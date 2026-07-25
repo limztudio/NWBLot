@@ -88,13 +88,13 @@ public:
     // by m_surfelUseHwTrace on the HW-shadow branch; gated on RayQuery + accel-struct support (like ensureShadowPipeline).
     [[nodiscard]] bool ensureSurfelTraceHwPipeline();
     // The spawn + hash-build sets bind persistent surfel buffers only and are built once. The trace set carries the SW
-    // scene BVH + per-mesh arrays + surfel constants/pool; rebuild it during prepare when the scene BVH or distinct-
-    // mesh count changes, mirroring the SW shadow set.
+    // scene BVH + per-mesh arrays + surfel constants/pool plus the target-generation bindless slot cbuffer; rebuild it
+    // during prepare when that target generation, the scene BVH, or the distinct-mesh count changes.
     [[nodiscard]] bool ensureSurfelSpawnBindingSet();
     [[nodiscard]] bool ensureSurfelAgeFreeBindingSet();
     [[nodiscard]] bool ensureSurfelHashBuildBindingSet();
-    [[nodiscard]] bool ensureSurfelTraceBindingSet();
-    [[nodiscard]] bool ensureSurfelTraceHwBindingSet();   // U5 HW twin: TLAS + HW-resident per-mesh buffers
+    [[nodiscard]] bool ensureSurfelTraceBindingSet(DeferredFrameTargets& targets);
+    [[nodiscard]] bool ensureSurfelTraceHwBindingSet(DeferredFrameTargets& targets);   // U5 HW twin: TLAS + HW-resident per-mesh buffers
     // The resolve pass: a COMPUTE gather-once-per-pixel into the screen-space surfelIrradiance texture the deferred
     // lighting samples (keeps the RW pool off the pixel shader -> no frames-in-flight pool race). Its persistent
     // buffers/output stay local; G-buffer world-position/normal are frame-heap reads selected by push constants.

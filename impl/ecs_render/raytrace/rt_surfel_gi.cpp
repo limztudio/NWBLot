@@ -241,10 +241,10 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
         // advertises VK_EXT_descriptor_buffer, and only then are the embedded heap layouts descriptor-buffer-compatible
         // -- so opt in exactly when the heap is, otherwise the classic heap layouts would downgrade this pipeline to A.
         layoutDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
-        // SW scene BVH, instances, light list, and material context. The NWB_GI_SW_BINDING_* ABI is shared with
-        // gi_sw_trace.slangi, so the CPU binding layout cannot drift from shader declarations.
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_GI_SW_BINDING_SCENE_SHADING, 1)); // scene shading
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_LIGHT_LIST, 1)); // light list
+        // The target-generation resource-slot cbuffer selects the shared scene-shading + light-list heap entries at
+        // the historical scene-shading position. The NWB_GI_SW_BINDING_* ABI is shared with gi_sw_trace.slangi, so the
+        // CPU binding layout cannot drift from shader declarations; historical light-list slot 1 remains a gap.
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_GI_SW_BINDING_BINDLESS_RESOURCES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_NODES, 1)); // scene nodes
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_INSTANCES, 1)); // scene instances
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_INSTANCE_MATERIAL, 1)); // instance material
@@ -594,9 +594,10 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildBindingSet(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The trace binding set: the SW scene-BVH ABI + the surfel constants CB + the surfel pool UAV. Rebuilt when the
-// scene-BVH / instance buffers or the distinct-mesh count change, mirroring the SW shadow set's rebuild guard.
-bool RendererRayTracingSystem::ensureSurfelTraceBindingSet(){
+// The trace binding set: the SW scene-BVH ABI + the surfel constants CB + the surfel pool UAV + the target-generation
+// resource-slot cbuffer that selects the shared scene buffers from the heap. Rebuilt when that target generation, the
+// scene-BVH / instance buffers, or the distinct-mesh count change, mirroring the SW shadow set's rebuild guard.
+bool RendererRayTracingSystem::ensureSurfelTraceBindingSet(DeferredFrameTargets& targets){
     NWB_ASSERT(rayTracingState().m_surfelTraceBindingLayout);
     NWB_ASSERT(rayTracingState().m_surfelConstants);
     NWB_ASSERT(rayTracingState().m_surfelPoolBuffer);
@@ -607,13 +608,14 @@ bool RendererRayTracingSystem::ensureSurfelTraceBindingSet(){
     NWB_ASSERT(rayTracingState().m_shadowInstanceMaterialBuffer);
     NWB_ASSERT(rayTracingState().m_shadowMaterialTypedBuffer);
     NWB_ASSERT(rayTracingState().m_shadowInstanceBuffer);
-    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
-    NWB_ASSERT(deferredState().m_lightBuffer);
+    NWB_ASSERT(targets.bindless.valid());
+    NWB_ASSERT(targets.bindless.slotsBuffer);
 
     Core::Buffer* sceneNodeBuffer = rayTracingState().m_sceneBvhNodeBuffer.get();
     Core::Buffer* instanceBuffer = rayTracingState().m_sceneInstanceBuffer.get();
     Core::Buffer* materialTypedBuffer = rayTracingState().m_shadowMaterialTypedBuffer.get();
     Core::Buffer* meshInstanceBuffer = rayTracingState().m_shadowInstanceBuffer.get();
+    Core::Buffer* bindlessResourcesBuffer = targets.bindless.slotsBuffer.get();
     const u32 meshCount = rayTracingState().m_swShadowMeshCount;
     if(
         rayTracingState().m_surfelTraceBindingSet
@@ -621,13 +623,13 @@ bool RendererRayTracingSystem::ensureSurfelTraceBindingSet(){
         && rayTracingState().m_surfelTraceBindingSetInstances == instanceBuffer
         && rayTracingState().m_surfelTraceBindingSetMaterialTyped == materialTypedBuffer
         && rayTracingState().m_surfelTraceBindingSetMeshInstances == meshInstanceBuffer
+        && rayTracingState().m_surfelTraceBindingSetBindlessResources == bindlessResourcesBuffer
         && rayTracingState().m_surfelTraceBindingSetMeshCount == meshCount
     )
         return true;
 
     Core::BindingSetDesc desc(arena());
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_SW_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get())); // scene shading
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get())); // light list
+    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_SW_BINDING_BINDLESS_RESOURCES, bindlessResourcesBuffer));
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_NODES, sceneNodeBuffer)); // scene nodes
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_INSTANCES, instanceBuffer)); // scene instances
     desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_INSTANCE_MATERIAL, rayTracingState().m_shadowInstanceMaterialBuffer.get())); // instance material
@@ -647,6 +649,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceBindingSet(){
         rayTracingState().m_surfelTraceBindingSetInstances = nullptr;
         rayTracingState().m_surfelTraceBindingSetMaterialTyped = nullptr;
         rayTracingState().m_surfelTraceBindingSetMeshInstances = nullptr;
+        rayTracingState().m_surfelTraceBindingSetBindlessResources = nullptr;
         rayTracingState().m_surfelTraceBindingSetMeshCount = 0u;
         return false;
     }
@@ -654,6 +657,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceBindingSet(){
     rayTracingState().m_surfelTraceBindingSetInstances = instanceBuffer;
     rayTracingState().m_surfelTraceBindingSetMaterialTyped = materialTypedBuffer;
     rayTracingState().m_surfelTraceBindingSetMeshInstances = meshInstanceBuffer;
+    rayTracingState().m_surfelTraceBindingSetBindlessResources = bindlessResourcesBuffer;
     rayTracingState().m_surfelTraceBindingSetMeshCount = meshCount;
     return true;
 }
@@ -685,11 +689,11 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
         // Backend C reads the shared TLAS from the fixed set-10 heap block, leaving this local set with only the
         // surfel/GI resources. Backend A keeps its classic local TLAS descriptor.
         layoutDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
-        // 0/1 scene shading + light list (shared with the SW trace); 2 = scene TLAS on Backend A; 3 = InstanceID-indexed material
+        // Binding 0 is the target-generation resource-slot cbuffer selecting scene shading + light list from the heap;
+        // historical local light-list slot 1 remains a gap. 2 = scene TLAS on Backend A; 3 = InstanceID-indexed material
         // record; 7/8 = the typed material + mutable-instance context the generated material-surface evaluator reads.
         // Closest-hit reads positions, indices, and attributes through descriptor-heap slots; the driver walks the TLAS.
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_GI_HW_BINDING_SCENE_SHADING, 1)); // scene shading
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_LIGHT_LIST, 1)); // light list
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_GI_HW_BINDING_BINDLESS_RESOURCES, 1));
         if(!heap.usesDescriptorBuffer())
             layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_GI_HW_BINDING_TLAS, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_INSTANCE_MATERIAL, 1)); // instance material
@@ -759,10 +763,10 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The HW trace binding set: the scene TLAS + the HW-resident InstanceID-material record + per-mesh position/index arrays
-// (all built by the HW-shadow branch, indexed by material.meshSlot) + the shared surfel tail. Rebuilt when the TLAS /
-// instance-material buffer / distinct-mesh count changes, mirroring the HW shadow set's tracked-pointer guard.
-bool RendererRayTracingSystem::ensureSurfelTraceHwBindingSet(){
+// The HW trace binding set: the scene TLAS + the HW-resident InstanceID-material record + the target-generation
+// resource-slot cbuffer + the shared surfel tail. Rebuilt when the target generation, TLAS / instance-material buffer /
+// distinct-mesh count changes, mirroring the HW shadow set's tracked-pointer guard.
+bool RendererRayTracingSystem::ensureSurfelTraceHwBindingSet(DeferredFrameTargets& targets){
     NWB_ASSERT(rayTracingState().m_surfelTraceHwBindingLayout);
     NWB_ASSERT(rayTracingState().m_surfelConstants);
     NWB_ASSERT(rayTracingState().m_surfelPoolBuffer);
@@ -772,13 +776,14 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwBindingSet(){
     NWB_ASSERT(rayTracingState().m_shadowInstanceMaterialBuffer);
     NWB_ASSERT(rayTracingState().m_shadowMaterialTypedBuffer);
     NWB_ASSERT(rayTracingState().m_shadowInstanceBuffer);
-    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
-    NWB_ASSERT(deferredState().m_lightBuffer);
+    NWB_ASSERT(targets.bindless.valid());
+    NWB_ASSERT(targets.bindless.slotsBuffer);
 
     Core::RayTracingAccelStruct* tlas = rayTracingState().m_tlas.get();
     Core::Buffer* instanceMaterial = rayTracingState().m_shadowInstanceMaterialBuffer.get();
     Core::Buffer* materialTyped = rayTracingState().m_shadowMaterialTypedBuffer.get();
     Core::Buffer* meshInstances = rayTracingState().m_shadowInstanceBuffer.get();
+    Core::Buffer* bindlessResourcesBuffer = targets.bindless.slotsBuffer.get();
     const u32 meshCount = rayTracingState().m_shadowMeshCount;
     if(
         rayTracingState().m_surfelTraceHwBindingSet
@@ -786,13 +791,13 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwBindingSet(){
         && rayTracingState().m_surfelTraceHwBindingSetInstanceMaterial == instanceMaterial
         && rayTracingState().m_surfelTraceHwBindingSetMaterialTyped == materialTyped
         && rayTracingState().m_surfelTraceHwBindingSetMeshInstances == meshInstances
+        && rayTracingState().m_surfelTraceHwBindingSetBindlessResources == bindlessResourcesBuffer
         && rayTracingState().m_surfelTraceHwBindingSetMeshCount == meshCount
     )
         return true;
 
     Core::BindingSetDesc desc(arena());
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_HW_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get())); // scene shading
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get())); // light list
+    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_HW_BINDING_BINDLESS_RESOURCES, bindlessResourcesBuffer));
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
     if(!heap.usesDescriptorBuffer())
         desc.addItem(Core::BindingSetItem::RayTracingAccelStruct(NWB_GI_HW_BINDING_TLAS, tlas));
@@ -813,6 +818,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwBindingSet(){
         rayTracingState().m_surfelTraceHwBindingSetInstanceMaterial = nullptr;
         rayTracingState().m_surfelTraceHwBindingSetMaterialTyped = nullptr;
         rayTracingState().m_surfelTraceHwBindingSetMeshInstances = nullptr;
+        rayTracingState().m_surfelTraceHwBindingSetBindlessResources = nullptr;
         rayTracingState().m_surfelTraceHwBindingSetMeshCount = 0u;
         return false;
     }
@@ -820,6 +826,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwBindingSet(){
     rayTracingState().m_surfelTraceHwBindingSetInstanceMaterial = instanceMaterial;
     rayTracingState().m_surfelTraceHwBindingSetMaterialTyped = materialTyped;
     rayTracingState().m_surfelTraceHwBindingSetMeshInstances = meshInstances;
+    rayTracingState().m_surfelTraceHwBindingSetBindlessResources = bindlessResourcesBuffer;
     rayTracingState().m_surfelTraceHwBindingSetMeshCount = meshCount;
     return true;
 }
@@ -1144,8 +1151,9 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
     if(!ensureSurfelResources())
         return false;
 
-    // The trace binding set is the ONE backend-specific set: HW (TLAS + HW-resident per-mesh) or SW (scene BVH).
-    const bool traceSetReady = rayTracingState().m_surfelUseHwTrace ? ensureSurfelTraceHwBindingSet() : ensureSurfelTraceBindingSet();
+    // The trace binding set is the ONE backend-specific set: HW (TLAS + HW-resident per-mesh) or SW (scene BVH). Both
+    // retain the target-generation slot cbuffer that selects the shared scene buffers from the descriptor heap.
+    const bool traceSetReady = rayTracingState().m_surfelUseHwTrace ? ensureSurfelTraceHwBindingSet(targets) : ensureSurfelTraceBindingSet(targets);
     if(
         !ensureSurfelHashBuildBindingSet()
         || !traceSetReady

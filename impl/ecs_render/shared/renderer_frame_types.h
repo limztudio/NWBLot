@@ -143,9 +143,9 @@ struct DeferredBindlessFrameResources{
     Core::GpuDescriptorHandle avboitTransmittance = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitLinearSampler = Core::GpuDescriptorHandle::invalid();
     // The scene-shading cbuffer and light-list storage buffer are shared singletons owned by the deferred lighting
-    // resources (still locally bound by the AVBOIT/GI/shadow consumers). Registered here so the deferred lighting pass
-    // reads them from the heap through the two spare avboit resource-slot lanes; migrating the other consumers is a
-    // follow-up slice.
+    // resources. Deferred lighting, AVBOIT accumulation, and both surfel-GI trace backends select their heap entries
+    // through the two spare avboit resource-slot lanes; the soft-shadow geometry downsample remains the final ordinary
+    // consumer to migrate.
     Core::GpuDescriptorHandle sceneShading = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle lightList = Core::GpuDescriptorHandle::invalid();
     // Caustic resolve inputs use target-generation slots directly in push constants. causticAccumulator is sampled

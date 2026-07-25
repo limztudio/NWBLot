@@ -31,6 +31,9 @@
 #include <impl/assets/graphics/caustic/hw_binding_slots.h>
 #include <impl/assets/graphics/caustic/sw_binding_slots.h>
 #include <impl/assets/graphics/csg/binding_slots.h>
+#include <impl/assets/graphics/gi/hw_binding_slots.h>
+#include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
+#include <impl/assets/graphics/gi/sw_binding_slots.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets/graphics/shadow/binding_slots.h>
 #include <tests/capturing_logger.h>
@@ -1060,6 +1063,137 @@ TEST_F(DescriptorBufferRoundTripTest, CausticPhotonProducerShapesBuildAsDescript
         accumulatorSubresources,
         TextureDimension::Texture2DArray
     ));
+    auto hwSet = device.createBindingSet(hwSetDesc, hwLayout);
+    ASSERT_NE(hwSet.get(), nullptr);
+    EXPECT_EQ(hwSet->getLayout(), hwLayout.get());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Both surfel-GI trace backends now take one target-generation slot cbuffer at their historical scene-shading position
+// and fetch the shared scene-shading CB + light list through the global heap. These exact local shapes prove the removal
+// of the former scene/light descriptors while retaining the sparse ABI positions used by the traversal and surfel tail.
+TEST_F(DescriptorBufferRoundTripTest, SurfelTraceShapesBuildAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/surfel_trace_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredSrv = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 256u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredUav = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 256u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::UnorderedAccess)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto bindlessResources = makeConstantBuffer();
+    auto surfelConstants = makeConstantBuffer();
+    auto sceneNodes = makeStructuredSrv(32u);
+    auto sceneInstances = makeStructuredSrv(64u);
+    auto instanceMaterial = makeStructuredSrv(32u);
+    auto materialTyped = makeStructuredSrv(16u);
+    auto meshInstances = makeStructuredSrv(64u);
+    auto pool = makeStructuredUav(96u);
+    auto snapshotPool = makeStructuredSrv(96u);
+    auto snapshotCellHead = makeStructuredSrv(4u);
+    ASSERT_TRUE(
+        bindlessResources && surfelConstants && sceneNodes && sceneInstances && instanceMaterial && materialTyped
+        && meshInstances && pool && snapshotPool && snapshotCellHead
+    );
+
+    // SW trace: the local slot cbuffer replaces old scene/light bindings 0/1; the scene BVH and surfel resources keep
+    // their sparse production positions. This is the complete Backend-C local resource segment (no sampler segment).
+    BindingLayoutDesc swLayoutDesc(descArena);
+    swLayoutDesc.setVisibility(ShaderType::Compute);
+    swLayoutDesc.setUseDescriptorBuffer(true);
+    swLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_GI_SW_BINDING_BINDLESS_RESOURCES, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_NODES, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_INSTANCES, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_INSTANCE_MATERIAL, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MATERIAL_TYPED, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MESH_INSTANCES, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD, 1u));
+
+    auto swLayout = device.createBindingLayout(swLayoutDesc);
+    ASSERT_NE(swLayout.get(), nullptr);
+    ASSERT_TRUE(swLayout->isDescriptorBufferCompatible())
+        << "surfel SW trace shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(swLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    EXPECT_EQ(swLayout->getDescriptorBufferBindingOffsets().size(), 10u);
+
+    BindingSetDesc swSetDesc(descArena);
+    swSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_GI_SW_BINDING_BINDLESS_RESOURCES, bindlessResources.get()));
+    swSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_NODES, sceneNodes.get()));
+    swSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_SCENE_INSTANCES, sceneInstances.get()));
+    swSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_INSTANCE_MATERIAL, instanceMaterial.get()));
+    swSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MATERIAL_TYPED, materialTyped.get()));
+    swSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_GI_SW_BINDING_MESH_INSTANCES, meshInstances.get()));
+    swSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, surfelConstants.get()));
+    swSetDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, pool.get()));
+    swSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, snapshotPool.get()));
+    swSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD, snapshotCellHead.get()));
+    auto swSet = device.createBindingSet(swSetDesc, swLayout);
+    ASSERT_NE(swSet.get(), nullptr);
+    EXPECT_EQ(swSet->getLayout(), swLayout.get());
+
+    // HW trace: Backend C selects the TLAS through set 10, so this local segment contains the slot cbuffer, material
+    // context, and surfel tail only. It otherwise shares the scene-buffer access contract with the SW trace.
+    BindingLayoutDesc hwLayoutDesc(descArena);
+    hwLayoutDesc.setVisibility(ShaderType::Compute);
+    hwLayoutDesc.setUseDescriptorBuffer(true);
+    hwLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_GI_HW_BINDING_BINDLESS_RESOURCES, 1u));
+    hwLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_INSTANCE_MATERIAL, 1u));
+    hwLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_MATERIAL_TYPED, 1u));
+    hwLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_MESH_INSTANCES, 1u));
+    hwLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1u));
+    hwLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1u));
+    hwLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, 1u));
+    hwLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD, 1u));
+
+    auto hwLayout = device.createBindingLayout(hwLayoutDesc);
+    ASSERT_NE(hwLayout.get(), nullptr);
+    ASSERT_TRUE(hwLayout->isDescriptorBufferCompatible())
+        << "surfel HW trace shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(hwLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    EXPECT_EQ(hwLayout->getDescriptorBufferBindingOffsets().size(), 8u);
+
+    BindingSetDesc hwSetDesc(descArena);
+    hwSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_GI_HW_BINDING_BINDLESS_RESOURCES, bindlessResources.get()));
+    hwSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_INSTANCE_MATERIAL, instanceMaterial.get()));
+    hwSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_MATERIAL_TYPED, materialTyped.get()));
+    hwSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_GI_HW_BINDING_MESH_INSTANCES, meshInstances.get()));
+    hwSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, surfelConstants.get()));
+    hwSetDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, pool.get()));
+    hwSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, snapshotPool.get()));
+    hwSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD, snapshotCellHead.get()));
     auto hwSet = device.createBindingSet(hwSetDesc, hwLayout);
     ASSERT_NE(hwSet.get(), nullptr);
     EXPECT_EQ(hwSet->getLayout(), hwLayout.get());

@@ -10,17 +10,20 @@
 
 
 // Binding slots for the HARDWARE surfel-GI trace (surfel_trace_hw_cs / gi_hw_trace.slangi). Dual-consumed by the Slang
-// shader AND the C++ pipeline/binding-set builder so both agree. Slots 0/1 (scene shading + light list) match the SW
-// trace layout, and the surfel tail (constants 12 / pool 13 / snapshot 20/21 -- surfel_binding_slots.h) is shared
-// verbatim; the HW path swaps the SW-BVH node bindings (SW slots 2-10) for the TLAS + the InstanceID-indexed material
-// record + the per-mesh position/index/attribute buffers and typed material context it uses to evaluate the authored
-// surface at the hit.
+// shader AND the C++ pipeline/binding-set builder so both agree. Slot 0 carries the target-generation
+// DeferredBindlessResourceSlots cbuffer; its avboitSlots.z/.w select the shared scene-shading + light-list heap entries,
+// leaving historical slot 1 as a gap. The surfel tail (constants 12 / pool 13 / snapshot 20/21 --
+// surfel_binding_slots.h) is shared verbatim; the HW path swaps the SW-BVH node bindings (SW slots 2-10) for the TLAS +
+// the InstanceID-indexed material record and typed material context it uses to evaluate the authored surface at the hit.
 
 
 #define NWB_GI_HW_SET 0
 
-#define NWB_GI_HW_BINDING_SCENE_SHADING 0      // ConstantBuffer (scene shading) -- same slot as the SW trace
-#define NWB_GI_HW_BINDING_LIGHT_LIST 1         // StructuredBuffer<NwbSceneLight> (SRV)
+// Historical local scene/light positions: binding 0 is now the bindless slot cbuffer, while 1 remains intentionally
+// unbound. Do not renumber the subsequent ABI slots.
+#define NWB_GI_HW_BINDING_SCENE_SHADING 0
+#define NWB_GI_HW_BINDING_LIGHT_LIST 1
+#define NWB_GI_HW_BINDING_BINDLESS_RESOURCES NWB_GI_HW_BINDING_SCENE_SHADING
 #define NWB_GI_HW_BINDING_TLAS 2               // RaytracingAccelerationStructure (the scene TLAS)
 #define NWB_GI_HW_BINDING_INSTANCE_MATERIAL 3  // StructuredBuffer<NwbRtInstanceMaterial> (SRV) -- InstanceID-indexed
 // Slots 4-6 are intentionally unused. HW GI reads positions, indices, and attributes from the global descriptor heap

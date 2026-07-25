@@ -452,6 +452,7 @@ void RendererRayTracingState::invalidateResources(){
     m_surfelTraceBindingSetInstances = nullptr;
     m_surfelTraceBindingSetMaterialTyped = nullptr;
     m_surfelTraceBindingSetMeshInstances = nullptr;
+    m_surfelTraceBindingSetBindlessResources = nullptr;
     m_surfelTraceBindingSetMeshCount = 0u;
     m_surfelTraceHwBindingLayout.reset();
     m_surfelTraceHwShader.reset();
@@ -461,6 +462,7 @@ void RendererRayTracingState::invalidateResources(){
     m_surfelTraceHwBindingSetInstanceMaterial = nullptr;
     m_surfelTraceHwBindingSetMaterialTyped = nullptr;
     m_surfelTraceHwBindingSetMeshInstances = nullptr;
+    m_surfelTraceHwBindingSetBindlessResources = nullptr;
     m_surfelTraceHwBindingSetMeshCount = 0u;
     m_surfelUseHwTrace = false;
     m_surfelPoolBuffer.reset();

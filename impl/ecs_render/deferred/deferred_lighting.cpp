@@ -62,8 +62,8 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
             // Backend C while Backend A continues to use its classic descriptor set.
             .setUseDescriptorBuffer(heap.usesDescriptorBuffer())
         ;
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_DEFERRED_LIGHTING_BINDING_SCENE_SHADING, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_DEFERRED_LIGHTING_BINDING_LIGHT_LIST, 1));
+        // Scene-shading cbuffer + light list moved to the global heap (fetched via the resource-slot cbuffer); the
+        // lighting set now carries only that per-frame slot cbuffer.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_DEFERRED_LIGHTING_BINDING_BINDLESS_RESOURCES, 1));
 
         deferredState().m_lightingBindingLayout = device->createBindingLayout(bindingLayoutDesc);

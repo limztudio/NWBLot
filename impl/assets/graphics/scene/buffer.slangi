@@ -40,10 +40,17 @@ struct NwbSceneShadingBuffer{
     float4 g_NwbSceneCameraPosition;
 };
 
+// The scene-shading cbuffer and light list are either bound locally in the consuming pass's set (the default below)
+// or fetched from the global descriptor heap when the consumer defines NWB_SCENE_BUFFERS_FROM_HEAP plus the two slot
+// expressions NWB_SCENE_SHADING_HEAP_SLOT / NWB_SCENE_LIGHT_LIST_HEAP_SLOT (uniform per draw/dispatch) before
+// including this header. Either way the scene library below reads the same names: g_NwbSceneCameraPosition,
+// g_NwbSceneLights, nwbSceneLightCount().
+#ifndef NWB_SCENE_BUFFERS_FROM_HEAP
 [[vk::binding(NWB_SCENE_SHADING_BINDING, NWB_SCENE_SHADING_SET)]]
 ConstantBuffer<NwbSceneShadingBuffer, Std140DataLayout> g_NwbSceneShadingBuffer;
 
 #define g_NwbSceneCameraPosition g_NwbSceneShadingBuffer.g_NwbSceneCameraPosition
+#endif
 
 struct NwbSceneLight{
     // xyz = world position (point/spot), w = spot inner cone cosine.
@@ -59,8 +66,36 @@ struct NwbSceneLight{
     float4 params2;
 };
 
+#ifndef NWB_SCENE_BUFFERS_FROM_HEAP
 [[vk::binding(NWB_SCENE_LIGHT_LIST_BINDING, NWB_SCENE_LIGHT_LIST_SET)]]
 StructuredBuffer<NwbSceneLight, Std430DataLayout> g_NwbSceneLights;
+#else
+// Typed views of the shared heap StorageBuffer / UniformBuffer descriptor tables, exactly like the BVH-node and
+// mesh-stream aliases (bindless_heap_bvh.slangi / bindless_heap_mesh.slangi): the element type/stride is a per-view
+// SPIR-V decoration over the one Vulkan descriptor, so the scene-shading CB and light list are legible through the
+// heap without a second registration. The selecting slot is uniform across the draw (one per frame), so no
+// NonUniformResourceIndex() wrap is needed (mirrors the deferred image/sampler accessors).
+#include "../bindless/bindless_heap.slangi"
+
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed views of the storage/uniform-buffer descriptor tables in bindless_heap.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbSceneLight, Std430DataLayout> g_NwbHeapSceneLightBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbSceneShadingBuffer, Std140DataLayout> g_NwbHeapSceneShadingBuffers[];
+#pragma warning(pop)
+
+ConstantBuffer<NwbSceneShadingBuffer, Std140DataLayout> NwbHeapSceneShading(const uint slot){
+    return g_NwbHeapSceneShadingBuffers[slot];
+}
+
+StructuredBuffer<NwbSceneLight, Std430DataLayout> NwbHeapSceneLights(const uint slot){
+    return g_NwbHeapSceneLightBuffers[slot];
+}
+
+#define g_NwbSceneCameraPosition NwbHeapSceneShading(NWB_SCENE_SHADING_HEAP_SLOT).g_NwbSceneCameraPosition
+#define g_NwbSceneLights NwbHeapSceneLights(NWB_SCENE_LIGHT_LIST_HEAP_SLOT)
+#endif
 
 uint nwbSceneLightCount(){
     return uint(max(g_NwbSceneCameraPosition.w, 0.0));

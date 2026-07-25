@@ -19,7 +19,7 @@ struct NwbDeferredBindlessResources{
     uint4 gbufferSlots;   // albedo, normal, world position, depth
     uint4 lightingSlots;  // shadow visibility array, caustic, surfel, sampler
     uint4 compositeSlots; // opaque color, AVBOIT accumulated color, accumulated extinction, padding
-    uint4 avboitSlots;    // AVBOIT transmittance 3D volume, linear sampler, padding, padding
+    uint4 avboitSlots;    // AVBOIT transmittance 3D volume, linear sampler, scene-shading CB heap slot, light-list heap slot
 };
 
 

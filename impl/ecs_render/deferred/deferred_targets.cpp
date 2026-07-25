@@ -151,6 +151,10 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred bindless resources require the AVBOIT linear sampler"));
         return false;
     }
+    if(!deferredState().m_sceneShadingBuffer || !deferredState().m_lightBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred bindless resources require the scene shading + light buffers"));
+        return false;
+    }
 
     auto registerTexture = [&heap](
         Core::GpuDescriptorHandle& handle,
@@ -181,6 +185,30 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         return false;
     };
 
+    // Shared scene buffers: the light list rides the StorageBuffer table (structured SRV), the scene-shading cbuffer
+    // the UniformBuffer table. Both are read-only per-frame singletons the lighting shader selects by slot.
+    auto registerStructuredBuffer = [&heap](Core::GpuDescriptorHandle& handle, Core::Buffer* buffer) -> bool{
+        handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        if(!handle.valid())
+            return false;
+        if(heap.write(handle, Core::BindingSetItem::StructuredBuffer_SRV(0u, buffer)))
+            return true;
+        heap.free(handle);
+        handle = Core::GpuDescriptorHandle::invalid();
+        return false;
+    };
+
+    auto registerConstantBuffer = [&heap](Core::GpuDescriptorHandle& handle, Core::Buffer* buffer) -> bool{
+        handle = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
+        if(!handle.valid())
+            return false;
+        if(heap.write(handle, Core::BindingSetItem::ConstantBuffer(0u, buffer)))
+            return true;
+        heap.free(handle);
+        handle = Core::GpuDescriptorHandle::invalid();
+        return false;
+    };
+
     DeferredBindlessFrameResources& bindless = targets.bindless;
     const bool registered =
         registerTexture(bindless.gbufferBaseColor, Core::GpuDescriptorClass::SampledImage, targets.albedo.get(), targets.albedoFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
@@ -199,6 +227,10 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         && registerTexture(bindless.avboitAccumExtinction, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumExtinction.get(), targets.avboit.accumExtinctionFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitTransmittance, Core::GpuDescriptorClass::SampledImage3D, targets.avboit.transmittanceTexture.get(), targets.avboit.transmittanceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D)
         && registerSampler(bindless.avboitLinearSampler, avboitState().m_linearSampler.get())
+        // Scene-shading cbuffer (uniform-buffer table) + light-list storage buffer (structured-buffer table): the two
+        // shared singletons the deferred lighting pass now reads from the heap via its two spare avboit slot lanes.
+        && registerConstantBuffer(bindless.sceneShading, deferredState().m_sceneShadingBuffer.get())
+        && registerStructuredBuffer(bindless.lightList, deferredState().m_lightBuffer.get())
         // The caustic resolve carries all sampled inputs through target-generation slots. The R32_UINT accumulator uses
         // the heap's dedicated typed uint Texture2DArray table; the remaining resources are floating-point Texture2Ds.
         && registerTexture(bindless.causticAccumulator, Core::GpuDescriptorClass::SampledImage2DArrayUint, targets.causticAccumulator.get(), targets.causticAccumulatorFormat, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::TextureDimension::Texture2DArray)
@@ -240,6 +272,8 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
     bindless.slots.avboitAccumExtinction = bindless.avboitAccumExtinction.slot();
     bindless.slots.avboitTransmittance = bindless.avboitTransmittance.slot();
     bindless.slots.avboitLinearSampler = bindless.avboitLinearSampler.slot();
+    bindless.slots.sceneShading = bindless.sceneShading.slot();
+    bindless.slots.lightList = bindless.lightList.slot();
 
     Core::BufferDesc slotsBufferDesc;
     slotsBufferDesc
@@ -276,6 +310,8 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTa
             heap.free(targets.bindless.avboitAccumExtinction);
             heap.free(targets.bindless.avboitTransmittance);
             heap.free(targets.bindless.avboitLinearSampler);
+            heap.free(targets.bindless.sceneShading);
+            heap.free(targets.bindless.lightList);
             heap.free(targets.bindless.causticAccumulator);
             heap.free(targets.bindless.causticHistory);
             heap.free(targets.bindless.causticResolveHalf);
@@ -577,8 +613,8 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
 
     Core::BindingSetDesc lightingBindingSetDesc(arena());
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_DEFERRED_LIGHTING_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_DEFERRED_LIGHTING_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get()));
+    // The scene-shading cbuffer + light list are now heap entries (registered in createDeferredBindlessFrameResources,
+    // selected through the resource-slot cbuffer); the lighting set carries only that per-frame slot cbuffer.
     lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
         NWB_DEFERRED_LIGHTING_BINDING_BINDLESS_RESOURCES,
         createdTargets.bindless.slotsBuffer.get()

@@ -115,8 +115,8 @@ struct DeferredBindlessResourceSlots{
 
     u32 avboitTransmittance = 0u;
     u32 avboitLinearSampler = 0u;
-    u32 _avboitPad0 = 0u;
-    u32 _avboitPad1 = 0u;
+    u32 sceneShading = 0u;
+    u32 lightList = 0u;
 };
 static_assert(sizeof(DeferredBindlessResourceSlots) == sizeof(u32) * 16u, "Deferred bindless slots must match four std140 uint4 lanes");
 
@@ -142,6 +142,12 @@ struct DeferredBindlessFrameResources{
     Core::GpuDescriptorHandle avboitAccumExtinction = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitTransmittance = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitLinearSampler = Core::GpuDescriptorHandle::invalid();
+    // The scene-shading cbuffer and light-list storage buffer are shared singletons owned by the deferred lighting
+    // resources (still locally bound by the AVBOIT/GI/shadow consumers). Registered here so the deferred lighting pass
+    // reads them from the heap through the two spare avboit resource-slot lanes; migrating the other consumers is a
+    // follow-up slice.
+    Core::GpuDescriptorHandle sceneShading = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle lightList = Core::GpuDescriptorHandle::invalid();
     // Caustic resolve inputs use target-generation slots directly in push constants. causticAccumulator is sampled
     // through the heap's dedicated typed uint Texture2DArray table; the remaining three are floating-point Texture2D
     // resources.
@@ -183,6 +189,8 @@ struct DeferredBindlessFrameResources{
             && avboitAccumExtinction.valid()
             && avboitTransmittance.valid()
             && avboitLinearSampler.valid()
+            && sceneShading.valid()
+            && lightList.valid()
             && causticAccumulator.valid()
             && causticHistory.valid()
             && causticResolveHalf.valid()

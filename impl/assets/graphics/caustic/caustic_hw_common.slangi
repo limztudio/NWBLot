@@ -86,6 +86,8 @@ struct NwbCausticHwPushConstants{
     uint emissionTargetCount;
     uint gridSide; // the FULL emission grid side (sqrt of the full photon budget); runtime so the density scales per build config
     uint frameIndex; // HW 2x temporal-reuse checkerboard phase: (frameIndex & 1) selects which half of the grid this frame emits
+    uint depthSlot;
+    uint worldPositionSlot;
 };
 
 
@@ -110,17 +112,20 @@ StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbCausticHwEmiss
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_VIEW, NWB_CAUSTIC_RT_SET)]]
 ConstantBuffer<NwbCausticHwView, Std140DataLayout> g_NwbCausticHwView;
 
-[[vk::binding(NWB_CAUSTIC_RT_BINDING_GBUFFER_DEPTH, NWB_CAUSTIC_RT_SET)]]
-Texture2D<float4> g_NwbCausticHwGBufferDepth;
-
-[[vk::binding(NWB_CAUSTIC_RT_BINDING_GBUFFER_WORLD_POSITION, NWB_CAUSTIC_RT_SET)]]
-Texture2D<float4> g_NwbCausticHwGBufferWorldPosition;
-
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_ACCUMULATOR, NWB_CAUSTIC_RT_SET)]]
 RWTexture2DArray<uint> g_NwbCausticHwAccumulator;
 
 [[vk::push_constant]]
 ConstantBuffer<NwbCausticHwPushConstants> g_NwbCausticHwPushConstants;
+
+
+Texture2D<float4> nwbCausticHwGbufferDepth(){
+    return NwbHeapSampledImage2D(g_NwbCausticHwPushConstants.depthSlot);
+}
+
+Texture2D<float4> nwbCausticHwGbufferWorldPosition(){
+    return NwbHeapSampledImage2D(g_NwbCausticHwPushConstants.worldPositionSlot);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -160,8 +165,8 @@ NwbCausticHwVertexAttrib nwbCausticHwLoadVertexAttrib(const uint attributeSlot, 
 
 #define NWB_CAUSTIC_SPLAT_VIEW g_NwbCausticHwView
 #define NWB_CAUSTIC_SPLAT_PUSH g_NwbCausticHwPushConstants
-#define NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH g_NwbCausticHwGBufferDepth
-#define NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION g_NwbCausticHwGBufferWorldPosition
+#define NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH nwbCausticHwGbufferDepth()
+#define NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION nwbCausticHwGbufferWorldPosition()
 #define NWB_CAUSTIC_SPLAT_ACCUMULATOR g_NwbCausticHwAccumulator
 #include "splat.slangi"
 #undef NWB_CAUSTIC_SPLAT_ACCUMULATOR

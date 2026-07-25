@@ -91,12 +91,6 @@ struct NwbCausticSwView{
 [[vk::binding(NWB_CAUSTIC_SW_BINDING_VIEW, NWB_CAUSTIC_SW_SET)]]
 ConstantBuffer<NwbCausticSwView, Std140DataLayout> g_NwbCausticSwView;
 
-[[vk::binding(NWB_CAUSTIC_SW_BINDING_GBUFFER_DEPTH, NWB_CAUSTIC_SW_SET)]]
-Texture2D<float4> g_NwbCausticSwGBufferDepth;
-
-[[vk::binding(NWB_CAUSTIC_SW_BINDING_GBUFFER_WORLD_POSITION, NWB_CAUSTIC_SW_SET)]]
-Texture2D<float4> g_NwbCausticSwGBufferWorldPosition;
-
 [[vk::binding(NWB_CAUSTIC_SW_BINDING_ACCUMULATOR, NWB_CAUSTIC_SW_SET)]]
 RWTexture2DArray<uint> g_NwbCausticSwAccumulator;
 
@@ -108,10 +102,21 @@ struct NwbCausticSwPushConstants{
     uint emissionTargetCount;
     uint gridSide; // the FULL emission grid side (sqrt of the full photon budget); runtime so the density scales per build config
     uint frameIndex; // SW 2x temporal-reuse checkerboard phase: (frameIndex & 1) selects which half of the grid this frame emits
+    uint depthSlot;
+    uint worldPositionSlot;
 };
 
 [[vk::push_constant]]
 ConstantBuffer<NwbCausticSwPushConstants> g_NwbCausticSwPushConstants;
+
+
+Texture2D<float4> nwbCausticSwGbufferDepth(){
+    return NwbHeapSampledImage2D(g_NwbCausticSwPushConstants.depthSlot);
+}
+
+Texture2D<float4> nwbCausticSwGbufferWorldPosition(){
+    return NwbHeapSampledImage2D(g_NwbCausticSwPushConstants.worldPositionSlot);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -394,8 +399,8 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 
 #define NWB_CAUSTIC_SPLAT_VIEW g_NwbCausticSwView
 #define NWB_CAUSTIC_SPLAT_PUSH g_NwbCausticSwPushConstants
-#define NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH g_NwbCausticSwGBufferDepth
-#define NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION g_NwbCausticSwGBufferWorldPosition
+#define NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH nwbCausticSwGbufferDepth()
+#define NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION nwbCausticSwGbufferWorldPosition()
 #define NWB_CAUSTIC_SPLAT_ACCUMULATOR g_NwbCausticSwAccumulator
 #include "splat.slangi"
 #undef NWB_CAUSTIC_SPLAT_ACCUMULATOR

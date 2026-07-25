@@ -368,9 +368,10 @@ struct RtSceneBvhState{
     const Core::Texture* m_transparentReprojectMergeMomentsB = nullptr;
     // Software caustic photon producer (P3) — the no-hardware-ray-tracing fallback. It reuses the same software
     // scene/instance + per-mesh BVH buffers the SW shadow trace builds (the shared m_swShadowMesh* table serves
-    // shadow, caustic, and GI alike), and adds the caustic-specific inputs
-    // (the P1 emission-target buffer, the camera view buffer, the G-buffer depth) + output (the R32_UINT
-    // accumulators). The binding set is rebuilt when any cached input changes, mirroring the SW shadow set.
+    // shadow, caustic, and GI alike), and adds the caustic-specific local inputs/output
+    // (the P1 emission-target buffer, the camera view buffer, and the R32_UINT accumulators). G-buffer depth/world
+    // position are frame-heap reads selected through the shared photon push constants. The binding set is rebuilt when
+    // any cached local input changes, mirroring the SW shadow set.
     Core::BindingLayoutHandle m_swCausticBindingLayout;
     Core::ShaderHandle m_swCausticShader;
     Core::ComputePipelineHandle m_swCausticPipeline;
@@ -382,8 +383,6 @@ struct RtSceneBvhState{
     const Core::Buffer* m_swCausticBindingSetMeshInstances = nullptr;
     const Core::Buffer* m_swCausticBindingSetEmissionTargets = nullptr;
     const Core::Buffer* m_swCausticBindingSetView = nullptr;
-    const Core::Texture* m_swCausticBindingSetDepth = nullptr;
-    const Core::Texture* m_swCausticBindingSetWorldPosition = nullptr;
     const Core::Texture* m_swCausticBindingSetAccumulator = nullptr;
     u32 m_swCausticBindingSetMeshCount = 0u;
     bool m_swCausticPipelineFailed = false;
@@ -394,7 +393,8 @@ struct RtSceneBvhState{
     // shadow RT pipeline and REUSES m_tlas + the shadow instance-material / material-context / per-mesh
     // index+attribute buffers verbatim (the refraction bends on the interpolated SHADING normal from the attribute
     // buffer, so no per-mesh position array is needed). Feeds the SAME R32_UINT accumulator + the SAME resolve the SW
-    // path uses. The binding set is rebuilt when any cached input changes, mirroring the shadow set.
+    // path uses. Its G-buffer depth/world-position reads use the frame heap; the binding set is rebuilt when any
+    // cached local input changes, mirroring the shadow set.
     Core::BindingLayoutHandle m_hwCausticBindingLayout;
     Core::RayTracingPipelineHandle m_hwCausticPipeline;
     Core::RayTracingShaderTableHandle m_hwCausticShaderTable;
@@ -405,8 +405,6 @@ struct RtSceneBvhState{
     const Core::Buffer* m_hwCausticBindingSetMeshInstances = nullptr;
     const Core::Buffer* m_hwCausticBindingSetEmissionTargets = nullptr;
     const Core::Buffer* m_hwCausticBindingSetView = nullptr;
-    const Core::Texture* m_hwCausticBindingSetDepth = nullptr;
-    const Core::Texture* m_hwCausticBindingSetWorldPosition = nullptr;
     const Core::Texture* m_hwCausticBindingSetAccumulator = nullptr;
     bool m_bvhSortPipelineFailed = false;
     bool m_bvhBuildPipelineFailed = false;

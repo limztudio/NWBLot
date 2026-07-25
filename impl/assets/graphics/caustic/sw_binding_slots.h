@@ -16,7 +16,7 @@
 // InterlockedAdd. The set mirrors the SW shadow set's geometry slots (so the closest-hit hook reads identical
 // buffers + the per-hit surface dispatch resolves ior/transmission the SAME way) and adds the caustic-specific
 // inputs/outputs: the emission-target AABB buffer, the camera view buffer (worldToClip for the splat projection),
-// the G-buffer depth SRV (the depth-reject that kills screen-space leak), and the accumulator UAV.
+// heap-selected G-buffer depth/world-position inputs (the receiver identity reject), and the accumulator UAV.
 #define NWB_CAUSTIC_SW_SET 0
 
 #define NWB_CAUSTIC_SW_BINDING_SCENE_SHADING 0
@@ -33,16 +33,18 @@
 // Caustic-specific inputs/output:
 //  - EMISSION_TARGETS: the per-frame refractive-instance world AABBs (P1) the photons aim at.
 //  - VIEW: the camera view buffer (worldToClip) the splat projects the receiver hit through.
-//  - GBUFFER_DEPTH: the G-buffer depth the splat uses to reject splats onto sky (background skip).
+//  - GBUFFER_DEPTH: historical local-layout position; now a logical heap-SRV slot selecting the G-buffer depth the
+//    splat uses to reject sky/background.
 //  - ACCUMULATOR: the R32_UINT fixed-point splat target (Texture2DArray, one layer per RGB channel).
-//  - GBUFFER_WORLD_POSITION: the G-buffer world position the splat compares the photon's receiver hit against
-//    (the screen-space-leak reject -- a WORLD-distance test, robust at grazing angles where the device-depth
-//    gradient across one pixel can exceed any fixed device-depth tolerance and reject every valid splat).
+//  - GBUFFER_WORLD_POSITION: historical local-layout position; now a logical heap-SRV slot selecting the G-buffer
+//    world position the splat compares the photon's receiver hit against (the screen-space-leak reject -- a WORLD-
+//    distance test, robust at grazing angles where the device-depth gradient across one pixel can exceed any fixed
+//    device-depth tolerance and reject every valid splat).
 #define NWB_CAUSTIC_SW_BINDING_EMISSION_TARGETS 11
 #define NWB_CAUSTIC_SW_BINDING_VIEW 12
-#define NWB_CAUSTIC_SW_BINDING_GBUFFER_DEPTH 13
+#define NWB_CAUSTIC_SW_BINDING_GBUFFER_DEPTH 13 // logical heap-SRV position; selected through push constants
 #define NWB_CAUSTIC_SW_BINDING_ACCUMULATOR 14
-#define NWB_CAUSTIC_SW_BINDING_GBUFFER_WORLD_POSITION 15
+#define NWB_CAUSTIC_SW_BINDING_GBUFFER_WORLD_POSITION 15 // logical heap-SRV position; selected through push constants
 
 // One thread per photon in a 1D dispatch; 64 photons per group.
 #define NWB_CAUSTIC_SW_GROUP_SIZE 64

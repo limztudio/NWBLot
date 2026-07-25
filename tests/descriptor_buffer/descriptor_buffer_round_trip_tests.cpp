@@ -28,6 +28,8 @@
 #include <core/perf/timing.h>
 #include <impl/assets/graphics/avboit/binding_slots.h>
 #include <impl/assets/graphics/avboit/constants.h>
+#include <impl/assets/graphics/caustic/hw_binding_slots.h>
+#include <impl/assets/graphics/caustic/sw_binding_slots.h>
 #include <impl/assets/graphics/csg/binding_slots.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <tests/capturing_logger.h>
@@ -916,6 +918,155 @@ TEST_F(DescriptorBufferRoundTripTest, CausticAccumulatorDecayShapeBuildsAsDescri
     auto bindingSet = device.createBindingSet(setDesc, layout);
     ASSERT_NE(bindingSet.get(), nullptr);
     EXPECT_EQ(bindingSet->getLayout(), layout.get());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Both caustic photon producers now select their depth/world-position G-buffer inputs from the global heap through
+// the shared 36-byte push block. These two layouts cover their exact remaining local Backend-C resource shapes: SW
+// keeps scene/BVH/material buffers plus its accumulator; HW keeps the ray-tracing material context plus accumulator
+// (the Backend-C TLAS itself lives in the heap's set-10 block, not the local layout).
+TEST_F(DescriptorBufferRoundTripTest, CausticPhotonProducerShapesBuildAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/caustic_photon_producer_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredSrv = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 256u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeAccumulator = [&]() {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(32u).setHeight(32u)
+                .setArraySize(3u)
+                .setDimension(TextureDimension::Texture2DArray)
+                .setFormat(Format::R32_UINT)
+                .setInitialState(ResourceStates::UnorderedAccess)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto sceneShading = makeConstantBuffer();
+    auto view = makeConstantBuffer();
+    auto lightList = makeStructuredSrv(16u);
+    auto sceneNodes = makeStructuredSrv(32u);
+    auto sceneInstances = makeStructuredSrv(64u);
+    auto instanceMaterial = makeStructuredSrv(32u);
+    auto materialTyped = makeStructuredSrv(16u);
+    auto meshInstances = makeStructuredSrv(64u);
+    auto emissionTargets = makeStructuredSrv(32u);
+    auto accumulator = makeAccumulator();
+    ASSERT_TRUE(
+        sceneShading && view && lightList && sceneNodes && sceneInstances && instanceMaterial && materialTyped
+        && meshInstances && emissionTargets && accumulator
+    );
+    const TextureSubresourceSet accumulatorSubresources(0u, 1u, 0u, 3u);
+
+    // Exact SW local shape after the two G-buffer SRVs became push-selected heap reads. The 36-byte range is the
+    // byte-identical CausticPhotonPushConstants contract used by both producers.
+    BindingLayoutDesc swLayoutDesc(descArena);
+    swLayoutDesc.setVisibility(ShaderType::Compute);
+    swLayoutDesc.setUseDescriptorBuffer(true);
+    swLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_SCENE_SHADING, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_LIGHT_LIST, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_NODES, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_INSTANCES, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_INSTANCE_MATERIAL, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MATERIAL_TYPED, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_INSTANCES, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_EMISSION_TARGETS, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_VIEW, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_SW_BINDING_ACCUMULATOR, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 36u));
+
+    auto swLayout = device.createBindingLayout(swLayoutDesc);
+    ASSERT_NE(swLayout.get(), nullptr);
+    ASSERT_TRUE(swLayout->isDescriptorBufferCompatible())
+        << "caustic SW photon shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(swLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    EXPECT_EQ(swLayout->getDescriptorBufferBindingOffsets().size(), 10u);
+
+    BindingSetDesc swSetDesc(descArena);
+    swSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_SCENE_SHADING, sceneShading.get()));
+    swSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_LIGHT_LIST, lightList.get()));
+    swSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_NODES, sceneNodes.get()));
+    swSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_SCENE_INSTANCES, sceneInstances.get()));
+    swSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_INSTANCE_MATERIAL, instanceMaterial.get()));
+    swSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MATERIAL_TYPED, materialTyped.get()));
+    swSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_MESH_INSTANCES, meshInstances.get()));
+    swSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_EMISSION_TARGETS, emissionTargets.get()));
+    swSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_VIEW, view.get()));
+    swSetDesc.addItem(BindingSetItem::Texture_UAV(
+        NWB_CAUSTIC_SW_BINDING_ACCUMULATOR,
+        accumulator.get(),
+        Format::R32_UINT,
+        accumulatorSubresources,
+        TextureDimension::Texture2DArray
+    ));
+    auto swSet = device.createBindingSet(swSetDesc, swLayout);
+    ASSERT_NE(swSet.get(), nullptr);
+    EXPECT_EQ(swSet->getLayout(), swLayout.get());
+
+    // Exact hardware local shape in Backend C: set 10 carries the TLAS, so the eight descriptors here are its scene,
+    // material, emission, view, and accumulator resources. Descriptor layout compatibility is independent of shader
+    // stage, so Compute makes this proof runnable on descriptor-buffer-only test devices.
+    BindingLayoutDesc hwLayoutDesc(descArena);
+    hwLayoutDesc.setVisibility(ShaderType::Compute);
+    hwLayoutDesc.setUseDescriptorBuffer(true);
+    hwLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_SCENE_SHADING, 1u));
+    hwLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_LIGHT_LIST, 1u));
+    hwLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_INSTANCE_MATERIAL, 1u));
+    hwLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_MATERIAL_TYPED, 1u));
+    hwLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_MESH_INSTANCES, 1u));
+    hwLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_EMISSION_TARGETS, 1u));
+    hwLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_VIEW, 1u));
+    hwLayoutDesc.addItem(BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_RT_BINDING_ACCUMULATOR, 1u));
+    hwLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 36u));
+
+    auto hwLayout = device.createBindingLayout(hwLayoutDesc);
+    ASSERT_NE(hwLayout.get(), nullptr);
+    ASSERT_TRUE(hwLayout->isDescriptorBufferCompatible())
+        << "caustic HW photon shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(hwLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    EXPECT_EQ(hwLayout->getDescriptorBufferBindingOffsets().size(), 8u);
+
+    BindingSetDesc hwSetDesc(descArena);
+    hwSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_SCENE_SHADING, sceneShading.get()));
+    hwSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_LIGHT_LIST, lightList.get()));
+    hwSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_INSTANCE_MATERIAL, instanceMaterial.get()));
+    hwSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_MATERIAL_TYPED, materialTyped.get()));
+    hwSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_MESH_INSTANCES, meshInstances.get()));
+    hwSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_EMISSION_TARGETS, emissionTargets.get()));
+    hwSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_VIEW, view.get()));
+    hwSetDesc.addItem(BindingSetItem::Texture_UAV(
+        NWB_CAUSTIC_RT_BINDING_ACCUMULATOR,
+        accumulator.get(),
+        Format::R32_UINT,
+        accumulatorSubresources,
+        TextureDimension::Texture2DArray
+    ));
+    auto hwSet = device.createBindingSet(hwSetDesc, hwLayout);
+    ASSERT_NE(hwSet.get(), nullptr);
+    EXPECT_EQ(hwSet->getLayout(), hwLayout.get());
 }
 
 

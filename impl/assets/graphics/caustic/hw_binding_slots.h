@@ -31,11 +31,12 @@
 // bind at NWB_MESH_BINDING_MATERIAL_TYPED / NWB_MESH_BINDING_INSTANCE, pointed here for this pass).
 #define NWB_CAUSTIC_RT_BINDING_MATERIAL_TYPED 4
 #define NWB_CAUSTIC_RT_BINDING_MESH_INSTANCES 5
-// Caustic-specific I/O.
+// Caustic-specific I/O. The two G-buffer positions remain reserved for ABI compatibility, but are now logical heap-
+// SRV selections carried in the shared photon-producer push constants.
 #define NWB_CAUSTIC_RT_BINDING_EMISSION_TARGETS 6
 #define NWB_CAUSTIC_RT_BINDING_VIEW 7
-#define NWB_CAUSTIC_RT_BINDING_GBUFFER_DEPTH 8
-#define NWB_CAUSTIC_RT_BINDING_GBUFFER_WORLD_POSITION 9
+#define NWB_CAUSTIC_RT_BINDING_GBUFFER_DEPTH 8 // logical heap-SRV position; selected through push constants
+#define NWB_CAUSTIC_RT_BINDING_GBUFFER_WORLD_POSITION 9 // logical heap-SRV position; selected through push constants
 #define NWB_CAUSTIC_RT_BINDING_ACCUMULATOR 10
 
 // Slots 11-12 are intentionally unused. The HW closest-hit gets the triangle from the fixed-function intersector and

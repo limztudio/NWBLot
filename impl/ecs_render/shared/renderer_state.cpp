@@ -377,8 +377,6 @@ void RendererRayTracingState::invalidateResources(){
     m_swCausticBindingSetMeshInstances = nullptr;
     m_swCausticBindingSetEmissionTargets = nullptr;
     m_swCausticBindingSetView = nullptr;
-    m_swCausticBindingSetDepth = nullptr;
-    m_swCausticBindingSetWorldPosition = nullptr;
     m_swCausticBindingSetAccumulator = nullptr;
     m_swCausticBindingSetMeshCount = 0u;
     m_hwCausticBindingLayout.reset();
@@ -391,8 +389,6 @@ void RendererRayTracingState::invalidateResources(){
     m_hwCausticBindingSetMeshInstances = nullptr;
     m_hwCausticBindingSetEmissionTargets = nullptr;
     m_hwCausticBindingSetView = nullptr;
-    m_hwCausticBindingSetDepth = nullptr;
-    m_hwCausticBindingSetWorldPosition = nullptr;
     m_hwCausticBindingSetAccumulator = nullptr;
     m_hwCausticBindingSetMeshCount = 0u;
     m_causticResolveBindingLayout.reset();

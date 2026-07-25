@@ -487,6 +487,93 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitMaterialShapesBuildAsDescriptorBuffe
 }
 
 
+// Depth warp and integration complete the AVBOIT sequence. They use no samplers and no heap access: depth warp is
+// buffer-only, while integration adds one 3D storage image. Both shapes must therefore remain coherent resource
+// descriptor-buffer layouts on Backend C.
+TEST_F(DescriptorBufferRoundTripTest, AvboitComputeShapesBuildAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/avboit_compute_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeStructuredBuffer = [&](const ResourceStates::Mask state, const bool uav){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(4u * 4096u)
+                .setStructStride(4u)
+                .setCanHaveRawViews(true)
+                .setCanHaveUAVs(uav)
+                .setInitialState(state)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto coverage = makeStructuredBuffer(ResourceStates::ShaderResource, false);
+    auto depthWarp = makeStructuredBuffer(ResourceStates::UnorderedAccess, true);
+    auto control = makeStructuredBuffer(ResourceStates::UnorderedAccess, true);
+    auto extinction = makeStructuredBuffer(ResourceStates::ShaderResource, false);
+    auto overflowDepth = makeStructuredBuffer(ResourceStates::ShaderResource, false);
+    auto transmittance = device.createTexture(
+        TextureDesc()
+            .setWidth(16u)
+            .setHeight(16u)
+            .setDepth(4u)
+            .setDimension(TextureDimension::Texture3D)
+            .setFormat(NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::UnorderedAccess)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(coverage && depthWarp && control && extinction && overflowDepth && transmittance);
+
+    BindingLayoutDesc depthWarpLayoutDesc(descArena);
+    depthWarpLayoutDesc.setVisibility(ShaderType::Compute);
+    depthWarpLayoutDesc.setUseDescriptorBuffer(true);
+    depthWarpLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_DEPTH_WARP_BINDING_COVERAGE_WORDS, 1u));
+    depthWarpLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_DEPTH_WARP, 1u));
+    depthWarpLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_CONTROL, 1u));
+    depthWarpLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE));
+    auto depthWarpLayout = device.createBindingLayout(depthWarpLayoutDesc);
+    ASSERT_NE(depthWarpLayout.get(), nullptr);
+    ASSERT_TRUE(depthWarpLayout->isDescriptorBufferCompatible());
+    EXPECT_EQ(depthWarpLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+
+    BindingSetDesc depthWarpSetDesc(descArena);
+    depthWarpSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_DEPTH_WARP_BINDING_COVERAGE_WORDS, coverage.get()));
+    depthWarpSetDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_DEPTH_WARP, depthWarp.get()));
+    depthWarpSetDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_CONTROL, control.get()));
+    auto depthWarpSet = device.createBindingSet(depthWarpSetDesc, depthWarpLayout);
+    ASSERT_NE(depthWarpSet.get(), nullptr);
+
+    BindingLayoutDesc integrateLayoutDesc(descArena);
+    integrateLayoutDesc.setVisibility(ShaderType::Compute);
+    integrateLayoutDesc.setUseDescriptorBuffer(true);
+    integrateLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_EXTINCTION, 1u));
+    integrateLayoutDesc.addItem(BindingLayoutItem::Texture_UAV(NWB_AVBOIT_INTEGRATE_BINDING_TRANSMITTANCE, 1u));
+    integrateLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_CONTROL, 1u));
+    integrateLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_OVERFLOW_DEPTH, 1u));
+    integrateLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE));
+    auto integrateLayout = device.createBindingLayout(integrateLayoutDesc);
+    ASSERT_NE(integrateLayout.get(), nullptr);
+    ASSERT_TRUE(integrateLayout->isDescriptorBufferCompatible());
+    EXPECT_EQ(integrateLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+
+    BindingSetDesc integrateSetDesc(descArena);
+    integrateSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_EXTINCTION, extinction.get()));
+    integrateSetDesc.addItem(BindingSetItem::Texture_UAV(
+        NWB_AVBOIT_INTEGRATE_BINDING_TRANSMITTANCE,
+        transmittance.get(),
+        NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT,
+        TextureSubresourceSet(0u, 1u, 0u, 1u),
+        TextureDimension::Texture3D
+    ));
+    integrateSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_CONTROL, control.get()));
+    integrateSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_OVERFLOW_DEPTH, overflowDepth.get()));
+    auto integrateSet = device.createBindingSet(integrateSetDesc, integrateLayout);
+    ASSERT_NE(integrateSet.get(), nullptr);
+}
+
+
 // CSG's material graphics tail no longer falls back to a local texture/sampler set. Its clip, receiver-surface,
 // interval-sample, and cap-material layouts are all pure-resource descriptor-buffer shapes, so a CSG AVBOIT pipeline
 // can carry the shared heap at sets 8/9 without mixing classic descriptor sets. Exercise the exact local shapes

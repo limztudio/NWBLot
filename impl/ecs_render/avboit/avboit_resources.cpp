@@ -101,6 +101,9 @@ bool RendererAvboitSystem::createAvboitResources(){
         avboitState().m_depthWarpBindingLayout,
         Core::ShaderType::Compute,
         [](Core::BindingLayoutDesc& bindingLayoutDesc){
+            // Depth warp uses only buffer descriptors and push constants, so its target-generation set can live in
+            // Backend C's resource descriptor buffer without involving the global sampled-image/sampler heap.
+            bindingLayoutDesc.setUseDescriptorBuffer(true);
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_DEPTH_WARP_BINDING_COVERAGE_WORDS, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_DEPTH_WARP, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_CONTROL, 1));
@@ -136,6 +139,9 @@ bool RendererAvboitSystem::createAvboitResources(){
         avboitState().m_integrateBindingLayout,
         Core::ShaderType::Compute,
         [](Core::BindingLayoutDesc& bindingLayoutDesc){
+            // Integration is likewise a resource-only set: buffers plus the transmittance storage image. Keeping the
+            // image in the resource segment lets Backend C bind the full AVBOIT sequence through descriptor buffers.
+            bindingLayoutDesc.setUseDescriptorBuffer(true);
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_EXTINCTION, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_AVBOIT_INTEGRATE_BINDING_TRANSMITTANCE, 1));
             bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_CONTROL, 1));

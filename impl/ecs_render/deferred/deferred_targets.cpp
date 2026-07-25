@@ -570,7 +570,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     // AVBOIT's regular material sets use the shared target-generation heap-slot cbuffer. Allocate those
     // descriptor-buffer sets after deferred lighting's heap-coupled pipeline, while their layouts remain available
     // for the normal target setup. This preserves the established SW pipeline-creation sequence before AVBOIT draw
-    // work begins. Transparent CSG receives the parallel classic fallback here as well.
+    // work begins, including the shared CSG AVBOIT path.
     if(!m_renderer.avboitSystem().createAvboitFrameTargetBindingSets(
             deferredState().m_targets,
             deferredState().m_targets.avboit

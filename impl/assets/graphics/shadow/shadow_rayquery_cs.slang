@@ -22,6 +22,9 @@
 // hard-shadow result.
 struct NwbShadowRqPushConstants{
     uint frameIndex;
+    uint worldPositionSlot;
+    uint normalSlot;
+    uint depthSlot;
 };
 
 [[vk::push_constant]]
@@ -45,14 +48,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const int3 texel = int3(int2(pixel), 0);
 
     // Background (no geometry) is fully lit; the lighting pass ignores it anyway.
-    if(g_NwbShadowGBufferDepth.Load(texel).r >= 0.999999){
+    if(NwbHeapSampledImage2D(g_NwbShadowRqPushConstants.depthSlot).Load(texel).r >= 0.999999){
         for(uint slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot)
             g_NwbShadowVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
         return;
     }
 
-    const float3 worldPosition = g_NwbShadowGBufferWorldPosition.Load(texel).xyz;
-    const float3 normal = normalize(g_NwbShadowGBufferNormal.Load(texel).xyz * 2.0 - 1.0);
+    const float3 worldPosition = NwbHeapSampledImage2D(g_NwbShadowRqPushConstants.worldPositionSlot).Load(texel).xyz;
+    const float3 normal = normalize(NwbHeapSampledImage2D(g_NwbShadowRqPushConstants.normalSlot).Load(texel).xyz * 2.0 - 1.0);
 
     // Trace only the lights that hold a shadow slot (params.z >= 0); write each light's visibility into its own slot
     // layer. Lights without a slot are left at the cleared "all lit" white default.

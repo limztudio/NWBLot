@@ -133,8 +133,9 @@ private:
     // the HW opaque shadow feeds the SAME half-res -> temporal -> a-trous -> upsample denoise chain as the SW path.
     [[nodiscard]] bool ensureShadowSoftPipeline();
     [[nodiscard]] bool ensureShadowSoftBindingSet(DeferredFrameTargets& targets);
-    // Shared hardware opaque-shadow-trace bindings (TLAS + G-buffer + scene/light + per-mesh geometry + material
-    // context), appended by the trace pipeline/set. (Factored out for clarity; visibilityTarget is the full-res output.)
+    // Shared hardware opaque-shadow-trace local bindings (TLAS + scene/light + material context). The three G-buffer
+    // images are selected through target-generation heap slots in the push constants. (Factored out for clarity;
+    // visibilityTarget is the full-res or half-res output.)
     void appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const;
     void appendShadowTraceBindingSet(Core::BindingSetDesc& desc, DeferredFrameTargets& targets, Core::Texture* visibilityTarget)const;
     // ensureSwShadowPipeline creates the shared software-shadow binding layout + persistent adaptive buffers once, then

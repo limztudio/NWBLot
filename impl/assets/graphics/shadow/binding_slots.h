@@ -12,6 +12,8 @@
 #define NWB_SHADOW_RT_SET 0
 
 #define NWB_SHADOW_RT_BINDING_TLAS 0
+// Legacy local G-buffer binding numbers retained for source compatibility. The hardware trace now selects the
+// target-generation Texture2D descriptors through heap-slot push constants, leaving local bindings 1..3 as gaps.
 #define NWB_SHADOW_RT_BINDING_GBUFFER_WORLD_POSITION 1
 #define NWB_SHADOW_RT_BINDING_GBUFFER_NORMAL 2
 #define NWB_SHADOW_RT_BINDING_GBUFFER_DEPTH 3

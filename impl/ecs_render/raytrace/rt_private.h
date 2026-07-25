@@ -350,24 +350,30 @@ static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowTransparentBuil
 static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowTransparentIndirectPushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
 static_assert(sizeof(SwShadowMaxPushConstants) >= sizeof(SwShadowTransparentUniformPushConstants), "SwShadowMaxPushConstants must cover every SW-shadow pass push struct");
 
-// CPU mirror of the hardware RayQuery shadow push constants (shadow_rayquery_cs.slang): just the frame counter that
-// seeds the soft cone-jitter (the full-res HW opaque trace softens directly -- directional by its angular radius,
-// point/spot by the cone their source sphere subtends).
+// CPU mirror of the hardware RayQuery shadow push constants (shadow_rayquery_cs.slang): the cone-jitter frame counter
+// followed by target-generation heap slots for the full-resolution world-position, normal, and depth G-buffers.
 struct ShadowRqPushConstants{
     u32 frameIndex = 0u;
+    u32 worldPositionSlot = 0u;
+    u32 normalSlot = 0u;
+    u32 depthSlot = 0u;
 };
-static_assert(sizeof(ShadowRqPushConstants) == sizeof(u32), "ShadowRqPushConstants must match the shader push-constant layout");
+static_assert(sizeof(ShadowRqPushConstants) == sizeof(u32) * 4u, "ShadowRqPushConstants must match the shader push-constant layout");
 
 // CPU mirror of the hardware RayQuery SOFT OPAQUE half-res trace push constants (shadow_rayquery_soft_cs.slang): the
-// explicit half-res grid dims + the frame counter seeding the per-pixel cone-jitter. Mirrors NwbShadowRqSoftPushConstants
-// (and, minus instanceCount, SwShadowSoftOpaquePushConstants) so the half-res grid guard is structured identically and the
-// downsample/resolve tap alignment stays byte-identical.
+// explicit half-res grid dims + the frame counter seeding the per-pixel cone-jitter, followed by the same three
+// target-generation heap G-buffer slots. Mirrors NwbShadowRqSoftPushConstants (and, minus instanceCount,
+// SwShadowSoftOpaquePushConstants) so the half-res grid guard is structured identically and the downsample/resolve tap
+// alignment stays byte-identical.
 struct ShadowRqSoftPushConstants{
     u32 width = 0u;
     u32 height = 0u;
     u32 frameIndex = 0u;
+    u32 worldPositionSlot = 0u;
+    u32 normalSlot = 0u;
+    u32 depthSlot = 0u;
 };
-static_assert(sizeof(ShadowRqSoftPushConstants) == sizeof(u32) * 3u, "ShadowRqSoftPushConstants must match the shader push-constant layout");
+static_assert(sizeof(ShadowRqSoftPushConstants) == sizeof(u32) * 6u, "ShadowRqSoftPushConstants must match the shader push-constant layout");
 
 // CPU mirror of shadow_resolve_cs.slang's NwbShadowResolvePushConstants: the full/half dims, the a-trous dilation +
 // stage selector, the active shadow-slot range the resolve loops, the temporal-moments-valid flag, the upsample fold,

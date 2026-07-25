@@ -30,6 +30,9 @@ struct NwbShadowRqSoftPushConstants{
     uint width;
     uint height;
     uint frameIndex;
+    uint worldPositionSlot;
+    uint normalSlot;
+    uint depthSlot;
 };
 
 [[vk::push_constant]]
@@ -54,7 +57,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // Background: fully LIT (white) for every slot -- the multiplicative identity the resolve carries and the value the
     // upsample writes for a background full-res pixel, so the two agree at the geometry/background edge. Same depth
     // threshold as the SW trace (NWB_SW_SHADOW_BACKGROUND_DEPTH == the HW full-res trace's 0.999999).
-    if(g_NwbShadowGBufferDepth.Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH){
+    if(NwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.depthSlot).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH){
         for(uint i = 0u; i < lightCount; ++i){
             const float slot = g_NwbSceneLights[i].params.z;
             if(slot < 0.0)
@@ -64,8 +67,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    const float3 worldPosition = g_NwbShadowGBufferWorldPosition.Load(texel).xyz;
-    const float3 normal = normalize(g_NwbShadowGBufferNormal.Load(texel).xyz * 2.0 - 1.0);
+    const float3 worldPosition = NwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.worldPositionSlot).Load(texel).xyz;
+    const float3 normal = normalize(NwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.normalSlot).Load(texel).xyz * 2.0 - 1.0);
     for(uint i = 0u; i < lightCount; ++i){
         const float slot = g_NwbSceneLights[i].params.z;
         if(slot < 0.0)

@@ -32,6 +32,7 @@
 #include <impl/assets/graphics/caustic/sw_binding_slots.h>
 #include <impl/assets/graphics/csg/binding_slots.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
+#include <impl/assets/graphics/shadow/binding_slots.h>
 #include <tests/capturing_logger.h>
 
 // The manager lives in the Vulkan backend (Core::GraphicsBackend namespace). The test is inherently Vulkan-aware
@@ -1843,28 +1844,18 @@ TEST_F(DescriptorBufferRoundTripTest, ShadowReprojectMergeShapeBuildsAsDescripto
 
 
 // HW shadow trace parity: the shared inline-RayQuery occlusion layout used by BOTH the full-resolution hard fallback
-// (shadow_rayquery_cs) and the half-resolution soft opaque trace (shadow_rayquery_soft_cs). Its shape is
-// segment-coherent pure-resource (TLAS + 3 Texture_SRV + 1 Texture_UAV + 1 ConstantBuffer + 3 StructuredBuffer_SRV)
-// with no samplers. This standalone local-TLAS shape remains a direct proof that vkGetDescriptorEXT can encode an AS;
-// production Backend C now obtains its TLAS from the fixed descriptor-heap set 10, while Backend A retains this local
-// descriptor form.
-// Slots mirror shadow/binding_slots.h RT block (0 TLAS, 1..3 G-buffer, 4 scene CB, 5 light, 6 visibility UAV,
-// 10/11 shared material-context SRVs); the push-constant range rides the pipeline layout alongside the set.
+// (shadow_rayquery_cs) and the half-resolution soft opaque trace (shadow_rayquery_soft_cs). Its exact Backend-C local
+// shape is five pure-resource descriptors: scene CB, light/material/instance SRVs, and the visibility UAV. The TLAS
+// comes from immutable heap set 10 and the three G-buffer textures are target-generation heap reads selected through
+// the 24-byte soft-trace push block. Backend A retains its local TLAS descriptor as its portability fallback.
+// Slots mirror the remaining shadow/binding_slots.h RT block (4 scene CB, 5 light, 6 visibility UAV, and 10/11 shared
+// material-context SRVs); local gaps 0..3 and 7..9 are intentional.
 TEST_F(DescriptorBufferRoundTripTest, ShadowRtTraceShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/shadow_rt_trace_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    auto makeTexture = [&]() {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(32u).setHeight(32u)
-                .setFormat(Format::RGBA16_FLOAT)
-                .setInitialState(ResourceStates::ShaderResource)
-                .setKeepInitialState(true)
-        );
-    };
     auto makeUavTexture = [&]() {
         return device.createTexture(
             TextureDesc()
@@ -1894,61 +1885,42 @@ TEST_F(DescriptorBufferRoundTripTest, ShadowRtTraceShapeBuildsAsDescriptorBuffer
         );
     };
 
-    auto gbufferWorldPos = makeTexture();
-    auto gbufferNormal = makeTexture();
-    auto gbufferDepth = makeTexture();
     auto visibilityOutput = makeUavTexture();
     auto sceneShading = makeConstantBuffer();
     auto lightList = makeStructuredSrv(16u);
     auto materialTyped = makeStructuredSrv(16u);
     auto meshInstances = makeStructuredSrv(16u);
-    ASSERT_TRUE(gbufferWorldPos && gbufferNormal && gbufferDepth && visibilityOutput && sceneShading
-        && lightList && materialTyped && meshInstances);
+    ASSERT_TRUE(visibilityOutput && sceneShading && lightList && materialTyped && meshInstances);
 
-    // A non-virtual TLAS yields a valid device address at createAccelStruct time (vkGetAccelerationStructureDeviceAddressKHR
-    // -- no build command needed), which is exactly what the AS descriptor-buffer write (vkGetDescriptorEXT) requires.
-    RayTracingAccelStructDesc tlasDesc(descArena);
-    tlasDesc.setTopLevelMaxInstances(8u);
-    tlasDesc.setDebugName(Name{"tests/shadow_rt_trace/dummy_tlas"});
-    auto tlas = device.createAccelStruct(tlasDesc);
-    ASSERT_NE(tlas.get(), nullptr);
-
-    // Slots mirror shadow/binding_slots.h RT block (0 TLAS, 1..3 G-buffer SRVs, 4 scene CB, 5 light SRV, 6 visibility
-    // UAV, 10/11 shared material-context SRVs). The layout omits slot 7 (per-instance occluder material) intentionally,
-    // matching appendShadowTraceBindingLayout.
+    // Exact Backend-C local layout: TLAS and frame G-buffer images are heap resources, leaving only the scene/material
+    // context plus the visibility output in set 0. The 24-byte range covers NwbShadowRqSoftPushConstants, which is the
+    // larger of the shared hard/soft RayQuery push contracts.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
     layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::RayTracingAccelStruct(0u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(1u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(2u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(3u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(4u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(5u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(6u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(10u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(11u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_SHADOW_RT_BINDING_SCENE_SHADING, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_LIGHT_LIST, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MATERIAL_TYPED, 1u));
+    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INSTANCES, 1u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 6u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "shadow RT trace shape did not route to the descriptor-buffer path (first TLAS shape)";
+        << "shadow RT trace Backend-C local shape did not route to the descriptor-buffer path";
     EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
     const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 9u);
+    EXPECT_EQ(offsets.size(), 5u);
 
     BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::RayTracingAccelStruct(0u, tlas.get()));
-    setDesc.addItem(BindingSetItem::Texture_SRV(1u, gbufferWorldPos.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(2u, gbufferNormal.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(3u, gbufferDepth.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::ConstantBuffer(4u, sceneShading.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_SRV(5u, lightList.get()));
-    setDesc.addItem(BindingSetItem::Texture_UAV(6u, visibilityOutput.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_SRV(10u, materialTyped.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_SRV(11u, meshInstances.get()));
+    setDesc.addItem(BindingSetItem::ConstantBuffer(NWB_SHADOW_RT_BINDING_SCENE_SHADING, sceneShading.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_LIGHT_LIST, lightList.get()));
+    setDesc.addItem(BindingSetItem::Texture_UAV(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, visibilityOutput.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MATERIAL_TYPED, materialTyped.get()));
+    setDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INSTANCES, meshInstances.get()));
 
     auto bindingSet = device.createBindingSet(setDesc, layout);
     ASSERT_NE(bindingSet.get(), nullptr);

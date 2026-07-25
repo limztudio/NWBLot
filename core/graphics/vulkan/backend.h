@@ -1524,6 +1524,11 @@ public:
         GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::invalid()
     );
 
+    // Graphics sibling of bindCompute. Deferred/compositor fullscreen passes use this after setGraphicsState() so
+    // their per-pass texture/sampler slots can resolve through the persistent heap on both descriptor-indexing and
+    // descriptor-buffer backends.
+    void bindGraphics(CommandList& commandList, const GraphicsPipeline& pipeline);
+
     // Ray-tracing sibling of bindCompute: binds the heap's resource + sampler tables against the ray-tracing pipeline's
     // layout at VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR. Call after setRayTracingState(pipeline) and before dispatchRays;
     // the pipeline must carry the heap layouts at its heap sets (ensureCausticRtPipeline pins them at sets 8/9). Lets a
@@ -1543,7 +1548,7 @@ public:
     [[nodiscard]] u32 getResourceSetIndex()const{ return m_resourceSetIndex; }
     [[nodiscard]] u32 getSamplerSetIndex()const{ return m_samplerSetIndex; }
     [[nodiscard]] u32 getAccelStructSetIndex()const{ return m_accelStructSetIndex; }
-    // The two bindless layouts a consuming pipeline must be built from (resource -> set 0, sampler -> set 1), in that
+    // The two bindless layouts a consuming pipeline must be built from (resource -> set 8, sampler -> set 9), in that
     // order, so the pipeline layout matches what bind()/bindCompute() bind against. Null until initialize() succeeds.
     [[nodiscard]] const BindingLayoutHandle& getResourceLayout()const{ return m_resourceLayout; }
     [[nodiscard]] const BindingLayoutHandle& getSamplerLayout()const{ return m_samplerLayout; }
@@ -1583,6 +1588,7 @@ private:
     [[nodiscard]] SlotAllocator& allocatorForClass(GpuDescriptorClass::Enum descriptorClass);
     [[nodiscard]] DescriptorTable* tableForClass(GpuDescriptorClass::Enum descriptorClass);
     void releaseAccelStructDescriptorBlock(u32 slot);
+    void releaseRetainedDescriptorResource(GpuDescriptorHandle handle);
 
     // Backend C (VK_EXT_descriptor_buffer). Carve one persistent block per segment (resource/sampler) sized to the
     // driver-queried set block of the heap's bindless layout, and cache each class's binding offset within its block.
@@ -1632,6 +1638,10 @@ private:
     // a new TLAS receives a fresh slot/block, while the old block and a retaining handle live through deferred free.
     Vector<DescriptorBufferSegment, Alloc::GlobalArena> m_accelStructBufferBlocks;
     Vector<RayTracingAccelStructHandle, Alloc::GlobalArena> m_accelStructResources;
+    // Ordinary heap descriptors are persistent too. Keep their concrete resource alive until the slot's deferred-free
+    // quarantine matures, so an in-flight command buffer cannot resolve a descriptor to a destroyed resource.
+    Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_resourceDescriptorResources;
+    Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_samplerDescriptorResources;
     u32 m_accelStructBufferBindingOffset = 0u;
     // The driver-queried byte offset of each class's register space within its set block (slot -> bytes); write()
     // addresses a descriptor as block.offsetBytes + classOffset[handle.slot] + handle.slotIndex()*stride.

@@ -18,14 +18,19 @@ NWB_IMPL_BEGIN
 
 bool RendererDeferredSystem::createDeferredCompositeResources(){
     auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred compositing requires the global descriptor heap"));
+        return false;
+    }
 
     if(!deferredState().m_compositeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_COMPOSITE_BINDING_OPAQUE_COLOR, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_COLOR, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_EXTINCTION, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(NWB_DEFERRED_COMPOSITE_BINDING_SAMPLER, 1));
+        bindingLayoutDesc
+            .setVisibility(Core::ShaderType::Pixel)
+            .setUseDescriptorBuffer(heap.usesDescriptorBuffer())
+        ;
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_DEFERRED_COMPOSITE_BINDING_BINDLESS_RESOURCES, 1));
 
         deferredState().m_compositeBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!deferredState().m_compositeBindingLayout){
@@ -65,15 +70,18 @@ bool RendererDeferredSystem::createDeferredCompositePipeline(Core::Framebuffer* 
     if(deferredState().m_compositePipeline && deferredState().m_compositePipeline->getFramebufferInfo() == framebufferInfo)
         return true;
 
+    auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     Core::GraphicsPipelineDesc pipelineDesc;
     pipelineDesc
         .setVertexShader(deferredState().m_compositeVertexShader)
         .setPixelShader(deferredState().m_compositePixelShader)
         .setRenderState(ECSRenderDetail::BuildCompositeRenderState())
         .addBindingLayout(deferredState().m_compositeBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
     ;
 
-    auto* device = graphics().getDevice();
     deferredState().m_compositePipeline = device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
     if(!deferredState().m_compositePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite pipeline"));
@@ -93,6 +101,17 @@ bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandL
         && deferredState().m_compositePipeline->getFramebufferInfo() == presentationFramebuffer->getFramebufferInfo()
     );
 
+    if(!uploadDeferredBindlessFrameResources(commandList, targets))
+        return false;
+
+    commandList.setResourceStatesForBindingSet(targets.compositeBindingSet.get());
+    // The three compositor inputs are global-heap descriptors, so move them explicitly to SRV state before the
+    // fullscreen draw. The local slot cbuffer above remains covered by the ordinary binding-set transition.
+    commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+    commandList.setTextureState(targets.avboit.accumColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+    commandList.setTextureState(targets.avboit.accumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+    commandList.commitBarriers();
+
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredComposite, graphics().getDevice(), commandList);
 
     Core::ViewportState viewportState;
@@ -105,6 +124,7 @@ bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandL
     graphicsState.addBindingSet(targets.compositeBindingSet.get());
 
     commandList.setGraphicsState(graphicsState);
+    graphics().getDevice()->getDescriptorHeap().bindGraphics(commandList, *deferredState().m_compositePipeline);
 
     Core::DrawArguments drawArgs;
     drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);

@@ -131,9 +131,143 @@ void RendererDeferredSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets
     targets = AvboitFrameTargets{};
 }
 
+bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameTargets& targets){
+    auto* device = graphics().getDevice();
+    if(!device){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot create deferred bindless resources without a graphics device"));
+        return false;
+    }
+
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred lighting/compositor requires the global descriptor heap"));
+        return false;
+    }
+    if(!deferredState().m_sampler){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred bindless resources require the deferred sampler"));
+        return false;
+    }
+
+    auto registerTexture = [&heap](
+        Core::GpuDescriptorHandle& handle,
+        const Core::GpuDescriptorClass::Enum descriptorClass,
+        Core::Texture* texture,
+        const Core::Format::Enum format,
+        const Core::TextureSubresourceSet& subresources,
+        const Core::TextureDimension::Enum dimension
+    ) -> bool{
+        handle = heap.allocate(descriptorClass);
+        if(!handle.valid())
+            return false;
+        if(heap.write(handle, Core::BindingSetItem::Texture_SRV(0u, texture, format, subresources, dimension)))
+            return true;
+        heap.free(handle);
+        handle = Core::GpuDescriptorHandle::invalid();
+        return false;
+    };
+
+    auto registerSampler = [&heap](Core::GpuDescriptorHandle& handle, Core::Sampler* sampler) -> bool{
+        handle = heap.allocate(Core::GpuDescriptorClass::Sampler);
+        if(!handle.valid())
+            return false;
+        if(heap.write(handle, Core::BindingSetItem::Sampler(0u, sampler)))
+            return true;
+        heap.free(handle);
+        handle = Core::GpuDescriptorHandle::invalid();
+        return false;
+    };
+
+    DeferredBindlessFrameResources& bindless = targets.bindless;
+    const bool registered =
+        registerTexture(bindless.gbufferBaseColor, Core::GpuDescriptorClass::SampledImage, targets.albedo.get(), targets.albedoFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.gbufferNormal, Core::GpuDescriptorClass::SampledImage, targets.normal.get(), targets.normalFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.gbufferWorldPosition, Core::GpuDescriptorClass::SampledImage, targets.worldPosition.get(), targets.worldPositionFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.gbufferDepth, Core::GpuDescriptorClass::SampledImage, targets.depth.get(), targets.depthFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.shadowVisibility, Core::GpuDescriptorClass::SampledImage2DArray, targets.shadowVisibility.get(), targets.shadowVisibilityFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerTexture(bindless.causticIrradiance, Core::GpuDescriptorClass::SampledImage, targets.causticIrradiance.get(), targets.causticIrradianceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.surfelIrradiance, Core::GpuDescriptorClass::SampledImage, targets.surfelIrradiance.get(), targets.surfelIrradianceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerSampler(bindless.sampler, deferredState().m_sampler.get())
+        && registerTexture(bindless.opaqueColor, Core::GpuDescriptorClass::SampledImage, targets.opaqueColor.get(), targets.opaqueColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.avboitAccumColor, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumColor.get(), targets.avboit.accumColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.avboitAccumExtinction, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumExtinction.get(), targets.avboit.accumExtinctionFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+    ;
+    if(!registered){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register deferred frame resources in the descriptor heap"));
+        resetDeferredBindlessFrameResources(targets);
+        return false;
+    }
+
+    bindless.slots.gbufferBaseColor = bindless.gbufferBaseColor.slot();
+    bindless.slots.gbufferNormal = bindless.gbufferNormal.slot();
+    bindless.slots.gbufferWorldPosition = bindless.gbufferWorldPosition.slot();
+    bindless.slots.gbufferDepth = bindless.gbufferDepth.slot();
+    bindless.slots.shadowVisibility = bindless.shadowVisibility.slot();
+    bindless.slots.causticIrradiance = bindless.causticIrradiance.slot();
+    bindless.slots.surfelIrradiance = bindless.surfelIrradiance.slot();
+    bindless.slots.sampler = bindless.sampler.slot();
+    bindless.slots.opaqueColor = bindless.opaqueColor.slot();
+    bindless.slots.avboitAccumColor = bindless.avboitAccumColor.slot();
+    bindless.slots.avboitAccumExtinction = bindless.avboitAccumExtinction.slot();
+
+    Core::BufferDesc slotsBufferDesc;
+    slotsBufferDesc
+        .setByteSize(sizeof(DeferredBindlessResourceSlots))
+        .setIsConstantBuffer(true)
+        .setDebugName("ECSRender_DeferredBindlessResourceSlots")
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    bindless.slotsBuffer = graphics().createBuffer(slotsBufferDesc);
+    if(!bindless.slotsBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred bindless slot buffer"));
+        resetDeferredBindlessFrameResources(targets);
+        return false;
+    }
+
+    return true;
+}
+
+void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTargets& targets){
+    if(auto* device = graphics().getDevice()){
+        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+        if(heap.isInitialized()){
+            heap.free(targets.bindless.gbufferBaseColor);
+            heap.free(targets.bindless.gbufferNormal);
+            heap.free(targets.bindless.gbufferWorldPosition);
+            heap.free(targets.bindless.gbufferDepth);
+            heap.free(targets.bindless.shadowVisibility);
+            heap.free(targets.bindless.causticIrradiance);
+            heap.free(targets.bindless.surfelIrradiance);
+            heap.free(targets.bindless.sampler);
+            heap.free(targets.bindless.opaqueColor);
+            heap.free(targets.bindless.avboitAccumColor);
+            heap.free(targets.bindless.avboitAccumExtinction);
+        }
+    }
+    targets.bindless = DeferredBindlessFrameResources{};
+}
+
+bool RendererDeferredSystem::uploadDeferredBindlessFrameResources(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    DeferredBindlessFrameResources& bindless = targets.bindless;
+    if(bindless.slotsUploaded)
+        return true;
+    if(!bindless.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot upload incomplete deferred bindless resources"));
+        return false;
+    }
+
+    commandList.setBufferState(bindless.slotsBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.writeBuffer(bindless.slotsBuffer.get(), &bindless.slots, sizeof(bindless.slots));
+    commandList.setBufferState(bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    commandList.commitBarriers();
+    bindless.slotsUploaded = true;
+    return true;
+}
+
 void RendererDeferredSystem::resetDeferredFrameTargets(){
     deferredState().m_targets.lightingBindingSet.reset();
     deferredState().m_targets.compositeBindingSet.reset();
+    resetDeferredBindlessFrameResources(deferredState().m_targets);
     resetAvboitFrameTargets(deferredState().m_targets.avboit);
     csgState().m_intervalPeelBindingSet.reset();
     csgState().m_receiverSpanBuildBindingSet.reset();
@@ -387,94 +521,33 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     if(!m_renderer.raytracingSystem().createCausticTargets(createdTargets))
         return false;
 
+    if(!createDeferredBindlessFrameResources(createdTargets))
+        return false;
+
     Core::BindingSetDesc lightingBindingSetDesc(arena());
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_BASE_COLOR,
-        createdTargets.albedo.get(),
-        createdTargets.albedoFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_NORMAL,
-        createdTargets.normal.get(),
-        createdTargets.normalFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_WORLD_POSITION,
-        createdTargets.worldPosition.get(),
-        createdTargets.worldPositionFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_DEPTH,
-        createdTargets.depth.get(),
-        createdTargets.depthFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, deferredState().m_sampler.get()));
     lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_DEFERRED_LIGHTING_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
     lightingBindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_DEFERRED_LIGHTING_BINDING_LIGHT_LIST, deferredState().m_lightBuffer.get()));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY,
-        createdTargets.shadowVisibility.get(),
-        createdTargets.shadowVisibilityFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ));
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_DEFERRED_LIGHTING_BINDING_CAUSTIC_IRRADIANCE,
-        createdTargets.causticIrradiance.get(),
-        createdTargets.causticIrradianceFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    // Surfel GI: the RESOLVED screen-space irradiance texture (surfel_resolve_cs writes it; the lighting samples it).
-    // Created WITH these targets (same lifetime), so it is bound here at creation -- no lazy rebuild. Reading the
-    // resolved texture (not the RW surfel pool) is what keeps the pool off the pixel shader = no frames-in-flight race.
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_IRRADIANCE,
-        createdTargets.surfelIrradiance.get(),
-        createdTargets.surfelIrradianceFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
+    lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
+        NWB_DEFERRED_LIGHTING_BINDING_BINDLESS_RESOURCES,
+        createdTargets.bindless.slotsBuffer.get()
     ));
     createdTargets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, deferredState().m_lightingBindingLayout);
     if(!createdTargets.lightingBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting binding set"));
+        resetDeferredBindlessFrameResources(createdTargets);
         return false;
     }
 
     Core::BindingSetDesc bindingSetDesc(arena());
-    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_DEFERRED_COMPOSITE_BINDING_OPAQUE_COLOR,
-        createdTargets.opaqueColor.get(),
-        createdTargets.opaqueColorFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
+        NWB_DEFERRED_COMPOSITE_BINDING_BINDLESS_RESOURCES,
+        createdTargets.bindless.slotsBuffer.get()
     ));
-    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_COLOR,
-        createdTargets.avboit.accumColor.get(),
-        createdTargets.avboit.accumColorFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    bindingSetDesc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_EXTINCTION,
-        createdTargets.avboit.accumExtinction.get(),
-        createdTargets.avboit.accumExtinctionFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    bindingSetDesc.addItem(Core::BindingSetItem::Sampler(NWB_DEFERRED_COMPOSITE_BINDING_SAMPLER, deferredState().m_sampler.get()));
     createdTargets.compositeBindingSet = device->createBindingSet(bindingSetDesc, deferredState().m_compositeBindingLayout);
     if(!createdTargets.compositeBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite binding set"));
+        createdTargets.lightingBindingSet.reset();
+        resetDeferredBindlessFrameResources(createdTargets);
         return false;
     }
 

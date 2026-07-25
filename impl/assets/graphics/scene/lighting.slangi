@@ -46,8 +46,10 @@
 // transparent occluders), one Texture2DArray layer per shadow slot. The shadow producers write a light's
 // transmittance into its slot layer; a light's slot index lives in its light record (params.z).
 #ifndef NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
+#ifndef NWB_SCENE_SHADOW_VISIBILITY_RESOURCE
 [[vk::binding(NWB_SCENE_SHADOW_VISIBILITY_BINDING, NWB_SCENE_SHADOW_VISIBILITY_SET)]]
 Texture2DArray<float4> g_NwbShadowVisibility;
+#endif
 #endif
 
 // Additive caustic irradiance (RGBA16F, screen space): the focused light the caustic producer splats onto opaque
@@ -55,8 +57,10 @@ Texture2DArray<float4> g_NwbShadowVisibility;
 // this is a single screen-space buffer (all caustic lights accumulate into it) and is ADDED to the lit color
 // pre-tonemap. Cleared to black each frame -- black is the additive identity, so an unwritten buffer is a no-op.
 #ifndef NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
+#ifndef NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE
 [[vk::binding(NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING, NWB_SCENE_CAUSTIC_IRRADIANCE_SET)]]
 Texture2D<float4> g_NwbCausticIrradiance;
+#endif
 #endif
 
 // The surfel GI gather is NOT done here. It runs once per pixel in a dedicated COMPUTE resolve pass
@@ -84,7 +88,11 @@ half3 nwbBxdfLightTransmittance(int2 pixel, uint lightIndex){
     if(slot < 0.0)
         return half3(1.0, 1.0, 1.0);
 
+    #ifdef NWB_SCENE_SHADOW_VISIBILITY_RESOURCE
+    return half3(NWB_SCENE_SHADOW_VISIBILITY_RESOURCE.Load(int4(pixel, int(slot), 0)).rgb);
+    #else
     return half3(g_NwbShadowVisibility.Load(int4(pixel, int(slot), 0)).rgb);
+    #endif
 #endif
 }
 
@@ -102,7 +110,11 @@ half3 nwbBxdfCausticIrradiance(int2 pixel){
     if(pixel.x < 0)
         return half3(0.0, 0.0, 0.0);
 
+    #ifdef NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE
+    return half3(NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE.Load(int3(pixel, 0)).rgb);
+    #else
     return half3(g_NwbCausticIrradiance.Load(int3(pixel, 0)).rgb);
+    #endif
 #endif
 }
 

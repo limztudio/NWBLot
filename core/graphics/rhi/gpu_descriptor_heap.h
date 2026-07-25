@@ -34,6 +34,10 @@ namespace GpuDescriptorClass{
         UniformBuffer,      // ConstantBuffer        -> UNIFORM_BUFFER
         AccelStruct,        // RayTracingAccelStruct -> ACCELERATION_STRUCTURE_KHR (see note below)
         Sampler,            // Sampler               -> SAMPLER (separate index namespace)
+        // Keep this appended so the class tags above remain stable across the C++/shader handle ABI. It is a
+        // distinct descriptor array because Texture2D and Texture2DArray have different shader types even though
+        // both write VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE descriptors.
+        SampledImage2DArray,// Texture2DArray_SRV     -> SAMPLED_IMAGE
 
         kCount
     };

@@ -1584,6 +1584,49 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRunsOnBackendC){
         << "heap write() did not route through the descriptor-buffer path";
 
     heap.free(handle);
+
+    // Deferred lighting consumes its per-light shadow visibility as Texture2DArray while ordinary G-buffer and
+    // compositor inputs remain Texture2D. Both use VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, but the shader types differ,
+    // so this distinct heap class/binding must have a valid Backend-C descriptor-buffer write path as well.
+    auto sampledImageArray = device.createTexture(
+        TextureDesc()
+            .setWidth(32u)
+            .setHeight(32u)
+            .setArraySize(3u)
+            .setDimension(TextureDimension::Texture2DArray)
+            .setFormat(Format::RGBA16_FLOAT)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(sampledImageArray);
+    EXPECT_EQ(sampledImageArray->getReferenceCount(), 1u);
+
+    EXPECT_EQ(
+        heap.getRegisterSlot(GpuDescriptorClass::SampledImage2DArray),
+        NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY
+    );
+    const GpuDescriptorHandle sampledImageArrayHandle = heap.allocate(GpuDescriptorClass::SampledImage2DArray);
+    ASSERT_TRUE(sampledImageArrayHandle.valid());
+    EXPECT_TRUE(heap.write(
+        sampledImageArrayHandle,
+        BindingSetItem::Texture_SRV(
+            0u,
+            sampledImageArray.get(),
+            Format::RGBA16_FLOAT,
+            TextureSubresourceSet(0u, 1u, 0u, 3u),
+            TextureDimension::Texture2DArray
+        )
+    )) << "heap Texture2DArray write() did not route through the descriptor-buffer path";
+    EXPECT_EQ(sampledImageArray->getReferenceCount(), 2u)
+        << "heap write() did not retain the persistent Texture2DArray resource";
+
+    heap.free(sampledImageArrayHandle);
+    EXPECT_EQ(sampledImageArray->getReferenceCount(), 2u)
+        << "heap free() released a descriptor resource before its in-flight quarantine matured";
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
+    EXPECT_EQ(sampledImageArray->getReferenceCount(), 1u)
+        << "heap did not release the descriptor resource after its in-flight quarantine matured";
 }
 
 

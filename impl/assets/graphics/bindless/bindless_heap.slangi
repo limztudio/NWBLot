@@ -47,6 +47,11 @@ struct NwbBindlessHeapUint{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 Texture2D<float4> g_NwbHeapSampledImages[];
 
+// Texture2DArray requires a distinct shader declaration from Texture2D even though both are Vulkan sampled-image
+// descriptors. It therefore owns a separate binding/class while sharing the resource-slot namespace.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+Texture2DArray<float4> g_NwbHeapSampledImage2DArrays[];
+
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 RWTexture2D<float4> g_NwbHeapStorageImages[];
 
@@ -88,6 +93,20 @@ RaytracingAccelerationStructure g_NwbHeapAccelStruct;
 // buffer by value (an opaque handle) so the caller loads from its own offset.
 ByteAddressBuffer NwbHeapRawBuffer(const uint slot){
     return g_NwbHeapRawBuffers[NonUniformResourceIndex(slot)];
+}
+
+// Deferred/compositor resource-slot buffers are constant across their fullscreen draw. Keep these indices uniform:
+// unlike per-mesh fetches they do not require sampler/image non-uniform-indexing capability on the portability path.
+Texture2D<float4> NwbHeapSampledImage2D(const uint slot){
+    return g_NwbHeapSampledImages[slot];
+}
+
+Texture2DArray<float4> NwbHeapSampledImage2DArray(const uint slot){
+    return g_NwbHeapSampledImage2DArrays[slot];
+}
+
+SamplerState NwbHeapSampler(const uint slot){
+    return g_NwbHeapSamplers[slot];
 }
 
 

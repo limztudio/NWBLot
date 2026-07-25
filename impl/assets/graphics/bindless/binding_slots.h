@@ -16,7 +16,7 @@
 //     keep the heap separate from pipeline-local low sets), and
 //   - the per-class register-space binding numbers GpuDescriptorHeap::getRegisterSlot() adds to each table.
 // createBindlessLayout() sets binding.binding = item.slot directly (no classic 128/256/384 offset), so the resource
-// table is one set carrying five flat bindings, one per non-sampler class; the sampler table is a second set.
+// table is one set carrying six flat bindings, one per non-sampler class; the sampler table is a second set.
 // Backend C adds a third, fixed one-descriptor TLAS set. It is deliberately separate from the descriptor-indexing
 // resource table: acceleration structures cannot use Backend A's update-after-bind bindless path, while
 // VK_EXT_descriptor_buffer can encode them directly through vkGetDescriptorEXT.
@@ -29,6 +29,7 @@
 #define NWB_BINDLESS_HEAP_BINDING_SAMPLED_BUFFER 2   // Buffer                 (GpuDescriptorClass::SampledBuffer)
 #define NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER 3   // RWByteAddressBuffer    (GpuDescriptorClass::StorageBuffer)
 #define NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER 4   // ConstantBuffer         (GpuDescriptorClass::UniformBuffer)
+#define NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY 5 // Texture2DArray      (GpuDescriptorClass::SampledImage2DArray)
 #define NWB_BINDLESS_HEAP_BINDING_SAMPLER        0   // SamplerState (set 9)   (GpuDescriptorClass::Sampler)
 #define NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT   0   // RaytracingAccelerationStructure (set 10, Backend C only)
 

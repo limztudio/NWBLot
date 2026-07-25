@@ -8,6 +8,7 @@
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
 
 #include <core/graphics/api.h>
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,6 +91,64 @@ struct MaterialPassDrawContext{
     Core::BindingSet* passBindingSet = nullptr;
     const AvboitFrameTargets* avboitTargets = nullptr;
     const Core::ViewportState& viewportState;
+};
+
+// Per-frame slot indirection for the first ordinary-pass bindless migration. The data is a std140-compatible
+// sequence of three uint4 lanes in deferred/bindless_resources.slangi. Descriptor handles retain their class tag on
+// the CPU; shaders need only the global slot because each field names the descriptor array it indexes.
+struct DeferredBindlessResourceSlots{
+    u32 gbufferBaseColor = 0u;
+    u32 gbufferNormal = 0u;
+    u32 gbufferWorldPosition = 0u;
+    u32 gbufferDepth = 0u;
+
+    u32 shadowVisibility = 0u;
+    u32 causticIrradiance = 0u;
+    u32 surfelIrradiance = 0u;
+    u32 sampler = 0u;
+
+    u32 opaqueColor = 0u;
+    u32 avboitAccumColor = 0u;
+    u32 avboitAccumExtinction = 0u;
+    u32 _pad = 0u;
+};
+static_assert(sizeof(DeferredBindlessResourceSlots) == sizeof(u32) * 12u, "Deferred bindless slots must match three std140 uint4 lanes");
+
+// Heap registrations are owned by the deferred-target generation. Resize/recreate frees each handle through the
+// heap's deferred retirement path before releasing the texture it points at; the slot buffer is shared by lighting
+// and compositing because both fullscreen passes consume the same frame generation.
+struct DeferredBindlessFrameResources{
+    Core::BufferHandle slotsBuffer;
+    DeferredBindlessResourceSlots slots;
+    Core::GpuDescriptorHandle gbufferBaseColor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle gbufferNormal = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle gbufferWorldPosition = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle gbufferDepth = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowVisibility = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle causticIrradiance = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle surfelIrradiance = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle sampler = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle opaqueColor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle avboitAccumColor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle avboitAccumExtinction = Core::GpuDescriptorHandle::invalid();
+    bool slotsUploaded = false;
+
+    [[nodiscard]] bool valid()const noexcept{
+        return
+            slotsBuffer != nullptr
+            && gbufferBaseColor.valid()
+            && gbufferNormal.valid()
+            && gbufferWorldPosition.valid()
+            && gbufferDepth.valid()
+            && shadowVisibility.valid()
+            && causticIrradiance.valid()
+            && surfelIrradiance.valid()
+            && sampler.valid()
+            && opaqueColor.valid()
+            && avboitAccumColor.valid()
+            && avboitAccumExtinction.valid()
+        ;
+    }
 };
 
 struct DeferredFrameTargets{
@@ -231,6 +290,7 @@ struct DeferredFrameTargets{
     Core::FramebufferHandle opaqueLightingFramebuffer;
     Core::BindingSetHandle lightingBindingSet;
     Core::BindingSetHandle compositeBindingSet;
+    DeferredBindlessFrameResources bindless;
     AvboitFrameTargets avboit;
 
     [[nodiscard]] bool csgIntervalTargetsValid()const noexcept{
@@ -299,6 +359,7 @@ struct DeferredFrameTargets{
             && opaqueLightingFramebuffer != nullptr
             && lightingBindingSet != nullptr
             && compositeBindingSet != nullptr
+            && bindless.valid()
             && avboit.valid()
         ;
 #else

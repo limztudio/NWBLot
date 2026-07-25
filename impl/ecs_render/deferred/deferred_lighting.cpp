@@ -18,6 +18,11 @@ NWB_IMPL_BEGIN
 
 bool RendererDeferredSystem::createDeferredLightingResources(){
     auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred lighting requires the global descriptor heap"));
+        return false;
+    }
 
     if(!deferredState().m_sceneShadingBuffer){
         Core::BufferDesc sceneShadingBufferDesc;
@@ -51,22 +56,15 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
 
     if(!deferredState().m_lightingBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
-        bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_BASE_COLOR, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_NORMAL, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_WORLD_POSITION, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_DEPTH, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Sampler(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, 1));
+        bindingLayoutDesc
+            .setVisibility(Core::ShaderType::Pixel)
+            // The remaining local set is pure-resource (CBV/SRV), so it can join the descriptor-buffer pipeline on
+            // Backend C while Backend A continues to use its classic descriptor set.
+            .setUseDescriptorBuffer(heap.usesDescriptorBuffer())
+        ;
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_DEFERRED_LIGHTING_BINDING_SCENE_SHADING, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_DEFERRED_LIGHTING_BINDING_LIGHT_LIST, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_CAUSTIC_IRRADIANCE, 1));
-
-        // Surfel GI: a single RESOLVED screen-space irradiance texture (RGBA16F) the surfel_resolve_cs COMPUTE pass
-        // writes and this pixel shader samples. Reading the resolved texture (not the read-write surfel pool) keeps the
-        // pool off the pixel shader (compute-only), eliminating the frames-in-flight pool race. Created with the
-        // deferred targets, so it is bound at set creation (no lazy rebuild). Cleared to 0 (a=0) -> hemiAmbient no-op.
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_IRRADIANCE, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_DEFERRED_LIGHTING_BINDING_BINDLESS_RESOURCES, 1));
 
         deferredState().m_lightingBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!deferredState().m_lightingBindingLayout){
@@ -108,15 +106,18 @@ bool RendererDeferredSystem::createDeferredLightingPipeline(DeferredFrameTargets
     if(deferredState().m_lightingPipeline && deferredState().m_lightingPipeline->getFramebufferInfo() == framebufferInfo)
         return true;
 
+    auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     Core::GraphicsPipelineDesc pipelineDesc;
     pipelineDesc
         .setVertexShader(deferredState().m_compositeVertexShader)
         .setPixelShader(deferredState().m_lightingPixelShader)
         .setRenderState(ECSRenderDetail::BuildCompositeRenderState())
         .addBindingLayout(deferredState().m_lightingBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
     ;
 
-    auto* device = graphics().getDevice();
     deferredState().m_lightingPipeline = device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
     if(!deferredState().m_lightingPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting pipeline"));
@@ -192,13 +193,22 @@ bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandLi
     NWB_ASSERT(targets.opaqueLightingFramebuffer);
     NWB_ASSERT(deferredState().m_lightingPipeline);
 
-    // The resolved surfel-irradiance texture is created with the deferred targets and bound at creation, so the lighting
-    // binding set needs no per-frame rebuild for GI.
-
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredLighting, graphics().getDevice(), commandList);
+    if(!uploadDeferredBindlessFrameResources(commandList, targets))
+        return false;
 
     commandList.setResourceStatesForBindingSet(targets.lightingBindingSet.get());
+    // Heap writes are persistent descriptors rather than BindingSet items, so state tracking cannot discover these
+    // sampled textures automatically. Transition every target the lighting pixel shader resolves through the heap.
+    commandList.setTextureState(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+    commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+    commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+    commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+    commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+    commandList.setTextureState(targets.causticIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+    commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
+
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredLighting, graphics().getDevice(), commandList);
 
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(targets.opaqueLightingFramebuffer->getFramebufferInfo().getViewport());
@@ -210,6 +220,7 @@ bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandLi
     graphicsState.addBindingSet(targets.lightingBindingSet.get());
 
     commandList.setGraphicsState(graphicsState);
+    graphics().getDevice()->getDescriptorHeap().bindGraphics(commandList, *deferredState().m_lightingPipeline);
 
     Core::DrawArguments drawArgs;
     drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);

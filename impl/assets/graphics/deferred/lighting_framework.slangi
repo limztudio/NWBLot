@@ -19,6 +19,7 @@
 
 #include "binding_slots.h"
 #include "bxdf_surface.slangi"
+#include "bindless_resources.slangi"
 #include "../scene/binding_slots.h"
 
 // The scene shading cbuffer + light list live in the deferred lighting binding set; point scene/buffer.slangi
@@ -35,39 +36,31 @@
 #ifndef NWB_SCENE_LIGHT_LIST_BINDING
 #define NWB_SCENE_LIGHT_LIST_BINDING NWB_DEFERRED_LIGHTING_BINDING_LIGHT_LIST
 #endif
-#ifndef NWB_SCENE_SHADOW_VISIBILITY_SET
-#define NWB_SCENE_SHADOW_VISIBILITY_SET NWB_DEFERRED_LIGHTING_SET
-#endif
-#ifndef NWB_SCENE_SHADOW_VISIBILITY_BINDING
-#define NWB_SCENE_SHADOW_VISIBILITY_BINDING NWB_DEFERRED_LIGHTING_BINDING_SHADOW_VISIBILITY
-#endif
-#ifndef NWB_SCENE_CAUSTIC_IRRADIANCE_SET
-#define NWB_SCENE_CAUSTIC_IRRADIANCE_SET NWB_DEFERRED_LIGHTING_SET
-#endif
-#ifndef NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING
-#define NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING NWB_DEFERRED_LIGHTING_BINDING_CAUSTIC_IRRADIANCE
-#endif
+// G-buffer, screen-space shadow/caustic/GI inputs, and the shared sampler are now global-heap entries. The local
+// lighting set carries this small target-generation cbuffer plus the scene/light buffers below. Define the scene
+// accessors before lighting.slangi so its ordinary local declarations remain available to non-deferred consumers.
+[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_BINDLESS_RESOURCES, NWB_DEFERRED_LIGHTING_SET)]]
+ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbDeferredBindlessResources;
+
+#define NWB_SCENE_SHADOW_VISIBILITY_RESOURCE NwbHeapSampledImage2DArray(g_NwbDeferredBindlessResources.lightingSlots.x)
+#define NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.y)
 // Brings common/math (nwbSafeNormalize, frame helpers), scene/buffer (g_NwbSceneLights, nwbSceneLightCount,
 // g_NwbSceneCameraPosition, nwbSceneResolveLight) and the engine's default BRDF lobe (nwbSceneShadeLight) +
 // whole-surface model (nwbSceneApplyLighting). A project BXDF may use or ignore the default model.
 #include "../scene/lighting.slangi"
 
+#undef NWB_SCENE_SHADOW_VISIBILITY_RESOURCE
+#undef NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_BASE_COLOR, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferBaseColor;
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_NORMAL, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferNormal;
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_WORLD_POSITION, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferWorldPosition;
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GBUFFER_DEPTH, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_GBufferDepth;
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_SAMPLER, NWB_DEFERRED_LIGHTING_SET)]] SamplerState g_DeferredSampler;
 
 // Resolved surfel-GI indirect irradiance (RGBA16F, screen space): the surfel_resolve_cs COMPUTE pass gathered the
 // surfel field once per pixel into this texture (rgb = indirect irradiance, a = 1 where a surfel covered the pixel,
 // 0 = none). The lighting reads THIS texture rather than the read-write surfel pool, so the pool stays off the pixel
 // shader (compute-only) -- that is what kills the frames-in-flight pool race. Cleared to 0 (a = 0 -> hemiAmbient) when
 // no surfel producer ran this frame, so an unbound/disabled GI is a correct hemiAmbient no-op.
-[[vk::binding(NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_IRRADIANCE, NWB_DEFERRED_LIGHTING_SET)]] Texture2D<float4> g_NwbSurfelIrradiance;
 
 // Indirect irradiance for the OPAQUE deferred path: read the resolved surfel texture at THIS pixel; where no surfel
 // covered it (a < 0.5) fall back to the hemiAmbient ambient term. The resolve texture is 1:1 with the screen, so use a
@@ -75,9 +68,9 @@
 half3 nwbBxdfResolvedIndirect(float2 uv, float3 normalVector){
     uint width;
     uint height;
-    g_NwbSurfelIrradiance.GetDimensions(width, height);
+    NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.z).GetDimensions(width, height);
     const int2 pixel = int2(uv * float2(width, height));
-    const half4 resolved = half4(g_NwbSurfelIrradiance.Load(int3(pixel, 0)));
+    const half4 resolved = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.z).Load(int3(pixel, 0)));
     return resolved.a > 0.5 ? half3(resolved.rgb) : nwbGiHemiAmbient(normalVector);
 }
 
@@ -103,10 +96,11 @@ float3 nwbDeferredDecodeNormal(half3 value){
 
 // Unpack the G-buffer at a fullscreen UV into the surface a BXDF reads.
 NwbBxdfSurface nwbBxdfLoadSurface(float2 uv){
-    const half4 baseColorSample = half4(g_GBufferBaseColor.Sample(g_DeferredSampler, uv));
-    const half4 normalSample = half4(g_GBufferNormal.Sample(g_DeferredSampler, uv));
-    const float4 worldSample = g_GBufferWorldPosition.Sample(g_DeferredSampler, uv);
-    const float depth = g_GBufferDepth.Sample(g_DeferredSampler, uv).r;
+    const SamplerState sampler = NwbHeapSampler(g_NwbDeferredBindlessResources.lightingSlots.w);
+    const half4 baseColorSample = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.x).Sample(sampler, uv));
+    const half4 normalSample = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.y).Sample(sampler, uv));
+    const float4 worldSample = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.z).Sample(sampler, uv);
+    const float depth = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w).Sample(sampler, uv).r;
 
     NwbBxdfSurface surface;
     surface.baseColor = baseColorSample.rgb;

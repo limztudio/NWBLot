@@ -120,6 +120,9 @@ void RendererSystem::invalidateResources(){
         if(auto* device = m_graphics.getDevice())
             device->getDescriptorHeap().free(m_rayTracingState.m_tlasHeapHandle);
     }
+    // Deferred target generations own ordinary image/sampler heap slots. Release those handles while both the target
+    // resources and the device heap are still live; RendererDeferredState then drops the remaining resource handles.
+    m_deferredSystem.resetDeferredFrameTargets();
     m_meshState.invalidateResources();
     m_materialState.invalidateResources();
     m_drawState.invalidateResources();

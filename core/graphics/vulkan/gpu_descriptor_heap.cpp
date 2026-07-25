@@ -23,10 +23,14 @@ namespace __hidden_vulkan_descriptor_heap{
     inline constexpr u32 s_DefaultResourceCapacity = 16384u;
     inline constexpr u32 s_DefaultSamplerCapacity = 2048u;
 
-    // Non-sampler resource classes that share the one resource-heap register set (SampledImage..UniformBuffer).
-    // Their per-class descriptor arrays each occupy the full resourceCapacity, so the total live in one set is this
-    // many times the capacity - used to respect the aggregate maxPerStageUpdateAfterBindResources limit.
-    inline constexpr u32 s_ResourceClassCount = 5u;
+    // Non-sampler resource classes that share the one resource-heap register set. Their per-class descriptor arrays
+    // each occupy the full resourceCapacity, so the total live in one set is this many times the capacity - used to
+    // respect the aggregate maxPerStageUpdateAfterBindResources limit.
+    //
+    // SampledImage2DArray is deliberately appended after Sampler in the public enum to preserve existing handle
+    // tags, so do not rely on enum contiguity when iterating the resource classes below.
+    inline constexpr u32 s_ResourceClassCount = 6u;
+    inline constexpr u32 s_SampledImageClassCount = 2u;
 
     // Backend C owns a distinct descriptor-buffer block per live TLAS generation. Two in-flight frames plus the
     // current replacement need at most three slots; keep one spare so a burst of capacity growth still preserves
@@ -45,6 +49,7 @@ namespace __hidden_vulkan_descriptor_heap{
         case GpuDescriptorClass::UniformBuffer: return ResourceType::ConstantBuffer;
         case GpuDescriptorClass::AccelStruct:   return ResourceType::RayTracingAccelStruct;
         case GpuDescriptorClass::Sampler:       return ResourceType::Sampler;
+        case GpuDescriptorClass::SampledImage2DArray: return ResourceType::Texture_SRV;
         default:                                return ResourceType::None;
         }
     }
@@ -59,6 +64,8 @@ GpuDescriptorHeap::GpuDescriptorHeap(Device& device)
     , m_context(device.m_context)
     , m_accelStructBufferBlocks(device.m_context.objectArena)
     , m_accelStructResources(device.m_context.objectArena)
+    , m_resourceDescriptorResources(device.m_context.objectArena)
+    , m_samplerDescriptorResources(device.m_context.objectArena)
     , m_resourceSlots(device.m_context.objectArena)
     , m_samplerSlots(device.m_context.objectArena)
     , m_accelStructSlots(device.m_context.objectArena)
@@ -83,6 +90,7 @@ u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptor
     case GpuDescriptorClass::UniformBuffer: return NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER;
     case GpuDescriptorClass::AccelStruct:   return NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT;
     case GpuDescriptorClass::Sampler:       return NWB_BINDLESS_HEAP_BINDING_SAMPLER;
+    case GpuDescriptorClass::SampledImage2DArray: return NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY;
     default:                                return 0u;
     }
 }
@@ -126,6 +134,20 @@ void GpuDescriptorHeap::releaseAccelStructDescriptorBlock(const u32 slot){
         m_accelStructResources[slot] = nullptr;
 }
 
+void GpuDescriptorHeap::releaseRetainedDescriptorResource(const GpuDescriptorHandle handle){
+    if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct){
+        releaseAccelStructDescriptorBlock(handle.slot());
+        return;
+    }
+
+    auto& resources = handle.descriptorClass() == GpuDescriptorClass::Sampler
+        ? m_samplerDescriptorResources
+        : m_resourceDescriptorResources
+    ;
+    if(handle.slot() < resources.size())
+        resources[handle.slot()].reset();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -147,12 +169,18 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     props2.pNext = &indexingProps;
     vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
 
-    // SampledBuffer (uniform texel) counts under the sampled-image limit; StorageBuffer under the storage-buffer
-    // limit - so these four set-level caps cover all five resource classes.
+    // The heap is visible to every shader stage, so clamp both descriptor-set and per-stage update-after-bind limits.
+    // The two sampled-image arrays share their sampled-image caps; Vulkan exposes no separate texel-buffer cap, so
+    // SampledBuffer remains covered by the aggregate resource cap below.
     u32 resourceLimit = indexingProps.maxDescriptorSetUpdateAfterBindSampledImages;
+    resourceLimit = Min(resourceLimit, indexingProps.maxDescriptorSetUpdateAfterBindSampledImages / s_SampledImageClassCount);
     resourceLimit = Min(resourceLimit, indexingProps.maxDescriptorSetUpdateAfterBindStorageImages);
     resourceLimit = Min(resourceLimit, indexingProps.maxDescriptorSetUpdateAfterBindStorageBuffers);
     resourceLimit = Min(resourceLimit, indexingProps.maxDescriptorSetUpdateAfterBindUniformBuffers);
+    resourceLimit = Min(resourceLimit, indexingProps.maxPerStageDescriptorUpdateAfterBindSampledImages / s_SampledImageClassCount);
+    resourceLimit = Min(resourceLimit, indexingProps.maxPerStageDescriptorUpdateAfterBindStorageImages);
+    resourceLimit = Min(resourceLimit, indexingProps.maxPerStageDescriptorUpdateAfterBindStorageBuffers);
+    resourceLimit = Min(resourceLimit, indexingProps.maxPerStageDescriptorUpdateAfterBindUniformBuffers);
     // Every resource class array is sized to resourceCapacity and they all live in one set, so the aggregate must
     // fit maxPerStageUpdateAfterBindResources.
     const u32 aggregateLimit = indexingProps.maxPerStageUpdateAfterBindResources / s_ResourceClassCount;
@@ -165,12 +193,16 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         );
         resourceCapacity = resourceLimit;
     }
-    if(samplerCapacity > indexingProps.maxDescriptorSetUpdateAfterBindSamplers){
+    const u32 samplerLimit = Min(
+        indexingProps.maxDescriptorSetUpdateAfterBindSamplers,
+        indexingProps.maxPerStageDescriptorUpdateAfterBindSamplers
+    );
+    if(samplerCapacity > samplerLimit){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: GpuDescriptorHeap sampler capacity {} exceeds device update-after-bind limit {}; clamping.")
             , samplerCapacity
-            , indexingProps.maxDescriptorSetUpdateAfterBindSamplers
+            , samplerLimit
         );
-        samplerCapacity = indexingProps.maxDescriptorSetUpdateAfterBindSamplers;
+        samplerCapacity = samplerLimit;
     }
     if(resourceCapacity == 0u || samplerCapacity == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap cannot initialize: effective capacity is zero (resource={}, sampler={})")
@@ -205,6 +237,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .addRegisterSpace(BindingLayoutItem::TypedBuffer_SRV(getRegisterSlot(GpuDescriptorClass::SampledBuffer), resourceCapacity))
         .addRegisterSpace(BindingLayoutItem::StructuredBuffer_UAV(getRegisterSlot(GpuDescriptorClass::StorageBuffer), resourceCapacity))
         .addRegisterSpace(BindingLayoutItem::ConstantBuffer(getRegisterSlot(GpuDescriptorClass::UniformBuffer), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImage2DArray), resourceCapacity))
         .setUseDescriptorBuffer(m_usesDescriptorBuffer)
     ;
 
@@ -325,6 +358,20 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     m_resourceSlots.nextFresh = 0u;
     m_samplerSlots.capacity = samplerCapacity;
     m_samplerSlots.nextFresh = 0u;
+    m_resourceDescriptorResources.reserve(resourceCapacity);
+    for(u32 slot = 0u; slot < resourceCapacity; ++slot){
+        m_resourceDescriptorResources.emplace_back(
+            nullptr,
+            Handle<GraphicsResource>::deleter_type(&m_context.objectArena)
+        );
+    }
+    m_samplerDescriptorResources.reserve(samplerCapacity);
+    for(u32 slot = 0u; slot < samplerCapacity; ++slot){
+        m_samplerDescriptorResources.emplace_back(
+            nullptr,
+            Handle<GraphicsResource>::deleter_type(&m_context.objectArena)
+        );
+    }
     m_frameCounter = 0u;
     m_initialized = true;
 
@@ -358,6 +405,8 @@ void GpuDescriptorHeap::shutdown(){
     m_samplerBufferBlock = {};
     m_accelStructBufferBlocks.clear();
     m_accelStructResources.clear();
+    m_resourceDescriptorResources.clear();
+    m_samplerDescriptorResources.clear();
     m_accelStructBufferBindingOffset = 0u;
     m_usesDescriptorBuffer = false;
     for(u32 i = 0; i < GpuDescriptorClass::kCount; ++i)
@@ -449,8 +498,7 @@ void GpuDescriptorHeap::advanceFrame(){
     for(usize i = 0; i < m_retired.size(); ++i){
         const RetiredSlot& retired = m_retired[i];
         if(retired.retireAtFrame <= m_frameCounter){
-            if(retired.handle.descriptorClass() == GpuDescriptorClass::AccelStruct)
-                releaseAccelStructDescriptorBlock(retired.handle.slot());
+            releaseRetainedDescriptorResource(retired.handle);
             allocatorForClass(retired.handle.descriptorClass()).freeList.push_back(retired.handle.slot());
         }
         else{
@@ -519,8 +567,34 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const BindingSet
         return true;
     }
 
+    // Persistent heap descriptors do not ride inside a BindingSet, so retain each resource until free()'s in-flight
+    // quarantine matures. Replacing a populated slot would mutate a descriptor an older command buffer may still use;
+    // callers must allocate a fresh handle for a different resource generation.
+    auto& retainedResources = descriptorClass == GpuDescriptorClass::Sampler
+        ? m_samplerDescriptorResources
+        : m_resourceDescriptorResources
+    ;
+    if(handle.slot() >= retainedResources.size()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: descriptor slot {} is outside the retained-resource table."), handle.slot());
+        return false;
+    }
+    GraphicsResource* const resource = static_cast<GraphicsResource*>(writeItem.resourceHandle);
+    if(!resource){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: resource is null for descriptor slot {}."), handle.slot());
+        return false;
+    }
+    Handle<GraphicsResource>& retained = retainedResources[handle.slot()];
+    if(retained && retained.get() != resource){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: cannot replace a live descriptor slot; allocate a fresh handle."));
+        return false;
+    }
+
     if(m_usesDescriptorBuffer){
-        return writeDescriptorBuffer(writeItem, descriptorClass);
+        if(!writeDescriptorBuffer(writeItem, descriptorClass))
+            return false;
+        if(!retained)
+            retained = resource;
+        return true;
     }
 
     DescriptorTable* table = tableForClass(descriptorClass);
@@ -529,7 +603,11 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const BindingSet
         return false;
     }
 
-    return m_device.writeDescriptorTable(table, writeItem);
+    if(!m_device.writeDescriptorTable(table, writeItem))
+        return false;
+    if(!retained)
+        retained = resource;
+    return true;
 }
 
 
@@ -555,6 +633,16 @@ void GpuDescriptorHeap::bindCompute(
     commandList.bindDescriptorHeap(*this, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.m_pipelineLayout);
 }
 
+void GpuDescriptorHeap::bindGraphics(CommandList& commandList, const GraphicsPipeline& pipeline){
+    // The fullscreen deferred passes have no TLAS; the ordinary resource/sampler heap sets are identical to their
+    // compute/RT siblings and must be selected only after setGraphicsState() has installed this pipeline layout.
+    if(m_usesDescriptorBuffer){
+        commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipelineLayout);
+        return;
+    }
+    commandList.bindDescriptorHeap(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipelineLayout);
+}
+
 void GpuDescriptorHeap::bindRayTracing(
     CommandList& commandList,
     const RayTracingPipeline& pipeline,
@@ -577,7 +665,7 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
     if(!m_context.descriptorBufferManager)
         return false;
 
-    auto carve = [&](const BindingLayoutHandle& layout, DescriptorBufferSegment& outBlock, GpuDescriptorClass::Enum firstClass, u32 classCount) -> bool{
+    auto carve = [&](const BindingLayoutHandle& layout, DescriptorBufferSegment& outBlock, const GpuDescriptorClass::Enum* classes, const u32 classCount) -> bool{
         const auto* bindingLayout = layout.get();
         if(!bindingLayout || !bindingLayout->isDescriptorBufferCompatible()){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: bindless layout is not descriptor-buffer-compatible; cannot carve heap block."));
@@ -602,7 +690,7 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
         // block.offsetBytes + m_classBufferOffset[class] + slot*stride.
         const auto& bindingOffsets = bindingLayout->getDescriptorBufferBindingOffsets();
         for(u32 c = 0; c < classCount; ++c){
-            const GpuDescriptorClass::Enum cls = static_cast<GpuDescriptorClass::Enum>(static_cast<u32>(firstClass) + c);
+            const GpuDescriptorClass::Enum cls = classes[c];
             const auto it = bindingOffsets.find(getRegisterSlot(cls));
             if(it == bindingOffsets.end()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: descriptor-buffer layout has no offset for class {}."), static_cast<u32>(cls));
@@ -613,10 +701,22 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
         return true;
     };
 
-    // Resource set holds the five non-sampler classes in ascending register-slot order; the sampler set holds Sampler.
-    if(!carve(m_resourceLayout, m_resourceBufferBlock, GpuDescriptorClass::SampledImage, 5u))
+    // The public class enum intentionally keeps legacy tags stable, so the resource classes are listed explicitly
+    // rather than assuming the non-sampler subset is contiguous. They stay in ascending register-slot order.
+    static constexpr GpuDescriptorClass::Enum s_ResourceClasses[] = {
+        GpuDescriptorClass::SampledImage,
+        GpuDescriptorClass::StorageImage,
+        GpuDescriptorClass::SampledBuffer,
+        GpuDescriptorClass::StorageBuffer,
+        GpuDescriptorClass::UniformBuffer,
+        GpuDescriptorClass::SampledImage2DArray
+    };
+    static constexpr GpuDescriptorClass::Enum s_SamplerClasses[] = {
+        GpuDescriptorClass::Sampler
+    };
+    if(!carve(m_resourceLayout, m_resourceBufferBlock, s_ResourceClasses, static_cast<u32>(sizeof(s_ResourceClasses) / sizeof(s_ResourceClasses[0]))))
         return false;
-    if(!carve(m_samplerLayout, m_samplerBufferBlock, GpuDescriptorClass::Sampler, 1u))
+    if(!carve(m_samplerLayout, m_samplerBufferBlock, s_SamplerClasses, static_cast<u32>(sizeof(s_SamplerClasses) / sizeof(s_SamplerClasses[0]))))
         return false;
 
     return true;

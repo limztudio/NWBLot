@@ -196,6 +196,11 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         && registerTexture(bindless.avboitAccumExtinction, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumExtinction.get(), targets.avboit.accumExtinctionFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitTransmittance, Core::GpuDescriptorClass::SampledImage3D, targets.avboit.transmittanceTexture.get(), targets.avboit.transmittanceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D)
         && registerSampler(bindless.avboitLinearSampler, avboitState().m_linearSampler.get())
+        // The caustic resolve carries its float sampled inputs through target-generation slots. The R32_UINT accumulator
+        // stays in the sparse local set until a typed uint-array heap accessor is added in a later slice.
+        && registerTexture(bindless.causticHistory, Core::GpuDescriptorClass::SampledImage, targets.causticHistory.get(), targets.causticHistoryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.causticResolveHalf, Core::GpuDescriptorClass::SampledImage, targets.causticResolveHalf.get(), targets.causticHistoryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.causticResolveGeometry, Core::GpuDescriptorClass::SampledImage, targets.causticResolveGeometry.get(), targets.causticHistoryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         // The soft-shadow geometry downsample + resolve use these target-generation slots directly in push constants.
         // Keep the physical images retained through the heap's deferred-free window when a resize replaces them.
         && registerTexture(bindless.shadowSoftGeometry, Core::GpuDescriptorClass::SampledImage, targets.shadowSoftGeometry.get(), targets.shadowSoftGeometryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
@@ -266,6 +271,9 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTa
             heap.free(targets.bindless.avboitAccumExtinction);
             heap.free(targets.bindless.avboitTransmittance);
             heap.free(targets.bindless.avboitLinearSampler);
+            heap.free(targets.bindless.causticHistory);
+            heap.free(targets.bindless.causticResolveHalf);
+            heap.free(targets.bindless.causticResolveGeometry);
             heap.free(targets.bindless.shadowSoftGeometry);
             heap.free(targets.bindless.shadowSoftGeometryPrev);
             heap.free(targets.bindless.shadowSoftHalfA);

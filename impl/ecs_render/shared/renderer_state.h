@@ -736,9 +736,8 @@ struct RtCausticState{
     bool m_causticResolvePipelineFailed = false;
     bool m_causticAccumulatorInitialized = false;
     // Caustic resolve pass (P3): an N-pass edge-avoiding a-trous wavelet denoise. The single compute pipeline is
-    // dispatched per pass with two ping-pong binding sets that swap the (output UAV, input-color SRV) pair: one outputs
-    // the irradiance buffer, the other the scratch buffer; the loop alternates so the final pass writes irradiance.
-    // Both sets share the accumulator + G-buffer SRVs; they are rebuilt when any of those targets change (on resize).
+    // dispatched per pass with three output-UAV local sets. The R32_UINT accumulator stays local; G-buffer, geometry,
+    // and ping-pong float reads use target-generation heap slots selected in the dispatch push constants.
     Core::BindingLayoutHandle m_causticResolveBindingLayout;
     Core::ShaderHandle m_causticResolveShader;
     Core::ComputePipelineHandle m_causticResolvePipeline;
@@ -746,20 +745,15 @@ struct RtCausticState{
     Core::BindingSetHandle m_causticResolveBindingSetOutputHalfB; // output=half-B, input=half-A (even wavelet passes)
     Core::BindingSetHandle m_causticResolveBindingSetUpsample;    // output=full-res irradiance, input=half-B (final upsample)
     const Core::Texture* m_causticResolveBindingSetAccumulator = nullptr;
-    const Core::Texture* m_causticResolveBindingSetWorldPosition = nullptr;
-    const Core::Texture* m_causticResolveBindingSetDepth = nullptr;
     const Core::Texture* m_causticResolveBindingSetIrradiance = nullptr;
     const Core::Texture* m_causticResolveBindingSetHalfA = nullptr;
     const Core::Texture* m_causticResolveBindingSetHalfB = nullptr;
-    const Core::Texture* m_causticResolveBindingSetGeometry = nullptr;
     // Geometry downsample pre-pass (its own pipeline): fills the half-res geometry cache (world + receiver validity) the
     // resolve passes read, so they tap one half-res texel instead of re-reading the full-res world/depth G-buffer per tap.
     Core::BindingLayoutHandle m_causticGeometryDownsampleBindingLayout;
     Core::ShaderHandle m_causticGeometryDownsampleShader;
     Core::ComputePipelineHandle m_causticGeometryDownsamplePipeline;
     Core::BindingSetHandle m_causticGeometryDownsampleBindingSet;
-    const Core::Texture* m_causticGeometryDownsampleWorldPosition = nullptr;
-    const Core::Texture* m_causticGeometryDownsampleDepth = nullptr;
     const Core::Texture* m_causticGeometryDownsampleGeometry = nullptr;
     // Caustic accumulator decay pre-pass (splat-space temporal EMA): a single-resource compute pass that multiplies the
     // resident R32_UINT accumulator by m_causticTemporalDecay before the producer splats this frame's photons.

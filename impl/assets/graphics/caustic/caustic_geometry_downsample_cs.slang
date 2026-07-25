@@ -3,6 +3,7 @@
 
 
 #include "resolve_binding_slots.h"
+#include "../bindless/bindless_heap.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,12 +18,6 @@
 // that every resolve pass then taps as one half-res read. Same geometry the per-tap full-res reads would have used (a 2x
 // point sample), so there is no quality change; it only removes redundant full-res bandwidth.
 
-[[vk::binding(NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION, NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_SET)]]
-Texture2D<float4> g_NwbCausticGeometryWorldPosition;
-
-[[vk::binding(NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH, NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_SET)]]
-Texture2D<float4> g_NwbCausticGeometryDepth;
-
 [[vk::binding(NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT, NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_SET)]]
 RWTexture2D<float4> g_NwbCausticGeometryOutput;
 
@@ -31,6 +26,10 @@ struct NwbCausticGeometryDownsamplePushConstants{
     uint height;      // full-res G-buffer height
     uint halfWidth;   // half-res output width
     uint halfHeight;  // half-res output height
+    uint worldPositionSlot;
+    uint depthSlot;
+    uint pad0;
+    uint pad1;
 };
 
 [[vk::push_constant]]
@@ -52,8 +51,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         min((int)halfTexel.y * 2, (int)g_NwbCausticGeometryDownsamplePushConstants.height - 1)
     );
 
-    const float3 world = g_NwbCausticGeometryWorldPosition.Load(int3(full, 0)).xyz;
-    const float depth = g_NwbCausticGeometryDepth.Load(int3(full, 0)).r;
+    const float3 world = NwbHeapSampledImage2D(g_NwbCausticGeometryDownsamplePushConstants.worldPositionSlot).Load(int3(full, 0)).xyz;
+    const float depth = NwbHeapSampledImage2D(g_NwbCausticGeometryDownsamplePushConstants.depthSlot).Load(int3(full, 0)).r;
     const float validity = (depth >= 0.999999) ? 0.0 : 1.0; // background (no receiver) -> 0
     g_NwbCausticGeometryOutput[halfTexel] = float4(world, validity);
 }

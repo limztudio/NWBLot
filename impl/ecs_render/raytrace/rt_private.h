@@ -471,8 +471,8 @@ static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 7u, "CausticPh
 
 // CPU mirror of the caustic resolve push constants (caustic/caustic_resolve_cs.slang). The resolve is an N-pass
 // edge-avoiding a-trous wavelet denoise: per pass it carries the wavelet dilation (stepWidth) and whether this is the
-// first pass (read+normalize the accumulator vs read the previous pass's color). All-scalar -> 32 bytes (no padding
-// mismatch); the trailing pads keep it a clean 16B multiple matching the shader struct.
+// first pass (read+normalize the accumulator vs read the previous pass's color). The four float-image heap slots bring
+// the scalar block to 48 bytes; the trailing pad preserves the original 32-byte prefix alignment.
 struct CausticResolvePushConstants{
     u32 width = 0u;             // FULL-res width (G-buffer dim; UPSAMPLE dispatch/output dim)
     u32 height = 0u;            // FULL-res height
@@ -481,9 +481,13 @@ struct CausticResolvePushConstants{
     f32 causticIntensity = 0.f; // exposure, applied once during the PREPARE-pass area-normalize
     u32 stepWidth = 1u;         // a-trous dilation for this wavelet pass (1,2,4), in HALF-res texels
     u32 stage = 0u;             // 0 = PREPARE+DOWNSAMPLE, 1 = WAVELET (half-res), 2 = UPSAMPLE (-> full-res irradiance)
-    u32 pad = 0u;
+    u32 pad = 0u;               // completes the preserved first 32-byte scalar block
+    u32 worldPositionSlot = 0u; // SampledImage: full-res world-position G-buffer
+    u32 depthSlot = 0u;         // SampledImage: full-res depth G-buffer
+    u32 inputColorSlot = 0u;    // SampledImage: selected half-res wavelet input
+    u32 geometrySlot = 0u;      // SampledImage: half-res caustic geometry cache
 };
-static_assert(sizeof(CausticResolvePushConstants) == sizeof(u32) * 7u + sizeof(f32), "CausticResolvePushConstants must match the shader push-constant layout");
+static_assert(sizeof(CausticResolvePushConstants) == sizeof(u32) * 11u + sizeof(f32), "CausticResolvePushConstants must match the shader push-constant layout");
 
 // Caustic resolve stages, kept in lockstep with caustic_resolve_cs.slang's pushConstants.stage switch.
 namespace CausticResolveStage{
@@ -495,14 +499,18 @@ namespace CausticResolveStage{
 };
 
 // Mirror of caustic_geometry_downsample_cs.slang's NwbCausticGeometryDownsamplePushConstants (the half-res geometry
-// cache pre-pass): full-res G-buffer dims + the half-res output dims.
+// cache pre-pass): full-res G-buffer dims + the half-res output dims + two global-heap G-buffer slots.
 struct CausticGeometryDownsamplePushConstants{
     u32 width = 0u;
     u32 height = 0u;
     u32 halfWidth = 0u;
     u32 halfHeight = 0u;
+    u32 worldPositionSlot = 0u;
+    u32 depthSlot = 0u;
+    u32 pad0 = 0u;
+    u32 pad1 = 0u;
 };
-static_assert(sizeof(CausticGeometryDownsamplePushConstants) == sizeof(u32) * 4u, "CausticGeometryDownsamplePushConstants must match the shader push-constant layout");
+static_assert(sizeof(CausticGeometryDownsamplePushConstants) == sizeof(u32) * 8u, "CausticGeometryDownsamplePushConstants must match the shader push-constant layout");
 
 // Mirror of caustic_accumulator_decay_cs.slang's NwbCausticAccumulatorDecayPushConstants (the splat-space temporal EMA
 // pre-pass): the accumulator dims + the per-frame decay factor (accum_N = decayFactor*accum_{N-1} before this frame's

@@ -17,29 +17,31 @@
 // irradiance buffer the lighting adds.
 #define NWB_CAUSTIC_RESOLVE_SET 0
 
-// The R32_UINT accumulators (Texture2DArray, one layer per RGB channel) read as an SRV (first pass only).
+// The R32_UINT accumulators (Texture2DArray, one layer per RGB channel) remain a local typed SRV (first pass only).
 #define NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR 0
-// The G-buffer world-position SRV: the resolve estimates the receiver area subtended by each pixel from the
+// Logical heap-SRV positions retained for the pass ABI documentation. The world/depth/input/geometry slots now arrive
+// through per-dispatch push constants and no longer occupy entries in the local descriptor-buffer layout.
+// Heap SRV: the G-buffer world-position. The resolve estimates the receiver area subtended by each pixel from the
 // world-space spacing of neighbouring pixels (a screen-space area Jacobian), so the area-normalization is physical;
 // it is ALSO the wavelet's geometry edge-stop (the caustic never bleeds across a receiver depth/silhouette jump).
 #define NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_WORLD_POSITION 1
-// The G-buffer depth SRV: background pixels (no receiver) write zero, and background taps are skipped by the wavelet.
+// Heap SRV: the G-buffer depth; background pixels (no receiver) write zero, and background taps are skipped by the wavelet.
 #define NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_DEPTH 2
 // The RGBA16F wavelet OUTPUT UAV for this pass. The C++ ping-pongs the two RGBA16F buffers (irradiance + scratch) as
 // (input,output) each pass; the FINAL pass writes the caustic irradiance buffer the deferred lighting samples.
 #define NWB_CAUSTIC_RESOLVE_BINDING_OUTPUT 3
-// The previous pass's RGBA16F color, read as an SRV (the OTHER ping-pong buffer). Unused on the first pass (which reads
+// Heap SRV: the previous pass's RGBA16F color (the OTHER ping-pong buffer). Unused on the first pass (which reads
 // the accumulator instead) but always bound so the descriptor is valid.
 #define NWB_CAUSTIC_RESOLVE_BINDING_INPUT_COLOR 4
-// Half-res GEOMETRY CACHE SRV (RGBA16F: xyz = world position, w = receiver validity 1/0), produced once by the geometry
+// Heap SRV: half-res GEOMETRY CACHE (RGBA16F: xyz = world position, w = receiver validity 1/0), produced once by the geometry
 // downsample pre-pass. The PREPARE + WAVELET passes read this single half-res texel per tap for the area Jacobian +
 // world-distance edge-stop + background skip, instead of re-reading the full-res world-position + depth G-buffer at the
 // half pixel's 2x location every tap -- a big read-bandwidth cut on the half-res dispatch (the full-res world/depth SRVs
 // above are then only consumed by the full-res UPSAMPLE's own centre pixel).
 #define NWB_CAUSTIC_RESOLVE_BINDING_GEOMETRY 5
 
-// Geometry downsample pre-pass (its own pipeline + binding layout): reads the full-res G-buffer world position + depth,
-// writes the half-res geometry cache above.
+// Geometry downsample pre-pass (its own pipeline + binding layout): heap-reads the full-res G-buffer world position +
+// depth and writes the half-res geometry cache above. Its logical source positions remain reserved here.
 #define NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_SET 0
 #define NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION 0
 #define NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH 1

@@ -139,6 +139,11 @@ struct DeferredBindlessFrameResources{
     Core::GpuDescriptorHandle avboitAccumExtinction = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitTransmittance = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitLinearSampler = Core::GpuDescriptorHandle::invalid();
+    // Caustic resolve float inputs use target-generation slots directly in push constants. The R32_UINT accumulator
+    // deliberately remains a local typed SRV until its own typed-array heap surface is introduced.
+    Core::GpuDescriptorHandle causticHistory = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle causticResolveHalf = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle causticResolveGeometry = Core::GpuDescriptorHandle::invalid();
     // Soft-shadow denoise intermediates are target-generation resources too. The resolve passes carry these slots in
     // their push constants, rather than keeping seven sampled images in each local descriptor-buffer set.
     Core::GpuDescriptorHandle shadowSoftGeometry = Core::GpuDescriptorHandle::invalid();
@@ -172,6 +177,9 @@ struct DeferredBindlessFrameResources{
             && avboitAccumExtinction.valid()
             && avboitTransmittance.valid()
             && avboitLinearSampler.valid()
+            && causticHistory.valid()
+            && causticResolveHalf.valid()
+            && causticResolveGeometry.valid()
             && shadowSoftGeometry.valid()
             && shadowSoftGeometryPrev.valid()
             && shadowSoftHalfA.valid()

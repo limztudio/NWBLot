@@ -4,6 +4,7 @@
 
 #include "resolve_binding_slots.h"
 #include "splat_constants.slangi"
+#include "../bindless/bindless_heap.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,30 +31,13 @@
 [[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR, NWB_CAUSTIC_RESOLVE_SET)]]
 Texture2DArray<uint> g_NwbCausticResolveAccumulator;
 
-[[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_WORLD_POSITION, NWB_CAUSTIC_RESOLVE_SET)]]
-Texture2D<float4> g_NwbCausticResolveGBufferWorldPosition;
-
-[[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_DEPTH, NWB_CAUSTIC_RESOLVE_SET)]]
-Texture2D<float4> g_NwbCausticResolveGBufferDepth;
-
 // The pass output (UAV). For PREPARE + WAVELET this is a HALF-res ping-pong buffer (half-A / half-B); for UPSAMPLE this
 // is the FULL-res caustic irradiance buffer the deferred lighting adds. The C++ swaps the bound textures per pass.
 [[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_OUTPUT, NWB_CAUSTIC_RESOLVE_SET)]]
 RWTexture2D<float4> g_NwbCausticResolveOutput;
 
-// The input color (SRV). For WAVELET this is the previous pass's HALF-res color (the other ping-pong buffer); for
-// UPSAMPLE it is the final half-res caustic. Unused on PREPARE (which reads the accumulator) but always bound.
-[[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_INPUT_COLOR, NWB_CAUSTIC_RESOLVE_SET)]]
-Texture2D<float4> g_NwbCausticResolveInputColor;
-
-// Half-res geometry cache (xyz = world position, w = receiver validity 1/0), produced once by the geometry downsample
-// pre-pass. The PREPARE + WAVELET passes read this single half-res texel for the edge-stop geometry + area + background
-// skip, instead of re-reading the full-res world-position + depth G-buffer at the half pixel's 2x location every tap.
-[[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_GEOMETRY, NWB_CAUSTIC_RESOLVE_SET)]]
-Texture2D<float4> g_NwbCausticResolveGeometry;
-
 struct NwbCausticResolvePushConstants{
-    // All-scalar -> 8 x 4 = 32 bytes, no alignment padding; matches the C++ mirror CausticResolvePushConstants.
+    // All-scalar -> 12 x 4 = 48 bytes; matches the C++ mirror CausticResolvePushConstants.
     uint width;             // FULL-res width (G-buffer dim; UPSAMPLE dispatch/output dim)
     uint height;            // FULL-res height
     uint halfWidth;         // HALF-res width (the resolve buffers; PREPARE/WAVELET dispatch dim)
@@ -61,7 +45,12 @@ struct NwbCausticResolvePushConstants{
     float causticIntensity; // exposure, applied once during the area-normalize on the PREPARE pass
     uint stepWidth;         // a-trous dilation for this wavelet pass (1,2,4), in HALF-res texels
     uint stage;             // 0 = PREPARE+DOWNSAMPLE, 1 = WAVELET (half-res), 2 = UPSAMPLE (-> full-res irradiance)
-    uint pad;               // pad the tail to a 16B multiple (32) so C++ + shader sizes match exactly
+    uint pad;               // preserves the original first 32-byte scalar block
+    // Global heap SampledImage slots. The R32_UINT accumulator remains the local typed SRV for this slice.
+    uint worldPositionSlot;
+    uint depthSlot;
+    uint inputColorSlot;
+    uint geometrySlot;
 };
 
 [[vk::push_constant]]
@@ -82,11 +71,11 @@ groupshared uint   s_NwbCausticResolveTileActive; // 1 iff the loaded tile+halo 
 // Half-res receiver geometry, read from the precomputed cache. xyz = world position (the 2x point sample of the
 // full-res G-buffer), w = receiver validity (1/0).
 float3 nwbCausticResolveWorldAtHalf(const int2 halfTexel){
-    return g_NwbCausticResolveGeometry.Load(int3(halfTexel, 0)).xyz;
+    return NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.geometrySlot).Load(int3(halfTexel, 0)).xyz;
 }
 
 bool nwbCausticResolveValidAtHalf(const int2 halfTexel){
-    return g_NwbCausticResolveGeometry.Load(int3(halfTexel, 0)).w > 0.5;
+    return NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.geometrySlot).Load(int3(halfTexel, 0)).w > 0.5;
 }
 
 // The world-space receiver area subtended by one HALF-res pixel, from the screen-space spacing of the half-res world
@@ -130,18 +119,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const int fw = (int)g_NwbCausticResolvePushConstants.width;
         const int fh = (int)g_NwbCausticResolvePushConstants.height;
         const int2 fullTexel = int2(pixel);
-        if(g_NwbCausticResolveGBufferDepth.Load(int3(fullTexel, 0)).r >= 0.999999){
+        if(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.depthSlot).Load(int3(fullTexel, 0)).r >= 0.999999){
             g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0); // background: additive no-op
             return;
         }
 
         // Edge-stop sigma from the full-res pixel's own world spacing (max of +x / +y to handle foreshortening on a
         // grazing receiver); a few pixels of tolerance keeps same-surface taps while rejecting a silhouette jump.
-        const float3 centerWorld = g_NwbCausticResolveGBufferWorldPosition.Load(int3(fullTexel, 0)).xyz;
+        const float3 centerWorld = NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.worldPositionSlot).Load(int3(fullTexel, 0)).xyz;
         const int2 rightFull = int2(min(fullTexel.x + 1, fw - 1), fullTexel.y);
         const int2 downFull = int2(fullTexel.x, min(fullTexel.y + 1, fh - 1));
-        const float3 dxWorld = g_NwbCausticResolveGBufferWorldPosition.Load(int3(rightFull, 0)).xyz - centerWorld;
-        const float3 dyWorld = g_NwbCausticResolveGBufferWorldPosition.Load(int3(downFull, 0)).xyz - centerWorld;
+        const float3 dxWorld = NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.worldPositionSlot).Load(int3(rightFull, 0)).xyz - centerWorld;
+        const float3 dyWorld = NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.worldPositionSlot).Load(int3(downFull, 0)).xyz - centerWorld;
         const float spacing = max(max(length(dxWorld), length(dyWorld)), 1e-4);
         const float sigmaWorld = spacing * 3.0;
         const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
@@ -162,7 +151,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const float bilinearWeight = (i == 0 ? (1.0 - lerpFrac.x) : lerpFrac.x) * (j == 0 ? (1.0 - lerpFrac.y) : lerpFrac.y);
                 const float3 d = nwbCausticResolveWorldAtHalf(tap) - centerWorld;
                 const float weight = bilinearWeight * exp(-dot(d, d) * invTwoSigmaWorldSq);
-                sum += weight * g_NwbCausticResolveInputColor.Load(int3(tap, 0)).rgb;
+                sum += weight * NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb;
                 weightSum += weight;
             }
         }
@@ -233,7 +222,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             // Only receiver texels inside the half-res image contribute (matches the texture path's OOB + background skips).
             if(t.x >= 0 && t.y >= 0 && t.x < hw && t.y < hh){
                 if(nwbCausticResolveValidAtHalf(t)){
-                    tapColor = half3(g_NwbCausticResolveInputColor.Load(int3(t, 0)).rgb);
+                    tapColor = half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(t, 0)).rgb);
                     tapWorld = nwbCausticResolveWorldAtHalf(t);
                     tapValid = 1u;
                     if(any(tapColor > half3(0.0h, 0.0h, 0.0h)))
@@ -312,7 +301,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 continue; // background tap: no receiver -> skip so the dark surround cannot dilute the caustic edge
             const float3 d = nwbCausticResolveWorldAtHalf(tap) - centerWorld;
             const float weight = s_NwbCausticResolveKernel[kx + 2] * s_NwbCausticResolveKernel[ky + 2] * exp(-dot(d, d) * invTwoSigmaWorldSq);
-            sum += weight * g_NwbCausticResolveInputColor.Load(int3(tap, 0)).rgb;
+            sum += weight * NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb;
             weightSum += weight;
         }
     }

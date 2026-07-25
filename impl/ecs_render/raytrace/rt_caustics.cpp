@@ -26,6 +26,13 @@ static constexpr AStringView s_HwRaygenExportName = "CausticHwRayGen";
 static constexpr AStringView s_HwMissExportName = "CausticHwMiss";
 static constexpr AStringView s_HwHitGroupExportName = "CausticHwHitGroup";
 
+// The caustic resolve's dynamic float input role. The R32_UINT accumulator remains a local typed SRV, while the
+// selected wavelet input, G-buffer, and geometry cache are target-generation heap reads.
+struct CausticResolvePassResources{
+    Core::Texture* inputColor = nullptr;
+    u32 inputColorSlot = 0u;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -322,10 +329,12 @@ void RendererRayTracingSystem::clearCausticTargets(Core::CommandList& commandLis
 
 void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& commandList, DeferredFrameTargets& targets){
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticResolve, graphics().getDevice(), commandList);
+    NWB_ASSERT(targets.bindless.valid());
+    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
 
     // The producer wrote the accumulator as a UAV; move it to ShaderResource for the PREPARE pass to read (un-scale +
-    // area-normalize). setResourceStatesForBindingSet derives the rest each pass (G-buffer SRVs + the ping-pong UAV/SRV
-    // roles of the irradiance + scratch buffers as they swap).
+    // area-normalize). The local set handles that typed SRV + output UAV; heap-backed float reads are staged explicitly
+    // below as the G-buffer and ping-pong roles change.
     commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::ShaderResource);
 
     // The resolve runs at HALF resolution (1/4 the pixels); only the final UPSAMPLE dispatches at full res.
@@ -341,6 +350,8 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
     // world-position + depth G-buffer at the half pixel's 2x location every a-trous tap. The framework transitions the
     // cache UAV(write here) -> SRV(read in the resolve passes).
     {
+        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setResourceStatesForBindingSet(rayTracingState().m_causticGeometryDownsampleBindingSet.get());
         commandList.commitBarriers();
 
@@ -349,11 +360,15 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
         geometryPush.height = targets.height;
         geometryPush.halfWidth = halfWidth;
         geometryPush.halfHeight = halfHeight;
+        geometryPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
+        geometryPush.depthSlot = targets.bindless.gbufferDepth.slot();
 
         Core::ComputeState geometryState;
         geometryState.setPipeline(rayTracingState().m_causticGeometryDownsamplePipeline.get());
         geometryState.addBindingSet(rayTracingState().m_causticGeometryDownsampleBindingSet.get());
         commandList.setComputeState(geometryState);
+        if(heap.isInitialized())
+            heap.bindCompute(commandList, *rayTracingState().m_causticGeometryDownsamplePipeline.get());
         commandList.setPushConstants(&geometryPush, sizeof(geometryPush));
         commandList.dispatch(halfGroupsX, halfGroupsY, 1u);
     }
@@ -364,7 +379,14 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
     const f32 temporalDecay = causticTemporalDecay();
     const f32 effectiveIntensity = (temporalDecay > 0.f) ? (s_CausticIntensity * (1.f - temporalDecay)) : s_CausticIntensity;
 
-    const auto runPass = [&](Core::BindingSet* const bindingSet, const u32 stepWidth, const CausticResolveStage::Enum stage, const u32 groupsX, const u32 groupsY){
+    const auto runPass = [&](Core::BindingSet* const bindingSet, const __hidden_caustics::CausticResolvePassResources& resources, const u32 stepWidth, const CausticResolveStage::Enum stage, const u32 groupsX, const u32 groupsY){
+        NWB_ASSERT(resources.inputColor);
+        // Keep the former automatic-state behavior for the four heap reads. The selected wavelet input never aliases
+        // the local output UAV of this pass (the output/input ping-pong invariant).
+        commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(resources.inputColor, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.causticResolveGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setResourceStatesForBindingSet(bindingSet);
         commandList.commitBarriers();
 
@@ -376,11 +398,17 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
         resolvePush.causticIntensity = effectiveIntensity;
         resolvePush.stepWidth = stepWidth;
         resolvePush.stage = static_cast<u32>(stage);
+        resolvePush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
+        resolvePush.depthSlot = targets.bindless.gbufferDepth.slot();
+        resolvePush.inputColorSlot = resources.inputColorSlot;
+        resolvePush.geometrySlot = targets.bindless.causticResolveGeometry.slot();
 
         Core::ComputeState computeState;
         computeState.setPipeline(rayTracingState().m_causticResolvePipeline.get());
         computeState.addBindingSet(bindingSet);
         commandList.setComputeState(computeState);
+        if(heap.isInitialized())
+            heap.bindCompute(commandList, *rayTracingState().m_causticResolvePipeline.get());
         commandList.setPushConstants(&resolvePush, sizeof(resolvePush));
         commandList.dispatch(groupsX, groupsY, 1u);
     };
@@ -389,8 +417,17 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
     // the prepared buffer the wavelet reads. The target is seeded by parity so the ping-pong always ENDS in half-B (the
     // upsample input) regardless of PASS_COUNT: an even count starts in half-B, an odd count in half-A.
     const bool prepareToHalfB = (static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) % 2u) == 0u;
+    const __hidden_caustics::CausticResolvePassResources halfAInput{
+        targets.causticHistory.get(),
+        targets.bindless.causticHistory.slot()
+    };
+    const __hidden_caustics::CausticResolvePassResources halfBInput{
+        targets.causticResolveHalf.get(),
+        targets.bindless.causticResolveHalf.slot()
+    };
     runPass(
         prepareToHalfB ? rayTracingState().m_causticResolveBindingSetOutputHalfB.get() : rayTracingState().m_causticResolveBindingSetOutputHalfA.get(),
+        prepareToHalfB ? halfAInput : halfBInput,
         1u, CausticResolveStage::PrepareDownsample, halfGroupsX, halfGroupsY
     );
 
@@ -403,13 +440,13 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
             ? rayTracingState().m_causticResolveBindingSetOutputHalfA.get()
             : rayTracingState().m_causticResolveBindingSetOutputHalfB.get()
         ;
-        runPass(bindingSet, 1u << pass, CausticResolveStage::Wavelet, halfGroupsX, halfGroupsY);
+        runPass(bindingSet, srcIsHalfB ? halfBInput : halfAInput, 1u << pass, CausticResolveStage::Wavelet, halfGroupsX, halfGroupsY);
         srcIsHalfB = !srcIsHalfB;
     }
 
     // UPSAMPLE (full-res): edge-aware bilateral resample of the final half-res caustic (half-B) into the full-res
     // irradiance buffer the deferred lighting adds.
-    runPass(rayTracingState().m_causticResolveBindingSetUpsample.get(), 1u, CausticResolveStage::Upsample, fullGroupsX, fullGroupsY);
+    runPass(rayTracingState().m_causticResolveBindingSetUpsample.get(), halfBInput, 1u, CausticResolveStage::Upsample, fullGroupsX, fullGroupsY);
 }
 
 
@@ -832,18 +869,11 @@ bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
     if(!rayTracingState().m_causticResolveBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Phase 3 (Backend C): the caustic resolve set is the first pass migrated to VK_EXT_descriptor_buffer. Its
-        // shape is segment-coherent pure-resource (5 texture SRVs + 1 texture UAV, no samplers) with push constants,
-        // which the descriptor-buffer path serves wholesale. The opt-in declares intent only; where the extension is
-        // absent the backend downgrades this layout to non-descriptor-buffer-compatible and the classic descriptor-set
-        // path (Backend A) serves the pass unchanged, so no device capability gate is needed here.
+        // The float sampled inputs now use global target-generation heap slots. Keep the typed R32_UINT accumulator
+        // local until the heap grows a uint Texture2DArray accessor, and retain sparse output binding 3 as the ABI.
         layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_WORLD_POSITION, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_DEPTH, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_RESOLVE_BINDING_OUTPUT, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_INPUT_COLOR, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_RESOLVE_BINDING_GEOMETRY, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticResolvePushConstants)));
 
         rayTracingState().m_causticResolveBindingLayout = device->createBindingLayout(layoutDesc);
@@ -870,6 +900,13 @@ bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
         .setComputeShader(rayTracingState().m_causticResolveShader)
         .addBindingLayout(rayTracingState().m_causticResolveBindingLayout)
     ;
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(heap.isInitialized()){
+        pipelineDesc
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+        ;
+    }
     rayTracingState().m_causticResolvePipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_causticResolvePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve compute pipeline"));
@@ -895,35 +932,25 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
 
     // Non-const (BindingSetItem needs a mutable Texture*); the const cache fields still compare/assign fine.
     Core::Texture* accumulatorTarget = targets.causticAccumulator.get();
-    Core::Texture* worldPositionTarget = targets.worldPosition.get();
-    Core::Texture* depthTarget = targets.depth.get();
     Core::Texture* irradianceTarget = targets.causticIrradiance.get();
     Core::Texture* halfATarget = targets.causticHistory.get();
     Core::Texture* halfBTarget = targets.causticResolveHalf.get();
-    Core::Texture* geometryTarget = targets.causticResolveGeometry.get();
     if(
         rayTracingState().m_causticResolveBindingSetOutputHalfA
         && rayTracingState().m_causticResolveBindingSetOutputHalfB
         && rayTracingState().m_causticResolveBindingSetUpsample
         && rayTracingState().m_causticResolveBindingSetAccumulator == accumulatorTarget
-        && rayTracingState().m_causticResolveBindingSetWorldPosition == worldPositionTarget
-        && rayTracingState().m_causticResolveBindingSetDepth == depthTarget
         && rayTracingState().m_causticResolveBindingSetIrradiance == irradianceTarget
         && rayTracingState().m_causticResolveBindingSetHalfA == halfATarget
         && rayTracingState().m_causticResolveBindingSetHalfB == halfBTarget
-        && rayTracingState().m_causticResolveBindingSetGeometry == geometryTarget
     )
         return true;
 
     auto* device = graphics().getDevice();
 
-    // Three binding sets. All share the accumulator + G-buffer SRVs and only swap the (output UAV, input-color SRV) pair:
-    //  - OutputHalfA: writes half-A reading half-B (the PREPARE pass + the odd wavelet passes),
-    //  - OutputHalfB: writes half-B reading half-A (the even wavelet passes),
-    //  - Upsample:    writes the FULL-res irradiance reading the final half-res caustic (half-B).
-    // The half buffers are half-res and the irradiance is full-res, but the sets are dimensionless (the bound textures
-    // carry the extent), so the same layout serves all three.
-    const auto buildSet = [&](Core::Texture* outputTex, Core::Format::Enum outputFormat, Core::Texture* inputTex, Core::Format::Enum inputFormat) -> Core::BindingSetHandle {
+    // Three local binding sets now share only the typed accumulator SRV and swap their output UAV. The float G-buffer,
+    // geometry, and ping-pong input roles are selected by global-heap slots at dispatch time.
+    const auto buildSet = [&](Core::Texture* outputTex, Core::Format::Enum outputFormat) -> Core::BindingSetHandle {
         Core::BindingSetDesc desc(arena());
         desc.addItem(Core::BindingSetItem::Texture_SRV(
             NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR,
@@ -932,20 +959,6 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
             ECSRenderDetail::s_CausticAccumulatorSubresources,
             Core::TextureDimension::Texture2DArray
         ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_WORLD_POSITION,
-            worldPositionTarget,
-            targets.worldPositionFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_DEPTH,
-            depthTarget,
-            targets.depthFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
         desc.addItem(Core::BindingSetItem::Texture_UAV(
             NWB_CAUSTIC_RESOLVE_BINDING_OUTPUT,
             outputTex,
@@ -953,50 +966,30 @@ bool RendererRayTracingSystem::ensureCausticResolveBindingSet(DeferredFrameTarge
             ECSRenderDetail::s_FramebufferSubresources,
             Core::TextureDimension::Texture2D
         ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_CAUSTIC_RESOLVE_BINDING_INPUT_COLOR,
-            inputTex,
-            inputFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
-        desc.addItem(Core::BindingSetItem::Texture_SRV(
-            NWB_CAUSTIC_RESOLVE_BINDING_GEOMETRY,
-            geometryTarget,
-            targets.causticHistoryFormat,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::TextureDimension::Texture2D
-        ));
         return device->createBindingSet(desc, rayTracingState().m_causticResolveBindingLayout);
     };
 
-    Core::BindingSetHandle outputHalfA = buildSet(halfATarget, targets.causticHistoryFormat, halfBTarget, targets.causticHistoryFormat);
-    Core::BindingSetHandle outputHalfB = buildSet(halfBTarget, targets.causticHistoryFormat, halfATarget, targets.causticHistoryFormat);
-    Core::BindingSetHandle upsample    = buildSet(irradianceTarget, targets.causticIrradianceFormat, halfBTarget, targets.causticHistoryFormat);
+    Core::BindingSetHandle outputHalfA = buildSet(halfATarget, targets.causticHistoryFormat);
+    Core::BindingSetHandle outputHalfB = buildSet(halfBTarget, targets.causticHistoryFormat);
+    Core::BindingSetHandle upsample    = buildSet(irradianceTarget, targets.causticIrradianceFormat);
     if(!outputHalfA || !outputHalfB || !upsample){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve a-trous binding sets"));
         rayTracingState().m_causticResolveBindingSetOutputHalfA = nullptr;
         rayTracingState().m_causticResolveBindingSetOutputHalfB = nullptr;
         rayTracingState().m_causticResolveBindingSetUpsample = nullptr;
         rayTracingState().m_causticResolveBindingSetAccumulator = nullptr;
-        rayTracingState().m_causticResolveBindingSetWorldPosition = nullptr;
-        rayTracingState().m_causticResolveBindingSetDepth = nullptr;
         rayTracingState().m_causticResolveBindingSetIrradiance = nullptr;
         rayTracingState().m_causticResolveBindingSetHalfA = nullptr;
         rayTracingState().m_causticResolveBindingSetHalfB = nullptr;
-        rayTracingState().m_causticResolveBindingSetGeometry = nullptr;
         return false;
     }
     rayTracingState().m_causticResolveBindingSetOutputHalfA = Move(outputHalfA);
     rayTracingState().m_causticResolveBindingSetOutputHalfB = Move(outputHalfB);
     rayTracingState().m_causticResolveBindingSetUpsample = Move(upsample);
     rayTracingState().m_causticResolveBindingSetAccumulator = accumulatorTarget;
-    rayTracingState().m_causticResolveBindingSetWorldPosition = worldPositionTarget;
-    rayTracingState().m_causticResolveBindingSetDepth = depthTarget;
     rayTracingState().m_causticResolveBindingSetIrradiance = irradianceTarget;
     rayTracingState().m_causticResolveBindingSetHalfA = halfATarget;
     rayTracingState().m_causticResolveBindingSetHalfB = halfBTarget;
-    rayTracingState().m_causticResolveBindingSetGeometry = geometryTarget;
     return true;
 }
 
@@ -1015,15 +1008,9 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
     if(!rayTracingState().m_causticGeometryDownsampleBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Phase 3 (Backend C): caustic geometry downsample is the second pass migrated to VK_EXT_descriptor_buffer,
-        // after caustic resolve. Its shape is segment-coherent pure-resource (2 texture SRVs + 1 texture UAV, no
-        // samplers) with push constants, which the descriptor-buffer path serves wholesale. The opt-in declares intent
-        // only; where the extension is absent the backend downgrades this layout to non-descriptor-buffer-compatible
-        // and the classic descriptor-set path (Backend A) serves the pass unchanged, so no device capability gate is
-        // needed here.
+        // G-buffer world/depth are global-heap reads selected by push constants. Preserve sparse local output binding 2;
+        // its descriptor-buffer block now holds only the geometry-cache UAV.
         layoutDesc.setUseDescriptorBuffer(true);
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_SRV(NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticGeometryDownsamplePushConstants)));
 
@@ -1051,6 +1038,13 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
         .setComputeShader(rayTracingState().m_causticGeometryDownsampleShader)
         .addBindingLayout(rayTracingState().m_causticGeometryDownsampleBindingLayout)
     ;
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(heap.isInitialized()){
+        pipelineDesc
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+        ;
+    }
     rayTracingState().m_causticGeometryDownsamplePipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_causticGeometryDownsamplePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic geometry downsample compute pipeline"));
@@ -1070,13 +1064,9 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsampleBindingSet(Deferre
     NWB_ASSERT(targets.depth);
     NWB_ASSERT(targets.causticResolveGeometry);
 
-    Core::Texture* worldPositionTarget = targets.worldPosition.get();
-    Core::Texture* depthTarget = targets.depth.get();
     Core::Texture* geometryTarget = targets.causticResolveGeometry.get();
     if(
         rayTracingState().m_causticGeometryDownsampleBindingSet
-        && rayTracingState().m_causticGeometryDownsampleWorldPosition == worldPositionTarget
-        && rayTracingState().m_causticGeometryDownsampleDepth == depthTarget
         && rayTracingState().m_causticGeometryDownsampleGeometry == geometryTarget
     )
         return true;
@@ -1084,20 +1074,6 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsampleBindingSet(Deferre
     auto* device = graphics().getDevice();
 
     Core::BindingSetDesc desc(arena());
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION,
-        worldPositionTarget,
-        targets.worldPositionFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_SRV(
-        NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH,
-        depthTarget,
-        targets.depthFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
     desc.addItem(Core::BindingSetItem::Texture_UAV(
         NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT,
         geometryTarget,
@@ -1110,14 +1086,10 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsampleBindingSet(Deferre
     if(!bindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic geometry downsample binding set"));
         rayTracingState().m_causticGeometryDownsampleBindingSet = nullptr;
-        rayTracingState().m_causticGeometryDownsampleWorldPosition = nullptr;
-        rayTracingState().m_causticGeometryDownsampleDepth = nullptr;
         rayTracingState().m_causticGeometryDownsampleGeometry = nullptr;
         return false;
     }
     rayTracingState().m_causticGeometryDownsampleBindingSet = Move(bindingSet);
-    rayTracingState().m_causticGeometryDownsampleWorldPosition = worldPositionTarget;
-    rayTracingState().m_causticGeometryDownsampleDepth = depthTarget;
     rayTracingState().m_causticGeometryDownsampleGeometry = geometryTarget;
     return true;
 }

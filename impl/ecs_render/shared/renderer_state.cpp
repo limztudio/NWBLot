@@ -402,18 +402,13 @@ void RendererRayTracingState::invalidateResources(){
     m_causticResolveBindingSetOutputHalfB.reset();
     m_causticResolveBindingSetUpsample.reset();
     m_causticResolveBindingSetAccumulator = nullptr;
-    m_causticResolveBindingSetWorldPosition = nullptr;
-    m_causticResolveBindingSetDepth = nullptr;
     m_causticResolveBindingSetIrradiance = nullptr;
     m_causticResolveBindingSetHalfA = nullptr;
     m_causticResolveBindingSetHalfB = nullptr;
-    m_causticResolveBindingSetGeometry = nullptr;
     m_causticGeometryDownsampleBindingLayout.reset();
     m_causticGeometryDownsampleShader.reset();
     m_causticGeometryDownsamplePipeline.reset();
     m_causticGeometryDownsampleBindingSet.reset();
-    m_causticGeometryDownsampleWorldPosition = nullptr;
-    m_causticGeometryDownsampleDepth = nullptr;
     m_causticGeometryDownsampleGeometry = nullptr;
     m_causticGeometryDownsamplePipelineFailed = false;
     m_causticAccumulatorDecayBindingLayout.reset();

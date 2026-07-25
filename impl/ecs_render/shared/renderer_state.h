@@ -663,9 +663,9 @@ struct RtSoftShadowState{
     Core::ShaderHandle m_shadowGeometryDownsampleShader;
     Core::ComputePipelineHandle m_shadowGeometryDownsamplePipeline;
     Core::BindingSetHandle m_shadowGeometryDownsampleBindingSet;
-    const Core::Texture* m_shadowGeometryDownsampleWorldPosition = nullptr;
-    const Core::Texture* m_shadowGeometryDownsampleNormal = nullptr;
-    const Core::Texture* m_shadowGeometryDownsampleDepth = nullptr;
+    // The full-res G-buffer inputs and scene-shading CB are heap selected. Only the target-generation slot cbuffer +
+    // geometry-cache output can invalidate this compact local binding set.
+    const Core::Buffer* m_shadowGeometryDownsampleBindlessResources = nullptr;
     const Core::Texture* m_shadowGeometryDownsampleGeometry = nullptr;
     // Cleared whenever the temporal targets are (re)created (createShadowVisibilityTarget); the FIRST merge dispatch sets it
     // true. Until then the merge treats every pixel as n=0 (pure current sample) -- the clean first-frame / post-resize path.

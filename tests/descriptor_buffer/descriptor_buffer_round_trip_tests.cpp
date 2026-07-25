@@ -36,6 +36,7 @@
 #include <impl/assets/graphics/gi/sw_binding_slots.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets/graphics/shadow/binding_slots.h>
+#include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 #include <tests/capturing_logger.h>
 
 // The manager lives in the Vulkan backend (Core::GraphicsBackend namespace). The test is inherently Vulkan-aware
@@ -1728,8 +1729,9 @@ TEST_F(DescriptorBufferRoundTripTest, BvhBuildShapeBuildsAsDescriptorBuffer){
 
 
 // Shadow geometry-downsample parity: the half-res G-buffer downsample feeding the soft-shadow a-trous resolve. Its
-// shape is segment-coherent pure-resource (3 Texture_SRV + 1 ConstantBuffer + 1 Texture_UAV, no samplers) with push
-// constants.
+// three G-buffer inputs and the shared scene-shading CB are all selected through the global heap, so its exact local
+// shape is the target-generation slot cbuffer + geometry-cache UAV, with the eight-u32 push-constant range carrying the
+// image slots and dimensions.
 TEST_F(DescriptorBufferRoundTripTest, ShadowGeometryDownsampleShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
@@ -1745,15 +1747,6 @@ TEST_F(DescriptorBufferRoundTripTest, ShadowGeometryDownsampleShapeBuildsAsDescr
                 .setKeepInitialState(true)
         );
     };
-    auto makeTexture = [&](const u32 w, const u32 h) {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(w).setHeight(h)
-                .setFormat(Format::RGBA16_FLOAT)
-                .setInitialState(ResourceStates::ShaderResource)
-                .setKeepInitialState(true)
-        );
-    };
     auto makeUavTexture = [&](const u32 w, const u32 h) {
         return device.createTexture(
             TextureDesc()
@@ -1764,22 +1757,18 @@ TEST_F(DescriptorBufferRoundTripTest, ShadowGeometryDownsampleShapeBuildsAsDescr
         );
     };
 
-    auto sceneShading = makeConstantBuffer();
-    auto worldPosition = makeTexture(32u, 32u);
-    auto normal = makeTexture(32u, 32u);
-    auto depth = makeTexture(32u, 32u);
+    auto bindlessResources = makeConstantBuffer();
     auto geometryOutput = makeUavTexture(16u, 16u);
-    ASSERT_TRUE(sceneShading && worldPosition && normal && depth && geometryOutput);
+    ASSERT_TRUE(bindlessResources && geometryOutput);
 
-    // Slots mirror shadow_resolve_binding_slots.h downsample block (0..4).
+    // Slots mirror shadow_resolve_binding_slots.h downsample block: binding 3 retains the historical scene-CB position
+    // but now carries DeferredBindlessResourceSlots, while the sparse output stays at binding 4.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
     layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(0u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(1u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(2u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(3u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(4u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_BINDLESS_RESOURCES, 1u));
+    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT, 1u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 8u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
@@ -1789,14 +1778,11 @@ TEST_F(DescriptorBufferRoundTripTest, ShadowGeometryDownsampleShapeBuildsAsDescr
     EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
     const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 5u);
+    EXPECT_EQ(offsets.size(), 2u);
 
     BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::Texture_SRV(0u, worldPosition.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(1u, normal.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(2u, depth.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::ConstantBuffer(3u, sceneShading.get()));
-    setDesc.addItem(BindingSetItem::Texture_UAV(4u, geometryOutput.get(), Format::RGBA16_FLOAT));
+    setDesc.addItem(BindingSetItem::ConstantBuffer(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_BINDLESS_RESOURCES, bindlessResources.get()));
+    setDesc.addItem(BindingSetItem::Texture_UAV(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT, geometryOutput.get(), Format::RGBA16_FLOAT));
 
     auto bindingSet = device.createBindingSet(setDesc, layout);
     ASSERT_NE(bindingSet.get(), nullptr);

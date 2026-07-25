@@ -308,9 +308,7 @@ void RendererRayTracingState::invalidateResources(){
     m_shadowGeometryDownsamplePipeline.reset();
     m_shadowGeometryDownsamplePipelineFailed = false;
     m_shadowGeometryDownsampleBindingSet.reset();
-    m_shadowGeometryDownsampleWorldPosition = nullptr;
-    m_shadowGeometryDownsampleNormal = nullptr;
-    m_shadowGeometryDownsampleDepth = nullptr;
+    m_shadowGeometryDownsampleBindlessResources = nullptr;
     m_shadowGeometryDownsampleGeometry = nullptr;
     m_softShadowReady = false;
     m_prevWorldToClip = {};

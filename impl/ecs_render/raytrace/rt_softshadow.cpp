@@ -199,6 +199,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
     // HW RayQuery and SW BVH opaque-soft traces. The transparent trace+fold always traces against the SW transparent-only
     // scene BVH via m_swShadowBindingSet; on the HW path this block stages those resources before the transparent trace.
     NWB_ASSERT(targets.bindless.valid());
+    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
     const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
     const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
 
@@ -225,10 +226,12 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
     // resolve loop taps it. Writes the cache UAV; each slot's resolve then reads it as an SRV (the cache is not
     // rewritten, so the UAV->SRV transition happens once and every directional slot shares it).
     {
-        // These three reads moved out of the local set, so stage them explicitly before the local CB/UAV set is applied.
+        // The three G-buffer reads and the shared scene-shading CB are heap fetched, so stage them explicitly before the
+        // local slot-cbuffer/UAV set is applied.
         commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
         commandList.setResourceStatesForBindingSet(rayTracingState().m_shadowGeometryDownsampleBindingSet.get());
         commandList.commitBarriers();
 
@@ -543,11 +546,12 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
     if(!rayTracingState().m_shadowGeometryDownsampleBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Phase 3 (Backend C): the G-buffer inputs now arrive through the global heap, leaving this local
-        // descriptor-buffer segment with only the scene CB + geometry-cache UAV. Push constants carry the three
-        // SampledImage slots, while the fixed high heap sets preserve Backend-A descriptor-indexing fallback.
+        // Phase 3 (Backend C): the G-buffer inputs and shared scene-shading CB now arrive through the global heap.
+        // This local descriptor-buffer segment therefore holds only the target-generation slot cbuffer + geometry-cache
+        // UAV. Push constants carry the three SampledImage slots, while the fixed high heap sets preserve Backend-A
+        // descriptor-indexing fallback.
         layoutDesc.setUseDescriptorBuffer(true);
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_SCENE_SHADING, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_BINDLESS_RESOURCES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowGeometryDownsamplePushConstants)));
 
@@ -601,17 +605,14 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsampleBindingSet(Deferred
     NWB_ASSERT(targets.normal);
     NWB_ASSERT(targets.depth);
     NWB_ASSERT(targets.shadowSoftGeometry);
-    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
+    NWB_ASSERT(targets.bindless.valid());
+    NWB_ASSERT(targets.bindless.slotsBuffer);
 
-    Core::Texture* worldPositionTarget = targets.worldPosition.get();
-    Core::Texture* normalTarget = targets.normal.get();
-    Core::Texture* depthTarget = targets.depth.get();
+    Core::Buffer* bindlessResourcesBuffer = targets.bindless.slotsBuffer.get();
     Core::Texture* geometryTarget = targets.shadowSoftGeometry.get();
     if(
         rayTracingState().m_shadowGeometryDownsampleBindingSet
-        && rayTracingState().m_shadowGeometryDownsampleWorldPosition == worldPositionTarget
-        && rayTracingState().m_shadowGeometryDownsampleNormal == normalTarget
-        && rayTracingState().m_shadowGeometryDownsampleDepth == depthTarget
+        && rayTracingState().m_shadowGeometryDownsampleBindlessResources == bindlessResourcesBuffer
         && rayTracingState().m_shadowGeometryDownsampleGeometry == geometryTarget
     )
         return true;
@@ -619,7 +620,10 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsampleBindingSet(Deferred
     auto* device = graphics().getDevice();
 
     Core::BindingSetDesc desc(arena());
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_SCENE_SHADING, deferredState().m_sceneShadingBuffer.get()));
+    desc.addItem(Core::BindingSetItem::ConstantBuffer(
+        NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_BINDLESS_RESOURCES,
+        bindlessResourcesBuffer
+    ));
     desc.addItem(Core::BindingSetItem::Texture_UAV(
         NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT,
         geometryTarget,
@@ -632,16 +636,12 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsampleBindingSet(Deferred
     if(!bindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow geometry downsample binding set"));
         rayTracingState().m_shadowGeometryDownsampleBindingSet = nullptr;
-        rayTracingState().m_shadowGeometryDownsampleWorldPosition = nullptr;
-        rayTracingState().m_shadowGeometryDownsampleNormal = nullptr;
-        rayTracingState().m_shadowGeometryDownsampleDepth = nullptr;
+        rayTracingState().m_shadowGeometryDownsampleBindlessResources = nullptr;
         rayTracingState().m_shadowGeometryDownsampleGeometry = nullptr;
         return false;
     }
     rayTracingState().m_shadowGeometryDownsampleBindingSet = Move(bindingSet);
-    rayTracingState().m_shadowGeometryDownsampleWorldPosition = worldPositionTarget;
-    rayTracingState().m_shadowGeometryDownsampleNormal = normalTarget;
-    rayTracingState().m_shadowGeometryDownsampleDepth = depthTarget;
+    rayTracingState().m_shadowGeometryDownsampleBindlessResources = bindlessResourcesBuffer;
     rayTracingState().m_shadowGeometryDownsampleGeometry = geometryTarget;
     return true;
 }

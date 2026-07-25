@@ -4,20 +4,18 @@
 
 #include "shadow_resolve_binding_slots.h"
 #include "sw_binding_slots.h" // NWB_SW_SHADOW_SOFT_FACTOR -- the half-res downscale, shared with the trace + resolve.
-#include "../bindless/bindless_heap.slangi"
+#include "../deferred/bindless_resources.slangi"
 #include "../common/math.slangi"
 
-// This pass needs ONLY the camera world position (for the linear camera-distance edge-stop metric), so it declares
-// the scene-shading CB DIRECTLY rather than #including scene/buffer.slangi -- buffer.slangi also declares the
-// light-list SRV this pass never uses, and depending on a compiler dead-code pass to strip it (so the reflected
-// descriptor layout matches the C++ binding layout, which omits it) is fragile. This layout-matches the C++
-// binding set, which binds the same scene-shading CB (m_sceneShadingBuffer) at this slot. Mirrors buffer.slangi's
-// NwbSceneShadingBuffer field-for-field (xyz = camera world position, w = active light count -- unused here).
-struct NwbShadowGeometrySceneShading{
-    float4 cameraPosition;
-};
-[[vk::binding(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_SCENE_SHADING, NWB_SHADOW_GEOMETRY_DOWNSAMPLE_SET)]]
-ConstantBuffer<NwbShadowGeometrySceneShading, Std140DataLayout> g_NwbShadowGeometrySceneShading;
+// The pass needs only the camera world position. Fetch the shared scene-shading CB through the same target-generation
+// slot cbuffer as deferred lighting, AVBOIT, and surfel GI; scene/buffer.slangi emits typed heap aliases rather than a
+// local light-list binding, so its declaration cannot perturb this pass's compact local set.
+[[vk::binding(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_BINDLESS_RESOURCES, NWB_SHADOW_GEOMETRY_DOWNSAMPLE_SET)]]
+ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbShadowGeometryDownsampleBindlessResources;
+#define NWB_SCENE_BUFFERS_FROM_HEAP 1
+#define NWB_SCENE_SHADING_HEAP_SLOT g_NwbShadowGeometryDownsampleBindlessResources.avboitSlots.z
+#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbShadowGeometryDownsampleBindlessResources.avboitSlots.w
+#include "../scene/buffer.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -79,7 +77,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // the octahedral pack sees a unit vector.
     const float3 normal = normalize(NwbHeapSampledImage2D(g_NwbShadowGeometryDownsamplePushConstants.normalSlot).Load(int3(full, 0)).xyz * 2.0 - 1.0);
     const float2 octNormal = nwbOctEncodeNormal(normal);
-    const float cameraDistance = length(world - g_NwbShadowGeometrySceneShading.cameraPosition.xyz);
+    const float cameraDistance = length(world - g_NwbSceneCameraPosition.xyz);
 
     g_NwbShadowGeometryOutput[halfTexel] = float4(octNormal.x, octNormal.y, cameraDistance, 1.0);
 }

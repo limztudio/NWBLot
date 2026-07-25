@@ -23,8 +23,9 @@
 #define NWB_SHADOW_RESOLVE_SET 0
 
 // The sampled-image slot numbers below are retained as the sparse local-layout ABI map; do not renumber the gaps.
-// Geometry downsample and soft resolve now fetch those logical reads from the global heap through push-constant slots,
-// so only the OUTPUT/VISIBILITY UAVs and scene CB are physically present in their set-0 layouts.
+// Geometry downsample and soft resolve now fetch those logical reads from the global heap through push-constant slots.
+// Geometry downsample also gets its scene camera through the target-generation resource-slot cbuffer, so its local
+// layout contains only that cbuffer plus its geometry-cache UAV; resolve retains its own local scene CB.
 
 // The half-res soft visibility Texture2DArray (one layer per shadow slot). SRV role: read by PREPARE
 // (copy) + WAVELET (the previous pass's color, via the ping-pong -- see below). The FINAL upsample reads it too.
@@ -71,14 +72,17 @@
 #define NWB_SHADOW_RESOLVE_BINDING_SCENE_SHADING 9
 
 // Shadow geometry downsample pre-pass (its own pipeline + binding layout): reads the full-res G-buffer world position
-// + normal + depth + the scene-shading CB (for the camera position), writes the packed half-res geometry cache above
-// (octahedral normal + camera distance + validity).
+// + normal + depth + scene-shading heap entry (for the camera position), writes the packed half-res geometry cache
+// above (octahedral normal + camera distance + validity).
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_SET 0
 // These three logical G-buffer slots likewise remain reserved while the downsample reads the target-generation heap.
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION 0
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_NORMAL 1
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH 2
+// Historical scene-shading position. It now carries the DeferredBindlessResourceSlots cbuffer whose avboitSlots.z
+// selects the uniform-buffer heap entry; retain the number rather than renumbering the geometry-output binding.
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_SCENE_SHADING 3
+#define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_BINDLESS_RESOURCES NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_SCENE_SHADING
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT 4
 
 // 8x8 = 64 threads per group (one thread per pixel), matching the caustic resolve + the SW traversal.

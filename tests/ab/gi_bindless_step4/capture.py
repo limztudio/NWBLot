@@ -20,7 +20,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from window_capture_runner import REPO, capture_smoke_window
 
-RUNTIME = REPO / "__cmake/build/linux-clang-x64/Testing/smoke_runtime/opt"
+# GI reuses the skinning-culling benchmark's cooked body/ground assets, so its smoke target
+# runs from that runtime rather than the transparent-multi smoke runtime.
+RUNTIME = REPO / "__cmake/build/linux-clang-x64/Testing/skinning_culling_benchmark_runtime/opt"
 TITLE = "NWB GI Test"
 # DDGI probes converge over a temporal blend, so give the field time to settle before the read;
 # two identical runs still differ by a small EMA floor in the bounced-lighting features.

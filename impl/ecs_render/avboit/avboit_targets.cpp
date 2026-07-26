@@ -285,9 +285,8 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
         return false;
     }
 
-    // AVBOIT material binding sets share DeferredBindlessFrameResources::slotsBuffer. That buffer is created after
-    // all frame targets are registered in the global heap, so defer binding-set creation until the deferred target
-    // builder reaches that point.
+    // AVBOIT material passes share DeferredBindlessFrameResources::slotsBuffer. That buffer is created after all
+    // frame targets are registered in the global heap, so pass setup waits for the deferred target builder.
     createdTargets.avboit = Move(avboitTargets);
     avboitState().m_targetsNeedClear = true;
     return true;

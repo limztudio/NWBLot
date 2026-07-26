@@ -4,9 +4,6 @@
 
 #include <impl/ecs_render/raytrace/rt_private.h>
 
-#include <impl/assets/graphics/gi/hw_binding_slots.h>   // NWB_GI_HW_* -- the U5 HW-RayQuery trace binding slots
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -39,6 +36,66 @@ inline constexpr u32 s_SurfelCountLogDelay = 3u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_rt_surfel_gi{
+    [[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass){
+        return handle.valid() && handle.descriptorClass() == descriptorClass;
+    }
+
+    [[nodiscard]] bool RegisterHeapBuffer(
+        Core::GpuDescriptorHeap& heap,
+        Core::Buffer& buffer,
+        const Core::GpuDescriptorClass::Enum descriptorClass,
+        const bool writable,
+        Core::GpuDescriptorHandle& outHandle
+    ){
+        outHandle = Core::GpuDescriptorHandle::invalid();
+        const Core::GpuDescriptorHandle handle = heap.allocate(descriptorClass);
+        if(!handle.valid())
+            return false;
+
+        const Core::DescriptorWriteItem item = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
+            ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
+            : (writable
+                ? Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, &buffer)
+                : Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, &buffer)
+            )
+        ;
+        if(!heap.write(handle, item)){
+            heap.free(handle);
+            return false;
+        }
+        outHandle = handle;
+        return true;
+    }
+
+    [[nodiscard]] bool EnsureHeapBuffer(
+        Core::GpuDescriptorHeap& heap,
+        Core::Buffer& buffer,
+        const Core::GpuDescriptorClass::Enum descriptorClass,
+        const bool writable,
+        Core::GpuDescriptorHandle& inOutHandle
+    ){
+        if(inOutHandle.valid())
+            return IsHeapHandle(inOutHandle, descriptorClass);
+
+        Core::GpuDescriptorHandle acquired;
+        if(!RegisterHeapBuffer(heap, buffer, descriptorClass, writable, acquired))
+            return false;
+        inOutHandle = acquired;
+        return true;
+    }
+
+    void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle){
+        if(handle.valid())
+            heap.free(handle);
+        handle = Core::GpuDescriptorHandle::invalid();
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
     if(rayTracingState().m_surfelSpawnPipeline)
         return true;
@@ -46,20 +103,18 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
         return false;
 
     auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel spawn requires the initialized global descriptor heap"));
+        rayTracingState().m_surfelSpawnPipelineFailed = true;
+        return false;
+    }
 
     if(!rayTracingState().m_surfelSpawnBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Spawn selects its two frame G-buffer images through descriptor-heap slots carried in an eight-byte push
-        // block. The local set is therefore the persistent CB + four UAV buffers only. The descriptor-buffer opt-in
-        // preserves Backend A: where that extension is absent this layout uses the classic descriptor-set path.
-        layoutDesc.setUseDescriptorBuffer(true);
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // pool
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_CELL_HEAD, 1)); // cell head (this frame; claim links)
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_COUNTER, 1)); // counter
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_FREE_LIST, 1)); // free-list (U1 pop)
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelSpawnPushConstants)));
+        // All surfel resources and frame inputs are selected through the common heap-slot push block.
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         rayTracingState().m_surfelSpawnBindingLayout = device->createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelSpawnBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel spawn binding layout"));
@@ -83,14 +138,9 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
     pipelineDesc
         .setComputeShader(rayTracingState().m_surfelSpawnShader)
         .addBindingLayout(rayTracingState().m_surfelSpawnBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
     ;
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
-    if(heap.isInitialized()){
-        pipelineDesc
-            .addBindingLayout(heap.getResourceLayout())
-            .addBindingLayout(heap.getSamplerLayout())
-        ;
-    }
     rayTracingState().m_surfelSpawnPipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelSpawnPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel spawn compute pipeline"));
@@ -112,18 +162,18 @@ bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
         return false;
 
     auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel age-free requires the initialized global descriptor heap"));
+        rayTracingState().m_surfelAgeFreePipelineFailed = true;
+        return false;
+    }
 
     if(!rayTracingState().m_surfelAgeFreeBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // This pure-resource layout (one constant buffer plus three StructuredBuffer UAVs) is descriptor-buffer
-        // compatible. The free-list is the additional storage buffer beyond hash-build. Where the extension is absent,
-        // the backend uses the classic descriptor-set path (Backend A) without a capability gate.
-        layoutDesc.setUseDescriptorBuffer(true);
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // pool (write alive = 0)
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_COUNTER, 1)); // counter (FREE_TOP push)
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_FREE_LIST, 1)); // free-list (push)
+        // The maintenance field is entirely heap-selected by the common push block.
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         rayTracingState().m_surfelAgeFreeBindingLayout = device->createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelAgeFreeBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel age-free binding layout"));
@@ -147,6 +197,8 @@ bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
     pipelineDesc
         .setComputeShader(rayTracingState().m_surfelAgeFreeShader)
         .addBindingLayout(rayTracingState().m_surfelAgeFreeBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
     ;
     rayTracingState().m_surfelAgeFreePipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelAgeFreePipeline){
@@ -169,17 +221,18 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
         return false;
 
     auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel hash-build requires the initialized global descriptor heap"));
+        rayTracingState().m_surfelHashBuildPipelineFailed = true;
+        return false;
+    }
 
     if(!rayTracingState().m_surfelHashBuildBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // This pure-resource layout (one constant buffer plus two StructuredBuffer UAVs) is descriptor-buffer
-        // compatible. Where the extension is absent, the backend uses the classic descriptor-set path (Backend A)
-        // without a capability gate.
-        layoutDesc.setUseDescriptorBuffer(true);
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // pool
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_CELL_HEAD, 1)); // cell head (write links)
+        // Pool and hash-head views are selected through the global descriptor heap.
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         rayTracingState().m_surfelHashBuildBindingLayout = device->createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelHashBuildBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel hash-build binding layout"));
@@ -203,6 +256,8 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
     pipelineDesc
         .setComputeShader(rayTracingState().m_surfelHashBuildShader)
         .addBindingLayout(rayTracingState().m_surfelHashBuildBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
     ;
     rayTracingState().m_surfelHashBuildPipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelHashBuildPipeline){
@@ -225,27 +280,18 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
         return false;
 
     auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel trace requires the initialized global descriptor heap"));
+        rayTracingState().m_surfelTracePipelineFailed = true;
+        return false;
+    }
 
     if(!rayTracingState().m_surfelTraceBindingLayout){
-        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Backend C: this layout is segment-coherent pure-resource (CB + StructuredBuffer SRV/UAV, no samplers) and the
-        // pipeline embeds the global descriptor heap's two layouts at sets 8/9. The heap is on Backend C iff the device
-        // advertises VK_EXT_descriptor_buffer, and only then are the embedded heap layouts descriptor-buffer-compatible
-        // -- so opt in exactly when the heap is, otherwise the classic heap layouts would downgrade this pipeline to A.
-        layoutDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
-        // Binding 0 is the target-generation slot cbuffer for shared scene shading + lights. Binding 11 is the
-        // renderer-owned trace material-context cbuffer selecting the SW scene tables and surface-evaluator buffers
-        // from the global StorageBuffer heap. The sparse positions are shared with gi_sw_trace.slangi.
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_GI_SW_BINDING_BINDLESS_RESOURCES, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_GI_SW_BINDING_MATERIAL_CONTEXT_SLOTS, 1));
-        // The surfel-specific tail is likewise named in surfel_binding_slots.h. No push constants -- the trace derives
-        // the round-robin phase from frameIndex % divisor.
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // surfel pool
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, 1)); // U4 bounce: prev-frame pool
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD, 1)); // U4 bounce: prev-frame cell-head
+        // Deferred scene slots, material-context slots, live/snapshot surfels, and geometry all come from the heap.
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         rayTracingState().m_surfelTraceBindingLayout = device->createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelTraceBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace binding layout"));
@@ -269,20 +315,9 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
     pipelineDesc
         .setComputeShader(rayTracingState().m_surfelTraceShader)
         .addBindingLayout(rayTracingState().m_surfelTraceBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
     ;
-    // Pin the global descriptor-index heap's resource (set 8) + sampler (set 9) layouts onto the SW surfel-trace
-    // pipeline -- the shader-layout-only side of the split: the traversal reads per-mesh geometry through these sets by
-    // the host-provided slot index. The classic SW GI layout is added first, so it keeps positional set 0; the two heap
-    // layouts carry explicit sets 8/9 and createPipelineLayoutForBindingLayouts gap-fills sets 1-7 with the empty set
-    // layout. Guarded on a live heap so builds without one keep the pure set-0 layout. Mirrors the SW-caustic scaffold
-    // (rt_caustics.cpp ensureSwCausticPipeline).
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
-    if(heap.isInitialized()){
-        pipelineDesc
-            .addBindingLayout(heap.getResourceLayout())
-            .addBindingLayout(heap.getSamplerLayout())
-        ;
-    }
     rayTracingState().m_surfelTracePipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelTracePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace compute pipeline"));
@@ -307,6 +342,13 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
     const u32 cellCount = rayTracingState().m_surfelHashCellCount;
     if(poolCapacity == 0u || cellCount == 0u)
         return false;
+
+    auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel GI requires the initialized global descriptor heap"));
+        return false;
+    }
 
     // Surfel pool (poolCapacity * 64B). UAV-writable (the spawn/hash-build/trace passes write it); the gather binds it
     // as an SRV. On (re)creation, request the one-shot clear (this function has no command list) + reset the seed.
@@ -463,8 +505,8 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
 
     // Params CB (5 x Float4). Uploaded each rendered frame in prepareSurfelResources. setIsConstantBuffer marks it a
     // uniform buffer (adds VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT + 16-byte-aligns the suballocation); it is bound as a
-    // ConstantBuffer in every surfel pass, so without the flag the validation layer flags a UNIFORM_BUFFER type/usage
-    // + alignment mismatch (VUID-VkWriteDescriptorSet-descriptorType-00330 / -type-11452 / -11461).
+    // ConstantBuffer in every surfel pass, so without the flag validation reports a uniform-buffer type/usage and
+    // alignment mismatch.
     if(!rayTracingState().m_surfelConstants){
         Core::BufferDesc cbDesc;
         cbDesc
@@ -480,148 +522,26 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         }
     }
 
-    // Build the pipelines + persistent binding sets. Target/BVH-dependent binding sets are built by
-    // prepareSurfelResources after the per-frame SW scene BVH is resident, so renderSurfelGi only consumes ready
-    // resources.
-    // The trace pipeline is the ONE backend-specific pass: the HW-shadow branch selects the RayQuery twin, else the SW walk.
+    // Register each persistent surfel buffer exactly once in the global heap. The typed shader aliases choose read or
+    // writable views at use time; the descriptor itself owns the backing-buffer lifetime until its retirement delay.
+    if(
+        !__hidden_rt_surfel_gi::EnsureHeapBuffer(heap, *rayTracingState().m_surfelConstants.get(), Core::GpuDescriptorClass::UniformBuffer, false, rayTracingState().m_surfelConstantsHeapHandle)
+        || !__hidden_rt_surfel_gi::EnsureHeapBuffer(heap, *rayTracingState().m_surfelPoolBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelPoolHeapHandle)
+        || !__hidden_rt_surfel_gi::EnsureHeapBuffer(heap, *rayTracingState().m_surfelCellHeadBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelCellHeadHeapHandle)
+        || !__hidden_rt_surfel_gi::EnsureHeapBuffer(heap, *rayTracingState().m_surfelCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelCounterHeapHandle)
+        || !__hidden_rt_surfel_gi::EnsureHeapBuffer(heap, *rayTracingState().m_surfelTraceIndirectArgsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelTraceIndirectArgsHeapHandle)
+        || !__hidden_rt_surfel_gi::EnsureHeapBuffer(heap, *rayTracingState().m_surfelFreeListBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelFreeListHeapHandle)
+        || !__hidden_rt_surfel_gi::EnsureHeapBuffer(heap, *rayTracingState().m_surfelPoolSnapshotBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, false, rayTracingState().m_surfelPoolSnapshotHeapHandle)
+        || !__hidden_rt_surfel_gi::EnsureHeapBuffer(heap, *rayTracingState().m_surfelCellHeadSnapshotBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, false, rayTracingState().m_surfelCellHeadSnapshotHeapHandle)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register persistent surfel resources in the descriptor heap"));
+        return false;
+    }
+
+    // The trace pipeline is the one backend-specific pass: the HW-shadow branch selects the RayQuery twin, else the SW walk.
     const bool traceReady = rayTracingState().m_surfelUseHwTrace ? ensureSurfelTraceHwPipeline() : ensureSurfelTracePipeline();
     if(!ensureSurfelSpawnPipeline() || !ensureSurfelAgeFreePipeline() || !ensureSurfelHashBuildPipeline() || !traceReady || !ensureSurfelResolvePipeline() || !ensureSurfelUpsamplePipeline() || !ensureSurfelTraceBuildArgsPipeline())
         return false;
-    if(!ensureSurfelSpawnBindingSet() || !ensureSurfelHashBuildBindingSet() || !ensureSurfelAgeFreeBindingSet())
-        return false;
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// The spawn binding set retains only the persistent surfel buffers. Its G-buffer world-position/normal inputs are
-// frame-heap reads selected by push constants at dispatch, so this set builds once and survives target recreation.
-bool RendererRayTracingSystem::ensureSurfelSpawnBindingSet(){
-    NWB_ASSERT(rayTracingState().m_surfelSpawnBindingLayout);
-    NWB_ASSERT(rayTracingState().m_surfelConstants);
-    NWB_ASSERT(rayTracingState().m_surfelPoolBuffer);
-    NWB_ASSERT(rayTracingState().m_surfelCellHeadBuffer);
-    NWB_ASSERT(rayTracingState().m_surfelCounterBuffer);
-    NWB_ASSERT(rayTracingState().m_surfelFreeListBuffer);
-    if(rayTracingState().m_surfelSpawnBindingSet)
-        return true;
-
-    Core::BindingSetDesc desc(arena());
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get()));
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, rayTracingState().m_surfelPoolBuffer.get()));
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_CELL_HEAD, rayTracingState().m_surfelCellHeadBuffer.get()));
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_COUNTER, rayTracingState().m_surfelCounterBuffer.get()));
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_FREE_LIST, rayTracingState().m_surfelFreeListBuffer.get()));
-
-    rayTracingState().m_surfelSpawnBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_surfelSpawnBindingLayout);
-    if(!rayTracingState().m_surfelSpawnBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel spawn binding set"));
-        return false;
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// The age-free binding set (U1): surfel constants + pool UAV + counter UAV + free-list UAV. All persistent, so it is
-// built once (from ensureSurfelResources) and reused, like the hash-build set.
-bool RendererRayTracingSystem::ensureSurfelAgeFreeBindingSet(){
-    if(rayTracingState().m_surfelAgeFreeBindingSet)
-        return true;
-    NWB_ASSERT(rayTracingState().m_surfelAgeFreeBindingLayout);
-    NWB_ASSERT(rayTracingState().m_surfelConstants);
-    NWB_ASSERT(rayTracingState().m_surfelPoolBuffer);
-    NWB_ASSERT(rayTracingState().m_surfelCounterBuffer);
-    NWB_ASSERT(rayTracingState().m_surfelFreeListBuffer);
-
-    Core::BindingSetDesc desc(arena());
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get()));
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, rayTracingState().m_surfelPoolBuffer.get()));
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_COUNTER, rayTracingState().m_surfelCounterBuffer.get()));
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_FREE_LIST, rayTracingState().m_surfelFreeListBuffer.get()));
-
-    rayTracingState().m_surfelAgeFreeBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_surfelAgeFreeBindingLayout);
-    if(!rayTracingState().m_surfelAgeFreeBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel age-free binding set"));
-        return false;
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// The hash-build binding set: the surfel buffers only (constants + pool UAV + cell-head UAV). All persistent, so this
-// is built once (from ensureSurfelResources) and reused.
-bool RendererRayTracingSystem::ensureSurfelHashBuildBindingSet(){
-    if(rayTracingState().m_surfelHashBuildBindingSet)
-        return true;
-    NWB_ASSERT(rayTracingState().m_surfelHashBuildBindingLayout);
-    NWB_ASSERT(rayTracingState().m_surfelConstants);
-    NWB_ASSERT(rayTracingState().m_surfelPoolBuffer);
-    NWB_ASSERT(rayTracingState().m_surfelCellHeadBuffer);
-
-    Core::BindingSetDesc desc(arena());
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get()));
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, rayTracingState().m_surfelPoolBuffer.get()));
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_CELL_HEAD, rayTracingState().m_surfelCellHeadBuffer.get()));
-
-    rayTracingState().m_surfelHashBuildBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_surfelHashBuildBindingLayout);
-    if(!rayTracingState().m_surfelHashBuildBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel hash-build binding set"));
-        return false;
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// The trace binding set contains only its two slot cbuffers and the surfel tail. Its b11 context cbuffer selects all
-// SW scene/material StorageBuffers through the global heap, so replacement of one backing buffer updates only that
-// cbuffer rather than rebuilding five direct SRV descriptors.
-bool RendererRayTracingSystem::ensureSurfelTraceBindingSet(DeferredFrameTargets& targets){
-    NWB_ASSERT(rayTracingState().m_surfelTraceBindingLayout);
-    NWB_ASSERT(rayTracingState().m_surfelConstants);
-    NWB_ASSERT(rayTracingState().m_surfelPoolBuffer);
-    NWB_ASSERT(rayTracingState().m_surfelPoolSnapshotBuffer);
-    NWB_ASSERT(rayTracingState().m_surfelCellHeadSnapshotBuffer);
-    NWB_ASSERT(rayTracingState().m_rayTraceMaterialContextSlotsBuffer);
-    NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(targets.bindless.slotsBuffer);
-
-    Core::Buffer* materialContextSlotsBuffer = rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get();
-    Core::Buffer* bindlessResourcesBuffer = targets.bindless.slotsBuffer.get();
-    if(
-        rayTracingState().m_surfelTraceBindingSet
-        && rayTracingState().m_surfelTraceBindingSetMaterialContextSlots == materialContextSlotsBuffer
-        && rayTracingState().m_surfelTraceBindingSetBindlessResources == bindlessResourcesBuffer
-    )
-        return true;
-
-    Core::BindingSetDesc desc(arena());
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_SW_BINDING_BINDLESS_RESOURCES, bindlessResourcesBuffer));
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_SW_BINDING_MATERIAL_CONTEXT_SLOTS, materialContextSlotsBuffer));
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get())); // surfel constants
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, rayTracingState().m_surfelPoolBuffer.get())); // surfel pool
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, rayTracingState().m_surfelPoolSnapshotBuffer.get())); // U4 bounce: prev-frame pool
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD, rayTracingState().m_surfelCellHeadSnapshotBuffer.get())); // U4 bounce: prev-frame cell-head
-
-    rayTracingState().m_surfelTraceBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_surfelTraceBindingLayout);
-    if(!rayTracingState().m_surfelTraceBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace binding set"));
-        rayTracingState().m_surfelTraceBindingSetMaterialContextSlots = nullptr;
-        rayTracingState().m_surfelTraceBindingSetBindlessResources = nullptr;
-        return false;
-    }
-    rayTracingState().m_surfelTraceBindingSetMaterialContextSlots = materialContextSlotsBuffer;
-    rayTracingState().m_surfelTraceBindingSetBindlessResources = bindlessResourcesBuffer;
     return true;
 }
 
@@ -645,25 +565,17 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
 
     auto* device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel HW trace requires the descriptor-buffer TLAS heap layout"));
+        rayTracingState().m_surfelTraceHwPipelineFailed = true;
+        return false;
+    }
 
     if(!rayTracingState().m_surfelTraceHwBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Backend C reads the shared TLAS from the fixed set-10 heap block, leaving this local set with only the
-        // surfel/GI resources. Backend A keeps its classic local TLAS descriptor.
-        layoutDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
-        // Binding 0 selects scene shading + lights; b11 selects the heap-backed InstanceID material and material-surface
-        // context. Historical local slots 1 and 3-10 remain gaps. Backend A retains the local TLAS at b2; Backend C
-        // selects it from the fixed heap set. Closest-hit reads mesh geometry through material-record heap slots.
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_GI_HW_BINDING_BINDLESS_RESOURCES, 1));
-        if(!heap.usesDescriptorBuffer())
-            layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_GI_HW_BINDING_TLAS, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_GI_HW_BINDING_MATERIAL_CONTEXT_SLOTS, 1));
-        // Surfel tail (constants 12 / pool 13 / snapshot 20/21) -- shared verbatim with the SW trace.
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // surfel pool
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, 1)); // U4 bounce: prev-frame pool
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD, 1)); // U4 bounce: prev-frame cell-head
+        // The fixed heap blocks provide the TLAS, trace contexts, surfels, and geometry; the local layout is push-only.
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         rayTracingState().m_surfelTraceHwBindingLayout = device->createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelTraceHwBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel HW trace binding layout"));
@@ -675,7 +587,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
     if(!m_renderer.shaderSystem().loadShader(
         rayTracingState().m_surfelTraceHwShader,
         AssetsGraphicsGi::s_SurfelTraceHwShaderName,
-        heap.usesDescriptorBuffer() ? AStringView("NWB_BINDLESS_TLAS=1") : AStringView("NWB_BINDLESS_TLAS=0"),
+        AStringView("NWB_BINDLESS_TLAS=1"),
         Core::ShaderType::Compute,
         "ECSRender_SurfelTraceHw"
     )){
@@ -688,27 +600,15 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
         .setComputeShader(rayTracingState().m_surfelTraceHwShader)
         .addBindingLayout(rayTracingState().m_surfelTraceHwBindingLayout)
     ;
-    // Pin the global descriptor-index heap's resource (set 8) + sampler (set 9) layouts onto the hardware
-    // surfel-trace pipeline -- the shader-layout-only side of the split: the inline-RayQuery closest-hit reads each
-    // mesh's position / index / attribute buffers through these sets by the host-provided slot index. The classic HW GI
-    // layout is added first (positional set 0); the two heap layouts carry explicit sets 8/9 and
-    // createPipelineLayoutForBindingLayouts gap-fills sets 1-7. Guarded on a live heap so builds without one keep the
-    // pure set-0 layout. Mirrors the SW GI scaffold -- this is a COMPUTE pipeline (inline RayQuery), so the heap binds
-    // via bindCompute like the SW paths, not the HW-caustic bindRayTracing.
-    if(heap.isInitialized()){
-        pipelineDesc
-            .addBindingLayout(heap.getResourceLayout())
-            .addBindingLayout(heap.getSamplerLayout())
-        ;
-        if(heap.usesDescriptorBuffer()){
-            if(!heap.hasAccelStructLayout()){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Backend-C descriptor heap has no TLAS layout for surfel GI"));
-                rayTracingState().m_surfelTraceHwPipelineFailed = true;
-                return false;
-            }
-            pipelineDesc.addBindingLayout(heap.getAccelStructLayout());
-        }
-    }
+    // Pin the global resource (set 8), sampler (set 9), and TLAS (set 10) layouts onto the hardware surfel-trace
+    // pipeline. The local HW GI layout remains positional set 0; the heap layouts carry explicit high set indices and
+    // createPipelineLayoutForBindingLayouts gap-fills sets 1-7. This is a COMPUTE pipeline, so the heap binds through
+    // bindCompute.
+    pipelineDesc
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
+        .addBindingLayout(heap.getAccelStructLayout())
+    ;
     rayTracingState().m_surfelTraceHwPipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelTraceHwPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel HW trace compute pipeline"));
@@ -723,59 +623,6 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The HW trace binding set contains its target and trace-context slot cbuffers plus the surfel tail. Backend A also
-// retains the local TLAS; Backend C selects it from set 10. The b11 cbuffer selects heap-backed material buffers.
-bool RendererRayTracingSystem::ensureSurfelTraceHwBindingSet(DeferredFrameTargets& targets){
-    NWB_ASSERT(rayTracingState().m_surfelTraceHwBindingLayout);
-    NWB_ASSERT(rayTracingState().m_surfelConstants);
-    NWB_ASSERT(rayTracingState().m_surfelPoolBuffer);
-    NWB_ASSERT(rayTracingState().m_surfelPoolSnapshotBuffer);
-    NWB_ASSERT(rayTracingState().m_surfelCellHeadSnapshotBuffer);
-    NWB_ASSERT(rayTracingState().m_tlas);
-    NWB_ASSERT(rayTracingState().m_rayTraceMaterialContextSlotsBuffer);
-    NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(targets.bindless.slotsBuffer);
-
-    Core::RayTracingAccelStruct* tlas = rayTracingState().m_tlas.get();
-    Core::Buffer* materialContextSlotsBuffer = rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get();
-    Core::Buffer* bindlessResourcesBuffer = targets.bindless.slotsBuffer.get();
-    if(
-        rayTracingState().m_surfelTraceHwBindingSet
-        && rayTracingState().m_surfelTraceHwBindingSetTlas == tlas
-        && rayTracingState().m_surfelTraceHwBindingSetMaterialContextSlots == materialContextSlotsBuffer
-        && rayTracingState().m_surfelTraceHwBindingSetBindlessResources == bindlessResourcesBuffer
-    )
-        return true;
-
-    Core::BindingSetDesc desc(arena());
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_HW_BINDING_BINDLESS_RESOURCES, bindlessResourcesBuffer));
-    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
-    if(!heap.usesDescriptorBuffer())
-        desc.addItem(Core::BindingSetItem::RayTracingAccelStruct(NWB_GI_HW_BINDING_TLAS, tlas));
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_GI_HW_BINDING_MATERIAL_CONTEXT_SLOTS, materialContextSlotsBuffer));
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get())); // surfel constants
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, rayTracingState().m_surfelPoolBuffer.get())); // surfel pool
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, rayTracingState().m_surfelPoolSnapshotBuffer.get())); // U4 bounce: prev-frame pool
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD, rayTracingState().m_surfelCellHeadSnapshotBuffer.get())); // U4 bounce: prev-frame cell-head
-
-    rayTracingState().m_surfelTraceHwBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_surfelTraceHwBindingLayout);
-    if(!rayTracingState().m_surfelTraceHwBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel HW trace binding set"));
-        rayTracingState().m_surfelTraceHwBindingSetTlas = nullptr;
-        rayTracingState().m_surfelTraceHwBindingSetMaterialContextSlots = nullptr;
-        rayTracingState().m_surfelTraceHwBindingSetBindlessResources = nullptr;
-        return false;
-    }
-    rayTracingState().m_surfelTraceHwBindingSetTlas = tlas;
-    rayTracingState().m_surfelTraceHwBindingSetMaterialContextSlots = materialContextSlotsBuffer;
-    rayTracingState().m_surfelTraceHwBindingSetBindlessResources = bindlessResourcesBuffer;
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
     if(rayTracingState().m_surfelResolvePipeline)
         return true;
@@ -783,19 +630,18 @@ bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
         return false;
 
     auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel resolve requires the initialized global descriptor heap"));
+        rayTracingState().m_surfelResolvePipelineFailed = true;
+        return false;
+    }
 
     if(!rayTracingState().m_surfelResolveBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // The G-buffer inputs are target-generation descriptor-heap reads selected by push constants. Preserve the
-        // sparse local output binding: the descriptor-buffer block now contains the persistent CB/SRVs plus the
-        // half-resolution irradiance UAV only.
-        layoutDesc.setUseDescriptorBuffer(true);
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_RESOLVE_BINDING_CONSTANTS, 1)); // surfel constants
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_RESOLVE_BINDING_POOL, 1)); // pool (SRV)
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_RESOLVE_BINDING_CELL_HEAD, 1)); // cell head (SRV)
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SURFEL_RESOLVE_BINDING_OUTPUT, 1)); // surfelIrradiance (UAV)
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelResolvePushConstants)));
+        // G-buffer, surfel field, and half-resolution storage output are all selected from heap slots.
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         rayTracingState().m_surfelResolveBindingLayout = device->createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelResolveBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel resolve binding layout"));
@@ -819,14 +665,9 @@ bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
     pipelineDesc
         .setComputeShader(rayTracingState().m_surfelResolveShader)
         .addBindingLayout(rayTracingState().m_surfelResolveBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
     ;
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
-    if(heap.isInitialized()){
-        pipelineDesc
-            .addBindingLayout(heap.getResourceLayout())
-            .addBindingLayout(heap.getSamplerLayout())
-        ;
-    }
     rayTracingState().m_surfelResolvePipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelResolvePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel resolve compute pipeline"));
@@ -841,50 +682,6 @@ bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The resolve set retains the surfel constants/pool(SRV)/cell-head(SRV) plus the HALF-res surfelIrradianceHalf UAV.
-// G-buffer world-position/normal are selected from the frame heap at dispatch; only an output change rebuilds this set.
-bool RendererRayTracingSystem::ensureSurfelResolveBindingSet(DeferredFrameTargets& targets){
-    NWB_ASSERT(rayTracingState().m_surfelResolveBindingLayout);
-    NWB_ASSERT(rayTracingState().m_surfelConstants);
-    NWB_ASSERT(rayTracingState().m_surfelPoolBuffer);
-    NWB_ASSERT(rayTracingState().m_surfelCellHeadBuffer);
-    NWB_ASSERT(targets.worldPosition);
-    NWB_ASSERT(targets.normal);
-    NWB_ASSERT(targets.surfelIrradianceHalf);
-
-    const Core::Texture* output = targets.surfelIrradianceHalf.get();
-    if(
-        rayTracingState().m_surfelResolveBindingSet
-        && rayTracingState().m_surfelResolveBindingSetOutput == output
-    )
-        return true;
-
-    Core::BindingSetDesc desc(arena());
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_RESOLVE_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get()));
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_RESOLVE_BINDING_POOL, rayTracingState().m_surfelPoolBuffer.get()));
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_RESOLVE_BINDING_CELL_HEAD, rayTracingState().m_surfelCellHeadBuffer.get()));
-    desc.addItem(Core::BindingSetItem::Texture_UAV(
-        NWB_SURFEL_RESOLVE_BINDING_OUTPUT,
-        targets.surfelIrradianceHalf.get(),
-        targets.surfelIrradianceFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-
-    rayTracingState().m_surfelResolveBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_surfelResolveBindingLayout);
-    if(!rayTracingState().m_surfelResolveBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel resolve binding set"));
-        rayTracingState().m_surfelResolveBindingSetOutput = nullptr;
-        return false;
-    }
-    rayTracingState().m_surfelResolveBindingSetOutput = output;
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
     if(rayTracingState().m_surfelUpsamplePipeline)
         return true;
@@ -892,16 +689,18 @@ bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
         return false;
 
     auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel upsample requires the initialized global descriptor heap"));
+        rayTracingState().m_surfelUpsamplePipelineFailed = true;
+        return false;
+    }
 
     if(!rayTracingState().m_surfelUpsampleBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // The half irradiance and G-buffer inputs are target-generation descriptor-heap reads selected by push
-        // constants. Preserve the sparse local output binding: the descriptor-buffer block now holds the full-res
-        // irradiance UAV only.
-        layoutDesc.setUseDescriptorBuffer(true);
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SURFEL_UPSAMPLE_BINDING_OUTPUT, 1)); // full-res surfelIrradiance (UAV)
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelUpsamplePushConstants)));
+        // Half irradiance, G-buffer, and full-resolution storage output are heap-selected.
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         rayTracingState().m_surfelUpsampleBindingLayout = device->createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelUpsampleBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel upsample binding layout"));
@@ -925,14 +724,9 @@ bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
     pipelineDesc
         .setComputeShader(rayTracingState().m_surfelUpsampleShader)
         .addBindingLayout(rayTracingState().m_surfelUpsampleBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
     ;
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
-    if(heap.isInitialized()){
-        pipelineDesc
-            .addBindingLayout(heap.getResourceLayout())
-            .addBindingLayout(heap.getSamplerLayout())
-        ;
-    }
     rayTracingState().m_surfelUpsamplePipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelUpsamplePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel upsample compute pipeline"));
@@ -947,45 +741,6 @@ bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The upsample set retains only the full-res surfelIrradiance UAV. Half irradiance plus G-buffer normal/world-position
-// are selected from the frame heap at dispatch, so only the output target changes rebuild this set.
-bool RendererRayTracingSystem::ensureSurfelUpsampleBindingSet(DeferredFrameTargets& targets){
-    NWB_ASSERT(rayTracingState().m_surfelUpsampleBindingLayout);
-    NWB_ASSERT(targets.surfelIrradianceHalf);
-    NWB_ASSERT(targets.normal);
-    NWB_ASSERT(targets.worldPosition);
-    NWB_ASSERT(targets.surfelIrradiance);
-
-    const Core::Texture* output = targets.surfelIrradiance.get();
-    if(
-        rayTracingState().m_surfelUpsampleBindingSet
-        && rayTracingState().m_surfelUpsampleBindingSetOutput == output
-    )
-        return true;
-
-    Core::BindingSetDesc desc(arena());
-    desc.addItem(Core::BindingSetItem::Texture_UAV(
-        NWB_SURFEL_UPSAMPLE_BINDING_OUTPUT,
-        targets.surfelIrradiance.get(),
-        targets.surfelIrradianceFormat,
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::TextureDimension::Texture2D
-    ));
-
-    rayTracingState().m_surfelUpsampleBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_surfelUpsampleBindingLayout);
-    if(!rayTracingState().m_surfelUpsampleBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel upsample binding set"));
-        rayTracingState().m_surfelUpsampleBindingSetOutput = nullptr;
-        return false;
-    }
-    rayTracingState().m_surfelUpsampleBindingSetOutput = output;
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
     if(rayTracingState().m_surfelTraceBuildArgsPipeline)
         return true;
@@ -993,17 +748,18 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
         return false;
 
     auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel trace build-args requires the initialized global descriptor heap"));
+        rayTracingState().m_surfelTraceBuildArgsPipelineFailed = true;
+        return false;
+    }
 
     if(!rayTracingState().m_surfelTraceBuildArgsBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // This pure-resource layout (one constant buffer plus two StructuredBuffer UAVs) is descriptor-buffer
-        // compatible. Its storage buffers are the counter read and indirect-args write. Where the extension is absent,
-        // the backend uses the classic descriptor-set path (Backend A) without a capability gate.
-        layoutDesc.setUseDescriptorBuffer(true);
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_TRACE_BUILDARGS_BINDING_CONSTANTS, 1)); // surfel constants (divisor .w)
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_TRACE_BUILDARGS_BINDING_COUNTER, 1)); // counter (read BUMP_TOP)
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_TRACE_BUILDARGS_BINDING_ARGS, 1)); // indirect args (write)
+        // Constants, counter, and indirect argument output are selected by heap slots.
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         rayTracingState().m_surfelTraceBuildArgsBindingLayout = device->createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelTraceBuildArgsBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace build-args binding layout"));
@@ -1027,6 +783,8 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
     pipelineDesc
         .setComputeShader(rayTracingState().m_surfelTraceBuildArgsShader)
         .addBindingLayout(rayTracingState().m_surfelTraceBuildArgsBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
     ;
     rayTracingState().m_surfelTraceBuildArgsPipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelTraceBuildArgsPipeline){
@@ -1042,28 +800,32 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The build-args set binds only PERSISTENT buffers (surfel constants + counter + the indirect-args buffer), so it is
-// built ONCE and reused (no per-target rebuild, mirroring the hash-build/age-free sets).
-bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsBindingSet(){
-    if(rayTracingState().m_surfelTraceBuildArgsBindingSet)
-        return true;
-
-    NWB_ASSERT(rayTracingState().m_surfelTraceBuildArgsBindingLayout);
-    NWB_ASSERT(rayTracingState().m_surfelConstants);
-    NWB_ASSERT(rayTracingState().m_surfelCounterBuffer);
-    NWB_ASSERT(rayTracingState().m_surfelTraceIndirectArgsBuffer);
-
-    Core::BindingSetDesc desc(arena());
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_SURFEL_TRACE_BUILDARGS_BINDING_CONSTANTS, rayTracingState().m_surfelConstants.get()));
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_TRACE_BUILDARGS_BINDING_COUNTER, rayTracingState().m_surfelCounterBuffer.get()));
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_TRACE_BUILDARGS_BINDING_ARGS, rayTracingState().m_surfelTraceIndirectArgsBuffer.get()));
-
-    rayTracingState().m_surfelTraceBuildArgsBindingSet = graphics().getDevice()->createBindingSet(desc, rayTracingState().m_surfelTraceBuildArgsBindingLayout);
-    if(!rayTracingState().m_surfelTraceBuildArgsBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace build-args binding set"));
-        return false;
+void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
+    if(auto* device = graphics().getDevice()){
+        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+        if(heap.isInitialized()){
+            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelConstantsHeapHandle);
+            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelPoolHeapHandle);
+            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelCellHeadHeapHandle);
+            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelCounterHeapHandle);
+            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelTraceIndirectArgsHeapHandle);
+            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelFreeListHeapHandle);
+            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelPoolSnapshotHeapHandle);
+            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelCellHeadSnapshotHeapHandle);
+            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelMaterialContextSlotsHeapHandle);
+            return;
+        }
     }
-    return true;
+
+    rayTracingState().m_surfelConstantsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_surfelPoolHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_surfelCellHeadHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_surfelCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_surfelTraceIndirectArgsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_surfelFreeListHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_surfelPoolSnapshotHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_surfelCellHeadSnapshotHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_surfelMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
 }
 
 
@@ -1089,17 +851,26 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
     if(!ensureSurfelResources())
         return false;
 
-    // The trace binding set is the ONE backend-specific set: HW (TLAS + heap-selected material context) or SW
-    // (heap-selected scene BVH + material context). Both retain the target-generation slot cbuffer for scene lighting.
-    const bool traceSetReady = rayTracingState().m_surfelUseHwTrace ? ensureSurfelTraceHwBindingSet(targets) : ensureSurfelTraceBindingSet(targets);
+    // The shared deferred target-generation payload already owns a UniformBuffer heap descriptor. Register the one
+    // remaining trace selector (material-context slots) in surfel state; this avoids changing shadow/caustic bindings
+    // while leaving both surfel trace backends entirely heap-addressed.
+    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
     if(
-        !ensureSurfelHashBuildBindingSet()
-        || !traceSetReady
-        || !ensureSurfelResolveBindingSet(targets)
-        || !ensureSurfelUpsampleBindingSet(targets)
-        || !ensureSurfelTraceBuildArgsBindingSet()
+        !targets.bindless.valid()
+        || !__hidden_rt_surfel_gi::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
+        || !rayTracingState().m_rayTraceMaterialContextSlotsBuffer
+        || !__hidden_rt_surfel_gi::EnsureHeapBuffer(
+            heap,
+            *rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(),
+            Core::GpuDescriptorClass::UniformBuffer,
+            false,
+            rayTracingState().m_surfelMaterialContextSlotsHeapHandle
+        )
     )
+    {
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel GI trace heap context is incomplete"));
         return false;
+    }
 
     // One-shot clear of the freshly-created buffers (ensureSurfelResources has no command list). Pool -> zero (alive ==
     // 0 everywhere), cell-head -> 0xFFFFFFFF (empty lists), counter -> 0 (bump top at slot 0). Cleared exactly once per
@@ -1157,7 +928,7 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
     commandList.setBufferState(cb, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.writeBuffer(cb, &params, sizeof(params));
-    commandList.setBufferState(cb, Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(cb, Core::ResourceStates::ConstantBuffer);
     commandList.commitBarriers();
     return true;
 }
@@ -1172,12 +943,13 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
 
     NWB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
 
     // The trace pass runs the SELECTED backend (U5): the HW RayQuery twin on the HW-shadow branch, else the SW BVH walk.
     // Everything else (snapshot copy, age-free/clear/hash-build/spawn/resolve) is backend-agnostic.
     const bool useHwTrace = rayTracingState().m_surfelUseHwTrace;
     Core::ComputePipeline* const tracePipeline = useHwTrace ? rayTracingState().m_surfelTraceHwPipeline.get() : rayTracingState().m_surfelTracePipeline.get();
-    Core::BindingSet* const traceBindingSet = useHwTrace ? rayTracingState().m_surfelTraceHwBindingSet.get() : rayTracingState().m_surfelTraceBindingSet.get();
 
     // Guard: every pass needs its pipeline (a prior ensure failure leaves the block inert this frame).
     if(
@@ -1192,19 +964,45 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         return true;
 
     if(
-        !rayTracingState().m_surfelSpawnBindingSet
-        || !rayTracingState().m_surfelAgeFreeBindingSet
-        || !rayTracingState().m_surfelHashBuildBindingSet
-        || !traceBindingSet
-        || !rayTracingState().m_surfelResolveBindingSet
-        || !rayTracingState().m_surfelUpsampleBindingSet
-        || !rayTracingState().m_surfelTraceBuildArgsBindingSet
-    )
-        return true;
+        !targets.bindless.valid()
+        || !deferredState().m_sceneShadingBuffer
+        || !deferredState().m_lightBuffer
+        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelConstantsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
+        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelPoolHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelCellHeadHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelTraceIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelFreeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelPoolSnapshotHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelCellHeadSnapshotHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
+        || !__hidden_rt_surfel_gi::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
+        || !__hidden_rt_surfel_gi::IsHeapHandle(targets.bindless.gbufferWorldPosition, Core::GpuDescriptorClass::SampledImage)
+        || !__hidden_rt_surfel_gi::IsHeapHandle(targets.bindless.gbufferNormal, Core::GpuDescriptorClass::SampledImage)
+        || !__hidden_rt_surfel_gi::IsHeapHandle(targets.bindless.surfelIrradianceHalf, Core::GpuDescriptorClass::SampledImage)
+        || !__hidden_rt_surfel_gi::IsHeapHandle(targets.bindless.surfelIrradianceHalfStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_rt_surfel_gi::IsHeapHandle(targets.bindless.surfelIrradianceStorage, Core::GpuDescriptorClass::StorageImage)
+        || (useHwTrace && (!rayTracingState().m_tlas || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)))
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel GI heap registration is incomplete"));
+        return false;
+    }
 
     // The age-free / hash-build passes dispatch over the full pool (they touch every slot); the trace dispatches per
     // LIVE surfel via (3b)'s indirect args and derives its round-robin phase from the CB divisor.
     const u32 poolCapacity = rayTracingState().m_surfelPoolCapacity;
+
+    SurfelHeapPushConstants surfelPush;
+    surfelPush.constantsHeapSlot = rayTracingState().m_surfelConstantsHeapHandle.slot();
+    surfelPush.poolHeapSlot = rayTracingState().m_surfelPoolHeapHandle.slot();
+    surfelPush.cellHeadHeapSlot = rayTracingState().m_surfelCellHeadHeapHandle.slot();
+    surfelPush.counterHeapSlot = rayTracingState().m_surfelCounterHeapHandle.slot();
+    surfelPush.freeListHeapSlot = rayTracingState().m_surfelFreeListHeapHandle.slot();
+    surfelPush.snapshotPoolHeapSlot = rayTracingState().m_surfelPoolSnapshotHeapHandle.slot();
+    surfelPush.snapshotCellHeadHeapSlot = rayTracingState().m_surfelCellHeadSnapshotHeapHandle.slot();
+    surfelPush.traceIndirectArgsHeapSlot = rayTracingState().m_surfelTraceIndirectArgsHeapHandle.slot();
+    surfelPush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
+    surfelPush.materialContextSlotsHeapSlot = rayTracingState().m_surfelMaterialContextSlotsHeapHandle.slot();
 
     // (U4 infinite bounce) Snapshot the previous frame's converged pool + cell-head into the SRV-only snapshot buffers
     // BEFORE any pass mutates them this frame, so the trace's per-ray bounce gather reads a stable frame-start field
@@ -1237,6 +1035,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelCellHeadBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelCounterBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelFreeListBuffer.get(), true);
+    commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelTraceIndirectArgsBuffer.get(), true);
 
     // (0) Age-free (U1 recycling): one thread per pool slot; free surfels unseen for maxAge frames (alive = 0) and PUSH
     // their ids onto the free-list for the spawn to reuse. Runs FIRST -- it reads lastSeenFrame written by the PREVIOUS
@@ -1245,12 +1044,16 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     // concurrent push/pop -> no ABA. The linear workgroup width is shared with the shader.
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelAgeFree, graphics().getDevice(), commandList);
-        commandList.setResourceStatesForBindingSet(rayTracingState().m_surfelAgeFreeBindingSet.get());
+        commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(rayTracingState().m_surfelCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(rayTracingState().m_surfelFreeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
         Core::ComputeState state;
         state.setPipeline(rayTracingState().m_surfelAgeFreePipeline.get());
-        state.addBindingSet(rayTracingState().m_surfelAgeFreeBindingSet.get());
         commandList.setComputeState(state);
+        heap.bindCompute(commandList, *rayTracingState().m_surfelAgeFreePipeline.get());
+        commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
         commandList.dispatch(DivideUp(poolCapacity, static_cast<u32>(NWB_SURFEL_LINEAR_GROUP_SIZE)), 1u, 1u);
     }
 
@@ -1266,12 +1069,15 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     // (2) Hash-build: one thread per pool slot; link each live surfel into its cell's list.
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelHashBuild, graphics().getDevice(), commandList);
-        commandList.setResourceStatesForBindingSet(rayTracingState().m_surfelHashBuildBindingSet.get());
+        commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(rayTracingState().m_surfelCellHeadBuffer.get(), Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
         Core::ComputeState state;
         state.setPipeline(rayTracingState().m_surfelHashBuildPipeline.get());
-        state.addBindingSet(rayTracingState().m_surfelHashBuildBindingSet.get());
         commandList.setComputeState(state);
+        heap.bindCompute(commandList, *rayTracingState().m_surfelHashBuildPipeline.get());
+        commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
         commandList.dispatch(DivideUp(poolCapacity, static_cast<u32>(NWB_SURFEL_LINEAR_GROUP_SIZE)), 1u, 1u);
     }
 
@@ -1281,20 +1087,21 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelSpawn, graphics().getDevice(), commandList);
         commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setResourceStatesForBindingSet(rayTracingState().m_surfelSpawnBindingSet.get());
+        commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(rayTracingState().m_surfelCellHeadBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(rayTracingState().m_surfelCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(rayTracingState().m_surfelFreeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
-        SurfelSpawnPushConstants spawnPush;
-        spawnPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
-        spawnPush.normalSlot = targets.bindless.gbufferNormal.slot();
+        surfelPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
+        surfelPush.normalSlot = targets.bindless.gbufferNormal.slot();
 
         Core::ComputeState state;
         state.setPipeline(rayTracingState().m_surfelSpawnPipeline.get());
-        state.addBindingSet(rayTracingState().m_surfelSpawnBindingSet.get());
         commandList.setComputeState(state);
-        if(heap.isInitialized())
-            heap.bindCompute(commandList, *rayTracingState().m_surfelSpawnPipeline.get());
-        commandList.setPushConstants(&spawnPush, sizeof(spawnPush));
+        heap.bindCompute(commandList, *rayTracingState().m_surfelSpawnPipeline.get());
+        commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
         const u32 tilesX = DivideUp(targets.width, NWB_SURFEL_SPAWN_TILE);
         const u32 tilesY = DivideUp(targets.height, NWB_SURFEL_SPAWN_TILE);
         commandList.dispatch(DivideUp(tilesX, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), DivideUp(tilesY, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), 1u);
@@ -1306,12 +1113,15 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     // synced to the build-args read by the counter's per-frame UAV barriers; the args UAV write is synced to the trace's
     // IndirectArgument consume by setComputeState (auto) below.
     {
-        commandList.setResourceStatesForBindingSet(rayTracingState().m_surfelTraceBuildArgsBindingSet.get());
+        commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(rayTracingState().m_surfelCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(rayTracingState().m_surfelTraceIndirectArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
         Core::ComputeState state;
         state.setPipeline(rayTracingState().m_surfelTraceBuildArgsPipeline.get());
-        state.addBindingSet(rayTracingState().m_surfelTraceBuildArgsBindingSet.get());
         commandList.setComputeState(state);
+        heap.bindCompute(commandList, *rayTracingState().m_surfelTraceBuildArgsPipeline.get());
+        commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
         commandList.dispatch(
             NWB_SURFEL_TRACE_BUILDARGS_DISPATCH_GROUP_COUNT_X,
             NWB_SURFEL_TRACE_BUILDARGS_DISPATCH_GROUP_COUNT_Y,
@@ -1324,8 +1134,8 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     // ShaderResource, then dispatch the SELECTED backend (U5). HW = the driver walks the TLAS; we still stage the
     // HW-resident per-mesh position/index/attribute buffers plus the shadow-owned material context (the shader uses all
     // of them to reconstruct the authored surface at the hit). SW = the per-mesh BVH nodes/positions/indices/attributes
-    // + its scene BVH/instance tables and the same material context. These are global-heap accesses, so they must be
-    // transitioned explicitly: setResourceStatesForBindingSet sees only the two local slot cbuffers and surfel tail.
+    // + its scene BVH/instance tables and the same material context. Every one of these accesses is heap-addressed, so
+    // their backing resources are transitioned explicitly here.
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelTrace, graphics().getDevice(), commandList);
         if(useHwTrace){
@@ -1351,26 +1161,34 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
             commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
             commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
         }
-        commandList.setResourceStatesForBindingSet(traceBindingSet);
+        if(useHwTrace)
+            commandList.setAccelStructState(rayTracingState().m_tlas.get(), Core::ResourceStates::AccelStructRead);
+        commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
+        commandList.setBufferState(rayTracingState().m_surfelPoolSnapshotBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_surfelCellHeadSnapshotBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_surfelTraceIndirectArgsBuffer.get(), Core::ResourceStates::IndirectArgument);
         commandList.commitBarriers();
         Core::ComputeState state;
         state.setPipeline(tracePipeline);
-        state.addBindingSet(traceBindingSet);
-        // The args buffer carries the workgroup count; setComputeState auto-transitions it UnorderedAccess->IndirectArgument.
+        // The explicit IndirectArgument transition above makes the heap-written args buffer visible to the dispatch.
         state.setIndirectParams(rayTracingState().m_surfelTraceIndirectArgsBuffer.get());
         commandList.setComputeState(state);
-        // Both surfel shaders access per-mesh geometry through the descriptor heap, so bind its tables against the
-        // selected pipeline before dispatch. The HW Backend-C variant also selects its TLAS generation at set 10.
-        if(rayTracingState().m_surfelUseHwTrace && heap.usesDescriptorBuffer() && !rayTracingState().m_tlasHeapHandle.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch Backend-C surfel GI without a TLAS heap handle"));
+        // Both surfel shaders access per-mesh geometry through the descriptor heap, so bind its blocks against the
+        // selected pipeline before dispatch. The HW path also selects its TLAS generation at set 10.
+        if(rayTracingState().m_surfelUseHwTrace && !rayTracingState().m_tlasHeapHandle.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch surfel HW GI without the descriptor-heap TLAS handle"));
             return false;
         }
-        if(heap.isInitialized()){
-            const Core::GpuDescriptorHandle tlasHeapHandle = rayTracingState().m_surfelUseHwTrace && heap.usesDescriptorBuffer()
-                ? rayTracingState().m_tlasHeapHandle
-                : Core::GpuDescriptorHandle::invalid();
-            heap.bindCompute(commandList, *tracePipeline, tlasHeapHandle);
-        }
+        const Core::GpuDescriptorHandle tlasHeapHandle = rayTracingState().m_surfelUseHwTrace
+            ? rayTracingState().m_tlasHeapHandle
+            : Core::GpuDescriptorHandle::invalid();
+        heap.bindCompute(commandList, *tracePipeline, tlasHeapHandle);
+        commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
         commandList.dispatchIndirect(0u);
     }
 
@@ -1383,24 +1201,23 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     const u32 halfHeight = DivideUp(targets.height, static_cast<u32>(NWB_SURFEL_RESOLVE_HALF_FACTOR));
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelResolve, graphics().getDevice(), commandList);
+        commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
         commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_surfelCellHeadBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setResourceStatesForBindingSet(rayTracingState().m_surfelResolveBindingSet.get());
+        commandList.setTextureState(targets.surfelIrradianceHalf.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
-        SurfelResolvePushConstants resolvePush;
-        resolvePush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
-        resolvePush.normalSlot = targets.bindless.gbufferNormal.slot();
+        surfelPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
+        surfelPush.normalSlot = targets.bindless.gbufferNormal.slot();
+        surfelPush.outputStorageHeapSlot = targets.bindless.surfelIrradianceHalfStorage.slot();
 
         Core::ComputeState state;
         state.setPipeline(rayTracingState().m_surfelResolvePipeline.get());
-        state.addBindingSet(rayTracingState().m_surfelResolveBindingSet.get());
         commandList.setComputeState(state);
-        if(heap.isInitialized())
-            heap.bindCompute(commandList, *rayTracingState().m_surfelResolvePipeline.get());
-        commandList.setPushConstants(&resolvePush, sizeof(resolvePush));
+        heap.bindCompute(commandList, *rayTracingState().m_surfelResolvePipeline.get());
+        commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
         const u32 groupSize = static_cast<u32>(NWB_SURFEL_RESOLVE_GROUP_SIZE);
         commandList.dispatch(DivideUp(halfWidth, groupSize), DivideUp(halfHeight, groupSize), 1u);
     }
@@ -1413,21 +1230,19 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelUpsample, graphics().getDevice(), commandList);
         commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-        commandList.setResourceStatesForBindingSet(rayTracingState().m_surfelUpsampleBindingSet.get());
+        commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
-        SurfelUpsamplePushConstants upsamplePush;
-        upsamplePush.halfIrradianceSlot = targets.bindless.surfelIrradianceHalf.slot();
-        upsamplePush.normalSlot = targets.bindless.gbufferNormal.slot();
-        upsamplePush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
+        surfelPush.halfIrradianceSlot = targets.bindless.surfelIrradianceHalf.slot();
+        surfelPush.normalSlot = targets.bindless.gbufferNormal.slot();
+        surfelPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
+        surfelPush.outputStorageHeapSlot = targets.bindless.surfelIrradianceStorage.slot();
 
         Core::ComputeState state;
         state.setPipeline(rayTracingState().m_surfelUpsamplePipeline.get());
-        state.addBindingSet(rayTracingState().m_surfelUpsampleBindingSet.get());
         commandList.setComputeState(state);
-        if(heap.isInitialized())
-            heap.bindCompute(commandList, *rayTracingState().m_surfelUpsamplePipeline.get());
-        commandList.setPushConstants(&upsamplePush, sizeof(upsamplePush));
+        heap.bindCompute(commandList, *rayTracingState().m_surfelUpsamplePipeline.get());
+        commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
         const u32 groupSize = static_cast<u32>(NWB_SURFEL_UPSAMPLE_GROUP_SIZE);
         commandList.dispatch(DivideUp(targets.width, groupSize), DivideUp(targets.height, groupSize), 1u);
     }

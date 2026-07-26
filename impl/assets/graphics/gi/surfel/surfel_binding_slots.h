@@ -9,15 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Surfel GI bindings. Three compute passes + the deferred-lighting gather share the surfel pool / hash / counter /
-// constants; the TRACE pass additionally uses the heap-selected SW-BVH scene/material context (b11) the SW
-// shadow/caustic path already builds, so the trace body (gi_sw_trace.slangi: nwbGiTraceClosest +
-// nwbGiShadeHit + the cook-generated material-surface dispatch) is reused verbatim.
-//
-//   HASH_BUILD: constants + pool(UAV) + cellHead(UAV)                                  [runs BEFORE spawn]
-//   SPAWN     : constants + pool(UAV) + cellHead(UAV, this frame) + counter(UAV) + G-buffer worldPos/normal(SRV)
-//   TRACE     : target slot CB (b0) + trace-context slot CB (b11) + constants + pool(UAV)
-//   GATHER    : (in the resolve set) constants + pool(SRV) + cellHead(SRV)
+// Shared surfel-GI configuration. Every surfel resource view is a global descriptor-heap entry selected by the common
+// NwbSurfelHeapPushConstants block; no surfel pass owns local CBV/SRV/UAV bindings.
 //
 // ONE SURFEL PER HASH BUCKET. The hash is (re)built from the live pool FIRST; the spawn then only fills buckets whose
 // cell-head is still empty, claiming each with an atomic CompareExchange(INVALID -> PENDING) so exactly one screen tile
@@ -26,76 +19,23 @@
 // of tile-surfels per cell) walked in the hash-build's non-deterministic InterlockedExchange order and truncated at
 // NWB_SURFEL_MAX_WALK, so the walked subset's surface mix churned frame to frame.
 
-#define NWB_SURFEL_SET 0
-
-// b0 is the target-generation resource-slot cbuffer, b1-10 are intentional ABI gaps, and b11 is the heap-backed trace
-// material-context cbuffer supplied by gi_sw_trace.slangi. The surfel-specific bindings live at the tail.
-#define NWB_SURFEL_BINDING_CONSTANTS 12   // ConstantBuffer<NwbSurfelConstants>
-#define NWB_SURFEL_BINDING_POOL 13        // RWStructuredBuffer<NwbSurfel> (UAV) / StructuredBuffer (SRV at the gather)
-#define NWB_SURFEL_BINDING_CELL_HEAD 14   // RWStructuredBuffer<uint> (UAV build) / StructuredBuffer (SRV spawn+gather)
-#define NWB_SURFEL_BINDING_COUNTER 15     // RWStructuredBuffer<uint> (bump top + free top)
-
-// Spawn-only G-buffer inputs (the same deferred targets the lighting pass reads: world position + normal + depth).
-// Keep these historical local-layout positions intact: world position and normal are now logical heap-SRV selections
-// supplied through the spawn push constants, so they no longer occupy entries in the local spawn binding set.
-#define NWB_SURFEL_BINDING_GBUFFER_WORLD_POSITION 16 // logical heap-SRV position; selected through push constants
-#define NWB_SURFEL_BINDING_GBUFFER_NORMAL 17         // logical heap-SRV position; selected through push constants
-#define NWB_SURFEL_BINDING_GBUFFER_DEPTH 18
-
-// Free-list (U1 recycling): a persistent LIFO stack of recycled surfel ids. The age-free pass PUSHES an id (dead surfel)
-// via InterlockedAdd on counter[FREE_TOP]; the spawn POPS one (before bump-allocating) via a CAS loop. Bound UAV in the
-// age-free + spawn sets.
-#define NWB_SURFEL_BINDING_FREE_LIST 19   // RWStructuredBuffer<uint> (UAV) -- capacity poolCapacity, depth = counter[FREE_TOP]
-
-// Snapshot of the PREVIOUS frame's converged field (U4 infinite bounce), bound as SRVs in the TRACE set: the trace's
-// per-ray bounce gather reads these (never the live pool being written this frame), so surfel->surfel feedback reads a
-// stable prev-frame field. Copied at the TOP of renderSurfelGi (pool + cell-head, so the walk is mutually consistent).
-#define NWB_SURFEL_BINDING_SNAPSHOT_POOL 20       // StructuredBuffer<NwbSurfel> (SRV) -- prev-frame pool copy
-#define NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD 21  // StructuredBuffer<uint> (SRV) -- prev-frame cell-head copy
-
-// RESOLVE pass: a COMPUTE pass that gathers the surfel irradiance ONCE PER PIXEL into a screen-space texture, which
-// the deferred-lighting PIXEL shader then samples. This decouples the pixel consumer from the read-write surfel pool:
-// the pool is touched only by compute (like the caustic accumulator), avoiding frames-in-flight pixel-read-vs-next-frame
-// compute-write races. Output alpha = 1 where a surfel covered the pixel (rgb = gathered irradiance), 0 otherwise (the
-// lighting falls back to hemiAmbient). Its own binding set.
-#define NWB_SURFEL_RESOLVE_SET 0
-#define NWB_SURFEL_RESOLVE_BINDING_CONSTANTS 0              // ConstantBuffer<NwbSurfelConstants>
-#define NWB_SURFEL_RESOLVE_BINDING_POOL 1                  // StructuredBuffer<NwbSurfel> (SRV)
-#define NWB_SURFEL_RESOLVE_BINDING_CELL_HEAD 2             // StructuredBuffer<uint> (SRV)
-#define NWB_SURFEL_RESOLVE_BINDING_GBUFFER_WORLD_POSITION 3 // logical heap-SRV position; selected through push constants
-#define NWB_SURFEL_RESOLVE_BINDING_GBUFFER_NORMAL 4         // logical heap-SRV position; selected through push constants
-#define NWB_SURFEL_RESOLVE_BINDING_OUTPUT 5                // RWTexture2D<float4> (HALF-res irradiance; upsampled to full)
+// Resolve gathers the surfel field once per half-resolution pixel into a heap-selected storage image; deferred
+// lighting subsequently samples the full-resolution upsampled result.
 #define NWB_SURFEL_RESOLVE_GROUP_SIZE 8
 // Half-res resolve factor (U6): the resolve gather -- the (2*EXTENT+1)^3 = 5x5x5 = 125-cell hotspot -- runs at 1/FACTOR^2
 // the pixels, then the upsample reconstructs full-res. FACTOR 2 quarters the gather threads (a half-res 5x5x5 ~= a
 // full-res 3x3x3 in cost), which is what pays back the seam fix's 27->125 cell widening.
 #define NWB_SURFEL_RESOLVE_HALF_FACTOR 2
 
-// Upsample set (surfel_upsample_cs, U6): a full-res joint-bilinear reconstruction of the half-res surfel irradiance,
-// gated by surface similarity (normal + world distance) so GI never bleeds across a silhouette or a crease. Dims come
-// from the bound textures' GetDimensions (no CB). Output keeps the exact lighting contract: rgb = irradiance, a = 0/1
-// coverage (so deferred lighting's point-Load + a>0.5 ? gi : hemiAmbient is unchanged). A covered tap must also be
-// same-surface to contribute; a fully-uncovered/rejected window writes a=0 -> hemiAmbient.
-#define NWB_SURFEL_UPSAMPLE_SET 0
-#define NWB_SURFEL_UPSAMPLE_BINDING_HALF_IRRADIANCE 0        // logical heap-SRV position; selected through push constants
-#define NWB_SURFEL_UPSAMPLE_BINDING_GBUFFER_NORMAL 1         // logical heap-SRV position; selected through push constants
-#define NWB_SURFEL_UPSAMPLE_BINDING_GBUFFER_WORLD_POSITION 2 // logical heap-SRV position; selected through push constants
-#define NWB_SURFEL_UPSAMPLE_BINDING_OUTPUT 3                 // RWTexture2D<float4> (full-res surfelIrradiance)
+// Full-resolution joint-bilinear reconstruction of the half-resolution surfel irradiance. Its inputs and output are
+// likewise heap-selected, with coverage retaining the deferred-lighting contract.
 #define NWB_SURFEL_UPSAMPLE_GROUP_SIZE 8
 // Reject a half-res tap whose surface normal is >60deg from the full-res pixel's (cos < gate): stops GI leaking across a
 // crease (e.g. the Cornell red<->blue wall corner -- adjacent in screen space, 90deg apart, near-equal world position so
 // a distance-only stop would NOT catch it).
 #define NWB_SURFEL_UPSAMPLE_NORMAL_GATE 0.5f
 
-// Trace build-indirect-args set (surfel_trace_buildargs_cs, U6): a 1-thread pass that reads the allocation high-water
-// BUMP_TOP + the update divisor (surfel CB .w) and writes the trace's DispatchIndirectArguments{ceil(BUMP_TOP/divisor),
-// 1,1}. The trace then dispatches one workgroup per LIVE surfel instead of the fixed ceil(poolCapacity/divisor) -- with a
-// generously-sized pool that is a large per-frame over-dispatch of dead-slot workgroups. Both SW + HW trace consume the
-// same args buffer (identical round-robin). Runs AFTER spawn (BUMP_TOP includes this frame's new surfels), BEFORE trace.
-#define NWB_SURFEL_TRACE_BUILDARGS_SET 0
-#define NWB_SURFEL_TRACE_BUILDARGS_BINDING_CONSTANTS 0   // ConstantBuffer<NwbSurfelConstants> (update divisor = .w)
-#define NWB_SURFEL_TRACE_BUILDARGS_BINDING_COUNTER 1     // RWStructuredBuffer<uint> (read BUMP_TOP)
-#define NWB_SURFEL_TRACE_BUILDARGS_BINDING_ARGS 2        // RWStructuredBuffer<uint> (DispatchIndirectArguments, 3 u32)
+// The trace-build-args pass reads its heap-selected high-water counter and writes heap-selected indirect arguments.
 // This housekeeping pass has exactly one invocation. Keep its Slang workgroup shape and its CPU dispatch dimensions
 // explicit and shared so neither side accidentally starts launching more than one writer of the indirect arguments.
 #define NWB_SURFEL_TRACE_BUILDARGS_GROUP_SIZE_X 1u

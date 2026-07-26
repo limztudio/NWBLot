@@ -26,22 +26,30 @@ struct NwbCsgIntervalSampleState{
     uint4 resourceSlots;
 };
 
-[[vk::binding(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, NWB_CSG_INTERVAL_SAMPLE_SET)]]
-ConstantBuffer<NwbCsgIntervalSampleState> g_NwbCsgIntervalSampleState;
+// The sample-state payload is another typed view of the global UniformBuffer heap.  runtime.slangi supplies the
+// CSG context selector before this header is included, and that context supplies this payload's descriptor slot.
+#ifndef NWB_GRAPHICS_CSG_RUNTIME_SLANGI
+#error "CSG interval sampling requires runtime.slangi before interval_sample.slangi"
+#endif
+#pragma warning(push)
+#pragma warning(disable: 39001)
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbCsgIntervalSampleState, Std140DataLayout> g_NwbHeapCsgIntervalSampleStates[];
+#pragma warning(pop)
+
+ConstantBuffer<NwbCsgIntervalSampleState, Std140DataLayout> NwbHeapCsgIntervalSampleState(const uint slot){
+    return g_NwbHeapCsgIntervalSampleStates[slot];
+}
+
+#define g_NwbCsgIntervalSampleState \
+    NwbHeapCsgIntervalSampleState(g_NwbCsgClipContextSlots.intervalSampleState)
 
 // Receiver-surface, CSG material, AVBOIT, and cap-fill sampling all carry the ordinary mesh-view input in their
 // existing b18 state payload. This leaves the historical direct b13 cbuffer as a deliberate ABI gap.
-#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
-#define NWB_MESH_VIEW_BUFFER_BINDLESS 1
 #define NWB_MESH_VIEW_BUFFER_HEAP_SLOT (g_NwbCsgIntervalSampleState.resourceSlots.x)
 #include "../bindless/bindless_heap_mesh.slangi"
 
-// This include participates in two pipeline layouts: the receiver-surface material layout at its normal sample set,
-// and the cap-fill fullscreen layout after interval_cap_fill_ps overrides that set to 0. Bind the shared deferred
-// slot cbuffer at whichever local set this variant selected.
-#define NWB_CSG_BINDLESS_RESOURCES_SET NWB_CSG_INTERVAL_SAMPLE_SET
 #include "bindless_resources.slangi"
-#undef NWB_CSG_BINDLESS_RESOURCES_SET
 
 #if NWB_CSG_RECEIVER_EVENTS_WRITABLE
 // Event data layout: .x = receiverIndex, .y = faceSign, .z = asuint(linear depth), .w = unused. The former local

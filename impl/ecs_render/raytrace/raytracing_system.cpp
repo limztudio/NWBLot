@@ -47,9 +47,8 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
     outBackendReady = false;
     if(!targets.shadowVisibility)
         return false;
-    // Every trace binding set carries this renderer-owned cbuffer locally while the five actual scene/material
-    // buffers are addressed through the global storage-buffer heap. Create it before any of the binding-set ensure
-    // calls below; the current slots are uploaded after all gathers have completed on this command list.
+    // The trace material-context selector is itself a global UniformBuffer heap entry. Create its backing buffer before
+    // gathering; the current slots are uploaded after all gathers complete on this command list.
     if(!ensureRayTraceMaterialContextSlotsBuffer())
         return false;
 
@@ -74,7 +73,6 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
         // Hardware path casts the OPAQUE (binary) shadow via inline RayQuery.
         outBackendReady =
             ensureShadowPipeline()
-            && ensureShadowBindingSet(targets)
         ;
 
         // Hybrid TRANSPARENT shadow: when the scene holds a transparent occluder, also build the software scene/mesh
@@ -90,14 +88,13 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent shadow software BVH resource preparation failed"));
             if(!buildPendingMeshSwBvh(commandList))
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent shadow per-mesh software BVH build failed"));
-            // Guard m_swShadowMeshCount > 0 before ensureSwShadowBindingSet (which asserts it): if no per-mesh software
-            // BVH was available this frame the software pass simply does not run (HW opaque-only), rather than aborting.
+            // Guard m_swShadowMeshCount > 0: if no per-mesh software BVH was available this frame the software pass
+            // simply does not run (HW opaque-only), rather than aborting.
             const bool swReady =
                 buildSceneSwBvh(commandList, scratchArena)
                 && rayTracingState().m_swShadowMeshCount > 0u
                 && rayTracingState().m_sceneBvhInstanceCount > 0u
                 && ensureSwShadowPipeline()
-                && ensureSwShadowBindingSet(targets)
             ;
             if(swReady)
                 rayTracingState().m_hybridTransparentShadowReady = true;
@@ -112,11 +109,8 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
         rayTracingState().m_softShadowReady =
             outBackendReady
             && ensureShadowSoftPipeline()
-            && ensureShadowSoftBindingSet(targets)
             && ensureShadowGeometryDownsamplePipeline()
-            && ensureShadowGeometryDownsampleBindingSet(targets)
             && ensureSoftShadowResolvePipeline()
-            && ensureSoftShadowResolveBindingSet(targets)
         ;
         if(outBackendReady && !rayTracingState().m_softShadowReady)
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW soft opaque shadow resource preparation failed; HW shadows fall back to the full-res trace this frame"));
@@ -126,7 +120,6 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
         rayTracingState().m_softShadowTemporalReady =
             rayTracingState().m_softShadowReady
             && ensureShadowReprojectMergePipeline()
-            && ensureShadowReprojectMergeBindingSet(targets)
         ;
         if(rayTracingState().m_softShadowReady && !rayTracingState().m_softShadowTemporalReady)
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame"));
@@ -140,7 +133,6 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
             rayTracingState().m_softShadowReady
             && rayTracingState().m_hybridTransparentShadowReady
             && ensureSoftTransparentResolvePipeline()
-            && ensureSoftTransparentResolveBindingSet(targets)
         ;
         if(rayTracingState().m_softShadowReady && rayTracingState().m_hybridTransparentShadowReady && !rayTracingState().m_softTransparentReady)
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW soft transparent shadow resource preparation failed; colored shadows fall back to the hybrid multiply this frame"));
@@ -148,7 +140,6 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
         rayTracingState().m_softTransparentTemporalReady =
             rayTracingState().m_softTransparentReady
             && rayTracingState().m_softShadowTemporalReady
-            && ensureShadowTransparentReprojectMergeBindingSet(targets)
         ;
         if(rayTracingState().m_softTransparentReady && rayTracingState().m_softShadowTemporalReady && !rayTracingState().m_softTransparentTemporalReady)
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW soft transparent shadow temporal resource preparation failed; no colored temporal accumulation this frame"));
@@ -201,44 +192,40 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
     if(rayTracingState().m_sceneBvhInstanceCount == 0u)
         return true;
 
-    outBackendReady = ensureSwShadowPipeline() && ensureSwShadowBindingSet(targets);
+    outBackendReady = ensureSwShadowPipeline();
 
-    // Soft opaque shadow (all light types): build the geometry-downsample + a-trous resolve pipelines/binding sets so
+    // Soft opaque shadow (all light types): build the geometry-downsample + a-trous resolve pipelines and heap-slot payloads so
     // the render can denoise the half-res jittered opaque trace into the full-res visibility. Non-fatal to shadows -- a
     // failure leaves m_softShadowReady false and the slot lights keep their hard opaque mask.
     rayTracingState().m_softShadowReady =
         outBackendReady
         && ensureShadowGeometryDownsamplePipeline()
-        && ensureShadowGeometryDownsampleBindingSet(targets)
         && ensureSoftShadowResolvePipeline()
-        && ensureSoftShadowResolveBindingSet(targets)
     ;
     if(outBackendReady && !rayTracingState().m_softShadowReady)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: soft opaque shadow resource preparation failed; shadows hard this frame"));
 
-    // Soft opaque shadow TEMPORAL accumulation: build the reproject-merge pipeline + its two front/back binding
-    // sets AND the two temporal SOFT_HALF resolve variants (the a-trous then reads the accumulated history instead of the
+    // Soft opaque shadow TEMPORAL accumulation: build the reproject-merge pipeline + its two front/back heap-slot
+    // payloads AND the two temporal SOFT_HALF resolve variants (the a-trous then reads the accumulated history instead of the
     // raw trace). Always on when the resources build; non-fatal: a failure leaves m_softShadowTemporalReady false and the
     // soft path feeds the raw trace straight into the a-trous (the Stage-1/2 spatial-only fallback).
     rayTracingState().m_softShadowTemporalReady =
         rayTracingState().m_softShadowReady
         && ensureShadowReprojectMergePipeline()
-        && ensureShadowReprojectMergeBindingSet(targets)
     ;
     if(rayTracingState().m_softShadowReady && !rayTracingState().m_softShadowTemporalReady)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame"));
 
     // Soft COLORED TRANSPARENT shadow: build the RGB a-trous resolve pipeline + the parallel transparent resolve
-    // binding sets (over the transparent half-res buffers), gated on the opaque soft path being ready (it shares the
+    // heap-slot payloads (over the transparent half-res buffers), gated on the opaque soft path being ready (it shares the
     // geometry cache + the resolve binding layout + the ping-pong scratch). Non-fatal: a failure leaves m_softTransparentReady
     // false so the soft transparent fold is skipped and the transparent coarse/adaptive fallback runs (no double-fold --
     // they are exclusive). The transparent TEMPORAL path additionally needs the (shared) merge pipeline + the
-    // parallel transparent merge binding sets; a failure there leaves m_softTransparentTemporalReady false and the transparent
+    // parallel transparent merge heap-slot payloads; a failure there leaves m_softTransparentTemporalReady false and the transparent
     // resolve reads the raw colored trace straight into the RGB a-trous (the spatial fallback).
     rayTracingState().m_softTransparentReady =
         rayTracingState().m_softShadowReady
         && ensureSoftTransparentResolvePipeline()
-        && ensureSoftTransparentResolveBindingSet(targets)
     ;
     if(rayTracingState().m_softShadowReady && !rayTracingState().m_softTransparentReady)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: soft transparent shadow resource preparation failed; colored shadows fall back to the hard-ish path this frame"));
@@ -246,7 +233,6 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
     rayTracingState().m_softTransparentTemporalReady =
         rayTracingState().m_softTransparentReady
         && rayTracingState().m_softShadowTemporalReady
-        && ensureShadowTransparentReprojectMergeBindingSet(targets)
     ;
     if(rayTracingState().m_softTransparentReady && rayTracingState().m_softShadowTemporalReady && !rayTracingState().m_softTransparentTemporalReady)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: soft transparent shadow temporal resource preparation failed; no colored temporal accumulation this frame"));

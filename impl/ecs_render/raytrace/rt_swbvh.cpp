@@ -50,7 +50,7 @@ namespace __hidden_rt_swbvh{
         const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
         if(!handle.valid())
             return false;
-        if(!heap.write(handle, Core::BindingSetItem::StructuredBuffer_SRV(0u, &buffer))){
+        if(!heap.write(handle, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, &buffer))){
             heap.free(handle);
             return false;
         }
@@ -89,6 +89,35 @@ namespace __hidden_rt_swbvh{
     ){
         for(auto it = cache.begin(); it != cache.end(); ++it)
             it.value().seenThisFrame = false;
+    }
+
+    [[nodiscard]] bool IsStorageBufferHeapHandle(const Core::GpuDescriptorHandle handle){
+        return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
+    }
+
+    // Heap descriptor writes retain the backing buffer through deferred free. Keep the registration next to the
+    // explicit owner instead of relying on transient descriptor state to retain or describe writable scratch.
+    [[nodiscard]] bool RegisterWritableBvhBuffer(
+        Core::GpuDescriptorHeap& heap,
+        Core::Buffer& buffer,
+        Core::GpuDescriptorHandle& outHandle
+    ){
+        outHandle = Core::GpuDescriptorHandle::invalid();
+        const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        if(!handle.valid())
+            return false;
+        if(!heap.write(handle, Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, &buffer))){
+            heap.free(handle);
+            return false;
+        }
+        outHandle = handle;
+        return true;
+    }
+
+    void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle){
+        if(handle.valid())
+            heap.free(handle);
+        handle = Core::GpuDescriptorHandle::invalid();
     }
 };
 
@@ -201,7 +230,8 @@ bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
             primitiveCount,
             meshResources.swBvhNodeBuffer,
             meshResources.swBvhParentBuffer,
-            meshResources.swBvhBindingSet
+            meshResources.swBvhNodeHeapHandle,
+            meshResources.swBvhParentHeapHandle
         )){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preparation failed for mesh '{}'")
                 , StringConvert(meshResources.meshName.c_str())
@@ -258,14 +288,16 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     meshSlotLookup.reserve(candidateCount);
 
     // Reset the per-frame distinct-mesh table; the gather repopulates its index, attribute, and position buffers.
-    // Each backing buffer is registered in the global descriptor-index heap, and its slot is stored in the material
-    // record for shader-side NwbHeapRawBuffer() access. The table drives host-side barriers and record population.
+    // Each backing buffer is registered in the global descriptor heap, and its slot is stored in the material record
+    // for shader-side NwbHeapRawBuffer() access. The table drives host-side barriers and record population.
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
-    const bool heapLive = heap.isInitialized();
+    if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: hardware TLAS build requires the descriptor-buffer TLAS heap layout"));
+        return false;
+    }
     // Begin the stable-handle-cache gather: mark every cached buffer unseen so the end-of-gather sweep can distinguish
     // reappearances from dropouts. Reappearing buffers reuse their handles; absent buffers are freed and evicted below.
-    if(heapLive)
-        BeginMeshHeapHandleGather(rayTracingState().m_hwMeshHeapHandleCache);
+    BeginMeshHeapHandleGather(rayTracingState().m_hwMeshHeapHandleCache);
     // Clear the distinct-mesh table for this frame's rebuild. The Vectors retain capacity (they grow once to the
     // scene's steady-state distinct-mesh count, then reuse that storage) and m_shadowMeshCount mirrors their length --
     // the gather below repopulates both by push_back with cached handles.
@@ -302,7 +334,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
 
         // Dedupe to a per-mesh table slot: instances sharing a mesh share its index/attribute/position buffers. The
         // scratch lookup avoids rescanning the growing dense table for every instance while preserving its first-seen
-        // order, which the parallel buffer/descriptor tables consume.
+        // order, which the parallel buffer and heap-handle arrays consume.
         Core::Buffer* meshIndexBuffer = mesh->triangleIndexBuffer.get();
         u32 meshSlot = 0u;
         const auto foundMeshSlot = meshSlotLookup.find(meshIndexBuffer);
@@ -316,26 +348,23 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             Core::GpuDescriptorHandle attributeHandle;
             Core::GpuDescriptorHandle positionHandle;
             if(
-                heapLive
-                && (
-                    !AcquireMeshHeapHandle(
-                        heap,
-                        rayTracingState().m_hwMeshHeapHandleCache,
-                        *meshIndexBuffer,
-                        indexHandle
-                    )
-                    || !AcquireMeshHeapHandle(
-                        heap,
-                        rayTracingState().m_hwMeshHeapHandleCache,
-                        *mesh->attributeBuffer,
-                        attributeHandle
-                    )
-                    || !AcquireMeshHeapHandle(
-                        heap,
-                        rayTracingState().m_hwMeshHeapHandleCache,
-                        *mesh->positionBuffer,
-                        positionHandle
-                    )
+                !AcquireMeshHeapHandle(
+                    heap,
+                    rayTracingState().m_hwMeshHeapHandleCache,
+                    *meshIndexBuffer,
+                    indexHandle
+                )
+                || !AcquireMeshHeapHandle(
+                    heap,
+                    rayTracingState().m_hwMeshHeapHandleCache,
+                    *mesh->attributeBuffer,
+                    attributeHandle
+                )
+                || !AcquireMeshHeapHandle(
+                    heap,
+                    rayTracingState().m_hwMeshHeapHandleCache,
+                    *mesh->positionBuffer,
+                    positionHandle
                 )
             ){
                 SweepUnseenMeshHeapHandles(heap, rayTracingState().m_hwMeshHeapHandleCache);
@@ -347,18 +376,10 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             rayTracingState().m_shadowMeshIndexBuffers.push_back(meshIndexBuffer);
             rayTracingState().m_shadowMeshAttributeBuffers.push_back(mesh->attributeBuffer.get());
             rayTracingState().m_shadowMeshPositionBuffers.push_back(mesh->positionBuffer.get());
-            // Mirror the same three buffers into the global heap for HW caustic and GI. When unavailable, append
-            // default handles so all vectors remain slot-aligned.
-            if(heapLive){
-                rayTracingState().m_shadowMeshIndexHandles.push_back(indexHandle);
-                rayTracingState().m_shadowMeshAttributeHandles.push_back(attributeHandle);
-                rayTracingState().m_shadowMeshPositionHandles.push_back(positionHandle);
-            }
-            else{
-                rayTracingState().m_shadowMeshIndexHandles.emplace_back();
-                rayTracingState().m_shadowMeshAttributeHandles.emplace_back();
-                rayTracingState().m_shadowMeshPositionHandles.emplace_back();
-            }
+            // Mirror the same three buffers into the global heap for HW caustic and GI.
+            rayTracingState().m_shadowMeshIndexHandles.push_back(indexHandle);
+            rayTracingState().m_shadowMeshAttributeHandles.push_back(attributeHandle);
+            rayTracingState().m_shadowMeshPositionHandles.push_back(positionHandle);
             meshSlotLookup.emplace(meshIndexBuffer, meshSlot);
             ++rayTracingState().m_shadowMeshCount;
         }
@@ -409,11 +430,9 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         }
         // Carry this mesh's heap slots on both resolved and fallback records. The HW opaque trace does not read
         // geometry; caustic and GI consume the slots by InstanceID. nodeSlot stays s_Max because this is the HW path.
-        if(heapLive){
-            instanceMaterial.indexSlot = rayTracingState().m_shadowMeshIndexHandles[meshSlot].slot();
-            instanceMaterial.attributeSlot = rayTracingState().m_shadowMeshAttributeHandles[meshSlot].slot();
-            instanceMaterial.positionSlot = rayTracingState().m_shadowMeshPositionHandles[meshSlot].slot();
-        }
+        instanceMaterial.indexSlot = rayTracingState().m_shadowMeshIndexHandles[meshSlot].slot();
+        instanceMaterial.attributeSlot = rayTracingState().m_shadowMeshAttributeHandles[meshSlot].slot();
+        instanceMaterial.positionSlot = rayTracingState().m_shadowMeshPositionHandles[meshSlot].slot();
 
         // Non-transparent occluders (including the unresolved-material fallback above, which casts a colorless
         // opaque shadow) are marked FORCE_OPAQUE. The hardware shadow RayQuery then lets the fixed-function
@@ -434,7 +453,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
 
     // Log a new peak only, keeping steady scenes quiet. Each HW distinct mesh contributes index, attribute, and
     // position handles.
-    if(heapLive && rayTracingState().m_shadowMeshCount > rayTracingState().m_shadowMeshHeapHighWater){
+    if(rayTracingState().m_shadowMeshCount > rayTracingState().m_shadowMeshHeapHighWater){
         rayTracingState().m_shadowMeshHeapHighWater = rayTracingState().m_shadowMeshCount;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: HW-shadow heap registration high-water: {} distinct meshes -> {} handles")
             , static_cast<u64>(rayTracingState().m_shadowMeshCount)
@@ -443,8 +462,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     }
     // End-of-gather sweep: free + evict every cached HW buffer that did not reappear this frame (a mesh was unloaded
     // or fell out of the visible occluder set). Reappearing buffers keep their cached handle for next frame.
-    if(heapLive)
-        SweepUnseenMeshHeapHandles(heap, rayTracingState().m_hwMeshHeapHandleCache);
+    SweepUnseenMeshHeapHandles(heap, rayTracingState().m_hwMeshHeapHandleCache);
 
     rayTracingState().m_tlasInstanceCount = static_cast<u32>(instances.size());
     if(instances.empty()){
@@ -472,7 +490,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             );
             return false;
         }
-        // Backend C gives each TLAS generation an immutable descriptor-buffer block. Retire the old handle before
+        // Each TLAS generation receives an immutable descriptor-buffer block. Retire the old handle before
         // replacing its resource so the heap retains the old acceleration structure until all in-flight command
         // buffers that selected its block have drained.
         if(rayTracingState().m_tlasHeapHandle.valid()){
@@ -494,32 +512,20 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     );
     rayTracingState().m_tlasDeviceAddress = rayTracingState().m_tlas->getDeviceAddress();
 
-    // Backend C selects the shared scene TLAS from a dedicated fixed heap set (rather than a mutable descriptor
-    // table). A fresh handle/block is allocated only when the TLAS object changes; it remains immutable thereafter.
-    if(heap.usesDescriptorBuffer()){
-        if(!heap.hasAccelStructLayout()){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Backend-C descriptor heap has no TLAS layout"));
+    // The shared scene TLAS is selected from a dedicated fixed heap set. A fresh handle/block is allocated only when
+    // the TLAS object changes; it remains immutable thereafter.
+    if(!rayTracingState().m_tlasHeapHandle.valid()){
+        const Core::GpuDescriptorHandle tlasHeapHandle = heap.allocate(Core::GpuDescriptorClass::AccelStruct);
+        if(
+            !tlasHeapHandle.valid()
+            || !heap.write(tlasHeapHandle, Core::DescriptorWriteItem::RayTracingAccelStruct(0u, rayTracingState().m_tlas.get()))
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register scene TLAS in the descriptor-buffer heap"));
+            if(tlasHeapHandle.valid())
+                heap.free(tlasHeapHandle);
             return false;
         }
-        if(!rayTracingState().m_tlasHeapHandle.valid()){
-            const Core::GpuDescriptorHandle tlasHeapHandle = heap.allocate(Core::GpuDescriptorClass::AccelStruct);
-            if(
-                !tlasHeapHandle.valid()
-                || !heap.write(tlasHeapHandle, Core::BindingSetItem::RayTracingAccelStruct(0u, rayTracingState().m_tlas.get()))
-            ){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register scene TLAS in Backend-C descriptor heap"));
-                if(tlasHeapHandle.valid())
-                    heap.free(tlasHeapHandle);
-                return false;
-            }
-            rayTracingState().m_tlasHeapHandle = tlasHeapHandle;
-        }
-    }
-    else if(rayTracingState().m_tlasHeapHandle.valid()){
-        // This only occurs after a renderer/device mode change; the classic Backend-A path retains its local TLAS
-        // descriptors and must not leave a Backend-C generation handle live.
-        heap.free(rayTracingState().m_tlasHeapHandle);
-        rayTracingState().m_tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
+        rayTracingState().m_tlasHeapHandle = tlasHeapHandle;
     }
 
     // Upload the per-instance occluder material table (indexed by InstanceID()) for the hardware trace paths.
@@ -573,8 +579,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     // Shadow-OWNED combined material-constants context, built lockstep with `instances` (see buildSceneTlas): the
     // per-occluder InstanceGpuData (g_NwbMeshInstances for the trace) + the combined typed bytes
     // (g_NwbMaterialTypedWords for the trace). The draw pass's buffers hold only one transparency class at trace
-    // time, so the software traversal selects these shadow-owned buffers through its heap-slot cbuffer -- see
-    // ensureSwShadowBindingSet.
+    // time, so the software traversal selects these shadow-owned buffers through its heap-slot push selector.
     InstanceGpuDataVector shadowInstanceData{ scratchArena };
     MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
     ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(
@@ -600,11 +605,13 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
 
     // Reset the per-frame distinct-mesh table; the gather repopulates its buffers and descriptor-heap handles.
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
-    const bool heapLive = heap.isInitialized();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software scene BVH requires the initialized global descriptor heap"));
+        return false;
+    }
     // Begin the SW stable-handle-cache gather: mark every cached SW buffer unseen so the gather (AcquireMeshHeapHandle
     // sets seenThisFrame on touch) and the end-of-gather sweep can tell reappearances from dropouts.
-    if(heapLive)
-        BeginMeshHeapHandleGather(rayTracingState().m_swMeshHeapHandleCache);
+    BeginMeshHeapHandleGather(rayTracingState().m_swMeshHeapHandleCache);
     // Clear the distinct-mesh table for this frame's rebuild. The Vectors retain capacity (they grow once to the
     // scene's steady-state distinct-mesh count, then reuse that storage) and m_swShadowMeshCount mirrors their length
     // -- the gather below repopulates both by push_back with cached handles.
@@ -639,6 +646,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             || !mesh
             || !mesh->swBvhTopologyBuilt
             || !mesh->swBvhNodeBuffer
+            || !__hidden_rt_swbvh::IsStorageBufferHeapHandle(mesh->swBvhNodeHeapHandle)
             || !mesh->positionBuffer
             || !mesh->triangleIndexBuffer
             || !mesh->attributeBuffer
@@ -648,39 +656,29 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
 
         // Dedupe to a per-mesh table slot: instances sharing a mesh share its node/position/index buffers. The
         // scratch lookup avoids rescanning the growing dense table for every instance while preserving its first-seen
-        // order, which the parallel buffer/descriptor tables consume.
+        // order, which the parallel buffer and heap-handle arrays consume.
         Core::Buffer* meshNodeBuffer = mesh->swBvhNodeBuffer.get();
         u32 meshSlot = 0u;
         const auto foundMeshSlot = meshSlotLookup.find(meshNodeBuffer);
         if(foundMeshSlot != meshSlotLookup.end())
             meshSlot = foundMeshSlot.value();
         else{
-            // New distinct mesh: append its four backing buffers to the per-frame table. The stable build inputs
-            // already own persistent mesh-level heap handles; keep the node and trace-attribute registrations in the
-            // existing visibility-scoped cache.
-            Core::GpuDescriptorHandle nodeHandle;
+            // New distinct mesh: append its four backing buffers to the per-frame table. The build inputs and node
+            // output own persistent mesh-level heap handles; only trace attributes use the visibility-scoped cache.
+            const Core::GpuDescriptorHandle nodeHandle = mesh->swBvhNodeHeapHandle;
             Core::GpuDescriptorHandle attributeHandle;
             const Core::GpuDescriptorHandle positionHandle = mesh->swBvhPositionHeapHandle;
             const Core::GpuDescriptorHandle indexHandle = mesh->swBvhTriangleIndexHeapHandle;
             if(
-                heapLive
-                && (
-                    !positionHandle.valid()
-                    || positionHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-                    || !indexHandle.valid()
-                    || indexHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-                    || !AcquireMeshHeapHandle(
-                        heap,
-                        rayTracingState().m_swMeshHeapHandleCache,
-                        *meshNodeBuffer,
-                        nodeHandle
-                    )
-                    || !AcquireMeshHeapHandle(
-                        heap,
-                        rayTracingState().m_swMeshHeapHandleCache,
-                        *mesh->attributeBuffer,
-                        attributeHandle
-                    )
+                !positionHandle.valid()
+                || positionHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
+                || !indexHandle.valid()
+                || indexHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
+                || !AcquireMeshHeapHandle(
+                    heap,
+                    rayTracingState().m_swMeshHeapHandleCache,
+                    *mesh->attributeBuffer,
+                    attributeHandle
                 )
             ){
                 SweepUnseenMeshHeapHandles(heap, rayTracingState().m_swMeshHeapHandleCache);
@@ -695,21 +693,12 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             // The U2 per-triangle-corner shadow-trace attribute buffer (normal/uv0), parallel to the triangle index
             // buffer so the trace interpolates the exact raster corner attributes.
             rayTracingState().m_swShadowMeshAttributeBuffers.push_back(mesh->attributeBuffer.get());
-            // Node and attribute handles remain visibility-scoped cache entries. Position/index reuse the persistent
-            // registrations the SW-BVH build already needs, so each read-only mesh input has one heap slot for both
-            // build and traversal. When the heap is unavailable, append default handles to preserve fallback alignment.
-            if(heapLive){
-                rayTracingState().m_swShadowMeshNodeHandles.push_back(nodeHandle);
-                rayTracingState().m_swShadowMeshPositionHandles.push_back(positionHandle);
-                rayTracingState().m_swShadowMeshIndexHandles.push_back(indexHandle);
-                rayTracingState().m_swShadowMeshAttributeHandles.push_back(attributeHandle);
-            }
-            else{
-                rayTracingState().m_swShadowMeshNodeHandles.emplace_back();
-                rayTracingState().m_swShadowMeshPositionHandles.emplace_back();
-                rayTracingState().m_swShadowMeshIndexHandles.emplace_back();
-                rayTracingState().m_swShadowMeshAttributeHandles.emplace_back();
-            }
+            // Node, position, and index reuse the persistent registrations the SW-BVH build needs, so each mesh
+            // buffer has one heap slot for both build and traversal. Attribute remains visibility-scoped.
+            rayTracingState().m_swShadowMeshNodeHandles.push_back(nodeHandle);
+            rayTracingState().m_swShadowMeshPositionHandles.push_back(positionHandle);
+            rayTracingState().m_swShadowMeshIndexHandles.push_back(indexHandle);
+            rayTracingState().m_swShadowMeshAttributeHandles.push_back(attributeHandle);
             meshSlotLookup.emplace(meshNodeBuffer, meshSlot);
             ++rayTracingState().m_swShadowMeshCount;
         }
@@ -765,14 +754,11 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
                 return false;
             instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, materialConstantByteOffset, meshInstanceIndex);
         }
-        // Carry this mesh's four heap slots on both resolved and fallback records; software shadow traversal consumes
-        // them next.
-        if(heapLive){
-            instanceMaterial.indexSlot = rayTracingState().m_swShadowMeshIndexHandles[meshSlot].slot();
-            instanceMaterial.attributeSlot = rayTracingState().m_swShadowMeshAttributeHandles[meshSlot].slot();
-            instanceMaterial.positionSlot = rayTracingState().m_swShadowMeshPositionHandles[meshSlot].slot();
-            instanceMaterial.nodeSlot = rayTracingState().m_swShadowMeshNodeHandles[meshSlot].slot();
-        }
+        // Carry this mesh's four heap slots on every material record; software shadow traversal consumes them next.
+        instanceMaterial.indexSlot = rayTracingState().m_swShadowMeshIndexHandles[meshSlot].slot();
+        instanceMaterial.attributeSlot = rayTracingState().m_swShadowMeshAttributeHandles[meshSlot].slot();
+        instanceMaterial.positionSlot = rayTracingState().m_swShadowMeshPositionHandles[meshSlot].slot();
+        instanceMaterial.nodeSlot = rayTracingState().m_swShadowMeshNodeHandles[meshSlot].slot();
         Float4 storedWorldMin;
         Float4 storedWorldMax;
         Float4 storedCentroid;
@@ -789,7 +775,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     }
 
     // Log a new peak only. Each SW distinct mesh contributes node, position, index, and attribute handles.
-    if(heapLive && rayTracingState().m_swShadowMeshCount > rayTracingState().m_swShadowMeshHeapHighWater){
+    if(rayTracingState().m_swShadowMeshCount > rayTracingState().m_swShadowMeshHeapHighWater){
         rayTracingState().m_swShadowMeshHeapHighWater = rayTracingState().m_swShadowMeshCount;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW-shadow heap registration high-water: {} distinct meshes -> {} handles")
             , static_cast<u64>(rayTracingState().m_swShadowMeshCount)
@@ -798,8 +784,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     }
     // End-of-gather sweep: free + evict every cached SW buffer that did not reappear this frame (a mesh was unloaded
     // or fell out of the visible occluder set). Reappearing buffers keep their cached handle for next frame.
-    if(heapLive)
-        SweepUnseenMeshHeapHandles(heap, rayTracingState().m_swMeshHeapHandleCache);
+    SweepUnseenMeshHeapHandles(heap, rayTracingState().m_swMeshHeapHandleCache);
 
     const u32 instanceCount = static_cast<u32>(instances.size());
     if(instanceCount == 0u){
@@ -960,6 +945,25 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void RendererRayTracingSystem::releaseSwBvhScratchHeapHandles(){
+    if(auto* device = graphics().getDevice()){
+        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+        if(heap.isInitialized()){
+            __hidden_rt_swbvh::RetireHeapHandle(heap, rayTracingState().m_bvhSortKeysHeapHandle);
+            __hidden_rt_swbvh::RetireHeapHandle(heap, rayTracingState().m_bvhSortPayloadHeapHandle);
+            __hidden_rt_swbvh::RetireHeapHandle(heap, rayTracingState().m_bvhVisitCounterHeapHandle);
+            return;
+        }
+    }
+    rayTracingState().m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_bvhSortPayloadHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererRayTracingSystem::ensureBvhSortPipeline(){
     if(rayTracingState().m_bvhSortPipeline)
         return true;
@@ -967,16 +971,18 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
         return false;
 
     auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software BVH sort requires the initialized global descriptor heap"));
+        rayTracingState().m_bvhSortPipelineFailed = true;
+        return false;
+    }
 
     if(!rayTracingState().m_bvhSortBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // This pure-resource layout (two StructuredBuffer UAVs plus push constants) is descriptor-buffer compatible.
-        // Push constants stay in the pipeline layout, so they coexist with the descriptor-buffer block. Where the
-        // extension is absent, the backend uses the classic descriptor-set path (Backend A) without a capability gate.
-        layoutDesc.setUseDescriptorBuffer(true);
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_SORT_BINDING_KEYS, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_SORT_BINDING_PAYLOAD, 1));
+        // All sort buffers are global heap entries selected by push constants. This local layout therefore carries
+        // only that push-constant range; heap layouts are appended to the pipeline below.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhSortPushConstants)));
 
         rayTracingState().m_bvhSortBindingLayout = device->createBindingLayout(layoutDesc);
@@ -1002,6 +1008,8 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
     pipelineDesc
         .setComputeShader(rayTracingState().m_bvhSortShader)
         .addBindingLayout(rayTracingState().m_bvhSortBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
     ;
     rayTracingState().m_bvhSortPipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_bvhSortPipeline){
@@ -1018,64 +1026,100 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
 
 bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
     auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
 
-    if(!rayTracingState().m_bvhSortKeysBuffer || rayTracingState().m_bvhSortCapacity < paddedCount){
-        const usize capacity = ::NextGrowingCapacity(
-            rayTracingState().m_bvhSortCapacity,
-            paddedCount,
-            s_BvhSortInitialCapacity
-        );
-
-        Core::BufferDesc keysBufferDesc;
-        keysBufferDesc
-            .setByteSize(static_cast<u64>(sizeof(u32) * capacity))
-            .setStructStride(sizeof(u32))
-            .setCanHaveUAVs(true)
-            .setDebugName(Name("bvh_sort_keys"))
-            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    const auto sortHandlesReady = [this](){
+        return
+            __hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhSortKeysHeapHandle)
+            && __hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhSortPayloadHeapHandle)
         ;
-        rayTracingState().m_bvhSortKeysBuffer = graphics().createBuffer(keysBufferDesc);
-        if(!rayTracingState().m_bvhSortKeysBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort keys buffer"));
+    };
+
+    if(
+        rayTracingState().m_bvhSortKeysBuffer
+        && rayTracingState().m_bvhSortPayloadBuffer
+        && rayTracingState().m_bvhSortCapacity >= paddedCount
+    ){
+        if(sortHandlesReady())
+            return true;
+
+        // A live buffer may have survived while its descriptor did not (for example, after a partial preparation
+        // retry). Fill only the absent slots; never overwrite a live heap descriptor generation.
+        Core::GpuDescriptorHandle acquiredKeys = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle acquiredPayload = Core::GpuDescriptorHandle::invalid();
+        if(
+            (!rayTracingState().m_bvhSortKeysHeapHandle.valid()
+                && !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *rayTracingState().m_bvhSortKeysBuffer.get(), acquiredKeys))
+            || (!rayTracingState().m_bvhSortPayloadHeapHandle.valid()
+                && !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *rayTracingState().m_bvhSortPayloadBuffer.get(), acquiredPayload))
+        ){
+            __hidden_rt_swbvh::RetireHeapHandle(heap, acquiredKeys);
+            __hidden_rt_swbvh::RetireHeapHandle(heap, acquiredPayload);
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register existing BVH sort scratch in the descriptor heap"));
             return false;
         }
-
-        Core::BufferDesc payloadBufferDesc;
-        payloadBufferDesc
-            .setByteSize(static_cast<u64>(sizeof(u32) * capacity))
-            .setStructStride(sizeof(u32))
-            .setCanHaveUAVs(true)
-            .setDebugName(Name("bvh_sort_payload"))
-            .enableAutomaticStateTracking(Core::ResourceStates::Common)
-        ;
-        rayTracingState().m_bvhSortPayloadBuffer = graphics().createBuffer(payloadBufferDesc);
-        if(!rayTracingState().m_bvhSortPayloadBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort payload buffer"));
-            return false;
-        }
-
-        rayTracingState().m_bvhSortCapacity = capacity;
-        rayTracingState().m_bvhSortBindingSet.reset();
+        if(acquiredKeys.valid())
+            rayTracingState().m_bvhSortKeysHeapHandle = acquiredKeys;
+        if(acquiredPayload.valid())
+            rayTracingState().m_bvhSortPayloadHeapHandle = acquiredPayload;
+        return sortHandlesReady();
     }
 
-    const Core::Buffer* keysBuffer = rayTracingState().m_bvhSortKeysBuffer.get();
-    if(
-        rayTracingState().m_bvhSortBindingSet
-        && rayTracingState().m_bvhSortBindingSetKeys == keysBuffer
-    )
-        return true;
+    const usize capacity = ::NextGrowingCapacity(
+        rayTracingState().m_bvhSortCapacity,
+        paddedCount,
+        s_BvhSortInitialCapacity
+    );
 
-    Core::BindingSetDesc bindingSetDesc(arena());
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_SORT_BINDING_KEYS, rayTracingState().m_bvhSortKeysBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_SORT_BINDING_PAYLOAD, rayTracingState().m_bvhSortPayloadBuffer.get()));
-
-    rayTracingState().m_bvhSortBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_bvhSortBindingLayout);
-    if(!rayTracingState().m_bvhSortBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort binding set"));
-        rayTracingState().m_bvhSortBindingSetKeys = nullptr;
+    Core::BufferDesc keysBufferDesc;
+    keysBufferDesc
+        .setByteSize(static_cast<u64>(sizeof(u32) * capacity))
+        .setStructStride(sizeof(u32))
+        .setCanHaveUAVs(true)
+        .setDebugName(Name("bvh_sort_keys"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    Core::BufferHandle keysBuffer = graphics().createBuffer(keysBufferDesc);
+    if(!keysBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort keys buffer"));
         return false;
     }
-    rayTracingState().m_bvhSortBindingSetKeys = keysBuffer;
+
+    Core::BufferDesc payloadBufferDesc;
+    payloadBufferDesc
+        .setByteSize(static_cast<u64>(sizeof(u32) * capacity))
+        .setStructStride(sizeof(u32))
+        .setCanHaveUAVs(true)
+        .setDebugName(Name("bvh_sort_payload"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    Core::BufferHandle payloadBuffer = graphics().createBuffer(payloadBufferDesc);
+    if(!payloadBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort payload buffer"));
+        return false;
+    }
+
+    Core::GpuDescriptorHandle keysHeapHandle;
+    Core::GpuDescriptorHandle payloadHeapHandle;
+    if(
+        !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *keysBuffer.get(), keysHeapHandle)
+        || !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *payloadBuffer.get(), payloadHeapHandle)
+    ){
+        __hidden_rt_swbvh::RetireHeapHandle(heap, keysHeapHandle);
+        __hidden_rt_swbvh::RetireHeapHandle(heap, payloadHeapHandle);
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register BVH sort scratch in the descriptor heap"));
+        return false;
+    }
+
+    __hidden_rt_swbvh::RetireHeapHandle(heap, rayTracingState().m_bvhSortKeysHeapHandle);
+    __hidden_rt_swbvh::RetireHeapHandle(heap, rayTracingState().m_bvhSortPayloadHeapHandle);
+    rayTracingState().m_bvhSortKeysBuffer = Move(keysBuffer);
+    rayTracingState().m_bvhSortPayloadBuffer = Move(payloadBuffer);
+    rayTracingState().m_bvhSortKeysHeapHandle = keysHeapHandle;
+    rayTracingState().m_bvhSortPayloadHeapHandle = payloadHeapHandle;
+    rayTracingState().m_bvhSortCapacity = capacity;
     return true;
 }
 
@@ -1085,9 +1129,10 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
 
 bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount){
     NWB_ASSERT(rayTracingState().m_bvhSortPipeline);
-    NWB_ASSERT(rayTracingState().m_bvhSortBindingSet);
     NWB_ASSERT(rayTracingState().m_bvhSortKeysBuffer);
     NWB_ASSERT(rayTracingState().m_bvhSortPayloadBuffer);
+    NWB_ASSERT(__hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhSortKeysHeapHandle));
+    NWB_ASSERT(__hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhSortPayloadHeapHandle));
 
     // paddedCount must be a power of two and a multiple of the dispatch group size; the caller fills the
     // sort buffers to it and pads the tail with sentinel keys that sort to the end.
@@ -1101,14 +1146,19 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
     // enable per-buffer UAV barriers, then commit one per step.
     commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
     commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
+    commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
+    commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);
+    commandList.commitBarriers();
 
     const u32 groupCount = paddedCount / static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE);
 
-    const auto dispatchSort = [this, &commandList](const BvhSortPushConstants& pushConstants, const u32 groups){
+    const auto dispatchSort = [this, &commandList](BvhSortPushConstants pushConstants, const u32 groups){
+        pushConstants.keysHeapSlot = rayTracingState().m_bvhSortKeysHeapHandle.slot();
+        pushConstants.payloadHeapSlot = rayTracingState().m_bvhSortPayloadHeapHandle.slot();
         Core::ComputeState computeState;
         computeState.setPipeline(rayTracingState().m_bvhSortPipeline.get());
-        computeState.addBindingSet(rayTracingState().m_bvhSortBindingSet.get());
         commandList.setComputeState(computeState);
+        graphics().getDevice()->getDescriptorHeap().bindCompute(commandList, *rayTracingState().m_bvhSortPipeline.get());
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         commandList.dispatch(groups, 1u, 1u);
     };
@@ -1182,15 +1232,8 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
     if(!rayTracingState().m_bvhBuildBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Stable read-only position/index inputs now arrive through the global heap. This local pure-resource layout
-        // intentionally retains only the five transient StructuredBuffer UAVs; push constants select the two heap
-        // slots. Where the extension is absent, Backend A keeps the same heap-backed binding model.
-        layoutDesc.setUseDescriptorBuffer(true);
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_KEYS, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_PAYLOAD, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_NODES, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_PARENT, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_VISIT_COUNTER, 1));
+        // Inputs and all scratch/work buffers are selected through the global heap. Keep the pipeline-local layout
+        // push-only and append the resource/sampler heap layouts to each build pipeline below.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhBuildPushConstants)));
 
         rayTracingState().m_bvhBuildBindingLayout = device->createBindingLayout(layoutDesc);
@@ -1240,8 +1283,25 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
 
 
 bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount){
-    if(rayTracingState().m_bvhVisitCounterBuffer && rayTracingState().m_bvhBuildCapacity >= primitiveCount)
-        return true;
+    auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
+
+    if(rayTracingState().m_bvhVisitCounterBuffer && rayTracingState().m_bvhBuildCapacity >= primitiveCount){
+        if(__hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhVisitCounterHeapHandle))
+            return true;
+
+        Core::GpuDescriptorHandle acquired = Core::GpuDescriptorHandle::invalid();
+        if(!rayTracingState().m_bvhVisitCounterHeapHandle.valid()
+            && __hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *rayTracingState().m_bvhVisitCounterBuffer.get(), acquired)){
+            rayTracingState().m_bvhVisitCounterHeapHandle = acquired;
+            return true;
+        }
+        __hidden_rt_swbvh::RetireHeapHandle(heap, acquired);
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register existing BVH visit counter in the descriptor heap"));
+        return false;
+    }
 
     const usize capacity = ::NextGrowingCapacity(
         rayTracingState().m_bvhBuildCapacity,
@@ -1259,11 +1319,21 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
         .setDebugName(Name("bvh_visit_counter"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    rayTracingState().m_bvhVisitCounterBuffer = graphics().createBuffer(counterBufferDesc);
-    if(!rayTracingState().m_bvhVisitCounterBuffer){
+    Core::BufferHandle counterBuffer = graphics().createBuffer(counterBufferDesc);
+    if(!counterBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH visit counter buffer"));
         return false;
     }
+
+    Core::GpuDescriptorHandle counterHeapHandle = Core::GpuDescriptorHandle::invalid();
+    if(!__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *counterBuffer.get(), counterHeapHandle)){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register BVH visit counter in the descriptor heap"));
+        return false;
+    }
+
+    __hidden_rt_swbvh::RetireHeapHandle(heap, rayTracingState().m_bvhVisitCounterHeapHandle);
+    rayTracingState().m_bvhVisitCounterBuffer = Move(counterBuffer);
+    rayTracingState().m_bvhVisitCounterHeapHandle = counterHeapHandle;
     rayTracingState().m_bvhBuildCapacity = capacity;
     return true;
 }
@@ -1272,9 +1342,49 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer){
-    if(nodeBuffer && parentBuffer)
-        return true;
+bool RendererRayTracingSystem::createMeshBvhStorage(
+    usize primitiveCount,
+    Core::BufferHandle& nodeBuffer,
+    Core::BufferHandle& parentBuffer,
+    Core::GpuDescriptorHandle& nodeHeapHandle,
+    Core::GpuDescriptorHandle& parentHeapHandle
+){
+    auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
+
+    if(nodeBuffer && parentBuffer){
+        if(
+            __hidden_rt_swbvh::IsStorageBufferHeapHandle(nodeHeapHandle)
+            && __hidden_rt_swbvh::IsStorageBufferHeapHandle(parentHeapHandle)
+        )
+            return true;
+
+        Core::GpuDescriptorHandle acquiredNode = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle acquiredParent = Core::GpuDescriptorHandle::invalid();
+        if(
+            (!nodeHeapHandle.valid() && !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *nodeBuffer.get(), acquiredNode))
+            || (!parentHeapHandle.valid() && !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *parentBuffer.get(), acquiredParent))
+        ){
+            __hidden_rt_swbvh::RetireHeapHandle(heap, acquiredNode);
+            __hidden_rt_swbvh::RetireHeapHandle(heap, acquiredParent);
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register existing per-mesh BVH storage in the descriptor heap"));
+            return false;
+        }
+        if(acquiredNode.valid())
+            nodeHeapHandle = acquiredNode;
+        if(acquiredParent.valid())
+            parentHeapHandle = acquiredParent;
+        return
+            __hidden_rt_swbvh::IsStorageBufferHeapHandle(nodeHeapHandle)
+            && __hidden_rt_swbvh::IsStorageBufferHeapHandle(parentHeapHandle)
+        ;
+    }
+    if(nodeBuffer || parentBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: per-mesh BVH storage is partially allocated"));
+        return false;
+    }
 
     // A binary LBVH over N primitives has exactly 2N-1 nodes (internal [0,N-1) + leaves [N-1,2N-1)). These
     // are PER-MESH and persist across frames (refit reuses the topology), so they are sized exactly to N.
@@ -1288,8 +1398,8 @@ bool RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::
         .setDebugName(Name("bvh_mesh_nodes"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    nodeBuffer = graphics().createBuffer(nodeBufferDesc);
-    if(!nodeBuffer){
+    Core::BufferHandle newNodeBuffer = graphics().createBuffer(nodeBufferDesc);
+    if(!newNodeBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create per-mesh BVH node buffer"));
         return false;
     }
@@ -1302,60 +1412,38 @@ bool RendererRayTracingSystem::createMeshBvhStorage(usize primitiveCount, Core::
         .setDebugName(Name("bvh_mesh_parent"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    parentBuffer = graphics().createBuffer(parentBufferDesc);
-    if(!parentBuffer){
+    Core::BufferHandle newParentBuffer = graphics().createBuffer(parentBufferDesc);
+    if(!newParentBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create per-mesh BVH parent buffer"));
-        nodeBuffer.reset();
         return false;
     }
-    return true;
-}
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool RendererRayTracingSystem::ensureMeshBvhBindingSet(
-    Core::Buffer* nodeBuffer,
-    Core::Buffer* parentBuffer,
-    Core::BindingSetHandle& bindingSet
-){
-    if(bindingSet)
-        return true;
-
-    NWB_ASSERT(rayTracingState().m_bvhBuildBindingLayout);
-    NWB_ASSERT(rayTracingState().m_bvhSortKeysBuffer);
-    NWB_ASSERT(rayTracingState().m_bvhSortPayloadBuffer);
-    NWB_ASSERT(rayTracingState().m_bvhVisitCounterBuffer);
-    NWB_ASSERT(nodeBuffer);
-    NWB_ASSERT(parentBuffer);
-
-    // Stable position/index geometry is selected from the global heap via push constants. Keep only the mesh-local
-    // nodes/parent and the shared transient sort/counter UAVs in this reusable per-mesh binding set.
-    Core::BindingSetDesc bindingSetDesc(arena());
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_KEYS, rayTracingState().m_bvhSortKeysBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_PAYLOAD, rayTracingState().m_bvhSortPayloadBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_NODES, nodeBuffer));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_PARENT, parentBuffer));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_VISIT_COUNTER, rayTracingState().m_bvhVisitCounterBuffer.get()));
-
-    bindingSet = graphics().getDevice()->createBindingSet(bindingSetDesc, rayTracingState().m_bvhBuildBindingLayout);
-    if(!bindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create per-mesh BVH build binding set"));
+    Core::GpuDescriptorHandle newNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle newParentHeapHandle = Core::GpuDescriptorHandle::invalid();
+    if(
+        !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *newNodeBuffer.get(), newNodeHeapHandle)
+        || !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *newParentBuffer.get(), newParentHeapHandle)
+    ){
+        __hidden_rt_swbvh::RetireHeapHandle(heap, newNodeHeapHandle);
+        __hidden_rt_swbvh::RetireHeapHandle(heap, newParentHeapHandle);
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register per-mesh BVH storage in the descriptor heap"));
         return false;
     }
+
+    nodeBuffer = Move(newNodeBuffer);
+    parentBuffer = Move(newParentBuffer);
+    nodeHeapHandle = newNodeHeapHandle;
+    parentHeapHandle = newParentHeapHandle;
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool RendererRayTracingSystem::ensureMeshSwBvhResources(
     u32 primitiveCount,
     Core::BufferHandle& nodeBuffer,
     Core::BufferHandle& parentBuffer,
-    Core::BindingSetHandle& bindingSet
+    Core::GpuDescriptorHandle& nodeHeapHandle,
+    Core::GpuDescriptorHandle& parentHeapHandle
 ){
     if(primitiveCount > s_BvhMaxPrimitivesPerMesh){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: mesh exceeds software BVH primitive cap ({} > {}), shadows skipped")
@@ -1370,15 +1458,14 @@ bool RendererRayTracingSystem::ensureMeshSwBvhResources(
     if(!ensureBvhBuildPipeline())
         return false;
     // Size the shared sort/counter scratch ONCE to the per-mesh cap (a power of two, so it is itself a valid
-    // padded sort length). This keeps the shared buffers stable across builds of different-sized meshes, so
-    // the per-mesh binding sets that reference them stay valid; the per-mesh node/parent are sized exactly.
+    // padded sort length). Heap slots select every per-mesh resource, and node/parent stay exactly sized.
     if(!ensureBvhSortBuffers(s_BvhMaxPrimitivesPerMesh))
         return false;
     if(!ensureBvhVisitCounterBuffer(s_BvhMaxPrimitivesPerMesh))
         return false;
-    if(!createMeshBvhStorage(primitiveCount, nodeBuffer, parentBuffer))
+    if(!createMeshBvhStorage(primitiveCount, nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
         return false;
-    return ensureMeshBvhBindingSet(nodeBuffer.get(), parentBuffer.get(), bindingSet);
+    return true;
 }
 
 
@@ -1388,20 +1475,24 @@ bool RendererRayTracingSystem::ensureMeshSwBvhResources(
 bool RendererRayTracingSystem::meshSwBvhResourcesReady(
     const Core::BufferHandle& nodeBuffer,
     const Core::BufferHandle& parentBuffer,
-    const Core::BindingSetHandle& bindingSet
+    const Core::GpuDescriptorHandle nodeHeapHandle,
+    const Core::GpuDescriptorHandle parentHeapHandle
 ){
     return
         nodeBuffer
         && parentBuffer
-        && bindingSet
+        && __hidden_rt_swbvh::IsStorageBufferHeapHandle(nodeHeapHandle)
+        && __hidden_rt_swbvh::IsStorageBufferHeapHandle(parentHeapHandle)
         && rayTracingState().m_bvhSortPipeline
-        && rayTracingState().m_bvhSortBindingSet
         && rayTracingState().m_bvhSortKeysBuffer
         && rayTracingState().m_bvhSortPayloadBuffer
+        && __hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhSortKeysHeapHandle)
+        && __hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhSortPayloadHeapHandle)
         && rayTracingState().m_bvhMortonPipeline
         && rayTracingState().m_bvhTopologyPipeline
         && rayTracingState().m_bvhFitPipeline
         && rayTracingState().m_bvhVisitCounterBuffer
+        && __hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhVisitCounterHeapHandle)
     ;
 }
 
@@ -1418,11 +1509,12 @@ bool RendererRayTracingSystem::buildMeshSwBvh(
     const SIMDVector aabbMax,
     Core::BufferHandle& nodeBuffer,
     Core::BufferHandle& parentBuffer,
-    Core::BindingSetHandle& bindingSet
+    Core::GpuDescriptorHandle& nodeHeapHandle,
+    Core::GpuDescriptorHandle& parentHeapHandle
 ){
     if(primitiveCount == 0u)
         return false;
-    if(!ensureMeshSwBvhResources(primitiveCount, nodeBuffer, parentBuffer, bindingSet))
+    if(!ensureMeshSwBvhResources(primitiveCount, nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
         return false;
 
     return buildMeshSwBvhPrepared(
@@ -1434,7 +1526,8 @@ bool RendererRayTracingSystem::buildMeshSwBvh(
         aabbMax,
         nodeBuffer,
         parentBuffer,
-        bindingSet
+        nodeHeapHandle,
+        parentHeapHandle
     );
 }
 
@@ -1451,13 +1544,14 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     const SIMDVector aabbMax,
     Core::BufferHandle& nodeBuffer,
     Core::BufferHandle& parentBuffer,
-    Core::BindingSetHandle& bindingSet
+    const Core::GpuDescriptorHandle nodeHeapHandle,
+    const Core::GpuDescriptorHandle parentHeapHandle
 ){
     if(
         primitiveCount == 0u
         || positionHeapSlot == Limit<u32>::s_Max
         || triangleIndexHeapSlot == Limit<u32>::s_Max
-        || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, bindingSet)
+        || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle)
     )
         return false;
 
@@ -1470,13 +1564,17 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     Core::Buffer* visitCounterBuffer = rayTracingState().m_bvhVisitCounterBuffer.get();
     Core::Buffer* meshNodeBuffer = nodeBuffer.get();
     Core::Buffer* meshParentBuffer = parentBuffer.get();
-    Core::BindingSet* meshBindingSet = bindingSet.get();
 
     BvhBuildPushConstants pushConstants;
     pushConstants.primitiveCount = primitiveCount;
     pushConstants.internalCount = primitiveCount - 1u;
     pushConstants.positionHeapSlot = positionHeapSlot;
     pushConstants.triangleIndexHeapSlot = triangleIndexHeapSlot;
+    pushConstants.keysHeapSlot = rayTracingState().m_bvhSortKeysHeapHandle.slot();
+    pushConstants.payloadHeapSlot = rayTracingState().m_bvhSortPayloadHeapHandle.slot();
+    pushConstants.nodeHeapSlot = nodeHeapHandle.slot();
+    pushConstants.parentHeapSlot = parentHeapHandle.slot();
+    pushConstants.visitCounterHeapSlot = rayTracingState().m_bvhVisitCounterHeapHandle.slot();
     StoreFloat(VectorSetW(aabbMin, 0.0f), &pushConstants.aabbMin);
     StoreFloat(VectorSetW(aabbMax, 0.0f), &pushConstants.aabbMax);
 
@@ -1506,10 +1604,9 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     };
 
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
-    const auto dispatchBuildKernel = [&commandList, &pushConstants, meshBindingSet, &heap](Core::ComputePipeline* pipeline, const u32 groupCount){
+    const auto dispatchBuildKernel = [&commandList, &pushConstants, &heap](Core::ComputePipeline* pipeline, const u32 groupCount){
         Core::ComputeState computeState;
         computeState.setPipeline(pipeline);
-        computeState.addBindingSet(meshBindingSet);
         commandList.setComputeState(computeState);
         heap.bindCompute(commandList, *pipeline);
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
@@ -1553,11 +1650,12 @@ bool RendererRayTracingSystem::refitMeshSwBvh(
     u32 primitiveCount,
     Core::BufferHandle& nodeBuffer,
     Core::BufferHandle& parentBuffer,
-    Core::BindingSetHandle& bindingSet
+    Core::GpuDescriptorHandle& nodeHeapHandle,
+    Core::GpuDescriptorHandle& parentHeapHandle
 ){
     if(primitiveCount == 0u)
         return false;
-    if(!ensureMeshSwBvhResources(primitiveCount, nodeBuffer, parentBuffer, bindingSet))
+    if(!ensureMeshSwBvhResources(primitiveCount, nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle))
         return false;
 
     return refitMeshSwBvhPrepared(
@@ -1567,7 +1665,8 @@ bool RendererRayTracingSystem::refitMeshSwBvh(
         primitiveCount,
         nodeBuffer,
         parentBuffer,
-        bindingSet
+        nodeHeapHandle,
+        parentHeapHandle
     );
 }
 
@@ -1582,16 +1681,19 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     u32 primitiveCount,
     Core::BufferHandle& nodeBuffer,
     Core::BufferHandle& parentBuffer,
-    Core::BindingSetHandle& bindingSet
+    const Core::GpuDescriptorHandle nodeHeapHandle,
+    const Core::GpuDescriptorHandle parentHeapHandle
 ){
     if(
         primitiveCount == 0u
         || positionHeapSlot == Limit<u32>::s_Max
         || triangleIndexHeapSlot == Limit<u32>::s_Max
-        || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, bindingSet)
+        || !meshSwBvhResourcesReady(nodeBuffer, parentBuffer, nodeHeapHandle, parentHeapHandle)
     )
         return false;
 
+    Core::Buffer* keysBuffer = rayTracingState().m_bvhSortKeysBuffer.get();
+    Core::Buffer* payloadBuffer = rayTracingState().m_bvhSortPayloadBuffer.get();
     Core::Buffer* meshNodeBuffer = nodeBuffer.get();
     Core::Buffer* meshParentBuffer = parentBuffer.get();
     Core::Buffer* visitCounterBuffer = rayTracingState().m_bvhVisitCounterBuffer.get();
@@ -1602,6 +1704,11 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     pushConstants.refitMode = 1u;
     pushConstants.positionHeapSlot = positionHeapSlot;
     pushConstants.triangleIndexHeapSlot = triangleIndexHeapSlot;
+    pushConstants.keysHeapSlot = rayTracingState().m_bvhSortKeysHeapHandle.slot();
+    pushConstants.payloadHeapSlot = rayTracingState().m_bvhSortPayloadHeapHandle.slot();
+    pushConstants.nodeHeapSlot = nodeHeapHandle.slot();
+    pushConstants.parentHeapSlot = parentHeapHandle.slot();
+    pushConstants.visitCounterHeapSlot = rayTracingState().m_bvhVisitCounterHeapHandle.slot();
 
     // A refit reuses the sorted topology, child links, and per-leaf primitive from the last full build, so
     // only the rendezvous counters reset; the fit pass recomputes every box from the current positions.
@@ -1609,9 +1716,16 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     commandList.commitBarriers();
     commandList.clearBufferUInt(visitCounterBuffer, 0u);
 
+    commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
+    commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
     commandList.setEnableUavBarriersForBuffer(meshNodeBuffer, true);
     commandList.setEnableUavBarriersForBuffer(meshParentBuffer, true);
     commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
+    // Even though refit does not read the payload branch at runtime, the same fit shader declares every build
+    // scratch view. Keep every heap-selected buffer explicitly in its prior UAV state; no local descriptor state remains
+    // to do that bookkeeping implicitly.
+    commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
+    commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);
     commandList.setBufferState(meshNodeBuffer, Core::ResourceStates::UnorderedAccess);
     commandList.setBufferState(meshParentBuffer, Core::ResourceStates::UnorderedAccess);
     commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::UnorderedAccess);
@@ -1619,7 +1733,6 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
 
     Core::ComputeState computeState;
     computeState.setPipeline(rayTracingState().m_bvhFitPipeline.get());
-    computeState.addBindingSet(bindingSet.get());
     commandList.setComputeState(computeState);
     graphics().getDevice()->getDescriptorHeap().bindCompute(commandList, *rayTracingState().m_bvhFitPipeline.get());
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
@@ -1651,7 +1764,8 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
     if(!meshSwBvhResourcesReady(
         meshResources.swBvhNodeBuffer,
         meshResources.swBvhParentBuffer,
-        meshResources.swBvhBindingSet
+        meshResources.swBvhNodeHeapHandle,
+        meshResources.swBvhParentHeapHandle
     ))
         return false;
 
@@ -1684,7 +1798,8 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
             primitiveCount,
             meshResources.swBvhNodeBuffer,
             meshResources.swBvhParentBuffer,
-            meshResources.swBvhBindingSet
+            meshResources.swBvhNodeHeapHandle,
+            meshResources.swBvhParentHeapHandle
         );
     }
     else{
@@ -1699,7 +1814,8 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
             aabbMax,
             meshResources.swBvhNodeBuffer,
             meshResources.swBvhParentBuffer,
-            meshResources.swBvhBindingSet
+            meshResources.swBvhNodeHeapHandle,
+            meshResources.swBvhParentHeapHandle
         );
     }
     if(!built)

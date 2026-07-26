@@ -13,12 +13,6 @@
 
 // Every raster material pixel shader uses the same heap-backed frame buffers as its mesh/compute producer. The
 // trace and cap-fill paths establish their own material-context route before including shared surface code.
-#ifndef NWB_MESH_FRAME_RESOURCES_BINDLESS
-#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
-#endif
-#ifndef NWB_MESH_VIEW_BUFFER_BINDLESS
-#define NWB_MESH_VIEW_BUFFER_BINDLESS 1
-#endif
 #include "../bindless/bindless_heap_mesh.slangi"
 
 

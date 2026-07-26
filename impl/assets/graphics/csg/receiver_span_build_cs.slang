@@ -4,7 +4,6 @@
 
 #include "binding_slots.h"
 #include "constants.h"
-#include "bindless_resources.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,8 +24,14 @@ struct NwbCsgIntervalDispatchPushConstants{
 [[vk::push_constant]]
 ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPushConstants;
 
+// The standalone compute passes carry their one CSG context UniformBuffer slot in the pre-existing second
+// resource-slot word.  That context selects the deferred target payload from the global heap.
+#define NWB_CSG_CONTEXT_HEAP_SLOT (g_NwbCsgIntervalDispatchPushConstants.resourceSlots[NWB_CSG_INTERVAL_DISPATCH_PUSH_RESOURCE_SLOT_CONTEXT])
+#include "bindless_resources.slangi"
+#undef NWB_CSG_CONTEXT_HEAP_SLOT
+
 // The event read and span write images share the global StorageImage table. Their historical local bindings 5/6/9/10
-// remain gaps; the target-generation slot cbuffer selects the correct typed array views.
+// remain gaps; the heap-selected CSG context resolves the correct typed array views.
 #define g_NwbCsgReceiverEventData (NwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgPeelSlots.w))
 #define g_NwbCsgReceiverEventCount (NwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgSpanSlots.x))
 #define g_NwbCsgReceiverSpanData (NwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgSpanSlots.y))

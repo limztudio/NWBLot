@@ -86,7 +86,7 @@ bool ResolveRenderableMeshResources(
 // Recursively builds a binary BVH over the [lo, hi) slice of the instance-index permutation, appending nodes
 // to `nodes` (the first node appended for the whole range is the root, index 0). Each internal node splits on
 // the axis + bin boundary of lowest binned-SAH cost: it sweeps a fixed-grid binning of all three centroid axes,
-// accumulating per-bin AABBs, instance counts, and leaf-cost sums, then evaluates the classic
+// accumulating per-bin AABBs, instance counts, and leaf-cost sums, then evaluates the standard binned-SAH
 // cost = ct + (SA_L*cost_L + SA_R*cost_R)/SA_parent at every boundary and takes the minimum. When no axis has a
 // separating bin boundary (coincident centroids everywhere) it falls back to the count median, so the build never
 // produces an empty/degenerate split. Leaves store NWB_BVH_LEAF_FLAG | instanceIndex + the instance world AABB;
@@ -118,7 +118,7 @@ u32 BuildSceneBvhNode(
     }
 
     // Per-instance leaf cost: primitive count in production, uniform (1) in the self-test path. Uniform cost is
-    // the classic TLAS model where every instance intersection costs the same; the production weight is what makes
+    // the uniform-cost TLAS model where every instance intersection costs the same; the production weight is what makes
     // SAH at TLAS scale meaningful (a 100k-triangle instance should bias the tree like a large primitive).
     auto leafCostOf = [instanceLeafCost](const u32 instance) -> f32 {
         return instanceLeafCost ? static_cast<f32>(instanceLeafCost[instance]) : 1.0f;

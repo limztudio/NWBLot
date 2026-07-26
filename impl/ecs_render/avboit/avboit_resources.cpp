@@ -4,8 +4,6 @@
 
 #include <impl/ecs_render/avboit/avboit_private.h>
 
-#include <core/graphics/pipeline_helpers.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -21,27 +19,33 @@ namespace __hidden_avboit_resources{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-template<typename BuildItemsFunc>
-static bool CreateBindingLayout(
-    Core::GraphicsArena& arena,
+static bool CreateHeapComputePipeline(
     Core::Device& device,
-    Core::BindingLayoutHandle& layout,
-    const Core::ShaderType::Mask visibility,
-    const BuildItemsFunc& buildItems
+    Core::ComputePipelineHandle& pipeline,
+    const Core::ShaderHandle& shader,
+    const Core::BindingLayoutHandle& bindingLayout
 ){
-    if(layout)
+    if(pipeline)
         return true;
 
-    Core::BindingLayoutDesc bindingLayoutDesc(arena);
-    bindingLayoutDesc.setVisibility(visibility);
-    buildItems(bindingLayoutDesc);
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(
+        !heap.isInitialized()
+        || !bindingLayout
+        || !heap.getResourceLayout()
+        || !heap.getSamplerLayout()
+    )
+        return false;
 
-    layout = device.createBindingLayout(bindingLayoutDesc);
-    if(layout)
-        return true;
-
-    return false;
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(shader)
+        .addBindingLayout(bindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
+    ;
+    pipeline = device.createComputePipeline(pipelineDesc);
+    return pipeline != nullptr;
 }
 
 
@@ -66,117 +70,18 @@ bool RendererAvboitSystem::createAvboitResources(){
         return false;
     }
 
-    if(!__hidden_avboit_resources::CreateBindingLayout(
-        arena(),
-        *device,
-        avboitState().m_emptyBindingLayout,
-        Core::ShaderType::Amplification | Core::ShaderType::Mesh | Core::ShaderType::Vertex | Core::ShaderType::Pixel,
-        [](Core::BindingLayoutDesc& bindingLayoutDesc){
-            // Material pipelines retain this descriptor-buffer-compatible empty set at slot 0 after their frame
-            // resources moved into the global heap. It preserves the fixed AVBOIT/CSG low-set ABI without a live
-            // local descriptor set, and carries the maximum draw push-constant range now that the old frame layout
-            // no longer contributes one.
-            bindingLayoutDesc.setUseDescriptorBuffer(true);
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
-        }
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT empty binding layout"));
-        return false;
+    if(!avboitState().m_emptyBindingLayout){
+        Core::BindingLayoutDesc bindingLayoutDesc(arena());
+        bindingLayoutDesc
+            .setVisibility(Core::ShaderType::All)
+            // This is the only AVBOIT pipeline-local layout: a push range. The descriptor-buffer pipeline-layout
+            // builder supplies empty gap sets through set 7, while all live resource access starts at heap set 8.
+            .addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize))
+        ;
+        avboitState().m_emptyBindingLayout = device->createBindingLayout(bindingLayoutDesc);
     }
-
-    if(!__hidden_avboit_resources::CreateBindingLayout(
-        arena(),
-        *device,
-        avboitState().m_occupancyBindingLayout,
-        Core::ShaderType::Pixel,
-        [](Core::BindingLayoutDesc& bindingLayoutDesc){
-            // The ordinary occupancy shader reads depth/sampler through the global heap. Its remaining local set is
-            // pure-resource, so Backend C can carry it with the descriptor-buffer heap sets at 8/9.
-            bindingLayoutDesc.setUseDescriptorBuffer(true);
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_OCCUPANCY_BINDING_COVERAGE_WORDS, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
-        }
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT occupancy binding layout"));
-        return false;
-    }
-
-    if(!__hidden_avboit_resources::CreateBindingLayout(
-        arena(),
-        *device,
-        avboitState().m_depthWarpBindingLayout,
-        Core::ShaderType::Compute,
-        [](Core::BindingLayoutDesc& bindingLayoutDesc){
-            // Depth warp uses only buffer descriptors and push constants, so its target-generation set can live in
-            // Backend C's resource descriptor buffer without involving the global sampled-image/sampler heap.
-            bindingLayoutDesc.setUseDescriptorBuffer(true);
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_DEPTH_WARP_BINDING_COVERAGE_WORDS, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_DEPTH_WARP, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_CONTROL, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(RendererAvboitPushConstants)));
-        }
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp binding layout"));
-        return false;
-    }
-
-    if(!__hidden_avboit_resources::CreateBindingLayout(
-        arena(),
-        *device,
-        avboitState().m_extinctionBindingLayout,
-        Core::ShaderType::Pixel,
-        [](Core::BindingLayoutDesc& bindingLayoutDesc){
-            bindingLayoutDesc.setUseDescriptorBuffer(true);
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_DEPTH_WARP, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_CONTROL, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_EXTINCTION, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_OVERFLOW_DEPTH, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
-        }
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction binding layout"));
-        return false;
-    }
-
-    if(!__hidden_avboit_resources::CreateBindingLayout(
-        arena(),
-        *device,
-        avboitState().m_integrateBindingLayout,
-        Core::ShaderType::Compute,
-        [](Core::BindingLayoutDesc& bindingLayoutDesc){
-            // Integration is likewise a resource-only set: buffers plus the transmittance storage image. Keeping the
-            // image in the resource segment lets Backend C bind the full AVBOIT sequence through descriptor buffers.
-            bindingLayoutDesc.setUseDescriptorBuffer(true);
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_EXTINCTION, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_AVBOIT_INTEGRATE_BINDING_TRANSMITTANCE, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_CONTROL, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_OVERFLOW_DEPTH, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(RendererAvboitPushConstants)));
-        }
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration binding layout"));
-        return false;
-    }
-
-    if(!__hidden_avboit_resources::CreateBindingLayout(
-        arena(),
-        *device,
-        avboitState().m_accumulateBindingLayout,
-        Core::ShaderType::Pixel,
-        [](Core::BindingLayoutDesc& bindingLayoutDesc){
-            // The regular accumulate shader fetches its Texture3D transmittance volume + linear sampler AND the shared
-            // scene-shading cbuffer + light list from the heap, leaving a pure-resource local set that Backend C can
-            // bind with the heap at sets 8/9.
-            bindingLayoutDesc.setUseDescriptorBuffer(true);
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, 1));
-            bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, s_RendererAvboitTransparentDrawPushConstantSize));
-        }
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation binding layout"));
+    if(!avboitState().m_emptyBindingLayout){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT shared push-constant layout"));
         return false;
     }
 
@@ -220,21 +125,21 @@ bool RendererAvboitSystem::createAvboitPipelines(){
 
     auto* device = graphics().getDevice();
 
-    if(!Core::CreateComputePipelineIfNeeded(
+    if(!__hidden_avboit_resources::CreateHeapComputePipeline(
         *device,
         avboitState().m_depthWarpPipeline,
         avboitState().m_depthWarpComputeShader,
-        avboitState().m_depthWarpBindingLayout
+        avboitState().m_emptyBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp pipeline"));
         return false;
     }
 
-    if(!Core::CreateComputePipelineIfNeeded(
+    if(!__hidden_avboit_resources::CreateHeapComputePipeline(
         *device,
         avboitState().m_integratePipeline,
         avboitState().m_integrateComputeShader,
-        avboitState().m_integrateBindingLayout
+        avboitState().m_emptyBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration pipeline"));
         return false;

@@ -158,13 +158,12 @@ void RendererMaterialSystem::renderMaterialPass(
     const MaterialPipelinePass::Enum pass,
     const bool transparent,
     const CsgFrameState& csgFrameState,
-    Core::BindingSet* passBindingSet,
     const AvboitFrameTargets* avboitTargets
 ){
     if(!framebuffer)
         return;
     const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(pass);
-    if(usesAvboit && (!passBindingSet || !avboitTargets || !avboitTargets->valid()))
+    if(usesAvboit && (!avboitTargets || !avboitTargets->valid()))
         return;
 
     commandList.endRenderPass();
@@ -226,11 +225,7 @@ void RendererMaterialSystem::renderMaterialPass(
         return;
     const bool csgUploadReady = csgResourcesReady && (drawItems.csg.empty() || m_renderer.csgSystem().uploadCsgFrameBuffers(commandList, csgFrameData));
 
-    if(passBindingSet){
-        commandList.setResourceStatesForBindingSet(passBindingSet);
-        commandList.commitBarriers();
-    }
-    const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, passBindingSet, avboitTargets, viewportState };
+    const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, avboitTargets, viewportState };
     if(regularDrawResourcesReady)
         renderMaterialPassDrawItems(drawContext, drawItems.regular);
     if(csgUploadReady && csgDrawResourcesReady){

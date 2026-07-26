@@ -3,15 +3,16 @@
 
 
 #include "compute_common.slangi"
-#include "binding_slots.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_AVBOIT_DEPTH_WARP_BINDING_COVERAGE_WORDS, NWB_AVBOIT_COMPUTE_SET)]] StructuredBuffer<uint, Std430DataLayout> g_CoverageWords;
-[[vk::binding(NWB_AVBOIT_DEPTH_WARP_BINDING_DEPTH_WARP, NWB_AVBOIT_COMPUTE_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_DepthWarp;
-[[vk::binding(NWB_AVBOIT_DEPTH_WARP_BINDING_CONTROL, NWB_AVBOIT_COMPUTE_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_Control;
+// Every work buffer is selected from the global StorageBuffer heap through the shared target-generation slot
+// payload. Keep the established names below so the warp algorithm remains readable.
+#define g_CoverageWords nwbAvboitCoverageWords()
+#define g_DepthWarp nwbAvboitDepthWarpUav()
+#define g_Control nwbAvboitControlUav()
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -106,4 +107,9 @@ void main(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#undef g_CoverageWords
+#undef g_DepthWarp
+#undef g_Control
 

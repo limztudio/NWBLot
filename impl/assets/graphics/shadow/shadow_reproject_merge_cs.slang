@@ -5,7 +5,7 @@
 #include "shadow_reproject_merge_binding_slots.h"
 #include "shadow_resolve_binding_slots.h" // NWB_SHADOW_RESOLVE_GROUP_SIZE (the merge shares the resolve's group size)
 #include "sw_binding_slots.h"             // NWB_SW_SHADOW_SOFT_FACTOR + NWB_SCENE_SHADOW_SLOT_COUNT (via scene binding_slots)
-#include "../bindless/bindless_heap.slangi"
+#include "shadow_heap_resources.slangi"
 #include "../scene/binding_slots.h"
 #include "../common/math.slangi"
 
@@ -40,12 +40,6 @@
 // n=0 everywhere, so the output is the pure current sample -- never garbage/black. Invalid receiver texels also pass through
 // the current sample. So a first frame degrades exactly to the pre-temporal single-frame trace.
 
-[[vk::binding(NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_OUT, NWB_SHADOW_REPROJECT_MERGE_SET)]]
-RWTexture2DArray<float4> g_NwbShadowMergeHistoryOut;
-
-[[vk::binding(NWB_SHADOW_REPROJECT_MERGE_BINDING_MOMENTS_OUT, NWB_SHADOW_REPROJECT_MERGE_SET)]]
-RWTexture2DArray<float4> g_NwbShadowMergeMomentsOut;
-
 struct NwbShadowReprojectMergePushConstants{
     // The STASHED previous-frame worldToClip. row_major to match the C++ Float44U row-major raw dump (and the caustic
     // view CB convention). 64 bytes; the 16 u32 scalars below bring the push to exactly 128 bytes.
@@ -65,13 +59,16 @@ struct NwbShadowReprojectMergePushConstants{
     uint geometryCurrSlot;
     uint geometryPrevSlot;
     uint worldPositionSlot;
-    uint pad0;
-    uint pad1;
+    uint historyOutputStorageSlot;
+    uint momentsOutputStorageSlot;
     uint pad2;
 };
 
 [[vk::push_constant]]
 ConstantBuffer<NwbShadowReprojectMergePushConstants> g_NwbShadowMergePush;
+
+#define g_NwbShadowMergeHistoryOut NwbHeapStorageImage2DArrayFloat4(g_NwbShadowMergePush.historyOutputStorageSlot)
+#define g_NwbShadowMergeMomentsOut NwbHeapStorageImage2DArrayFloat4(g_NwbShadowMergePush.momentsOutputStorageSlot)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

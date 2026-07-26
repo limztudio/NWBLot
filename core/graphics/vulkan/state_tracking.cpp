@@ -99,52 +99,6 @@ void AppendTextureStateBarriersBefore(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::setResourceStatesForBindingSet(BindingSet* bindingSet){
-    if(!bindingSet || !m_enableAutomaticBarriers)
-        return;
-
-    auto* bs = bindingSet;
-    for(const auto& item : bs->m_desc.bindings){
-        switch(item.type){
-        case ResourceType::Texture_SRV:
-            if(item.resourceHandle)
-                setTextureState(static_cast<Texture*>(item.resourceHandle), item.subresources, ResourceStates::ShaderResource);
-            break;
-        case ResourceType::Texture_UAV:
-            if(item.resourceHandle)
-                setTextureState(static_cast<Texture*>(item.resourceHandle), item.subresources, ResourceStates::UnorderedAccess);
-            break;
-        case ResourceType::StructuredBuffer_SRV:
-        case ResourceType::RawBuffer_SRV:
-        case ResourceType::TypedBuffer_SRV:
-            if(item.resourceHandle)
-                setBufferState(static_cast<Buffer*>(item.resourceHandle), ResourceStates::ShaderResource);
-            break;
-        case ResourceType::StructuredBuffer_UAV:
-        case ResourceType::RawBuffer_UAV:
-        case ResourceType::TypedBuffer_UAV:
-            if(item.resourceHandle)
-                setBufferState(static_cast<Buffer*>(item.resourceHandle), ResourceStates::UnorderedAccess);
-            break;
-        case ResourceType::ConstantBuffer:
-        case ResourceType::VolatileConstantBuffer:
-            if(item.resourceHandle)
-                setBufferState(static_cast<Buffer*>(item.resourceHandle), ResourceStates::ConstantBuffer);
-            break;
-        case ResourceType::RayTracingAccelStruct:
-            if(item.resourceHandle)
-                setAccelStructState(static_cast<RayTracingAccelStruct*>(item.resourceHandle), ResourceStates::AccelStructRead);
-            break;
-        case ResourceType::Sampler:
-        case ResourceType::None:
-        case ResourceType::PushConstants:
-        case ResourceType::SamplerFeedbackTexture_UAV:
-        default:
-            break;
-        }
-    }
-}
-
 void CommandList::setResourceStatesForFramebuffer(Framebuffer& framebuffer){
     const FramebufferDesc& desc = framebuffer.getDescription();
 
@@ -156,11 +110,6 @@ void CommandList::setResourceStatesForFramebuffer(Framebuffer& framebuffer){
 
     if(desc.shadingRateAttachment.valid())
         setTextureState(desc.shadingRateAttachment.texture, desc.shadingRateAttachment.subresources, ResourceStates::ShadingRateSurface);
-}
-
-void CommandList::setResourceStatesForBindingSets(const BindingSetVector& bindings){
-    for(BindingSet* bindingSet : bindings)
-        setResourceStatesForBindingSet(bindingSet);
 }
 
 void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state){

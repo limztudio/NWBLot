@@ -16,12 +16,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_MESH_VIEW_SET
-#define NWB_MESH_VIEW_SET NWB_MESH_SET
-#define NWB_MESH_VIEW_SET_DEFAULTED_BY_VIEW_BUFFER 1
-#endif
-
-
 struct NwbMeshViewBuffer{
     row_major float4x4 g_NwbMeshWorldToClip;
     row_major float4x4 g_NwbMeshClipToWorld;
@@ -29,11 +23,6 @@ struct NwbMeshViewBuffer{
     float4 g_NwbMeshFrustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];
 };
 
-#ifndef NWB_MESH_VIEW_BUFFER_BINDLESS
-#define NWB_MESH_VIEW_BUFFER_BINDLESS 0
-#endif
-
-#if NWB_MESH_VIEW_BUFFER_BINDLESS
 // Most mesh consumers select the global view descriptor from their per-draw frame slots. Narrower consumers such as
 // CSG interval passes can supply their own uniform slot through this hook without reintroducing a local b13 binding.
 #if defined(NWB_MESH_VIEW_BUFFER_HEAP_SLOT)
@@ -41,21 +30,11 @@ struct NwbMeshViewBuffer{
 #else
 #define g_NwbMeshViewBuffer NwbHeapMeshViewBuffer(nwbMeshFrameViewHeapSlot())
 #endif
-#else
-[[vk::binding(NWB_MESH_BINDING_VIEW, NWB_MESH_VIEW_SET)]]
-ConstantBuffer<NwbMeshViewBuffer, Std140DataLayout> g_NwbMeshViewBuffer;
-#endif
 
 #define g_NwbMeshWorldToClip g_NwbMeshViewBuffer.g_NwbMeshWorldToClip
 #define g_NwbMeshClipToWorld g_NwbMeshViewBuffer.g_NwbMeshClipToWorld
 #define g_NwbMeshCameraPosition g_NwbMeshViewBuffer.g_NwbMeshCameraPosition
 #define g_NwbMeshFrustumPlanes g_NwbMeshViewBuffer.g_NwbMeshFrustumPlanes
-
-#ifdef NWB_MESH_VIEW_SET_DEFAULTED_BY_VIEW_BUFFER
-#undef NWB_MESH_VIEW_SET
-#undef NWB_MESH_VIEW_SET_DEFAULTED_BY_VIEW_BUFFER
-#endif
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -32,12 +32,11 @@ public:
 public:
     [[nodiscard]] CsgFrameState buildFrameState(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool createCsgClipResources();
-    void destroyCsgClipBindingSet();
     void releaseCsgClipContextHeapHandles();
     [[nodiscard]] bool createCsgPeelTargets(DeferredFrameTargets& targets);
     [[nodiscard]] bool createCsgIntervalPeelResources(DeferredFrameTargets& targets, bool capFillRequired);
     [[nodiscard]] bool createCsgIntervalSampleResources(DeferredFrameTargets& targets);
-    void destroyCsgIntervalPeelBindingSet();
+    void invalidateCsgIntervalPeelPipelines();
     void dispatchCsgIntervalPeels(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
     void dispatchCsgReceiverSpanBuild(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
     void dispatchCsgIntervalCombine(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);

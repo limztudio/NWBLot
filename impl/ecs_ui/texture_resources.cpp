@@ -129,7 +129,7 @@ bool UiSystem::ensureSamplerHeapHandle(){
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::Sampler);
     if(!handle.valid())
         return false;
-    if(!heap.write(handle, Core::BindingSetItem::Sampler(0u, m_sampler.get()))){
+    if(!heap.write(handle, Core::DescriptorWriteItem::Sampler(0u, m_sampler.get()))){
         heap.free(handle);
         return false;
     }
@@ -160,7 +160,7 @@ bool UiSystem::registerTextureHeapHandle(UiTextureResource& resource){
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::SampledImage);
     if(!handle.valid())
         return false;
-    if(!heap.write(handle, Core::BindingSetItem::Texture_SRV(
+    if(!heap.write(handle, Core::DescriptorWriteItem::Texture_SRV(
         0u,
         resource.texture.get(),
         Core::Format::RGBA8_UNORM,

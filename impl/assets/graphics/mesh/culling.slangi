@@ -202,7 +202,7 @@ void nwbMeshStoreCulledPrimitive(const uint primitiveBase){
         0u
     );
     for(uint corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner)
-        g_NwbMeshGeneratedVertices[primitiveBase + corner] = vertex;
+        nwbMeshGeneratedVertices()[primitiveBase + corner] = vertex;
 }
 
 

@@ -9,10 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Fallback slots for shaders that include scene/buffer.slangi without selecting their own. Each real
-// consumer owns the complete slot map of its binding set in its own header (deferred/binding_slots.h,
-// avboit/binding_slots.h, shadow/binding_slots.h, ...) and points NWB_SCENE_SHADING_* /
-// NWB_SCENE_LIGHT_LIST_* at the matching slot there, so a set's layout is never split across headers.
+// Retired local scene-binding slots. Preserve these ABI gaps for archived shader variants, but active renderer
+// consumers must select scene resources through the global descriptor heap.
 #define NWB_SCENE_SHADING_DEFAULT_SET 0
 #define NWB_SCENE_SHADING_DEFAULT_BINDING 4
 
@@ -35,15 +33,12 @@
 // Point lights are excluded because omnidirectional emission would spread the photon budget too thin.
 #define NWB_SCENE_CAUSTIC_SLOT_COUNT 4u
 
-// Fallback set/binding for the shadow-visibility SRV when a consumer includes scene/lighting.slangi without
-// selecting its own (the real consumer -- deferred lighting -- points these at its own slot map).
+// Retired local shadow-visibility SRV slot; active consumers use a heap-selected resource alias.
 #define NWB_SCENE_SHADOW_VISIBILITY_DEFAULT_SET 0
 #define NWB_SCENE_SHADOW_VISIBILITY_DEFAULT_BINDING 7
 
-// Fallback set/binding for the additive caustic-irradiance SRV (RGBA16F) when a consumer includes
-// scene/lighting.slangi without selecting its own (the real consumer -- deferred lighting -- points these at its
-// own slot map). Unlike the multiplicative shadow visibility, this is additive scene-referred irradiance the
-// caustic producer focuses onto receivers; an unwritten / black buffer is the additive identity (no-op).
+// Retired local additive caustic-irradiance SRV slot. Unlike the multiplicative shadow visibility, this is additive
+// scene-referred irradiance the caustic producer focuses onto receivers; an unwritten / black buffer is a no-op.
 #define NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_SET 0
 #define NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_BINDING 8
 

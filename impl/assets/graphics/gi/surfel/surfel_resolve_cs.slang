@@ -14,35 +14,13 @@
 // (encode = n*0.5+0.5), so the surfel normalWeight matches the deferred path.
 
 
-// Point the gather's pool / hash / params bindings at the resolve set BEFORE surfel_gather declares them.
-#include "surfel_binding_slots.h"
-#define NWB_SCENE_GI_SURFEL_POOL_SET NWB_SURFEL_RESOLVE_SET
-#define NWB_SCENE_GI_SURFEL_POOL_BINDING NWB_SURFEL_RESOLVE_BINDING_POOL
-#define NWB_SCENE_GI_SURFEL_HASH_SET NWB_SURFEL_RESOLVE_SET
-#define NWB_SCENE_GI_SURFEL_HASH_BINDING NWB_SURFEL_RESOLVE_BINDING_CELL_HEAD
-#define NWB_SCENE_GI_SURFEL_PARAMS_SET NWB_SURFEL_RESOLVE_SET
-#define NWB_SCENE_GI_SURFEL_PARAMS_BINDING NWB_SURFEL_RESOLVE_BINDING_CONSTANTS
-
 #include "surfel_gather.slangi"
-#include "../../bindless/bindless_heap_sampled_image_2d.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_SURFEL_RESOLVE_BINDING_OUTPUT, NWB_SURFEL_RESOLVE_SET)]]
-RWTexture2D<float4> g_NwbSurfelResolveOutput;
-
-struct NwbSurfelResolvePushConstants{
-    uint worldPositionSlot;
-    uint normalSlot;
-};
-
-[[vk::push_constant]]
-NwbSurfelResolvePushConstants g_NwbSurfelResolvePushConstants;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#define g_NwbSurfelResolveOutput (NwbHeapStorageImage2DFloat4(g_NwbSurfelHeapPushConstants.outputStorageHeapSlot))
 
 
 [numthreads(NWB_SURFEL_RESOLVE_GROUP_SIZE, NWB_SURFEL_RESOLVE_GROUP_SIZE, 1)]
@@ -60,13 +38,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // re-reads per tap to recover this texel's geometry, so the gather normal and the upsample gate agree exactly.
     const uint2 fullPixel = min(halfPixel * factor, uint2(screenWidth - 1u, screenHeight - 1u));
     const int3 loadCoord = int3(int2(fullPixel), 0);
-    const float3 rawNormal = NwbHeapSampledImage2DOnly(g_NwbSurfelResolvePushConstants.normalSlot).Load(loadCoord).xyz;
+    const float3 rawNormal = NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.normalSlot).Load(loadCoord).xyz;
     if(dot(rawNormal, rawNormal) < 0.01){
         g_NwbSurfelResolveOutput[halfPixel] = float4(0.0, 0.0, 0.0, 0.0);   // background -> no GI (upsample -> hemiAmbient)
         return;
     }
 
-    const float3 worldPosition = NwbHeapSampledImage2DOnly(g_NwbSurfelResolvePushConstants.worldPositionSlot).Load(loadCoord).xyz;
+    const float3 worldPosition = NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.worldPositionSlot).Load(loadCoord).xyz;
     const float3 normal = normalize(rawNormal * 2.0 - 1.0);   // decode the packed G-buffer normal (matches the lighting)
 
     float3 gi;

@@ -4,7 +4,7 @@
 
 #include "shadow_resolve_binding_slots.h"
 #include "sw_binding_slots.h" // NWB_SW_SHADOW_SOFT_FACTOR + NWB_SCENE_SHADOW_SLOT_COUNT reach (via scene binding_slots)
-#include "../bindless/bindless_heap.slangi"
+#include "shadow_heap_resources.slangi"
 #include "../scene/binding_slots.h"
 #include "../common/math.slangi"
 
@@ -55,23 +55,16 @@
 //   stage 2 UPSAMPLE (full-res dispatch): per slot, edge-aware (joint-bilateral) resample of the final half-res
 //     visibility into the FULL-res visibility buffer the deferred lighting samples. Background pixels write 1.0.
 
-// The pass output (UAV). For PREPARE + WAVELET this is a HALF-res ping-pong layer (soft-A / soft-B); the C++ swaps the
-// bound texture per pass. (Only the UPSAMPLE writes the full-res visibility below, so this stays half-res here.)
-[[vk::binding(NWB_SHADOW_RESOLVE_BINDING_OUTPUT, NWB_SHADOW_RESOLVE_SET)]]
-RWTexture2DArray<float4> g_NwbShadowResolveOutput;
-
-// The FULL-res visibility Texture2DArray the deferred lighting samples -- the UPSAMPLE stage's output.
-[[vk::binding(NWB_SHADOW_RESOLVE_BINDING_VISIBILITY, NWB_SHADOW_RESOLVE_SET)]]
-RWTexture2DArray<float4> g_NwbShadowResolveVisibility;
-
-// Scene-shading CB: only the camera world position is needed (the full-res upsample centre's camera distance). Declared
-// directly (not via scene/buffer.slangi) for the same reason the geometry downsample does -- to layout-match the C++
-// binding set exactly (which binds only this CB) without depending on dead-code-stripping the unused light-list SRV.
+// Scene-shading CB: only the camera world position is needed (the full-res upsample centre's camera distance). Its typed
+// view aliases the global UniformBuffer heap; the push block selects this frame's descriptor slot.
 struct NwbShadowResolveSceneShading{
     float4 cameraPosition; // xyz = camera world position (w = active light count, unused here)
 };
-[[vk::binding(NWB_SHADOW_RESOLVE_BINDING_SCENE_SHADING, NWB_SHADOW_RESOLVE_SET)]]
-ConstantBuffer<NwbShadowResolveSceneShading, Std140DataLayout> g_NwbShadowResolveSceneShading;
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed UniformBuffer heap view.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbShadowResolveSceneShading, Std140DataLayout> g_NwbHeapShadowResolveSceneShadings[];
+#pragma warning(pop)
 
 struct NwbShadowResolvePushConstants{
     uint width;          // FULL-res width (UPSAMPLE dispatch/output dim)
@@ -98,11 +91,18 @@ struct NwbShadowResolvePushConstants{
     uint softHalfSlot;
     uint inputColorSlot;
     uint momentsSlot;
+    uint outputStorageSlot;
+    uint visibilityStorageSlot;
+    uint sceneShadingSlot;
     uint _pad0;
 };
 
 [[vk::push_constant]]
 ConstantBuffer<NwbShadowResolvePushConstants> g_NwbShadowResolvePushConstants;
+
+#define g_NwbShadowResolveOutput NwbHeapStorageImage2DArrayFloat4(g_NwbShadowResolvePushConstants.outputStorageSlot)
+#define g_NwbShadowResolveVisibility NwbHeapStorageImage2DArrayFloat4(g_NwbShadowResolvePushConstants.visibilityStorageSlot)
+#define g_NwbShadowResolveSceneShading g_NwbHeapShadowResolveSceneShadings[g_NwbShadowResolvePushConstants.sceneShadingSlot]
 
 // Groupshared (LDS) tile for the small-dilation wavelet passes: the group cooperatively loads its half-res tile + halo
 // (for ONE slot at a time) here once, then every thread taps from LDS. Sized for the largest LDS-tiled step

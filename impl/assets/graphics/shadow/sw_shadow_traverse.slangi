@@ -19,13 +19,8 @@
 #endif
 
 // Route the surface hook's typed words + mutable mesh-instance records through the global heap. The uniform slots live
-// in the b8 trace-material cbuffer declared by sw_shadow_gbuffer.slangi; define this complete mesh-frame route before
-// shadow_surface.slangi causes material_typed_bindings.slangi to be included.
-#ifndef NWB_MESH_SET
-#define NWB_MESH_SET NWB_SW_SHADOW_SET
-#endif
-#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
-#define NWB_MESH_VIEW_BUFFER_BINDLESS 1
+// in the b8 trace-material cbuffer declared by sw_shadow_gbuffer.slangi; establish this complete mesh-frame route
+// before shadow_surface.slangi causes material_typed_bindings.slangi to be included.
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbSwShadowMaterialContextSlots.sceneSlots.w;
 }

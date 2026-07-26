@@ -76,9 +76,9 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::Compute)
-            .setUseDescriptorBuffer(heap.usesDescriptorBuffer())
         ;
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SKINNED_MESH_BINDING_BINDLESS_RESOURCES, 1));
+        // Persistent stream descriptors and their per-runtime selector payload all live in the global heap. Keep
+        // this local layout only for the dispatch push constants.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshSkinningPushConstants)));
 
         m_skinningBindingLayout = device->createBindingLayout(bindingLayoutDesc);
@@ -132,9 +132,8 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::Compute)
-            .setUseDescriptorBuffer(heap.usesDescriptorBuffer())
         ;
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SKINNED_MESH_BOUNDS_BINDING_BINDLESS_RESOURCES, 1));
+        // The per-runtime selector payload is a global UniformBuffer heap entry selected by a push-constant word.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshletBoundsPushConstants)));
 
         m_boundsBindingLayout = device->createBindingLayout(bindingLayoutDesc);
@@ -188,9 +187,8 @@ bool MeshSkinningSystem::ensureRepackPipeline(){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::Compute)
-            .setUseDescriptorBuffer(heap.usesDescriptorBuffer())
         ;
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SKINNED_MESH_REPACK_BINDING_BINDLESS_RESOURCES, 1));
+        // The per-runtime selector payload is a global UniformBuffer heap entry selected by a push-constant word.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshletRepackPushConstants)));
 
         m_repackBindingLayout = device->createBindingLayout(bindingLayoutDesc);

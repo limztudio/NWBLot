@@ -29,12 +29,14 @@
 #define NWB_MESH_PUSH_DISPATCH_FLAGS 3u
 // The per-draw frame-resource heap slots occupy the fourth 16-byte lane of the material push constant. Keeping
 // them together lets both the mesh/compute stage and its independently compiled pixel stage reach the same
-// instance, typed-material, and camera buffers without recreating a local set-0 binding set.
+// instance, typed-material, and camera buffers without recreating local resource bindings.
 #define NWB_MESH_PUSH_FRAME_HEAP_SLOT_WORD_OFFSET 12u
 #define NWB_MESH_FRAME_HEAP_SLOT_INSTANCE 0u
 #define NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED 1u
 #define NWB_MESH_FRAME_HEAP_SLOT_VIEW 2u
-#define NWB_MESH_FRAME_HEAP_SLOT_RESERVED 3u
+// The compute-emulation path uses the otherwise unused fourth frame-slot lane to select its writable generated
+// vertex buffer from the global StorageBuffer heap. Raster/mesh-shader draws leave this slot zero.
+#define NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX 3u
 #define NWB_MESH_FRAME_HEAP_SLOT_COUNT 4u
 #define NWB_MESH_PUSH_CONSTANT_BYTE_SIZE 64u
 
@@ -52,6 +54,10 @@
 // mesh shader can fetch its streams without growing the already-full AVBOIT draw push constant.
 #define NWB_MESH_INSTANCE_GEOMETRY_SLOT_FLOAT_OFFSET 12u
 #define NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT 12u
+// The former direct typed-material binding (6) is no longer a geometry stream: typed words use the frame heap
+// lane.  CSG reuses that preserved per-instance word for its UniformBuffer context selector, without renumbering
+// any historical source-stream slots.
+#define NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT 6u
 #define NWB_MESH_INSTANCE_FLOAT_COUNT (NWB_MESH_INSTANCE_GEOMETRY_SLOT_FLOAT_OFFSET + NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT)
 
 #define NWB_MESH_RASTER_COLOR_LOCATION 0

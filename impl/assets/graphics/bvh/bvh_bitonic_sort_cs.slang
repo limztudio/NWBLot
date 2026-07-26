@@ -3,6 +3,7 @@
 
 
 #include "binding_slots.h"
+#include "bvh_heap_resources.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,20 +43,13 @@ struct NwbBvhBitonicSortPushConstants{
     uint compareDistance;    // GLOBAL only: XOR distance for this merge step
     uint sequenceSize;       // GLOBAL / GLOBAL_TAIL only: current bitonic sequence size (a power of two)
     uint mode;               // 0 = LOCAL_TILE, 1 = GLOBAL, 2 = GLOBAL_TAIL
+    uint keysHeapSlot;
+    uint payloadHeapSlot;
+    uint2 pad;
 };
 
 [[vk::push_constant]]
 ConstantBuffer<NwbBvhBitonicSortPushConstants> g_NwbBvhBitonicSortPushConstants;
-
-[[vk::binding(NWB_BVH_SORT_BINDING_KEYS, NWB_BVH_SORT_SET)]]
-RWStructuredBuffer<uint> g_NwbBvhSortKeys;
-
-[[vk::binding(NWB_BVH_SORT_BINDING_PAYLOAD, NWB_BVH_SORT_SET)]]
-RWStructuredBuffer<uint> g_NwbBvhSortPayload;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 // Lexicographic (key, payload) order: equal Morton codes fall back to the primitive index so the comparison
 // is a strict total order — Karras topology needs unique sort keys to avoid degenerate internal nodes.
@@ -107,18 +101,18 @@ void main(
         if(partner <= index)
             return;
 
-        const uint keyA = g_NwbBvhSortKeys[index];
-        const uint payloadA = g_NwbBvhSortPayload[index];
-        const uint keyB = g_NwbBvhSortKeys[partner];
-        const uint payloadB = g_NwbBvhSortPayload[partner];
+        const uint keyA = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.keysHeapSlot][index];
+        const uint payloadA = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.payloadHeapSlot][index];
+        const uint keyB = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.keysHeapSlot][partner];
+        const uint payloadB = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.payloadHeapSlot][partner];
 
         const bool ascending = (index & g_NwbBvhBitonicSortPushConstants.sequenceSize) == 0u;
         const bool aLessB = nwbBvhSortPairLess(keyA, payloadA, keyB, payloadB);
         if(ascending != aLessB){
-            g_NwbBvhSortKeys[index] = keyB;
-            g_NwbBvhSortPayload[index] = payloadB;
-            g_NwbBvhSortKeys[partner] = keyA;
-            g_NwbBvhSortPayload[partner] = payloadA;
+            g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.keysHeapSlot][index] = keyB;
+            g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.payloadHeapSlot][index] = payloadB;
+            g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.keysHeapSlot][partner] = keyA;
+            g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.payloadHeapSlot][partner] = payloadA;
         }
         return;
     }
@@ -128,8 +122,8 @@ void main(
     const uint local = groupThreadID.x;
     const uint global = tileBase + local;
 
-    s_tileKeys[local] = g_NwbBvhSortKeys[global];
-    s_tilePayload[local] = g_NwbBvhSortPayload[global];
+    s_tileKeys[local] = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.keysHeapSlot][global];
+    s_tilePayload[local] = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.payloadHeapSlot][global];
     GroupMemoryBarrierWithGroupSync();
 
     if(mode == 0u){
@@ -170,8 +164,8 @@ void main(
         }
     }
 
-    g_NwbBvhSortKeys[global] = s_tileKeys[local];
-    g_NwbBvhSortPayload[global] = s_tilePayload[local];
+    g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.keysHeapSlot][global] = s_tileKeys[local];
+    g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.payloadHeapSlot][global] = s_tilePayload[local];
 }
 
 #undef NWB_BVH_SORT_TILE_COMPARE_SWAP

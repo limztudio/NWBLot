@@ -15,16 +15,16 @@ NWB_CORE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Global descriptor heap - backend-agnostic contract.
+// Global descriptor-heap contract.
 //
 // A resource registered in the heap is addressed everywhere - C++ and shader - by a single opaque 32-bit
-// GpuDescriptorHandle. The handle bit-layout and class taxonomy are identical on every backend, so a handle
-// minted on the descriptor-indexing path is byte-for-byte valid on the descriptor-buffer path when that backend is
-// available. See docs/design/bindless-phase1-rhi-heap.md for the original design.
+// GpuDescriptorHandle. The handle bit-layout and class taxonomy are shared by C++ and shaders; the Vulkan renderer
+// resolves every handle through its required descriptor-buffer-backed global heap. See
+// docs/design/bindless-phase1-rhi-heap.md for the original design history.
 
 
-// The resource classes a shader must select between. Each class maps to exactly one register space / descriptor
-// type on the descriptor-indexing backend, so the class tag alone disambiguates which shader-side array to index.
+// The resource classes a shader must select between. Each class maps to exactly one global-heap register space /
+// descriptor type, so the class tag alone disambiguates which shader-side array to index.
 namespace GpuDescriptorClass{
     enum Enum : u8{
         SampledImage = 0,   // Texture_SRV           -> SAMPLED_IMAGE
@@ -48,8 +48,7 @@ namespace GpuDescriptorClass{
         kCount
     };
 
-    // AccelStruct is part of the stable handle ABI but is unsupported by the descriptor-indexing backend.
-    // write() reports it as unsupported rather than faking a handle.
+    // AccelStruct selects a distinct immutable descriptor-buffer block per live TLAS generation.
 };
 
 
@@ -84,12 +83,12 @@ inline constexpr bool operator!=(const GpuDescriptorHandle lhs, const GpuDescrip
 static_assert(sizeof(GpuDescriptorHandle) == 4, "GpuDescriptorHandle is supposed to be a single 32-bit word");
 
 
-// Capacities are hard ceilings: the heap is not auto-grown mid-frame. Effective caps are clamped to
-// the device's update-after-bind limits at initialize() time and logged (no silent truncation). Zero means "use
-// the backend default".
+// Capacities are hard ceilings: the heap is not auto-grown mid-frame. Effective caps are clamped to the device's
+// descriptor-layout limits at initialize() time and logged (no silent truncation). Zero means "use the renderer
+// default".
 struct GpuDescriptorHeapDesc{
     u32 resourceCapacity = 0;   // slots shared by all non-sampler classes (one global namespace, see design 3.4)
-    u32 samplerCapacity = 0;    // samplers live in their own namespace on both backends
+    u32 samplerCapacity = 0;    // samplers live in their own global namespace
 
     constexpr GpuDescriptorHeapDesc& setResourceCapacity(u32 value){ resourceCapacity = value; return *this; }
     constexpr GpuDescriptorHeapDesc& setSamplerCapacity(u32 value){ samplerCapacity = value; return *this; }

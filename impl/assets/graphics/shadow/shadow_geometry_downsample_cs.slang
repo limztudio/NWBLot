@@ -4,18 +4,8 @@
 
 #include "shadow_resolve_binding_slots.h"
 #include "sw_binding_slots.h" // NWB_SW_SHADOW_SOFT_FACTOR -- the half-res downscale, shared with the trace + resolve.
-#include "../deferred/bindless_resources.slangi"
+#include "shadow_heap_resources.slangi"
 #include "../common/math.slangi"
-
-// The pass needs only the camera world position. Fetch the shared scene-shading CB through the same target-generation
-// slot cbuffer as deferred lighting, AVBOIT, and surfel GI; scene/buffer.slangi emits typed heap aliases rather than a
-// local light-list binding, so its declaration cannot perturb this pass's compact local set.
-[[vk::binding(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_BINDLESS_RESOURCES, NWB_SHADOW_GEOMETRY_DOWNSAMPLE_SET)]]
-ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbShadowGeometryDownsampleBindlessResources;
-#define NWB_SCENE_BUFFERS_FROM_HEAP 1
-#define NWB_SCENE_SHADING_HEAP_SLOT g_NwbShadowGeometryDownsampleBindlessResources.avboitSlots.z
-#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbShadowGeometryDownsampleBindlessResources.avboitSlots.w
-#include "../scene/buffer.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,9 +21,6 @@ ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbShadowGeomet
 // metric, not an area Jacobian). Same 2x point sample the resolve's half->full map would use, so no quality change vs
 // per-tap full-res reads; it only removes redundant full-res bandwidth.
 
-[[vk::binding(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT, NWB_SHADOW_GEOMETRY_DOWNSAMPLE_SET)]]
-RWTexture2D<float4> g_NwbShadowGeometryOutput;
-
 struct NwbShadowGeometryDownsamplePushConstants{
     uint width;       // full-res G-buffer width
     uint height;      // full-res G-buffer height
@@ -43,11 +30,20 @@ struct NwbShadowGeometryDownsamplePushConstants{
     uint worldPositionSlot;
     uint normalSlot;
     uint depthSlot;
+    uint outputStorageSlot;
+    uint sceneShadingSlot;
     uint _pad0;
 };
 
 [[vk::push_constant]]
 ConstantBuffer<NwbShadowGeometryDownsamplePushConstants> g_NwbShadowGeometryDownsamplePushConstants;
+
+#define NWB_SCENE_SHADING_HEAP_SLOT g_NwbShadowGeometryDownsamplePushConstants.sceneShadingSlot
+// This pass never reads lights, but scene/buffer.slangi requires a valid heap expression for the shared helper ABI.
+#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT 0u
+#include "../scene/buffer.slangi"
+
+#define g_NwbShadowGeometryOutput NwbHeapStorageImage2DFloat4(g_NwbShadowGeometryDownsamplePushConstants.outputStorageSlot)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

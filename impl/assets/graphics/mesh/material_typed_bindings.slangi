@@ -16,30 +16,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The per-instance data + the typed material-constant buffer, shared by the mesh stage (runtime.slangi) and
-// the pixel stage (the material pixel shader, via gbuffer_io.slangi). Raster and migrated trace shaders resolve both
-// through the global heap; consumers that leave the switch below off retain dedicated local bindings.
+// The per-instance data + typed material-constant buffer are shared by the mesh stage (runtime.slangi) and pixel
+// stage (via gbuffer_io.slangi).  They are descriptor-heap-only renderer resources.
 struct NwbMeshInstanceData{
     float4 rotation;
     float3 translation;
     uint materialMutableByteOffset;
     float4 scale;
-    // Indexed by the original NWB_MESH_BINDING_* source slot. Binding 6 remains an intentional unused gap;
-    // keeping its word preserves the direct C++/shader map and avoids renumbering the surviving local bindings.
+    // Indexed by the original NWB_MESH_BINDING_* source slot.  Binding 6 no longer carries typed material words
+    // (those use the frame heap lane), so CSG stores its UniformBuffer context selector in that preserved word.
+    // Keeping the original position avoids renumbering any source-stream slots.
     uint geometryHeapSlots[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
 };
 
-#ifndef NWB_MESH_FRAME_RESOURCES_BINDLESS
-#define NWB_MESH_FRAME_RESOURCES_BINDLESS 0
-#endif
-
-#if NWB_MESH_FRAME_RESOURCES_BINDLESS
 #define g_NwbMaterialTypedWords NwbHeapMeshMaterialTypedWords(nwbMeshFrameMaterialTypedHeapSlot())
 #define g_NwbMeshInstances NwbHeapMeshInstances(nwbMeshFrameInstanceHeapSlot())
-#else
-[[vk::binding(NWB_MESH_BINDING_MATERIAL_TYPED, NWB_MESH_SET)]] StructuredBuffer<uint, Std430DataLayout> g_NwbMaterialTypedWords;
-[[vk::binding(NWB_MESH_BINDING_INSTANCE, NWB_MESH_SET)]] StructuredBuffer<NwbMeshInstanceData, Std430DataLayout> g_NwbMeshInstances;
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -9,41 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_AVBOIT_TRANSPARENT_SET 1
-#define NWB_AVBOIT_COMPUTE_SET 0
-
-#define NWB_AVBOIT_BINDING_OPAQUE_DEPTH 0
-#define NWB_AVBOIT_BINDING_POINT_SAMPLER 1
-
-#define NWB_AVBOIT_OCCUPANCY_BINDING_COVERAGE_WORDS 2
-
-#define NWB_AVBOIT_DEPTH_WARP_BINDING_COVERAGE_WORDS 0
-#define NWB_AVBOIT_DEPTH_WARP_BINDING_DEPTH_WARP 1
-#define NWB_AVBOIT_DEPTH_WARP_BINDING_CONTROL 2
-
-#define NWB_AVBOIT_EXTINCTION_BINDING_DEPTH_WARP 2
-#define NWB_AVBOIT_EXTINCTION_BINDING_CONTROL 3
-#define NWB_AVBOIT_EXTINCTION_BINDING_EXTINCTION 4
-#define NWB_AVBOIT_EXTINCTION_BINDING_OVERFLOW_DEPTH 5
-// Occupancy/extinction fetch the shared opaque-depth image and point sampler through the deferred target-generation
-// slot cbuffer on every graphics variant. Slots 0..5 remain reserved layout gaps; do not renumber them.
-#define NWB_AVBOIT_BINDING_BINDLESS_RESOURCES 6
-
-#define NWB_AVBOIT_INTEGRATE_BINDING_EXTINCTION 0
-#define NWB_AVBOIT_INTEGRATE_BINDING_TRANSMITTANCE 1
-#define NWB_AVBOIT_INTEGRATE_BINDING_CONTROL 2
-#define NWB_AVBOIT_INTEGRATE_BINDING_OVERFLOW_DEPTH 3
-
-#define NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP 0
-#define NWB_AVBOIT_ACCUMULATE_BINDING_TRANSMITTANCE 1
-#define NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL 2
-#define NWB_AVBOIT_ACCUMULATE_BINDING_LINEAR_SAMPLER 3
-// Slots 1 (transmittance volume) + 3 (linear sampler) already fetch from the persistent heap; the shared
-// scene-shading cbuffer (4) + light list (5) now do too (deferred avboitSlots.z/.w). All four remain reserved
-// layout gaps -- do not renumber them.
-#define NWB_AVBOIT_ACCUMULATE_BINDING_SCENE_SHADING 4
-#define NWB_AVBOIT_ACCUMULATE_BINDING_LIGHT_LIST 5
-
 #define NWB_AVBOIT_ACCUM_COLOR_LOCATION 0
 #define NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION 1
 #define NWB_AVBOIT_ACCUM_TARGET_COUNT 2

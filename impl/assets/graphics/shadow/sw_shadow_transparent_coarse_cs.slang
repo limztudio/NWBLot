@@ -14,17 +14,6 @@
 // TRANSPARENT occluder class: skip opaque occluders -> colored Beer-Lambert transmittance.
 #define NWB_SW_SHADOW_OCCLUDER NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
 
-struct NwbSwShadowTransparentCoarsePushConstants{
-    uint width;
-    uint height;
-    uint instanceCount;
-    uint coarseWidth;
-    uint coarseHeight;
-};
-
-[[vk::push_constant]]
-ConstantBuffer<NwbSwShadowTransparentCoarsePushConstants> g_NwbSwShadowPush;
-
 #include "sw_shadow_coarse.slangi"
 
 

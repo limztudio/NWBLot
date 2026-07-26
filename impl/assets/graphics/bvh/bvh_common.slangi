@@ -35,7 +35,12 @@ struct NwbBvhBuildPushConstants{
     uint pad0;
     uint positionHeapSlot;
     uint triangleIndexHeapSlot;
-    uint2 pad1;
+    uint keysHeapSlot;
+    uint payloadHeapSlot;
+    uint nodeHeapSlot;
+    uint parentHeapSlot;
+    uint visitCounterHeapSlot;
+    uint pad1;
     float4 aabbMin;
     float4 aabbMax;
 };

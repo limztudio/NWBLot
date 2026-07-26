@@ -25,17 +25,18 @@
 #include "../scene/binding_slots.h"
 #include "../mesh/runtime_constants.h"
 
+// Keep the material-context override in scope before common.slangi brings in the AVBOIT draw push block.  The
+// target-generation selector is a UniformBuffer heap slot in that block, rather than a local AVBOIT CBV.
+#define NWB_MESH_MATERIAL_CONTEXT_PROVIDED
+#include "common.slangi"
+#define g_NwbDeferredBindlessResources NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES
+
 // The scene-shading cbuffer + light list are global-heap entries now (like the deferred lighting pass + the
 // screen-space shadow/caustic/GI inputs below): fetch them from the heap through this pass's per-frame resource-slot
 // cbuffer's two spare avboit lanes instead of a local set binding. scene/buffer.slangi (pulled in via
-// scene/lighting.slangi, below) reads these two slot expressions when NWB_SCENE_BUFFERS_FROM_HEAP is set.
-// g_NwbDeferredBindlessResources MUST be declared before scene/lighting.slangi: the scene library's own light walk
-// (nwbSceneResolveLight / nwbSceneApplyLighting) expands the slot expressions inside that include, where the cbuffer
-// must already be visible.
-#include "../deferred/bindless_resources.slangi"
-[[vk::binding(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, NWB_AVBOIT_TRANSPARENT_SET)]]
-ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbDeferredBindlessResources;
-#define NWB_SCENE_BUFFERS_FROM_HEAP 1
+// scene/lighting.slangi, below) reads these two slot expressions directly.
+// g_NwbDeferredBindlessResources is the heap-selected target payload and must be visible before
+// scene/lighting.slangi: its light walk expands the slot expressions inside that include.
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbDeferredBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbDeferredBindlessResources.avboitSlots.w
 
@@ -54,14 +55,11 @@ ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbDeferredBind
 // / nwbMeshMaterialConstantByteOffset() + nwbMeshLoadInstance(); declaring NWB_MESH_MATERIAL_CONTEXT_PROVIDED tells
 // gbuffer_io.slangi to NOT define those accessors (this header serves them from g_NwbAvboitDraw, below), so the
 // SAME authored hook evaluates identically here and in the rasterizer.
-#define NWB_MESH_MATERIAL_CONTEXT_PROVIDED
-
 // common.slangi declares g_NwbAvboitDraw (the per-draw push constant) + the AVBOIT helpers; scene/lighting.slangi
 // brings the scene light list + the engine shading model the BXDFs build on. gbuffer_io.slangi brings the mesh
 // pixel-input plumbing + the shared typed/instance buffers (g_NwbMaterialTypedWords / g_NwbMeshInstances /
 // NwbMeshInstanceData) the surface hook reads; NWB_MESH_MATERIAL_CONTEXT_PROVIDED (above) tells it NOT to declare
 // its own per-draw push constant or the material-context accessors -- this header serves those from g_NwbAvboitDraw.
-#include "common.slangi"
 #include "../scene/lighting.slangi"
 #include "../mesh/gbuffer_io.slangi"
 
@@ -88,9 +86,7 @@ ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbDeferredBind
 
 // All accumulation variants sample their target-generation transmittance volume and linear sampler through the
 // persistent heap. This keeps CSG's descriptor-buffer graphics tail on the same resource/sampler contract.
-// (g_NwbDeferredBindlessResources itself is declared near the top, ahead of the scene/lighting.slangi include.)
-[[vk::binding(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, NWB_AVBOIT_TRANSPARENT_SET)]] StructuredBuffer<uint, Std430DataLayout> g_DepthWarp;
-[[vk::binding(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, NWB_AVBOIT_TRANSPARENT_SET)]] StructuredBuffer<uint, Std430DataLayout> g_Control;
+// The depth-warp/control work buffers are selected through nwbAvboitDepthWarp()/nwbAvboitControl() as well.
 
 Texture3D<float4> nwbAvboitTransmittanceTexture(){
     return NwbHeapSampledImage3D(g_NwbDeferredBindlessResources.avboitSlots.x);
@@ -186,6 +182,9 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#undef g_NwbDeferredBindlessResources
 
 
 #endif

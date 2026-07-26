@@ -87,7 +87,8 @@ static void SetCsgIntervalSampleStorageStates(Core::CommandList& commandList, co
 [[nodiscard]] static CsgIntervalDispatchPushConstants BuildCsgIntervalDispatchPushConstants(
     const DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
-    const u32 meshViewHeapSlot
+    const u32 meshViewHeapSlot,
+    const u32 csgContextHeapSlot
 ){
     const Core::Rect workRect = ResolveCsgFrameWorkRect(targets, csgFrameData);
 
@@ -101,6 +102,7 @@ static void SetCsgIntervalSampleStorageStates(Core::CommandList& commandList, co
     pushConstants.workExtentX = static_cast<u32>(Max(workRect.width(), 0));
     pushConstants.workExtentY = static_cast<u32>(Max(workRect.height(), 0));
     pushConstants.meshViewHeapSlot = meshViewHeapSlot;
+    pushConstants.csgContextHeapSlot = csgContextHeapSlot;
     return pushConstants;
 }
 
@@ -114,22 +116,20 @@ static void DispatchCsgIntervalCompute(
     DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
     Core::ComputePipeline* pipeline,
-    Core::BindingSet* bindingSet,
-    Core::BindingSet* extraBindingSet = nullptr,
+    const u32 csgContextHeapSlot,
     const u32 meshViewHeapSlot = 0u
 ){
     Core::ComputeState computeState;
     computeState.setPipeline(pipeline);
-    computeState.addBindingSet(bindingSet);
-    if(extraBindingSet)
-        computeState.addBindingSet(extraBindingSet);
+    // This CSG layout owns only the dispatch push range.  Images, view data, and CSG context are selected from the
+    // global descriptor heap, so no pipeline-local resource descriptor is installed.
     commandList.setComputeState(computeState);
     // The CSG pipeline carries the persistent heap layouts at sets 8/9; bind after setComputeState installs that
     // pipeline layout so its StorageImage table resolves the target-generation slots.
     heap.bindCompute(commandList, *pipeline);
 
     const CsgIntervalDispatchPushConstants pushConstants =
-        BuildCsgIntervalDispatchPushConstants(targets, csgFrameData, meshViewHeapSlot)
+        BuildCsgIntervalDispatchPushConstants(targets, csgFrameData, meshViewHeapSlot, csgContextHeapSlot)
     ;
     if(pushConstants.workExtentX == 0u || pushConstants.workExtentY == 0u)
         return;
@@ -180,10 +180,9 @@ bool RendererCsgSystem::uploadCsgIntervalSampleState(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererCsgSystem::destroyCsgIntervalPeelBindingSet(){
-    csgState().m_intervalPeelBindingSet.reset();
-    csgState().m_receiverSpanBuildBindingSet.reset();
-    csgState().m_intervalCombineBindingSet.reset();
+void RendererCsgSystem::invalidateCsgIntervalPeelPipelines(){
+    // Target descriptors are target-generation heap entries, not pipeline-local descriptor objects. Pipelines remain reusable
+    // across target replacement; CreateIntervalCapFillPipeline refreshes its framebuffer-dependent variant.
 }
 
 
@@ -198,17 +197,14 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
     if(!csgFrameData.hasWork())
         return;
     NWB_ASSERT(csgState().m_intervalPeelPipeline);
-    NWB_ASSERT(csgState().m_intervalPeelBindingSet);
-    NWB_ASSERT(csgState().m_clipBindingSet);
+    NWB_ASSERT(csgState().m_clipContextSlotsHeapHandle.valid());
     NWB_ASSERT(drawState().m_meshViewBuffer);
     NWB_ASSERT(m_renderer.meshSystem().meshFrameHeapHandlesReady());
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalPeel, graphics().getDevice(), commandList);
 
     __hidden_csg_interval_peel::SetCsgIntervalPeelStorageStates(commandList, targets);
-    commandList.setResourceStatesForBindingSet(csgState().m_intervalPeelBindingSet.get());
-    commandList.setResourceStatesForBindingSet(csgState().m_clipBindingSet.get());
-    // The view no longer resides in the local interval binding set; transition the heap-selected UniformBuffer
+    // The view is heap-selected; transition its UniformBuffer
     // explicitly before the standalone peel dispatch.
     commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
     setCsgClipBufferStates(commandList);
@@ -220,8 +216,7 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
         targets,
         csgFrameData,
         csgState().m_intervalPeelPipeline.get(),
-        csgState().m_intervalPeelBindingSet.get(),
-        csgState().m_clipBindingSet.get(),
+        csgState().m_clipContextSlotsHeapHandle.slot(),
         drawState().m_meshViewBufferHeapHandle.slot()
     );
 }
@@ -238,13 +233,12 @@ void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
     if(!csgFrameData.hasWork())
         return;
     NWB_ASSERT(csgState().m_receiverSpanBuildPipeline);
-    NWB_ASSERT(csgState().m_receiverSpanBuildBindingSet);
+    NWB_ASSERT(csgState().m_clipContextSlotsHeapHandle.valid());
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgReceiverSpanBuild, graphics().getDevice(), commandList);
 
     commandList.endRenderPass();
     __hidden_csg_interval_peel::SetCsgReceiverSpanStorageStates(commandList, targets);
-    commandList.setResourceStatesForBindingSet(csgState().m_receiverSpanBuildBindingSet.get());
     commandList.commitBarriers();
 
     __hidden_csg_interval_peel::DispatchCsgIntervalCompute(
@@ -253,7 +247,7 @@ void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
         targets,
         csgFrameData,
         csgState().m_receiverSpanBuildPipeline.get(),
-        csgState().m_receiverSpanBuildBindingSet.get()
+        csgState().m_clipContextSlotsHeapHandle.slot()
     );
 }
 
@@ -269,13 +263,12 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
     if(!csgFrameData.hasWork())
         return;
     NWB_ASSERT(csgState().m_intervalCombinePipeline);
-    NWB_ASSERT(csgState().m_intervalCombineBindingSet);
+    NWB_ASSERT(csgState().m_clipContextSlotsHeapHandle.valid());
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalCombine, graphics().getDevice(), commandList);
 
     commandList.endRenderPass();
     __hidden_csg_interval_peel::SetCsgIntervalCombineStorageStates(commandList, targets);
-    commandList.setResourceStatesForBindingSet(csgState().m_intervalCombineBindingSet.get());
     commandList.commitBarriers();
 
     __hidden_csg_interval_peel::DispatchCsgIntervalCompute(
@@ -284,7 +277,7 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
         targets,
         csgFrameData,
         csgState().m_intervalCombinePipeline.get(),
-        csgState().m_intervalCombineBindingSet.get()
+        csgState().m_clipContextSlotsHeapHandle.slot()
     );
 }
 
@@ -294,8 +287,7 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
 
 void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData){
     NWB_ASSERT(csgState().m_intervalCapFillPipeline);
-    NWB_ASSERT(csgState().m_intervalSampleBindingSet);
-    NWB_ASSERT(csgState().m_clipBindingSet);
+    NWB_ASSERT(csgState().m_clipContextSlotsHeapHandle.valid());
     NWB_ASSERT(drawState().m_materialTypedBuffer);
     NWB_ASSERT(drawState().m_instanceBuffer);
     NWB_ASSERT(drawState().m_meshViewBuffer);
@@ -304,10 +296,8 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgCapFill, graphics().getDevice(), commandList);
 
     __hidden_csg_interval_peel::SetCsgIntervalSampleStorageStates(commandList, targets);
-    commandList.setResourceStatesForBindingSet(csgState().m_intervalSampleBindingSet.get());
-    commandList.setResourceStatesForBindingSet(csgState().m_clipBindingSet.get());
     // The cap-fill surface evaluator now reaches typed words and mesh instances through heap slots, so its former
-    // local material binding set can no longer contribute these transitions automatically.
+    // pipeline-local material descriptor can no longer contribute these transitions automatically.
     commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(drawState().m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
@@ -324,10 +314,20 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     graphicsState.setPipeline(csgState().m_intervalCapFillPipeline.get());
     graphicsState.setFramebuffer(targets.framebuffer.get());
     graphicsState.setViewport(viewportState);
-    graphicsState.addBindingSet(csgState().m_intervalSampleBindingSet.get());
-    graphicsState.addBindingSet(csgState().m_clipBindingSet.get());
     commandList.setGraphicsState(graphicsState);
     graphics().getDevice()->getDescriptorHeap().bindGraphics(commandList, *csgState().m_intervalCapFillPipeline);
+
+    ECSRenderDetail::MeshFrameHeapSlots frameHeapSlots;
+    frameHeapSlots.generatedVertex = csgState().m_clipContextSlotsHeapHandle.slot();
+    ECSRenderDetail::SetShaderDrivenPushConstants(
+        commandList,
+        0u,
+        0u,
+        0u,
+        viewportState,
+        frameHeapSlots,
+        0u
+    );
 
     Core::DrawArguments drawArgs;
     drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);

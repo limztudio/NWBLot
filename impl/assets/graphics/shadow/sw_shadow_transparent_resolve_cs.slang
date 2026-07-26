@@ -16,34 +16,17 @@
 
 #include "sw_shadow_gbuffer.slangi"
 
-struct NwbSwShadowTransparentResolvePushConstants{
-    uint width;
-    uint height;
-    uint instanceCount;
-    uint coarseWidth;
-    uint coarseHeight;
-    // 2x2 coarse transmittance range above which a block is re-traced (else bilinearly interpolated).
-    float edgeThreshold;
-    // When non-zero, atomically tally traced-vs-total rays into the edge-stats buffer (measurement only).
-    uint collectStats;
-};
-
-[[vk::push_constant]]
-ConstantBuffer<NwbSwShadowTransparentResolvePushConstants> g_NwbSwShadowPush;
-
 // The coarse concern declares the COARSE input (read here) and pulls the tracing engine for the edge re-trace.
 #include "sw_shadow_coarse.slangi"
 
 // The full-res visibility array: read the opaque mask, fold the transmittance onto it, write back.
-[[vk::binding(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, NWB_SW_SHADOW_SET)]]
-RWTexture2DArray<float4> g_NwbSwShadowVisibility;
+#define g_NwbSwShadowVisibility NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
 
 #include "sw_shadow_coarse_samples.slangi"
 
 // Edge-fraction instrumentation counter ([0] full-res traced rays, [1] total candidate rays). Tallied only when
 // collectStats is set; read back to the log to decide the Stage-3 payoff.
-[[vk::binding(NWB_SW_SHADOW_BINDING_EDGE_STATS, NWB_SW_SHADOW_SET)]]
-RWStructuredBuffer<uint> g_NwbSwShadowEdgeStats;
+#define g_NwbSwShadowEdgeStats NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeStatsStorageSlot)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

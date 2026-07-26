@@ -10,7 +10,7 @@
 
 
 // Binding slots for the HARDWARE surfel-GI trace (surfel_trace_hw_cs / gi_hw_trace.slangi). Dual-consumed by the Slang
-// shader AND the C++ pipeline/binding-set builder so both agree. Slot 0 carries the target-generation
+// shader AND the C++ pipeline-layout builder so both agree. Slot 0 carries the target-generation
 // DeferredBindlessResourceSlots cbuffer; its avboitSlots.z/.w select the shared scene-shading + light-list heap entries,
 // leaving historical slot 1 as a gap. Slot 11 is the trace-owned material-context slot cbuffer, selecting the shared
 // InstanceID material and surface-evaluator buffers from the global heap. The surfel tail (constants 12 / pool 13 /

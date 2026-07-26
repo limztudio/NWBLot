@@ -82,7 +82,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         }
 
         for(uint corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner)
-            g_NwbMeshGeneratedVertices[primitiveBase + corner] = generatedVertices[corner];
+            nwbMeshGeneratedVertices()[primitiveBase + corner] = generatedVertices[corner];
     }
 }
 

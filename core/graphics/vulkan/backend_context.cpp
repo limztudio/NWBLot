@@ -111,8 +111,7 @@ struct OptionalDeviceFeatureSet{
     VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV rayTracingLinearSweptSpheres = MakeVkFeatureStruct<VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_LINEAR_SWEPT_SPHERES_FEATURES_NV);
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShader = MakeVkFeatureStruct<VkPhysicalDeviceMeshShaderFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT);
     VkPhysicalDeviceFragmentShadingRateFeaturesKHR fragmentShadingRate = MakeVkFeatureStruct<VkPhysicalDeviceFragmentShadingRateFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR);
-    VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT mutableDescriptorType = MakeVkFeatureStruct<VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT);
-    // Backend C: VK_EXT_descriptor_buffer (descriptor-as-memory). It is advertised by the BC-250/RADV target and
+    // VK_EXT_descriptor_buffer (descriptor-as-memory). It is advertised by the BC-250/RADV target and
     // natively encodes acceleration structures via VkDescriptorGetInfoEXT; descriptor-buffer-compatible pipelines
     // consume it through the production binding path.
     VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptorBuffer = MakeVkFeatureStruct<VkPhysicalDeviceDescriptorBufferFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT);
@@ -145,10 +144,8 @@ static OptionalDeviceFeatureSet MakeRequestedOptionalDeviceFeatures(){
     features.fragmentShadingRate.primitiveFragmentShadingRate = VK_TRUE;
     features.fragmentShadingRate.attachmentFragmentShadingRate = VK_TRUE;
 
-    features.mutableDescriptorType.mutableDescriptorType = VK_TRUE;
-
-    // Backend C is requested but optional: the support clamp below disables it on a target lacking the extension or
-    // its core descriptorBuffer capability, exactly like every other optional accelerator.
+    // Descriptor buffers are a required renderer capability. The device feature support check below rejects a
+    // selected GPU that exposes the extension but not its descriptorBuffer feature.
     features.descriptorBuffer.descriptorBuffer = VK_TRUE;
 
     features.deviceFault.deviceFault = VK_TRUE;
@@ -169,7 +166,6 @@ static void* GetOptionalDeviceFeatureStruct(OptionalDeviceFeatureSet& features, 
     case DeviceExtensionFeature::RayTracingLinearSweptSpheres: return &features.rayTracingLinearSweptSpheres;
     case DeviceExtensionFeature::MeshShader: return &features.meshShader;
     case DeviceExtensionFeature::FragmentShadingRate: return &features.fragmentShadingRate;
-    case DeviceExtensionFeature::MutableDescriptorType: return &features.mutableDescriptorType;
     case DeviceExtensionFeature::DescriptorBuffer: return &features.descriptorBuffer;
     case DeviceExtensionFeature::DeviceFault: return &features.deviceFault;
     case DeviceExtensionFeature::None:
@@ -302,8 +298,6 @@ static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
             && SupportsRequestedValue(requested.fragmentShadingRate.primitiveFragmentShadingRate, supported.fragmentShadingRate.primitiveFragmentShadingRate)
             && SupportsRequestedValue(requested.fragmentShadingRate.attachmentFragmentShadingRate, supported.fragmentShadingRate.attachmentFragmentShadingRate)
         ;
-    case DeviceExtensionFeature::MutableDescriptorType:
-        return SupportsRequestedValue(requested.mutableDescriptorType.mutableDescriptorType, supported.mutableDescriptorType.mutableDescriptorType);
     case DeviceExtensionFeature::DescriptorBuffer:
         return SupportsRequestedValue(requested.descriptorBuffer.descriptorBuffer, supported.descriptorBuffer.descriptorBuffer);
     case DeviceExtensionFeature::DeviceFault:
@@ -1208,6 +1202,11 @@ bool BackendContext::createVulkanDevice(){
     }
 
     for(const auto& name : unsupportedFeatureExtensions){
+        const auto extensionIt = m_enabledExtensions.device.find(name);
+        if(extensionIt != m_enabledExtensions.device.end() && extensionIt.value() == DeviceExtensionFeature::DescriptorBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device extension '{}' lacks the descriptorBuffer feature."), StringConvert(name));
+            return false;
+        }
         NWB_LOGGER_INFO(NWB_TEXT("Vulkan: Disabling device extension '{}' because the selected GPU does not support its required feature set."), StringConvert(name));
         m_enabledExtensions.device.erase(name);
     }
@@ -1280,8 +1279,6 @@ bool BackendContext::createVulkanDevice(){
         || !requireFeature(supportedVulkan11Features.shaderDrawParameters, "shaderDrawParameters")
         || !requireFeature(supportedVulkan12Features.descriptorIndexing, "descriptorIndexing")
         || !requireFeature(supportedVulkan12Features.runtimeDescriptorArray, "runtimeDescriptorArray")
-        || !requireFeature(supportedVulkan12Features.descriptorBindingPartiallyBound, "descriptorBindingPartiallyBound")
-        || !requireFeature(supportedVulkan12Features.descriptorBindingVariableDescriptorCount, "descriptorBindingVariableDescriptorCount")
         || !requireFeature(supportedVulkan12Features.timelineSemaphore, "timelineSemaphore")
         || !requireFeature(supportedVulkan12Features.shaderFloat16, "shaderFloat16")
         || !requireFeature(supportedVulkan12Features.shaderSampledImageArrayNonUniformIndexing, "shaderSampledImageArrayNonUniformIndexing")
@@ -1289,16 +1286,6 @@ bool BackendContext::createVulkanDevice(){
         // NonUniformResourceIndex; require non-uniform storage-buffer indexing so a target lacking it
         // fails device creation with a clear capability log instead of silently miscompiling the heap fetch path.
         || !requireFeature(supportedVulkan12Features.shaderStorageBufferArrayNonUniformIndexing, "shaderStorageBufferArrayNonUniformIndexing")
-        // The heap's resource layout (createBindlessLayout) marks all five of its non-sampler descriptor classes
-        // UPDATE_AFTER_BIND, and the sampler table too. Creating that layout is a VUID violation unless the matching
-        // sibling UAB feature is enabled for each descriptor type, so require all five here - the sampler table's UAB
-        // is covered by the sampled-image feature per the Vulkan spec. These worked de-facto on RADV but were never
-        // formally required.
-        || !requireFeature(supportedVulkan12Features.descriptorBindingSampledImageUpdateAfterBind, "descriptorBindingSampledImageUpdateAfterBind")
-        || !requireFeature(supportedVulkan12Features.descriptorBindingStorageImageUpdateAfterBind, "descriptorBindingStorageImageUpdateAfterBind")
-        || !requireFeature(supportedVulkan12Features.descriptorBindingUniformTexelBufferUpdateAfterBind, "descriptorBindingUniformTexelBufferUpdateAfterBind")
-        || !requireFeature(supportedVulkan12Features.descriptorBindingStorageBufferUpdateAfterBind, "descriptorBindingStorageBufferUpdateAfterBind")
-        || !requireFeature(supportedVulkan12Features.descriptorBindingUniformBufferUpdateAfterBind, "descriptorBindingUniformBufferUpdateAfterBind")
         || !requireFeature(supportedVulkan12Features.shaderSubgroupExtendedTypes, "shaderSubgroupExtendedTypes")
         || !requireFeature(supportedVulkan12Features.scalarBlockLayout, "scalarBlockLayout")
         || !requireFeature(dynamicRenderingEnabled ? dynamicRenderingFeatures.dynamicRendering : VK_FALSE, "dynamicRendering")
@@ -1414,18 +1401,10 @@ bool BackendContext::createVulkanDevice(){
     VkPhysicalDeviceVulkan12Features vulkan12features = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceVulkan12Features>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
     vulkan12features.descriptorIndexing = supportedVulkan12Features.descriptorIndexing;
     vulkan12features.runtimeDescriptorArray = supportedVulkan12Features.runtimeDescriptorArray;
-    vulkan12features.descriptorBindingPartiallyBound = supportedVulkan12Features.descriptorBindingPartiallyBound;
-    vulkan12features.descriptorBindingVariableDescriptorCount = supportedVulkan12Features.descriptorBindingVariableDescriptorCount;
     vulkan12features.timelineSemaphore = supportedVulkan12Features.timelineSemaphore;
     vulkan12features.shaderFloat16 = supportedVulkan12Features.shaderFloat16;
     vulkan12features.shaderSampledImageArrayNonUniformIndexing = supportedVulkan12Features.shaderSampledImageArrayNonUniformIndexing;
     vulkan12features.shaderStorageBufferArrayNonUniformIndexing = supportedVulkan12Features.shaderStorageBufferArrayNonUniformIndexing;
-    // All five non-sampler heap descriptor classes are UPDATE_AFTER_BIND (see the requireFeature block above).
-    vulkan12features.descriptorBindingSampledImageUpdateAfterBind = supportedVulkan12Features.descriptorBindingSampledImageUpdateAfterBind;
-    vulkan12features.descriptorBindingStorageImageUpdateAfterBind = supportedVulkan12Features.descriptorBindingStorageImageUpdateAfterBind;
-    vulkan12features.descriptorBindingUniformTexelBufferUpdateAfterBind = supportedVulkan12Features.descriptorBindingUniformTexelBufferUpdateAfterBind;
-    vulkan12features.descriptorBindingStorageBufferUpdateAfterBind = supportedVulkan12Features.descriptorBindingStorageBufferUpdateAfterBind;
-    vulkan12features.descriptorBindingUniformBufferUpdateAfterBind = supportedVulkan12Features.descriptorBindingUniformBufferUpdateAfterBind;
     vulkan12features.bufferDeviceAddress = bufferDeviceAddressFeatures.bufferDeviceAddress;
     vulkan12features.shaderSubgroupExtendedTypes = supportedVulkan12Features.shaderSubgroupExtendedTypes;
     vulkan12features.scalarBlockLayout = supportedVulkan12Features.scalarBlockLayout;
@@ -1499,10 +1478,10 @@ bool BackendContext::createVulkanDevice(){
         ss << "\n    key features: dynamicRendering=" << VulkanDetail::BoolToString(m_dynamicRenderingSupported)
            << " synchronization2=" << VulkanDetail::BoolToString(m_synchronization2Supported)
            << " bufferDeviceAddress=" << VulkanDetail::BoolToString(m_bufferDeviceAddressSupported)
+           << " descriptorBuffer=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME))
            << " meshTaskShader=" << VulkanDetail::BoolToString(m_meshTaskShaderSupported)
            << " maintenance4=" << VulkanDetail::BoolToString(maintenance4Enabled && maintenance4Features.maintenance4 == VK_TRUE)
            << "\n    optional paths: debugMarker=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_DEBUG_MARKER_EXTENSION_NAME))
-           << " descriptorBuffer=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME))
            << " meshShader=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME))
            << " rayTracingPipeline=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME))
            << " rayQuery=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_KHR_RAY_QUERY_EXTENSION_NAME))
@@ -1946,6 +1925,11 @@ bool BackendContext::createDevice(){
     m_rhiDevice = CreateDevice(deviceDesc);
     if(!m_rhiDevice){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create RHI device wrapper."));
+        return false;
+    }
+    if(!m_rhiDevice->getDescriptorHeap().isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required descriptor-buffer heap initialization failed."));
+        m_rhiDevice = nullptr;
         return false;
     }
 

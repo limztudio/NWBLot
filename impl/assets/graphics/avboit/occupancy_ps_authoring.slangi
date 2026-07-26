@@ -31,8 +31,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_AVBOIT_OCCUPANCY_BINDING_COVERAGE_WORDS, NWB_AVBOIT_TRANSPARENT_SET)]] RWStructuredBuffer<uint, Std430DataLayout> g_CoverageWords;
-
 #include "material_alpha_authoring.slangi"
 #include "coverage_splat.slangi"
 
@@ -58,6 +56,9 @@ void main(NwbAvboitMaterialAlphaPixelInput input){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#undef g_NwbDeferredBindlessResources
 
 
 #endif

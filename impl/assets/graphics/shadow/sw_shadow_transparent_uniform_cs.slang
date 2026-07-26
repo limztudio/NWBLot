@@ -17,20 +17,10 @@
 
 #include "sw_shadow_gbuffer.slangi"
 
-struct NwbSwShadowTransparentUniformPushConstants{
-    uint width;
-    uint height;
-    uint instanceCount;
-};
-
-[[vk::push_constant]]
-ConstantBuffer<NwbSwShadowTransparentUniformPushConstants> g_NwbSwShadowPush;
-
 #include "sw_shadow_ray.slangi"
 
 // The full-res visibility array: read the opaque mask, fold the block's transmittance onto each full-res pixel, write back.
-[[vk::binding(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, NWB_SW_SHADOW_SET)]]
-RWTexture2DArray<float4> g_NwbSwShadowVisibility;
+#define g_NwbSwShadowVisibility NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

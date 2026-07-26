@@ -13,53 +13,15 @@
 
 #include "sw_binding_slots.h"
 
-// The scene light list this classify loop iterates is a target-generation heap entry. sw_shadow_gbuffer.slangi declares
-// the local slot cbuffer before scene/buffer.slangi is pulled, so redirect both shared scene buffers through it.
-#define NWB_SCENE_BUFFERS_FROM_HEAP 1
-#define NWB_SCENE_SHADING_HEAP_SLOT g_NwbSwShadowBindlessResources.avboitSlots.z
-#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbSwShadowBindlessResources.avboitSlots.w
-
 #include "sw_shadow_gbuffer.slangi"
 #include "sw_shadow_edge_record.slangi"
-#include "../scene/buffer.slangi"
 
-struct NwbSwShadowTransparentClassifyPushConstants{
-    uint width;
-    uint height;
-    uint coarseWidth;
-    uint coarseHeight;
-    // 2x2 coarse transmittance range above which a block is an EDGE (appended) rather than FLAT (interpolated in place).
-    float edgeThreshold;
-    // When non-zero, atomically tally traced-vs-total (edge-vs-total) rays into the edge-stats buffer (measurement only).
-    uint collectStats;
-    // Element capacity of the edge-list buffer in RECORDS; the appended index is guarded against this (overflow degrades
-    // to the interpolated fallback).
-    uint edgeCapacity;
-};
-
-[[vk::push_constant]]
-ConstantBuffer<NwbSwShadowTransparentClassifyPushConstants> g_NwbSwShadowPush;
-
-// The coarse (downscaled) transmittance neighbourhood read for the edge test / flat interpolation.
-[[vk::binding(NWB_SW_SHADOW_BINDING_COARSE, NWB_SW_SHADOW_SET)]]
-RWTexture2DArray<float4> g_NwbSwShadowCoarse;
-
-// The full-res visibility array: flat interior folds transmittance in place; edge texels are left pristine for the
-// indirect trace pass (overflow folds the interpolated fallback in place).
-[[vk::binding(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, NWB_SW_SHADOW_SET)]]
-RWTexture2DArray<float4> g_NwbSwShadowVisibility;
-
-// Edge-fraction instrumentation counter ([0] traced/edge rays, [1] total candidate rays).
-[[vk::binding(NWB_SW_SHADOW_BINDING_EDGE_STATS, NWB_SW_SHADOW_SET)]]
-RWStructuredBuffer<uint> g_NwbSwShadowEdgeStats;
-
-// Stage-3 compaction: the edge-pixel append counter ([0] atomic append count) + the compacted edge-record list
-// (NWB_SW_SHADOW_EDGE_RECORD_WORDS u32 per record) this pass appends into.
-[[vk::binding(NWB_SW_SHADOW_BINDING_EDGE_COUNTER, NWB_SW_SHADOW_SET)]]
-RWStructuredBuffer<uint> g_NwbSwShadowEdgeCounter;
-
-[[vk::binding(NWB_SW_SHADOW_BINDING_EDGE_LIST, NWB_SW_SHADOW_SET)]]
-RWStructuredBuffer<uint> g_NwbSwShadowEdgeList;
+// The classify pass reads/writes all worksets through their storage heap slots.
+#define g_NwbSwShadowCoarse NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.coarseStorageSlot)
+#define g_NwbSwShadowVisibility NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
+#define g_NwbSwShadowEdgeStats NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeStatsStorageSlot)
+#define g_NwbSwShadowEdgeCounter NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeCounterStorageSlot)
+#define g_NwbSwShadowEdgeList NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeListStorageSlot)
 
 #include "sw_shadow_coarse_samples.slangi"
 

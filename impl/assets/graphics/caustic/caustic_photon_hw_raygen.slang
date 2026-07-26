@@ -33,11 +33,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     p.hit = 0u;
     p.isRefractive = 0u;
 
-#if defined(NWB_BINDLESS_TLAS) && NWB_BINDLESS_TLAS
     TraceRay(NwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, 0xFFu, 0u, 0u, 0u, ray, p);
-#else
-    TraceRay(g_NwbCausticHwTlas, RAY_FLAG_FORCE_OPAQUE, 0xFFu, 0u, 0u, 0u, ray, p);
-#endif
 
     NwbCausticHit hit;
     hit.hit = (p.hit != 0u);

@@ -18,9 +18,7 @@ bool RendererCsgSystem::createCsgPeelTargets(DeferredFrameTargets& targets){
     if(targets.csgIntervalTargetsValid())
         return true;
 
-    destroyCsgIntervalPeelBindingSet();
-    csgState().m_receiverSurfaceBindingSet.reset();
-    csgState().m_intervalSampleBindingSet.reset();
+    invalidateCsgIntervalPeelPipelines();
 
     targets.csgCapBackNormal.reset();
     targets.csgIntervalDepth.reset();

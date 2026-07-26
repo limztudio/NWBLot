@@ -6,8 +6,8 @@
 //
 // Small compute consumers such as surfel resolve/upsample need only floating-point Texture2D Load operations. Keeping
 // their shader interface to this one table avoids emitting the otherwise-unused buffer, array, 3D, and storage-image
-// declarations from bindless_heap.slangi. The host still installs the unchanged set-8/9 heap layouts, so Backend A
-// descriptor indexing and Backend C descriptor buffers use the exact same physical descriptor block.
+// declarations from bindless_heap.slangi. The host still installs the unchanged set-8/9 descriptor-buffer heap
+// layouts, so this narrow interface addresses the same persistent descriptor block.
 
 
 #ifndef NWB_GRAPHICS_BINDLESS_HEAP_SAMPLED_IMAGE_2D_SLANGI

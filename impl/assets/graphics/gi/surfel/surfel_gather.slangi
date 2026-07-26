@@ -15,20 +15,14 @@
 // The pool + cell-head + params are bound via the NWB_SCENE_GI_SURFEL_* slot macros.
 
 
-#include "surfel_record.slangi"
-#include "surfel_constants.slangi"
+#include "surfel_heap_resources.slangi"
 #include "surfel_hash.slangi"
 #include "surfel_sh.slangi"
 
-
-[[vk::binding(NWB_SCENE_GI_SURFEL_POOL_BINDING, NWB_SCENE_GI_SURFEL_POOL_SET)]]
-StructuredBuffer<NwbSurfel> g_NwbSceneSurfelPool;
-
-[[vk::binding(NWB_SCENE_GI_SURFEL_HASH_BINDING, NWB_SCENE_GI_SURFEL_HASH_SET)]]
-StructuredBuffer<uint> g_NwbSceneSurfelCellHead;
-
-[[vk::binding(NWB_SCENE_GI_SURFEL_PARAMS_BINDING, NWB_SCENE_GI_SURFEL_PARAMS_SET)]]
-ConstantBuffer<NwbSurfelConstants> g_NwbSceneSurfelParams;
+// Resolve reads the immutable views of the live field through its dispatch-uniform heap slots.
+#define g_NwbSceneSurfelPool g_NwbHeapSurfelReadOnlyPools[g_NwbSurfelHeapPushConstants.poolHeapSlot]
+#define g_NwbSceneSurfelCellHead g_NwbHeapSurfelReadOnlyUintBuffers[g_NwbSurfelHeapPushConstants.cellHeadHeapSlot]
+#define g_NwbSceneSurfelParams g_NwbHeapSurfelConstantBuffers[g_NwbSurfelHeapPushConstants.constantsHeapSlot]
 
 
 // Gathers the surfel irradiance at a shaded point. Returns false if no surfel covers it (caller -> hemiAmbient).

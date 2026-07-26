@@ -18,17 +18,17 @@
 // It is a GPU mirror of BuildMeshletTriangleAttributes with one substitution: the normal source is the skinned
 // (deformed) stream instead of the bind-pose stream. uv0 is pose-invariant, so only the 8-byte normal half is written
 // (bytes 8..15 of each record are left verbatim).
-// All persistent source and output buffers are selected from the global StorageBuffer heap; b6 is the only local
-// descriptor and keeps the retired b0..5 ABI range as gaps.
-[[vk::binding(NWB_SKINNED_MESH_REPACK_BINDING_BINDLESS_RESOURCES, NWB_SKINNED_MESH_REPACK_SET)]]
-ConstantBuffer<NwbSkinnedMeshBindlessResources, Std140DataLayout> g_NwbSkinnedMeshRepackBindlessResources;
-
 struct NwbSkinnedMeshRepackPushConstants{
     uint4 payload0;
 };
 
 [[vk::push_constant]]
 ConstantBuffer<NwbSkinnedMeshRepackPushConstants> g_NwbSkinnedMeshRepackPushConstants;
+
+// The persistent stream-slot payload is selected from the global UniformBuffer heap by payload0.y.
+#define g_NwbSkinnedMeshRepackBindlessResources nwbSkinnedMeshHeapBindlessResources(\
+    g_NwbSkinnedMeshRepackPushConstants.payload0[NWB_SKINNED_MESH_REPACK_PUSH_BINDLESS_RESOURCES_SLOT]\
+)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,6 +78,8 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         nwbSkinnedMeshHeapWritableRawBuffer(g_NwbSkinnedMeshRepackBindlessResources.streamSlots3.w).Store2(primitiveByte * 16u, uint2(skinnedNormal.xy, skinnedNormal.zw));
     }
 }
+
+#undef g_NwbSkinnedMeshRepackBindlessResources
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -13,7 +13,7 @@
 
 
 #include "binding_slots.h"
-#include "shadow_rayquery.slangi"
+#include "shadow_heap_resources.slangi"
 // Pure #defines (no binding/resource declarations) shared with the SW trace: the half-res SHIFT/FACTOR and the per-frame
 // SPP, so the HW soft trace's half-res grid + sample count match the SW trace's exactly (no magic numbers).
 #include "sw_binding_slots.h"
@@ -33,10 +33,16 @@ struct NwbShadowRqSoftPushConstants{
     uint worldPositionSlot;
     uint normalSlot;
     uint depthSlot;
+    uint deferredResourcesHeapSlot;
+    uint visibilityStorageSlot;
 };
 
 [[vk::push_constant]]
 ConstantBuffer<NwbShadowRqSoftPushConstants> g_NwbShadowRqSoftPushConstants;
+
+#define NWB_SHADOW_RQ_DEFERRED_RESOURCES_HEAP_SLOT g_NwbShadowRqSoftPushConstants.deferredResourcesHeapSlot
+#define NWB_SHADOW_RQ_VISIBILITY_STORAGE_SLOT g_NwbShadowRqSoftPushConstants.visibilityStorageSlot
+#include "shadow_rayquery.slangi"
 
 
 [numthreads(NWB_SHADOW_RT_GROUP_SIZE, NWB_SHADOW_RT_GROUP_SIZE, 1)]

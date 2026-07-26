@@ -18,9 +18,6 @@
 // that every resolve pass then taps as one half-res read. Same geometry the per-tap full-res reads would have used (a 2x
 // point sample), so there is no quality change; it only removes redundant full-res bandwidth.
 
-[[vk::binding(NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT, NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_SET)]]
-RWTexture2D<float4> g_NwbCausticGeometryOutput;
-
 struct NwbCausticGeometryDownsamplePushConstants{
     uint width;       // full-res G-buffer width
     uint height;      // full-res G-buffer height
@@ -28,7 +25,7 @@ struct NwbCausticGeometryDownsamplePushConstants{
     uint halfHeight;  // half-res output height
     uint worldPositionSlot;
     uint depthSlot;
-    uint pad0;
+    uint outputStorageSlot;
     uint pad1;
 };
 
@@ -54,7 +51,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 world = NwbHeapSampledImage2D(g_NwbCausticGeometryDownsamplePushConstants.worldPositionSlot).Load(int3(full, 0)).xyz;
     const float depth = NwbHeapSampledImage2D(g_NwbCausticGeometryDownsamplePushConstants.depthSlot).Load(int3(full, 0)).r;
     const float validity = (depth >= 0.999999) ? 0.0 : 1.0; // background (no receiver) -> 0
-    g_NwbCausticGeometryOutput[halfTexel] = float4(world, validity);
+    NwbHeapStorageImage2DFloat4(g_NwbCausticGeometryDownsamplePushConstants.outputStorageSlot)[halfTexel] = float4(world, validity);
 }
 
 

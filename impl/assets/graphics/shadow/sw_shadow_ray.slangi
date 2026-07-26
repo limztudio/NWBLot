@@ -11,16 +11,7 @@
 
 #include "sw_binding_slots.h"
 
-// The shared scene-shading CB + light list are target-generation heap entries. sw_shadow_gbuffer.slangi declared the
-// same local slot cbuffer before this concern is included; use its avboitSlots.z/.w so scene/buffer.slangi emits typed
-// heap aliases instead of the historical local bindings 3/4. Every tracing pass reaches this redirect through this
-// shared ray concern.
-#define NWB_SCENE_BUFFERS_FROM_HEAP 1
-#define NWB_SCENE_SHADING_HEAP_SLOT g_NwbSwShadowBindlessResources.avboitSlots.z
-#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbSwShadowBindlessResources.avboitSlots.w
-
 #include "sw_shadow_traverse.slangi"
-#include "../scene/buffer.slangi"
 // The per-pixel/per-frame low-discrepancy 2D sample + the cone jitter the soft opaque trace applies to the occlusion
 // ray so a physical source (a sun disk for directional, a source sphere for point/spot) casts a penumbra
 // (nwbShadowJitterCone; the soft pass also uses nwbShadowLowDiscrepancy2D directly).

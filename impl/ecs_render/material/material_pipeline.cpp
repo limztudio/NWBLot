@@ -55,7 +55,6 @@ namespace __hidden_material_pipeline{
 
 [[nodiscard]] bool BuildCsgShaderVariantName(
     const AStringView baseVariant,
-    const bool avboitClipSet,
     const AStringView projectEvaluatorModuleAssignment,
     Core::GraphicsString& outVariant
 ){
@@ -64,12 +63,6 @@ namespace __hidden_material_pipeline{
     ];
     usize defineAssignmentCount = 0u;
 
-    if(avboitClipSet){
-        defineAssignments[defineAssignmentCount++] = {
-            ECSRenderMaterialShaderVariants::s_CsgClipSetDefineName,
-            ECSRenderMaterialShaderVariants::s_CsgAvboitClipSetDefineAssignment
-        };
-    }
     defineAssignments[defineAssignmentCount++] = {
         ECSRenderMaterialShaderVariants::s_CsgEnabledDefineName,
         ECSRenderMaterialShaderVariants::s_CsgEnabledDefineAssignment
@@ -78,12 +71,6 @@ namespace __hidden_material_pipeline{
         ECSRenderMaterialShaderVariants::s_CsgIntervalSampleEnabledDefineName,
         ECSRenderMaterialShaderVariants::s_CsgIntervalSampleEnabledDefineAssignment
     };
-    if(avboitClipSet){
-        defineAssignments[defineAssignmentCount++] = {
-            ECSRenderMaterialShaderVariants::s_CsgIntervalSampleSetDefineName,
-            ECSRenderMaterialShaderVariants::s_CsgAvboitIntervalSampleSetDefineAssignment
-        };
-    }
     if(!projectEvaluatorModuleAssignment.empty()){
         defineAssignments[defineAssignmentCount++] = {
             ECSRenderMaterialShaderVariants::s_CsgProjectEvaluatorModuleDefineName,
@@ -98,12 +85,6 @@ namespace __hidden_material_pipeline{
         outVariant
     );
 }
-
-struct MaterialPipelineCsgBindingLayouts{
-    const Core::BindingLayoutHandle& clip;
-    const Core::BindingLayoutHandle& receiverSurface;
-    const Core::BindingLayoutHandle& intervalSample;
-};
 
 struct MaterialPipelineAvboitPixelShaderSelection{
     const Core::Assets::AssetRef<Shader>* materialShader = nullptr;
@@ -136,81 +117,6 @@ struct MaterialPipelineAvboitPixelShaderSelection{
     }
     return selection;
 }
-
-struct MaterialPipelineAvboitBindingLayouts{
-    const Core::BindingLayoutHandle& occupancy;
-    const Core::BindingLayoutHandle& extinction;
-    const Core::BindingLayoutHandle& accumulate;
-};
-
-template<typename PipelineDesc>
-[[nodiscard]] bool AddAvboitBindingLayout(
-    PipelineDesc& pipelineDesc,
-    const MaterialPipelinePass::Enum pass,
-    const bool,
-    const MaterialPipelineAvboitBindingLayouts& bindingLayouts
-){
-    const Core::BindingLayoutHandle* bindingLayout = nullptr;
-    switch(pass){
-    case MaterialPipelinePass::AvboitOccupancy:
-        bindingLayout = &bindingLayouts.occupancy;
-        break;
-    case MaterialPipelinePass::AvboitExtinction:
-        bindingLayout = &bindingLayouts.extinction;
-        break;
-    case MaterialPipelinePass::AvboitAccumulate:
-        bindingLayout = &bindingLayouts.accumulate;
-        break;
-    default:
-        return true;
-    }
-
-    if(!*bindingLayout)
-        return false;
-
-    pipelineDesc.addBindingLayout(*bindingLayout);
-    return true;
-}
-
-template<typename PipelineDesc>
-[[nodiscard]] bool AddCsgGraphicsBindingLayouts(
-    PipelineDesc& pipelineDesc,
-    const MaterialPipelineCsgBindingUse& csgBindingUse,
-    const MaterialPipelineCsgBindingLayouts& bindingLayouts
-){
-    if(!csgBindingUse.clip)
-        return true;
-    if(!bindingLayouts.clip)
-        return false;
-    if(csgBindingUse.receiverSurface && !bindingLayouts.receiverSurface)
-        return false;
-    if(csgBindingUse.intervalSample && !bindingLayouts.intervalSample)
-        return false;
-
-    pipelineDesc.addBindingLayout(bindingLayouts.clip);
-    if(csgBindingUse.receiverSurface)
-        pipelineDesc.addBindingLayout(bindingLayouts.receiverSurface);
-    if(csgBindingUse.intervalSample)
-        pipelineDesc.addBindingLayout(bindingLayouts.intervalSample);
-    return true;
-}
-
-[[nodiscard]] bool AddCsgComputeBindingLayouts(
-    Core::ComputePipelineDesc& pipelineDesc,
-    const MaterialPipelineCsgBindingUse& csgBindingUse,
-    const MaterialPipelineCsgBindingLayouts& bindingLayouts
-){
-    if(!csgBindingUse.clip)
-        return true;
-    if(!bindingLayouts.clip)
-        return false;
-    pipelineDesc.addBindingLayout(bindingLayouts.clip);
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 };
 
@@ -313,7 +219,6 @@ bool RendererMaterialSystem::createRendererPipeline(
         && !avboitCsgClipPipeline
         && !__hidden_material_pipeline::BuildCsgShaderVariantName(
             shaderVariant,
-            false,
             materialProjectEvaluatorModuleAssignmentToAdd,
             csgShaderVariant
         )
@@ -325,7 +230,6 @@ bool RendererMaterialSystem::createRendererPipeline(
         avboitCsgClipPipeline
         && !__hidden_material_pipeline::BuildCsgShaderVariantName(
             shaderVariant,
-            true,
             materialProjectEvaluatorModuleAssignmentToAdd,
             csgShaderVariant
         )
@@ -337,7 +241,6 @@ bool RendererMaterialSystem::createRendererPipeline(
         avboitCsgClipPipeline
         && !__hidden_material_pipeline::BuildCsgShaderVariantName(
             Core::ShaderArchive::s_DefaultVariant,
-            true,
             avboitProjectEvaluatorModuleAssignmentToAdd,
             avboitCsgShaderVariant
         )
@@ -361,15 +264,6 @@ bool RendererMaterialSystem::createRendererPipeline(
     const char* passPixelShaderDebugName = nullptr;
     __hidden_material_pipeline::MaterialPipelineAvboitPixelShaderSelection avboitPixelShaderSelection;
     if(MaterialPipelinePassUsesRendererAvboit(pass)){
-        if(
-            !avboitState().m_emptyBindingLayout
-            || !avboitState().m_occupancyBindingLayout
-            || !avboitState().m_extinctionBindingLayout
-            || !avboitState().m_accumulateBindingLayout
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT resources were not validated before material pipeline creation"));
-            return failMaterialPipeline();
-        }
         avboitPixelShaderSelection = __hidden_material_pipeline::SelectAvboitPixelShader(
             pass,
             materialInfo
@@ -398,16 +292,6 @@ bool RendererMaterialSystem::createRendererPipeline(
 
     auto* device = graphics().getDevice();
     const Core::RenderState renderState = ECSRenderDetail::BuildRenderStateForPass(pass, pipelineKey.twoSided);
-    const __hidden_material_pipeline::MaterialPipelineCsgBindingLayouts csgBindingLayouts{
-        csgState().m_clipBindingLayout,
-        csgState().m_receiverSurfaceBindingLayout,
-        csgState().m_intervalSampleBindingLayout
-    };
-    const __hidden_material_pipeline::MaterialPipelineAvboitBindingLayouts avboitBindingLayouts{
-        avboitState().m_occupancyBindingLayout,
-        avboitState().m_extinctionBindingLayout,
-        avboitState().m_accumulateBindingLayout
-    };
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material geometry pipeline requires the global descriptor heap"));
@@ -471,16 +355,10 @@ bool RendererMaterialSystem::createRendererPipeline(
         pipelineDesc.setMeshShader(resources.meshShader);
         pipelineDesc.setPixelShader(resources.pixelShader);
         pipelineDesc.setRenderState(renderState);
-        // Keep the fixed shader-set ABI dense after retiring the old per-mesh frame set: AVBOIT owns set 1 and
-        // CSG starts at set 1 (or set 2 behind AVBOIT), while the heap remains pinned at sets 8/9.
+        // Set 0 is the shared push-only range; all CSG and AVBOIT resources are selected through the global heap.
         pipelineDesc.addBindingLayout(avboitState().m_emptyBindingLayout);
-        if(!__hidden_material_pipeline::AddAvboitBindingLayout(pipelineDesc, pass, csgClipPipeline, avboitBindingLayouts))
-            return false;
-        if(!__hidden_material_pipeline::AddCsgGraphicsBindingLayouts(pipelineDesc, csgBindingUse, csgBindingLayouts))
-            return false;
         // The mesh stage resolves every immutable geometry stream through the global StorageBuffer heap. Keep both
-        // fixed heap layouts in every mesh pipeline so Backend-A descriptor binding and Backend-C descriptor-buffer binding use
-        // the same set-8/9 contract; the sampler layout is part of that frozen heap surface even though geometry uses
+        // fixed heap layouts in every mesh pipeline. The sampler layout is part of that frozen heap surface even though geometry uses
         // only the resource table today.
         pipelineDesc
             .addBindingLayout(heap.getResourceLayout())
@@ -521,15 +399,6 @@ bool RendererMaterialSystem::createRendererPipeline(
         Core::ComputePipelineDesc computeDesc;
         computeDesc.setComputeShader(resources.computeShader);
         computeDesc.addBindingLayout(drawState().m_computeBindingLayout);
-        // AVBOIT CSG shader variants reserve set 1 for their material pass before placing the CSG clip set at 2.
-        // The mesh compute stage does not read this pass data, but binding the real pure-resource layout keeps the
-        // whole pipeline descriptor-buffer compatible and preserves the shader's fixed set numbering.
-        if(csgBindingUse.avboitClip
-            && !__hidden_material_pipeline::AddAvboitBindingLayout(computeDesc, pass, csgClipPipeline, avboitBindingLayouts)
-        )
-            return false;
-        if(!__hidden_material_pipeline::AddCsgComputeBindingLayouts(computeDesc, csgBindingUse, csgBindingLayouts))
-            return false;
         // The compute-emulation mesh stage shares the same heap-backed source-stream runtime as the mesh-shader
         // path, so it needs the persistent tables before its dispatch as well.
         computeDesc
@@ -548,12 +417,6 @@ bool RendererMaterialSystem::createRendererPipeline(
         emulationDesc.setPixelShader(resources.pixelShader);
         emulationDesc.setRenderState(renderState);
         emulationDesc.addBindingLayout(avboitState().m_emptyBindingLayout);
-        if(MaterialPipelinePassUsesRendererAvboit(pass)){
-            if(!__hidden_material_pipeline::AddAvboitBindingLayout(emulationDesc, pass, csgClipPipeline, avboitBindingLayouts))
-                return false;
-        }
-        if(!__hidden_material_pipeline::AddCsgGraphicsBindingLayouts(emulationDesc, csgBindingUse, csgBindingLayouts))
-            return false;
         emulationDesc
             .addBindingLayout(heap.getResourceLayout())
             .addBindingLayout(heap.getSamplerLayout())

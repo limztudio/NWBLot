@@ -11,21 +11,18 @@
 
 #include "binding_slots.h"
 
-// The G-buffer reads and (on Backend C) the shared TLAS come from the global descriptor heap. Backend A retains the
-// local set-0 TLAS descriptor below, while both backends select the target-generation G-buffer images by push slot.
+// The G-buffer reads and shared TLAS come from the global descriptor heap; target-generation G-buffer images are
+// selected by push slot.
 #include "../bindless/bindless_heap.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !(defined(NWB_BINDLESS_TLAS) && NWB_BINDLESS_TLAS)
-[[vk::binding(NWB_SHADOW_RT_BINDING_TLAS, NWB_SHADOW_RT_SET)]]
-RaytracingAccelerationStructure g_NwbShadowTlas;
+#ifndef NWB_SHADOW_RQ_VISIBILITY_STORAGE_SLOT
+#error "shadow RayQuery sources must provide the visibility StorageImage heap slot expression"
 #endif
-
-[[vk::binding(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, NWB_SHADOW_RT_SET)]]
-RWTexture2DArray<float4> g_NwbShadowVisibility;
+#define g_NwbShadowVisibility NwbHeapStorageImage2DArrayFloat4(NWB_SHADOW_RQ_VISIBILITY_STORAGE_SLOT)
 
 // (binding 7, the per-instance occluder material table, is intentionally absent here: the hardware opaque fast
 // path commits the first FORCE_OPAQUE hit and loads no per-instance material -- see binding_slots.h.)

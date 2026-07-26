@@ -12,8 +12,8 @@
 // Backend-agnostic GI trace body shared by the SW-BVH walk (gi_sw_trace.slangi) and the HW inline-RayQuery
 // (gi_hw_trace.slangi): the NwbGiTraceHit closest-hit result + the Lambert shade nwbGiShadeHit. The TRAVERSAL is the
 // SEAM -- each backend defines nwbGiTraceClosest, and the shade re-enters it for the dominant-light occlusion ray, so
-// the same shade runs on both paths. The including backend MUST set the scene-shading + light-list binding macros
-// (NWB_SCENE_SHADING_SET/_BINDING, NWB_SCENE_LIGHT_LIST_SET/_BINDING) + NWB_GI_HIT_SHADOW_RAYS before this include.
+// the same shade runs on both paths. The including backend MUST provide global scene-shading/light-list heap-slot
+// expressions plus NWB_GI_HIT_SHADOW_RAYS before this include.
 
 
 #include "../scene/buffer.slangi"

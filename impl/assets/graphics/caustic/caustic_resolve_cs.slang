@@ -28,13 +28,12 @@
 //   stage 2 UPSAMPLE (full-res dispatch): bilinearly samples the final half-res caustic into the full-res irradiance
 //     buffer the deferred lighting adds; background pixels (no receiver) write zero (the additive no-op).
 
-// The pass output (UAV). For PREPARE + WAVELET this is a HALF-res ping-pong buffer (half-A / half-B); for UPSAMPLE this
-// is the FULL-res caustic irradiance buffer the deferred lighting adds. The C++ swaps the bound textures per pass.
-[[vk::binding(NWB_CAUSTIC_RESOLVE_BINDING_OUTPUT, NWB_CAUSTIC_RESOLVE_SET)]]
-RWTexture2D<float4> g_NwbCausticResolveOutput;
+// The pass output is a StorageImage heap entry selected per dispatch. For PREPARE + WAVELET this is a HALF-res
+// ping-pong buffer (half-A / half-B); for UPSAMPLE it is the FULL-res caustic irradiance buffer the deferred lighting
+// adds.
 
 struct NwbCausticResolvePushConstants{
-    // All-scalar -> 13 x 4 = 52 bytes; matches the C++ mirror CausticResolvePushConstants.
+    // All-scalar -> 14 x 4 = 56 bytes; matches the C++ mirror CausticResolvePushConstants.
     uint width;             // FULL-res width (G-buffer dim; UPSAMPLE dispatch/output dim)
     uint height;            // FULL-res height
     uint halfWidth;         // HALF-res width (the resolve buffers; PREPARE/WAVELET dispatch dim)
@@ -50,10 +49,13 @@ struct NwbCausticResolvePushConstants{
     uint inputColorSlot;
     uint geometrySlot;
     uint accumulatorSlot;
+    uint outputStorageSlot;
 };
 
 [[vk::push_constant]]
 ConstantBuffer<NwbCausticResolvePushConstants> g_NwbCausticResolvePushConstants;
+
+#define g_NwbCausticResolveOutput NwbHeapStorageImage2DFloat4(g_NwbCausticResolvePushConstants.outputStorageSlot)
 
 // Groupshared (LDS) tile for the small-dilation wavelet passes: the group cooperatively loads its half-res tile + halo
 // here once, then every thread taps from LDS instead of re-Loading the G-buffer + color textures per tap. Sized for the
@@ -89,10 +91,6 @@ float nwbCausticResolveHalfPixelArea(const int2 halfTexel){
     const float3 dy = nwbCausticResolveWorldAtHalf(down) - center;
     return max(length(cross(dx, dy)), 1e-4);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 // 5x5 B-spline a-trous kernel (separable [1,4,6,4,1]/16), sampled at +-{1,2}*step. Edge-AVOIDING: each tap is weighted
 // by the spatial kernel AND a world-distance edge-stop so the caustic never bleeds across a depth/silhouette
@@ -307,6 +305,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
     g_NwbCausticResolveOutput[pixel] = (weightSum > 0.0) ? float4(sum / weightSum, 1.0) : float4(0.0, 0.0, 0.0, 1.0);
 }
+
+
+#undef g_NwbCausticResolveOutput
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -24,27 +24,13 @@
 
 #include "sw_shadow_gbuffer.slangi"
 
-struct NwbSwShadowTransparentSoftPushConstants{
-    uint width;
-    uint height;
-    uint instanceCount;
-    // The renderer frame counter, seeding the per-pixel low-discrepancy cone-jitter sample so the jittered rays walk the
-    // source across frames (decorrelated per pixel by a hash rotation). The SALT below further decorrelates this stream
-    // from the opaque soft trace's.
-    uint frameIndex;
-};
-
-[[vk::push_constant]]
-ConstantBuffer<NwbSwShadowTransparentSoftPushConstants> g_NwbSwShadowPush;
-
 // sw_shadow_ray.slangi pulls shadow_sampling.slangi (nwbShadowLowDiscrepancy2D + the cone jitter) transitively.
 #include "sw_shadow_ray.slangi"
 
 // The half-res soft TRANSPARENT transmittance buffer (one layer per shadow slot) this pass writes the cone-jittered
 // colored sample into; the separate RGB shadow_resolve pipeline denoises + fold-multiplies it onto the full-res
 // visibility (which already holds the soft OPAQUE result).
-[[vk::binding(NWB_SW_SHADOW_BINDING_TRANSPARENT_SOFT_HALF, NWB_SW_SHADOW_SET)]]
-RWTexture2DArray<float4> g_NwbSwShadowTransparentSoftHalf;
+#define g_NwbSwShadowTransparentSoftHalf NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.transparentSoftHalfStorageSlot)
 
 #define NWB_SW_SHADOW_SOFT_TRACE_OUTPUT g_NwbSwShadowTransparentSoftHalf
 #define NWB_SW_SHADOW_SOFT_TRACE_SPP NWB_SW_SHADOW_TRANSPARENT_SPP

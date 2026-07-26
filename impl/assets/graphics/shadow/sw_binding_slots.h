@@ -62,7 +62,7 @@
 // Soft COLORED TRANSPARENT shadow: a HALF-res RGBA16F Texture2DArray (one
 // layer per shadow slot) the soft transparent trace (sw_shadow_transparent_soft_cs) writes ONE cone-jittered COLORED
 // (Beer-Lambert/Fresnel) transmittance sample per half-res pixel into. It is denoised by the SEPARATE RGB shadow_resolve
-// pipeline (its own binding set) -- temporal reproject-merge + RGB a-trous wavelet + fold-multiply upsample onto the
+// pipeline -- temporal reproject-merge + RGB a-trous wavelet + fold-multiply upsample onto the
 // full-res visibility (which already holds the soft OPAQUE result). UAV (written by the soft transparent trace, read by
 // the resolve). Only the SW traversal declares/writes it; the resolve binds its own copy. Kept a PARALLEL signal to the
 // opaque SOFT_HALF (independent noise stats, separately denoised) and folded only at the final full-res upsample.

@@ -40,8 +40,8 @@ struct hash<NWB::Core::BufferRange>{
 };
 
 template<>
-struct hash<NWB::Core::BindingSetItem>{
-    size_t operator()(NWB::Core::BindingSetItem const& s)const noexcept{
+struct hash<NWB::Core::DescriptorWriteItem>{
+    size_t operator()(NWB::Core::DescriptorWriteItem const& s)const noexcept{
         usize value = 0;
         ::HashCombine(value, s.resourceHandle);
         ::HashCombine(value, s.slot);
@@ -51,17 +51,6 @@ struct hash<NWB::Core::BindingSetItem>{
         ::HashCombine(value, s.format);
         ::HashCombine(value, s.rawData[0]);
         ::HashCombine(value, s.rawData[1]);
-        return static_cast<size_t>(value);
-    }
-};
-
-template<>
-struct hash<NWB::Core::BindingSetDesc>{
-    size_t operator()(NWB::Core::BindingSetDesc const& s)const noexcept{
-        usize value = 0;
-        ::HashCombine(value, s.trackLiveness);
-        for(const auto& item : s.bindings)
-            ::HashCombine(value, item);
         return static_cast<size_t>(value);
     }
 };

@@ -1,0 +1,76 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_GI_SURFEL_HEAP_RESOURCES_SLANGI
+#define NWB_GRAPHICS_GI_SURFEL_HEAP_RESOURCES_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Heap-only surfel GI resource ABI. The descriptor class owns only the Vulkan descriptor type; these aliases supply
+// the pass-specific structured element types and access modes. All selector slots are dispatch-uniform push constants,
+// so they intentionally use direct descriptor-table indices rather than NonUniformResourceIndex().
+
+
+#include "surfel_record.slangi"
+#include "surfel_constants.slangi"
+#include "surfel_binding_slots.h"
+#include "../../bindless/bindless_heap.slangi"
+#include "../../deferred/bindless_resources.slangi"
+#include "../../raytrace/material_context_slots.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbSurfelHeapPushConstants{
+    uint constantsHeapSlot;
+    uint poolHeapSlot;
+    uint cellHeadHeapSlot;
+    uint counterHeapSlot;
+    uint freeListHeapSlot;
+    uint snapshotPoolHeapSlot;
+    uint snapshotCellHeadHeapSlot;
+    uint traceIndirectArgsHeapSlot;
+    uint deferredResourcesHeapSlot;
+    uint materialContextSlotsHeapSlot;
+    uint worldPositionSlot;
+    uint normalSlot;
+    uint outputStorageHeapSlot;
+    uint halfIrradianceSlot;
+};
+
+[[vk::push_constant]]
+NwbSurfelHeapPushConstants g_NwbSurfelHeapPushConstants;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed aliases over the global UniformBuffer/StorageBuffer heap tables.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbSurfelConstants, Std140DataLayout> g_NwbHeapSurfelConstantBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapSurfelMaterialContextSlotBuffers[];
+
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+RWStructuredBuffer<NwbSurfel, Std430DataLayout> g_NwbHeapSurfelWritablePools[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbSurfel, Std430DataLayout> g_NwbHeapSurfelReadOnlyPools[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+RWStructuredBuffer<uint, Std430DataLayout> g_NwbHeapSurfelWritableUintBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<uint, Std430DataLayout> g_NwbHeapSurfelReadOnlyUintBuffers[];
+#pragma warning(pop)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

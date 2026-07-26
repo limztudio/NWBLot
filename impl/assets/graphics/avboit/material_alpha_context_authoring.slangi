@@ -14,12 +14,14 @@
 // surface hook solely to obtain renderCoverage, so their mesh/material binding contract must stay identical.
 
 
-#include "binding_slots.h"
 #include "../mesh/runtime_constants.h"
 
 #define NWB_MESH_MATERIAL_CONTEXT_PROVIDED
 
 #include "common.slangi"
+// Occupancy/extinction no longer bind a pass-local selector CBV.  This alias resolves the target-generation
+// payload through the UniformBuffer heap slot carried by the AVBOIT draw push constants.
+#define g_NwbDeferredBindlessResources NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES
 #include "../mesh/gbuffer_io.slangi"
 #include "material_context_authoring.slangi"
 #include "../mesh/material_typed_accessors.slangi"
@@ -28,12 +30,6 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-// All occupancy/extinction variants read opaque depth through the persistent descriptor heap. Keeping CSG on the
-// same target-generation slot buffer lets its descriptor-buffer-compatible graphics tail share the heap sets.
-#include "../deferred/bindless_resources.slangi"
-[[vk::binding(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, NWB_AVBOIT_TRANSPARENT_SET)]]
-ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbDeferredBindlessResources;
 
 struct NwbAvboitMaterialAlphaPixelInput{
     float4 position : SV_Position;

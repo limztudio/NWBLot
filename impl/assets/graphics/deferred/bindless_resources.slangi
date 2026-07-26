@@ -12,7 +12,7 @@
 #include "../bindless/bindless_heap.slangi"
 
 
-// Matches DeferredBindlessResourceSlots exactly: seven std140 uint4 lanes carried by one target-generation constant
+// Matches DeferredBindlessResourceSlots exactly: nine std140 uint4 lanes carried by one target-generation constant
 // buffer. These values are uniform for each fullscreen draw, so accessing the global heap does not require
 // NonUniformResourceIndex().
 struct NwbDeferredBindlessResources{
@@ -20,10 +20,25 @@ struct NwbDeferredBindlessResources{
     uint4 lightingSlots;  // shadow visibility array, caustic, surfel, sampler
     uint4 compositeSlots; // opaque color, AVBOIT accumulated color, accumulated extinction, padding
     uint4 avboitSlots;    // AVBOIT transmittance 3D volume, linear sampler, scene-shading CB heap slot, light-list heap slot
+    uint4 avboitWorkSlots0; // coverage, depth-warp, control, packed-extinction StorageBuffer heap slots
+    uint4 avboitWorkSlots1; // extinction-overflow StorageBuffer, transmittance StorageImage, padding
     uint4 csgPeelSlots;   // cap-back normal, interval depth, interval id, receiver event data (StorageImage)
     uint4 csgSpanSlots;   // receiver event count, receiver span data/count, removed-interval depth (StorageImage)
     uint4 csgRemovedSlots;// removed-interval cap normal/data/count, padding (StorageImage)
 };
+
+// The target-generation slot payload used to occupy a local CBV in every fullscreen/compute consumer.  It now lives
+// in the global UniformBuffer heap like the resources it selects.  Each pass provides the descriptor slot through
+// its push constants, preserving a descriptor-heap-only binding model without duplicating the 112-byte payload.
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed view of the global UniformBuffer descriptor table.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbHeapDeferredBindlessResources[];
+#pragma warning(pop)
+
+ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> NwbHeapDeferredBindlessResources(const uint slot){
+    return g_NwbHeapDeferredBindlessResources[slot];
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

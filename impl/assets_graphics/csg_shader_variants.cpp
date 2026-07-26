@@ -33,8 +33,6 @@ namespace AssetsGraphicsCsgShaderVariants{
 
 static constexpr AStringView s_EnabledImplicitDefineValue = "1";
 static constexpr AStringView s_IntervalSampleEnabledImplicitDefineValue = "1";
-static constexpr AStringView s_AvboitClipSetImplicitDefineValue = "2";
-static constexpr AStringView s_AvboitIntervalSampleSetImplicitDefineValue = "3";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -115,10 +113,9 @@ static bool BuildClipDefineComboImpl(
     ShaderCook::CookArena& cookArena,
     const AStringView entryName,
     const ShaderCook::DefineCombo& sourceCombo,
-    const bool avboitClipSet,
     ShaderCook::DefineCombo& outDefineCombo
 ){
-    const usize addedDefineCount = avboitClipSet ? 4u : 2u;
+    constexpr usize addedDefineCount = 2u;
     if(sourceCombo.size() > Limit<usize>::s_Max - addedDefineCount){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: CSG shader define combo size overflow for entry '{}'"), StringConvert(entryName));
         return false;
@@ -128,28 +125,6 @@ static bool BuildClipDefineComboImpl(
     outDefineCombo.reserve(sourceCombo.size() + addedDefineCount);
     for(const auto& [defineName, defineValue] : sourceCombo)
         outDefineCombo.try_emplace(defineName, defineValue);
-
-    if(avboitClipSet){
-        ShaderCook::CookString csgClipSetDefineName(s_ClipSetImplicitDefineName, cookArena);
-        ShaderCook::CookString csgClipSetDefineValue(s_AvboitClipSetImplicitDefineValue, cookArena);
-        if(!outDefineCombo.try_emplace(Move(csgClipSetDefineName), Move(csgClipSetDefineValue)).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: reserved CSG shader define '{}' already exists for entry '{}'")
-                , StringConvert(s_ClipSetImplicitDefineName)
-                , StringConvert(entryName)
-            );
-            return false;
-        }
-
-        ShaderCook::CookString csgIntervalSampleSetDefineName(s_IntervalSampleSetImplicitDefineName, cookArena);
-        ShaderCook::CookString csgIntervalSampleSetDefineValue(s_AvboitIntervalSampleSetImplicitDefineValue, cookArena);
-        if(!outDefineCombo.try_emplace(Move(csgIntervalSampleSetDefineName), Move(csgIntervalSampleSetDefineValue)).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetVolumeCooker: reserved CSG shader define '{}' already exists for entry '{}'")
-                , StringConvert(s_IntervalSampleSetImplicitDefineName)
-                , StringConvert(entryName)
-            );
-            return false;
-        }
-    }
 
     ShaderCook::CookString csgIntervalSampleEnabledDefineName(s_IntervalSampleEnabledImplicitDefineName, cookArena);
     ShaderCook::CookString csgIntervalSampleEnabledDefineValue(s_IntervalSampleEnabledImplicitDefineValue, cookArena);
@@ -179,16 +154,7 @@ bool BuildClipDefineCombo(
     const ShaderCook::DefineCombo& sourceCombo,
     ShaderCook::DefineCombo& outDefineCombo
 ){
-    return BuildClipDefineComboImpl(cookArena, entryName, sourceCombo, false, outDefineCombo);
-}
-
-bool BuildAvboitClipDefineCombo(
-    ShaderCook::CookArena& cookArena,
-    const AStringView entryName,
-    const ShaderCook::DefineCombo& sourceCombo,
-    ShaderCook::DefineCombo& outDefineCombo
-){
-    return BuildClipDefineComboImpl(cookArena, entryName, sourceCombo, true, outDefineCombo);
+    return BuildClipDefineComboImpl(cookArena, entryName, sourceCombo, outDefineCombo);
 }
 
 

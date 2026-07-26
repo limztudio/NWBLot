@@ -23,11 +23,9 @@
 // each defines (so the opaque pass writes a BINARY blocker value and the transparent pass writes colored transmittance).
 
 
-// The coarse (downscaled) transmittance scratch: one layer per shadow slot. The coarse trace writes one value per
-// NWB_SW_SHADOW_COARSE_FACTOR block here; the adaptive resolve UAV-loads the neighbourhood to interpolate the flat
-// interior / detect edges. UAV (written here, UAV-loaded by the resolve pass).
-[[vk::binding(NWB_SW_SHADOW_BINDING_COARSE, NWB_SW_SHADOW_SET)]]
-RWTexture2DArray<float4> g_NwbSwShadowCoarse;
+// The coarse transmittance workset is a heap-selected StorageImage. It is writable by the coarse trace and read via
+// the same storage view by classify/resolve, so no pass owns a local UAV binding.
+#define g_NwbSwShadowCoarse NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.coarseStorageSlot)
 
 
 // One thread per coarse texel: trace ONE occlusion ray from the block's top-left full-res G-buffer texel and store the

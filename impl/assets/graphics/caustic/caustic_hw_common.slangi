@@ -12,26 +12,42 @@
 #include "../raytrace/material_context_slots.slangi"
 #include "../bindless/bindless_heap_rt.slangi"
 
-// The shared scene-shading CB + light list are target-generation heap entries. This local slot cbuffer carries their
-// uniform heap indices in avboitSlots.z/.w, so scene/buffer.slangi emits typed heap aliases instead of the historical
-// local bindings 1/2. The per-hit surface dispatch (which supplies a refractive occluder's ior / transmission)
-// reads the same shadow-owned material buffers as the SW path through the trace-context heap slots below.
-[[vk::binding(NWB_CAUSTIC_RT_BINDING_BINDLESS_RESOURCES, NWB_CAUSTIC_RT_SET)]]
-ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbCausticHwBindlessResources;
-#define NWB_SCENE_BUFFERS_FROM_HEAP 1
+// Per-dispatch constants -- byte-identical to the SW producer's push constants (CPU mirror
+// CausticPhotonPushConstants), including the global-heap selector and accumulator slots.
+struct NwbCausticHwPushConstants{
+    uint width;
+    uint height;
+    uint instanceCount;
+    uint photonCount;
+    uint emissionTargetCount;
+    uint gridSide; // the FULL emission grid side (sqrt of the full photon budget); runtime so the density scales per build config
+    uint frameIndex; // HW 2x temporal-reuse checkerboard phase: (frameIndex & 1) selects which half of the grid this frame emits
+    uint depthSlot;
+    uint worldPositionSlot;
+    uint emissionTargetSlot;
+    uint viewSlot;
+    uint deferredResourcesHeapSlot;
+    uint materialContextSlotsHeapSlot;
+    uint accumulatorStorageSlot;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<NwbCausticHwPushConstants> g_NwbCausticHwPushConstants;
+
+// The shared scene-shading CB + light list are selected by the frame selector payload in the UniformBuffer heap. The
+// per-hit surface dispatch reads the same shadow-owned material buffers as the SW path through the heap selector below.
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed alias of the global UniformBuffer descriptor table.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapCausticHwMaterialContextSlots[];
+#pragma warning(pop)
+#define g_NwbCausticHwBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbCausticHwPushConstants.deferredResourcesHeapSlot]
+#define g_NwbCausticHwMaterialContextSlots g_NwbHeapCausticHwMaterialContextSlots[g_NwbCausticHwPushConstants.materialContextSlotsHeapSlot]
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbCausticHwBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbCausticHwBindlessResources.avboitSlots.w
 
-// The InstanceID material table and the material-surface evaluator's typed/instance buffers are global
-// StorageBuffer heap entries. This local b11 cbuffer supplies their uniform slots for the whole ray dispatch.
-[[vk::binding(NWB_CAUSTIC_RT_BINDING_MATERIAL_CONTEXT_SLOTS, NWB_CAUSTIC_RT_SET)]]
-ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbCausticHwMaterialContextSlots;
-
 // Route the per-hit surface dispatch through the heap-selected typed-word and mesh-instance buffers. The caustic
-// push block selects its own mesh-view heap slot, so suppress bindless_heap_mesh's unrelated local declaration.
-#define NWB_MESH_SET NWB_CAUSTIC_RT_SET
-#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
-#define NWB_MESH_VIEW_BUFFER_BINDLESS 1
+// push block selects its own mesh-view heap slot.
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbCausticHwMaterialContextSlots.sceneSlots.w;
 }
@@ -104,46 +120,18 @@ StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbHeapCausticHwE
 ConstantBuffer<NwbCausticHwView, Std140DataLayout> g_NwbHeapCausticHwViews[];
 #pragma warning(pop)
 
-// Per-dispatch constants -- byte-identical to the SW producer's push constants (CPU mirror CausticPhotonPushConstants)
-// so the photon grid / flux / emission / jitter all match the SW reference exactly.
-struct NwbCausticHwPushConstants{
-    uint width;
-    uint height;
-    uint instanceCount;
-    uint photonCount;
-    uint emissionTargetCount;
-    uint gridSide; // the FULL emission grid side (sqrt of the full photon budget); runtime so the density scales per build config
-    uint frameIndex; // HW 2x temporal-reuse checkerboard phase: (frameIndex & 1) selects which half of the grid this frame emits
-    uint depthSlot;
-    uint worldPositionSlot;
-    uint emissionTargetSlot;
-    uint viewSlot;
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if !(defined(NWB_BINDLESS_TLAS) && NWB_BINDLESS_TLAS)
-[[vk::binding(NWB_CAUSTIC_RT_BINDING_TLAS, NWB_CAUSTIC_RT_SET)]]
-RaytracingAccelerationStructure g_NwbCausticHwTlas;
-#endif
-
 // The fixed-function intersector supplies triangle/barycentric data; its InstanceID selects the heap-backed material
-// record through the b11 context cbuffer. Per-corner attributes remain separately addressed by that record's heap slot.
+// record through the UniformBuffer heap payload. Per-corner attributes remain separately addressed by that record's
+// heap slot.
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> nwbCausticHwInstanceMaterials(){
     return NwbHeapRtInstanceMaterials(g_NwbCausticHwMaterialContextSlots.sceneSlots.z);
 }
 
 // The closest-hit reads corner attributes through the material record's global heap slot. The shared backing buffers
 // remain transitioned for those heap reads; the world hit point comes from WorldRayOrigin()+RayTCurrent()*WorldRayDirection().
-
-[[vk::binding(NWB_CAUSTIC_RT_BINDING_ACCUMULATOR, NWB_CAUSTIC_RT_SET)]]
-RWTexture2DArray<uint> g_NwbCausticHwAccumulator;
-
-[[vk::push_constant]]
-ConstantBuffer<NwbCausticHwPushConstants> g_NwbCausticHwPushConstants;
-
 
 Texture2D<float4> nwbCausticHwGbufferDepth(){
     return NwbHeapSampledImage2D(g_NwbCausticHwPushConstants.depthSlot);
@@ -199,7 +187,7 @@ NwbCausticHwVertexAttrib nwbCausticHwLoadVertexAttrib(const uint attributeSlot, 
 #define NWB_CAUSTIC_SPLAT_PUSH g_NwbCausticHwPushConstants
 #define NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH nwbCausticHwGbufferDepth()
 #define NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION nwbCausticHwGbufferWorldPosition()
-#define NWB_CAUSTIC_SPLAT_ACCUMULATOR g_NwbCausticHwAccumulator
+#define NWB_CAUSTIC_SPLAT_ACCUMULATOR NwbHeapStorageImage2DArrayUint(g_NwbCausticHwPushConstants.accumulatorStorageSlot)
 #include "splat.slangi"
 #undef NWB_CAUSTIC_SPLAT_ACCUMULATOR
 #undef NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION

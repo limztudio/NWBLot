@@ -20,9 +20,6 @@
 #endif
 
 #if NWB_CSG_ENABLED
-#ifndef NWB_CSG_CLIP_SET
-#define NWB_CSG_CLIP_SET 2
-#endif
 #ifndef NWB_CSG_INTERVAL_SAMPLE_ENABLED
 #define NWB_CSG_INTERVAL_SAMPLE_ENABLED 0
 #endif
@@ -43,6 +40,7 @@ struct NwbAvboitDrawPushConstants{
     uint4 nwbAvboitFrame;
     uint4 nwbAvboitVolume;
     float4 nwbAvboitParams;
+    uint4 nwbAvboitHeapSlots;
 };
 
 [[vk::push_constant]]
@@ -50,18 +48,28 @@ ConstantBuffer<NwbAvboitDrawPushConstants> g_NwbAvboitDraw;
 
 #if NWB_CSG_ENABLED
 #define NWB_CSG_MESH_INSTANCE_INDEX (g_NwbAvboitDraw.nwbMeshDispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX])
+#define NWB_CSG_CONTEXT_HEAP_SLOT (g_NwbAvboitDraw.nwbAvboitHeapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_CSG_CONTEXT])
 #include "../csg/pixel_runtime.slangi"
 #if NWB_CSG_INTERVAL_SAMPLE_ENABLED
 #define NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED 1
 #include "../csg/interval_sample.slangi"
 #undef NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
 #endif
+#undef NWB_CSG_CONTEXT_HEAP_SLOT
 #undef NWB_CSG_MESH_INSTANCE_INDEX
 #endif
 
 #define NWB_AVBOIT_PUSH_CONSTANTS g_NwbAvboitDraw
 #include "push_constants.slangi"
 #undef NWB_AVBOIT_PUSH_CONSTANTS
+
+// AVBOIT's five work buffers and the target-generation slot payload are global heap entries. The push block carries
+// only the UniformBuffer descriptor index for that shared payload; the payload then selects every StorageBuffer
+// entry. This keeps the transparent draw ABI at the portable 128-byte limit while removing pass-local buffer/CBV
+// descriptors entirely.
+#define NWB_AVBOIT_DEFERRED_SLOTS_DESCRIPTOR_SLOT \
+    g_NwbAvboitDraw.nwbAvboitHeapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES]
+#include "heap_resources.slangi"
 
 half nwbAvboitResolveFragmentAlpha(half4 color){
     return clamp(color.a, half(0.0), half(1.0));

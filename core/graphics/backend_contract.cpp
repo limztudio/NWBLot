@@ -32,8 +32,6 @@ static_assert(GraphicsContract::FramebufferApi<GraphicsBackend::Framebuffer>);
 static_assert(GraphicsContract::RayTracingOpacityMicromapApi<GraphicsBackend::RayTracingOpacityMicromap>);
 static_assert(GraphicsContract::RayTracingAccelStructApi<GraphicsBackend::RayTracingAccelStruct>);
 static_assert(GraphicsContract::BindingLayoutApi<GraphicsBackend::BindingLayout>);
-static_assert(GraphicsContract::BindingSetApi<GraphicsBackend::BindingSet>);
-static_assert(GraphicsContract::DescriptorTableApi<GraphicsBackend::DescriptorTable>);
 static_assert(GraphicsContract::GraphicsPipelineApi<GraphicsBackend::GraphicsPipeline>);
 static_assert(GraphicsContract::ComputePipelineApi<GraphicsBackend::ComputePipeline>);
 static_assert(GraphicsContract::MeshletPipelineApi<GraphicsBackend::MeshletPipeline>);

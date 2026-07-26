@@ -4,7 +4,6 @@
 
 #include "binding_slots.h"
 #include "constants.h"
-#include "bindless_resources.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,8 +25,12 @@ struct NwbCsgIntervalDispatchPushConstants{
 [[vk::push_constant]]
 ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPushConstants;
 
+#define NWB_CSG_CONTEXT_HEAP_SLOT (g_NwbCsgIntervalDispatchPushConstants.resourceSlots[NWB_CSG_INTERVAL_DISPATCH_PUSH_RESOURCE_SLOT_CONTEXT])
+#include "bindless_resources.slangi"
+#undef NWB_CSG_CONTEXT_HEAP_SLOT
+
 // Every input/output texture is a CSG StorageImage heap entry. The local binding numbers remain intentional gaps;
-// a single cbuffer at binding 17 selects the typed array aliases for this dispatch.
+// the heap-selected CSG context resolves the typed array aliases for this dispatch.
 #define g_NwbCsgBackCapNormal (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.x))
 #define g_NwbCsgIntervalDepth (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.y))
 #define g_NwbCsgIntervalId (NwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgPeelSlots.z))

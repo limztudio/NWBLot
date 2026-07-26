@@ -92,54 +92,20 @@ inline bool operator==(const BindingLayoutItem& lhs, const BindingLayoutItem& rh
 inline bool operator!=(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs){ return !(lhs == rhs); }
 static_assert(sizeof(BindingLayoutItem) == 8, "sizeof(BindingLayoutItem) is supposed to be 8 bytes");
 
-struct BindingOffsets{
-    u32 shaderResource = s_BindingOffsetShaderResource;
-    u32 sampler = s_BindingOffsetSampler;
-    u32 constantBuffer = s_BindingOffsetConstantBuffer;
-    u32 unorderedAccess = s_BindingOffsetUnorderedAccess;
-
-    constexpr BindingOffsets& setShaderResourceOffset(u32 value){ shaderResource = value; return *this; }
-    constexpr BindingOffsets& setSamplerOffset(u32 value){ sampler = value; return *this; }
-    constexpr BindingOffsets& setConstantBufferOffset(u32 value){ constantBuffer = value; return *this; }
-    constexpr BindingOffsets& setUnorderedAccessViewOffset(u32 value){ unorderedAccess = value; return *this; }
-};
-
 struct BindingLayoutDesc{
     GraphicsVector<BindingLayoutItem> bindings;
-    BindingOffsets bindingOffsets;
-
-    // DXC maps HLSL register spaces to SPIR-V descriptor sets, so this can be used as the descriptor set index.
-    // Set `registerSpaceIsDescriptorSet` to enable that mapping explicitly.
-    u32 registerSpace = 0;
     ShaderType::Mask visibility = ShaderType::None;
-
-    // This flag controls the behavior for pipelines that use multiple binding layouts.
-    // When true, the layout uses `registerSpace` as its SPIR-V descriptor set index. Layouts in the same
-    // pipeline must not reuse a descriptor set index.
-    bool registerSpaceIsDescriptorSet = false;
-
-    // Backend C (VK_EXT_descriptor_buffer): when true the layout is built with the
-    // VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT flag and its binding sets allocate from the
-    // DescriptorBufferManager rather than classic descriptor pools. Default false selects the portability fallback.
-    // Descriptor-buffer and classic layouts cannot be mixed in one pipeline layout.
-    bool useDescriptorBuffer = false;
 
     explicit BindingLayoutDesc(GraphicsArena& arena)
         : bindings(arena)
     {}
 
     constexpr BindingLayoutDesc& setVisibility(ShaderType::Mask value){ visibility = value; return *this; }
-    constexpr BindingLayoutDesc& setRegisterSpace(u32 value){ registerSpace = value; return *this; }
-    constexpr BindingLayoutDesc& setRegisterSpaceIsDescriptorSet(bool value){ registerSpaceIsDescriptorSet = value; return *this; }
-    constexpr BindingLayoutDesc& setUseDescriptorBuffer(bool value){ useDescriptorBuffer = value; return *this; }
-    // Shortcut for .setRegisterSpace(value).setRegisterSpaceIsDescriptorSet(true)
-    constexpr BindingLayoutDesc& setRegisterSpaceAndDescriptorSet(u32 value){ registerSpace = value; registerSpaceIsDescriptorSet = true; return *this; }
     BindingLayoutDesc& addItem(const BindingLayoutItem& value){ bindings.push_back(value); return *this; }
-    constexpr BindingLayoutDesc& setBindingOffsets(const BindingOffsets& value){ bindingOffsets = value; return *this; }
 };
 
-// BindlessDescriptorType describes the SPIR-V bindings DXC emits for HLSL ResourceDescriptorHeap and SamplerDescriptorHeap.
-// The shader must be compiled with the same descriptor set index that is passed into setState.
+// BindlessLayoutType describes the SPIR-V bindings DXC emits for the renderer's global ResourceDescriptorHeap and
+// SamplerDescriptorHeap layouts. The shader must use the same reserved descriptor-set index as the heap layout.
 // https://github.com/microsoft/DirectXShaderCompiler/blob/main/docs/SPIR-V.rst#resourcedescriptorheaps-samplerdescriptorheaps
 namespace BindlessLayoutType{
     enum Enum : u8{
@@ -149,63 +115,39 @@ namespace BindlessLayoutType{
                             // Valid descriptor types: Texture_SRV, Texture_UAV, TypedBuffer_SRV, TypedBuffer_UAV,
                             // StructuredBuffer_SRV, StructuredBuffer_UAV, RawBuffer_SRV, RawBuffer_UAV, ConstantBuffer
 
-        MutableCounters,    // Corresponds to SPIRV binding -fvk-bind-counter-heap (Counter resources accessed via ResourceDescriptorHeap)
-                            // Valid descriptor types: StructuredBuffer_UAV
-
         MutableSampler,     // Corresponds to SPIRV binding -fvk-bind-sampler-heap (SamplerDescriptorHeap)
                             // Valid descriptor types: Sampler
     };
 };
 
-// Bindless layouts allow applications to attach a descriptor table to an unbounded
-// resource array in the shader. The size of the array is not known ahead of time.
-// The same table can be bound to multiple HLSL register spaces in order to access
-// different types of resources stored in the table through different arrays.
-// The `registerSpaces` vector specifies which spaces the table will be bound to,
-// with the table type (SRV or UAV) derived from the resource type assigned to each space.
+// Bindless layouts describe a global descriptor-heap array in the shader. The `registerSpaces` vector specifies
+// which bindings the heap exposes, with the resource type derived from each entry. They are never per-pass tables.
 struct BindlessLayoutDesc{
     FixedVector<BindingLayoutItem, s_MaxBindlessRegisterSpaces> registerSpaces;
-    u32 firstSlot = 0;
     u32 maxCapacity = 0;
 
-    // When descriptorSetIndexIsExplicit is set, this layout occupies SPIR-V descriptor set `descriptorSetIndex` in a
-    // multi-layout pipeline layout, mirroring BindingLayoutDesc::registerSpaceIsDescriptorSet. Other layouts retain
-    // positional assignment. The global bindless heap uses reserved high sets so it cannot collide with pipeline sets.
-    u32 descriptorSetIndex = 0;
+    // This resource-bearing layout occupies an explicit SPIR-V descriptor set in a multi-layout pipeline. The global
+    // bindless heap uses reserved high sets so it cannot collide with push-constant-only pipeline-local sets.
+    u32 descriptorSetIndex = Limit<u32>::s_Max;
 
     ShaderType::Mask visibility = ShaderType::None;
     BindlessLayoutType::Enum layoutType = BindlessLayoutType::Immutable;
 
-    bool descriptorSetIndexIsExplicit = false;
-
-    // Backend C (VK_EXT_descriptor_buffer) opt-in, mirroring BindingLayoutDesc::useDescriptorBuffer. When set on an
-    // extension-capable device, the backend flags the descriptor-set layout with
-    // VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT, queries the driver for the set block size and each
-    // register-space's byte offset, and marks the layout descriptor-buffer-compatible. The global descriptor heap
-    // (MutableSrvUavCbv resource + MutableSampler) sets this so the heap-coupled tail pipelines can embed
-    // descriptor-buffer layouts at sets 8/9 instead of classic bindless sets. The opt-in declares intent only; where
-    // the extension is absent the backend leaves the classic (Backend A) path unchanged. Same segment-coherence rule
-    // as classic layouts applies (a mixed resource+sampler bindless set is not segment-coherent and downgrades), but
-    // the heap's two bindless layouts are each pure-class by construction.
-    bool useDescriptorBuffer = false;
-
     constexpr BindlessLayoutDesc& setVisibility(ShaderType::Mask value){ visibility = value; return *this; }
-    constexpr BindlessLayoutDesc& setFirstSlot(u32 value){ firstSlot = value; return *this; }
     constexpr BindlessLayoutDesc& setMaxCapacity(u32 value){ maxCapacity = value; return *this; }
     constexpr BindlessLayoutDesc& addRegisterSpace(const BindingLayoutItem& value){ registerSpaces.push_back(value); return *this; }
     constexpr BindlessLayoutDesc& setLayoutType(BindlessLayoutType::Enum value){ layoutType = value; return *this; }
-    constexpr BindlessLayoutDesc& setDescriptorSetIndex(u32 value){ descriptorSetIndex = value; descriptorSetIndexIsExplicit = true; return *this; }
-    constexpr BindlessLayoutDesc& setUseDescriptorBuffer(bool value){ useDescriptorBuffer = value; return *this; }
+    constexpr BindlessLayoutDesc& setDescriptorSetIndex(u32 value){ descriptorSetIndex = value; return *this; }
 };
 
 typedef GraphicsBackend::Handle<BindingLayout> BindingLayoutHandle;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Binding Sets
+// Descriptor writes
 
 
-struct BindingSetItem{
+struct DescriptorWriteItem{
     void* resourceHandle;
 
     u32 slot;
@@ -231,17 +173,17 @@ struct BindingSetItem{
     static_assert(sizeof(BufferRange) == 16, "sizeof(BufferRange) is supposed to be 16 bytes");
 
     // Default constructor that doesn't initialize anything for performance:
-    // BindingSetItem's are stored in large statically sized arrays.
-    BindingSetItem(){}
+    // DescriptorWriteItem's are stored in large statically sized arrays.
+    DescriptorWriteItem(){}
 
-    constexpr BindingSetItem& setArrayElement(u32 value){ arrayElement = value; return *this; }
-    constexpr BindingSetItem& setFormat(Format::Enum value){ format = value; return *this; }
-    constexpr BindingSetItem& setDimension(TextureDimension::Enum value){ dimension = value; return *this; }
-    constexpr BindingSetItem& setSubresources(TextureSubresourceSet value){ subresources = value; return *this; }
-    constexpr BindingSetItem& setRange(BufferRange value){ range = value; return *this; }
+    constexpr DescriptorWriteItem& setArrayElement(u32 value){ arrayElement = value; return *this; }
+    constexpr DescriptorWriteItem& setFormat(Format::Enum value){ format = value; return *this; }
+    constexpr DescriptorWriteItem& setDimension(TextureDimension::Enum value){ dimension = value; return *this; }
+    constexpr DescriptorWriteItem& setSubresources(TextureSubresourceSet value){ subresources = value; return *this; }
+    constexpr DescriptorWriteItem& setRange(BufferRange value){ range = value; return *this; }
 
-    static BindingSetItem Base(u32 slot, ResourceType::Enum type, void* resourceHandle, Format::Enum format, TextureDimension::Enum dimension){
-        BindingSetItem result;
+    static DescriptorWriteItem Base(u32 slot, ResourceType::Enum type, void* resourceHandle, Format::Enum format, TextureDimension::Enum dimension){
+        DescriptorWriteItem result;
         result.slot = slot;
         result.arrayElement = 0;
         result.type = type;
@@ -255,69 +197,69 @@ struct BindingSetItem{
         return result;
     }
 
-    static BindingSetItem None(u32 slot = 0){
+    static DescriptorWriteItem None(u32 slot = 0){
         return Base(slot, ResourceType::None, nullptr, Format::UNKNOWN, TextureDimension::Unknown);
     }
-    static BindingSetItem Texture_SRV(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_AllSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown){
-        BindingSetItem result = Base(slot, ResourceType::Texture_SRV, texture, format, dimension);
+    static DescriptorWriteItem Texture_SRV(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_AllSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown){
+        DescriptorWriteItem result = Base(slot, ResourceType::Texture_SRV, texture, format, dimension);
         result.subresources = subresources;
         return result;
     }
-    static BindingSetItem Texture_UAV(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::AllArraySlices), TextureDimension::Enum dimension = TextureDimension::Unknown){
-        BindingSetItem result = Base(slot, ResourceType::Texture_UAV, texture, format, dimension);
+    static DescriptorWriteItem Texture_UAV(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::AllArraySlices), TextureDimension::Enum dimension = TextureDimension::Unknown){
+        DescriptorWriteItem result = Base(slot, ResourceType::Texture_UAV, texture, format, dimension);
         result.subresources = subresources;
         return result;
     }
-    static BindingSetItem TypedBuffer_SRV(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
-        BindingSetItem result = Base(slot, ResourceType::TypedBuffer_SRV, buffer, format, TextureDimension::Unknown);
+    static DescriptorWriteItem TypedBuffer_SRV(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
+        DescriptorWriteItem result = Base(slot, ResourceType::TypedBuffer_SRV, buffer, format, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static BindingSetItem TypedBuffer_UAV(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
-        BindingSetItem result = Base(slot, ResourceType::TypedBuffer_UAV, buffer, format, TextureDimension::Unknown);
+    static DescriptorWriteItem TypedBuffer_UAV(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
+        DescriptorWriteItem result = Base(slot, ResourceType::TypedBuffer_UAV, buffer, format, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static BindingSetItem ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer);
-    static BindingSetItem Sampler(u32 slot, Sampler* sampler){
+    static DescriptorWriteItem ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer);
+    static DescriptorWriteItem Sampler(u32 slot, Sampler* sampler){
         return Base(slot, ResourceType::Sampler, sampler, Format::UNKNOWN, TextureDimension::Unknown);
     }
-    static BindingSetItem RayTracingAccelStruct(u32 slot, RayTracingAccelStruct* as){
+    static DescriptorWriteItem RayTracingAccelStruct(u32 slot, RayTracingAccelStruct* as){
         return Base(slot, ResourceType::RayTracingAccelStruct, as, Format::UNKNOWN, TextureDimension::Unknown);
     }
-    static BindingSetItem StructuredBuffer_SRV(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
-        BindingSetItem result = Base(slot, ResourceType::StructuredBuffer_SRV, buffer, format, TextureDimension::Unknown);
+    static DescriptorWriteItem StructuredBuffer_SRV(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
+        DescriptorWriteItem result = Base(slot, ResourceType::StructuredBuffer_SRV, buffer, format, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static BindingSetItem StructuredBuffer_UAV(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
-        BindingSetItem result = Base(slot, ResourceType::StructuredBuffer_UAV, buffer, format, TextureDimension::Unknown);
+    static DescriptorWriteItem StructuredBuffer_UAV(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
+        DescriptorWriteItem result = Base(slot, ResourceType::StructuredBuffer_UAV, buffer, format, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static BindingSetItem RawBuffer_SRV(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer){
-        BindingSetItem result = Base(slot, ResourceType::RawBuffer_SRV, buffer, Format::UNKNOWN, TextureDimension::Unknown);
+    static DescriptorWriteItem RawBuffer_SRV(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer){
+        DescriptorWriteItem result = Base(slot, ResourceType::RawBuffer_SRV, buffer, Format::UNKNOWN, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static BindingSetItem RawBuffer_UAV(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer){
-        BindingSetItem result = Base(slot, ResourceType::RawBuffer_UAV, buffer, Format::UNKNOWN, TextureDimension::Unknown);
+    static DescriptorWriteItem RawBuffer_UAV(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer){
+        DescriptorWriteItem result = Base(slot, ResourceType::RawBuffer_UAV, buffer, Format::UNKNOWN, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static BindingSetItem PushConstants(u32 slot, u32 byteSize){
-        BindingSetItem result = Base(slot, ResourceType::PushConstants, nullptr, Format::UNKNOWN, TextureDimension::Unknown);
+    static DescriptorWriteItem PushConstants(u32 slot, u32 byteSize){
+        DescriptorWriteItem result = Base(slot, ResourceType::PushConstants, nullptr, Format::UNKNOWN, TextureDimension::Unknown);
         result.range.byteOffset = 0;
         result.range.byteSize = byteSize;
         return result;
     }
-    static BindingSetItem SamplerFeedbackTexture_UAV(u32 slot, SamplerFeedbackTexture* texture){
-        BindingSetItem result = Base(slot, ResourceType::SamplerFeedbackTexture_UAV, texture, Format::UNKNOWN, TextureDimension::Unknown);
+    static DescriptorWriteItem SamplerFeedbackTexture_UAV(u32 slot, SamplerFeedbackTexture* texture){
+        DescriptorWriteItem result = Base(slot, ResourceType::SamplerFeedbackTexture_UAV, texture, Format::UNKNOWN, TextureDimension::Unknown);
         result.subresources = s_AllSubresources;
         return result;
     }
 };
-inline bool operator==(const BindingSetItem& lhs, const BindingSetItem& rhs){
+inline bool operator==(const DescriptorWriteItem& lhs, const DescriptorWriteItem& rhs){
     return
         lhs.resourceHandle == rhs.resourceHandle
         && lhs.slot == rhs.slot
@@ -329,44 +271,8 @@ inline bool operator==(const BindingSetItem& lhs, const BindingSetItem& rhs){
         && lhs.rawData[1] == rhs.rawData[1]
     ;
 }
-inline bool operator!=(const BindingSetItem& lhs, const BindingSetItem& rhs){ return !(lhs == rhs); }
-static_assert(sizeof(BindingSetItem) == 40, "sizeof(BindingSetItem) is supposed to be 40 bytes");
-
-struct BindingSetDesc{
-    GraphicsVector<BindingSetItem> bindings;
-
-    // Enables automatic liveness tracking of this binding set by command lists.
-    // When disabled, the caller must keep the binding set and referenced resources alive until all commands using the binding set have finished.
-    bool trackLiveness = true;
-
-    explicit BindingSetDesc(GraphicsArena& arena)
-        : bindings(arena)
-    {}
-
-    BindingSetDesc& addItem(const BindingSetItem& value){ bindings.push_back(value); return *this; }
-    constexpr BindingSetDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
-};
-inline bool operator==(const BindingSetDesc& lhs, const BindingSetDesc& rhs){
-    if(lhs.trackLiveness != rhs.trackLiveness)
-        return false;
-    if(lhs.bindings.size() != rhs.bindings.size())
-        return false;
-    for(usize i = 0; i < lhs.bindings.size(); ++i){
-        if(lhs.bindings[i] != rhs.bindings[i])
-            return false;
-    }
-    return true;
-}
-inline bool operator!=(const BindingSetDesc& lhs, const BindingSetDesc& rhs){ return !(lhs == rhs); }
-
-typedef GraphicsBackend::Handle<BindingSet> BindingSetHandle;
-
-// Descriptor tables are bare, without extra mappings, state, or liveness tracking.
-// Unlike binding sets, descriptor tables are mutable - moreover, modification is the only way to populate them.
-// They can be grown or shrunk, and they are not tied to any binding layout.
-// All tracking is off, so applications should use descriptor tables with great care.
-typedef GraphicsBackend::Handle<DescriptorTable> DescriptorTableHandle;
-
+inline bool operator!=(const DescriptorWriteItem& lhs, const DescriptorWriteItem& rhs){ return !(lhs == rhs); }
+static_assert(sizeof(DescriptorWriteItem) == 40, "sizeof(DescriptorWriteItem) is supposed to be 40 bytes");
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

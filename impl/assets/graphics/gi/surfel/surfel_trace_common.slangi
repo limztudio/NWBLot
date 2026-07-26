@@ -22,13 +22,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Snapshot of the previous frame's converged field. The bounce gather reads these SRVs instead of the live pool this
-// trace writes, so surfel feedback sees a stable frame-start field.
-[[vk::binding(NWB_SURFEL_BINDING_SNAPSHOT_POOL, NWB_SURFEL_SET)]]
-StructuredBuffer<NwbSurfel> g_NwbSurfelSnapshotPool;
-
-[[vk::binding(NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD, NWB_SURFEL_SET)]]
-StructuredBuffer<uint> g_NwbSurfelSnapshotCellHead;
+// Snapshot of the previous frame's converged field. The bounce gather reads these global heap entries instead of the
+// live pool this trace writes, so surfel feedback sees a stable frame-start field.
+#define g_NwbSurfelSnapshotPool g_NwbHeapSurfelReadOnlyPools[g_NwbSurfelHeapPushConstants.snapshotPoolHeapSlot]
+#define g_NwbSurfelSnapshotCellHead g_NwbHeapSurfelReadOnlyUintBuffers[g_NwbSurfelHeapPushConstants.snapshotCellHeadHeapSlot]
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -19,6 +19,7 @@ struct NwbAvboitComputePushConstants{
     uint4 nwbAvboitFrame;
     uint4 nwbAvboitVolume;
     float4 nwbAvboitParams;
+    uint4 nwbAvboitHeapSlots;
 };
 
 [[vk::push_constant]]
@@ -31,6 +32,12 @@ ConstantBuffer<NwbAvboitComputePushConstants> g_NwbAvboitCompute;
 #define NWB_AVBOIT_PUSH_CONSTANTS g_NwbAvboitCompute
 #include "push_constants.slangi"
 #undef NWB_AVBOIT_PUSH_CONSTANTS
+
+// Compute dispatches select the same target-generation slot payload as the transparent material draws.  The
+// resulting helper functions expose every AVBOIT work buffer through the global StorageBuffer heap.
+#define NWB_AVBOIT_DEFERRED_SLOTS_DESCRIPTOR_SLOT \
+    g_NwbAvboitCompute.nwbAvboitHeapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES]
+#include "heap_resources.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

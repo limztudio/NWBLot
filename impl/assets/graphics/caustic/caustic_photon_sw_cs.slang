@@ -8,25 +8,41 @@
 #include "../raytrace/material_context_slots.slangi"
 #include "../bindless/bindless_heap_rt.slangi"
 
-// The shared scene-shading CB + light list are target-generation heap entries. This local slot cbuffer carries their
-// uniform heap indices in avboitSlots.z/.w, so scene/buffer.slangi emits typed heap aliases instead of the historical
-// local bindings 0/1.
-[[vk::binding(NWB_CAUSTIC_SW_BINDING_BINDLESS_RESOURCES, NWB_CAUSTIC_SW_SET)]]
-ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbCausticSwBindlessResources;
-#define NWB_SCENE_BUFFERS_FROM_HEAP 1
+// Per-dispatch constants -- matches the C++ CausticPhotonPushConstants. The two UniformBuffer selector slots and the
+// writable accumulator StorageImage slot keep this producer entirely on the global descriptor heap.
+struct NwbCausticSwPushConstants{
+    uint width;
+    uint height;
+    uint instanceCount;
+    uint photonCount;
+    uint emissionTargetCount;
+    uint gridSide; // the FULL emission grid side (sqrt of the full photon budget); runtime so the density scales per build config
+    uint frameIndex; // SW 2x temporal-reuse checkerboard phase: (frameIndex & 1) selects which half of the grid this frame emits
+    uint depthSlot;
+    uint worldPositionSlot;
+    uint emissionTargetSlot;
+    uint viewSlot;
+    uint deferredResourcesHeapSlot;
+    uint materialContextSlotsHeapSlot;
+    uint accumulatorStorageSlot;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<NwbCausticSwPushConstants> g_NwbCausticSwPushConstants;
+
+// The shared scene-shading CB + light list are selected by the frame selector payload in the UniformBuffer heap.
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed alias of the global UniformBuffer descriptor table.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapCausticSwMaterialContextSlots[];
+#pragma warning(pop)
+#define g_NwbCausticSwBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbCausticSwPushConstants.deferredResourcesHeapSlot]
+#define g_NwbCausticSwMaterialContextSlots g_NwbHeapCausticSwMaterialContextSlots[g_NwbCausticSwPushConstants.materialContextSlotsHeapSlot]
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbCausticSwBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbCausticSwBindlessResources.avboitSlots.w
 
-// The five trace-context buffers are global StorageBuffer heap entries. This compact local cbuffer is their only
-// set-0 descriptor: its uniform slots select the scene BVH / instance and material-surface buffers for this dispatch.
-[[vk::binding(NWB_CAUSTIC_SW_BINDING_MATERIAL_CONTEXT_SLOTS, NWB_CAUSTIC_SW_SET)]]
-ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbCausticSwMaterialContextSlots;
-
 // The per-hit surface dispatch reads its typed words and mutable mesh-instance records through the heap-selected
-// material context above. Do not let bindless_heap_mesh.slangi emit its unrelated local mesh-view descriptor.
-#define NWB_MESH_SET NWB_CAUSTIC_SW_SET
-#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
-#define NWB_MESH_VIEW_BUFFER_BINDLESS 1
+// material context above.
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbCausticSwMaterialContextSlots.sceneSlots.w;
 }
@@ -117,27 +133,6 @@ StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbHeapCausticSwE
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 ConstantBuffer<NwbCausticSwView, Std140DataLayout> g_NwbHeapCausticSwViews[];
 #pragma warning(pop)
-
-[[vk::binding(NWB_CAUSTIC_SW_BINDING_ACCUMULATOR, NWB_CAUSTIC_SW_SET)]]
-RWTexture2DArray<uint> g_NwbCausticSwAccumulator;
-
-struct NwbCausticSwPushConstants{
-    uint width;
-    uint height;
-    uint instanceCount;
-    uint photonCount;
-    uint emissionTargetCount;
-    uint gridSide; // the FULL emission grid side (sqrt of the full photon budget); runtime so the density scales per build config
-    uint frameIndex; // SW 2x temporal-reuse checkerboard phase: (frameIndex & 1) selects which half of the grid this frame emits
-    uint depthSlot;
-    uint worldPositionSlot;
-    uint emissionTargetSlot;
-    uint viewSlot;
-};
-
-[[vk::push_constant]]
-ConstantBuffer<NwbCausticSwPushConstants> g_NwbCausticSwPushConstants;
-
 
 Texture2D<float4> nwbCausticSwGbufferDepth(){
     return NwbHeapSampledImage2D(g_NwbCausticSwPushConstants.depthSlot);
@@ -436,7 +431,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 #define NWB_CAUSTIC_SPLAT_PUSH g_NwbCausticSwPushConstants
 #define NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH nwbCausticSwGbufferDepth()
 #define NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION nwbCausticSwGbufferWorldPosition()
-#define NWB_CAUSTIC_SPLAT_ACCUMULATOR g_NwbCausticSwAccumulator
+#define NWB_CAUSTIC_SPLAT_ACCUMULATOR NwbHeapStorageImage2DArrayUint(g_NwbCausticSwPushConstants.accumulatorStorageSlot)
 #include "splat.slangi"
 #undef NWB_CAUSTIC_SPLAT_ACCUMULATOR
 #undef NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION

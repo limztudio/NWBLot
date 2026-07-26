@@ -37,13 +37,19 @@
 #define NWB_SKINNED_MESH_PUSH_JOINT_COUNT 2u
 #define NWB_SKINNED_MESH_PUSH_SKINNING_MODE 3u
 #define NWB_SKINNED_MESH_PUSH_ATTRIBUTE_COUNT 4u
+// The persistent per-runtime stream-slot payload is itself a UniformBuffer heap entry.  The skinning dispatch uses
+// the first free word of payload1 to select it, replacing the former local selector CBV.
+#define NWB_SKINNED_MESH_PUSH_BINDLESS_RESOURCES_SLOT 5u
 #define NWB_SKINNED_MESH_PUSH_CONSTANT_BYTE_SIZE 32u
 
 #define NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT 0u
+// Bounds and repack have a single uint4 push lane, so their first padding word selects the same heap UniformBuffer.
+#define NWB_SKINNED_MESH_BOUNDS_PUSH_BINDLESS_RESOURCES_SLOT 1u
 #define NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE 16u
 
 #define NWB_SKINNED_MESH_REPACK_GROUP_SIZE_X 64
 #define NWB_SKINNED_MESH_REPACK_PUSH_MESHLET_COUNT 0u
+#define NWB_SKINNED_MESH_REPACK_PUSH_BINDLESS_RESOURCES_SLOT 1u
 #define NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE 16u
 
 

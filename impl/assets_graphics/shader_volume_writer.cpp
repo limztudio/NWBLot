@@ -469,21 +469,12 @@ bool AppendPreparedShadersToManifest(
             if(!appendShaderVariant(defineCombo))
                 return false;
 
-            if(preparedEntry.supportsCsgClipVariant){
+            if(preparedEntry.supportsCsgClipVariant || preparedEntry.supportsAvboitCsgClipVariant){
                 ShaderCook::DefineCombo csgDefineCombo{0, Hasher<CookString>(), EqualTo<CookString>(), cookArena};
                 if(!AssetsGraphicsCsgShaderVariants::BuildClipDefineCombo(cookArena, AStringView(entry.name), defineCombo, csgDefineCombo))
                     return false;
 
                 if(!appendShaderVariant(csgDefineCombo))
-                    return false;
-            }
-
-            if(preparedEntry.supportsAvboitCsgClipVariant){
-                ShaderCook::DefineCombo avboitCsgDefineCombo{0, Hasher<CookString>(), EqualTo<CookString>(), cookArena};
-                if(!AssetsGraphicsCsgShaderVariants::BuildAvboitClipDefineCombo(cookArena, AStringView(entry.name), defineCombo, avboitCsgDefineCombo))
-                    return false;
-
-                if(!appendShaderVariant(avboitCsgDefineCombo))
                     return false;
             }
         }

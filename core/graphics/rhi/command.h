@@ -48,8 +48,6 @@ inline bool operator==(const IndexBufferBinding& lhs, const IndexBufferBinding& 
 }
 inline bool operator!=(const IndexBufferBinding& lhs, const IndexBufferBinding& rhs)noexcept{ return !(lhs == rhs); }
 
-typedef FixedVector<BindingSet*, s_MaxBindingLayouts> BindingSetVector;
-
 struct GraphicsState{
     GraphicsPipeline* pipeline = nullptr;
     Framebuffer* framebuffer = nullptr;
@@ -57,8 +55,6 @@ struct GraphicsState{
     VariableRateShadingState shadingRateState;
     Color blendConstantColor{};
     u8 dynamicStencilRefValue = 0;
-
-    BindingSetVector bindings;
 
     FixedVector<VertexBufferBinding, s_MaxVertexAttributes> vertexBuffers;
     IndexBufferBinding indexBuffer;
@@ -71,7 +67,6 @@ struct GraphicsState{
     constexpr GraphicsState& setShadingRateState(const VariableRateShadingState& value){ shadingRateState = value; return *this; }
     constexpr GraphicsState& setBlendColor(const Color& value){ blendConstantColor = value; return *this; }
     constexpr GraphicsState& setDynamicStencilRefValue(u8 value){ dynamicStencilRefValue = value; return *this; }
-    GraphicsState& addBindingSet(BindingSet* value){ bindings.push_back(value); return *this; }
     GraphicsState& addVertexBuffer(const VertexBufferBinding& value){ vertexBuffers.push_back(value); return *this; }
     constexpr GraphicsState& setIndexBuffer(const IndexBufferBinding& value){ indexBuffer = value; return *this; }
     constexpr GraphicsState& setIndirectParams(Buffer* value){ indirectParams = value; return *this; }
@@ -120,12 +115,9 @@ struct DrawIndexedIndirectArguments{
 struct ComputeState{
     ComputePipeline* pipeline = nullptr;
 
-    BindingSetVector bindings;
-
     Buffer* indirectParams = nullptr;
 
     constexpr ComputeState& setPipeline(ComputePipeline* value){ pipeline = value; return *this; }
-    ComputeState& addBindingSet(BindingSet* value){ bindings.push_back(value); return *this; }
     constexpr ComputeState& setIndirectParams(Buffer* value){ indirectParams = value; return *this; }
 };
 
@@ -148,15 +140,12 @@ struct MeshletState{
     Color blendConstantColor{};
     u8 dynamicStencilRefValue = 0;
 
-    BindingSetVector bindings;
-
     Buffer* indirectParams = nullptr;
 
     constexpr MeshletState& setPipeline(MeshletPipeline* value){ pipeline = value; return *this; }
     constexpr MeshletState& setFramebuffer(Framebuffer* value){ framebuffer = value; return *this; }
     constexpr MeshletState& setViewport(const ViewportState& value){ viewport = value; return *this; }
     constexpr MeshletState& setBlendColor(const Color& value){ blendConstantColor = value; return *this; }
-    MeshletState& addBindingSet(BindingSet* value){ bindings.push_back(value); return *this; }
     constexpr MeshletState& setIndirectParams(Buffer* value){ indirectParams = value; return *this; }
     constexpr MeshletState& setDynamicStencilRefValue(u8 value){ dynamicStencilRefValue = value; return *this; }
 };
@@ -234,10 +223,7 @@ typedef GraphicsBackend::Handle<RayTracingPipeline> RayTracingPipelineHandle;
 struct RayTracingState{
     RayTracingShaderTable* shaderTable = nullptr;
 
-    BindingSetVector bindings;
-
     constexpr RayTracingState& setShaderTable(RayTracingShaderTable* value){ shaderTable = value; return *this; }
-    RayTracingState& addBindingSet(BindingSet* value){ bindings.push_back(value); return *this; }
 };
 
 struct RayTracingDispatchRaysArguments{

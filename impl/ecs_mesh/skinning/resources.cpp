@@ -55,13 +55,30 @@ static Core::BufferHandle SetupStructuredBuffer(
 static bool RegisterStorageBuffer(
     Core::GpuDescriptorHeap& heap,
     Core::GpuDescriptorHandle& outHandle,
-    const Core::BindingSetItem& item
+    const Core::DescriptorWriteItem& item
 ){
     outHandle = Core::GpuDescriptorHandle::invalid();
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(!handle.valid())
         return false;
     if(!heap.write(handle, item)){
+        heap.free(handle);
+        return false;
+    }
+    outHandle = handle;
+    return true;
+}
+
+static bool RegisterUniformBuffer(
+    Core::GpuDescriptorHeap& heap,
+    Core::GpuDescriptorHandle& outHandle,
+    Core::Buffer& buffer
+){
+    outHandle = Core::GpuDescriptorHandle::invalid();
+    const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
+    if(!handle.valid())
+        return false;
+    if(!heap.write(handle, Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer))){
         heap.free(handle);
         return false;
     }
@@ -88,6 +105,7 @@ void MeshSkinningSystem::releaseRuntimeResourceBindlessHeapHandles(RuntimeResour
                     heap.free(handle);
                 handle = Core::GpuDescriptorHandle::invalid();
             };
+            release(resources.bindlessHeapHandles.resourceSlots);
             release(resources.bindlessHeapHandles.restPosition);
             release(resources.bindlessHeapHandles.skinnedPosition);
             release(resources.bindlessHeapHandles.restNormal);
@@ -124,12 +142,13 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to register persistent compute buffers for runtime mesh '{}' in the descriptor heap"), instance.handle.value);
         return false;
     };
-    const auto registerBuffer = [&](Core::GpuDescriptorHandle& outHandle, const Core::BindingSetItem& item){
+    const auto registerBuffer = [&](Core::GpuDescriptorHandle& outHandle, const Core::DescriptorWriteItem& item){
         return __hidden_resources::RegisterStorageBuffer(heap, outHandle, item);
     };
 
     if(
-        !instance.restPositionBuffer || !instance.skinnedPositionBuffer
+        !resources.bindlessResourceSlotsBuffer
+        || !instance.restPositionBuffer || !instance.skinnedPositionBuffer
         || !instance.restNormalBuffer || !instance.skinnedNormalBuffer
         || !instance.restTangentBuffer || !instance.skinnedTangentBuffer
         || !instance.meshletDescBuffer || !instance.meshletPositionRefDeltaBuffer
@@ -142,19 +161,19 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
     }
 
     if(
-        !registerBuffer(resources.bindlessHeapHandles.restPosition, Core::BindingSetItem::StructuredBuffer_SRV(0u, instance.restPositionBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.skinnedPosition, Core::BindingSetItem::StructuredBuffer_UAV(0u, instance.skinnedPositionBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.restNormal, Core::BindingSetItem::StructuredBuffer_SRV(0u, instance.restNormalBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.skinnedNormal, Core::BindingSetItem::StructuredBuffer_UAV(0u, instance.skinnedNormalBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.restTangent, Core::BindingSetItem::StructuredBuffer_SRV(0u, instance.restTangentBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.skinnedTangent, Core::BindingSetItem::StructuredBuffer_UAV(0u, instance.skinnedTangentBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.meshletDesc, Core::BindingSetItem::StructuredBuffer_SRV(0u, instance.meshletDescBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.positionRefDeltas, Core::BindingSetItem::RawBuffer_SRV(0u, instance.meshletPositionRefDeltaBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.attributeRefDeltas, Core::BindingSetItem::RawBuffer_SRV(0u, instance.meshletAttributeRefDeltaBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.attributeSkins, Core::BindingSetItem::StructuredBuffer_SRV(0u, instance.attributeSkinBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.localVertexRefs, Core::BindingSetItem::StructuredBuffer_SRV(0u, instance.meshletLocalVertexRefBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.primitiveIndices, Core::BindingSetItem::RawBuffer_SRV(0u, instance.meshletPrimitiveIndexBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.meshletBounds, Core::BindingSetItem::RawBuffer_UAV(0u, instance.meshletBoundsBuffer.get()))
+        !registerBuffer(resources.bindlessHeapHandles.restPosition, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, instance.restPositionBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.skinnedPosition, Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, instance.skinnedPositionBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.restNormal, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, instance.restNormalBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.skinnedNormal, Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, instance.skinnedNormalBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.restTangent, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, instance.restTangentBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.skinnedTangent, Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, instance.skinnedTangentBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.meshletDesc, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, instance.meshletDescBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.positionRefDeltas, Core::DescriptorWriteItem::RawBuffer_SRV(0u, instance.meshletPositionRefDeltaBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.attributeRefDeltas, Core::DescriptorWriteItem::RawBuffer_SRV(0u, instance.meshletAttributeRefDeltaBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.attributeSkins, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, instance.attributeSkinBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.localVertexRefs, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, instance.meshletLocalVertexRefBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.primitiveIndices, Core::DescriptorWriteItem::RawBuffer_SRV(0u, instance.meshletPrimitiveIndexBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.meshletBounds, Core::DescriptorWriteItem::RawBuffer_UAV(0u, instance.meshletBoundsBuffer.get()))
     )
         return fail();
 
@@ -164,16 +183,22 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
             return fail();
         }
         if(
-            !registerBuffer(resources.bindlessHeapHandles.skinInfluences, Core::BindingSetItem::StructuredBuffer_SRV(0u, resources.skinBuffer.get()))
-            || !registerBuffer(resources.bindlessHeapHandles.jointPalette, Core::BindingSetItem::StructuredBuffer_SRV(0u, resources.jointPaletteBuffer.get()))
+            !registerBuffer(resources.bindlessHeapHandles.skinInfluences, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, resources.skinBuffer.get()))
+            || !registerBuffer(resources.bindlessHeapHandles.jointPalette, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, resources.jointPaletteBuffer.get()))
         )
             return fail();
     }
 
     if(instance.attributeBuffer){
-        if(!registerBuffer(resources.bindlessHeapHandles.attributeBuffer, Core::BindingSetItem::RawBuffer_UAV(0u, instance.attributeBuffer.get())))
+        if(!registerBuffer(resources.bindlessHeapHandles.attributeBuffer, Core::DescriptorWriteItem::RawBuffer_UAV(0u, instance.attributeBuffer.get())))
             return fail();
     }
+    if(!__hidden_resources::RegisterUniformBuffer(
+        heap,
+        resources.bindlessHeapHandles.resourceSlots,
+        *resources.bindlessResourceSlotsBuffer.get()
+    ))
+        return fail();
 
     RuntimeBindlessResourceSlots& slots = resources.bindlessResourceSlots;
     slots.restPosition = resources.bindlessHeapHandles.restPosition.slot();
@@ -251,9 +276,7 @@ bool MeshSkinningSystem::ensureRuntimeResources(
         || resources.skinCount != skinCount
         || resources.jointCount != jointCount
         || !resources.hasPersistentHeapDescriptors(hasActiveSkin, instance.attributeBuffer != nullptr)
-        || !resources.boundsBindingSet
-        || (instance.attributeBuffer && !resources.repackBindingSet)
-        || (hasActiveSkin && (!resources.skinBuffer || !resources.jointPaletteBuffer || !resources.skinningBindingSet))
+        || (hasActiveSkin && (!resources.skinBuffer || !resources.jointPaletteBuffer))
         || (!hasActiveSkin && resources.usesSkinning())
     ;
     if(!rebuild){
@@ -270,8 +293,7 @@ bool MeshSkinningSystem::ensureRuntimeResources(
     rebuilt.skinCount = skinCount;
     rebuilt.jointCount = jointCount;
 
-    auto* device = m_graphics.getDevice();
-    if(!device){
+    if(!m_graphics.getDevice()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: no graphics device for runtime mesh '{}'"), instance.handle.value);
         return false;
     }
@@ -338,45 +360,6 @@ bool MeshSkinningSystem::ensureRuntimeResources(
 
     if(!createRuntimeResourceBindlessHeapHandles(instance, rebuilt))
         return failRebuild();
-
-    if(hasActiveSkin){
-        Core::BindingSetDesc skinningBindingSetDesc(m_arena);
-        skinningBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
-            NWB_SKINNED_MESH_BINDING_BINDLESS_RESOURCES,
-            rebuilt.bindlessResourceSlotsBuffer.get()
-        ));
-        rebuilt.skinningBindingSet = device->createBindingSet(skinningBindingSetDesc, m_skinningBindingLayout);
-        if(!rebuilt.skinningBindingSet){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skinning binding set for runtime mesh '{}'"), instance.handle.value);
-            return failRebuild();
-        }
-    }
-
-    Core::BindingSetDesc boundsBindingSetDesc(m_arena);
-    boundsBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
-        NWB_SKINNED_MESH_BOUNDS_BINDING_BINDLESS_RESOURCES,
-        rebuilt.bindlessResourceSlotsBuffer.get()
-    ));
-    rebuilt.boundsBindingSet = device->createBindingSet(boundsBindingSetDesc, m_boundsBindingLayout);
-    if(!rebuilt.boundsBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create bounds binding set for runtime mesh '{}'"), instance.handle.value);
-        return failRebuild();
-    }
-
-    // Per-frame skinned-normal repack uses the same persistent slot cbuffer; all stream descriptors live in the
-    // global heap, so the RT-only local set remains a one-CB shape.
-    if(instance.attributeBuffer && m_repackBindingLayout){
-        Core::BindingSetDesc repackBindingSetDesc(m_arena);
-        repackBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
-            NWB_SKINNED_MESH_REPACK_BINDING_BINDLESS_RESOURCES,
-            rebuilt.bindlessResourceSlotsBuffer.get()
-        ));
-        rebuilt.repackBindingSet = device->createBindingSet(repackBindingSetDesc, m_repackBindingLayout);
-        if(!rebuilt.repackBindingSet){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create repack binding set for runtime mesh '{}'"), instance.handle.value);
-            return failRebuild();
-        }
-    }
 
     // Each rebuild allocates fresh heap slots. Free the replaced generation before dropping its BufferHandles so the
     // heap's deferred retirement keeps in-flight dispatches valid instead of overwriting their descriptors.

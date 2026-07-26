@@ -3,7 +3,7 @@
 
 
 #include "binding_slots.h"
-#include "bvh_common.slangi"
+#include "bvh_heap_resources.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -12,27 +12,14 @@
 [[vk::push_constant]]
 ConstantBuffer<NwbBvhBuildPushConstants> g_NwbBvhBuildPushConstants;
 
-[[vk::binding(NWB_BVH_BUILD_BINDING_KEYS, NWB_BVH_BUILD_SET)]]
-RWStructuredBuffer<uint> g_NwbBvhKeys;
-
-[[vk::binding(NWB_BVH_BUILD_BINDING_NODES, NWB_BVH_BUILD_SET)]]
-RWStructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbBvhNodes;
-
-[[vk::binding(NWB_BVH_BUILD_BINDING_PARENT, NWB_BVH_BUILD_SET)]]
-RWStructuredBuffer<uint> g_NwbBvhParent;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Common-prefix length of the augmented keys: 32-bit Morton, then the leaf index as a tie-break so equal
 // Morton codes still yield a strict total order (Karras requires this to avoid degenerate nodes). Returns
 // -1 for an out-of-range neighbour, which terminates the range searches below.
 int nwbBvhDelta(const int lhs, const int rhs, const uint primitiveCount){
     if(rhs < 0 || rhs >= (int)primitiveCount)
         return -1;
-    const uint keyLhs = g_NwbBvhKeys[lhs];
-    const uint keyRhs = g_NwbBvhKeys[rhs];
+    const uint keyLhs = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBuildPushConstants.keysHeapSlot][lhs];
+    const uint keyRhs = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBuildPushConstants.keysHeapSlot][rhs];
     if(keyLhs != keyRhs)
         return (int)nwbBvhClz(keyLhs ^ keyRhs);
     return 32 + (int)nwbBvhClz((uint)lhs ^ (uint)rhs);
@@ -90,10 +77,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint leftChild = (split == first) ? (internalCount + (uint)split) : (uint)split;
     const uint rightChild = ((split + 1) == last) ? (internalCount + (uint)(split + 1)) : (uint)(split + 1);
 
-    g_NwbBvhNodes[internalIndex].leftChild = leftChild;
-    g_NwbBvhNodes[internalIndex].rightChild = rightChild;
-    g_NwbBvhParent[leftChild] = internalIndex;
-    g_NwbBvhParent[rightChild] = internalIndex;
+    g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][internalIndex].leftChild = leftChild;
+    g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][internalIndex].rightChild = rightChild;
+    g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBuildPushConstants.parentHeapSlot][leftChild] = internalIndex;
+    g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBuildPushConstants.parentHeapSlot][rightChild] = internalIndex;
 }
 
 

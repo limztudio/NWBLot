@@ -108,11 +108,19 @@ static void ClearCsgIntervalTargets(
 
 
 void RendererDeferredSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
-    targets.occupancyBindingSet.reset();
-    targets.depthWarpBindingSet.reset();
-    targets.extinctionBindingSet.reset();
-    targets.integrateBindingSet.reset();
-    targets.accumulateBindingSet.reset();
+    // AVBOIT owns its five transient work-buffer registrations plus the writable transmittance StorageImage. The
+    // shared deferred slot-payload descriptor is borrowed, so release only owned descriptors before their targets.
+    if(auto* device = graphics().getDevice()){
+        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+        if(heap.isInitialized()){
+            heap.free(targets.coverageBufferDescriptor);
+            heap.free(targets.depthWarpBufferDescriptor);
+            heap.free(targets.controlBufferDescriptor);
+            heap.free(targets.extinctionBufferDescriptor);
+            heap.free(targets.extinctionOverflowBufferDescriptor);
+            heap.free(targets.transmittanceTextureStorageDescriptor);
+        }
+    }
 
     targets.lowFramebuffer.reset();
     targets.accumulationFramebuffer.reset();
@@ -171,30 +179,31 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         handle = heap.allocate(descriptorClass);
         if(!handle.valid())
             return false;
-        if(heap.write(handle, Core::BindingSetItem::Texture_SRV(0u, texture, format, subresources, dimension)))
+        if(heap.write(handle, Core::DescriptorWriteItem::Texture_SRV(0u, texture, format, subresources, dimension)))
             return true;
         heap.free(handle);
         handle = Core::GpuDescriptorHandle::invalid();
         return false;
     };
 
-    // CSG interval/peel targets are all UAV-capable Texture2DArray images. Their shader-side float/uint aliases
-    // share the StorageImage descriptor table, so register every target once as a storage image regardless of the
-    // pass that subsequently reads it.
+    // One target may need both sampled and storage views.  Keep a persistent StorageImage descriptor for every
+    // writable target; shader aliases choose the appropriate 2D/2DArray/typed view while explicit command-list
+    // transitions select SHADER_READ_ONLY vs GENERAL for each use.
     auto registerStorageTexture = [&heap](
         Core::GpuDescriptorHandle& handle,
         Core::Texture* texture,
-        const Core::Format::Enum format
+        const Core::Format::Enum format,
+        const Core::TextureDimension::Enum dimension
     ) -> bool{
         handle = heap.allocate(Core::GpuDescriptorClass::StorageImage);
         if(!handle.valid())
             return false;
-        if(heap.write(handle, Core::BindingSetItem::Texture_UAV(
+        if(heap.write(handle, Core::DescriptorWriteItem::Texture_UAV(
             0u,
             texture,
             format,
             Core::s_AllSubresources,
-            Core::TextureDimension::Texture2DArray
+            dimension
         )))
             return true;
         heap.free(handle);
@@ -206,7 +215,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         handle = heap.allocate(Core::GpuDescriptorClass::Sampler);
         if(!handle.valid())
             return false;
-        if(heap.write(handle, Core::BindingSetItem::Sampler(0u, sampler)))
+        if(heap.write(handle, Core::DescriptorWriteItem::Sampler(0u, sampler)))
             return true;
         heap.free(handle);
         handle = Core::GpuDescriptorHandle::invalid();
@@ -219,7 +228,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
         if(!handle.valid())
             return false;
-        if(heap.write(handle, Core::BindingSetItem::StructuredBuffer_SRV(0u, buffer)))
+        if(heap.write(handle, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, buffer)))
             return true;
         heap.free(handle);
         handle = Core::GpuDescriptorHandle::invalid();
@@ -230,7 +239,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         handle = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
         if(!handle.valid())
             return false;
-        if(heap.write(handle, Core::BindingSetItem::ConstantBuffer(0u, buffer)))
+        if(heap.write(handle, Core::DescriptorWriteItem::ConstantBuffer(0u, buffer)))
             return true;
         heap.free(handle);
         handle = Core::GpuDescriptorHandle::invalid();
@@ -244,11 +253,15 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         && registerTexture(bindless.gbufferWorldPosition, Core::GpuDescriptorClass::SampledImage, targets.worldPosition.get(), targets.worldPositionFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.gbufferDepth, Core::GpuDescriptorClass::SampledImage, targets.depth.get(), targets.depthFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.shadowVisibility, Core::GpuDescriptorClass::SampledImage2DArray, targets.shadowVisibility.get(), targets.shadowVisibilityFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.shadowVisibilityStorage, targets.shadowVisibility.get(), targets.shadowVisibilityFormat, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.causticIrradiance, Core::GpuDescriptorClass::SampledImage, targets.causticIrradiance.get(), targets.causticIrradianceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerStorageTexture(bindless.causticIrradianceStorage, targets.causticIrradiance.get(), targets.causticIrradianceFormat, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.surfelIrradiance, Core::GpuDescriptorClass::SampledImage, targets.surfelIrradiance.get(), targets.surfelIrradianceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
-        // The surfel GI resolve/upsample pair carries its G-buffer + half-resolution image reads through direct heap
-        // slots in push constants, retaining only output UAVs and persistent surfel buffers in local binding sets.
+        && registerStorageTexture(bindless.surfelIrradianceStorage, targets.surfelIrradiance.get(), targets.surfelIrradianceFormat, Core::TextureDimension::Texture2D)
+        // The surfel GI resolve/upsample pair selects every persistent buffer and frame image through heap slots in
+        // push constants; both writable irradiance views therefore have StorageImage registrations.
         && registerTexture(bindless.surfelIrradianceHalf, Core::GpuDescriptorClass::SampledImage, targets.surfelIrradianceHalf.get(), targets.surfelIrradianceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerStorageTexture(bindless.surfelIrradianceHalfStorage, targets.surfelIrradianceHalf.get(), targets.surfelIrradianceFormat, Core::TextureDimension::Texture2D)
         && registerSampler(bindless.sampler, deferredState().m_sampler.get())
         && registerTexture(bindless.opaqueColor, Core::GpuDescriptorClass::SampledImage, targets.opaqueColor.get(), targets.opaqueColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitAccumColor, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumColor.get(), targets.avboit.accumColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
@@ -261,38 +274,56 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         && registerStructuredBuffer(bindless.lightList, deferredState().m_lightBuffer.get())
         // CSG interval/peel resources use one persistent StorageImage descriptor each. Their target-generation slots
         // are consumed by the CSG compute, material surface, and cap-fill shaders through the shared slot cbuffer.
-        && registerStorageTexture(bindless.csgCapBackNormal, targets.csgCapBackNormal.get(), targets.csgCapNormalFormat)
-        && registerStorageTexture(bindless.csgIntervalDepth, targets.csgIntervalDepth.get(), targets.csgIntervalDepthFormat)
-        && registerStorageTexture(bindless.csgIntervalId, targets.csgIntervalId.get(), targets.csgIntervalIdFormat)
-        && registerStorageTexture(bindless.csgReceiverEventData, targets.csgReceiverEventData.get(), targets.csgReceiverEventDataFormat)
-        && registerStorageTexture(bindless.csgReceiverEventCount, targets.csgReceiverEventCount.get(), targets.csgReceiverEventCountFormat)
-        && registerStorageTexture(bindless.csgReceiverSpanData, targets.csgReceiverSpanData.get(), targets.csgReceiverSpanDataFormat)
-        && registerStorageTexture(bindless.csgReceiverSpanCount, targets.csgReceiverSpanCount.get(), targets.csgReceiverSpanCountFormat)
-        && registerStorageTexture(bindless.csgRemovedIntervalDepth, targets.csgRemovedIntervalDepth.get(), targets.csgRemovedIntervalDepthFormat)
-        && registerStorageTexture(bindless.csgRemovedIntervalCapNormal, targets.csgRemovedIntervalCapNormal.get(), targets.csgRemovedIntervalCapNormalFormat)
-        && registerStorageTexture(bindless.csgRemovedIntervalData, targets.csgRemovedIntervalData.get(), targets.csgRemovedIntervalDataFormat)
-        && registerStorageTexture(bindless.csgRemovedIntervalCount, targets.csgRemovedIntervalCount.get(), targets.csgRemovedIntervalCountFormat)
+        && registerStorageTexture(bindless.csgCapBackNormal, targets.csgCapBackNormal.get(), targets.csgCapNormalFormat, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.csgIntervalDepth, targets.csgIntervalDepth.get(), targets.csgIntervalDepthFormat, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.csgIntervalId, targets.csgIntervalId.get(), targets.csgIntervalIdFormat, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.csgReceiverEventData, targets.csgReceiverEventData.get(), targets.csgReceiverEventDataFormat, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.csgReceiverEventCount, targets.csgReceiverEventCount.get(), targets.csgReceiverEventCountFormat, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.csgReceiverSpanData, targets.csgReceiverSpanData.get(), targets.csgReceiverSpanDataFormat, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.csgReceiverSpanCount, targets.csgReceiverSpanCount.get(), targets.csgReceiverSpanCountFormat, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.csgRemovedIntervalDepth, targets.csgRemovedIntervalDepth.get(), targets.csgRemovedIntervalDepthFormat, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.csgRemovedIntervalCapNormal, targets.csgRemovedIntervalCapNormal.get(), targets.csgRemovedIntervalCapNormalFormat, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.csgRemovedIntervalData, targets.csgRemovedIntervalData.get(), targets.csgRemovedIntervalDataFormat, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.csgRemovedIntervalCount, targets.csgRemovedIntervalCount.get(), targets.csgRemovedIntervalCountFormat, Core::TextureDimension::Texture2DArray)
         // The caustic resolve carries all sampled inputs through target-generation slots. The R32_UINT accumulator uses
         // the heap's dedicated typed uint Texture2DArray table; the remaining resources are floating-point Texture2Ds.
         && registerTexture(bindless.causticAccumulator, Core::GpuDescriptorClass::SampledImage2DArrayUint, targets.causticAccumulator.get(), targets.causticAccumulatorFormat, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.causticAccumulatorStorage, targets.causticAccumulator.get(), targets.causticAccumulatorFormat, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.causticHistory, Core::GpuDescriptorClass::SampledImage, targets.causticHistory.get(), targets.causticHistoryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerStorageTexture(bindless.causticHistoryStorage, targets.causticHistory.get(), targets.causticHistoryFormat, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.causticResolveHalf, Core::GpuDescriptorClass::SampledImage, targets.causticResolveHalf.get(), targets.causticHistoryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerStorageTexture(bindless.causticResolveHalfStorage, targets.causticResolveHalf.get(), targets.causticHistoryFormat, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.causticResolveGeometry, Core::GpuDescriptorClass::SampledImage, targets.causticResolveGeometry.get(), targets.causticHistoryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
-        // The soft-shadow geometry downsample + resolve use these target-generation slots directly in push constants.
-        // Keep the physical images retained through the heap's deferred-free window when a resize replaces them.
+        && registerStorageTexture(bindless.causticResolveGeometryStorage, targets.causticResolveGeometry.get(), targets.causticHistoryFormat, Core::TextureDimension::Texture2D)
+        // Every soft-shadow producer/resolve work image has both its sampled read view and, where a compute pass
+        // writes it, a StorageImage view. The heap owns each target generation until recorded dispatches retire.
+        && registerStorageTexture(bindless.shadowCoarseTransmittanceStorage, targets.shadowCoarseTransmittance.get(), targets.shadowCoarseTransmittanceFormat, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.shadowSoftGeometry, Core::GpuDescriptorClass::SampledImage, targets.shadowSoftGeometry.get(), targets.shadowSoftGeometryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerStorageTexture(bindless.shadowSoftGeometryStorage, targets.shadowSoftGeometry.get(), targets.shadowSoftGeometryFormat, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.shadowSoftGeometryPrev, Core::GpuDescriptorClass::SampledImage, targets.shadowSoftGeometryPrev.get(), targets.shadowSoftGeometryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerStorageTexture(bindless.shadowSoftGeometryPrevStorage, targets.shadowSoftGeometryPrev.get(), targets.shadowSoftGeometryFormat, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.shadowSoftHalfA, Core::GpuDescriptorClass::SampledImage2DArray, targets.shadowSoftHalfA.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.shadowSoftHalfAStorage, targets.shadowSoftHalfA.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.shadowSoftHalfB, Core::GpuDescriptorClass::SampledImage2DArray, targets.shadowSoftHalfB.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.shadowSoftHalfBStorage, targets.shadowSoftHalfB.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.shadowHistA, Core::GpuDescriptorClass::SampledImage2DArray, targets.shadowHistA.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.shadowHistAStorage, targets.shadowHistA.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.shadowHistB, Core::GpuDescriptorClass::SampledImage2DArray, targets.shadowHistB.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.shadowHistBStorage, targets.shadowHistB.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.shadowMomentsA, Core::GpuDescriptorClass::SampledImage2DArray, targets.shadowMomentsA.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.shadowMomentsAStorage, targets.shadowMomentsA.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.shadowMomentsB, Core::GpuDescriptorClass::SampledImage2DArray, targets.shadowMomentsB.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.shadowMomentsBStorage, targets.shadowMomentsB.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.transparentSoftHalf, Core::GpuDescriptorClass::SampledImage2DArray, targets.transparentSoftHalf.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.transparentSoftHalfStorage, targets.transparentSoftHalf.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.transparentHistA, Core::GpuDescriptorClass::SampledImage2DArray, targets.transparentHistA.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.transparentHistAStorage, targets.transparentHistA.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.transparentHistB, Core::GpuDescriptorClass::SampledImage2DArray, targets.transparentHistB.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.transparentHistBStorage, targets.transparentHistB.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.transparentMomentsA, Core::GpuDescriptorClass::SampledImage2DArray, targets.transparentMomentsA.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.transparentMomentsAStorage, targets.transparentMomentsA.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.transparentMomentsB, Core::GpuDescriptorClass::SampledImage2DArray, targets.transparentMomentsB.get(), targets.shadowSoftFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
+        && registerStorageTexture(bindless.transparentMomentsBStorage, targets.transparentMomentsB.get(), targets.shadowSoftFormat, Core::TextureDimension::Texture2DArray)
     ;
     if(!registered){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register deferred frame resources in the descriptor heap"));
@@ -341,6 +372,22 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         return false;
     }
 
+    // The indirection payload is itself heap-addressable.  Every consumer receives this one UniformBuffer slot in
+    // push constants instead of binding a local selector CBV, keeping the descriptor heap as the only resource
+    // binding surface for ordinary renderer passes.
+    bindless.slotsBufferDescriptor = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
+    if(
+        !bindless.slotsBufferDescriptor.valid()
+        || !heap.write(
+            bindless.slotsBufferDescriptor,
+            Core::DescriptorWriteItem::ConstantBuffer(0u, bindless.slotsBuffer.get())
+        )
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register deferred bindless slot buffer in the descriptor heap"));
+        resetDeferredBindlessFrameResources(targets);
+        return false;
+    }
+
     return true;
 }
 
@@ -348,14 +395,19 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTa
     if(auto* device = graphics().getDevice()){
         Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
         if(heap.isInitialized()){
+            heap.free(targets.bindless.slotsBufferDescriptor);
             heap.free(targets.bindless.gbufferBaseColor);
             heap.free(targets.bindless.gbufferNormal);
             heap.free(targets.bindless.gbufferWorldPosition);
             heap.free(targets.bindless.gbufferDepth);
             heap.free(targets.bindless.shadowVisibility);
+            heap.free(targets.bindless.shadowVisibilityStorage);
             heap.free(targets.bindless.causticIrradiance);
+            heap.free(targets.bindless.causticIrradianceStorage);
             heap.free(targets.bindless.surfelIrradiance);
+            heap.free(targets.bindless.surfelIrradianceStorage);
             heap.free(targets.bindless.surfelIrradianceHalf);
+            heap.free(targets.bindless.surfelIrradianceHalfStorage);
             heap.free(targets.bindless.sampler);
             heap.free(targets.bindless.opaqueColor);
             heap.free(targets.bindless.avboitAccumColor);
@@ -365,22 +417,40 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTa
             heap.free(targets.bindless.sceneShading);
             heap.free(targets.bindless.lightList);
             heap.free(targets.bindless.causticAccumulator);
+            heap.free(targets.bindless.causticAccumulatorStorage);
             heap.free(targets.bindless.causticHistory);
+            heap.free(targets.bindless.causticHistoryStorage);
             heap.free(targets.bindless.causticResolveHalf);
+            heap.free(targets.bindless.causticResolveHalfStorage);
             heap.free(targets.bindless.causticResolveGeometry);
+            heap.free(targets.bindless.causticResolveGeometryStorage);
+            heap.free(targets.bindless.shadowCoarseTransmittanceStorage);
             heap.free(targets.bindless.shadowSoftGeometry);
+            heap.free(targets.bindless.shadowSoftGeometryStorage);
             heap.free(targets.bindless.shadowSoftGeometryPrev);
+            heap.free(targets.bindless.shadowSoftGeometryPrevStorage);
             heap.free(targets.bindless.shadowSoftHalfA);
+            heap.free(targets.bindless.shadowSoftHalfAStorage);
             heap.free(targets.bindless.shadowSoftHalfB);
+            heap.free(targets.bindless.shadowSoftHalfBStorage);
             heap.free(targets.bindless.shadowHistA);
+            heap.free(targets.bindless.shadowHistAStorage);
             heap.free(targets.bindless.shadowHistB);
+            heap.free(targets.bindless.shadowHistBStorage);
             heap.free(targets.bindless.shadowMomentsA);
+            heap.free(targets.bindless.shadowMomentsAStorage);
             heap.free(targets.bindless.shadowMomentsB);
+            heap.free(targets.bindless.shadowMomentsBStorage);
             heap.free(targets.bindless.transparentSoftHalf);
+            heap.free(targets.bindless.transparentSoftHalfStorage);
             heap.free(targets.bindless.transparentHistA);
+            heap.free(targets.bindless.transparentHistAStorage);
             heap.free(targets.bindless.transparentHistB);
+            heap.free(targets.bindless.transparentHistBStorage);
             heap.free(targets.bindless.transparentMomentsA);
+            heap.free(targets.bindless.transparentMomentsAStorage);
             heap.free(targets.bindless.transparentMomentsB);
+            heap.free(targets.bindless.transparentMomentsBStorage);
             heap.free(targets.bindless.csgCapBackNormal);
             heap.free(targets.bindless.csgIntervalDepth);
             heap.free(targets.bindless.csgIntervalId);
@@ -416,18 +486,8 @@ bool RendererDeferredSystem::uploadDeferredBindlessFrameResources(Core::CommandL
 }
 
 void RendererDeferredSystem::resetDeferredFrameTargets(){
-    deferredState().m_targets.lightingBindingSet.reset();
-    deferredState().m_targets.compositeBindingSet.reset();
     resetDeferredBindlessFrameResources(deferredState().m_targets);
     resetAvboitFrameTargets(deferredState().m_targets.avboit);
-    csgState().m_intervalPeelBindingSet.reset();
-    csgState().m_receiverSpanBuildBindingSet.reset();
-    csgState().m_intervalCombineBindingSet.reset();
-    csgState().m_receiverSurfaceBindingSet.reset();
-    csgState().m_intervalSampleBindingSet.reset();
-    rayTracingState().m_shadowBindingSet.reset();
-    rayTracingState().m_shadowBindingSetTlas = nullptr;
-
     deferredState().m_targets.framebuffer.reset();
     deferredState().m_targets.opaqueLightingFramebuffer.reset();
 
@@ -675,44 +735,15 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     if(!createDeferredBindlessFrameResources(createdTargets))
         return false;
 
-    Core::BindingSetDesc lightingBindingSetDesc(arena());
-    // The scene-shading cbuffer + light list are now heap entries (registered in createDeferredBindlessFrameResources,
-    // selected through the resource-slot cbuffer); the lighting set carries only that per-frame slot cbuffer.
-    lightingBindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
-        NWB_DEFERRED_LIGHTING_BINDING_BINDLESS_RESOURCES,
-        createdTargets.bindless.slotsBuffer.get()
-    ));
-    createdTargets.lightingBindingSet = device->createBindingSet(lightingBindingSetDesc, deferredState().m_lightingBindingLayout);
-    if(!createdTargets.lightingBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting binding set"));
-        resetDeferredBindlessFrameResources(createdTargets);
-        return false;
-    }
-
-    Core::BindingSetDesc bindingSetDesc(arena());
-    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
-        NWB_DEFERRED_COMPOSITE_BINDING_BINDLESS_RESOURCES,
-        createdTargets.bindless.slotsBuffer.get()
-    ));
-    createdTargets.compositeBindingSet = device->createBindingSet(bindingSetDesc, deferredState().m_compositeBindingLayout);
-    if(!createdTargets.compositeBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite binding set"));
-        createdTargets.lightingBindingSet.reset();
-        resetDeferredBindlessFrameResources(createdTargets);
-        return false;
-    }
-
     deferredState().m_targets = Move(createdTargets);
     if(!createDeferredLightingPipeline(deferredState().m_targets)){
         resetDeferredFrameTargets();
         return false;
     }
 
-    // AVBOIT's regular material sets use the shared target-generation heap-slot cbuffer. Allocate those
-    // descriptor-buffer sets after deferred lighting's heap-coupled pipeline, while their layouts remain available
-    // for the normal target setup. This preserves the established SW pipeline-creation sequence before AVBOIT draw
-    // work begins, including the shared CSG AVBOIT path.
-    if(!m_renderer.avboitSystem().createAvboitFrameTargetBindingSets(
+    // AVBOIT registers its target-generation work resources after deferred lighting has created the shared slot
+    // payload. The material and compute pipeline layouts remain push-only gaps; no local descriptor object is allocated.
+    if(!m_renderer.avboitSystem().registerAvboitFrameTargetDescriptors(
             deferredState().m_targets,
             deferredState().m_targets.avboit
         )

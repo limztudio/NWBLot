@@ -14,19 +14,16 @@
 // so the trace's read-only previous-frame contract stays explicit at its use site.
 
 
-#include "surfel_record.slangi"
-#include "surfel_constants.slangi"
-#include "surfel_binding_slots.h"
+#include "surfel_heap_resources.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_SURFEL_BINDING_CONSTANTS, NWB_SURFEL_SET)]]
-ConstantBuffer<NwbSurfelConstants> g_NwbSurfelConstants;
-
-[[vk::binding(NWB_SURFEL_BINDING_POOL, NWB_SURFEL_SET)]]
-RWStructuredBuffer<NwbSurfel> g_NwbSurfelPool;
+// The live field is selected by the common push block rather than a pass-local descriptor set. These macros retain
+// the readable historical names throughout the maintenance/trace kernels while expanding to global heap aliases.
+#define g_NwbSurfelConstants g_NwbHeapSurfelConstantBuffers[g_NwbSurfelHeapPushConstants.constantsHeapSlot]
+#define g_NwbSurfelPool g_NwbHeapSurfelWritablePools[g_NwbSurfelHeapPushConstants.poolHeapSlot]
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

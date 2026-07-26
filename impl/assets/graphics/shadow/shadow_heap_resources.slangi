@@ -1,0 +1,54 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_HEAP_RESOURCES_SLANGI
+#define NWB_GRAPHICS_SHADOW_HEAP_RESOURCES_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Heap-only resource aliases shared by every shadow producer, denoise pass, and temporal merge.  The descriptor
+// class is global; these deliberately typed aliases only describe how an individual shader views that class.
+
+
+#include "../bindless/bindless_heap.slangi"
+#include "../deferred/bindless_resources.slangi"
+#include "../raytrace/material_context_slots.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed views of the global UniformBuffer/StorageBuffer descriptor tables.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapShadowMaterialContextSlotBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+RWStructuredBuffer<uint, Std430DataLayout> g_NwbHeapShadowWritableUintBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<uint, Std430DataLayout> g_NwbHeapShadowReadOnlyUintBuffers[];
+#pragma warning(pop)
+
+
+ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> NwbHeapShadowMaterialContextSlots(const uint slot){
+    return g_NwbHeapShadowMaterialContextSlotBuffers[slot];
+}
+
+RWStructuredBuffer<uint, Std430DataLayout> NwbHeapShadowWritableUintBuffer(const uint slot){
+    return g_NwbHeapShadowWritableUintBuffers[slot];
+}
+
+StructuredBuffer<uint, Std430DataLayout> NwbHeapShadowReadOnlyUintBuffer(const uint slot){
+    return g_NwbHeapShadowReadOnlyUintBuffers[slot];
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

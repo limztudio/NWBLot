@@ -27,14 +27,10 @@ namespace ECSRenderMaterialShaderVariants{
 
 inline constexpr AStringView s_CsgEnabledDefineName = "NWB_CSG_ENABLED";
 inline constexpr AStringView s_CsgEnabledDefineAssignment = "NWB_CSG_ENABLED=1";
-inline constexpr AStringView s_CsgClipSetDefineName = "NWB_CSG_CLIP_SET";
-inline constexpr AStringView s_CsgAvboitClipSetDefineAssignment = "NWB_CSG_CLIP_SET=2";
 inline constexpr AStringView s_CsgIntervalSampleEnabledDefineName = "NWB_CSG_INTERVAL_SAMPLE_ENABLED";
 inline constexpr AStringView s_CsgIntervalSampleEnabledDefineAssignment = "NWB_CSG_INTERVAL_SAMPLE_ENABLED=1";
-inline constexpr AStringView s_CsgIntervalSampleSetDefineName = "NWB_CSG_INTERVAL_SAMPLE_SET";
-inline constexpr AStringView s_CsgAvboitIntervalSampleSetDefineAssignment = "NWB_CSG_INTERVAL_SAMPLE_SET=3";
 inline constexpr AStringView s_CsgProjectEvaluatorModuleDefineName = "NWB_CSG_PROJECT_EVALUATOR_MODULE";
-inline constexpr usize s_MaxCsgClipShaderVariantDefineAssignments = 5u;
+inline constexpr usize s_MaxCsgClipShaderVariantDefineAssignments = 3u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

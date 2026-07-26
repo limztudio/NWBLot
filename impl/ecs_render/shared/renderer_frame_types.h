@@ -42,13 +42,17 @@ struct AvboitFrameTargets{
     Core::BufferHandle controlBuffer;
     Core::BufferHandle extinctionBuffer;
     Core::BufferHandle extinctionOverflowBuffer;
-    // All material-driven AVBOIT passes use the target-generation bindless resource slots, including CSG.
-    Core::BindingSetHandle occupancyBindingSet;
-    Core::BindingSetHandle depthWarpBindingSet;
-    Core::BindingSetHandle extinctionBindingSet;
-    Core::BindingSetHandle integrateBindingSet;
-    Core::BindingSetHandle accumulateBindingSet;
-
+    // AVBOIT's five work buffers are persistent StorageBuffer entries and its writable transmittance volume is a
+    // StorageImage entry in the global heap. These handles own their target-generation registrations.
+    Core::GpuDescriptorHandle coverageBufferDescriptor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle depthWarpBufferDescriptor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle controlBufferDescriptor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle extinctionBufferDescriptor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle extinctionOverflowBufferDescriptor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle transmittanceTextureStorageDescriptor = Core::GpuDescriptorHandle::invalid();
+    // Borrowed from DeferredBindlessFrameResources. It selects the shared target-generation slot payload from the
+    // global UniformBuffer heap; AVBOIT does not own or free this descriptor.
+    Core::GpuDescriptorHandle deferredSlotsBufferDescriptor = Core::GpuDescriptorHandle::invalid();
     [[nodiscard]] bool valid()const noexcept{
 #if defined(NWB_DEBUG)
         return
@@ -73,11 +77,13 @@ struct AvboitFrameTargets{
             && controlBuffer != nullptr
             && extinctionBuffer != nullptr
             && extinctionOverflowBuffer != nullptr
-            && occupancyBindingSet != nullptr
-            && depthWarpBindingSet != nullptr
-            && extinctionBindingSet != nullptr
-            && integrateBindingSet != nullptr
-            && accumulateBindingSet != nullptr
+            && coverageBufferDescriptor.valid()
+            && depthWarpBufferDescriptor.valid()
+            && controlBufferDescriptor.valid()
+            && extinctionBufferDescriptor.valid()
+            && extinctionOverflowBufferDescriptor.valid()
+            && transmittanceTextureStorageDescriptor.valid()
+            && deferredSlotsBufferDescriptor.valid()
         ;
 #else
         return accumulationFramebuffer != nullptr;
@@ -89,7 +95,6 @@ struct MaterialPassDrawContext{
     Core::CommandList& commandList;
     Core::Framebuffer* framebuffer = nullptr;
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
-    Core::BindingSet* passBindingSet = nullptr;
     const AvboitFrameTargets* avboitTargets = nullptr;
     const Core::ViewportState& viewportState;
 };
@@ -113,7 +118,7 @@ struct RayTraceMaterialContextSlots{
 };
 static_assert(sizeof(RayTraceMaterialContextSlots) == sizeof(u32) * 8u, "Ray-trace material-context slots must stay two uint4 lanes");
 
-// Per-frame slot indirection for ordinary-pass bindless consumers. The data is a std140-compatible sequence of seven
+// Per-frame slot indirection for ordinary-pass bindless consumers. The data is a std140-compatible sequence of nine
 // uint4 lanes in deferred/bindless_resources.slangi. Descriptor handles retain their class tag on
 // the CPU; shaders need only the global slot because each field names the descriptor array it indexes.
 struct DeferredBindlessResourceSlots{
@@ -137,8 +142,21 @@ struct DeferredBindlessResourceSlots{
     u32 sceneShading = 0u;
     u32 lightList = 0u;
 
+    // AVBOIT's five transient work buffers are heap StorageBuffer entries and its writable transmittance volume is a
+    // StorageImage entry. Its draw/compute push constants carry only the shared slot-cbuffer UniformBuffer index,
+    // keeping the transparent draw ABI within the portable 128-byte push-constant budget.
+    u32 avboitCoverage = 0u;
+    u32 avboitDepthWarp = 0u;
+    u32 avboitControl = 0u;
+    u32 avboitExtinction = 0u;
+
+    u32 avboitExtinctionOverflow = 0u;
+    u32 avboitTransmittanceStorage = 0u;
+    u32 _avboitWorkPad1 = 0u;
+    u32 _avboitWorkPad2 = 0u;
+
     // CSG interval/peel targets are all Texture2DArray storage images. Their typed shader aliases share the global
-    // StorageImage descriptor table; these lanes only select the per-target heap slots.
+    // StorageImage descriptor array; these lanes only select the per-target heap slots.
     u32 csgCapBackNormal = 0u;
     u32 csgIntervalDepth = 0u;
     u32 csgIntervalId = 0u;
@@ -154,7 +172,7 @@ struct DeferredBindlessResourceSlots{
     u32 csgRemovedIntervalCount = 0u;
     u32 _csgPad = 0u;
 };
-static_assert(sizeof(DeferredBindlessResourceSlots) == sizeof(u32) * 28u, "Deferred bindless slots must match seven std140 uint4 lanes");
+static_assert(sizeof(DeferredBindlessResourceSlots) == sizeof(u32) * 36u, "Deferred bindless slots must match nine std140 uint4 lanes");
 
 // Heap registrations are owned by the deferred-target generation. Resize/recreate frees each handle through the
 // heap's deferred retirement path before releasing the texture it points at; the slot buffer is shared by shadows,
@@ -162,16 +180,25 @@ static_assert(sizeof(DeferredBindlessResourceSlots) == sizeof(u32) * 28u, "Defer
 struct DeferredBindlessFrameResources{
     Core::BufferHandle slotsBuffer;
     DeferredBindlessResourceSlots slots;
+    // The slot payload itself is a UniformBuffer entry in the global heap. Passes carry only this descriptor slot in
+    // push constants, so the former local selector CBV does not create a per-pass descriptor block.
+    Core::GpuDescriptorHandle slotsBufferDescriptor = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle gbufferBaseColor = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle gbufferNormal = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle gbufferWorldPosition = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle gbufferDepth = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle shadowVisibility = Core::GpuDescriptorHandle::invalid();
+    // Shadow producers and soft-shadow resolve write the same per-light visibility array through this distinct
+    // StorageImage view; the sampled handle above remains the deferred-lighting consumer's SRV view.
+    Core::GpuDescriptorHandle shadowVisibilityStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle causticIrradiance = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle causticIrradianceStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle surfelIrradiance = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle surfelIrradianceStorage = Core::GpuDescriptorHandle::invalid();
     // The surfel resolve/upsample compute pair selects this half-resolution input together with the existing G-buffer
     // slots through push constants. The full-resolution irradiance above remains the deferred-lighting heap input.
     Core::GpuDescriptorHandle surfelIrradianceHalf = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle surfelIrradianceHalfStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle sampler = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle opaqueColor = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitAccumColor = Core::GpuDescriptorHandle::invalid();
@@ -188,24 +215,42 @@ struct DeferredBindlessFrameResources{
     // through the heap's dedicated typed uint Texture2DArray table; the remaining three are floating-point Texture2D
     // resources.
     Core::GpuDescriptorHandle causticAccumulator = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle causticAccumulatorStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle causticHistory = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle causticHistoryStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle causticResolveHalf = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle causticResolveHalfStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle causticResolveGeometry = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle causticResolveGeometryStorage = Core::GpuDescriptorHandle::invalid();
     // Soft-shadow denoise intermediates are target-generation resources too. The resolve passes carry these slots in
-    // their push constants, rather than keeping seven sampled images in each local descriptor-buffer set.
+    // their push constants, rather than keeping seven sampled images in each pipeline-local descriptor layout.
+    Core::GpuDescriptorHandle shadowCoarseTransmittanceStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle shadowSoftGeometry = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowSoftGeometryStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle shadowSoftGeometryPrev = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowSoftGeometryPrevStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle shadowSoftHalfA = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowSoftHalfAStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle shadowSoftHalfB = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowSoftHalfBStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle shadowHistA = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowHistAStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle shadowHistB = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowHistBStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle shadowMomentsA = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowMomentsAStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle shadowMomentsB = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowMomentsBStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle transparentSoftHalf = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle transparentSoftHalfStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle transparentHistA = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle transparentHistAStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle transparentHistB = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle transparentHistBStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle transparentMomentsA = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle transparentMomentsAStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle transparentMomentsB = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle transparentMomentsBStorage = Core::GpuDescriptorHandle::invalid();
     // CSG's eleven typed Texture2DArray intermediates are bound through the StorageImage heap table. The CSG
     // interval/peel/surface/cap-fill layouts retain only this target-generation slot cbuffer locally.
     Core::GpuDescriptorHandle csgCapBackNormal = Core::GpuDescriptorHandle::invalid();
@@ -224,14 +269,19 @@ struct DeferredBindlessFrameResources{
     [[nodiscard]] bool valid()const noexcept{
         return
             slotsBuffer != nullptr
+            && slotsBufferDescriptor.valid()
             && gbufferBaseColor.valid()
             && gbufferNormal.valid()
             && gbufferWorldPosition.valid()
             && gbufferDepth.valid()
             && shadowVisibility.valid()
+            && shadowVisibilityStorage.valid()
             && causticIrradiance.valid()
+            && causticIrradianceStorage.valid()
             && surfelIrradiance.valid()
+            && surfelIrradianceStorage.valid()
             && surfelIrradianceHalf.valid()
+            && surfelIrradianceHalfStorage.valid()
             && sampler.valid()
             && opaqueColor.valid()
             && avboitAccumColor.valid()
@@ -241,22 +291,40 @@ struct DeferredBindlessFrameResources{
             && sceneShading.valid()
             && lightList.valid()
             && causticAccumulator.valid()
+            && causticAccumulatorStorage.valid()
             && causticHistory.valid()
+            && causticHistoryStorage.valid()
             && causticResolveHalf.valid()
+            && causticResolveHalfStorage.valid()
             && causticResolveGeometry.valid()
+            && causticResolveGeometryStorage.valid()
+            && shadowCoarseTransmittanceStorage.valid()
             && shadowSoftGeometry.valid()
+            && shadowSoftGeometryStorage.valid()
             && shadowSoftGeometryPrev.valid()
+            && shadowSoftGeometryPrevStorage.valid()
             && shadowSoftHalfA.valid()
+            && shadowSoftHalfAStorage.valid()
             && shadowSoftHalfB.valid()
+            && shadowSoftHalfBStorage.valid()
             && shadowHistA.valid()
+            && shadowHistAStorage.valid()
             && shadowHistB.valid()
+            && shadowHistBStorage.valid()
             && shadowMomentsA.valid()
+            && shadowMomentsAStorage.valid()
             && shadowMomentsB.valid()
+            && shadowMomentsBStorage.valid()
             && transparentSoftHalf.valid()
+            && transparentSoftHalfStorage.valid()
             && transparentHistA.valid()
+            && transparentHistAStorage.valid()
             && transparentHistB.valid()
+            && transparentHistBStorage.valid()
             && transparentMomentsA.valid()
+            && transparentMomentsAStorage.valid()
             && transparentMomentsB.valid()
+            && transparentMomentsBStorage.valid()
             && csgCapBackNormal.valid()
             && csgIntervalDepth.valid()
             && csgIntervalId.valid()
@@ -409,8 +477,6 @@ struct DeferredFrameTargets{
     Core::TextureHandle causticResolveGeometry;
     Core::FramebufferHandle framebuffer;
     Core::FramebufferHandle opaqueLightingFramebuffer;
-    Core::BindingSetHandle lightingBindingSet;
-    Core::BindingSetHandle compositeBindingSet;
     DeferredBindlessFrameResources bindless;
     AvboitFrameTargets avboit;
 
@@ -478,8 +544,6 @@ struct DeferredFrameTargets{
             && depth != nullptr
             && framebuffer != nullptr
             && opaqueLightingFramebuffer != nullptr
-            && lightingBindingSet != nullptr
-            && compositeBindingSet != nullptr
             && bindless.valid()
             && avboit.valid()
         ;

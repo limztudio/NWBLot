@@ -16,11 +16,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_SURFEL_BINDING_COUNTER, NWB_SURFEL_SET)]]
-RWStructuredBuffer<uint> g_NwbSurfelCounter;
-
-[[vk::binding(NWB_SURFEL_BINDING_FREE_LIST, NWB_SURFEL_SET)]]
-RWStructuredBuffer<uint> g_NwbSurfelFreeList;
+// Heap-selected mutable allocation state.
+#define g_NwbSurfelCounter g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.counterHeapSlot]
+#define g_NwbSurfelFreeList g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.freeListHeapSlot]
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

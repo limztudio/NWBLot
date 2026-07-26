@@ -19,22 +19,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_SCENE_SHADOW_VISIBILITY_SET
-#define NWB_SCENE_SHADOW_VISIBILITY_SET NWB_SCENE_SHADOW_VISIBILITY_DEFAULT_SET
-#endif
-
-#ifndef NWB_SCENE_SHADOW_VISIBILITY_BINDING
-#define NWB_SCENE_SHADOW_VISIBILITY_BINDING NWB_SCENE_SHADOW_VISIBILITY_DEFAULT_BINDING
-#endif
-
-#ifndef NWB_SCENE_CAUSTIC_IRRADIANCE_SET
-#define NWB_SCENE_CAUSTIC_IRRADIANCE_SET NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_SET
-#endif
-
-#ifndef NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING
-#define NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_BINDING
-#endif
-
 // Debug toggle for the visual gate: when 1, nwbBxdfCausticIrradiance returns a small constant grey instead of
 // sampling the buffer, so the additive caustic path can be confirmed (every receiver brightens additively and
 // uniformly) without a producer running. Default 0 samples the (black-cleared) buffer = additive no-op.
@@ -45,21 +29,13 @@
 // Per-light shadow visibility: half3 transmittance (1 = lit, 0 = fully shadowed, tinted by colored
 // transparent occluders), one Texture2DArray layer per shadow slot. The shadow producers write a light's
 // transmittance into its slot layer; a light's slot index lives in its light record (params.z).
-#ifndef NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
-#ifndef NWB_SCENE_SHADOW_VISIBILITY_RESOURCE
-[[vk::binding(NWB_SCENE_SHADOW_VISIBILITY_BINDING, NWB_SCENE_SHADOW_VISIBILITY_SET)]]
-Texture2DArray<float4> g_NwbShadowVisibility;
-#endif
-#endif
-
 // Additive caustic irradiance (RGBA16F, screen space): the focused light the caustic producer splats onto opaque
 // receivers, already tinted by the glass it passed through. Unlike the multiplicative per-light shadow visibility
 // this is a single screen-space buffer (all caustic lights accumulate into it) and is ADDED to the lit color
 // pre-tonemap. Cleared to black each frame -- black is the additive identity, so an unwritten buffer is a no-op.
-#ifndef NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
-#ifndef NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE
-[[vk::binding(NWB_SCENE_CAUSTIC_IRRADIANCE_BINDING, NWB_SCENE_CAUSTIC_IRRADIANCE_SET)]]
-Texture2D<float4> g_NwbCausticIrradiance;
+#if !defined(NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED)
+#if !defined(NWB_SCENE_SHADOW_VISIBILITY_RESOURCE) || !defined(NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE)
+#error "Renderer screen-space shadow and caustic inputs require global descriptor-heap aliases"
 #endif
 #endif
 
@@ -88,11 +64,7 @@ half3 nwbBxdfLightTransmittance(int2 pixel, uint lightIndex){
     if(slot < 0.0)
         return half3(1.0, 1.0, 1.0);
 
-    #ifdef NWB_SCENE_SHADOW_VISIBILITY_RESOURCE
     return half3(NWB_SCENE_SHADOW_VISIBILITY_RESOURCE.Load(int4(pixel, int(slot), 0)).rgb);
-    #else
-    return half3(g_NwbShadowVisibility.Load(int4(pixel, int(slot), 0)).rgb);
-    #endif
 #endif
 }
 
@@ -110,11 +82,7 @@ half3 nwbBxdfCausticIrradiance(int2 pixel){
     if(pixel.x < 0)
         return half3(0.0, 0.0, 0.0);
 
-    #ifdef NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE
     return half3(NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE.Load(int3(pixel, 0)).rgb);
-    #else
-    return half3(g_NwbCausticIrradiance.Load(int3(pixel, 0)).rgb);
-    #endif
 #endif
 }
 

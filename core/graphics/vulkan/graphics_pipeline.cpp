@@ -446,7 +446,6 @@ void CommandList::endActiveRenderPass(){
 }
 
 void CommandList::setGraphicsState(const GraphicsState& state){
-    setResourceStatesForBindingSets(state.bindings);
     setResourceStatesForGraphicsBuffers(state);
     commitBarriers();
 
@@ -466,7 +465,7 @@ void CommandList::setGraphicsState(const GraphicsState& state){
     }
 
     if(pipeline)
-        bindPipelineBindingSets(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipelineLayout, pipeline->m_usesDescriptorBuffer, state.bindings);
+        bindDescriptorBufferEmptySet(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipelineLayout);
 
     setViewportState(state.viewport);
 

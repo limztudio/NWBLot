@@ -108,7 +108,6 @@ protected:
 protected:
     static constexpr u32 s_MeshInstanceBindingSlot = NWB_MESH_BINDING_INSTANCE;
     static constexpr u32 s_MeshViewBindingSlot = NWB_MESH_BINDING_VIEW;
-    static constexpr u32 s_MeshGeneratedVertexBindingSlot = NWB_MESH_BINDING_GENERATED_VERTEX;
 };
 
 

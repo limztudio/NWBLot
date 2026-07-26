@@ -18,28 +18,30 @@ NWB_VULKAN_BEGIN
 
 
 namespace __hidden_vulkan_descriptor_heap{
-    // Defaults when GpuDescriptorHeapDesc leaves a capacity at 0. Clamped to device update-after-bind limits in
+    // Defaults when GpuDescriptorHeapDesc leaves a capacity at 0. Clamped to the descriptor-layout limits in
     // initialize().
     inline constexpr u32 s_DefaultResourceCapacity = 16384u;
     inline constexpr u32 s_DefaultSamplerCapacity = 2048u;
 
     // Non-sampler resource classes that share the one resource-heap register set. Their per-class descriptor arrays
     // each occupy the full resourceCapacity, so the total live in one set is this many times the capacity - used to
-    // respect the aggregate maxPerStageUpdateAfterBindResources limit.
+    // respect the aggregate per-stage descriptor-resource limits.
     //
     // Sampled-image dimensions are deliberately appended after Sampler in the public enum to preserve existing
     // handle tags, so do not rely on enum contiguity when iterating the resource classes below.
     inline constexpr u32 s_ResourceClassCount = 8u;
-    inline constexpr u32 s_SampledImageClassCount = 4u;
+    // Four sampled-image arrays plus the uniform-texel-buffer array all count against Vulkan's sampled-image
+    // descriptor limits.
+    inline constexpr u32 s_SampledImageOrTexelClassCount = 5u;
 
-    // Backend C owns a distinct descriptor-buffer block per live TLAS generation. Two in-flight frames plus the
+    // The descriptor-buffer heap owns a distinct block per live TLAS generation. Two in-flight frames plus the
     // current replacement need at most three slots; keep one spare so a burst of capacity growth still preserves
     // immutable old blocks through the deferred-free quarantine.
     inline constexpr u32 s_AccelStructCapacity = s_MaxFramesInFlight + 2u;
 
     // Canonical descriptor type each class writes as. write() forces item.type to this so the handle's class - not
     // the caller's factory choice - is authoritative (matters for StorageBuffer: structured/raw SRV+UAV all resolve
-    // to one STORAGE_BUFFER descriptor, and writeDescriptorTable() matches on the exact ResourceType).
+    // to one STORAGE_BUFFER descriptor, and descriptor writes match on the exact ResourceType).
     ResourceType::Enum ClassToResourceType(const GpuDescriptorClass::Enum descriptorClass){
         switch(descriptorClass){
         case GpuDescriptorClass::SampledImage:  return ResourceType::Texture_SRV;
@@ -82,8 +84,8 @@ GpuDescriptorHeap::~GpuDescriptorHeap(){
 
 
 u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptorClass){
-    // Register-space binding numbers inside each table (must be added in ascending order in initialize() so the
-    // highest-numbered binding is the VARIABLE_DESCRIPTOR_COUNT one). Sampler counts from 0 in its own table.
+    // Register-space binding numbers inside each fixed-capacity descriptor-buffer layout. Sampler counts from 0 in
+    // its own table.
     switch(descriptorClass){
     case GpuDescriptorClass::SampledImage:  return NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE;
     case GpuDescriptorClass::StorageImage:  return NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE;
@@ -100,9 +102,9 @@ u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptor
 }
 
 GpuDescriptorHeap::SlotAllocator& GpuDescriptorHeap::allocatorForClass(const GpuDescriptorClass::Enum descriptorClass){
-    // All ordinary non-sampler classes share one global slot namespace (design 3.4). Backend C's acceleration
-    // structures are intentionally separate: each slot selects a fixed descriptor-buffer block at set 10, rather
-    // than an element of Backend A's update-after-bind resource table.
+    // All ordinary non-sampler classes share one global slot namespace (design 3.4). Acceleration structures are
+    // intentionally separate: each slot selects a fixed descriptor-buffer block at set 10 rather than an element
+    // of the resource descriptor array.
     if(descriptorClass == GpuDescriptorClass::Sampler)
         return m_samplerSlots;
     if(descriptorClass == GpuDescriptorClass::AccelStruct)
@@ -110,17 +112,10 @@ GpuDescriptorHeap::SlotAllocator& GpuDescriptorHeap::allocatorForClass(const Gpu
     return m_resourceSlots;
 }
 
-DescriptorTable* GpuDescriptorHeap::tableForClass(const GpuDescriptorClass::Enum descriptorClass){
-    if(descriptorClass == GpuDescriptorClass::AccelStruct)
-        return nullptr; // Backend C-only fixed descriptor-buffer layout; no classic descriptor table exists.
-    return descriptorClass == GpuDescriptorClass::Sampler ? m_samplerTable.get() : m_resourceTable.get();
-}
-
 DescriptorBufferSegment GpuDescriptorHeap::getAccelStructBufferBlock(const GpuDescriptorHandle handle)const{
     ScopedLock lock(m_mutex);
     if(
         !m_initialized
-        || !m_usesDescriptorBuffer
         || !handle.valid()
         || handle.descriptorClass() != GpuDescriptorClass::AccelStruct
         || handle.slot() >= m_accelStructBufferBlocks.size()
@@ -176,45 +171,45 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         return false;
     };
 
+    // The renderer's global heap has no fallback. Fail initialization unless the descriptor-buffer manager is live
+    // before any heap layout or slot state is created.
+    if(
+        !m_context.extensions.EXT_descriptor_buffer
+        || !m_context.descriptorBufferManager
+        || !m_context.descriptorBufferManager->isEnabled()
+    ){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: GpuDescriptorHeap requires VK_EXT_descriptor_buffer and an initialized DescriptorBufferManager."));
+        return failInitialization();
+    }
     u32 resourceCapacity = desc.resourceCapacity > 0 ? desc.resourceCapacity : s_DefaultResourceCapacity;
     u32 samplerCapacity = desc.samplerCapacity > 0 ? desc.samplerCapacity : s_DefaultSamplerCapacity;
 
-    // Clamp to the device's update-after-bind limits and log the effective caps (no silent truncation, design 12.3).
-    auto indexingProps = VulkanDetail::MakeVkStruct<VkPhysicalDeviceDescriptorIndexingProperties>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_PROPERTIES);
-    auto props2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
-    props2.pNext = &indexingProps;
-    vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
+    // Descriptor-buffer layouts use fixed descriptor capacity. Clamp only against ordinary descriptor-layout limits
+    // before creating the global heap layouts.
+    const VkPhysicalDeviceLimits& limits = m_context.physicalDeviceProperties.limits;
+    // The heap is visible to every shader stage. The sampled-image limit includes UNIFORM_TEXEL_BUFFER, so all five
+    // sampled-image/texel arrays count together; every resource class also counts toward maxPerStageResources.
+    u32 resourceLimit = limits.maxDescriptorSetSampledImages / s_SampledImageOrTexelClassCount;
+    resourceLimit = Min(resourceLimit, limits.maxDescriptorSetStorageImages);
+    resourceLimit = Min(resourceLimit, limits.maxDescriptorSetStorageBuffers);
+    resourceLimit = Min(resourceLimit, limits.maxDescriptorSetUniformBuffers);
+    resourceLimit = Min(resourceLimit, limits.maxPerStageDescriptorSampledImages / s_SampledImageOrTexelClassCount);
+    resourceLimit = Min(resourceLimit, limits.maxPerStageDescriptorStorageImages);
+    resourceLimit = Min(resourceLimit, limits.maxPerStageDescriptorStorageBuffers);
+    resourceLimit = Min(resourceLimit, limits.maxPerStageDescriptorUniformBuffers);
+    resourceLimit = Min(resourceLimit, limits.maxPerStageResources / s_ResourceClassCount);
 
-    // The heap is visible to every shader stage, so clamp both descriptor-set and per-stage update-after-bind limits.
-    // The four sampled-image arrays share their sampled-image caps; Vulkan exposes no separate texel-buffer cap, so
-    // SampledBuffer remains covered by the aggregate resource cap below.
-    u32 resourceLimit = indexingProps.maxDescriptorSetUpdateAfterBindSampledImages;
-    resourceLimit = Min(resourceLimit, indexingProps.maxDescriptorSetUpdateAfterBindSampledImages / s_SampledImageClassCount);
-    resourceLimit = Min(resourceLimit, indexingProps.maxDescriptorSetUpdateAfterBindStorageImages);
-    resourceLimit = Min(resourceLimit, indexingProps.maxDescriptorSetUpdateAfterBindStorageBuffers);
-    resourceLimit = Min(resourceLimit, indexingProps.maxDescriptorSetUpdateAfterBindUniformBuffers);
-    resourceLimit = Min(resourceLimit, indexingProps.maxPerStageDescriptorUpdateAfterBindSampledImages / s_SampledImageClassCount);
-    resourceLimit = Min(resourceLimit, indexingProps.maxPerStageDescriptorUpdateAfterBindStorageImages);
-    resourceLimit = Min(resourceLimit, indexingProps.maxPerStageDescriptorUpdateAfterBindStorageBuffers);
-    resourceLimit = Min(resourceLimit, indexingProps.maxPerStageDescriptorUpdateAfterBindUniformBuffers);
-    // Every resource class array is sized to resourceCapacity and they all live in one set, so the aggregate must
-    // fit maxPerStageUpdateAfterBindResources.
-    const u32 aggregateLimit = indexingProps.maxPerStageUpdateAfterBindResources / s_ResourceClassCount;
-    resourceLimit = Min(resourceLimit, aggregateLimit);
+    const u32 samplerLimit = Min(limits.maxDescriptorSetSamplers, limits.maxPerStageDescriptorSamplers);
 
     if(resourceCapacity > resourceLimit){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: GpuDescriptorHeap resource capacity {} exceeds device update-after-bind limit {}; clamping.")
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: GpuDescriptorHeap resource capacity {} exceeds device descriptor-layout limit {}; clamping.")
             , resourceCapacity
             , resourceLimit
         );
         resourceCapacity = resourceLimit;
     }
-    const u32 samplerLimit = Min(
-        indexingProps.maxDescriptorSetUpdateAfterBindSamplers,
-        indexingProps.maxPerStageDescriptorUpdateAfterBindSamplers
-    );
     if(samplerCapacity > samplerLimit){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: GpuDescriptorHeap sampler capacity {} exceeds device update-after-bind limit {}; clamping.")
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: GpuDescriptorHeap sampler capacity {} exceeds device descriptor-layout limit {}; clamping.")
             , samplerCapacity
             , samplerLimit
         );
@@ -228,20 +223,8 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         return failInitialization();
     }
 
-    // Backend selection: prefer Backend C (VK_EXT_descriptor_buffer) where the device advertises the extension and
-    // the DescriptorBufferManager initialized its mapped segments; fall back to Backend A (descriptor indexing)
-    // otherwise. The heap's two bindless layouts are each pure-class by construction (resource set / sampler set), so
-    // they are always segment-coherent and the descriptor-buffer path serves them wholesale. When Backend C is
-    // selected the layouts carry VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT, which makes them
-    // descriptor-buffer-compatible so a heap-coupled pipeline that embeds them can opt into Backend C too.
-    m_usesDescriptorBuffer =
-        m_context.extensions.EXT_descriptor_buffer
-        && m_context.descriptorBufferManager
-        && m_context.descriptorBufferManager->isEnabled()
-    ;
-
-    // Resource table: one mutable-SRV/UAV/CBV bindless layout with one register space per non-sampler class, added
-    // in ascending slot order (see getRegisterSlot).
+    // Resource descriptor-buffer block: one mutable-SRV/UAV/CBV bindless layout with one register space per
+    // non-sampler class, added in ascending slot order (see getRegisterSlot).
     BindlessLayoutDesc resourceLayoutDesc;
     resourceLayoutDesc
         .setLayoutType(BindlessLayoutType::MutableSrvUavCbv)
@@ -256,7 +239,6 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImage2DArray), resourceCapacity))
         .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImage3D), resourceCapacity))
         .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImage2DArrayUint), resourceCapacity))
-        .setUseDescriptorBuffer(m_usesDescriptorBuffer)
     ;
 
     m_resourceLayout = m_device.createBindlessLayout(resourceLayoutDesc);
@@ -264,25 +246,16 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap failed to create resource bindless layout."));
         return failInitialization();
     }
-    // On Backend C the layout should be descriptor-buffer-compatible (the resource set is pure-class); if the driver
-    // downgraded it, abandon Backend C for the heap so the classic table path serves it instead of mixing.
-    if(m_usesDescriptorBuffer && !m_resourceLayout->isDescriptorBufferCompatible()){
+    // The resource set is pure-class, so a non-compatible result is an extension/driver failure rather than a
+    // recoverable layout shape.
+    if(!m_resourceLayout->isDescriptorBufferCompatible()){
         // A pure MutableSrvUavCbv bindless set is always segment-coherent; a downgrade here is a driver/extension
         // problem, not a recoverable shape mismatch, so treat it as a hard init failure rather than silently mixing.
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap resource layout is not descriptor-buffer-compatible despite Backend C selection."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap resource layout is not descriptor-buffer-compatible despite descriptor-buffer initialization."));
         return failInitialization();
     }
-    // Backend C stores descriptors as bytes in carved buffer blocks, so it needs no classic descriptor table; in fact a
-    // DESCRIPTOR_BUFFER_BIT_EXT layout cannot back a classic descriptor set. Only Backend A allocates the tables here.
-    if(!m_usesDescriptorBuffer){
-        m_resourceTable = m_device.createDescriptorTable(m_resourceLayout);
-        if(!m_resourceTable){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap failed to create resource descriptor table."));
-            return failInitialization();
-        }
-    }
-
-    // Sampler table: separate namespace, separate layout (samplers cannot share an array with sampled images).
+    // Sampler descriptor-buffer block: separate namespace/layout because samplers cannot share an array with sampled
+    // images.
     BindlessLayoutDesc samplerLayoutDesc;
     samplerLayoutDesc
         .setLayoutType(BindlessLayoutType::MutableSampler)
@@ -290,7 +263,6 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .setVisibility(ShaderType::All)
         .setDescriptorSetIndex(m_samplerSetIndex)   // reserved set 9
         .addRegisterSpace(BindingLayoutItem::Sampler(getRegisterSlot(GpuDescriptorClass::Sampler), samplerCapacity))
-        .setUseDescriptorBuffer(m_usesDescriptorBuffer)
     ;
 
     m_samplerLayout = m_device.createBindlessLayout(samplerLayoutDesc);
@@ -298,33 +270,25 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap failed to create sampler bindless layout."));
         return failInitialization();
     }
-    if(m_usesDescriptorBuffer && !m_samplerLayout->isDescriptorBufferCompatible()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap sampler layout is not descriptor-buffer-compatible despite Backend C selection."));
+    if(!m_samplerLayout->isDescriptorBufferCompatible()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap sampler layout is not descriptor-buffer-compatible despite descriptor-buffer initialization."));
         return failInitialization();
     }
-    if(!m_usesDescriptorBuffer){
-        m_samplerTable = m_device.createDescriptorTable(m_samplerLayout);
-        if(!m_samplerTable){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap failed to create sampler descriptor table."));
-            return failInitialization();
-        }
-    }
-
-    // Backend C-only TLAS surface. It is deliberately a regular fixed BindingLayout rather than another mutable
-    // bindless table: Vulkan descriptor indexing has no acceleration-structure update-after-bind path, while
-    // VK_EXT_descriptor_buffer can encode the AS address directly. Each allocated AS handle later receives its own
-    // one-descriptor block of this layout and bindCompute/bindRayTracing selects that block at set 10.
-    if(m_usesDescriptorBuffer && m_context.extensions.KHR_acceleration_structure){
-        BindingLayoutDesc accelStructLayoutDesc(m_context.objectArena);
+    // TLAS surface. It is an immutable one-descriptor global-heap layout rather than a mutable HLSL descriptor
+    // array: VK_EXT_descriptor_buffer encodes the AS address directly. Each allocated AS handle later receives its
+    // own one-descriptor block and bindCompute/bindRayTracing selects that block at set 10.
+    if(m_context.extensions.KHR_acceleration_structure){
+        BindlessLayoutDesc accelStructLayoutDesc;
         accelStructLayoutDesc
+            .setLayoutType(BindlessLayoutType::Immutable)
+            .setMaxCapacity(1u)
             .setVisibility(ShaderType::All)
-            .setRegisterSpaceAndDescriptorSet(m_accelStructSetIndex)
-            .setUseDescriptorBuffer(true)
-            .addItem(BindingLayoutItem::RayTracingAccelStruct(NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT, 1u))
+            .setDescriptorSetIndex(m_accelStructSetIndex)
+            .addRegisterSpace(BindingLayoutItem::RayTracingAccelStruct(NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT, 1u))
         ;
-        m_accelStructLayout = m_device.createBindingLayout(accelStructLayoutDesc);
+        m_accelStructLayout = m_device.createBindlessLayout(accelStructLayoutDesc);
         if(!m_accelStructLayout || !m_accelStructLayout->isDescriptorBufferCompatible()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap failed to create Backend-C TLAS descriptor-buffer layout."));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap failed to create the TLAS descriptor-buffer layout."));
             return failInitialization();
         }
 
@@ -344,16 +308,12 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         m_accelStructResources.resize(s_AccelStructCapacity);
     }
 
-    // Backend C: carve one persistent block per segment sized to the driver-queried set block for each layout, and
-    // cache each class's binding offset within it. The heap's descriptors are written into these blocks' mapped
-    // memory via write() and never re-carved (the heap outlives any single frame). The blocks are freed in
-    // shutdown(). Backend A instead persists its descriptors in the classic tables created above and binds via
-    // vkCmdBindDescriptorSets, so no carve happens here on that path.
-    if(m_usesDescriptorBuffer){
-        const u32 offsetAlignmentBytes = m_context.descriptorBufferManager->getOffsetAlignmentBytes();
-        if(!initializeDescriptorBufferBlocks(offsetAlignmentBytes))
-            return failInitialization();
-    }
+    // Carve one persistent block per segment sized to the driver-queried set block for each layout, and cache each
+    // class's binding offset within it. The heap's descriptors are written into these blocks' mapped memory via
+    // write() and never re-carved (the heap outlives any single frame). The blocks are freed in shutdown().
+    const u32 offsetAlignmentBytes = m_context.descriptorBufferManager->getOffsetAlignmentBytes();
+    if(!initializeDescriptorBufferBlocks(offsetAlignmentBytes))
+        return failInitialization();
 
     m_resourceSlots.capacity = resourceCapacity;
     m_resourceSlots.nextFresh = 0u;
@@ -382,8 +342,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     m_frameCounter = 0u;
     m_initialized = true;
 
-    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: GpuDescriptorHeap initialized ({}): resource capacity {}, sampler capacity {} (sets {}/{}).")
-        , m_usesDescriptorBuffer ? NWB_TEXT("Backend C - descriptor buffer") : NWB_TEXT("Backend A - descriptor indexing")
+    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: GpuDescriptorHeap initialized (descriptor buffer): resource capacity {}, sampler capacity {} (sets {}/{}).")
         , resourceCapacity
         , samplerCapacity
         , m_resourceSetIndex
@@ -395,10 +354,10 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
 void GpuDescriptorHeap::shutdown(){
     ScopedLock lock(m_mutex);
 
-    // Backend C: return the persistent resource/sampler blocks and every per-generation TLAS block before dropping
+    // Return the persistent resource/sampler blocks and every per-generation TLAS block before dropping
     // layouts. This also handles a partially initialized heap after an allocation/layout failure. The manager outlives
     // the heap (it is device-owned), so freeing here is safe and ordering-independent.
-    if(m_usesDescriptorBuffer && m_context.descriptorBufferManager){
+    if(m_context.descriptorBufferManager){
         if(m_resourceBufferBlock.valid())
             m_context.descriptorBufferManager->free(m_resourceBufferBlock);
         if(m_samplerBufferBlock.valid())
@@ -415,12 +374,9 @@ void GpuDescriptorHeap::shutdown(){
     m_resourceDescriptorResources.clear();
     m_samplerDescriptorResources.clear();
     m_accelStructBufferBindingOffset = 0u;
-    m_usesDescriptorBuffer = false;
     for(u32 i = 0; i < GpuDescriptorClass::kCount; ++i)
         m_classBufferOffset[i] = 0u;
 
-    m_resourceTable = nullptr;
-    m_samplerTable = nullptr;
     m_resourceLayout = nullptr;
     m_samplerLayout = nullptr;
     m_accelStructLayout = nullptr;
@@ -457,8 +413,8 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate called with invalid class {}."), static_cast<u32>(descriptorClass));
         return GpuDescriptorHandle::invalid();
     }
-    if(descriptorClass == GpuDescriptorClass::AccelStruct && (!m_usesDescriptorBuffer || !m_accelStructLayout)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate: AccelStruct requires the Backend-C descriptor-buffer TLAS layout."));
+    if(descriptorClass == GpuDescriptorClass::AccelStruct && !m_accelStructLayout){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::allocate: AccelStruct requires the descriptor-buffer TLAS layout."));
         return GpuDescriptorHandle::invalid();
     }
 
@@ -503,7 +459,7 @@ void GpuDescriptorHeap::free(const GpuDescriptorHandle handle){
         return;
     if(handle.descriptorClass() >= GpuDescriptorClass::kCount)
         return;
-    if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct && (!m_usesDescriptorBuffer || !m_accelStructLayout))
+    if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct && !m_accelStructLayout)
         return;
 
     ScopedLock lock(m_mutex);
@@ -546,7 +502,7 @@ void GpuDescriptorHeap::advanceFrame(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const BindingSetItem& item){
+bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const DescriptorWriteItem& item){
     using namespace __hidden_vulkan_descriptor_heap;
 
     if(!m_initialized){
@@ -563,8 +519,8 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const BindingSet
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: handle has invalid class {}."), static_cast<u32>(descriptorClass));
         return false;
     }
-    if(descriptorClass == GpuDescriptorClass::AccelStruct && (!m_usesDescriptorBuffer || !m_accelStructLayout)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: AccelStruct requires the Backend-C descriptor-buffer TLAS layout."));
+    if(descriptorClass == GpuDescriptorClass::AccelStruct && !m_accelStructLayout){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: AccelStruct requires the descriptor-buffer TLAS layout."));
         return false;
     }
 
@@ -577,16 +533,14 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const BindingSet
 
     // The handle's class is authoritative: force the register space (slot), the global index (arrayElement), and the
     // canonical descriptor type. The caller supplies only the resource and its view params (range/subresources).
-    BindingSetItem writeItem = item;
+    DescriptorWriteItem writeItem = item;
     writeItem.slot = getRegisterSlot(descriptorClass);
     writeItem.arrayElement = handle.slot();
     writeItem.type = ClassToResourceType(descriptorClass);
 
-    // Backend C: write the descriptor as bytes into the heap's persistent carved block at
-    // block.offsetBytes + classBindingOffset + slotIndex*descriptorSize, exactly mirroring how createBindingSet lays
-    // out a frozen set (blockOffset + bindingOffset + arrayElement*descriptorSize). The block was carved once in
-    // initialize() and is never re-carved -- the heap is persistent, so every write() rewrites in place. Backend A
-    // keeps the classic table.
+    // Write the descriptor as bytes into the heap's persistent carved block at
+    // block.offsetBytes + classBindingOffset + slotIndex*descriptorSize. The block was carved once in
+    // initialize() and is never re-carved -- the heap is persistent, so every write() rewrites in place.
     if(descriptorClass == GpuDescriptorClass::AccelStruct){
         // A TLAS descriptor block is owned by its handle slot, so retain the AS until that slot's deferred-free
         // quarantine matures. Replacing a populated slot would mutate descriptor bytes an in-flight command buffer
@@ -607,8 +561,8 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const BindingSet
         return true;
     }
 
-    // Persistent heap descriptors do not ride inside a BindingSet, so retain each resource until free()'s in-flight
-    // quarantine matures. Replacing a populated slot would mutate a descriptor an older command buffer may still use;
+    // Persistent heap descriptors retain each resource until free()'s in-flight quarantine matures. Replacing a
+    // populated slot would mutate a descriptor an older command buffer may still use;
     // callers must allocate a fresh handle for a different resource generation.
     auto& retainedResources = descriptorClass == GpuDescriptorClass::Sampler
         ? m_samplerDescriptorResources
@@ -629,21 +583,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const BindingSet
         return false;
     }
 
-    if(m_usesDescriptorBuffer){
-        if(!writeDescriptorBuffer(writeItem, descriptorClass))
-            return false;
-        if(!retained)
-            retained = resource;
-        return true;
-    }
-
-    DescriptorTable* table = tableForClass(descriptorClass);
-    if(!table){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: no descriptor table for class {}."), static_cast<u32>(descriptorClass));
-        return false;
-    }
-
-    if(!m_device.writeDescriptorTable(table, writeItem))
+    if(!writeDescriptorBuffer(writeItem, descriptorClass))
         return false;
     if(!retained)
         retained = resource;
@@ -654,43 +594,27 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const BindingSet
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void GpuDescriptorHeap::bind(CommandList& commandList, const VkPipelineBindPoint bindPoint, const VkPipelineLayout pipelineLayout){
-    commandList.bindDescriptorHeap(*this, bindPoint, pipelineLayout);
-}
-
 void GpuDescriptorHeap::bindCompute(
     CommandList& commandList,
     const ComputePipeline& pipeline,
     const GpuDescriptorHandle accelStructHandle
 ){
-    // Backend C: bind persistent resource/sampler blocks at sets 8/9 and, when supplied, the current TLAS
-    // generation's immutable descriptor block at set 10. Backend A binds classic tables only; it never accepts an
-    // AccelStruct heap handle. m_pipelineLayout is a public PipelineBindingState member so impl/ need not name Vk.
-    if(m_usesDescriptorBuffer){
-        commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.m_pipelineLayout, accelStructHandle);
-        return;
-    }
-    commandList.bindDescriptorHeap(*this, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.m_pipelineLayout);
+    // Bind persistent resource/sampler blocks at sets 8/9 and, when supplied, the current TLAS generation's
+    // immutable descriptor block at set 10. m_pipelineLayout is a public PipelineBindingState member so impl/
+    // need not name Vk.
+    commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.m_pipelineLayout, accelStructHandle);
 }
 
 void GpuDescriptorHeap::bindGraphics(CommandList& commandList, const GraphicsPipeline& pipeline){
     // The fullscreen deferred passes have no TLAS; the ordinary resource/sampler heap sets are identical to their
     // compute/RT siblings and must be selected only after setGraphicsState() has installed this pipeline layout.
-    if(m_usesDescriptorBuffer){
-        commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipelineLayout);
-        return;
-    }
-    commandList.bindDescriptorHeap(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipelineLayout);
+    commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipelineLayout);
 }
 
 void GpuDescriptorHeap::bindGraphics(CommandList& commandList, const MeshletPipeline& pipeline){
     // Mesh shader pipelines share the graphics bind point but carry their own PipelineBindingState type. Keep the
     // overload here rather than exposing VkPipelineLayout above the Vulkan RHI boundary.
-    if(m_usesDescriptorBuffer){
-        commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipelineLayout);
-        return;
-    }
-    commandList.bindDescriptorHeap(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipelineLayout);
+    commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipelineLayout);
 }
 
 void GpuDescriptorHeap::bindRayTracing(
@@ -698,13 +622,9 @@ void GpuDescriptorHeap::bindRayTracing(
     const RayTracingPipeline& pipeline,
     const GpuDescriptorHandle accelStructHandle
 ){
-    // Same PipelineBindingState::m_pipelineLayout the RT dispatch binds its set-0 material table against. Backend C
-    // routes through descriptor-buffer offsets (including optional set-10 TLAS generation), Backend A through sets.
-    if(m_usesDescriptorBuffer){
-        commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline.m_pipelineLayout, accelStructHandle);
-        return;
-    }
-    commandList.bindDescriptorHeap(*this, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline.m_pipelineLayout);
+    // Same PipelineBindingState::m_pipelineLayout the RT dispatch binds its set-0 material table against. The heap
+    // routes through descriptor-buffer offsets, including the optional set-10 TLAS generation.
+    commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline.m_pipelineLayout, accelStructHandle);
 }
 
 
@@ -791,7 +711,7 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
     return true;
 }
 
-bool GpuDescriptorHeap::writeDescriptorBuffer(const BindingSetItem& writeItem, const GpuDescriptorClass::Enum descriptorClass){
+bool GpuDescriptorHeap::writeDescriptorBuffer(const DescriptorWriteItem& writeItem, const GpuDescriptorClass::Enum descriptorClass){
     if(!m_context.descriptorBufferManager || !m_context.descriptorBufferManager->isEnabled())
         return false;
 

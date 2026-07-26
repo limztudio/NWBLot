@@ -520,11 +520,7 @@ bool PrepareShaderEntriesForCook(
             return false;
         if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, AssetsGraphicsCsgShaderVariants::s_ClipImplicitDefineName))
             return false;
-        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, AssetsGraphicsCsgShaderVariants::s_ClipSetImplicitDefineName))
-            return false;
         if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, AssetsGraphicsCsgShaderVariants::s_IntervalSampleEnabledImplicitDefineName))
-            return false;
-        if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, AssetsGraphicsCsgShaderVariants::s_IntervalSampleSetImplicitDefineName))
             return false;
 
         CookString materialTypedBindingInterfaceText{cookArena};
@@ -582,9 +578,10 @@ bool PrepareShaderEntriesForCook(
         if(!__hidden_shader_cook_plan::CountShaderVariants(preparedEntry.entry, preparedEntry.variantCount))
             return false;
         const u64 baseVariantCount = preparedEntry.variantCount;
-        if(preparedEntry.supportsCsgClipVariant && !AssetsGraphicsCsgShaderVariants::AddClipVariantCount(preparedEntry.entry, baseVariantCount, preparedEntry.variantCount))
-            return false;
-        if(preparedEntry.supportsAvboitCsgClipVariant && !AssetsGraphicsCsgShaderVariants::AddClipVariantCount(preparedEntry.entry, baseVariantCount, preparedEntry.variantCount))
+        if(
+            (preparedEntry.supportsCsgClipVariant || preparedEntry.supportsAvboitCsgClipVariant)
+            && !AssetsGraphicsCsgShaderVariants::AddClipVariantCount(preparedEntry.entry, baseVariantCount, preparedEntry.variantCount)
+        )
             return false;
         if(!Core::Assets::AddPlannedFileCount(preparedEntry.variantCount, outPreparedPlan.plannedFileCount))
             return false;

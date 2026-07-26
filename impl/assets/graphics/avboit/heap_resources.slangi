@@ -1,0 +1,90 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_AVBOIT_HEAP_RESOURCES_SLANGI
+#define NWB_GRAPHICS_AVBOIT_HEAP_RESOURCES_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The including AVBOIT common header supplies the push-constant expression that selects the shared deferred slot
+// payload. That payload, in turn, names the five work-buffer StorageBuffer entries and writable transmittance
+// StorageImage entry in the global heap.
+#ifndef NWB_AVBOIT_DEFERRED_SLOTS_DESCRIPTOR_SLOT
+#error "NWB_AVBOIT_DEFERRED_SLOTS_DESCRIPTOR_SLOT must select the deferred slot-payload descriptor before including avboit/heap_resources.slangi"
+#endif
+
+#include "../deferred/bindless_resources.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#define NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES \
+    g_NwbHeapDeferredBindlessResources[NWB_AVBOIT_DEFERRED_SLOTS_DESCRIPTOR_SLOT]
+
+// A StorageBuffer descriptor carries no fixed structured stride or read/write qualifier.  These typed views share
+// the global StorageBuffer table declared by bindless_heap.slangi, while making AVBOIT's uint work-buffer accesses
+// explicit at each call site.
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed read/write aliases of the global StorageBuffer descriptor table.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<uint, Std430DataLayout> g_NwbHeapAvboitReadBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+RWStructuredBuffer<uint, Std430DataLayout> g_NwbHeapAvboitWriteBuffers[];
+#pragma warning(pop)
+
+StructuredBuffer<uint, Std430DataLayout> nwbAvboitCoverageWords(){
+    return g_NwbHeapAvboitReadBuffers[NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.avboitWorkSlots0.x];
+}
+
+RWStructuredBuffer<uint, Std430DataLayout> nwbAvboitCoverageWordsUav(){
+    return g_NwbHeapAvboitWriteBuffers[NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.avboitWorkSlots0.x];
+}
+
+StructuredBuffer<uint, Std430DataLayout> nwbAvboitDepthWarp(){
+    return g_NwbHeapAvboitReadBuffers[NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.avboitWorkSlots0.y];
+}
+
+RWStructuredBuffer<uint, Std430DataLayout> nwbAvboitDepthWarpUav(){
+    return g_NwbHeapAvboitWriteBuffers[NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.avboitWorkSlots0.y];
+}
+
+StructuredBuffer<uint, Std430DataLayout> nwbAvboitControl(){
+    return g_NwbHeapAvboitReadBuffers[NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.avboitWorkSlots0.z];
+}
+
+RWStructuredBuffer<uint, Std430DataLayout> nwbAvboitControlUav(){
+    return g_NwbHeapAvboitWriteBuffers[NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.avboitWorkSlots0.z];
+}
+
+StructuredBuffer<uint, Std430DataLayout> nwbAvboitExtinction(){
+    return g_NwbHeapAvboitReadBuffers[NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.avboitWorkSlots0.w];
+}
+
+RWStructuredBuffer<uint, Std430DataLayout> nwbAvboitExtinctionUav(){
+    return g_NwbHeapAvboitWriteBuffers[NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.avboitWorkSlots0.w];
+}
+
+StructuredBuffer<uint, Std430DataLayout> nwbAvboitExtinctionOverflowDepth(){
+    return g_NwbHeapAvboitReadBuffers[NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.avboitWorkSlots1.x];
+}
+
+RWStructuredBuffer<uint, Std430DataLayout> nwbAvboitExtinctionOverflowDepthUav(){
+    return g_NwbHeapAvboitWriteBuffers[NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.avboitWorkSlots1.x];
+}
+
+RWTexture3D<float> nwbAvboitTransmittanceUav(){
+    return NwbHeapStorageImage3DFloat(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.avboitWorkSlots1.y);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -107,7 +107,7 @@ void RendererSystem::invalidateResources(){
     m_preparedShadowVisibilityReady = false;
     m_renderCommandList.reset();
     m_shadowPrepareCommandList.reset();
-    // The Backend-C TLAS descriptor owns a retained acceleration-structure handle until its in-flight-frame
+    // The descriptor-buffer TLAS descriptor owns a retained acceleration-structure handle until its in-flight-frame
     // quarantine matures. Retire it before RendererRayTracingState releases the current TLAS so resource invalidation
     // cannot strand a descriptor-buffer block (or its retained AS) until device shutdown.
     if(m_rayTracingState.m_tlasHeapHandle.valid()){
@@ -119,6 +119,8 @@ void RendererSystem::invalidateResources(){
     // releases those buffers below.
     m_raytracingSystem.releaseCausticEmissionTargetHeapHandle();
     m_raytracingSystem.releaseRayTraceMaterialContextHeapHandles();
+    m_raytracingSystem.releaseSwBvhScratchHeapHandles();
+    m_raytracingSystem.releaseSurfelGiHeapHandles();
     // Deferred target generations own ordinary image/sampler heap slots. Release those handles while both the target
     // resources and the device heap are still live; RendererDeferredState then drops the remaining resource handles.
     m_deferredSystem.resetDeferredFrameTargets();
@@ -262,7 +264,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
         return false;
 
     // Transparent preparation can grow shared instance and material buffers, which invalidates all mesh
-    // binding sets. Refresh opaque bindings after the final possible grow so render only consumes prepared
+    // heap registrations. Refresh opaque descriptors after the final possible grow so render only consumes prepared
     // resources.
     if(
         m_preparedHasTransparentRenderers
@@ -308,7 +310,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     ;
     // Scene/material gathers can replace a capacity-grown buffer and therefore its heap slot. Upload the completed
     // five-slot indirection only after the full shadow/GI/caustic preparation path has settled on this frame's
-    // resource generations, but before the command list that will dispatch their binding sets is submitted.
+    // resource generations, but before the command list that will dispatch their heap-selected passes is submitted.
     const bool traceMaterialContextUploaded = shadowResourcesPrepared
         && m_raytracingSystem.uploadRayTraceMaterialContextSlots(*m_shadowPrepareCommandList)
     ;
@@ -436,7 +438,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 deferredTargets.framebuffer.get(),
                 MaterialPipelinePass::Opaque,
                 nullptr,
-                nullptr,
                 deferredViewportState
             };
             if(regularDrawResourcesReady && !opaqueDrawItems.regular.empty()){
@@ -454,7 +455,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 *commandList,
                 deferredTargets.framebuffer.get(),
                 MaterialPipelinePass::CsgReceiverSurface,
-                nullptr,
                 nullptr,
                 csgIntervalViewportState
             };
@@ -553,8 +553,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             if(hasTransparentRenderers)
                 m_avboitSystem.renderAvboitPasses(*commandList, deferredTargets, csgFrameState);
 
-            commandList->setResourceStatesForBindingSet(deferredTargets.compositeBindingSet.get());
-            commandList->commitBarriers();
             commandListReady = m_deferredSystem.renderDeferredComposite(*commandList, deferredTargets, framebuffer);
         }
     }

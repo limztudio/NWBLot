@@ -22,24 +22,18 @@
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"
 #include "../bindless/bindless_heap_rt.slangi"
+#include "surfel/surfel_heap_resources.slangi"
 
-// The shared scene-shading CB + light list are target-generation heap entries. This trace's local slot cbuffer carries
-// their uniform heap indices in avboitSlots.z/.w; gi_trace_common's scene/buffer.slangi include therefore emits typed
-// heap aliases instead of the historical local bindings 0/1.
-[[vk::binding(NWB_GI_HW_BINDING_BINDLESS_RESOURCES, NWB_GI_HW_SET)]]
-ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbGiHwBindlessResources;
-#define NWB_SCENE_BUFFERS_FROM_HEAP 1
+// The shared scene-shading CB + light list are target-generation heap entries. The surfel trace push block selects the
+// deferred target-generation payload from the global UniformBuffer table, so no local CBV remains.
+#define g_NwbGiHwBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbSurfelHeapPushConstants.deferredResourcesHeapSlot]
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbGiHwBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbGiHwBindlessResources.avboitSlots.w
 
-// The shared InstanceID material table and material-surface buffers are global StorageBuffer heap entries. This local
-// cbuffer keeps their selection uniform for the dispatch without retaining local b3/b7/b8 SRVs.
-[[vk::binding(NWB_GI_HW_BINDING_MATERIAL_CONTEXT_SLOTS, NWB_GI_HW_SET)]]
-ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbGiHwMaterialContextSlots;
+// The shared InstanceID material table and material-surface buffers are global StorageBuffer heap entries. The pushed
+// UniformBuffer slot keeps their selection uniform without retaining a local selector CBV.
+#define g_NwbGiHwMaterialContextSlots g_NwbHeapSurfelMaterialContextSlotBuffers[g_NwbSurfelHeapPushConstants.materialContextSlotsHeapSlot]
 
-#define NWB_MESH_SET NWB_GI_HW_SET
-#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
-#define NWB_MESH_VIEW_BUFFER_BINDLESS 1
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbGiHwMaterialContextSlots.sceneSlots.w;
 }
@@ -68,11 +62,6 @@ uint nwbMeshFrameViewHeapSlot(){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#if !(defined(NWB_BINDLESS_TLAS) && NWB_BINDLESS_TLAS)
-[[vk::binding(NWB_GI_HW_BINDING_TLAS, NWB_GI_HW_SET)]]
-RaytracingAccelerationStructure g_NwbGiHwTlas;
-#endif
 
 // Per-mesh positions, indices, and attributes are read through descriptor-heap slots carried by the material record.
 // The shared backing buffers remain transitioned for those heap reads.
@@ -136,11 +125,7 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     ray.TMax = tMax;
 
     RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
-#if defined(NWB_BINDLESS_TLAS) && NWB_BINDLESS_TLAS
     query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, 0xFFu, ray);
-#else
-    query.TraceRayInline(g_NwbGiHwTlas, RAY_FLAG_FORCE_OPAQUE, 0xFFu, ray);
-#endif
     query.Proceed();   // FORCE_OPAQUE + triangle-only -> commits the nearest at once, returns false
     if(query.CommittedStatus() != COMMITTED_TRIANGLE_HIT)
         return closest;

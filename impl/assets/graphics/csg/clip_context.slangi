@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "binding_slots.h"
+#include "../bindless/bindless_heap.slangi"
 
 
 // Persistent CSG inputs live in the global StorageBuffer heap. This local uint4 is deliberately only slot
@@ -21,10 +21,22 @@ struct NwbCsgClipContextSlots{
     uint cutters;
     uint materialTyped;
     uint meshInstances;
+    uint deferredBindlessResources;
+    uint intervalSampleState;
+    uint2 padding;
 };
 
-[[vk::binding(NWB_CSG_BINDING_CLIP_CONTEXT_SLOTS, NWB_CSG_CLIP_SET)]]
-ConstantBuffer<NwbCsgClipContextSlots, Std140DataLayout> g_NwbCsgClipContextSlots;
+// Typed view over the global UniformBuffer table.  The descriptor slot is carried by the existing mesh/CSG
+// push data (or the receiver instance record), so the historical local CSG clip cbuffer is retired.
+#pragma warning(push)
+#pragma warning(disable: 39001)
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbCsgClipContextSlots, Std140DataLayout> g_NwbHeapCsgClipContextSlots[];
+#pragma warning(pop)
+
+ConstantBuffer<NwbCsgClipContextSlots, Std140DataLayout> NwbHeapCsgClipContextSlots(const uint slot){
+    return g_NwbHeapCsgClipContextSlots[slot];
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -23,8 +23,8 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
     if(!drawState().m_computeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
-        bindingLayoutDesc.setUseDescriptorBuffer(true);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(s_MeshGeneratedVertexBindingSlot, 1));
+        // The per-mesh generated-vertex UAV is a global StorageBuffer heap entry selected through the fourth mesh
+        // frame-slot push-constant lane.  This local layout deliberately retains only the push range.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
         auto* device = graphics().getDevice();
@@ -113,12 +113,7 @@ bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const Mater
         return false;
 
     bool ready = true;
-    const MaterialPassCsgBindingSets csgBindingSets{
-        csgState().m_clipBindingSet,
-        csgState().m_receiverSurfaceBindingSet,
-        csgState().m_intervalSampleBindingSet
-    };
-    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
+    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem&, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
         if(!ready)
             return;
         if(!pipelineResources.meshletPipeline){
@@ -129,13 +124,6 @@ bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const Mater
             ready = false;
             return;
         }
-        if(!MaterialPassCsgResourcesReadyForPipelineKey(
-            drawItem.pipelineKey,
-            drawItem.pipelineKey.pass,
-            csgBindingSets,
-            false
-        ))
-            ready = false;
     });
     return ready;
 }
@@ -147,12 +135,7 @@ bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const Ma
         return false;
 
     bool ready = true;
-    const MaterialPassCsgBindingSets csgBindingSets{
-        csgState().m_clipBindingSet,
-        csgState().m_receiverSurfaceBindingSet,
-        csgState().m_intervalSampleBindingSet
-    };
-    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem& drawItem, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
+    forEachMaterialPassDrawItemResources(drawItems, [&](const MaterialPassDrawItem&, MeshResources& mesh, MaterialPipelineResources& pipelineResources){
         if(!ready)
             return;
         if(!pipelineResources.computePipeline || !pipelineResources.emulationPipeline){
@@ -163,18 +146,11 @@ bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const Ma
             ready = false;
             return;
         }
-        if(!mesh.computeBindingSet && !m_renderer.meshSystem().createComputeBindingSet(mesh)){
+        if(!m_renderer.meshSystem().createComputeEmulationHeapHandle(mesh)){
             ready = false;
             return;
         }
 
-        if(!MaterialPassCsgResourcesReadyForPipelineKey(
-            drawItem.pipelineKey,
-            drawItem.pipelineKey.pass,
-            csgBindingSets,
-            false
-        ))
-            ready = false;
     });
     return ready;
 }
@@ -279,11 +255,20 @@ bool RendererMaterialSystem::materialPassDrawBuffersReady(
     ;
 }
 
-bool RendererMaterialSystem::uploadInstanceBuffer(Core::CommandList& commandList, const InstanceGpuDataVector& instanceData){
+bool RendererMaterialSystem::uploadInstanceBuffer(Core::CommandList& commandList, InstanceGpuDataVector& instanceData){
     if(instanceData.empty())
         return true;
     NWB_ASSERT(drawState().m_instanceBuffer);
     NWB_ASSERT(drawState().m_instanceBufferCapacity >= instanceData.size());
+
+    // Slot 6 was retired as a direct material binding. It now carries CSG's heap-selected UniformBuffer context
+    // for every raster instance, avoiding a second pipeline-local resource descriptor in the mesh/compute geometry stages.
+    const u32 csgContextHeapSlot = csgState().m_clipContextSlotsHeapHandle.valid()
+        ? csgState().m_clipContextSlotsHeapHandle.slot()
+        : 0u
+    ;
+    for(InstanceGpuData& instance : instanceData)
+        instance.geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT] = csgContextHeapSlot;
 
 #if defined(NWB_DEBUG)
     if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
@@ -320,7 +305,7 @@ bool RendererMaterialSystem::uploadMaterialTypedBuffer(
 
 bool RendererMaterialSystem::uploadMaterialPassDrawBuffers(
     Core::CommandList& commandList,
-    const InstanceGpuDataVector& instanceData,
+    InstanceGpuDataVector& instanceData,
 #if defined(NWB_DEBUG)
     const ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif

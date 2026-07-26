@@ -339,8 +339,8 @@ NwbCausticEmission nwbCausticEmitPhotonAtTarget(float3 lightDir, float3 aabbMin,
     return emission;
 }
 
-// Clamp the directional/spot intensity exactly once for both producers. This is deliberately independent of any
-// pass-local resource name so the HW raygen and SW compute entry points retain their own binding interfaces.
+// Clamp the directional/spot intensity exactly once for both producers. This is deliberately independent of either
+// entry point's shared transport and push-constant ABI.
 float3 nwbCausticLightColor(const float4 colorIntensity){
     return clamp(colorIntensity.xyz, float3(0.0), float3(1.5)) * min(max(colorIntensity.w, 0.0), 2.0);
 }

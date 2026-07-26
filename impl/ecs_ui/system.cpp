@@ -496,16 +496,13 @@ void UiSystem::renderDrawData(Core::CommandList& commandList, Core::Framebuffer*
                 .setPipeline(m_pipeline.get())
                 .setFramebuffer(framebuffer)
                 .setViewport(viewportState)
-                // Preserve set 0's positional gap on Backend C: the push-only layout has no descriptor block, so
-                // the command binder records its required harmless zero offset before heap.bindGraphics selects 8/9.
-                .addBindingSet(nullptr)
                 .addVertexBuffer(Core::VertexBufferBinding().setBuffer(m_vertexBuffer.get()).setSlot(NWB_IMGUI_VERTEX_BUFFER_INDEX).setOffset(0u))
                 .setIndexBuffer(Core::IndexBufferBinding().setBuffer(m_indexBuffer.get()).setFormat(indexFormat).setOffset(0u))
             ;
 
             commandList.setGraphicsState(graphicsState);
-            // The heap bind must follow setGraphicsState(), which installs the UI pipeline layout. Backend A binds
-            // its persistent descriptor tables; Backend C selects the resource/sampler descriptor-buffer blocks.
+            // The heap bind must follow setGraphicsState(), which installs the UI pipeline layout and selects the
+            // global resource/sampler descriptor-buffer blocks.
             heap.bindGraphics(commandList, *m_pipeline);
             commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 

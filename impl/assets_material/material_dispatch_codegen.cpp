@@ -394,7 +394,7 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
     // -- nwbMeshLoadInstance / nwbMeshMaterialConstantByteOffset / ... -- + the surface contract) is supplied by
     // the includer BEFORE this module, exactly as the deferred BXDF dispatch relies on lighting_ps to bring in the
     // framework first. The includer (each shadow trace shader) #includes shadow/shadow_surface.slangi -- where it
-    // also points the material-constants buffers at its own binding set -- then this module; emitting the framework
+    // also points the material-constants buffers at its heap-selected context -- then this module; emitting the framework
     // include here instead would force a virtual engine/ path that the shader -I roots do not resolve.
 
     // Per-id surface hook. This is the ONE translation unit that pulls MULTIPLE materials' `.bind` files together

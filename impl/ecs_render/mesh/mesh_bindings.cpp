@@ -14,13 +14,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererMeshSystem::createComputeBindingSet(MeshResources& mesh){
-    if(mesh.computeBindingSet)
+bool RendererMeshSystem::createComputeEmulationHeapHandle(MeshResources& mesh){
+    if(mesh.emulationVertexHeapHandle.valid())
         return true;
-    if(!drawState().m_computeBindingLayout){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute-emulation binding layout was not validated before mesh binding-set creation"));
-        return false;
-    }
     if(!mesh.emulationVertexBuffer){
         const Name emulationVertexBufferName = DeriveName(mesh.meshName, AStringView(":emulation_vb"));
         if(!emulationVertexBufferName){
@@ -47,17 +43,25 @@ bool RendererMeshSystem::createComputeBindingSet(MeshResources& mesh){
         }
     }
 
-    Core::BindingSetDesc bindingSetDesc(arena());
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(s_MeshGeneratedVertexBindingSlot, mesh.emulationVertexBuffer.get()));
-
     auto* device = graphics().getDevice();
-    mesh.computeBindingSet = device->createBindingSet(bindingSetDesc, drawState().m_computeBindingLayout);
-    if(!mesh.computeBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding set for mesh '{}'")
+    if(!device || !device->getDescriptorHeap().isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute-emulation vertex buffer requires the initialized global descriptor heap"));
+        return false;
+    }
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(
+        !handle.valid()
+        || !heap.write(handle, Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, mesh.emulationVertexBuffer.get()))
+    ){
+        if(handle.valid())
+            heap.free(handle);
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register compute-emulation vertex buffer in the descriptor heap for mesh '{}'")
             , StringConvert(mesh.meshName.c_str())
         );
         return false;
     }
+    mesh.emulationVertexHeapHandle = handle;
 
     return true;
 }
@@ -92,9 +96,9 @@ bool RendererMeshSystem::createMeshFrameHeapHandles(){
         instanceHandle.valid()
         && materialTypedHandle.valid()
         && viewHandle.valid()
-        && heap.write(instanceHandle, Core::BindingSetItem::StructuredBuffer_SRV(0u, drawState().m_instanceBuffer.get()))
-        && heap.write(materialTypedHandle, Core::BindingSetItem::StructuredBuffer_SRV(0u, drawState().m_materialTypedBuffer.get()))
-        && heap.write(viewHandle, Core::BindingSetItem::ConstantBuffer(0u, drawState().m_meshViewBuffer.get()))
+        && heap.write(instanceHandle, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, drawState().m_instanceBuffer.get()))
+        && heap.write(materialTypedHandle, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, drawState().m_materialTypedBuffer.get()))
+        && heap.write(viewHandle, Core::DescriptorWriteItem::ConstantBuffer(0u, drawState().m_meshViewBuffer.get()))
     ;
     if(!registered){
         if(instanceHandle.valid())
@@ -132,7 +136,7 @@ void RendererMeshSystem::populateMeshFrameHeapSlots(ECSRenderDetail::MeshFrameHe
     outSlots.instance = drawState().m_instanceBufferHeapHandle.slot();
     outSlots.materialTyped = drawState().m_materialTypedBufferHeapHandle.slot();
     outSlots.view = drawState().m_meshViewBufferHeapHandle.slot();
-    outSlots.reserved = 0u;
+    outSlots.generatedVertex = 0u;
 }
 
 void RendererMeshSystem::releaseMeshFrameHeapHandles(){
@@ -200,7 +204,7 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
             registered = false;
             return;
         }
-        if(!heap.write(handle, Core::BindingSetItem::StructuredBuffer_SRV(0u, buffer.get()))){
+        if(!heap.write(handle, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, buffer.get()))){
             heap.free(handle);
             registered = false;
             return;
@@ -283,8 +287,8 @@ bool RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(MeshResources& mesh){
     const bool registered =
         positionHandle.valid()
         && triangleIndexHandle.valid()
-        && heap.write(positionHandle, Core::BindingSetItem::RawBuffer_SRV(0u, mesh.positionBuffer.get()))
-        && heap.write(triangleIndexHandle, Core::BindingSetItem::RawBuffer_SRV(0u, mesh.triangleIndexBuffer.get()))
+        && heap.write(positionHandle, Core::DescriptorWriteItem::RawBuffer_SRV(0u, mesh.positionBuffer.get()))
+        && heap.write(triangleIndexHandle, Core::DescriptorWriteItem::RawBuffer_SRV(0u, mesh.triangleIndexBuffer.get()))
     ;
     if(!registered){
         if(positionHandle.valid())
@@ -316,8 +320,17 @@ void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
             heap.free(mesh.swBvhPositionHeapHandle);
         if(mesh.swBvhTriangleIndexHeapHandle.valid())
             heap.free(mesh.swBvhTriangleIndexHeapHandle);
+        if(mesh.swBvhNodeHeapHandle.valid())
+            heap.free(mesh.swBvhNodeHeapHandle);
+        if(mesh.swBvhParentHeapHandle.valid())
+            heap.free(mesh.swBvhParentHeapHandle);
+        if(mesh.emulationVertexHeapHandle.valid())
+            heap.free(mesh.emulationVertexHeapHandle);
         mesh.swBvhPositionHeapHandle = Core::GpuDescriptorHandle::invalid();
         mesh.swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::invalid();
+        mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
+        mesh.swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
+        mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
         return;
     }
 
@@ -325,6 +338,9 @@ void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
         handle = Core::GpuDescriptorHandle::invalid();
     mesh.swBvhPositionHeapHandle = Core::GpuDescriptorHandle::invalid();
     mesh.swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::invalid();
+    mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
+    mesh.swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
+    mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
 }
 
 void RendererMeshSystem::releaseAllMeshGeometryHeapHandles(){

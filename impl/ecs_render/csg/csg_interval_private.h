@@ -32,7 +32,7 @@ struct CsgIntervalDispatchPushConstants{
     u32 workExtentX = 0u;
     u32 workExtentY = 0u;
     u32 meshViewHeapSlot = 0u;
-    u32 resourceSlotPadding0 = 0u;
+    u32 csgContextHeapSlot = 0u;
     u32 resourceSlotPadding1 = 0u;
     u32 resourceSlotPadding2 = 0u;
 };

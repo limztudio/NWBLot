@@ -25,12 +25,6 @@ namespace RendererResourceLookupMode{
     };
 };
 
-struct MaterialPassCsgBindingSets;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RendererMaterialSystem final : public RendererSystemSubsystemBase<RendererSystem>{
 public:
     explicit RendererMaterialSystem(RendererSystem& renderer);
@@ -57,7 +51,6 @@ public:
         MaterialPipelinePass::Enum pass,
         bool transparent,
         const CsgFrameState& csgFrameState,
-        Core::BindingSet* passBindingSet,
         const AvboitFrameTargets* avboitTargets
     );
     [[nodiscard]] bool prepareMaterialPassResources(
@@ -126,14 +119,8 @@ public:
     void pruneMaterialInstanceMutableCache();
     [[nodiscard]] bool materialPassDrawResourcesReady(const MeshResources& mesh)const;
     [[nodiscard]] bool materialPassDrawResourcesReady(const MaterialPassDrawItems& drawItems);
-    [[nodiscard]] bool meshMaterialPassDrawResourcesReady(
-        const MaterialPassDrawItemVector& drawItems,
-        const MaterialPassCsgBindingSets& csgBindingSets
-    );
-    [[nodiscard]] bool computeMaterialPassDrawResourcesReady(
-        const MaterialPassDrawItemVector& drawItems,
-        const MaterialPassCsgBindingSets& csgBindingSets
-    );
+    [[nodiscard]] bool meshMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems);
+    [[nodiscard]] bool computeMaterialPassDrawResourcesReady(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems);
     [[nodiscard]] bool prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
@@ -154,11 +141,11 @@ public:
         const InstanceGpuDataVector& instanceData,
         const MaterialTypedByteDataVector& materialTypedBytes
     )const;
-    [[nodiscard]] bool uploadInstanceBuffer(Core::CommandList& commandList, const InstanceGpuDataVector& instanceData);
+    [[nodiscard]] bool uploadInstanceBuffer(Core::CommandList& commandList, InstanceGpuDataVector& instanceData);
     [[nodiscard]] bool uploadMaterialTypedBuffer(Core::CommandList& commandList, const MaterialTypedByteDataVector& materialTypedBytes);
     [[nodiscard]] bool uploadMaterialPassDrawBuffers(
         Core::CommandList& commandList,
-        const InstanceGpuDataVector& instanceData,
+        InstanceGpuDataVector& instanceData,
 #if defined(NWB_DEBUG)
         const ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif

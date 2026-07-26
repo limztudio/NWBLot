@@ -16,6 +16,19 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_deferred_lighting{
+
+struct PushConstants{
+    u32 resourceSlots = 0u;
+};
+static_assert(sizeof(PushConstants) == sizeof(u32));
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererDeferredSystem::createDeferredLightingResources(){
     auto* device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
@@ -58,13 +71,10 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::Pixel)
-            // The remaining local set is pure-resource (CBV/SRV), so it can join the descriptor-buffer pipeline on
-            // Backend C while Backend A continues to use its classic descriptor set.
-            .setUseDescriptorBuffer(heap.usesDescriptorBuffer())
         ;
-        // Scene-shading cbuffer + light list moved to the global heap (fetched via the resource-slot cbuffer); the
-        // lighting set now carries only that per-frame slot cbuffer.
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_DEFERRED_LIGHTING_BINDING_BINDLESS_RESOURCES, 1));
+        // The target-generation selector is a UniformBuffer heap entry; the local layout contains only its four-byte
+        // slot.  That keeps both descriptor data and ordinary renderer resources on the global descriptor heap.
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_lighting::PushConstants)));
 
         deferredState().m_lightingBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!deferredState().m_lightingBindingLayout){
@@ -189,15 +199,13 @@ bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& command
 }
 
 bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    NWB_ASSERT(targets.lightingBindingSet);
     NWB_ASSERT(targets.opaqueLightingFramebuffer);
     NWB_ASSERT(deferredState().m_lightingPipeline);
 
     if(!uploadDeferredBindlessFrameResources(commandList, targets))
         return false;
 
-    commandList.setResourceStatesForBindingSet(targets.lightingBindingSet.get());
-    // Heap writes are persistent descriptors rather than BindingSet items, so state tracking cannot discover these
+    // Heap writes are persistent descriptors rather than command-state items, so state tracking cannot discover these
     // sampled textures automatically. Transition every target the lighting pixel shader resolves through the heap.
     commandList.setTextureState(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -217,10 +225,13 @@ bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandLi
     graphicsState.setPipeline(deferredState().m_lightingPipeline.get());
     graphicsState.setFramebuffer(targets.opaqueLightingFramebuffer.get());
     graphicsState.setViewport(viewportState);
-    graphicsState.addBindingSet(targets.lightingBindingSet.get());
 
     commandList.setGraphicsState(graphicsState);
     graphics().getDevice()->getDescriptorHeap().bindGraphics(commandList, *deferredState().m_lightingPipeline);
+    const __hidden_deferred_lighting::PushConstants pushConstants{
+        targets.bindless.slotsBufferDescriptor.slot()
+    };
+    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
     Core::DrawArguments drawArgs;
     drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);

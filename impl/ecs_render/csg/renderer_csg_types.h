@@ -66,18 +66,23 @@ struct CsgCutterGpuData{
     Float4 parameter1 = Float4(0.f, 0.f, 0.f, 0.f);
 };
 
-// The CSG clip/cap-fill local cbuffer is a single std140 uint4 lane. Its four values select persistent StorageBuffer
-// heap entries: receiver ranges, cutters, typed material words, and mesh-instance records.
+// The CSG context lives in one global UniformBuffer heap entry.  Its first lane selects the persistent
+// StorageBuffer inputs; its second lane selects the target-generation deferred slots and interval-sample state.
+// No CSG pass binds this payload through a pipeline-local resource descriptor.
 struct CsgClipContextSlots{
     u32 receiverRanges = 0u;
     u32 cutters = 0u;
     u32 materialTyped = 0u;
     u32 meshInstances = 0u;
+    u32 deferredBindlessResources = 0u;
+    u32 intervalSampleState = 0u;
+    u32 padding0 = 0u;
+    u32 padding1 = 0u;
 };
 
 static_assert(sizeof(CsgReceiverRangeGpuData) == sizeof(u32) * 8u + sizeof(Float34) + sizeof(CsgBoundsGpuData), "CsgReceiverRangeGpuData layout must match the CSG shader");
 static_assert(sizeof(CsgCutterGpuData) == sizeof(Float4) + sizeof(Float34) + sizeof(Float4) * 2u, "CsgCutterGpuData layout must match the CSG shader");
-static_assert(sizeof(CsgClipContextSlots) == sizeof(u32) * 4u, "CSG clip context slots must stay one uint4 lane");
+static_assert(sizeof(CsgClipContextSlots) == sizeof(u32) * 8u, "CSG clip context slots must stay two uint4 lanes");
 static_assert(alignof(CsgReceiverRangeGpuData) >= alignof(Float4), "CsgReceiverRangeGpuData must stay SIMD-aligned");
 static_assert(alignof(CsgCutterGpuData) >= alignof(Float4), "CsgCutterGpuData must stay SIMD-aligned");
 static_assert(alignof(CsgReceiverCpuBounds) >= alignof(Float4), "CsgReceiverCpuBounds must stay SIMD-friendly");

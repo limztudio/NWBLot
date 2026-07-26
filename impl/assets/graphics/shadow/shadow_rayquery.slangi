@@ -19,17 +19,15 @@
 
 
 #include "binding_slots.h"
-#include "../deferred/bindless_resources.slangi"
+#include "shadow_heap_resources.slangi"
 
-// The shared scene-shading CB + light list are target-generation heap entries. This local slot cbuffer carries their
-// uniform heap indices in avboitSlots.z/.w, so scene/buffer.slangi emits typed heap aliases instead of the historical
-// local bindings 4/5. The opaque trace only reads the TLAS, G-buffer, and light list; occlusion.slangi intentionally
-// contains no material-surface machinery.
-[[vk::binding(NWB_SHADOW_RT_BINDING_BINDLESS_RESOURCES, NWB_SHADOW_RT_SET)]]
-ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbShadowRqBindlessResources;
-#define NWB_SCENE_BUFFERS_FROM_HEAP 1
-#define NWB_SCENE_SHADING_HEAP_SLOT g_NwbShadowRqBindlessResources.avboitSlots.z
-#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbShadowRqBindlessResources.avboitSlots.w
+// The deferred selector itself is a global UniformBuffer heap entry supplied by the dispatch push block.  The opaque
+// trace therefore has no local cbuffer even though scene/buffer.slangi still exposes its familiar light helpers.
+#ifndef NWB_SHADOW_RQ_DEFERRED_RESOURCES_HEAP_SLOT
+#error "shadow RayQuery sources must provide the deferred-resource heap slot expression"
+#endif
+#define NWB_SCENE_SHADING_HEAP_SLOT NwbHeapDeferredBindlessResources(NWB_SHADOW_RQ_DEFERRED_RESOURCES_HEAP_SLOT).avboitSlots.z
+#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT NwbHeapDeferredBindlessResources(NWB_SHADOW_RQ_DEFERRED_RESOURCES_HEAP_SLOT).avboitSlots.w
 
 #include "occlusion.slangi"
 #include "../scene/buffer.slangi"
@@ -70,11 +68,7 @@ half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, c
     // traversal casts their colored shadow). We never commit them, so traversal continues past a transparent occluder
     // to any opaque occluder behind it. A committed triangle hit therefore means an opaque occluder blocks the light.
     RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
-#if defined(NWB_BINDLESS_TLAS) && NWB_BINDLESS_TLAS
     query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, 0xFFu, ray);
-#else
-    query.TraceRayInline(g_NwbShadowTlas, RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, 0xFFu, ray);
-#endif
     // Drain the non-opaque (transparent) candidates without committing any of them; opaque occluders never reach
     // this loop (the intersector commits them and ends the search). The body is intentionally empty.
     while(query.Proceed()){

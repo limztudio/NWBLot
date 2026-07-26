@@ -14,28 +14,16 @@
 
 #include "surfel_runtime.slangi"
 #include "surfel_hash.slangi"
-#include "../../bindless/bindless_heap_sampled_image_2d.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_SURFEL_BINDING_CELL_HEAD, NWB_SURFEL_SET)]]
-RWStructuredBuffer<uint> g_NwbSurfelCellHead;   // this frame's hash (built before spawn); the claim links the new surfel
-
-[[vk::binding(NWB_SURFEL_BINDING_COUNTER, NWB_SURFEL_SET)]]
-RWStructuredBuffer<uint> g_NwbSurfelCounter;
-
-[[vk::binding(NWB_SURFEL_BINDING_FREE_LIST, NWB_SURFEL_SET)]]
-RWStructuredBuffer<uint> g_NwbSurfelFreeList;   // recycled ids (U1); popped before bump-allocating
-
-struct NwbSurfelSpawnPushConstants{
-    uint worldPositionSlot;
-    uint normalSlot;
-};
-
-[[vk::push_constant]]
-NwbSurfelSpawnPushConstants g_NwbSurfelSpawnPushConstants;
+// This frame's hash, allocation counters, and free-list are all StorageBuffer heap entries selected by the common
+// dispatch push block. Keep the historical names below so the allocation logic stays uncluttered.
+#define g_NwbSurfelCellHead g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.cellHeadHeapSlot]
+#define g_NwbSurfelCounter g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.counterHeapSlot]
+#define g_NwbSurfelFreeList g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.freeListHeapSlot]
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -53,11 +41,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
 
     const int3 loadCoord = int3(int2(pixel), 0);
-    const float3 rawNormal = NwbHeapSampledImage2DOnly(g_NwbSurfelSpawnPushConstants.normalSlot).Load(loadCoord).xyz;
+    const float3 rawNormal = NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.normalSlot).Load(loadCoord).xyz;
     if(dot(rawNormal, rawNormal) < 0.01)
         return;   // no geometry at this tile (background)
 
-    const float3 worldPosition = NwbHeapSampledImage2DOnly(g_NwbSurfelSpawnPushConstants.worldPositionSlot).Load(loadCoord).xyz;
+    const float3 worldPosition = NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.worldPositionSlot).Load(loadCoord).xyz;
     const float3 worldNormal = normalize(rawNormal);
 
     const float cellSize = g_NwbSurfelConstants.cameraPositionCellSize.w;

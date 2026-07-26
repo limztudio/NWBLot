@@ -180,7 +180,7 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
     if(!ensureBoundsPipeline())
         return false;
     // The RT attribute buffer exists only when ray tracing is supported; build the repack pipeline only then so the
-    // binding set (ensureRuntimeResources) has its layout, and so no-RT runs do not pay for an unused pipeline.
+    // runtime resource registration has its layout, and so no-RT runs do not pay for an unused pipeline.
     if(instance.attributeBuffer && !ensureRepackPipeline())
         return false;
 
@@ -225,8 +225,7 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
         return false;
     RuntimeResources* resources = &foundRuntimeResources.value();
     NWB_ASSERT(resources != nullptr);
-    NWB_ASSERT(resources->boundsBindingSet);
-    NWB_ASSERT(!hasActiveSkin || resources->skinningBindingSet);
+    NWB_ASSERT(resources->bindlessHeapHandles.resourceSlots.valid());
     NWB_ASSERT(!hasActiveSkin || resources->skinBuffer);
     NWB_ASSERT(!hasActiveSkin || resources->jointPaletteBuffer);
     auto* device = m_graphics.getDevice();
@@ -289,7 +288,7 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
 
     Core::ComputeState computeState;
     computeState.setPipeline(m_skinningComputePipeline.get());
-    computeState.addBindingSet(resources->skinningBindingSet.get());
+    // Set 0 contains only the push range; all persistent inputs, outputs, and selector payloads are heap entries.
     commandList.setComputeState(computeState);
     heap.bindCompute(commandList, *m_skinningComputePipeline.get());
 
@@ -299,6 +298,7 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
     pushConstants.jointCount = static_cast<u32>(payload.jointMatrices.size());
     pushConstants.skinningMode = payload.resolvedSkinningMode;
     pushConstants.attributeCount = instance.meshletAttributeRefCount;
+    pushConstants.bindlessResourceSlots = resources->bindlessHeapHandles.resourceSlots.slot();
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_Skinning, m_graphics.getDevice(), commandList);
@@ -370,6 +370,7 @@ bool MeshSkinningSystem::dispatchMeshletBounds(
     MeshSkinningRuntimeInstance& instance,
     const RuntimeResources& resources
 ){
+    NWB_ASSERT(resources.bindlessHeapHandles.resourceSlots.valid());
     commandList.setBufferState(instance.skinnedPositionBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(instance.meshletDescBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(instance.meshletPositionRefDeltaBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -380,12 +381,12 @@ bool MeshSkinningSystem::dispatchMeshletBounds(
 
     Core::ComputeState computeState;
     computeState.setPipeline(m_boundsComputePipeline.get());
-    computeState.addBindingSet(resources.boundsBindingSet.get());
     commandList.setComputeState(computeState);
     m_graphics.getDevice()->getDescriptorHeap().bindCompute(commandList, *m_boundsComputePipeline.get());
 
     MeshletBoundsPushConstants pushConstants;
     pushConstants.meshletCount = static_cast<u32>(instance.meshlets.size());
+    pushConstants.bindlessResourceSlots = resources.bindlessHeapHandles.resourceSlots.slot();
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_MeshletBounds, m_graphics.getDevice(), commandList);
@@ -409,7 +410,7 @@ bool MeshSkinningSystem::dispatchRepackNormals(
     // single-instance buffer is safe to write here because the frame-begin fence retires all prior in-flight frames
     // before this command list records, and the renderer's RT reads run later (skinning render pass precedes the
     // renderer pass), exactly as for the skinned position/normal buffers.
-    if(!instance.attributeBuffer || !resources.repackBindingSet || !m_repackComputePipeline)
+    if(!instance.attributeBuffer || !resources.bindlessHeapHandles.resourceSlots.valid() || !m_repackComputePipeline)
         return true;
 
     commandList.setBufferState(instance.skinnedNormalBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -422,12 +423,12 @@ bool MeshSkinningSystem::dispatchRepackNormals(
 
     Core::ComputeState computeState;
     computeState.setPipeline(m_repackComputePipeline.get());
-    computeState.addBindingSet(resources.repackBindingSet.get());
     commandList.setComputeState(computeState);
     m_graphics.getDevice()->getDescriptorHeap().bindCompute(commandList, *m_repackComputePipeline.get());
 
     MeshletRepackPushConstants pushConstants;
     pushConstants.meshletCount = static_cast<u32>(instance.meshlets.size());
+    pushConstants.bindlessResourceSlots = resources.bindlessHeapHandles.resourceSlots.slot();
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_RepackNormals, m_graphics.getDevice(), commandList);

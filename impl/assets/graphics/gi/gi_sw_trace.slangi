@@ -10,9 +10,9 @@
 
 
 // The SOFTWARE backend of the GI trace seam: walks the SW scene/instance/per-mesh BVH the SW shadow/caustic path
-// already builds and defines nwbGiTraceClosest (+ nwbGiSwInstanceClosest) accordingly. Its only trace-context local
-// descriptor is the b11 slot cbuffer; it selects the scene BVH / instance and shadow material buffers from the global
-// StorageBuffer heap. gi_trace_common also brings NwbGiTraceHit + the shared nwbGiShadeHit Lambert shade + the scene
+// already builds and defines nwbGiTraceClosest (+ nwbGiSwInstanceClosest) accordingly. Its heap-selected trace-context
+// uniform selects the scene BVH / instance and shadow material buffers from the global StorageBuffer heap.
+// gi_trace_common also brings NwbGiTraceHit + the shared nwbGiShadeHit Lambert shade + the scene
 // light list. The HW twin is gi_hw_trace.slangi (inline RayQuery over the TLAS); both share the common shade +
 // NwbGiTraceHit, so a red wall bounces red identically. The producer's own shader supplies the OUTPUT bindings + main()
 // (the surfel path reduces rays in groupshared and running-means them into a surfel record).
@@ -22,26 +22,20 @@
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"
 #include "../bindless/bindless_heap_rt.slangi"
+#include "surfel/surfel_heap_resources.slangi"
 
-// The shared scene-shading CB + light list are target-generation heap entries. This trace's local slot cbuffer carries
-// their uniform heap indices in avboitSlots.z/.w; gi_trace_common's scene/buffer.slangi include therefore emits typed
-// heap aliases instead of the historical local bindings 0/1.
-[[vk::binding(NWB_GI_SW_BINDING_BINDLESS_RESOURCES, NWB_GI_SW_SET)]]
-ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbGiSwBindlessResources;
-#define NWB_SCENE_BUFFERS_FROM_HEAP 1
+// The shared scene-shading CB + light list are target-generation heap entries. The surfel trace push block selects the
+// deferred target-generation payload itself from the global UniformBuffer table, so this shader has no local CBV.
+#define g_NwbGiSwBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbSurfelHeapPushConstants.deferredResourcesHeapSlot]
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbGiSwBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbGiSwBindlessResources.avboitSlots.w
 
-// Per-trace scene/material context. These five slots are uniform for the dispatch, and select typed aliases of the
-// global StorageBuffer table; no scene/material context SRV remains in this pass's local binding set.
-[[vk::binding(NWB_GI_SW_BINDING_MATERIAL_CONTEXT_SLOTS, NWB_GI_SW_SET)]]
-ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbGiSwMaterialContextSlots;
+// Per-trace scene/material context. Its uniform heap slot is also pushed, selecting the five StorageBuffer aliases
+// without a local selector CBV.
+#define g_NwbGiSwMaterialContextSlots g_NwbHeapSurfelMaterialContextSlotBuffers[g_NwbSurfelHeapPushConstants.materialContextSlotsHeapSlot]
 
 // The generated material-surface evaluator reaches its typed words and mutable mesh-instance records through the
-// mesh bindless-frame route. Define these before material_typed_bindings.slangi is included by shadow_surface.slangi.
-#define NWB_MESH_SET NWB_GI_SW_SET
-#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
-#define NWB_MESH_VIEW_BUFFER_BINDLESS 1
+// mesh bindless-frame route before material_typed_bindings.slangi is included by shadow_surface.slangi.
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbGiSwMaterialContextSlots.sceneSlots.w;
 }
@@ -73,7 +67,8 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "../bvh/ray_intersect.slangi"
 
 // Global descriptor-heap accessors for per-mesh and scene BVH geometry. The material record carries per-mesh slots;
-// the b11 cbuffer carries the scene-node slot. This include provides NwbHeapBvhNodes() and NwbHeapRawBuffer().
+// the heap-selected trace context carries the scene-node slot. This include provides NwbHeapBvhNodes() and
+// NwbHeapRawBuffer().
 #include "../bindless/bindless_heap_bvh.slangi"
 
 

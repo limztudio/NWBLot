@@ -14,23 +14,11 @@
 
 #include "sw_shadow_gbuffer.slangi"
 
-// This pass declares its OWN push struct + output before the tracing engine, so the shared traverse concern reads
-// g_NwbSwShadowPush.instanceCount (the field-name contract) without a monolithic multiplyMode.
-struct NwbSwShadowOpaquePrepassPushConstants{
-    uint width;
-    uint height;
-    uint instanceCount;
-};
-
-[[vk::push_constant]]
-ConstantBuffer<NwbSwShadowOpaquePrepassPushConstants> g_NwbSwShadowPush;
-
 #include "sw_shadow_ray.slangi"
 
 // The full-res visibility array the deferred lighting samples: this pass writes the binary opaque mask (later
 // multiplied by the transparent pass), one layer per shadow slot.
-[[vk::binding(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, NWB_SW_SHADOW_SET)]]
-RWTexture2DArray<float4> g_NwbSwShadowVisibility;
+#define g_NwbSwShadowVisibility NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

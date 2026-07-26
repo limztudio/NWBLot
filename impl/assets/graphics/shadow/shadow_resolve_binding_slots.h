@@ -116,7 +116,7 @@
 // TIGHTENED transparent value edge-stop (NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE for the RGB variant), 1 pass fully recovers the
 // colored shadow's per-pixel contrast toward the near-hard look AND is the cheapest (~3ms/pass at half-res on the test iGPU).
 // MUST be ODD (like the opaque 5): the dispatch seeds the ping-pong so the final wavelet lands in soft-A ONLY for an odd count,
-// and the fixed upsample binding set reads soft-A. 1, 3, 5 are all odd.
+// and the fixed upsample dispatch reads soft-A. 1, 3, 5 are all odd.
 #define NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT 1
 
 // LDS (groupshared) tiling for the wavelet: passes with dilation stepWidth <= LDS_MAX_STEP cooperatively load the

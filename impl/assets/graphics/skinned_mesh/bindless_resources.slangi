@@ -38,6 +38,15 @@ struct NwbSkinnedMeshBindlessResources{
     uint4 streamSlots3; // local vertex refs, primitive indices, meshlet bounds, RT attribute buffer
 };
 
+// Each runtime mesh owns one small stream-slot payload. It is registered as a global UniformBuffer descriptor and
+// selected by a dispatch-uniform push-constant slot, so skinning, bounds, and repack do not create local selector
+// descriptor sets.
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed view of the UniformBuffer descriptor table.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbSkinnedMeshBindlessResources, Std140DataLayout> g_NwbHeapSkinnedMeshBindlessResources[];
+#pragma warning(pop)
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -109,6 +118,10 @@ StructuredBuffer<NwbSkinnedMeshJointMatrix, Std430DataLayout> nwbSkinnedMeshHeap
 
 RWByteAddressBuffer nwbSkinnedMeshHeapWritableRawBuffer(const uint slot){
     return g_NwbHeapStorageBuffers[NonUniformResourceIndex(slot)];
+}
+
+ConstantBuffer<NwbSkinnedMeshBindlessResources, Std140DataLayout> nwbSkinnedMeshHeapBindlessResources(const uint slot){
+    return g_NwbHeapSkinnedMeshBindlessResources[slot];
 }
 
 

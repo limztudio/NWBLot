@@ -347,10 +347,10 @@ BufferRange BufferRange::resolve(const BufferDesc& desc)const{
     return ret;
 }
 
-BindingSetItem BindingSetItem::ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range){
+DescriptorWriteItem DescriptorWriteItem::ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range){
     const bool isVolatile = buffer && buffer->getDescription().isVolatile;
 
-    BindingSetItem result = Base(
+    DescriptorWriteItem result = Base(
         slot,
         isVolatile ? ResourceType::VolatileConstantBuffer : ResourceType::ConstantBuffer,
         buffer,

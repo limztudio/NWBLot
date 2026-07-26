@@ -3,18 +3,7 @@
 
 
 #include "bvh_triangle_input.slangi"
-
-[[vk::binding(NWB_BVH_BUILD_BINDING_PAYLOAD, NWB_BVH_BUILD_SET)]]
-RWStructuredBuffer<uint> g_NwbBvhPayload;
-
-[[vk::binding(NWB_BVH_BUILD_BINDING_NODES, NWB_BVH_BUILD_SET)]]
-globallycoherent RWStructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbBvhNodes;
-
-[[vk::binding(NWB_BVH_BUILD_BINDING_PARENT, NWB_BVH_BUILD_SET)]]
-RWStructuredBuffer<uint> g_NwbBvhParent;
-
-[[vk::binding(NWB_BVH_BUILD_BINDING_VISIT_COUNTER, NWB_BVH_BUILD_SET)]]
-RWStructuredBuffer<uint> g_NwbBvhVisitCounter;
+#include "bvh_heap_resources.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,39 +29,45 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // boxes from the new (e.g. skinned) positions and leaves the child links untouched.
     const bool refit = g_NwbBvhBuildPushConstants.refitMode != 0u;
     const uint triangle = refit
-        ? (g_NwbBvhNodes[leafNodeIndex].leftChild & ~NWB_BVH_LEAF_FLAG)
-        : g_NwbBvhPayload[leaf];
+        ? (g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][leafNodeIndex].leftChild & ~NWB_BVH_LEAF_FLAG)
+        : g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBuildPushConstants.payloadHeapSlot][leaf];
     float3 p0;
     float3 p1;
     float3 p2;
     nwbBvhLoadTrianglePositions(triangle, p0, p1, p2);
 
-    g_NwbBvhNodes[leafNodeIndex].aabbMin = min(p0, min(p1, p2));
-    g_NwbBvhNodes[leafNodeIndex].aabbMax = max(p0, max(p1, p2));
+    g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][leafNodeIndex].aabbMin = min(p0, min(p1, p2));
+    g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][leafNodeIndex].aabbMax = max(p0, max(p1, p2));
     if(!refit){
-        g_NwbBvhNodes[leafNodeIndex].leftChild = NWB_BVH_LEAF_FLAG | triangle;
-        g_NwbBvhNodes[leafNodeIndex].rightChild = 1u;
+        g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][leafNodeIndex].leftChild = NWB_BVH_LEAF_FLAG | triangle;
+        g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][leafNodeIndex].rightChild = 1u;
     }
 
     DeviceMemoryBarrier();
 
-    uint nodeIndex = g_NwbBvhParent[leafNodeIndex];
+    uint nodeIndex = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBuildPushConstants.parentHeapSlot][leafNodeIndex];
     while(nodeIndex != NWB_BVH_INVALID){
         uint previousVisits;
-        InterlockedAdd(g_NwbBvhVisitCounter[nodeIndex], 1u, previousVisits);
+        InterlockedAdd(g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBuildPushConstants.visitCounterHeapSlot][nodeIndex], 1u, previousVisits);
         if(previousVisits == 0u)
             break;
 
-        const uint leftChild = g_NwbBvhNodes[nodeIndex].leftChild;
-        const uint rightChild = g_NwbBvhNodes[nodeIndex].rightChild;
-        g_NwbBvhNodes[nodeIndex].aabbMin = min(g_NwbBvhNodes[leftChild].aabbMin, g_NwbBvhNodes[rightChild].aabbMin);
-        g_NwbBvhNodes[nodeIndex].aabbMax = max(g_NwbBvhNodes[leftChild].aabbMax, g_NwbBvhNodes[rightChild].aabbMax);
+        const uint leftChild = g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][nodeIndex].leftChild;
+        const uint rightChild = g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][nodeIndex].rightChild;
+        g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][nodeIndex].aabbMin = min(
+            g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][leftChild].aabbMin,
+            g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][rightChild].aabbMin
+        );
+        g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][nodeIndex].aabbMax = max(
+            g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][leftChild].aabbMax,
+            g_NwbHeapBvhWritableNodeBuffers[g_NwbBvhBuildPushConstants.nodeHeapSlot][rightChild].aabbMax
+        );
 
         DeviceMemoryBarrier();
 
         if(nodeIndex == 0u)
             break;
-        nodeIndex = g_NwbBvhParent[nodeIndex];
+        nodeIndex = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBuildPushConstants.parentHeapSlot][nodeIndex];
     }
 }
 

@@ -18,7 +18,6 @@
 #define NWB_AVBOIT_COVERAGE_SLICES_PER_WORD 32u
 #define NWB_AVBOIT_COVERAGE_WORD_SHIFT 5u
 #define NWB_AVBOIT_COVERAGE_BIT_MASK 31u
-#define NWB_AVBOIT_TRANSMITTANCE_IMAGE_FORMAT "r16f"
 #if defined(__cplusplus)
 #define NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT NWB::Core::Format::R16_FLOAT
 #endif
@@ -39,6 +38,7 @@
 #define NWB_AVBOIT_PUSH_FRAME_WORD_OFFSET 0u
 #define NWB_AVBOIT_PUSH_VOLUME_WORD_OFFSET 4u
 #define NWB_AVBOIT_PUSH_PARAMS_WORD_OFFSET 8u
+#define NWB_AVBOIT_PUSH_HEAP_SLOTS_WORD_OFFSET 12u
 #define NWB_AVBOIT_PUSH_FRAME_FULL_WIDTH 0u
 #define NWB_AVBOIT_PUSH_FRAME_FULL_HEIGHT 1u
 #define NWB_AVBOIT_PUSH_FRAME_LOW_WIDTH 2u
@@ -49,8 +49,13 @@
 #define NWB_AVBOIT_PUSH_VOLUME_COVERAGE_WORD_COUNT 3u
 #define NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE 1u
 #define NWB_AVBOIT_PUSH_PARAMS_SELF_OCCLUSION_SLICE_BIAS 2u
-#define NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE 48u
-#define NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE 112u
+// AVBOIT consumes the shared DeferredBindlessResourceSlots payload through the global UniformBuffer heap. The
+// descriptor slot selecting that payload stays in this one uint4 lane, so transparent draw constants remain within
+// the portable 128-byte budget after the four mesh lanes.
+#define NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES 0u
+#define NWB_AVBOIT_PUSH_HEAP_SLOT_CSG_CONTEXT 1u
+#define NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE 64u
+#define NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE 128u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

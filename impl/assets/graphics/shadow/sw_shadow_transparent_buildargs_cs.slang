@@ -9,24 +9,11 @@
 
 
 #include "sw_binding_slots.h"
+#include "sw_shadow_heap_resources.slangi"
 
-struct NwbSwShadowTransparentBuildArgsPushConstants{
-    // Threads per group of the indirect trace pass (= NWB_SW_SHADOW_TRACE_GROUP): the count is divided by this to size
-    // the indirect dispatch.
-    uint traceGroupSize;
-    // Element capacity of the edge-list buffer in RECORDS: the append count is clamped to this.
-    uint edgeCapacity;
-};
-
-[[vk::push_constant]]
-ConstantBuffer<NwbSwShadowTransparentBuildArgsPushConstants> g_NwbSwShadowPush;
-
-// The append counter (read [0], write the clamped count into [1]) + the indirect dispatch-args buffer.
-[[vk::binding(NWB_SW_SHADOW_BINDING_EDGE_COUNTER, NWB_SW_SHADOW_SET)]]
-RWStructuredBuffer<uint> g_NwbSwShadowEdgeCounter;
-
-[[vk::binding(NWB_SW_SHADOW_BINDING_INDIRECT_ARGS, NWB_SW_SHADOW_SET)]]
-RWStructuredBuffer<uint> g_NwbSwShadowIndirectArgs;
+// The append counter and indirect arguments are both heap-selected writable uint buffers.
+#define g_NwbSwShadowEdgeCounter NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeCounterStorageSlot)
+#define g_NwbSwShadowIndirectArgs NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.indirectArgsStorageSlot)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

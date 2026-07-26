@@ -16,6 +16,19 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_deferred_composite{
+
+struct PushConstants{
+    u32 resourceSlots = 0u;
+};
+static_assert(sizeof(PushConstants) == sizeof(u32));
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererDeferredSystem::createDeferredCompositeResources(){
     auto* device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
@@ -28,9 +41,8 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::Pixel)
-            .setUseDescriptorBuffer(heap.usesDescriptorBuffer())
         ;
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_DEFERRED_COMPOSITE_BINDING_BINDLESS_RESOURCES, 1));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_composite::PushConstants)));
 
         deferredState().m_compositeBindingLayout = device->createBindingLayout(bindingLayoutDesc);
         if(!deferredState().m_compositeBindingLayout){
@@ -93,7 +105,6 @@ bool RendererDeferredSystem::createDeferredCompositePipeline(Core::Framebuffer* 
 
 bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Framebuffer* presentationFramebuffer){
     NWB_ASSERT(presentationFramebuffer);
-    NWB_ASSERT(targets.compositeBindingSet);
     NWB_ASSERT(deferredState().m_compositePipeline);
     NWB_ASSERT(
         presentationFramebuffer
@@ -104,9 +115,8 @@ bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandL
     if(!uploadDeferredBindlessFrameResources(commandList, targets))
         return false;
 
-    commandList.setResourceStatesForBindingSet(targets.compositeBindingSet.get());
     // The three compositor inputs are global-heap descriptors, so move them explicitly to SRV state before the
-    // fullscreen draw. The local slot cbuffer above remains covered by the ordinary binding-set transition.
+    // fullscreen draw.
     commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.avboit.accumColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.avboit.accumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -121,10 +131,13 @@ bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandL
     graphicsState.setPipeline(deferredState().m_compositePipeline.get());
     graphicsState.setFramebuffer(presentationFramebuffer);
     graphicsState.setViewport(viewportState);
-    graphicsState.addBindingSet(targets.compositeBindingSet.get());
 
     commandList.setGraphicsState(graphicsState);
     graphics().getDevice()->getDescriptorHeap().bindGraphics(commandList, *deferredState().m_compositePipeline);
+    const __hidden_deferred_composite::PushConstants pushConstants{
+        targets.bindless.slotsBufferDescriptor.slot()
+    };
+    commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
     Core::DrawArguments drawArgs;
     drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);

@@ -16,6 +16,80 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_rt_shadow{
+    [[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass){
+        return handle.valid() && handle.descriptorClass() == descriptorClass;
+    }
+
+    [[nodiscard]] bool RegisterHeapBuffer(
+        Core::GpuDescriptorHeap& heap,
+        Core::Buffer& buffer,
+        const Core::GpuDescriptorClass::Enum descriptorClass,
+        const bool writable,
+        Core::GpuDescriptorHandle& outHandle
+    ){
+        outHandle = Core::GpuDescriptorHandle::invalid();
+        const Core::GpuDescriptorHandle handle = heap.allocate(descriptorClass);
+        if(!handle.valid())
+            return false;
+        const Core::DescriptorWriteItem item = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
+            ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
+            : (writable
+                ? Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, &buffer)
+                : Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, &buffer)
+            )
+        ;
+        if(!heap.write(handle, item)){
+            heap.free(handle);
+            return false;
+        }
+        outHandle = handle;
+        return true;
+    }
+
+    [[nodiscard]] bool EnsureHeapBuffer(
+        Core::GpuDescriptorHeap& heap,
+        Core::Buffer& buffer,
+        const Core::GpuDescriptorClass::Enum descriptorClass,
+        const bool writable,
+        Core::GpuDescriptorHandle& inOutHandle
+    ){
+        if(inOutHandle.valid())
+            return IsHeapHandle(inOutHandle, descriptorClass);
+        Core::GpuDescriptorHandle acquired;
+        if(!RegisterHeapBuffer(heap, buffer, descriptorClass, writable, acquired))
+            return false;
+        inOutHandle = acquired;
+        return true;
+    }
+
+    [[nodiscard]] bool ReplaceHeapBuffer(
+        Core::GpuDescriptorHeap& heap,
+        Core::Buffer& buffer,
+        const Core::GpuDescriptorClass::Enum descriptorClass,
+        const bool writable,
+        Core::GpuDescriptorHandle& inOutHandle
+    ){
+        Core::GpuDescriptorHandle acquired;
+        if(!RegisterHeapBuffer(heap, buffer, descriptorClass, writable, acquired))
+            return false;
+        if(inOutHandle.valid())
+            heap.free(inOutHandle);
+        inOutHandle = acquired;
+        return true;
+    }
+
+    void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle){
+        if(handle.valid())
+            heap.free(handle);
+        handle = Core::GpuDescriptorHandle::invalid();
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
     if(handle.valid())
         return true;
@@ -27,15 +101,10 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buf
     }
 
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
-    const Core::GpuDescriptorHandle acquired = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!acquired.valid() || !heap.write(acquired, Core::BindingSetItem::StructuredBuffer_SRV(0u, &buffer))){
-        if(acquired.valid())
-            heap.free(acquired);
+    if(!__hidden_rt_shadow::EnsureHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material context buffer in the descriptor heap"));
         return false;
     }
-
-    handle = acquired;
     return true;
 }
 
@@ -51,17 +120,10 @@ bool RendererRayTracingSystem::replaceRayTraceMaterialContextHeapHandle(Core::Bu
     }
 
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
-    const Core::GpuDescriptorHandle acquired = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!acquired.valid() || !heap.write(acquired, Core::BindingSetItem::StructuredBuffer_SRV(0u, &buffer))){
-        if(acquired.valid())
-            heap.free(acquired);
+    if(!__hidden_rt_shadow::ReplaceHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to replace ray-trace material-context heap descriptor"));
         return false;
     }
-
-    if(handle.valid())
-        heap.free(handle);
-    handle = acquired;
     return true;
 }
 
@@ -126,6 +188,21 @@ bool RendererRayTracingSystem::uploadRayTraceMaterialContextSlots(Core::CommandL
     commandList.writeBuffer(slotsBuffer, &slots, sizeof(slots));
     commandList.setBufferState(slotsBuffer, Core::ResourceStates::ConstantBuffer);
     commandList.commitBarriers();
+    auto* device = graphics().getDevice();
+    if(
+        !device
+        || !device->getDescriptorHeap().isInitialized()
+        || !__hidden_rt_shadow::EnsureHeapBuffer(
+            device->getDescriptorHeap(),
+            *slotsBuffer,
+            Core::GpuDescriptorClass::UniformBuffer,
+            false,
+            rayTracingState().m_shadowMaterialContextSlotsHeapHandle
+        )
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material-context selector in the descriptor heap"));
+        return false;
+    }
     return true;
 }
 
@@ -142,6 +219,11 @@ void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
             heap.free(rayTracingState().m_shadowInstanceMaterialHeapHandle);
             heap.free(rayTracingState().m_shadowMaterialTypedHeapHandle);
             heap.free(rayTracingState().m_shadowInstanceHeapHandle);
+            heap.free(rayTracingState().m_shadowMaterialContextSlotsHeapHandle);
+            heap.free(rayTracingState().m_swShadowEdgeStatsHeapHandle);
+            heap.free(rayTracingState().m_swShadowEdgeCounterHeapHandle);
+            heap.free(rayTracingState().m_swShadowEdgeListHeapHandle);
+            heap.free(rayTracingState().m_swShadowIndirectArgsHeapHandle);
         }
     }
     rayTracingState().m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
@@ -149,6 +231,11 @@ void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
     rayTracingState().m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::invalid();
     rayTracingState().m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::invalid();
     rayTracingState().m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_shadowMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_swShadowEdgeStatsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::invalid();
 }
 
 
@@ -182,7 +269,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     // Stage-2 adaptive transparent shadow scratch: a HALF-res sibling of the visibility target (same slot layers, RGBA16F)
     // the coarse software trace writes one transmittance per 2x2 block into and the adaptive resolve interpolates/refines.
     // Allocated alongside the visibility target so it shares the resize lifecycle (resetDeferredFrameTargets rebuilds the
-    // SW shadow binding set, which re-binds whichever coarse handle is current). Round UP so a coarse texel covers its 2x2
+    // SW shadow heap-slot payload, which selects whichever coarse handle is current). Round UP so a coarse texel covers its 2x2
     // block even for odd extents -- matching the caustic half-res buffers.
     targets.shadowCoarseTransmittanceFormat = Core::Format::RGBA16_FLOAT;
     Core::TextureDesc coarseDesc;
@@ -337,8 +424,8 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         return false;
     }
 
-    // Compacted edge list (recreated on resize alongside the visibility/coarse targets, so the SW shadow binding-set
-    // rebuild that already triggers on the visibility-pointer change re-binds it). Each record is NWB_SW_SHADOW_EDGE_RECORD_WORDS
+    // Compacted edge list (recreated on resize alongside the visibility/coarse targets, so the SW shadow heap-slot
+    // refresh that already triggers on the visibility-pointer change refreshes it too). Each record is NWB_SW_SHADOW_EDGE_RECORD_WORDS
     // u32. Lives on rayTracingState (a buffer, not a frame target) since it is shadow-subsystem scratch the lighting never samples.
     // SIZING: capacity = one record per full-res pixel, but the classify pass appends one record per (pixel, active shadow slot) edge, so the
     // TIGHT worst-case demand is width*height*activeShadowSlots (slots capped at NWB_SCENE_SHADOW_SLOT_COUNT=8). One-per-pixel is
@@ -356,12 +443,29 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         .setDebugName(Name("sw_shadow_edge_list"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    rayTracingState().m_swShadowEdgeListBuffer = graphics().createBuffer(edgeListDesc);
-    if(!rayTracingState().m_swShadowEdgeListBuffer){
+    Core::BufferHandle edgeListBuffer = graphics().createBuffer(edgeListDesc);
+    if(!edgeListBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow edge-list buffer"));
         rayTracingState().m_swShadowEdgeListCapacity = 0u;
         return false;
     }
+    auto* device = graphics().getDevice();
+    if(
+        !device
+        || !device->getDescriptorHeap().isInitialized()
+        || !__hidden_rt_shadow::ReplaceHeapBuffer(
+            device->getDescriptorHeap(),
+            *edgeListBuffer.get(),
+            Core::GpuDescriptorClass::StorageBuffer,
+            true,
+            rayTracingState().m_swShadowEdgeListHeapHandle
+        )
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register SW shadow edge-list buffer in the descriptor heap"));
+        rayTracingState().m_swShadowEdgeListCapacity = 0u;
+        return false;
+    }
+    rayTracingState().m_swShadowEdgeListBuffer = Move(edgeListBuffer);
     rayTracingState().m_swShadowEdgeListCapacity = edgeListCapacityRecords;
     return true;
 }
@@ -373,43 +477,44 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
 bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!targets.shadowVisibility)
         return false;
-    if(!rayTracingState().m_tlas || !rayTracingState().m_shadowPipeline || !rayTracingState().m_shadowBindingSet)
+    if(!rayTracingState().m_tlas || !rayTracingState().m_shadowPipeline)
         return false;
 
-    NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
-    NWB_ASSERT(deferredState().m_lightBuffer);
-
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
-    if(heap.usesDescriptorBuffer() && !rayTracingState().m_tlasHeapHandle.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch Backend-C shadow trace without a TLAS heap handle"));
+    if(
+        !heap.isInitialized()
+        || !rayTracingState().m_tlasHeapHandle.valid()
+        || !targets.bindless.valid()
+        || !__hidden_rt_shadow::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
+        || !__hidden_rt_shadow::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_rt_shadow::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow trace heap resources are incomplete"));
         return false;
     }
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
-    // The RayQuery shaders fetch the G-buffer plus shared scene-shading/light-list buffers through descriptor-heap
-    // slots, rather than local set descriptors. Stage those reads explicitly; the binding sets cover only the local
-    // TLAS/slot-cbuffer/output resources.
+    // All resources are selected by global heap slots; transition every backing object explicitly.
     commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
     commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    commandList.setAccelStructState(rayTracingState().m_tlas.get(), Core::ResourceStates::AccelStructRead);
 
     // When the soft resources are ready this frame and at least one light holds a shadow slot, route the HW opaque shadow
     // through the same half-res soft denoise chain the SW path uses. The HW opaque-soft RayQuery trace casts SPP
     // cone-jittered opaque rays per half-res pixel into shadowSoftHalfA, then the shared
     // dispatchSoftShadowDenoiseAndTransparentFold denoises it into the full-res visibility.
-    if(rayTracingState().m_softShadowReady && rayTracingState().m_shadowSoftPipeline && rayTracingState().m_shadowSoftBindingSet && rayTracingState().m_softShadowSlotMask != 0u){
+    if(rayTracingState().m_softShadowReady && rayTracingState().m_shadowSoftPipeline && rayTracingState().m_softShadowSlotMask != 0u){
         const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
         const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
         const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE));
         const u32 softGroupsY = DivideUp(softHalfHeight, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE));
 
-        // Derive the soft trace's local resource states (TLAS, slot cbuffer, and shadowSoftHalfA as the UAV output) from
-        // its binding set; the heap-selected G-buffer/scene reads were staged above.
-        commandList.setResourceStatesForBindingSet(rayTracingState().m_shadowSoftBindingSet.get());
+        commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
         // Enable UAV barriers on the soft buffers + geometry cache for the resolve (mirror the SW soft block). The
@@ -433,14 +538,8 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
 
         Core::ComputeState softState;
         softState.setPipeline(rayTracingState().m_shadowSoftPipeline.get());
-        softState.addBindingSet(rayTracingState().m_shadowSoftBindingSet.get());
         commandList.setComputeState(softState);
-        if(heap.isInitialized()){
-            const Core::GpuDescriptorHandle tlasHeapHandle = heap.usesDescriptorBuffer()
-                ? rayTracingState().m_tlasHeapHandle
-                : Core::GpuDescriptorHandle::invalid();
-            heap.bindCompute(commandList, *rayTracingState().m_shadowSoftPipeline.get(), tlasHeapHandle);
-        }
+        heap.bindCompute(commandList, *rayTracingState().m_shadowSoftPipeline.get(), rayTracingState().m_tlasHeapHandle);
 
         ShadowRqSoftPushConstants softPush;
         softPush.width = targets.width;
@@ -449,11 +548,12 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         softPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
         softPush.normalSlot = targets.bindless.gbufferNormal.slot();
         softPush.depthSlot = targets.bindless.gbufferDepth.slot();
+        softPush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
+        softPush.visibilityStorageSlot = targets.bindless.shadowSoftHalfAStorage.slot();
         commandList.setPushConstants(&softPush, sizeof(softPush));
         commandList.dispatch(softGroupsX, softGroupsY, 1u);
 
-        // Sync soft-A (soft trace write -> the resolve PREPARE reads it as an SRV). The resolve's
-        // setResourceStatesForBindingSet transitions soft-A UnorderedAccess -> ShaderResource.
+        // Preserve the UAV write boundary before the heap-selected resolve reads soft-A as an SRV.
         commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
@@ -468,19 +568,13 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     // Soft path not ready -> the existing FULL-resolution 1-spp inline-RayQuery fallback (never a regression). One
     // occlusion ray per output pixel, written straight into the full-res visibility array the deferred lighting samples.
     // The shader reads its dispatch bounds from the output's own dimensions.
-    commandList.setResourceStatesForBindingSet(rayTracingState().m_shadowBindingSet.get());
+    commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
 
     Core::ComputeState shadowState;
     shadowState.setPipeline(rayTracingState().m_shadowPipeline.get());
-    shadowState.addBindingSet(rayTracingState().m_shadowBindingSet.get());
     commandList.setComputeState(shadowState);
-    if(heap.isInitialized()){
-        const Core::GpuDescriptorHandle tlasHeapHandle = heap.usesDescriptorBuffer()
-            ? rayTracingState().m_tlasHeapHandle
-            : Core::GpuDescriptorHandle::invalid();
-        heap.bindCompute(commandList, *rayTracingState().m_shadowPipeline.get(), tlasHeapHandle);
-    }
+    heap.bindCompute(commandList, *rayTracingState().m_shadowPipeline.get(), rayTracingState().m_tlasHeapHandle);
     // Soft shadow cone-jitter: advance the per-frame seed once here. A soft light samples inside its source cone; a
     // zero-radius light jitters to the axis exactly and keeps the hard-shadow result.
     ShadowRqPushConstants shadowPush;
@@ -488,6 +582,8 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     shadowPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
     shadowPush.normalSlot = targets.bindless.gbufferNormal.slot();
     shadowPush.depthSlot = targets.bindless.gbufferDepth.slot();
+    shadowPush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
+    shadowPush.visibilityStorageSlot = targets.bindless.shadowVisibilityStorage.slot();
     commandList.setPushConstants(&shadowPush, sizeof(shadowPush));
     commandList.dispatch(
         DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)),
@@ -534,17 +630,35 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     // No software scene BVH this frame (no traceable instances) -> the caller clears the mask to all-lit.
     if(!rayTracingState().m_sceneBvhNodeBuffer || rayTracingState().m_sceneBvhInstanceCount == 0u)
         return false;
-    // Every decomposed pass pipeline must be resident (ensureSwShadowPipeline creates them all-or-nothing) alongside the
-    // shared binding set + the per-mesh geometry; the opaque prepass is a representative liveness check for the set.
-    if(!rayTracingState().m_swShadowOpaquePrepassPipeline || !rayTracingState().m_swShadowBindingSet || rayTracingState().m_swShadowMeshCount == 0u)
+    // Every decomposed pass uses the global heap. Validate the selector and persistent work-buffer generations before
+    // recording any dispatch; target storage handles are recreated with the deferred target generation.
+    if(!rayTracingState().m_swShadowOpaquePrepassPipeline || rayTracingState().m_swShadowMeshCount == 0u)
         return false;
+
+    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    if(
+        !heap.isInitialized()
+        || !targets.bindless.valid()
+        || !__hidden_rt_shadow::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
+        || !__hidden_rt_shadow::IsHeapHandle(rayTracingState().m_shadowMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
+        || !__hidden_rt_shadow::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_rt_shadow::IsHeapHandle(targets.bindless.shadowCoarseTransmittanceStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_rt_shadow::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_rt_shadow::IsHeapHandle(targets.bindless.transparentSoftHalfStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_rt_shadow::IsHeapHandle(rayTracingState().m_swShadowEdgeStatsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_rt_shadow::IsHeapHandle(rayTracingState().m_swShadowEdgeCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_rt_shadow::IsHeapHandle(rayTracingState().m_swShadowEdgeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_rt_shadow::IsHeapHandle(rayTracingState().m_swShadowIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software-shadow heap resources are incomplete"));
+        return false;
+    }
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
     // The per-mesh BVH node buffers were left in UnorderedAccess by the build pass; move each distinct mesh's
     // node + geometry buffers to ShaderResource for the traversal reads. All five shared scene/material context
-    // buffers are heap-selected rather than locally bound, so transition them explicitly too; the binding set derives
-    // only the target-generation and material-context cbuffers plus the local UAVs.
+    // buffers are heap-selected, so transition them explicitly too; the heap does not encode resource states.
     for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){
         commandList.setBufferState(rayTracingState().m_swShadowMeshNodeBuffers[slot], Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_swShadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
@@ -561,35 +675,47 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     if(rayTracingState().m_shadowInstanceBuffer)
         commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
     // The trace selects its G-buffer, scene-shading, and light-list inputs through the descriptor heap, so their
-    // resource states are no longer implied by the SW binding set.
+    // resource states are explicit because the heap does not encode them.
     commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
     commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    commandList.setBufferState(rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
     // The two software sub-passes that write the visibility UAV (the opaque pre-pass + the transparent resolve/multiply)
     // need a UAV barrier between them, and the Stage-2 coarse->resolve handoff needs one on the coarse texture. Enable
     // UAV barriers on both so each commitBarriers between dispatches syncs the read-after-write hazard on the same image.
     commandList.setEnableUavBarriersForTexture(targets.shadowVisibility.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.shadowCoarseTransmittance.get(), true);
-    commandList.setResourceStatesForBindingSet(rayTracingState().m_swShadowBindingSet.get());
     commandList.commitBarriers();
 
-    // Each pass has its own pipeline but shares the one binding set, so build the ComputeState right before dispatch.
+    // Set 0 is the automatically bound push-only gap; each pass state carries no local descriptor object.
     const auto passState = [&](const Core::ComputePipelineHandle& pipeline){
         Core::ComputeState state;
         state.setPipeline(pipeline.get());
-        state.addBindingSet(rayTracingState().m_swShadowBindingSet.get());
         return state;
     };
 
-    // SW traversal accesses per-mesh geometry through the descriptor heap, so bind its tables after each ComputeState
-    // and before dispatch. bindCompute touches only sets 8/9; non-bindless builds skip it.
-    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
-    const bool heapLive = heap.isInitialized();
+    // SW traversal accesses every resource through the descriptor heap, so bind tables after each ComputeState.
     const auto bindPassHeap = [&](const Core::ComputePipelineHandle& pipeline){
-        if(heapLive)
-            heap.bindCompute(commandList, *pipeline.get());
+        heap.bindCompute(commandList, *pipeline.get());
+    };
+
+    const auto makePush = [&](){
+        SwShadowHeapPushConstants push;
+        push.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+        push.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
+        push.materialContextSlotsHeapSlot = rayTracingState().m_shadowMaterialContextSlotsHeapHandle.slot();
+        push.visibilityStorageSlot = targets.bindless.shadowVisibilityStorage.slot();
+        push.coarseStorageSlot = targets.bindless.shadowCoarseTransmittanceStorage.slot();
+        push.softHalfStorageSlot = targets.bindless.shadowSoftHalfAStorage.slot();
+        push.transparentSoftHalfStorageSlot = targets.bindless.transparentSoftHalfStorage.slot();
+        push.edgeStatsStorageSlot = rayTracingState().m_swShadowEdgeStatsHeapHandle.slot();
+        push.edgeCounterStorageSlot = rayTracingState().m_swShadowEdgeCounterHeapHandle.slot();
+        push.edgeListStorageSlot = rayTracingState().m_swShadowEdgeListHeapHandle.slot();
+        push.indirectArgsStorageSlot = rayTracingState().m_swShadowIndirectArgsHeapHandle.slot();
+        return push;
     };
 
     const u32 groupSize = static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE);
@@ -613,10 +739,11 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         // soft will run; keep it as the fallback when soft is not ready this frame.
         const bool softWillRun = rayTracingState().m_softShadowReady && rayTracingState().m_softShadowSlotMask != 0u;
         if(!softWillRun){
-            SwShadowOpaquePrepassPushConstants opaquePush;
+            commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+            commandList.commitBarriers();
+            SwShadowHeapPushConstants opaquePush = makePush();
             opaquePush.width = targets.width;
             opaquePush.height = targets.height;
-            opaquePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
             commandList.setComputeState(passState(rayTracingState().m_swShadowOpaquePrepassPipeline));
             bindPassHeap(rayTracingState().m_swShadowOpaquePrepassPipeline);
             commandList.setPushConstants(&opaquePush, sizeof(opaquePush));
@@ -625,11 +752,9 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
 
         // Sync before the transparent pass. The opaque mask (the prepass, or the soft resolve below, wrote shadowVisibility)
         // -> the transparent pass reads+multiplies it: a write->read/write hazard the visibility UAV barrier covers, so it
-        // stays UnorderedAccess. The transparent coarse pass writes the coarse buffer next, so stage it as ShaderResource
-        // here; setComputeState emits the ShaderResource->UnorderedAccess barrier that orders it. Both are cheap state
-        // transitions kept unconditional so the soft-not-transparent-ready fallback stays ordered.
+        // stays UnorderedAccess. The transparent coarse pass writes its own storage image next.
         commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+        commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
         // Soft opaque shadow (all light types): half-res jittered opaque trace (directional softens by its constant angular
@@ -653,9 +778,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
             commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
             commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
-            // Stage-3 temporal accumulator buffers: enable UAV barriers so the merge's history/moments writes are ordered
-            // before the a-trous PREPARE reads the accumulated history as an SRV (setResourceStatesForBindingSet handles the
-            // UAV->SRV transition). No-op when temporal is off (the merge never dispatches).
+            // Stage-3 temporal accumulator buffers retain UAV ordering before the heap-selected merge/resolve changes
+            // their sampled/storage roles. No-op when temporal is off (the merge never dispatches).
             if(rayTracingState().m_softShadowTemporalReady){
                 commandList.setEnableUavBarriersForTexture(targets.shadowHistA.get(), true);
                 commandList.setEnableUavBarriersForTexture(targets.shadowHistB.get(), true);
@@ -663,18 +787,18 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
                 commandList.setEnableUavBarriersForTexture(targets.shadowMomentsB.get(), true);
             }
 
-            SwShadowSoftOpaquePushConstants softTracePush;
+            commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+            commandList.commitBarriers();
+            SwShadowHeapPushConstants softTracePush = makePush();
             softTracePush.width = targets.width;
             softTracePush.height = targets.height;
-            softTracePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
             softTracePush.frameIndex = frameIndex;
             commandList.setComputeState(passState(rayTracingState().m_swShadowSoftOpaquePipeline));
             bindPassHeap(rayTracingState().m_swShadowSoftOpaquePipeline);
             commandList.setPushConstants(&softTracePush, sizeof(softTracePush));
             commandList.dispatch(softGroupsX, softGroupsY, 1u);
 
-            // Sync soft-A (soft trace write -> the resolve PREPARE reads it as an SRV). The resolve's
-            // setResourceStatesForBindingSet transitions soft-A UnorderedAccess -> ShaderResource here.
+            // Preserve the UAV write boundary before the heap-selected resolve changes soft-A to ShaderResource.
             commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
 
@@ -713,10 +837,12 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
 
         // Transparent coarse: one transparent trace per coarse block written into the coarse buffer (colored
         // transmittance only). Shared base for both the compacted and the Stage-2 adaptive resolve.
-        SwShadowTransparentCoarsePushConstants coarsePush;
+        commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+        SwShadowHeapPushConstants coarsePush = makePush();
         coarsePush.width = targets.width;
         coarsePush.height = targets.height;
-        coarsePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
         coarsePush.coarseWidth = coarseWidth;
         coarsePush.coarseHeight = coarseHeight;
         commandList.setComputeState(passState(rayTracingState().m_swShadowTransparentCoarsePipeline));
@@ -742,7 +868,11 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             // Classify (Stage-3): classify each pixel/light; interior -> interpolate + fold in place; edge -> append to
             // the list and leave the PRISTINE opaque mask for the indirect trace's single overwrite. collectStats tallies
             // the fraction on snapshots.
-            SwShadowTransparentClassifyPushConstants classifyPush;
+            commandList.setBufferState(rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+            commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+            commandList.commitBarriers();
+            SwShadowHeapPushConstants classifyPush = makePush();
             classifyPush.width = targets.width;
             classifyPush.height = targets.height;
             classifyPush.coarseWidth = coarseWidth;
@@ -763,7 +893,9 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.commitBarriers();
 
             // Build args: 1 thread builds DispatchIndirectArguments{ceil(count/64),1,1} from the clamped append count.
-            SwShadowTransparentBuildArgsPushConstants argsPush;
+            commandList.setBufferState(rayTracingState().m_swShadowIndirectArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.commitBarriers();
+            SwShadowHeapPushConstants argsPush = makePush();
             argsPush.traceGroupSize = static_cast<u32>(NWB_SW_SHADOW_TRACE_GROUP);
             argsPush.edgeCapacity = rayTracingState().m_swShadowEdgeListCapacity;
             commandList.setComputeState(passState(rayTracingState().m_swShadowTransparentBuildArgsPipeline));
@@ -779,11 +911,13 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             // Indirect trace: DispatchIndirect over the compacted edge records, one ray per thread. Its ComputeState
             // carries the indirect-args buffer; setComputeState auto-transitions it
             // UnorderedAccess->IndirectArgument.
-            SwShadowTransparentIndirectPushConstants tracePush;
+            SwShadowHeapPushConstants tracePush = makePush();
             tracePush.width = targets.width;
             tracePush.height = targets.height;
-            tracePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
             tracePush.traceGroupSize = static_cast<u32>(NWB_SW_SHADOW_TRACE_GROUP);
+            commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(rayTracingState().m_swShadowIndirectArgsBuffer.get(), Core::ResourceStates::IndirectArgument);
+            commandList.commitBarriers();
             Core::ComputeState computeStateIndirect = passState(rayTracingState().m_swShadowTransparentIndirectPipeline);
             computeStateIndirect.setIndirectParams(rayTracingState().m_swShadowIndirectArgsBuffer.get());
             commandList.setComputeState(computeStateIndirect);
@@ -793,10 +927,13 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         }
         else{
             // Stage-2 resolve: full-res adaptive (interpolate interior / re-trace edges in place, fold onto the opaque mask).
-            SwShadowTransparentResolvePushConstants resolvePush;
+            commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+            commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+            commandList.setBufferState(rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::ResourceStates::UnorderedAccess);
+            commandList.commitBarriers();
+            SwShadowHeapPushConstants resolvePush = makePush();
             resolvePush.width = targets.width;
             resolvePush.height = targets.height;
-            resolvePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
             resolvePush.coarseWidth = coarseWidth;
             resolvePush.coarseHeight = coarseHeight;
             resolvePush.edgeThreshold = rayTracingState().m_swShadowEdgeThreshold;
@@ -842,10 +979,11 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     else if(!softTransparentRan){
         // Non-adaptive baseline: uniform transparent multiply at HALF resolution, one trace per 2x2 block folded onto
         // each full-res pixel's own opaque mask. Kept for comparison against the adaptive path.
-        SwShadowTransparentUniformPushConstants pushConstants;
+        commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+        SwShadowHeapPushConstants pushConstants = makePush();
         pushConstants.width = targets.width;
         pushConstants.height = targets.height;
-        pushConstants.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
         commandList.setComputeState(passState(rayTracingState().m_swShadowTransparentUniformPipeline));
         bindPassHeap(rayTracingState().m_swShadowTransparentUniformPipeline);
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
@@ -884,50 +1022,10 @@ bool RendererRayTracingSystem::softTransparentShadowReady()const noexcept{
 
 
 void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const{
-    // The hardware inline-RayQuery occlusion trace's bindings, in NWB_SHADOW_RT_* slot order (occlusion.slangi /
-    // shadow_rayquery.slangi declare them). Its three G-buffer images are target-generation heap reads selected by push
-    // slots, and the shared scene-shading/light-list heap entries are selected by the target-generation slot cbuffer.
-    // The local set therefore holds only the TLAS, target-generation slot cbuffer, and output. The opaque trace never
-    // evaluates a material surface, so its former material-context SRVs are retained only as ABI gaps. Shared by the
-    // full-resolution hard fallback and the half-resolution soft trace, so both use the identical local resource map.
-    // Backend C reads the shared TLAS through set 10 of the global descriptor heap; Backend A retains its local
-    // set-0 TLAS binding and the matching shader variant.
-    if(!graphics().getDevice()->getDescriptorHeap().usesDescriptorBuffer())
-        layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_SHADOW_RT_BINDING_TLAS, 1));
-    // Binding 4 retains its historical scene-CB position, but now carries DeferredBindlessResourceSlots; binding 5 is
-    // intentionally left unbound because the light list is heap fetched too.
-    layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SHADOW_RT_BINDING_BINDLESS_RESOURCES, 1));
-    layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, 1)); // soft trace: half-res; hard fallback: full-res
-    // Soft shadow cone-jitter: the frame counter plus three heap G-buffer slots travel in both push blocks. Sized to the
-    // LARGER of the two pipelines that share this layout -- the full-res hard trace sets ShadowRqPushConstants, while the
-    // half-res SOFT trace (shadow_rayquery_soft_cs) sets the wider ShadowRqSoftPushConstants; a range sized to the max
-    // keeps both layout-compatible (each pipeline sets only its own smaller-or-equal struct), mirroring the SW
-    // SwShadowMaxPushConstants pattern.
+    // Full/half RayQuery trace layouts are push-only. The deferred selector, G-buffers, output StorageImage, and TLAS
+    // are all global descriptor-heap selections.
     static_assert(sizeof(ShadowRqSoftPushConstants) >= sizeof(ShadowRqPushConstants), "shadow-trace push-constant range must cover both the hard and soft trace push structs");
     layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowRqSoftPushConstants)));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void RendererRayTracingSystem::appendShadowTraceBindingSet(Core::BindingSetDesc& desc, DeferredFrameTargets& targets, Core::Texture* visibilityTarget)const{
-    // The visibility UAV target differs per pass (half-res for the trace, full-res for the hard fallback); everything
-    // else uses the identical trace layout. The opaque trace consumes no material context; transparent material
-    // evaluation is exclusively the software traversal's responsibility.
-    if(!graphics().getDevice()->getDescriptorHeap().usesDescriptorBuffer())
-        desc.addItem(Core::BindingSetItem::RayTracingAccelStruct(NWB_SHADOW_RT_BINDING_TLAS, rayTracingState().m_tlas.get()));
-    desc.addItem(Core::BindingSetItem::ConstantBuffer(
-        NWB_SHADOW_RT_BINDING_BINDLESS_RESOURCES,
-        targets.bindless.slotsBuffer.get()
-    ));
-    desc.addItem(Core::BindingSetItem::Texture_UAV(
-        NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT,
-        visibilityTarget,
-        targets.shadowVisibilityFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ));
 }
 
 
@@ -948,13 +1046,16 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
 
     auto* device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: RayQuery shadows require the descriptor-buffer TLAS heap layout"));
+        rayTracingState().m_shadowPipelineFailed = true;
+        return false;
+    }
 
     if(!rayTracingState().m_shadowBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Backend C leaves the TLAS out of this local set and reads it from the immutable set-10 heap block. This
-        // keeps the whole pipeline descriptor-buffer coherent; Backend A keeps the classic local AS descriptor.
-        layoutDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
+        // Set 0 contains only the push range; the TLAS and every ordinary resource are heap-addressed.
         appendShadowTraceBindingLayout(layoutDesc);
 
         rayTracingState().m_shadowBindingLayout = device->createBindingLayout(layoutDesc);
@@ -968,7 +1069,7 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
     if(!m_renderer.shaderSystem().loadShader(
         rayTracingState().m_shadowShader,
         AssetsGraphicsShadow::s_RayQueryShaderName,
-        heap.usesDescriptorBuffer() ? AStringView("NWB_BINDLESS_TLAS=1") : AStringView("NWB_BINDLESS_TLAS=0"),
+        AStringView("NWB_BINDLESS_TLAS=1"),
         Core::ShaderType::Compute,
         "ECSRender_ShadowRayQuery"
     )){
@@ -981,20 +1082,11 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
         .setComputeShader(rayTracingState().m_shadowShader)
         .addBindingLayout(rayTracingState().m_shadowBindingLayout)
     ;
-    if(heap.isInitialized()){
-        pipelineDesc
-            .addBindingLayout(heap.getResourceLayout())
-            .addBindingLayout(heap.getSamplerLayout())
-        ;
-        if(heap.usesDescriptorBuffer()){
-            if(!heap.hasAccelStructLayout()){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Backend-C descriptor heap has no TLAS layout for shadows"));
-                rayTracingState().m_shadowPipelineFailed = true;
-                return false;
-            }
-            pipelineDesc.addBindingLayout(heap.getAccelStructLayout());
-        }
-    }
+    pipelineDesc
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
+        .addBindingLayout(heap.getAccelStructLayout())
+    ;
     rayTracingState().m_shadowPipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_shadowPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery shadow compute pipeline"));
@@ -1003,47 +1095,6 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
     }
 
     NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created RayQuery shadow compute pipeline"));
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool RendererRayTracingSystem::ensureShadowBindingSet(DeferredFrameTargets& targets){
-    NWB_ASSERT(rayTracingState().m_shadowBindingLayout);
-    NWB_ASSERT(rayTracingState().m_tlas);
-    NWB_ASSERT(targets.shadowVisibility);
-    NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(targets.bindless.slotsBuffer);
-
-    // Rebuild when any binding input that can change without a full invalidate changes: the TLAS (recreated when
-    // the live instance count outgrows its capacity) or the target-generation slot cbuffer. A resize resets the set
-    // via resetDeferredFrameTargets, so the output needs no separate key.
-    const Core::RayTracingAccelStruct* tlas = rayTracingState().m_tlas.get();
-    Core::Buffer* bindlessResourcesBuffer = targets.bindless.slotsBuffer.get();
-    if(
-        rayTracingState().m_shadowBindingSet
-        && rayTracingState().m_shadowBindingSetTlas == tlas
-        && rayTracingState().m_shadowBindingSetBindlessResources == bindlessResourcesBuffer
-    )
-        return true;
-
-    Core::BindingSetDesc bindingSetDesc(arena());
-    // The full-res trace writes the FULL-res visibility (one ray per output pixel) at NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT
-    // -- the same buffer the deferred lighting samples, mirroring the software traversal (no resolve pass in between).
-    appendShadowTraceBindingSet(bindingSetDesc, targets, targets.shadowVisibility.get());
-
-    auto* device = graphics().getDevice();
-    rayTracingState().m_shadowBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_shadowBindingLayout);
-    if(!rayTracingState().m_shadowBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow binding set"));
-        rayTracingState().m_shadowBindingSetTlas = nullptr;
-        rayTracingState().m_shadowBindingSetBindlessResources = nullptr;
-        return false;
-    }
-    rayTracingState().m_shadowBindingSetTlas = tlas;
-    rayTracingState().m_shadowBindingSetBindlessResources = bindlessResourcesBuffer;
     return true;
 }
 
@@ -1064,6 +1115,11 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
 
     auto* device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: soft RayQuery shadows require the descriptor-buffer TLAS heap layout"));
+        rayTracingState().m_shadowSoftPipelineFailed = true;
+        return false;
+    }
 
     // The soft trace REUSES the shared shadow binding layout (identical trace context; only the bound visibility-output
     // texture differs). ensureShadowPipeline creates it; the HW prepare branch runs that before this, so it is resident.
@@ -1076,7 +1132,7 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
     if(!m_renderer.shaderSystem().loadShader(
         rayTracingState().m_shadowSoftShader,
         AssetsGraphicsShadow::s_RayQuerySoftShaderName,
-        heap.usesDescriptorBuffer() ? AStringView("NWB_BINDLESS_TLAS=1") : AStringView("NWB_BINDLESS_TLAS=0"),
+        AStringView("NWB_BINDLESS_TLAS=1"),
         Core::ShaderType::Compute,
         "ECSRender_ShadowRayQuerySoft"
     )){
@@ -1089,20 +1145,11 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
         .setComputeShader(rayTracingState().m_shadowSoftShader)
         .addBindingLayout(rayTracingState().m_shadowBindingLayout)
     ;
-    if(heap.isInitialized()){
-        pipelineDesc
-            .addBindingLayout(heap.getResourceLayout())
-            .addBindingLayout(heap.getSamplerLayout())
-        ;
-        if(heap.usesDescriptorBuffer()){
-            if(!heap.hasAccelStructLayout()){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Backend-C descriptor heap has no TLAS layout for soft shadows"));
-                rayTracingState().m_shadowSoftPipelineFailed = true;
-                return false;
-            }
-            pipelineDesc.addBindingLayout(heap.getAccelStructLayout());
-        }
-    }
+    pipelineDesc
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
+        .addBindingLayout(heap.getAccelStructLayout())
+    ;
     rayTracingState().m_shadowSoftPipeline = device->createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_shadowSoftPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery soft shadow compute pipeline"));
@@ -1118,48 +1165,6 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::ensureShadowSoftBindingSet(DeferredFrameTargets& targets){
-    NWB_ASSERT(rayTracingState().m_shadowBindingLayout);
-    NWB_ASSERT(rayTracingState().m_tlas);
-    NWB_ASSERT(targets.shadowSoftHalfA);
-    NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(targets.bindless.slotsBuffer);
-
-    // Rebuild on the same TLAS + target-generation slot-cbuffer keys as ensureShadowBindingSet (its own copies keep the
-    // soft set independent of the hard set's rebuild). A resize resets the set via resetDeferredFrameTargets, so the
-    // output needs no separate key.
-    const Core::RayTracingAccelStruct* tlas = rayTracingState().m_tlas.get();
-    Core::Buffer* bindlessResourcesBuffer = targets.bindless.slotsBuffer.get();
-    if(
-        rayTracingState().m_shadowSoftBindingSet
-        && rayTracingState().m_shadowSoftBindingSetTlas == tlas
-        && rayTracingState().m_shadowSoftBindingSetBindlessResources == bindlessResourcesBuffer
-    )
-        return true;
-
-    Core::BindingSetDesc bindingSetDesc(arena());
-    // The soft trace writes the HALF-res soft-A buffer (shadowSoftHalfA) at NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT --
-    // the SAME buffer the SW soft trace writes, so the shared geometry-downsample -> temporal -> a-trous -> upsample
-    // denoise chain reads it identically. Everything else is the identical trace context as the full-res set.
-    appendShadowTraceBindingSet(bindingSetDesc, targets, targets.shadowSoftHalfA.get());
-
-    auto* device = graphics().getDevice();
-    rayTracingState().m_shadowSoftBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_shadowBindingLayout);
-    if(!rayTracingState().m_shadowSoftBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow binding set"));
-        rayTracingState().m_shadowSoftBindingSetTlas = nullptr;
-        rayTracingState().m_shadowSoftBindingSetBindlessResources = nullptr;
-        return false;
-    }
-    rayTracingState().m_shadowSoftBindingSetTlas = tlas;
-    rayTracingState().m_shadowSoftBindingSetBindlessResources = bindlessResourcesBuffer;
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureSwShadowPipeline(){
     // Idempotent: the shared layout + persistent Stage-2/3 buffers are created once (guarded by m_swShadowBindingLayout),
     // and each per-pass pipeline creation below is itself idempotent (guarded by its own handle). A prior hard failure is
@@ -1168,42 +1173,17 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         return false;
 
     auto* device = graphics().getDevice();
+    if(!device || !device->getDescriptorHeap().isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software shadows require the initialized global descriptor heap"));
+        rayTracingState().m_swShadowPipelineFailed = true;
+        return false;
+    }
 
     if(!rayTracingState().m_swShadowBindingLayout){
-        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Backend C: pure-resource (UAV + CB + StructuredBuffer, no samplers) embedding the heap layouts at 8/9. The
-        // target-generation slot cbuffer at binding 22 selects the three G-buffer images plus the shared scene shading
-        // and light-list buffers from that heap. The push-constant range rides the pipeline layout alongside it. Opt in
-        // iff the heap is on Backend C.
-        layoutDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
-        // Bindings 3/4 remain historical scene/light ABI gaps; the cbuffer at 22 selects their heap entries instead.
-        // The former scene/material SRVs at 5/7/12/13/14 are similarly heap-selected by the b8 trace-context cbuffer.
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SW_SHADOW_BINDING_MATERIAL_CONTEXT_SLOTS, 1));
-        // Per-mesh geometry is fetched from the global descriptor heap through slots carried by the material record.
-        // Stage-2 adaptive transparent shadow: the half-res coarse transmittance scratch (written by the coarse trace,
-        // UAV-read by the resolve) + the edge-fraction stats counter. Always present in the layout (the shader always
-        // declares them); renderer state chooses which pass is dispatched and whether the counter is tallied.
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_COARSE, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_STATS, 1));
-        // Compaction UAVs: the edge append counter, the compacted edge-record list, and the indirect dispatch-args buffer.
-        // Always present in the layout; renderer state selects compacted-indirect or coarse/adaptive resolve.
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_COUNTER, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_LIST, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_INDIRECT_ARGS, 1));
-        // Soft opaque shadow: the half-res soft visibility UAV the jittered trace writes (read by the separate
-        // shadow_resolve pipeline). Always in the layout.
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_SOFT_HALF, 1));
-        // Soft COLORED TRANSPARENT shadow: the half-res colored soft transmittance UAV the soft transparent trace
-        // writes (read by the SEPARATE RGB shadow_resolve pipeline). Always in the layout -- only the soft transparent trace
-        // kernel declares/writes it; the other passes leave it inert. Recreated with the visibility target on resize.
-        layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_TRANSPARENT_SOFT_HALF, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SW_SHADOW_BINDING_BINDLESS_RESOURCES, 1));
-        // Push-constant range sized to the LARGEST pass struct: every per-pass pipeline shares this layout and each
-        // dispatch sets only its own (smaller) struct's bytes -- see SwShadowMaxPushConstants.
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwShadowMaxPushConstants)));
+        // Every selector, writable target, and work buffer is heap-addressed by one fixed push ABI.
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwShadowHeapPushConstants)));
 
         rayTracingState().m_swShadowBindingLayout = device->createBindingLayout(layoutDesc);
         if(!rayTracingState().m_swShadowBindingLayout){
@@ -1281,9 +1261,19 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         }
     }
 
-    // One named pipeline per pass, all against the shared layout. Each pass's kernel references only its own subset of
-    // the slot map, so the shared binding set drives them identically. Any single failure fails the whole ensure, leaving
-    // the frame's SW shadow backend not ready.
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    const bool heapResourcesReady =
+        __hidden_rt_shadow::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowEdgeStatsHeapHandle)
+        && __hidden_rt_shadow::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowEdgeCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowEdgeCounterHeapHandle)
+        && __hidden_rt_shadow::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowIndirectArgsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowIndirectArgsHeapHandle)
+    ;
+    if(!heapResourcesReady){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register software-shadow work buffers in the descriptor heap"));
+        rayTracingState().m_swShadowPipelineFailed = true;
+        return false;
+    }
+
+    // One named pipeline per pass, all against the shared push-only layout. Each kernel consumes the same heap-slot map.
     const bool passesReady =
         ensureSwShadowPassPipeline(rayTracingState().m_swShadowOpaquePrepassShader, rayTracingState().m_swShadowOpaquePrepassPipeline, AssetsGraphicsShadow::s_SwOpaquePrepassShaderName, "ECSRender_SwShadowOpaquePrepass")
         && ensureSwShadowPassPipeline(rayTracingState().m_swShadowSoftOpaqueShader, rayTracingState().m_swShadowSoftOpaquePipeline, AssetsGraphicsShadow::s_SwSoftOpaqueShaderName, "ECSRender_SwShadowSoftOpaque")
@@ -1327,18 +1317,14 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
         .setComputeShader(shader)
         .addBindingLayout(rayTracingState().m_swShadowBindingLayout)
     ;
-    // Pin the global descriptor-index heap's resource (set 8) + sampler (set 9) layouts onto every SW shadow pass
-    // pipeline -- the shader-layout-only side of the split: the traversal reads per-mesh geometry through these sets by
-    // the host-provided slot index. The classic SW shadow layout is added first, so it keeps positional set 0; the two
-    // heap layouts carry explicit sets 8/9 and createPipelineLayoutForBindingLayouts gap-fills sets 1-7 with the empty
-    // set layout. Guarded on a live heap so builds without one keep the pure set-0 layout.
+    // Every SW shadow pass requires the global resource/sampler heap layouts.
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
-    if(heap.isInitialized()){
-        pipelineDesc
-            .addBindingLayout(heap.getResourceLayout())
-            .addBindingLayout(heap.getSamplerLayout())
-        ;
-    }
+    if(!heap.isInitialized())
+        return false;
+    pipelineDesc
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
+    ;
     pipeline = graphics().getDevice()->createComputePipeline(pipelineDesc);
     if(!pipeline){
         // debugLabel identifies the failing pass in the shader-load path already; keep the message argument-free (the
@@ -1346,107 +1332,6 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow compute pipeline"));
         return false;
     }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& targets){
-    NWB_ASSERT(rayTracingState().m_swShadowBindingLayout);
-    NWB_ASSERT(rayTracingState().m_swShadowMeshCount > 0u);
-    NWB_ASSERT(targets.shadowVisibility);
-    NWB_ASSERT(targets.shadowCoarseTransmittance);
-    NWB_ASSERT(targets.shadowSoftHalfA);
-    NWB_ASSERT(targets.transparentSoftHalf);
-    NWB_ASSERT(rayTracingState().m_swShadowEdgeStatsBuffer);
-    NWB_ASSERT(rayTracingState().m_swShadowEdgeCounterBuffer);
-    NWB_ASSERT(rayTracingState().m_swShadowEdgeListBuffer);
-    NWB_ASSERT(rayTracingState().m_swShadowIndirectArgsBuffer);
-    NWB_ASSERT(targets.bindless.valid());
-    NWB_ASSERT(targets.bindless.slotsBuffer);
-    NWB_ASSERT(rayTracingState().m_rayTraceMaterialContextSlotsBuffer);
-
-    // Rebuild when a local binding input changes: the visibility target (recreated on resize, which also resets this
-    // set via resetDeferredFrameTargets), the target-generation bindless slot buffer, or the trace-context slot cbuffer.
-    // The five actual scene/material resources are globally heap-selected by that cbuffer and do not belong in this set.
-    Core::Buffer* materialContextSlotsBuffer = rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get();
-    Core::Buffer* bindlessResourcesBuffer = targets.bindless.slotsBuffer.get();
-    const Core::Texture* visibilityTarget = targets.shadowVisibility.get();
-    if(
-        rayTracingState().m_swShadowBindingSet
-        && rayTracingState().m_swShadowBindingSetMaterialContextSlots == materialContextSlotsBuffer
-        && rayTracingState().m_swShadowBindingSetBindlessResources == bindlessResourcesBuffer
-        && rayTracingState().m_swShadowBindingSetVisibility == visibilityTarget
-    )
-        return true;
-
-    Core::BindingSetDesc bindingSetDesc(arena());
-    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
-        NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT,
-        targets.shadowVisibility.get(),
-        targets.shadowVisibilityFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ));
-    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
-        NWB_SW_SHADOW_BINDING_MATERIAL_CONTEXT_SLOTS,
-        materialContextSlotsBuffer
-    ));
-    // Stage-2 adaptive transparent shadow: the half-res coarse transmittance scratch (UAV) + the edge-fraction counter
-    // (UAV). The coarse texture is recreated with the visibility target on resize, so tracking the visibility pointer in
-    // the rebuild guard also covers it; the stats buffer is persistent.
-    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
-        NWB_SW_SHADOW_BINDING_COARSE,
-        targets.shadowCoarseTransmittance.get(),
-        targets.shadowCoarseTransmittanceFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_STATS, rayTracingState().m_swShadowEdgeStatsBuffer.get()));
-    // Stage-3 compaction UAVs: append counter, compacted edge list, indirect dispatch-args.
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_COUNTER, rayTracingState().m_swShadowEdgeCounterBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_LIST, rayTracingState().m_swShadowEdgeListBuffer.get()));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_INDIRECT_ARGS, rayTracingState().m_swShadowIndirectArgsBuffer.get()));
-    // Soft opaque shadow: the half-res soft visibility UAV (recreated with the visibility target on resize, so tracking
-    // the visibility pointer in the rebuild guard also covers it).
-    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
-        NWB_SW_SHADOW_BINDING_SOFT_HALF,
-        targets.shadowSoftHalfA.get(),
-        targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ));
-    // Soft COLORED TRANSPARENT shadow: the half-res colored soft transmittance UAV (recreated with the visibility
-    // target on resize, so the tracked visibility-pointer rebuild guard also covers it).
-    bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
-        NWB_SW_SHADOW_BINDING_TRANSPARENT_SOFT_HALF,
-        targets.transparentSoftHalf.get(),
-        targets.shadowSoftFormat,
-        ECSRenderDetail::s_ShadowVisibilitySubresources,
-        Core::TextureDimension::Texture2DArray
-    ));
-    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
-        NWB_SW_SHADOW_BINDING_BINDLESS_RESOURCES,
-        bindlessResourcesBuffer
-    ));
-
-    // SW shadow reads its G-buffer and per-mesh geometry through descriptor-heap slots; backing resources remain
-    // explicitly transitioned for those reads.
-
-    auto* device = graphics().getDevice();
-    rayTracingState().m_swShadowBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_swShadowBindingLayout);
-    if(!rayTracingState().m_swShadowBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow binding set"));
-        rayTracingState().m_swShadowBindingSetMaterialContextSlots = nullptr;
-        rayTracingState().m_swShadowBindingSetBindlessResources = nullptr;
-        rayTracingState().m_swShadowBindingSetVisibility = nullptr;
-        return false;
-    }
-    rayTracingState().m_swShadowBindingSetMaterialContextSlots = materialContextSlotsBuffer;
-    rayTracingState().m_swShadowBindingSetBindlessResources = bindlessResourcesBuffer;
-    rayTracingState().m_swShadowBindingSetVisibility = visibilityTarget;
     return true;
 }
 

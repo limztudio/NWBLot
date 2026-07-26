@@ -1,0 +1,51 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_SW_HEAP_RESOURCES_SLANGI
+#define NWB_GRAPHICS_SHADOW_SW_HEAP_RESOURCES_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "shadow_heap_resources.slangi"
+
+
+// One push ABI serves every software-shadow kernel.  The old per-pass structs made the shared G-buffer/context
+// selectors local CBVs; keeping all selectors in this compact (80-byte) block makes every source independent of a
+// set-0 resource block while preserving each pass's existing width/trace-control fields.
+struct NwbSwShadowHeapPushConstants{
+    uint width;
+    uint height;
+    uint instanceCount;
+    uint frameIndex;
+    uint coarseWidth;
+    uint coarseHeight;
+    float edgeThreshold;
+    uint collectStats;
+    uint edgeCapacity;
+    uint traceGroupSize;
+    uint deferredResourcesHeapSlot;
+    uint materialContextSlotsHeapSlot;
+    uint visibilityStorageSlot;
+    uint coarseStorageSlot;
+    uint softHalfStorageSlot;
+    uint transparentSoftHalfStorageSlot;
+    uint edgeStatsStorageSlot;
+    uint edgeCounterStorageSlot;
+    uint edgeListStorageSlot;
+    uint indirectArgsStorageSlot;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<NwbSwShadowHeapPushConstants> g_NwbSwShadowPush;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -11,21 +11,15 @@
 // BUMP_TOP = 0 -> 0 groups -> a valid no-op indirect dispatch.
 
 
-#include "surfel_binding_slots.h"
-#include "surfel_constants.slangi"
+#include "surfel_heap_resources.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_SURFEL_TRACE_BUILDARGS_BINDING_CONSTANTS, NWB_SURFEL_TRACE_BUILDARGS_SET)]]
-ConstantBuffer<NwbSurfelConstants> g_NwbSurfelBuildArgsConstants;
-
-[[vk::binding(NWB_SURFEL_TRACE_BUILDARGS_BINDING_COUNTER, NWB_SURFEL_TRACE_BUILDARGS_SET)]]
-RWStructuredBuffer<uint> g_NwbSurfelBuildArgsCounter;
-
-[[vk::binding(NWB_SURFEL_TRACE_BUILDARGS_BINDING_ARGS, NWB_SURFEL_TRACE_BUILDARGS_SET)]]
-RWStructuredBuffer<uint> g_NwbSurfelBuildArgsOutput;
+#define g_NwbSurfelBuildArgsConstants g_NwbHeapSurfelConstantBuffers[g_NwbSurfelHeapPushConstants.constantsHeapSlot]
+#define g_NwbSurfelBuildArgsCounter g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.counterHeapSlot]
+#define g_NwbSurfelBuildArgsOutput g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.traceIndirectArgsHeapSlot]
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

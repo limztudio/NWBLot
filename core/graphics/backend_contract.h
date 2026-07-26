@@ -86,10 +86,6 @@ concept DeviceApi = requires(
     const RayTracingPipelineDesc& rayTracingPipelineDesc,
     const BindingLayoutDesc& bindingLayoutDesc,
     const BindlessLayoutDesc& bindlessLayoutDesc,
-    const BindingSetDesc& bindingSetDesc,
-    const BindingLayoutHandle& bindingLayout,
-    DescriptorTable* descriptorTable,
-    const BindingSetItem& bindingSetItem,
     const RayTracingOpacityMicromapDesc& opacityMicromapDesc,
     const RayTracingAccelStructDesc& accelStructDesc,
     RayTracingAccelStruct* accelStruct,
@@ -141,10 +137,6 @@ concept DeviceApi = requires(
     { device.createRayTracingPipeline(rayTracingPipelineDesc) }->SameAs<RayTracingPipelineHandle>;
     { device.createBindingLayout(bindingLayoutDesc) }->SameAs<BindingLayoutHandle>;
     { device.createBindlessLayout(bindlessLayoutDesc) }->SameAs<BindingLayoutHandle>;
-    { device.createBindingSet(bindingSetDesc, bindingLayout) }->SameAs<BindingSetHandle>;
-    { device.createDescriptorTable(bindingLayout) }->SameAs<DescriptorTableHandle>;
-    device.resizeDescriptorTable(descriptorTable, u32{}, bool{});
-    { device.writeDescriptorTable(descriptorTable, bindingSetItem) }->SameAs<bool>;
 
     { device.createOpacityMicromap(opacityMicromapDesc) }->SameAs<RayTracingOpacityMicromapHandle>;
     { device.createAccelStruct(accelStructDesc) }->SameAs<RayTracingAccelStructHandle>;
@@ -173,7 +165,6 @@ concept CommandListApi = requires(
     StagingTexture* stagingTexture,
     Buffer* buffer,
     SamplerFeedbackTexture* samplerFeedbackTexture,
-    BindingSet* bindingSet,
     Framebuffer& framebuffer,
     RayTracingAccelStruct* accelStruct,
     RayTracingOpacityMicromap* opacityMicromap,
@@ -261,7 +252,6 @@ concept CommandListApi = requires(
     commandList.beginMarker(markerName);
     commandList.endMarker();
 
-    commandList.setResourceStatesForBindingSet(bindingSet);
     commandList.setResourceStatesForFramebuffer(framebuffer);
     commandList.setEnableUavBarriersForTexture(texture, bool{});
     commandList.setEnableUavBarriersForBuffer(buffer, bool{});
@@ -349,18 +339,6 @@ concept BindingLayoutApi = requires(const T& layout){
 };
 
 template<typename T>
-concept BindingSetApi = requires(const T& bindingSet){
-    { bindingSet.getDescription() }->SameAs<const BindingSetDesc*>;
-    { bindingSet.getLayout() }->SameAs<BindingLayout*>;
-};
-
-template<typename T>
-concept DescriptorTableApi = requires(const T& descriptorTable){
-    { descriptorTable.getCapacity() }->SameAs<u32>;
-    { descriptorTable.getFirstDescriptorIndexInHeap() }->SameAs<u32>;
-};
-
-template<typename T>
 concept GraphicsPipelineApi = DescribedResourceApi<T, GraphicsPipelineDesc> && requires(const T& pipeline){
     { pipeline.getFramebufferInfo() }->SameAs<const FramebufferInfo&>;
 };
@@ -381,13 +359,12 @@ concept RayTracingPipelineApi = DescribedResourceApi<T, RayTracingPipelineDesc> 
 template<typename T>
 concept RayTracingShaderTableApi = requires(
     T& shaderTable,
-    AStringView exportName,
-    BindingSet* bindingSet
+    AStringView exportName
 ){
-    shaderTable.setRayGenerationShader(exportName, bindingSet);
-    { shaderTable.addMissShader(exportName, bindingSet) }->SameAs<u32>;
-    { shaderTable.addHitGroup(exportName, bindingSet) }->SameAs<u32>;
-    { shaderTable.addCallableShader(exportName, bindingSet) }->SameAs<u32>;
+    shaderTable.setRayGenerationShader(exportName);
+    { shaderTable.addMissShader(exportName) }->SameAs<u32>;
+    { shaderTable.addHitGroup(exportName) }->SameAs<u32>;
+    { shaderTable.addCallableShader(exportName) }->SameAs<u32>;
     shaderTable.clearMissShaders();
     shaderTable.clearHitShaders();
     shaderTable.clearCallableShaders();

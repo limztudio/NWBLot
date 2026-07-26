@@ -3,16 +3,17 @@
 
 
 #include "compute_common.slangi"
-#include "binding_slots.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_AVBOIT_INTEGRATE_BINDING_EXTINCTION, NWB_AVBOIT_COMPUTE_SET)]] StructuredBuffer<uint, Std430DataLayout> g_Extinction;
-[[vk::binding(NWB_AVBOIT_INTEGRATE_BINDING_TRANSMITTANCE, NWB_AVBOIT_COMPUTE_SET), vk::image_format(NWB_AVBOIT_TRANSMITTANCE_IMAGE_FORMAT)]] RWTexture3D<float> g_Transmittance;
-[[vk::binding(NWB_AVBOIT_INTEGRATE_BINDING_CONTROL, NWB_AVBOIT_COMPUTE_SET)]] StructuredBuffer<uint, Std430DataLayout> g_Control;
-[[vk::binding(NWB_AVBOIT_INTEGRATE_BINDING_OVERFLOW_DEPTH, NWB_AVBOIT_COMPUTE_SET)]] StructuredBuffer<uint, Std430DataLayout> g_ExtinctionOverflowDepth;
+// The integrated transmittance volume and all source work buffers are global-heap entries selected by the shared
+// target-generation payload. Keep the established local names below so the integration algorithm stays readable.
+#define g_Transmittance nwbAvboitTransmittanceUav()
+#define g_Extinction nwbAvboitExtinction()
+#define g_Control nwbAvboitControl()
+#define g_ExtinctionOverflowDepth nwbAvboitExtinctionOverflowDepth()
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,4 +73,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#undef g_Transmittance
+#undef g_Extinction
+#undef g_Control
+#undef g_ExtinctionOverflowDepth
 

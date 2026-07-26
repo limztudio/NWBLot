@@ -2,22 +2,34 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_CSG_INTERVAL_SAMPLE_SET 0
-#define NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED 1
-#include "interval_sample.slangi"
-
 #include "../deferred/binding_slots.h"
 #include "../mesh/runtime_constants.h"
 
-// Reuse the clip runtime's heap-selected receiver-range view. Cap fill has no receiver mesh invocation, so suppress
-// runtime.slangi's otherwise-unused fallback mesh push constant while retaining its typed receiver/cutter aliases.
+// The cap-fill fullscreen draw reuses the ordinary 64-byte mesh push ABI.  Its fourth frame-slot word is unused by
+// this path, so it selects the global CSG context UniformBuffer without growing any push range.
+struct NwbCsgCapFillPushConstants{
+    uint4 dispatch;
+    float4 viewportRect;
+    float4 scissorRect;
+    uint4 frameHeapSlots;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<NwbCsgCapFillPushConstants> g_NwbCsgCapFillPushConstants;
+
+#define NWB_CSG_CONTEXT_HEAP_SLOT (g_NwbCsgCapFillPushConstants.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX])
 #define NWB_CSG_MESH_INSTANCE_INDEX 0u
 #include "runtime.slangi"
 #undef NWB_CSG_MESH_INSTANCE_INDEX
 
+#define NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED 1
+#include "interval_sample.slangi"
+#undef NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
+#undef NWB_CSG_CONTEXT_HEAP_SLOT
+
 // CSG caps have no source triangle, but they still evaluate the receiver's COMPLETE cook-generated surface hook.
-// The clip-context cbuffer selects typed words and mutable mesh-instance storage from the global heap, leaving the
-// historical dedicated cap-material set (b6/b12) as an intentional gap.
+// The heap-selected clip context selects typed words and mutable mesh-instance storage, leaving the historical
+// dedicated cap-material set (b6/b12) as an intentional gap.
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbCsgClipContextSlots.materialTyped;
 }

@@ -15,41 +15,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef NWB_SCENE_SHADING_SET
-#define NWB_SCENE_SHADING_SET NWB_SCENE_SHADING_DEFAULT_SET
-#endif
-
-#ifndef NWB_SCENE_SHADING_BINDING
-#define NWB_SCENE_SHADING_BINDING NWB_SCENE_SHADING_DEFAULT_BINDING
-#endif
-
-#ifndef NWB_SCENE_LIGHT_LIST_SET
-#define NWB_SCENE_LIGHT_LIST_SET NWB_SCENE_LIGHT_LIST_DEFAULT_SET
-#endif
-
-#ifndef NWB_SCENE_LIGHT_LIST_BINDING
-#define NWB_SCENE_LIGHT_LIST_BINDING NWB_SCENE_LIGHT_LIST_DEFAULT_BINDING
-#endif
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct NwbSceneShadingBuffer{
     // xyz = camera world position, w = active light count.
     float4 g_NwbSceneCameraPosition;
 };
 
-// The scene-shading cbuffer and light list are either bound locally in the consuming pass's set (the default below)
-// or fetched from the global descriptor heap when the consumer defines NWB_SCENE_BUFFERS_FROM_HEAP plus the two slot
-// expressions NWB_SCENE_SHADING_HEAP_SLOT / NWB_SCENE_LIGHT_LIST_HEAP_SLOT (uniform per draw/dispatch) before
-// including this header. Either way the scene library below reads the same names: g_NwbSceneCameraPosition,
-// g_NwbSceneLights, nwbSceneLightCount().
-#ifndef NWB_SCENE_BUFFERS_FROM_HEAP
-[[vk::binding(NWB_SCENE_SHADING_BINDING, NWB_SCENE_SHADING_SET)]]
-ConstantBuffer<NwbSceneShadingBuffer, Std140DataLayout> g_NwbSceneShadingBuffer;
-
-#define g_NwbSceneCameraPosition g_NwbSceneShadingBuffer.g_NwbSceneCameraPosition
+// Scene shading and the light list are renderer-global heap resources. Every consumer provides the two uniform
+// heap-slot expressions before including this header; local scene descriptor bindings are intentionally unsupported.
+#if !defined(NWB_SCENE_SHADING_HEAP_SLOT) || !defined(NWB_SCENE_LIGHT_LIST_HEAP_SLOT)
+#error "Renderer scene buffers require shading and light-list heap slots"
 #endif
 
 struct NwbSceneLight{
@@ -66,10 +40,6 @@ struct NwbSceneLight{
     float4 params2;
 };
 
-#ifndef NWB_SCENE_BUFFERS_FROM_HEAP
-[[vk::binding(NWB_SCENE_LIGHT_LIST_BINDING, NWB_SCENE_LIGHT_LIST_SET)]]
-StructuredBuffer<NwbSceneLight, Std430DataLayout> g_NwbSceneLights;
-#else
 // Typed views of the shared heap StorageBuffer / UniformBuffer descriptor tables, exactly like the BVH-node and
 // mesh-stream aliases (bindless_heap_bvh.slangi / bindless_heap_mesh.slangi): the element type/stride is a per-view
 // SPIR-V decoration over the one Vulkan descriptor, so the scene-shading CB and light list are legible through the
@@ -95,7 +65,6 @@ StructuredBuffer<NwbSceneLight, Std430DataLayout> NwbHeapSceneLights(const uint 
 
 #define g_NwbSceneCameraPosition NwbHeapSceneShading(NWB_SCENE_SHADING_HEAP_SLOT).g_NwbSceneCameraPosition
 #define g_NwbSceneLights NwbHeapSceneLights(NWB_SCENE_LIGHT_LIST_HEAP_SLOT)
-#endif
 
 uint nwbSceneLightCount(){
     return uint(max(g_NwbSceneCameraPosition.w, 0.0));

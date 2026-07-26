@@ -3,6 +3,7 @@
 
 
 #include "resolve_binding_slots.h"
+#include "../bindless/bindless_heap.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,14 +17,11 @@
 // of a spinning refractor averages out). This is a decay in SPLAT space, NOT an image-space reprojection: there is no
 // per-pixel motion warp, so it cannot ghost. Each of the 3 layers (RGB flux) is decayed independently.
 
-[[vk::binding(NWB_CAUSTIC_ACCUMULATOR_DECAY_BINDING_ACCUMULATOR, NWB_CAUSTIC_ACCUMULATOR_DECAY_SET)]]
-RWTexture2DArray<uint> g_NwbCausticAccumulatorDecayAccumulator;
-
 struct NwbCausticAccumulatorDecayPushConstants{
     uint width;        // accumulator width
     uint height;       // accumulator height
     float decayFactor; // per-frame EMA decay in [0,1)
-    uint pad;
+    uint accumulatorStorageSlot;
 };
 
 [[vk::push_constant]]
@@ -46,8 +44,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     [unroll]
     for(uint layer = 0u; layer < 3u; ++layer){
         const uint3 coord = uint3(texel, layer);
-        const uint value = g_NwbCausticAccumulatorDecayAccumulator[coord];
-        g_NwbCausticAccumulatorDecayAccumulator[coord] = (uint)((float)value * decayFactor);
+        const uint value = NwbHeapStorageImage2DArrayUint(g_NwbCausticAccumulatorDecayPushConstants.accumulatorStorageSlot)[coord];
+        NwbHeapStorageImage2DArrayUint(g_NwbCausticAccumulatorDecayPushConstants.accumulatorStorageSlot)[coord] = (uint)((float)value * decayFactor);
     }
 }
 

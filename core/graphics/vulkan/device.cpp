@@ -410,19 +410,16 @@ Device::Device(const DeviceDesc& desc)
         vkGetPhysicalDeviceFeatures2(m_context.physicalDevice, &features2);
     }
 
-    // Backend C entry-point verification. VK_EXT_descriptor_buffer is optional and gracefully disabled here if the
-    // driver advertised the extension but failed to expose any required device-level command, leaving Backend A
-    // (descriptor indexing) as the live floor. No consumer is wired in this step.
-    if(m_context.extensions.EXT_descriptor_buffer){
-        if(
-            !vkGetDescriptorEXT
-            || !vkGetDescriptorSetLayoutBindingOffsetEXT
-            || !vkCmdBindDescriptorBuffersEXT
-            || !vkCmdSetDescriptorBufferOffsetsEXT
-        ){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Descriptor buffer entry points are unavailable; Backend C is disabled."));
-            m_context.extensions.EXT_descriptor_buffer = false;
-        }
+    // Descriptor-buffer entry points are a hard device requirement. Keep the extension state intact on failure so
+    // BackendContext can reject this device after construction instead of leaving an unsupported device alive.
+    if(
+        !m_context.extensions.EXT_descriptor_buffer
+        || !vkGetDescriptorEXT
+        || !vkGetDescriptorSetLayoutBindingOffsetEXT
+        || !vkCmdBindDescriptorBuffersEXT
+        || !vkCmdSetDescriptorBufferOffsetsEXT
+    ){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Required descriptor-buffer entry points are unavailable."));
     }
 
     if(!m_allocator.initialize())
@@ -446,23 +443,28 @@ Device::Device(const DeviceDesc& desc)
     }
 
 
-    // Stand up the Backend C descriptor-buffer manager (VK_EXT_descriptor_buffer). The extension and its properties
-    // are already detected/enabled/queried above; this carves the two global segments (resource + sampler) consumed
-    // by descriptor-buffer-compatible pipelines. Failure is non-fatal (Backend A remains the floor) but logged loudly.
-    if(m_context.extensions.EXT_descriptor_buffer){
+    // Stand up the required descriptor-buffer manager (VK_EXT_descriptor_buffer). The extension and its properties
+    // are already detected/enabled/queried above; this carves the two global segments used by every renderer pipeline.
+    if(
+        m_context.extensions.EXT_descriptor_buffer
+        && vkGetDescriptorEXT
+        && vkGetDescriptorSetLayoutBindingOffsetEXT
+        && vkCmdBindDescriptorBuffersEXT
+        && vkCmdSetDescriptorBufferOffsetsEXT
+    ){
         if(!m_descriptorBufferManager.initialize()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Descriptor buffer manager initialization failed; Backend C is disabled."));
-            m_context.extensions.EXT_descriptor_buffer = false;
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Required descriptor-buffer manager initialization failed."));
         }
     }
 
-    // Bring the global descriptor heap live for every run. Descriptor indexing is the portable path, so initialize it
-    // independently of the optional Backend-C descriptor-buffer path and NWB_DEBUG. Capacity 0 selects a default clamped to
-    // the device's update-after-bind limits; initialization failures are logged for bindless consumers.
-    {
+    // The global heap is mandatory. Capacity 0 selects a default clamped to the device's descriptor-layout limits.
+    if(m_context.extensions.EXT_descriptor_buffer && m_descriptorBufferManager.isEnabled()){
         GpuDescriptorHeapDesc heapDesc;
         if(!m_gpuDescriptorHeap.initialize(heapDesc))
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Global GpuDescriptorHeap failed to initialize; bindless heap consumers will be unavailable."));
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Required global GpuDescriptorHeap initialization failed."));
+    }
+    else{
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Required global GpuDescriptorHeap is unavailable."));
     }
 
     GraphicsBytes pipelineCacheInitialData{m_context.objectArena};
@@ -493,15 +495,6 @@ Device::Device(const DeviceDesc& desc)
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create pipeline cache. {}"), ResultToString(res));
     }
 
-    auto emptyLayoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
-    emptyLayoutInfo.bindingCount = 0;
-    emptyLayoutInfo.pBindings = nullptr;
-    res = vkCreateDescriptorSetLayout(m_context.device, &emptyLayoutInfo, m_context.allocationCallbacks, &m_context.emptyDescriptorSetLayout);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create empty descriptor set layout. {}"), ResultToString(res));
-        m_context.emptyDescriptorSetLayout = VK_NULL_HANDLE;
-    }
-
     if(desc.graphicsQueue && desc.graphicsQueueIndex >= 0){
         m_queues[static_cast<u32>(CommandQueue::Graphics)].emplace(m_context, *this, CommandQueue::Graphics, desc.graphicsQueue, desc.graphicsQueueIndex);
     }
@@ -518,7 +511,7 @@ Device::~Device(){
     m_uploadManager.clear();
     m_scratchManager.clear();
 
-    // Release the global descriptor heap's tables/layouts while the device is still valid (idempotent; the member
+    // Release the global descriptor heap's descriptor blocks/layouts while the device is still valid (idempotent; the member
     // destructor also calls this).
     m_gpuDescriptorHeap.shutdown();
     m_descriptorBufferManager.shutdown();
@@ -531,10 +524,6 @@ Device::~Device(){
     if(m_amdBreadcrumb.buffer != VK_NULL_HANDLE)
         m_allocator.destroyHostMappedBuffer(m_amdBreadcrumb.buffer, m_amdBreadcrumb.allocation, m_amdBreadcrumb.mappedMemory);
 
-    if(m_context.emptyDescriptorSetLayout){
-        vkDestroyDescriptorSetLayout(m_context.device, m_context.emptyDescriptorSetLayout, m_context.allocationCallbacks);
-        m_context.emptyDescriptorSetLayout = VK_NULL_HANDLE;
-    }
     if(m_context.emptyDescriptorBufferSetLayout){
         vkDestroyDescriptorSetLayout(m_context.device, m_context.emptyDescriptorBufferSetLayout, m_context.allocationCallbacks);
         m_context.emptyDescriptorBufferSetLayout = VK_NULL_HANDLE;

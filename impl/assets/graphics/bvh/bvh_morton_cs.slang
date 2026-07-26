@@ -3,12 +3,7 @@
 
 
 #include "bvh_triangle_input.slangi"
-
-[[vk::binding(NWB_BVH_BUILD_BINDING_KEYS, NWB_BVH_BUILD_SET)]]
-RWStructuredBuffer<uint> g_NwbBvhKeys;
-
-[[vk::binding(NWB_BVH_BUILD_BINDING_PAYLOAD, NWB_BVH_BUILD_SET)]]
-RWStructuredBuffer<uint> g_NwbBvhPayload;
+#include "bvh_heap_resources.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,8 +28,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 boundsExtent = max(g_NwbBvhBuildPushConstants.aabbMax.xyz - boundsMin, float3(1e-8, 1e-8, 1e-8));
     const float3 normalized = (centroid - boundsMin) / boundsExtent;
 
-    g_NwbBvhKeys[triangle] = nwbBvhMorton3D(normalized);
-    g_NwbBvhPayload[triangle] = triangle;
+    g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBuildPushConstants.keysHeapSlot][triangle] = nwbBvhMorton3D(normalized);
+    g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBuildPushConstants.payloadHeapSlot][triangle] = triangle;
 }
 
 

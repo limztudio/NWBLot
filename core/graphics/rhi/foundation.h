@@ -44,8 +44,6 @@ namespace GraphicsBackend{
     class AccelStruct;
     class OpacityMicromap;
     class BindingLayout;
-    class BindingSet;
-    class DescriptorTable;
     class GraphicsPipeline;
     class ComputePipeline;
     class MeshletPipeline;
@@ -79,8 +77,6 @@ namespace GraphicsBackend{
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(AccelStruct)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(OpacityMicromap)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(BindingLayout)
-    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(BindingSet)
-    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(DescriptorTable)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(GraphicsPipeline)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(ComputePipeline)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(MeshletPipeline)
@@ -114,8 +110,6 @@ using Framebuffer = GraphicsBackend::Framebuffer;
 using RayTracingOpacityMicromap = GraphicsBackend::RayTracingOpacityMicromap;
 using RayTracingAccelStruct = GraphicsBackend::RayTracingAccelStruct;
 using BindingLayout = GraphicsBackend::BindingLayout;
-using BindingSet = GraphicsBackend::BindingSet;
-using DescriptorTable = GraphicsBackend::DescriptorTable;
 using GraphicsPipeline = GraphicsBackend::GraphicsPipeline;
 using ComputePipeline = GraphicsBackend::ComputePipeline;
 using MeshletPipeline = GraphicsBackend::MeshletPipeline;
@@ -141,11 +135,6 @@ inline constexpr u32 s_MaxVolatileConstantBuffers = 32;
 inline constexpr u32 s_MaxPushConstantSize = 128;
 inline constexpr u32 s_ConstantBufferOffsetSizeAlignment = 256;
 inline constexpr u32 s_MaxGpuCrashMarkerStrings = 128;
-
-inline constexpr u32 s_BindingOffsetShaderResource = 0;
-inline constexpr u32 s_BindingOffsetSampler = 128;
-inline constexpr u32 s_BindingOffsetConstantBuffer = 256;
-inline constexpr u32 s_BindingOffsetUnorderedAccess = 384;
 
 inline constexpr i32 s_WindowPositionAuto = -1;
 inline constexpr u32 s_BackBufferWidth = 1280;

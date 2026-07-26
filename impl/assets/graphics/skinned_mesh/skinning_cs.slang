@@ -10,11 +10,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// All persistent mesh streams (including skin influences and the frame-updated joint palette) are selected from the
-// global StorageBuffer heap. The local b12 cbuffer is the only descriptor in this pass's set-0 layout.
-[[vk::binding(NWB_SKINNED_MESH_BINDING_BINDLESS_RESOURCES, NWB_SKINNED_MESH_SET)]]
-ConstantBuffer<NwbSkinnedMeshBindlessResources, Std140DataLayout> g_NwbSkinnedMeshBindlessResources;
-
 struct NwbSkinnedMeshPushConstants{
     uint4 payload0;
     uint4 payload1;
@@ -22,6 +17,12 @@ struct NwbSkinnedMeshPushConstants{
 
 [[vk::push_constant]]
 ConstantBuffer<NwbSkinnedMeshPushConstants> g_NwbSkinnedMeshPushConstants;
+
+// All persistent mesh streams, including this per-runtime selector payload, are global heap entries. The selector
+// slot occupies payload1.y (word 5) and is uniform for the entire dispatch.
+#define g_NwbSkinnedMeshBindlessResources nwbSkinnedMeshHeapBindlessResources(\
+    g_NwbSkinnedMeshPushConstants.payload1[NWB_SKINNED_MESH_PUSH_BINDLESS_RESOURCES_SLOT - 4u]\
+)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -273,6 +274,8 @@ void nwbSkinnedMeshMain(const uint meshletIndex, const uint groupThreadIndex){
 void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     nwbSkinnedMeshMain(groupID.x, groupThreadID.x);
 }
+
+#undef g_NwbSkinnedMeshBindlessResources
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

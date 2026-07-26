@@ -11,9 +11,9 @@
 // A resource registered through GpuDescriptorHeap::write() lands at its class's
 // array, at its GpuDescriptorHandle::slot(). A shader fetches it by indexing that array with the slot; a slot that
 // varies across a wave must be wrapped in NonUniformResourceIndex() at the subscript (the round-trip test runs a
-// single invocation, so it does not need to). Backend C's optional TLAS surface is intentionally a dedicated fixed
-// descriptor set: each command records the current handle's descriptor-buffer block offset, keeping retired TLAS
-// descriptors immutable until in-flight work has drained. Backend A compiles this declaration out.
+// single invocation, so it does not need to). Ray-tracing shader variants opt into the TLAS declaration below; it is
+// intentionally a dedicated fixed descriptor-buffer set, and each command records the current handle's block offset
+// so retired TLAS descriptors remain immutable until in-flight work has drained.
 
 
 #ifndef NWB_GRAPHICS_BINDLESS_HEAP_SLANGI
@@ -22,8 +22,8 @@
 
 #include "binding_slots.h"
 
-// Most shaders include the heap for buffer/sampler access but do not participate in the optional TLAS migration.
-// Give those variants an explicit disabled value: Slang evaluates the right side of `defined(...) && ...` and emits
+// Most shaders include the heap for buffer/sampler access but do not access a TLAS. Give those variants an explicit
+// disabled value: Slang evaluates the right side of `defined(...) && ...` and emits
 // a warning for an undefined identifier, even though the expression ultimately evaluates to false.
 #ifndef NWB_BINDLESS_TLAS
 #define NWB_BINDLESS_TLAS 0
@@ -59,6 +59,16 @@ Texture3D<float4> g_NwbHeapSampledImage3Ds[];
 
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 RWTexture2D<float4> g_NwbHeapStorageImages[];
+
+// The caustic accumulator is a 2DArray<uint>, while a few scalar storage passes use 2D uint images.  Keep typed
+// aliases at the same StorageImage binding so all writable images share one descriptor class/table.
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed aliases of the StorageImage descriptor table.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+RWTexture2D<uint> g_NwbHeapStorageImageUints[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+RWTexture3D<float> g_NwbHeapStorageImage3DFloats[];
+#pragma warning(pop)
 
 // Storage-image descriptors carry their view dimension and format with the descriptor, so the same global
 // StorageImage table can expose typed Texture2DArray aliases. CSG uses these unformatted views for its transient
@@ -147,6 +157,18 @@ RWTexture2DArray<uint2> NwbHeapStorageImage2DArrayUint2(const uint slot){
 
 RWTexture2DArray<uint4> NwbHeapStorageImage2DArrayUint4(const uint slot){
     return g_NwbHeapStorageImage2DArrayUint4s[slot];
+}
+
+RWTexture2D<float4> NwbHeapStorageImage2DFloat4(const uint slot){
+    return g_NwbHeapStorageImages[slot];
+}
+
+RWTexture2D<uint> NwbHeapStorageImage2DUint(const uint slot){
+    return g_NwbHeapStorageImageUints[slot];
+}
+
+RWTexture3D<float> NwbHeapStorageImage3DFloat(const uint slot){
+    return g_NwbHeapStorageImage3DFloats[slot];
 }
 
 SamplerState NwbHeapSampler(const uint slot){

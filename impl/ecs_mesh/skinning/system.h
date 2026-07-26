@@ -68,7 +68,8 @@ private:
         u32 jointCount = 0;
         u32 skinningMode = SkeletonSkinningMode::LinearBlend;
         u32 attributeCount = 0;
-        u32 padding1 = 0;
+        // UniformBuffer heap slot for RuntimeBindlessResourceSlots.
+        u32 bindlessResourceSlots = 0;
         u32 padding2 = 0;
         u32 padding3 = 0;
     };
@@ -78,27 +79,32 @@ private:
     static_assert(offsetof(MeshSkinningPushConstants, jointCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_JOINT_COUNT, "MeshSkinning joint-count push offset drifted");
     static_assert(offsetof(MeshSkinningPushConstants, skinningMode) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_SKINNING_MODE, "MeshSkinning skinning-mode push offset drifted");
     static_assert(offsetof(MeshSkinningPushConstants, attributeCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_ATTRIBUTE_COUNT, "MeshSkinning attribute-count push offset drifted");
+    static_assert(offsetof(MeshSkinningPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_BINDLESS_RESOURCES_SLOT, "MeshSkinning bindless-resource slot push offset drifted");
 
     struct MeshletBoundsPushConstants{
         u32 meshletCount = 0;
-        u32 padding0 = 0;
+        // UniformBuffer heap slot for RuntimeBindlessResourceSlots.
+        u32 bindlessResourceSlots = 0;
         u32 padding1 = 0;
         u32 padding2 = 0;
     };
     static_assert(sizeof(MeshletBoundsPushConstants) == NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning bounds push constants layout must match the shader ABI");
     static_assert(offsetof(MeshletBoundsPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT, "MeshSkinning bounds meshlet-count push offset drifted");
+    static_assert(offsetof(MeshletBoundsPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_BOUNDS_PUSH_BINDLESS_RESOURCES_SLOT, "MeshSkinning bounds bindless-resource slot push offset drifted");
 
     struct MeshletRepackPushConstants{
         u32 meshletCount = 0;
-        u32 padding0 = 0;
+        // UniformBuffer heap slot for RuntimeBindlessResourceSlots.
+        u32 bindlessResourceSlots = 0;
         u32 padding1 = 0;
         u32 padding2 = 0;
     };
     static_assert(sizeof(MeshletRepackPushConstants) == NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning repack push constants layout must match the shader ABI");
     static_assert(offsetof(MeshletRepackPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_MESHLET_COUNT, "MeshSkinning repack meshlet-count push offset drifted");
+    static_assert(offsetof(MeshletRepackPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_BINDLESS_RESOURCES_SLOT, "MeshSkinning repack bindless-resource slot push offset drifted");
 
     // Mirrors NwbSkinnedMeshBindlessResources exactly: four std140 uint4 lanes. Every handle below is a persistent
-    // StorageBuffer-heap registration; the slot buffer is the sole set-0 descriptor for all three compute passes.
+    // StorageBuffer-heap registration. The selector payload itself is a UniformBuffer heap entry.
     struct RuntimeBindlessResourceSlots{
         u32 restPosition = 0u;
         u32 skinnedPosition = 0u;
@@ -123,6 +129,7 @@ private:
     static_assert(sizeof(RuntimeBindlessResourceSlots) == sizeof(u32) * 16u, "MeshSkinning bindless resource slots must stay four uint4 lanes");
 
     struct RuntimeBindlessHeapHandles{
+        Core::GpuDescriptorHandle resourceSlots = Core::GpuDescriptorHandle::invalid();
         Core::GpuDescriptorHandle restPosition = Core::GpuDescriptorHandle::invalid();
         Core::GpuDescriptorHandle skinnedPosition = Core::GpuDescriptorHandle::invalid();
         Core::GpuDescriptorHandle restNormal = Core::GpuDescriptorHandle::invalid();
@@ -155,17 +162,18 @@ private:
         RuntimeBindlessResourceSlots bindlessResourceSlots;
         RuntimeBindlessHeapHandles bindlessHeapHandles;
         bool bindlessResourceSlotsUploaded = false;
-        Core::BindingSetHandle skinningBindingSet;
-        Core::BindingSetHandle boundsBindingSet;
-        Core::BindingSetHandle repackBindingSet; // RT-only: per-frame skinned-normal -> RT attribute buffer repack (null when ray tracing is unsupported)
 
-        [[nodiscard]] bool usesSkinning()const{ return skinCount != 0u && jointCount != 0u && skinningBindingSet != nullptr; }
+        [[nodiscard]] bool usesSkinning()const{ return skinCount != 0u && jointCount != 0u; }
         [[nodiscard]] bool hasPersistentHeapDescriptors(const bool hasActiveSkin, const bool hasAttributeBuffer)const{
             const auto storageHandle = [](const Core::GpuDescriptorHandle handle){
                 return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
             };
+            const auto uniformHandle = [](const Core::GpuDescriptorHandle handle){
+                return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer;
+            };
             const bool common =
                 bindlessResourceSlotsBuffer != nullptr
+                && uniformHandle(bindlessHeapHandles.resourceSlots)
                 && storageHandle(bindlessHeapHandles.restPosition)
                 && storageHandle(bindlessHeapHandles.skinnedPosition)
                 && storageHandle(bindlessHeapHandles.restNormal)

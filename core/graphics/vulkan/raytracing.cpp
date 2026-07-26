@@ -1257,10 +1257,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     auto createInfo = VulkanDetail::MakeVkStruct<VkRayTracingPipelineCreateInfoKHR>(VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR);
     if(pipelineFlags2.flags != 0)
         createInfo.pNext = &pipelineFlags2;
-    // Backend C: descriptor-buffer pipelines must opt in with VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT so the
-    // driver expects descriptor-buffer binds rather than classic descriptor sets.
-    if(pso->m_usesDescriptorBuffer)
-        createInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+    createInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     createInfo.stageCount = static_cast<u32>(stages.size());
     createInfo.pStages = stages.data();
     createInfo.groupCount = static_cast<u32>(groups.size());
@@ -1452,7 +1449,7 @@ void ShaderTable::allocateSBTBuffer(BufferHandle& outBuffer, u64 sbtSize){
     outBuffer = m_device.createBuffer(bufferDesc);
 }
 
-void ShaderTable::setRayGenerationShader(const AStringView exportName, BindingSet* /*bindings*/){
+void ShaderTable::setRayGenerationShader(const AStringView exportName){
     if(!m_pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to set ray generation shader: shader table has no pipeline"));
         return;
@@ -1496,15 +1493,15 @@ void ShaderTable::setRayGenerationShader(const AStringView exportName, BindingSe
     m_device.unmapBuffer(m_raygenBuffer.get());
 }
 
-u32 ShaderTable::addMissShader(const AStringView exportName, BindingSet* /*bindings*/){
+u32 ShaderTable::addMissShader(const AStringView exportName){
     return appendShaderRecord(exportName, m_missBuffer, m_missOffset, m_missCount, NWB_TEXT("add miss shader"), NWB_TEXT("miss"), NWB_TEXT("Miss shader"));
 }
 
-u32 ShaderTable::addHitGroup(const AStringView exportName, BindingSet* /*bindings*/){
+u32 ShaderTable::addHitGroup(const AStringView exportName){
     return appendShaderRecord(exportName, m_hitBuffer, m_hitOffset, m_hitCount, NWB_TEXT("add hit group"), NWB_TEXT("hit"), NWB_TEXT("Hit group"));
 }
 
-u32 ShaderTable::addCallableShader(const AStringView exportName, BindingSet* /*bindings*/){
+u32 ShaderTable::addCallableShader(const AStringView exportName){
     return appendShaderRecord(exportName, m_callableBuffer, m_callableOffset, m_callableCount, NWB_TEXT("add callable shader"), NWB_TEXT("callable"), NWB_TEXT("Callable shader"));
 }
 
@@ -1526,7 +1523,6 @@ Object ShaderTable::getNativeHandle(ObjectType objectType){
 
 void CommandList::setRayTracingState(const RayTracingState& state){
     endActiveRenderPass();
-    setResourceStatesForBindingSets(state.bindings);
     commitBarriers();
     m_currentGraphicsState = {};
     m_currentComputeState = {};
@@ -1549,7 +1545,7 @@ void CommandList::setRayTracingState(const RayTracingState& state){
 
     vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipeline);
 
-    bindPipelineBindingSets(VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipelineLayout, pipeline->m_usesDescriptorBuffer, state.bindings);
+    bindDescriptorBufferEmptySet(VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline->m_pipelineLayout);
 }
 
 

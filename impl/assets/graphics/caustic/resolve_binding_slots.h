@@ -14,48 +14,14 @@
 // by the receiver area subtended per pixel -- the photon-DENSITY -> physical-BRIGHTNESS conversion -- and apply the
 // causticIntensity exposure) AND does the first wavelet step; later passes only run the wavelet at a doubled dilation.
 // Purely spatial filtering avoids ghosting under non-rigid / morphing caustic motion. The output of the final pass is the
-// irradiance buffer the lighting adds.
-#define NWB_CAUSTIC_RESOLVE_SET 0
+// irradiance buffer the lighting adds. Every input and output is selected from the global descriptor heap with the
+// corresponding push-constant slot; the pass-local interface contains only that push block.
 
-// Logical heap-SRV position: the R32_UINT accumulator is selected through the uint Texture2DArray heap accessor and
-// a per-dispatch push-constant slot, so it no longer occupies the local descriptor-buffer layout.
-#define NWB_CAUSTIC_RESOLVE_BINDING_ACCUMULATOR 0
-// Logical heap-SRV positions retained for the pass ABI documentation. The world/depth/input/geometry slots now arrive
-// through per-dispatch push constants and no longer occupy entries in the local descriptor-buffer layout.
-// Heap SRV: the G-buffer world-position. The resolve estimates the receiver area subtended by each pixel from the
-// world-space spacing of neighbouring pixels (a screen-space area Jacobian), so the area-normalization is physical;
-// it is ALSO the wavelet's geometry edge-stop (the caustic never bleeds across a receiver depth/silhouette jump).
-#define NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_WORLD_POSITION 1
-// Heap SRV: the G-buffer depth; background pixels (no receiver) write zero, and background taps are skipped by the wavelet.
-#define NWB_CAUSTIC_RESOLVE_BINDING_GBUFFER_DEPTH 2
-// The RGBA16F wavelet OUTPUT UAV for this pass. The C++ ping-pongs the two RGBA16F buffers (irradiance + scratch) as
-// (input,output) each pass; the FINAL pass writes the caustic irradiance buffer the deferred lighting samples.
-#define NWB_CAUSTIC_RESOLVE_BINDING_OUTPUT 3
-// Heap SRV: the previous pass's RGBA16F color (the OTHER ping-pong buffer). Unused on the first pass (which reads
-// the accumulator instead) but always bound so the descriptor is valid.
-#define NWB_CAUSTIC_RESOLVE_BINDING_INPUT_COLOR 4
-// Heap SRV: half-res GEOMETRY CACHE (RGBA16F: xyz = world position, w = receiver validity 1/0), produced once by the geometry
-// downsample pre-pass. The PREPARE + WAVELET passes read this single half-res texel per tap for the area Jacobian +
-// world-distance edge-stop + background skip, instead of re-reading the full-res world-position + depth G-buffer at the
-// half pixel's 2x location every tap -- a big read-bandwidth cut on the half-res dispatch (the full-res world/depth SRVs
-// above are then only consumed by the full-res UPSAMPLE's own centre pixel).
-#define NWB_CAUSTIC_RESOLVE_BINDING_GEOMETRY 5
-
-// Geometry downsample pre-pass (its own pipeline + binding layout): heap-reads the full-res G-buffer world position +
-// depth and writes the half-res geometry cache above. Its logical source positions remain reserved here.
-#define NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_SET 0
-#define NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION 0
-#define NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH 1
-#define NWB_CAUSTIC_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT 2
-
-// Accumulator decay pre-pass (its own pipeline + binding layout): the SPLAT-SPACE temporal EMA. Before the producer
+// Accumulator decay pre-pass: the SPLAT-SPACE temporal EMA. Before the producer
 // splats this frame's photons, each accumulator texel is multiplied by decayFactor (accum_N = decay*accum_{N-1}); the
 // producer then atomic-adds this frame's photons on top, so the accumulator holds the EMA and the static steady state
 // is photons/(1-decayFactor). The resolve pre-multiplies causticIntensity by (1-decayFactor) so the STATIC brightness
-// is unchanged. Reprojection-free (no image-space warp -> no ghosting on the spinning refractor). One dedicated slot:
-// the accumulator UAV read-modify-written in place.
-#define NWB_CAUSTIC_ACCUMULATOR_DECAY_SET 0
-#define NWB_CAUSTIC_ACCUMULATOR_DECAY_BINDING_ACCUMULATOR 0
+// is unchanged. Reprojection-free (no image-space warp -> no ghosting on the spinning refractor).
 
 // 8x8 = 64 threads per group (one thread per pixel).
 #define NWB_CAUSTIC_RESOLVE_GROUP_SIZE 8

@@ -10,8 +10,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_DEFERRED_COMPOSITE_BINDING_BINDLESS_RESOURCES, NWB_DEFERRED_COMPOSITE_SET)]]
-ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbDeferredBindlessResources;
+struct NwbDeferredCompositePushConstants{
+    uint resourceSlots;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<NwbDeferredCompositePushConstants> g_NwbDeferredCompositePushConstants;
+
+#define g_NwbDeferredBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbDeferredCompositePushConstants.resourceSlots]
 
 struct NwbDeferredCompositePixelInput{
     [[vk::location(NWB_DEFERRED_FULLSCREEN_UV_LOCATION)]] float2 uv : TEXCOORD0;
@@ -37,6 +43,8 @@ NwbDeferredCompositePixelOutput main(NwbDeferredCompositePixelInput input){
     output.color = half4(compositeColor, half(1.0));
     return output;
 }
+
+#undef g_NwbDeferredBindlessResources
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

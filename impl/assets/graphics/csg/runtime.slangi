@@ -76,10 +76,6 @@ struct NwbCsgMeshPushConstants{
 };
 #endif
 
-// Historical local CSG clip SRVs at b0/b1 remain gaps. The clip context cbuffer selects their heap entries.
-#define g_NwbCsgReceiverRanges NwbHeapCsgReceiverRanges(g_NwbCsgClipContextSlots.receiverRanges)
-#define g_NwbCsgCutters NwbHeapCsgCutters(g_NwbCsgClipContextSlots.cutters)
-
 #if !defined(NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI) && !defined(NWB_CSG_MESH_INSTANCE_INDEX)
 [[vk::push_constant]]
 ConstantBuffer<NwbCsgMeshPushConstants> g_NwbCsgMeshPushConstants;
@@ -94,6 +90,24 @@ uint nwbCsgMeshInstanceIndex(){
     return g_NwbCsgMeshPushConstants.dispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
 #endif
 }
+
+// All CSG consumers select their persistent context from the global UniformBuffer heap.  Mesh stages inherit the
+// selector from their receiver instance record; pixel-only CSG variants use the otherwise-unused fourth mesh push
+// lane; standalone/AVBOIT variants provide NWB_CSG_CONTEXT_HEAP_SLOT explicitly.
+uint nwbCsgContextHeapSlot(){
+#if defined(NWB_CSG_CONTEXT_HEAP_SLOT)
+    return NWB_CSG_CONTEXT_HEAP_SLOT;
+#elif defined(NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI)
+    return g_NwbMeshInstances[nwbCsgMeshInstanceIndex()].geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT];
+#else
+    return g_NwbCsgMeshPushConstants.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX];
+#endif
+}
+
+// Historical local CSG clip SRVs/cbuffer remain ABI gaps.  This macro resolves the one heap context selected above.
+#define g_NwbCsgClipContextSlots NwbHeapCsgClipContextSlots(nwbCsgContextHeapSlot())
+#define g_NwbCsgReceiverRanges NwbHeapCsgReceiverRanges(g_NwbCsgClipContextSlots.receiverRanges)
+#define g_NwbCsgCutters NwbHeapCsgCutters(g_NwbCsgClipContextSlots.cutters)
 
 float3 nwbCsgNormalizeOr(const float3 value, const float3 fallback){
     const float lengthSquared = dot(value, value);

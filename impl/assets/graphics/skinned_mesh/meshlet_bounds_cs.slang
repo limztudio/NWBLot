@@ -17,17 +17,17 @@ static const float NWB_SKINNED_MESH_BOUNDS_RADIUS_INFLATION = 1.25;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// All persistent sources and the dynamic bounds output are selected through the global StorageBuffer heap; b6 is the
-// only local descriptor and preserves the retired b0..5 ABI range as gaps.
-[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_BINDLESS_RESOURCES, NWB_SKINNED_MESH_BOUNDS_SET)]]
-ConstantBuffer<NwbSkinnedMeshBindlessResources, Std140DataLayout> g_NwbSkinnedMeshBoundsBindlessResources;
-
 struct NwbSkinnedMeshBoundsPushConstants{
     uint4 payload0;
 };
 
 [[vk::push_constant]]
 ConstantBuffer<NwbSkinnedMeshBoundsPushConstants> g_NwbSkinnedMeshBoundsPushConstants;
+
+// The persistent stream-slot payload is selected from the global UniformBuffer heap by payload0.y.
+#define g_NwbSkinnedMeshBoundsBindlessResources nwbSkinnedMeshHeapBindlessResources(\
+    g_NwbSkinnedMeshBoundsPushConstants.payload0[NWB_SKINNED_MESH_BOUNDS_PUSH_BINDLESS_RESOURCES_SLOT]\
+)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -407,6 +407,8 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     ;
     nwbSkinnedMeshBoundsStore(meshletIndex, float4(g_NwbSkinnedMeshBoundsCenter, radius), conePacked);
 }
+
+#undef g_NwbSkinnedMeshBoundsBindlessResources
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

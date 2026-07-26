@@ -124,7 +124,6 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 
 
 void CommandList::setMeshletState(const MeshletState& state){
-    setResourceStatesForBindingSets(state.bindings);
     if(state.indirectParams)
         setBufferState(state.indirectParams, ResourceStates::IndirectArgument);
     commitBarriers();
@@ -142,7 +141,7 @@ void CommandList::setMeshletState(const MeshletState& state){
         vkCmdBindPipeline(m_currentCmdBuf->m_cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipeline);
 
     if(pipeline)
-        bindPipelineBindingSets(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipelineLayout, pipeline->m_usesDescriptorBuffer, state.bindings);
+        bindDescriptorBufferEmptySet(VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->m_pipelineLayout);
 
     setViewportState(state.viewport);
 }

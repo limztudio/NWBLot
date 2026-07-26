@@ -16,39 +16,28 @@
 // -- NO [0,1] clamp (the shadow upsample's clamp would clip the bounce).
 
 
-#include "surfel_binding_slots.h"
-#include "../../bindless/bindless_heap_sampled_image_2d.slangi"
+#include "surfel_heap_resources.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_SURFEL_UPSAMPLE_BINDING_OUTPUT, NWB_SURFEL_UPSAMPLE_SET)]]
-RWTexture2D<float4> g_NwbSurfelUpsampleOutput;
-
-struct NwbSurfelUpsamplePushConstants{
-    uint halfIrradianceSlot;
-    uint normalSlot;
-    uint worldPositionSlot;
-};
-
-[[vk::push_constant]]
-NwbSurfelUpsamplePushConstants g_NwbSurfelUpsamplePushConstants;
+#define g_NwbSurfelUpsampleOutput (NwbHeapStorageImage2DFloat4(g_NwbSurfelHeapPushConstants.outputStorageHeapSlot))
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 Texture2D<float4> nwbSurfelUpsampleHalfIrradiance(){
-    return NwbHeapSampledImage2DOnly(g_NwbSurfelUpsamplePushConstants.halfIrradianceSlot);
+    return NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.halfIrradianceSlot);
 }
 
 Texture2D<float4> nwbSurfelUpsampleGbufferNormal(){
-    return NwbHeapSampledImage2DOnly(g_NwbSurfelUpsamplePushConstants.normalSlot);
+    return NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.normalSlot);
 }
 
 Texture2D<float4> nwbSurfelUpsampleGbufferWorldPosition(){
-    return NwbHeapSampledImage2DOnly(g_NwbSurfelUpsamplePushConstants.worldPositionSlot);
+    return NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.worldPositionSlot);
 }
 
 

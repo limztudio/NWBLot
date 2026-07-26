@@ -4,10 +4,6 @@
 
 #include "binding_slots.h"
 #include "constants.h"
-#include "bindless_resources.slangi"
-
-#define NWB_CSG_MESH_INSTANCE_INDEX 0u
-#include "runtime.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,14 +27,21 @@ struct NwbCsgIntervalPeelEntry{
 [[vk::push_constant]]
 ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPushConstants;
 
+// Standalone CSG work has no material draw context.  Its existing second resource-slot word selects the persistent
+// CSG UniformBuffer payload, which in turn selects both receiver/cutter data and the deferred target slots.
+#define NWB_CSG_CONTEXT_HEAP_SLOT (g_NwbCsgIntervalDispatchPushConstants.resourceSlots[NWB_CSG_INTERVAL_DISPATCH_PUSH_RESOURCE_SLOT_CONTEXT])
+#define NWB_CSG_MESH_INSTANCE_INDEX 0u
+#include "runtime.slangi"
+#undef NWB_CSG_MESH_INSTANCE_INDEX
+#include "bindless_resources.slangi"
+#undef NWB_CSG_CONTEXT_HEAP_SLOT
+
 // The standalone peel dispatch has no mesh draw constants. Its view UniformBuffer slot therefore rides in its own
 // push payload, while b13 remains an intentional local-layout gap.
-#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
-#define NWB_MESH_VIEW_BUFFER_BINDLESS 1
 #define NWB_MESH_VIEW_BUFFER_HEAP_SLOT (g_NwbCsgIntervalDispatchPushConstants.resourceSlots[NWB_CSG_INTERVAL_DISPATCH_PUSH_RESOURCE_SLOT_VIEW])
 #include "../bindless/bindless_heap_mesh.slangi"
 
-// Historical local bindings 0..2 are now gaps. The target-generation slots select their typed Texture2DArray UAVs
+// Historical local bindings 0..2 are now gaps. The CSG context selects target-generation Texture2DArray UAVs
 // from the StorageImage heap; the device's required formatless-storage-image support permits the two float formats.
 #define g_NwbCsgBackCapNormal (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.x))
 #define g_NwbCsgIntervalDepth (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.y))

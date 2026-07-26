@@ -1,16 +1,15 @@
-// Backend C round-trip proof — VK_EXT_descriptor_buffer.
+// Descriptor-buffer round-trip proof — VK_EXT_descriptor_buffer.
 //
 // Stand up a real headless GPU device and exercise DescriptorBufferManager::allocate / writeDescriptor / free across
 // every descriptor class, asserting the vkGetDescriptorEXT path actually produces descriptor bytes into the
 // HOST-mapped segments and that the free-range sub-allocator is sound.
 //
-// Production descriptor-buffer-compatible pipelines consume the manager through CommandList. Alongside allocation,
-// byte encoding, layout, and heap-lifetime invariants, this suite submits a production compute pipeline and validates
-// GPU output written through vkCmdBindDescriptorBuffersEXT / vkCmdSetDescriptorBufferOffsetsEXT. It does so without a
-// test-only command-buffer escape hatch (see .helper policy on production test hooks).
+// Production descriptor-buffer-compatible pipelines consume the manager through the global heap. Alongside
+// allocation, byte encoding, layout, and heap-lifetime invariants, this suite verifies that pipeline-local layouts
+// are descriptor-free and that heap layouts are the sole resource-bearing descriptor transport.
 //
-// GPU-optional host: the suite SKIPS (never fails) when the extension is absent — Backend A remains the
-// portability floor on such runners, so its absence is an environment condition, not a regression.
+// GPU-optional host: the suite SKIPS (never fails) when the required extension is absent. This is an environment
+// limitation, not evidence that an ordinary descriptor-set implementation satisfies the descriptor-buffer contract.
 
 
 #include <gtest/gtest.h>
@@ -25,21 +24,8 @@
 #include <core/graphics/api.h>
 #include <core/graphics/backend_selection.h>
 #include <core/perf/timing.h>
-#include <impl/assets/graphics/avboit/binding_slots.h>
 #include <impl/assets/graphics/avboit/constants.h>
 #include <impl/assets/graphics/bindless/binding_slots.h>
-#include <impl/assets/graphics/bvh/binding_slots.h>
-#include <impl/assets/graphics/caustic/hw_binding_slots.h>
-#include <impl/assets/graphics/caustic/sw_binding_slots.h>
-#include <impl/assets/graphics/csg/binding_slots.h>
-#include <impl/assets/graphics/gi/hw_binding_slots.h>
-#include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
-#include <impl/assets/graphics/gi/sw_binding_slots.h>
-#include <impl/assets/graphics/mesh/binding_slots.h>
-#include <impl/assets/graphics/shadow/binding_slots.h>
-#include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
-#include <impl/assets/graphics/shadow/sw_binding_slots.h>
-#include <impl/assets/graphics/skinned_mesh/binding_slots.h>
 #include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <tests/capturing_logger.h>
 
@@ -73,54 +59,12 @@ using namespace Core;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_descriptor_buffer_submission{
-
-
-// `glslangValidator --stdin -S comp -V --target-env vulkan1.2` from this tiny GLSL program:
-//
-//   layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-//   layout(push_constant) uniform TestPushConstants { uint marker; } pushConstants;
-//   layout(set = 0, binding = 0, std430) buffer Output { uint value; } outputBuffer;
-//   void main() { outputBuffer.value = pushConstants.marker; }
-//
-// Keep this self-contained instead of adding a shader-cook/JIT dependency to a headless backend regression. The
-// device still creates the shader and pipeline through the normal production RHI APIs.
-inline constexpr u32 s_ComputeShaderSpirv[] = {
-    0x07230203u, 0x00010500u, 0x0008000bu, 0x00000017u, 0x00000000u, 0x00020011u, 0x00000001u, 0x0006000bu,
-    0x00000001u, 0x4c534c47u, 0x6474732eu, 0x3035342eu, 0x00000000u, 0x0003000eu, 0x00000000u, 0x00000001u,
-    0x0007000fu, 0x00000005u, 0x00000004u, 0x6e69616du, 0x00000000u, 0x00000009u, 0x0000000eu, 0x00060010u,
-    0x00000004u, 0x00000011u, 0x00000001u, 0x00000001u, 0x00000001u, 0x00030003u, 0x00000002u, 0x000001c2u,
-    0x00040005u, 0x00000004u, 0x6e69616du, 0x00000000u, 0x00040005u, 0x00000007u, 0x7074754fu, 0x00007475u,
-    0x00050006u, 0x00000007u, 0x00000000u, 0x756c6176u, 0x00000065u, 0x00060005u, 0x00000009u, 0x7074756fu,
-    0x75427475u, 0x72656666u, 0x00000000u, 0x00070005u, 0x0000000cu, 0x74736554u, 0x68737550u, 0x736e6f43u,
-    0x746e6174u, 0x00000073u, 0x00050006u, 0x0000000cu, 0x00000000u, 0x6b72616du, 0x00007265u, 0x00060005u,
-    0x0000000eu, 0x68737570u, 0x736e6f43u, 0x746e6174u, 0x00000073u, 0x00030047u, 0x00000007u, 0x00000002u,
-    0x00050048u, 0x00000007u, 0x00000000u, 0x00000023u, 0x00000000u, 0x00040047u, 0x00000009u, 0x00000021u,
-    0x00000000u, 0x00040047u, 0x00000009u, 0x00000022u, 0x00000000u, 0x00030047u, 0x0000000cu, 0x00000002u,
-    0x00050048u, 0x0000000cu, 0x00000000u, 0x00000023u, 0x00000000u, 0x00040047u, 0x00000016u, 0x0000000bu,
-    0x00000019u, 0x00020013u, 0x00000002u, 0x00030021u, 0x00000003u, 0x00000002u, 0x00040015u, 0x00000006u,
-    0x00000020u, 0x00000000u, 0x0003001eu, 0x00000007u, 0x00000006u, 0x00040020u, 0x00000008u, 0x0000000cu,
-    0x00000007u, 0x0004003bu, 0x00000008u, 0x00000009u, 0x0000000cu, 0x00040015u, 0x0000000au, 0x00000020u,
-    0x00000001u, 0x0004002bu, 0x0000000au, 0x0000000bu, 0x00000000u, 0x0003001eu, 0x0000000cu, 0x00000006u,
-    0x00040020u, 0x0000000du, 0x00000009u, 0x0000000cu, 0x0004003bu, 0x0000000du, 0x0000000eu, 0x00000009u,
-    0x00040020u, 0x0000000fu, 0x00000009u, 0x00000006u, 0x00040020u, 0x00000012u, 0x0000000cu, 0x00000006u,
-    0x00040017u, 0x00000014u, 0x00000006u, 0x00000003u, 0x0004002bu, 0x00000006u, 0x00000015u, 0x00000001u,
-    0x0006002cu, 0x00000014u, 0x00000016u, 0x00000015u, 0x00000015u, 0x00000015u, 0x00050036u, 0x00000002u,
-    0x00000004u, 0x00000000u, 0x00000003u, 0x000200f8u, 0x00000005u, 0x00050041u, 0x0000000fu, 0x00000010u,
-    0x0000000eu, 0x0000000bu, 0x0004003du, 0x00000006u, 0x00000011u, 0x00000010u, 0x00050041u, 0x00000012u,
-    0x00000013u, 0x00000009u, 0x0000000bu, 0x0003003eu, 0x00000013u, 0x00000011u, 0x000100fdu, 0x00010038u,
-};
-
-
-};
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Brings up a real headless GPU device with the minimum dependency set Graphics requires, mirroring Core::Frame's
-// construction. The device carries both the classic Backend-A descriptor heap and the Backend-C descriptor-buffer
-// manager; createHeadlessDevice() creates no window/swap chain, so this runs on any host with a Vulkan driver.
+// construction. createHeadlessDevice() creates no window/swap chain, so this runs on any host with a Vulkan driver
+// that exposes the required descriptor-buffer capability.
 class HeadlessGraphicsScope final : NoCopy{
 public:
     HeadlessGraphicsScope()
@@ -182,7 +126,7 @@ protected:
 
         // No usable Vulkan device on this host -> skip the whole suite. Reported as SKIPPED, not failed.
         if(!initialized){
-            GTEST_SKIP() << "Backend C round-trip: no usable headless Vulkan device on this host; skipping suite.";
+            GTEST_SKIP() << "Descriptor-buffer round-trip: no usable headless Vulkan device on this host; skipping suite.";
             return;
         }
 
@@ -191,10 +135,10 @@ protected:
         auto& mgr = device->getDescriptorBufferManager();
 
         if(!mgr.isEnabled()){
-            // The extension is genuinely absent (e.g. a non-BC-250 runner). Backend A is the portability floor there;
-            // absence is not a regression. Skip the suite rather than report a failure.
-            GTEST_SKIP() << "Backend C round-trip: VK_EXT_descriptor_buffer not enabled on this device; "
-                            "Backend A remains the portability floor. Skipping suite.";
+            // This suite proves the required descriptor-buffer path. A host without the extension cannot exercise
+            // that contract, so skip instead of treating an ordinary descriptor-set path as equivalent coverage.
+            GTEST_SKIP() << "Descriptor-buffer round-trip: VK_EXT_descriptor_buffer is not enabled on this device; "
+                            "skipping descriptor-buffer-only coverage.";
         }
     }
 
@@ -240,122 +184,6 @@ TEST_F(DescriptorBufferRoundTripTest, ManagerEnabledAndSegmentsMapped){
 }
 
 
-// End-to-end Backend-C proof: the normal CommandList path must bind two distinct descriptor-buffer blocks, dispatch
-// a production compute pipeline for each, and make each GPU-written value visible to a CPU readback. The two distinct
-// push-constant values make this sensitive to ignored, stale, or swapped vkCmdSetDescriptorBufferOffsetsEXT offsets;
-// descriptor byte generation alone cannot prove that contract.
-TEST_F(DescriptorBufferRoundTripTest, CommandListSubmissionConsumesDistinctDescriptorBufferOffsets){
-    auto& device = DescriptorBufferRoundTripTest::device();
-
-    static constexpr Name kDescArenaName{"tests/descriptor_buffer/submission_desc_arena"};
-    static constexpr Name kShaderName{"tests/descriptor_buffer/submission_compute_shader"};
-    Alloc::GlobalArena descArena{kDescArenaName};
-
-    const auto createOutputBuffer = [&device]() {
-        return device.createBuffer(
-            BufferDesc()
-                .setByteSize(sizeof(u32))
-                .setCanHaveRawViews(true)
-                .setCpuAccess(CpuAccessMode::Read)
-                .setInitialState(ResourceStates::Common)
-                .setKeepInitialState(true)
-        );
-    };
-
-    auto firstOutput = createOutputBuffer();
-    auto secondOutput = createOutputBuffer();
-    ASSERT_TRUE(firstOutput && secondOutput);
-
-    BindingLayoutDesc layoutDesc(descArena);
-    layoutDesc
-        .setVisibility(ShaderType::Compute)
-        .setUseDescriptorBuffer(true)
-        .addItem(BindingLayoutItem::RawBuffer_UAV(0u, 1u))
-        .addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32)))
-    ;
-    auto layout = device.createBindingLayout(layoutDesc);
-    ASSERT_TRUE(layout);
-    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "submission layout did not select Backend C";
-
-    const auto createOutputBindingSet = [&](Buffer* output) {
-        BindingSetDesc setDesc(descArena);
-        setDesc.addItem(BindingSetItem::RawBuffer_UAV(0u, output));
-        return device.createBindingSet(setDesc, layout);
-    };
-
-    // Keep both sets alive through the entire recording/submission. They receive independent carved blocks in the
-    // resource segment, so the second dispatch cannot pass if CommandList reuses the first block's offset.
-    auto firstBindingSet = createOutputBindingSet(firstOutput.get());
-    auto secondBindingSet = createOutputBindingSet(secondOutput.get());
-    ASSERT_TRUE(firstBindingSet && secondBindingSet);
-
-    ShaderDesc shaderDesc(descArena);
-    shaderDesc
-        .setDebugName(kShaderName)
-        .setShaderType(ShaderType::Compute)
-        .setEntryName("main")
-    ;
-    auto shader = device.createShader(
-        shaderDesc,
-        __hidden_descriptor_buffer_submission::s_ComputeShaderSpirv,
-        sizeof(__hidden_descriptor_buffer_submission::s_ComputeShaderSpirv)
-    );
-    ASSERT_TRUE(shader);
-
-    ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(shader)
-        .addBindingLayout(layout)
-    ;
-    auto pipeline = device.createComputePipeline(pipelineDesc);
-    ASSERT_TRUE(pipeline);
-    ASSERT_TRUE(pipeline->m_usesDescriptorBuffer)
-        << "submission pipeline did not carry the descriptor-buffer create flag";
-
-    auto commandList = device.createCommandList();
-    ASSERT_TRUE(commandList);
-    commandList->open();
-
-    static constexpr u32 kFirstMarker = 0x13579bdfu;
-    static constexpr u32 kSecondMarker = 0x2468ace0u;
-
-    ComputeState firstState;
-    firstState
-        .setPipeline(pipeline.get())
-        .addBindingSet(firstBindingSet.get())
-    ;
-    commandList->setComputeState(firstState);
-    commandList->setPushConstants(&kFirstMarker, sizeof(kFirstMarker));
-    commandList->dispatch(1u, 1u, 1u);
-
-    ComputeState secondState;
-    secondState
-        .setPipeline(pipeline.get())
-        .addBindingSet(secondBindingSet.get())
-    ;
-    commandList->setComputeState(secondState);
-    commandList->setPushConstants(&kSecondMarker, sizeof(kSecondMarker));
-    commandList->dispatch(1u, 1u, 1u);
-
-    commandList->close();
-
-    CommandList* commandLists[] = { commandList.get() };
-    EXPECT_NE(device.executeCommandLists(commandLists, 1u), 0u);
-    ASSERT_TRUE(device.waitForIdle());
-
-    const auto expectOutput = [&device](Buffer* output, const u32 expectedValue) {
-        auto* const mapped = static_cast<const u32*>(device.mapBuffer(output, CpuAccessMode::Read));
-        ASSERT_NE(mapped, nullptr);
-        const u32 actualValue = *mapped;
-        device.unmapBuffer(output);
-        EXPECT_EQ(actualValue, expectedValue);
-    };
-    expectOutput(firstOutput.get(), kFirstMarker);
-    expectOutput(secondOutput.get(), kSecondMarker);
-}
-
-
 // Carve one storage-buffer descriptor out of the resource segment and confirm writeDescriptor succeeds via the
 // vkGetDescriptorEXT path. Free returns the range to the free list. Storage buffer is the descriptor class every
 // raytrace pass binds, so it is the most representative round trip.
@@ -382,7 +210,7 @@ TEST_F(DescriptorBufferRoundTripTest, RoundTripsStorageBufferDescriptor){
     // The authoritative round-trip signal is writeDescriptor's return: a failed vkGetDescriptorEXT returns false and
     // logs at ERROR (the capturing logger would surface it). Byte-level inspection of the mapped segment is private
     // to the manager; the conversion trusts the return value plus the non-zero-size gate below.
-    const BindingSetItem item = BindingSetItem::RawBuffer_UAV(0u, storageBuffer.get());
+    const DescriptorWriteItem item = DescriptorWriteItem::RawBuffer_UAV(0u, storageBuffer.get());
     const bool wrote = mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
     EXPECT_TRUE(wrote);
 
@@ -411,7 +239,7 @@ TEST_F(DescriptorBufferRoundTripTest, RoundTripsUniformBufferDescriptor){
     const auto segment = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, mgr.getOffsetAlignmentBytes());
     ASSERT_TRUE(segment.valid());
 
-    const BindingSetItem item = BindingSetItem::ConstantBuffer(0u, constantBuffer.get());
+    const DescriptorWriteItem item = DescriptorWriteItem::ConstantBuffer(0u, constantBuffer.get());
     const bool wrote = mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     EXPECT_TRUE(wrote);
 
@@ -441,7 +269,7 @@ TEST_F(DescriptorBufferRoundTripTest, RoundTripsSampledImageDescriptor){
     const auto segment = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, mgr.getOffsetAlignmentBytes());
     ASSERT_TRUE(segment.valid());
 
-    const BindingSetItem item = BindingSetItem::Texture_SRV(0u, texture.get());
+    const DescriptorWriteItem item = DescriptorWriteItem::Texture_SRV(0u, texture.get());
     const bool wrote = mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
     EXPECT_TRUE(wrote);
 
@@ -465,7 +293,7 @@ TEST_F(DescriptorBufferRoundTripTest, RoundTripsSamplerDescriptor){
     ASSERT_TRUE(segment.valid());
     EXPECT_EQ(segment.kind, GraphicsBackend::DescriptorBufferSegmentKind::Sampler);
 
-    const BindingSetItem item = BindingSetItem::Sampler(0u, sampler.get());
+    const DescriptorWriteItem item = DescriptorWriteItem::Sampler(0u, sampler.get());
     const bool wrote = mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_SAMPLER);
     EXPECT_TRUE(wrote);
 
@@ -599,7 +427,7 @@ TEST_F(DescriptorBufferRoundTripTest, ManagerRejectsMismatchedWritesAndInvalidBl
     );
     ASSERT_TRUE(segment.valid());
 
-    const BindingSetItem item = BindingSetItem::RawBuffer_UAV(0u, storageBuffer.get());
+    const DescriptorWriteItem item = DescriptorWriteItem::RawBuffer_UAV(0u, storageBuffer.get());
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
     EXPECT_DEATH_IF_SUPPORTED({
         (void)mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_SAMPLER);
@@ -640,42 +468,28 @@ TEST_F(DescriptorBufferRoundTripTest, ManagerRejectsMismatchedWritesAndInvalidBl
 }
 
 
-// A sampler/resource mix is not segment-coherent. An opt-in must therefore produce a wholly classic layout before
-// Vulkan sees the descriptor-buffer create flag, so its ordinary descriptor table remains legal and usable.
-TEST_F(DescriptorBufferRoundTripTest, MixedDescriptorBufferOptInFallsBackToClassicLayout){
+// A sampler/resource mix is not segment-coherent. The renderer never falls back to ordinary descriptor sets, so
+// callers must split this shape into separate resource and sampler layouts.
+TEST_F(DescriptorBufferRoundTripTest, MixedDescriptorBufferLayoutIsRejected){
     auto& device = DescriptorBufferRoundTripTest::device();
 
-    static constexpr Name kDescArenaName{"tests/descriptor_buffer/mixed_layout_fallback_desc_arena"};
-    Alloc::GlobalArena descArena{kDescArenaName};
-
-    auto texture = device.createTexture(
-        TextureDesc()
-            .setWidth(16u)
-            .setHeight(16u)
-            .setFormat(Format::RGBA8_UNORM)
-            .setInitialState(ResourceStates::ShaderResource)
-            .setKeepInitialState(true)
-    );
-    auto sampler = device.createSampler(SamplerDesc().setAllFilters(true));
-    ASSERT_TRUE(texture && sampler);
-
-    BindingLayoutDesc layoutDesc(descArena);
+    BindlessLayoutDesc layoutDesc;
     layoutDesc
+        .setLayoutType(BindlessLayoutType::Immutable)
+        .setMaxCapacity(1u)
+        .setDescriptorSetIndex(s_MaxBindingLayouts)
         .setVisibility(ShaderType::Compute)
-        .setUseDescriptorBuffer(true)
-        .addItem(BindingLayoutItem::Texture_SRV(0u, 1u))
-        .addItem(BindingLayoutItem::Sampler(1u, 1u))
+        .addRegisterSpace(BindingLayoutItem::Texture_SRV(0u, 1u))
+        .addRegisterSpace(BindingLayoutItem::Sampler(1u, 1u))
     ;
-    auto layout = device.createBindingLayout(layoutDesc);
-    ASSERT_TRUE(layout);
-    EXPECT_FALSE(layout->isDescriptorBufferCompatible());
-
-    BindingSetDesc setDesc(descArena);
-    setDesc
-        .addItem(BindingSetItem::Texture_SRV(0u, texture.get()))
-        .addItem(BindingSetItem::Sampler(1u, sampler.get()))
-    ;
-    EXPECT_TRUE(device.createBindingSet(setDesc, layout));
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        (void)device.createBindlessLayout(layoutDesc);
+    }, "");
+#else
+    auto layout = device.createBindlessLayout(layoutDesc);
+    EXPECT_FALSE(layout);
+#endif
 }
 
 
@@ -701,18 +515,18 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetiredAndDoubleFreed
 
     const GpuDescriptorHandle retired = heap.allocate(GpuDescriptorClass::StorageBuffer);
     ASSERT_TRUE(retired.valid());
-    ASSERT_TRUE(heap.write(retired, BindingSetItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
+    ASSERT_TRUE(heap.write(retired, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
 
     heap.free(retired);
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
     EXPECT_DEATH_IF_SUPPORTED({
-        (void)heap.write(retired, BindingSetItem::StructuredBuffer_UAV(0u, storageBuffer.get()));
+        (void)heap.write(retired, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get()));
     }, "");
     EXPECT_DEATH_IF_SUPPORTED({
         heap.free(retired);
     }, "");
 #else
-    EXPECT_FALSE(heap.write(retired, BindingSetItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
+    EXPECT_FALSE(heap.write(retired, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
     heap.free(retired);
 #endif
 
@@ -727,12 +541,17 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetiredAndDoubleFreed
 }
 
 
-// Regular AVBOIT material passes keep sampled images and samplers in the global heap. Their local sets therefore
-// become pure-resource shapes: the shared deferred-slot CB plus coverage/depth-warp/extinction/scene buffers.
-// Exercise every exact non-CSG shape through the live descriptor-buffer API so a future local sampler or image
-// regression cannot silently downgrade the transparent path on Backend C.
-TEST_F(DescriptorBufferRoundTripTest, AvboitMaterialShapesBuildAsDescriptorBuffer){
+// AVBOIT's material and compute passes share one push-only local layout. Their target-generation slot payload is a
+// global UniformBuffer descriptor, all work buffers are global StorageBuffer descriptors, and the writable
+// transmittance volume is a global StorageImage descriptor. Exercise the shared local shape and material heap
+// registrations together so a future pass-local CBV/buffer/image cannot silently reappear in the transparent path.
+TEST_F(DescriptorBufferRoundTripTest, AvboitSharedPushLayoutAndMaterialHeapResourcesBuildAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
+
+    static_assert(NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE == sizeof(u32) * 16u, "AVBOIT compute push ABI must remain four uint4 lanes");
+    static_assert(NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE == sizeof(u32) * 32u, "AVBOIT transparent draw ABI must remain 128 bytes");
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/avboit_depth_gate_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
@@ -746,22 +565,12 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitMaterialShapesBuildAsDescriptorBuffe
                 .setKeepInitialState(true)
         );
     };
-    auto makeStructuredSrv = [&](const u32 stride) {
-        return device.createBuffer(
-            BufferDesc()
-                .setByteSize(stride * 4096u)
-                .setStructStride(stride)
-                .setCanHaveRawViews(true)
-                .setInitialState(ResourceStates::ShaderResource)
-                .setKeepInitialState(true)
-        );
-    };
     auto makeStructuredUav = [&](const u32 stride) {
         return device.createBuffer(
             BufferDesc()
                 .setByteSize(stride * 4096u)
                 .setStructStride(stride)
-                .setCanHaveRawViews(true)
+                .setCanHaveUAVs(true)
                 .setInitialState(ResourceStates::UnorderedAccess)
                 .setKeepInitialState(true)
         );
@@ -769,105 +578,74 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitMaterialShapesBuildAsDescriptorBuffe
 
     auto slots = makeConstantBuffer();
     auto coverage = makeStructuredUav(4u);
-    auto depthWarp = makeStructuredSrv(4u);
-    auto control = makeStructuredSrv(4u);
+    auto depthWarp = makeStructuredUav(4u);
+    auto control = makeStructuredUav(4u);
     auto extinction = makeStructuredUav(4u);
     auto overflowDepth = makeStructuredUav(4u);
     ASSERT_TRUE(slots && coverage && depthWarp && control && extinction && overflowDepth);
 
-    BindingLayoutDesc occupancyLayoutDesc(descArena);
-    occupancyLayoutDesc.setVisibility(ShaderType::Pixel);
-    occupancyLayoutDesc.setUseDescriptorBuffer(true);
-    occupancyLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, 1u));
-    occupancyLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_OCCUPANCY_BINDING_COVERAGE_WORDS, 1u));
-    occupancyLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE));
-    auto occupancyLayout = device.createBindingLayout(occupancyLayoutDesc);
-    ASSERT_NE(occupancyLayout.get(), nullptr);
-    ASSERT_TRUE(occupancyLayout->isDescriptorBufferCompatible());
-    EXPECT_EQ(occupancyLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    const GpuDescriptorHandle slotsHandle = heap.allocate(GpuDescriptorClass::UniformBuffer);
+    const GpuDescriptorHandle coverageHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    const GpuDescriptorHandle depthWarpHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    const GpuDescriptorHandle controlHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    const GpuDescriptorHandle extinctionHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    const GpuDescriptorHandle overflowDepthHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(
+        slotsHandle.valid()
+        && coverageHandle.valid()
+        && depthWarpHandle.valid()
+        && controlHandle.valid()
+        && extinctionHandle.valid()
+        && overflowDepthHandle.valid()
+    );
+    EXPECT_EQ(slotsHandle.descriptorClass(), GpuDescriptorClass::UniformBuffer);
+    EXPECT_EQ(coverageHandle.descriptorClass(), GpuDescriptorClass::StorageBuffer);
+    EXPECT_EQ(depthWarpHandle.descriptorClass(), GpuDescriptorClass::StorageBuffer);
+    EXPECT_EQ(controlHandle.descriptorClass(), GpuDescriptorClass::StorageBuffer);
+    EXPECT_EQ(extinctionHandle.descriptorClass(), GpuDescriptorClass::StorageBuffer);
+    EXPECT_EQ(overflowDepthHandle.descriptorClass(), GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(heap.write(slotsHandle, DescriptorWriteItem::ConstantBuffer(0u, slots.get())));
+    ASSERT_TRUE(heap.write(coverageHandle, DescriptorWriteItem::StructuredBuffer_UAV(0u, coverage.get())));
+    ASSERT_TRUE(heap.write(depthWarpHandle, DescriptorWriteItem::StructuredBuffer_UAV(0u, depthWarp.get())));
+    ASSERT_TRUE(heap.write(controlHandle, DescriptorWriteItem::StructuredBuffer_UAV(0u, control.get())));
+    ASSERT_TRUE(heap.write(extinctionHandle, DescriptorWriteItem::StructuredBuffer_UAV(0u, extinction.get())));
+    ASSERT_TRUE(heap.write(overflowDepthHandle, DescriptorWriteItem::StructuredBuffer_UAV(0u, overflowDepth.get())));
 
-    BindingSetDesc occupancySetDesc(descArena);
-    occupancySetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, slots.get()));
-    occupancySetDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_OCCUPANCY_BINDING_COVERAGE_WORDS, coverage.get()));
-    auto occupancySet = device.createBindingSet(occupancySetDesc, occupancyLayout);
-    ASSERT_NE(occupancySet.get(), nullptr);
+    BindingLayoutDesc sharedLayoutDesc(descArena);
+    sharedLayoutDesc.setVisibility(ShaderType::All);
+    sharedLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE));
+    auto sharedLayout = device.createBindingLayout(sharedLayoutDesc);
+    ASSERT_NE(sharedLayout.get(), nullptr);
+    ASSERT_TRUE(sharedLayout->isDescriptorBufferCompatible());
+    EXPECT_EQ(sharedLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(sharedLayout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(sharedLayout->getDescriptorBufferBindingOffsets().empty());
 
-    BindingLayoutDesc extinctionLayoutDesc(descArena);
-    extinctionLayoutDesc.setVisibility(ShaderType::Pixel);
-    extinctionLayoutDesc.setUseDescriptorBuffer(true);
-    extinctionLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, 1u));
-    extinctionLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_DEPTH_WARP, 1u));
-    extinctionLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_CONTROL, 1u));
-    extinctionLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_EXTINCTION, 1u));
-    extinctionLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_OVERFLOW_DEPTH, 1u));
-    extinctionLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE));
-    auto extinctionLayout = device.createBindingLayout(extinctionLayoutDesc);
-    ASSERT_NE(extinctionLayout.get(), nullptr);
-    ASSERT_TRUE(extinctionLayout->isDescriptorBufferCompatible());
-    EXPECT_EQ(extinctionLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-
-    BindingSetDesc extinctionSetDesc(descArena);
-    extinctionSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, slots.get()));
-    extinctionSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_DEPTH_WARP, depthWarp.get()));
-    extinctionSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_EXTINCTION_BINDING_CONTROL, control.get()));
-    extinctionSetDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_EXTINCTION, extinction.get()));
-    extinctionSetDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_EXTINCTION_BINDING_OVERFLOW_DEPTH, overflowDepth.get()));
-    auto extinctionSet = device.createBindingSet(extinctionSetDesc, extinctionLayout);
-    ASSERT_NE(extinctionSet.get(), nullptr);
-
-    BindingLayoutDesc accumulateLayoutDesc(descArena);
-    accumulateLayoutDesc.setVisibility(ShaderType::Pixel);
-    accumulateLayoutDesc.setUseDescriptorBuffer(true);
-    accumulateLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, 1u));
-    accumulateLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, 1u));
-    // Scene-shading cbuffer + light list are heap-fetched now (avboitSlots.z/.w); slots 4/5 are reserved gaps.
-    accumulateLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, 1u));
-    accumulateLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE));
-    auto accumulateLayout = device.createBindingLayout(accumulateLayoutDesc);
-    ASSERT_NE(accumulateLayout.get(), nullptr);
-    ASSERT_TRUE(accumulateLayout->isDescriptorBufferCompatible());
-    EXPECT_EQ(accumulateLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-
-    BindingSetDesc accumulateSetDesc(descArena);
-    accumulateSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_DEPTH_WARP, depthWarp.get()));
-    accumulateSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_ACCUMULATE_BINDING_CONTROL, control.get()));
-    accumulateSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_AVBOIT_BINDING_BINDLESS_RESOURCES, slots.get()));
-    auto accumulateSet = device.createBindingSet(accumulateSetDesc, accumulateLayout);
-    ASSERT_NE(accumulateSet.get(), nullptr);
-
-    auto& heap = device.getDescriptorHeap();
-    EXPECT_TRUE(heap.isInitialized() && heap.usesDescriptorBuffer());
     EXPECT_TRUE(heap.getResourceLayout()->isDescriptorBufferCompatible());
     EXPECT_TRUE(heap.getSamplerLayout()->isDescriptorBufferCompatible());
+
+    heap.free(slotsHandle);
+    heap.free(coverageHandle);
+    heap.free(depthWarpHandle);
+    heap.free(controlHandle);
+    heap.free(extinctionHandle);
+    heap.free(overflowDepthHandle);
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
 }
 
 
-// Depth warp and integration complete the AVBOIT sequence. They use no samplers and no heap access: depth warp is
-// buffer-only, while integration adds one 3D storage image. Both shapes must therefore remain coherent resource
-// descriptor-buffer layouts on Backend C.
-TEST_F(DescriptorBufferRoundTripTest, AvboitComputeShapesBuildAsDescriptorBuffer){
+// Both AVBOIT compute passes reuse the material path's shared 128-byte push-only layout. Depth warp selects
+// coverage/depth-warp/control through the global StorageBuffer heap, while integration selects its writable Texture3D
+// plus every source buffer through the same target-generation payload and global heap.
+TEST_F(DescriptorBufferRoundTripTest, AvboitComputeResourcesUseSharedPushLayout){
     auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/avboit_compute_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    auto makeStructuredBuffer = [&](const ResourceStates::Mask state, const bool uav){
-        return device.createBuffer(
-            BufferDesc()
-                .setByteSize(4u * 4096u)
-                .setStructStride(4u)
-                .setCanHaveRawViews(true)
-                .setCanHaveUAVs(uav)
-                .setInitialState(state)
-                .setKeepInitialState(true)
-        );
-    };
-
-    auto coverage = makeStructuredBuffer(ResourceStates::ShaderResource, false);
-    auto depthWarp = makeStructuredBuffer(ResourceStates::UnorderedAccess, true);
-    auto control = makeStructuredBuffer(ResourceStates::UnorderedAccess, true);
-    auto extinction = makeStructuredBuffer(ResourceStates::ShaderResource, false);
-    auto overflowDepth = makeStructuredBuffer(ResourceStates::ShaderResource, false);
     auto transmittance = device.createTexture(
         TextureDesc()
             .setWidth(16u)
@@ -879,61 +657,42 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitComputeShapesBuildAsDescriptorBuffer
             .setInitialState(ResourceStates::UnorderedAccess)
             .setKeepInitialState(true)
     );
-    ASSERT_TRUE(coverage && depthWarp && control && extinction && overflowDepth && transmittance);
+    ASSERT_TRUE(transmittance);
 
-    BindingLayoutDesc depthWarpLayoutDesc(descArena);
-    depthWarpLayoutDesc.setVisibility(ShaderType::Compute);
-    depthWarpLayoutDesc.setUseDescriptorBuffer(true);
-    depthWarpLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_DEPTH_WARP_BINDING_COVERAGE_WORDS, 1u));
-    depthWarpLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_DEPTH_WARP, 1u));
-    depthWarpLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_CONTROL, 1u));
-    depthWarpLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE));
-    auto depthWarpLayout = device.createBindingLayout(depthWarpLayoutDesc);
-    ASSERT_NE(depthWarpLayout.get(), nullptr);
-    ASSERT_TRUE(depthWarpLayout->isDescriptorBufferCompatible());
-    EXPECT_EQ(depthWarpLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-
-    BindingSetDesc depthWarpSetDesc(descArena);
-    depthWarpSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_DEPTH_WARP_BINDING_COVERAGE_WORDS, coverage.get()));
-    depthWarpSetDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_DEPTH_WARP, depthWarp.get()));
-    depthWarpSetDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_AVBOIT_DEPTH_WARP_BINDING_CONTROL, control.get()));
-    auto depthWarpSet = device.createBindingSet(depthWarpSetDesc, depthWarpLayout);
-    ASSERT_NE(depthWarpSet.get(), nullptr);
-
-    BindingLayoutDesc integrateLayoutDesc(descArena);
-    integrateLayoutDesc.setVisibility(ShaderType::Compute);
-    integrateLayoutDesc.setUseDescriptorBuffer(true);
-    integrateLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_EXTINCTION, 1u));
-    integrateLayoutDesc.addItem(BindingLayoutItem::Texture_UAV(NWB_AVBOIT_INTEGRATE_BINDING_TRANSMITTANCE, 1u));
-    integrateLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_CONTROL, 1u));
-    integrateLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_OVERFLOW_DEPTH, 1u));
-    integrateLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE));
-    auto integrateLayout = device.createBindingLayout(integrateLayoutDesc);
-    ASSERT_NE(integrateLayout.get(), nullptr);
-    ASSERT_TRUE(integrateLayout->isDescriptorBufferCompatible());
-    EXPECT_EQ(integrateLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-
-    BindingSetDesc integrateSetDesc(descArena);
-    integrateSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_EXTINCTION, extinction.get()));
-    integrateSetDesc.addItem(BindingSetItem::Texture_UAV(
-        NWB_AVBOIT_INTEGRATE_BINDING_TRANSMITTANCE,
+    const GpuDescriptorHandle transmittanceStorageHandle = heap.allocate(GpuDescriptorClass::StorageImage);
+    ASSERT_TRUE(transmittanceStorageHandle.valid());
+    EXPECT_EQ(transmittanceStorageHandle.descriptorClass(), GpuDescriptorClass::StorageImage);
+    ASSERT_TRUE(heap.write(transmittanceStorageHandle, DescriptorWriteItem::Texture_UAV(
+        0u,
         transmittance.get(),
         NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT,
         TextureSubresourceSet(0u, 1u, 0u, 1u),
         TextureDimension::Texture3D
-    ));
-    integrateSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_CONTROL, control.get()));
-    integrateSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_AVBOIT_INTEGRATE_BINDING_OVERFLOW_DEPTH, overflowDepth.get()));
-    auto integrateSet = device.createBindingSet(integrateSetDesc, integrateLayout);
-    ASSERT_NE(integrateSet.get(), nullptr);
+    )));
+
+    EXPECT_LE(NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE, NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE);
+    BindingLayoutDesc sharedLayoutDesc(descArena);
+    sharedLayoutDesc.setVisibility(ShaderType::All);
+    sharedLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE));
+    auto sharedLayout = device.createBindingLayout(sharedLayoutDesc);
+    ASSERT_NE(sharedLayout.get(), nullptr);
+    ASSERT_TRUE(sharedLayout->isDescriptorBufferCompatible());
+    EXPECT_EQ(sharedLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(sharedLayout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(sharedLayout->getDescriptorBufferBindingOffsets().empty());
+
+    EXPECT_TRUE(heap.getResourceLayout()->isDescriptorBufferCompatible());
+    EXPECT_TRUE(heap.getSamplerLayout()->isDescriptorBufferCompatible());
+
+    heap.free(transmittanceStorageHandle);
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
 }
 
 
-// CSG's persistent clip/cap-fill inputs are all StorageBuffer heap entries. Its clip set carries only a uint4
-// context-slot cbuffer at b2, leaving the historical receiver/cutter b0/b1 SRVs as ABI gaps; cap fill no longer owns
-// a direct typed-material/instance SRV layout. The surface/sample sets carry only their target-generation/state
-// cbuffers at b17/b18; the shared mesh view is selected from the UniformBuffer heap by b18, leaving b13 as a gap.
-// Exercise those exact local shapes and the corresponding StorageBuffer/UniformBuffer heap writes through the live API.
+// CSG's clip, cap-fill, and interval dispatch inputs all live in the global descriptor heap. The clip/cap-fill leaf
+// retains the shared 64-byte mesh push ABI, while each interval kernel uses its 48-byte dispatch selector ABI. Keep
+// both local layouts descriptor-free and prove the corresponding UniformBuffer/StorageBuffer heap writes separately.
 TEST_F(DescriptorBufferRoundTripTest, CsgMaterialTailShapesBuildAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
@@ -971,74 +730,38 @@ TEST_F(DescriptorBufferRoundTripTest, CsgMaterialTailShapesBuildAsDescriptorBuff
         receiverRanges && cutters && materialTyped && instances && clipContextSlots && bindlessSlots && sampleState && meshView
     );
 
-    BindingLayoutDesc clipLayoutDesc(descArena);
-    clipLayoutDesc.setVisibility(ShaderType::Mesh | ShaderType::Compute | ShaderType::Pixel);
-    clipLayoutDesc.setUseDescriptorBuffer(true);
-    clipLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_CSG_BINDING_CLIP_CONTEXT_SLOTS, 1u));
-    auto clipLayout = device.createBindingLayout(clipLayoutDesc);
-    ASSERT_NE(clipLayout.get(), nullptr);
-    ASSERT_TRUE(clipLayout->isDescriptorBufferCompatible());
-    const auto& clipOffsets = clipLayout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(clipOffsets.size(), 1u);
-    EXPECT_NE(clipOffsets.find(NWB_CSG_BINDING_CLIP_CONTEXT_SLOTS), clipOffsets.end());
-    EXPECT_EQ(clipOffsets.find(0u), clipOffsets.end());
-    EXPECT_EQ(clipOffsets.find(1u), clipOffsets.end());
-    EXPECT_EQ(clipOffsets.find(NWB_MESH_BINDING_MATERIAL_TYPED), clipOffsets.end());
-    EXPECT_EQ(clipOffsets.find(NWB_MESH_BINDING_INSTANCE), clipOffsets.end());
+    const auto verifyPushOnlyLayout = [&](const char* name, const ShaderType::Mask visibility, const u32 pushConstantByteSize) {
+        SCOPED_TRACE(name);
+        BindingLayoutDesc layoutDesc(descArena);
+        layoutDesc.setVisibility(visibility);
+        layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, pushConstantByteSize));
 
-    BindingSetDesc clipSetDesc(descArena);
-    clipSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_CSG_BINDING_CLIP_CONTEXT_SLOTS, clipContextSlots.get()));
-    auto clipSet = device.createBindingSet(clipSetDesc, clipLayout);
-    ASSERT_NE(clipSet.get(), nullptr);
-
-    BindingLayoutDesc receiverSurfaceLayoutDesc(descArena);
-    receiverSurfaceLayoutDesc.setVisibility(ShaderType::Pixel);
-    receiverSurfaceLayoutDesc.setUseDescriptorBuffer(true);
-    receiverSurfaceLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_BINDLESS_RESOURCES, 1u));
-    receiverSurfaceLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, 1u));
-    auto receiverSurfaceLayout = device.createBindingLayout(receiverSurfaceLayoutDesc);
-    ASSERT_NE(receiverSurfaceLayout.get(), nullptr);
-    ASSERT_TRUE(receiverSurfaceLayout->isDescriptorBufferCompatible());
-    const auto& receiverSurfaceOffsets = receiverSurfaceLayout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(receiverSurfaceOffsets.size(), 2u);
-    EXPECT_NE(receiverSurfaceOffsets.find(NWB_CSG_INTERVAL_BINDING_BINDLESS_RESOURCES), receiverSurfaceOffsets.end());
-    EXPECT_NE(receiverSurfaceOffsets.find(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE), receiverSurfaceOffsets.end());
-    EXPECT_EQ(receiverSurfaceOffsets.find(NWB_MESH_BINDING_VIEW), receiverSurfaceOffsets.end());
-
-    BindingSetDesc receiverSurfaceSetDesc(descArena);
-    receiverSurfaceSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_BINDLESS_RESOURCES, bindlessSlots.get()));
-    receiverSurfaceSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, sampleState.get()));
-    auto receiverSurfaceSet = device.createBindingSet(receiverSurfaceSetDesc, receiverSurfaceLayout);
-    ASSERT_NE(receiverSurfaceSet.get(), nullptr);
-
-    BindingLayoutDesc intervalSampleLayoutDesc(descArena);
-    intervalSampleLayoutDesc.setVisibility(ShaderType::Pixel);
-    intervalSampleLayoutDesc.setUseDescriptorBuffer(true);
-    intervalSampleLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_BINDLESS_RESOURCES, 1u));
-    intervalSampleLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, 1u));
-    auto intervalSampleLayout = device.createBindingLayout(intervalSampleLayoutDesc);
-    ASSERT_NE(intervalSampleLayout.get(), nullptr);
-    ASSERT_TRUE(intervalSampleLayout->isDescriptorBufferCompatible());
-    const auto& intervalSampleOffsets = intervalSampleLayout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(intervalSampleOffsets.size(), 2u);
-    EXPECT_NE(intervalSampleOffsets.find(NWB_CSG_INTERVAL_BINDING_BINDLESS_RESOURCES), intervalSampleOffsets.end());
-    EXPECT_NE(intervalSampleOffsets.find(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE), intervalSampleOffsets.end());
-    EXPECT_EQ(intervalSampleOffsets.find(NWB_MESH_BINDING_VIEW), intervalSampleOffsets.end());
-
-    BindingSetDesc intervalSampleSetDesc(descArena);
-    intervalSampleSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_BINDLESS_RESOURCES, bindlessSlots.get()));
-    intervalSampleSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, sampleState.get()));
-    auto intervalSampleSet = device.createBindingSet(intervalSampleSetDesc, intervalSampleLayout);
-    ASSERT_NE(intervalSampleSet.get(), nullptr);
+        auto layout = device.createBindingLayout(layoutDesc);
+        ASSERT_NE(layout.get(), nullptr);
+        ASSERT_TRUE(layout->isDescriptorBufferCompatible());
+        EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+        EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+        EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+    };
+    verifyPushOnlyLayout("clip/cap-fill", ShaderType::Mesh | ShaderType::Compute | ShaderType::Pixel, sizeof(u32) * 16u);
+    verifyPushOnlyLayout("interval dispatch", ShaderType::Compute, sizeof(u32) * 12u);
 
     // The CSG shader aliases its uint/float Texture2DArray views onto the existing StorageImage heap binding. Prove
     // the live heap accepts a typed array UAV descriptor there; the graphics cook verifies each Slang alias emitted
     // against this same set-8 binding.
     auto& heap = device.getDescriptorHeap();
     ASSERT_TRUE(heap.isInitialized());
-    const GpuDescriptorHandle meshViewHandle = heap.allocate(GpuDescriptorClass::UniformBuffer);
-    ASSERT_TRUE(meshViewHandle.valid());
-    EXPECT_TRUE(heap.write(meshViewHandle, BindingSetItem::ConstantBuffer(0u, meshView.get())));
+    const auto registerCsgUniformBuffer = [&](Core::Buffer* buffer) {
+        const GpuDescriptorHandle handle = heap.allocate(GpuDescriptorClass::UniformBuffer);
+        EXPECT_TRUE(handle.valid());
+        if(handle.valid())
+            EXPECT_TRUE(heap.write(handle, DescriptorWriteItem::ConstantBuffer(0u, buffer)));
+        return handle;
+    };
+    const GpuDescriptorHandle clipContextHandle = registerCsgUniformBuffer(clipContextSlots.get());
+    const GpuDescriptorHandle bindlessSlotsHandle = registerCsgUniformBuffer(bindlessSlots.get());
+    const GpuDescriptorHandle sampleStateHandle = registerCsgUniformBuffer(sampleState.get());
+    const GpuDescriptorHandle meshViewHandle = registerCsgUniformBuffer(meshView.get());
     auto csgStorageImage = device.createTexture(
         TextureDesc()
             .setWidth(16u)
@@ -1055,7 +778,7 @@ TEST_F(DescriptorBufferRoundTripTest, CsgMaterialTailShapesBuildAsDescriptorBuff
     ASSERT_TRUE(csgStorageHandle.valid());
     EXPECT_TRUE(heap.write(
         csgStorageHandle,
-        BindingSetItem::Texture_UAV(
+        DescriptorWriteItem::Texture_UAV(
             0u,
             csgStorageImage.get(),
             Format::RGBA32_UINT,
@@ -1071,7 +794,7 @@ TEST_F(DescriptorBufferRoundTripTest, CsgMaterialTailShapesBuildAsDescriptorBuff
         const GpuDescriptorHandle handle = heap.allocate(GpuDescriptorClass::StorageBuffer);
         EXPECT_TRUE(handle.valid());
         if(handle.valid())
-            EXPECT_TRUE(heap.write(handle, BindingSetItem::StructuredBuffer_SRV(0u, buffer)));
+            EXPECT_TRUE(heap.write(handle, DescriptorWriteItem::StructuredBuffer_SRV(0u, buffer)));
         return handle;
     };
     const GpuDescriptorHandle receiverRangeHandle = registerCsgContextBuffer(receiverRanges.get());
@@ -1079,7 +802,14 @@ TEST_F(DescriptorBufferRoundTripTest, CsgMaterialTailShapesBuildAsDescriptorBuff
     const GpuDescriptorHandle materialTypedHandle = registerCsgContextBuffer(materialTyped.get());
     const GpuDescriptorHandle instanceHandle = registerCsgContextBuffer(instances.get());
 
-    heap.free(meshViewHandle);
+    if(clipContextHandle.valid())
+        heap.free(clipContextHandle);
+    if(bindlessSlotsHandle.valid())
+        heap.free(bindlessSlotsHandle);
+    if(sampleStateHandle.valid())
+        heap.free(sampleStateHandle);
+    if(meshViewHandle.valid())
+        heap.free(meshViewHandle);
     heap.free(csgStorageHandle);
     if(receiverRangeHandle.valid())
         heap.free(receiverRangeHandle);
@@ -1094,302 +824,128 @@ TEST_F(DescriptorBufferRoundTripTest, CsgMaterialTailShapesBuildAsDescriptorBuff
 }
 
 
-// Production-binding-layer proof: the caustic resolve carries every sampled input through the
-// global heap, leaving a sparse local descriptor-buffer set containing only the output UAV at binding 3 plus its
-// 52-byte push constants. This verifies the live resource-only shape remains descriptor-buffer compatible and that
-// the driver reports the sparse binding offset correctly.
+// Caustic resolve selects every sampled input and its writable output from the global descriptor heap. Its set 0 ABI
+// is therefore only the 14-word selector push block; a future local image or buffer must make this proof fail.
 TEST_F(DescriptorBufferRoundTripTest, CausticResolveShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
-    // A short-lived arena for the layout/set descs (they copy their bindings into object-arena storage on creation).
+    // A short-lived arena for the layout desc (it copies its bindings into object-arena storage on creation).
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/caustic_shape_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    auto makeUavTexture = [&](const u32 w, const u32 h) {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(w)
-                .setHeight(h)
-                .setFormat(Format::RGBA16_FLOAT)
-                .setInitialState(ResourceStates::UnorderedAccess)
-                .setKeepInitialState(true)
-        );
-    };
-
-    auto output = makeUavTexture(32u, 32u);   // UAV (wavelet output)
-    ASSERT_TRUE(output);
-
-    // The caustic resolve local binding layout: sparse output UAV at binding 3 + push constants, opting into Backend C.
+    // CausticResolvePushConstants is 14 scalar words in the C++/Slang ABI.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(3u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 52u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
 
-    // The authoritative step-2 signal: the layout is descriptor-buffer-compatible. On a host where the extension is
-    // absent the suite is already skipped (SetUpTestSuite); here the extension is present, so this shape MUST route
-    // to Backend C. A downgrade here would mean the live caustic pass silently fell back to Backend A.
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "caustic resolve shape did not route to the descriptor-buffer path";
-    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
-    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    // The sparse output binding still needs one driver-queried layout offset within the set block.
-    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 1u);
-
-    // A binding set carved against this layout exercises the production carve + sparse-UAV writeDescriptor path.
-    BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::Texture_UAV(3u, output.get(), Format::RGBA16_FLOAT));
-
-    auto bindingSet = device.createBindingSet(setDesc, layout);
-    // createBindingSet carved the set block and wrote the single sparse UAV descriptor.
-    ASSERT_NE(bindingSet.get(), nullptr);
-    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+        << "caustic resolve push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
 
-// Caustic geometry downsample is the second pass flipped onto Backend C. Its shape (2 texture SRVs + 1 texture UAV +
-// push constants, no samplers) is a distinct resource-only segment -- two SRVs into one view is a worthwhile addition
-// to the resolve case, which interleaves the single UAV mid-set. Mirrors the resolve parity proof.
+// Caustic geometry downsample reads its G-buffer inputs and writes its half-res geometry cache through global heap
+// slots. Its local ABI is only the eight-word selector push block.
 TEST_F(DescriptorBufferRoundTripTest, CausticGeometryDownsampleShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/caustic_geom_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    auto makeTexture = [&](const u32 w, const u32 h) {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(w).setHeight(h)
-                .setFormat(Format::RGBA16_FLOAT)
-                .setInitialState(ResourceStates::ShaderResource)
-                .setKeepInitialState(true)
-        );
-    };
-    auto makeUavTexture = [&](const u32 w, const u32 h) {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(w).setHeight(h)
-                .setFormat(Format::RGBA16_FLOAT)
-                .setInitialState(ResourceStates::UnorderedAccess)
-                .setKeepInitialState(true)
-        );
-    };
-
-    auto worldPosition = makeTexture(32u, 32u);
-    auto depth = makeTexture(32u, 32u);
-    auto geometryOutput = makeUavTexture(32u, 32u);
-    ASSERT_TRUE(worldPosition && depth && geometryOutput);
-
-    // Slots mirror resolve_binding_slots.h geometry-downsample block (0..2); push constants ride the pipeline layout.
+    // CausticGeometryDownsamplePushConstants is eight scalar words in the C++/Slang ABI.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(0u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(1u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(2u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 32u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 8u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "caustic geometry downsample shape did not route to the descriptor-buffer path";
-    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
-    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 3u);
-
-    BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::Texture_SRV(0u, worldPosition.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(1u, depth.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_UAV(2u, geometryOutput.get(), Format::RGBA16_FLOAT));
-
-    auto bindingSet = device.createBindingSet(setDesc, layout);
-    ASSERT_NE(bindingSet.get(), nullptr);
-    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+        << "caustic geometry downsample push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Caustic accumulator decay is the third pass flipped onto Backend C. Its shape (1 texture UAV + push constants, no
-// samplers) is the minimal single-UAV case -- distinct from resolve (UAV interleaved mid-set) and geometry downsample
-// (2 SRVs + 1 UAV). The UAV is an R32_UINT Texture2DArray (3 flux-channel slices), exercised faithfully here.
-// Mirrors the resolve/geometry-downsample parity proofs.
+// Caustic accumulator decay selects its writable R32_UINT Texture2DArray from the global StorageImage heap. Its local
+// ABI is only the four-word push block.
 TEST_F(DescriptorBufferRoundTripTest, CausticAccumulatorDecayShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/caustic_decay_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    auto makeUavTextureArray = [&](const u32 w, const u32 h) {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(w).setHeight(h)
-                .setArraySize(3u)
-                .setDimension(TextureDimension::Texture2DArray)
-                .setFormat(Format::R32_UINT)
-                .setInitialState(ResourceStates::UnorderedAccess)
-                .setKeepInitialState(true)
-        );
-    };
-
-    auto accumulator = makeUavTextureArray(32u, 32u);
-    ASSERT_TRUE(accumulator);
-
-    // Slots mirror resolve_binding_slots.h accumulator-decay block (0); push constants ride the pipeline layout.
-    // sizeof(CausticAccumulatorDecayPushConstants) == 4 * u32 == 16 (matches the shader push-constant layout).
+    // CausticAccumulatorDecayPushConstants is four scalar words in the C++/Slang ABI.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(0u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 16u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 4u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "caustic accumulator decay shape did not route to the descriptor-buffer path";
-    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
-    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 1u);
-
-    BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::Texture_UAV(0u, accumulator.get(), Format::R32_UINT));
-
-    auto bindingSet = device.createBindingSet(setDesc, layout);
-    ASSERT_NE(bindingSet.get(), nullptr);
-    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+        << "caustic accumulator decay push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Both caustic photon producers fetch their scene/light, emission-target, view, and G-buffer inputs from the global
-// heap. The scene/light selectors live in the target-generation slot cbuffer, while the shared 44-byte photon push
-// block carries the other four slots. Both local shapes retain only target/context slot cbuffers and the accumulator
-// output; all BVH, instance, and material data is selected from the global heap (the Backend-C TLAS itself lives in
-// the heap's set-10 block, not the local layout).
+// Both caustic photon producers fetch every selector, input, and accumulator output from the global descriptor heap.
+// Their identical local set ABI is only the shared 14-word photon push block; the fixed global-heap TLAS remains
+// outside set 0.
 TEST_F(DescriptorBufferRoundTripTest, CausticPhotonProducerShapesBuildAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/caustic_photon_producer_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    auto makeConstantBuffer = [&]() {
-        return device.createBuffer(
-            BufferDesc()
-                .setByteSize(256u)
-                .setIsConstantBuffer(true)
-                .setInitialState(ResourceStates::ConstantBuffer)
-                .setKeepInitialState(true)
-        );
-    };
-    auto makeAccumulator = [&]() {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(32u).setHeight(32u)
-                .setArraySize(3u)
-                .setDimension(TextureDimension::Texture2DArray)
-                .setFormat(Format::R32_UINT)
-                .setInitialState(ResourceStates::UnorderedAccess)
-                .setKeepInitialState(true)
-        );
-    };
-
-    auto bindlessResources = makeConstantBuffer();
-    auto materialContextSlots = makeConstantBuffer();
-    auto accumulator = makeAccumulator();
-    ASSERT_TRUE(bindlessResources && materialContextSlots && accumulator);
-    const TextureSubresourceSet accumulatorSubresources(0u, 1u, 0u, 3u);
-
-    // Exact SW local shape after scene/light, BVH/material context, emission targets, and view became heap-selected
-    // reads. b0 selects target-generation scene/light slots, b5 selects the five trace-context heap slots, b11/b12
-    // remain ABI holes, and b14 is the deliberate local accumulator UAV. The 44-byte range is the byte-identical
-    // CausticPhotonPushConstants contract used by both producers.
+    // CausticPhotonPushConstants is 14 scalar words and byte-identical for the SW and HW producers.
     BindingLayoutDesc swLayoutDesc(descArena);
     swLayoutDesc.setVisibility(ShaderType::Compute);
-    swLayoutDesc.setUseDescriptorBuffer(true);
-    swLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_BINDLESS_RESOURCES, 1u));
-    swLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_MATERIAL_CONTEXT_SLOTS, 1u));
-    swLayoutDesc.addItem(BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_SW_BINDING_ACCUMULATOR, 1u));
-    swLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 44u));
+    swLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
 
     auto swLayout = device.createBindingLayout(swLayoutDesc);
     ASSERT_NE(swLayout.get(), nullptr);
     ASSERT_TRUE(swLayout->isDescriptorBufferCompatible())
-        << "caustic SW photon shape did not route to the descriptor-buffer path";
-    EXPECT_EQ(swLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    const auto& swOffsets = swLayout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(swOffsets.size(), 3u);
-    EXPECT_EQ(swOffsets.find(NWB_CAUSTIC_SW_BINDING_EMISSION_TARGETS), swOffsets.end());
-    EXPECT_EQ(swOffsets.find(NWB_CAUSTIC_SW_BINDING_VIEW), swOffsets.end());
+        << "caustic SW photon push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(swLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(swLayout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(swLayout->getDescriptorBufferBindingOffsets().empty());
 
-    BindingSetDesc swSetDesc(descArena);
-    swSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_BINDLESS_RESOURCES, bindlessResources.get()));
-    swSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_MATERIAL_CONTEXT_SLOTS, materialContextSlots.get()));
-    swSetDesc.addItem(BindingSetItem::Texture_UAV(
-        NWB_CAUSTIC_SW_BINDING_ACCUMULATOR,
-        accumulator.get(),
-        Format::R32_UINT,
-        accumulatorSubresources,
-        TextureDimension::Texture2DArray
-    ));
-    auto swSet = device.createBindingSet(swSetDesc, swLayout);
-    ASSERT_NE(swSet.get(), nullptr);
-    EXPECT_EQ(swSet->getLayout(), swLayout.get());
-
-    // Exact hardware local shape in Backend C: set 10 carries the TLAS, b1 selects target scene/light slots, and b11
-    // selects the heap-backed InstanceID/material-surface context. b6/b7 remain emission/view ABI holes and b10 is
-    // the deliberate local accumulator UAV. Descriptor layout compatibility is independent of shader stage, so
-    // Compute makes this proof runnable on descriptor-buffer-only test devices.
+    // Descriptor layout compatibility is independent of shader stage, so Compute makes this HW local-shape proof
+    // runnable on descriptor-buffer-only test devices.
     BindingLayoutDesc hwLayoutDesc(descArena);
     hwLayoutDesc.setVisibility(ShaderType::Compute);
-    hwLayoutDesc.setUseDescriptorBuffer(true);
-    hwLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_BINDLESS_RESOURCES, 1u));
-    hwLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_MATERIAL_CONTEXT_SLOTS, 1u));
-    hwLayoutDesc.addItem(BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_RT_BINDING_ACCUMULATOR, 1u));
-    hwLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 44u));
+    hwLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
 
     auto hwLayout = device.createBindingLayout(hwLayoutDesc);
     ASSERT_NE(hwLayout.get(), nullptr);
     ASSERT_TRUE(hwLayout->isDescriptorBufferCompatible())
-        << "caustic HW photon shape did not route to the descriptor-buffer path";
-    EXPECT_EQ(hwLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    const auto& hwOffsets = hwLayout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(hwOffsets.size(), 3u);
-    EXPECT_EQ(hwOffsets.find(NWB_CAUSTIC_RT_BINDING_EMISSION_TARGETS), hwOffsets.end());
-    EXPECT_EQ(hwOffsets.find(NWB_CAUSTIC_RT_BINDING_VIEW), hwOffsets.end());
-
-    BindingSetDesc hwSetDesc(descArena);
-    hwSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_BINDLESS_RESOURCES, bindlessResources.get()));
-    hwSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_MATERIAL_CONTEXT_SLOTS, materialContextSlots.get()));
-    hwSetDesc.addItem(BindingSetItem::Texture_UAV(
-        NWB_CAUSTIC_RT_BINDING_ACCUMULATOR,
-        accumulator.get(),
-        Format::R32_UINT,
-        accumulatorSubresources,
-        TextureDimension::Texture2DArray
-    ));
-    auto hwSet = device.createBindingSet(hwSetDesc, hwLayout);
-    ASSERT_NE(hwSet.get(), nullptr);
-    EXPECT_EQ(hwSet->getLayout(), hwLayout.get());
+        << "caustic HW photon push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(hwLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(hwLayout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(hwLayout->getDescriptorBufferBindingOffsets().empty());
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Both surfel-GI trace backends take the target-generation slot cbuffer at their historical scene-shading position and
-// a trace-material-context cbuffer at b11. The latter selects the shared scene/BVH/instance/material buffers through
-// the global heap. These exact local shapes prove the former context SRVs stay out of the descriptor-buffer segment.
+// Both surfel-GI trace backends select their target-generation, material-context, surfel, and scene data through the
+// global descriptor heap. Their pipeline-local layout is therefore only the shared 14-u32 selector push range.
 TEST_F(DescriptorBufferRoundTripTest, SurfelTraceShapesBuildAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
@@ -1436,74 +992,35 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelTraceShapesBuildAsDescriptorBuffer){
         bindlessResources && materialContextSlots && surfelConstants && pool && snapshotPool && snapshotCellHead
     );
 
-    // SW trace: b0 selects target-generation scene/light slots, b11 selects the global trace material context, and the
-    // surfel resources retain their sparse production positions. This is the complete Backend-C local resource segment.
+    // SW trace carries no local CBV/SRV/UAV entries.
     BindingLayoutDesc swLayoutDesc(descArena);
     swLayoutDesc.setVisibility(ShaderType::Compute);
-    swLayoutDesc.setUseDescriptorBuffer(true);
-    swLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_GI_SW_BINDING_BINDLESS_RESOURCES, 1u));
-    swLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_GI_SW_BINDING_MATERIAL_CONTEXT_SLOTS, 1u));
-    swLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1u));
-    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1u));
-    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, 1u));
-    swLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD, 1u));
+    swLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
 
     auto swLayout = device.createBindingLayout(swLayoutDesc);
     ASSERT_NE(swLayout.get(), nullptr);
     ASSERT_TRUE(swLayout->isDescriptorBufferCompatible())
         << "surfel SW trace shape did not route to the descriptor-buffer path";
-    EXPECT_EQ(swLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    EXPECT_EQ(swLayout->getDescriptorBufferBindingOffsets().size(), 6u);
+    EXPECT_TRUE(swLayout->getDescriptorBufferBindingOffsets().empty());
 
-    BindingSetDesc swSetDesc(descArena);
-    swSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_GI_SW_BINDING_BINDLESS_RESOURCES, bindlessResources.get()));
-    swSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_GI_SW_BINDING_MATERIAL_CONTEXT_SLOTS, materialContextSlots.get()));
-    swSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, surfelConstants.get()));
-    swSetDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, pool.get()));
-    swSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, snapshotPool.get()));
-    swSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD, snapshotCellHead.get()));
-    auto swSet = device.createBindingSet(swSetDesc, swLayout);
-    ASSERT_NE(swSet.get(), nullptr);
-    EXPECT_EQ(swSet->getLayout(), swLayout.get());
-
-    // HW trace: Backend C selects the TLAS through set 10, so this local segment contains both slot cbuffers and the
-    // surfel tail only. It otherwise shares the global material-context access contract with the SW trace.
+    // HW trace differs only by its global TLAS heap layout; its local leaf is identical.
     BindingLayoutDesc hwLayoutDesc(descArena);
     hwLayoutDesc.setVisibility(ShaderType::Compute);
-    hwLayoutDesc.setUseDescriptorBuffer(true);
-    hwLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_GI_HW_BINDING_BINDLESS_RESOURCES, 1u));
-    hwLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_GI_HW_BINDING_MATERIAL_CONTEXT_SLOTS, 1u));
-    hwLayoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1u));
-    hwLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1u));
-    hwLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, 1u));
-    hwLayoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD, 1u));
+    hwLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
 
     auto hwLayout = device.createBindingLayout(hwLayoutDesc);
     ASSERT_NE(hwLayout.get(), nullptr);
     ASSERT_TRUE(hwLayout->isDescriptorBufferCompatible())
         << "surfel HW trace shape did not route to the descriptor-buffer path";
-    EXPECT_EQ(hwLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    EXPECT_EQ(hwLayout->getDescriptorBufferBindingOffsets().size(), 6u);
-
-    BindingSetDesc hwSetDesc(descArena);
-    hwSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_GI_HW_BINDING_BINDLESS_RESOURCES, bindlessResources.get()));
-    hwSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_GI_HW_BINDING_MATERIAL_CONTEXT_SLOTS, materialContextSlots.get()));
-    hwSetDesc.addItem(BindingSetItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, surfelConstants.get()));
-    hwSetDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, pool.get()));
-    hwSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_POOL, snapshotPool.get()));
-    hwSetDesc.addItem(BindingSetItem::StructuredBuffer_SRV(NWB_SURFEL_BINDING_SNAPSHOT_CELL_HEAD, snapshotCellHead.get()));
-    auto hwSet = device.createBindingSet(hwSetDesc, hwLayout);
-    ASSERT_NE(hwSet.get(), nullptr);
-    EXPECT_EQ(hwSet->getLayout(), hwLayout.get());
+    EXPECT_TRUE(hwLayout->getDescriptorBufferBindingOffsets().empty());
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Surfel upsample keeps its sparse local output UAV while selecting half irradiance plus G-buffer inputs from the frame
-// descriptor heap through a three-u32 push block. This proof covers the resulting single-UAV descriptor-buffer shape
-// and its 12-byte push-constant range.
+// Surfel upsample selects its half irradiance, G-buffer inputs, and storage output through the descriptor heap. Its
+// local layout must remain a 14-u32 push-only selector block.
 TEST_F(DescriptorBufferRoundTripTest, SurfelUpsampleShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
@@ -1523,39 +1040,22 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelUpsampleShapeBuildsAsDescriptorBuffe
     auto output = makeUavTexture(32u, 32u);
     ASSERT_TRUE(output);
 
-    // The local output preserves its original sparse binding 3; the former 0..2 texture SRVs are heap-selected.
+    // No local UAV remains after the output migrated to the storage-image heap.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(3u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 12u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
         << "surfel upsample shape did not route to the descriptor-buffer path";
-    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
-    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 1u);
-
-    BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::Texture_UAV(3u, output.get(), Format::RGBA16_FLOAT));
-
-    auto bindingSet = device.createBindingSet(setDesc, layout);
-    ASSERT_NE(bindingSet.get(), nullptr);
-    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
 
-// Surfel hash-build parity: the first surfel-GI pass migrated that carries a uniform buffer alongside storage buffers
-// (1 ConstantBuffer + 2 StructuredBuffer_UAV), extending the texture-only shapes of the prior five migrations. Slots
-// mirror surfel_binding_slots.h hash-build block (12..14). The layout is segment-coherent pure-resource with no
-// samplers, so it routes to Backend C intact; the set is built once on persistent buffers in production. This proof
-// exercises the live device API with hash-build's exact binding shape, asserting the layout routes to Backend C,
-// reports a non-zero driver-queried set size, gives the binding 3 layout offsets, and createBindingSet carves the
-// block and writes the uniform/storage descriptors through the production writeDescriptor path.
+// Hash-build's constants, pool, and cell-head are all persistent heap descriptors. Its local layout contains only the
+// shared selector push range.
 TEST_F(DescriptorBufferRoundTripTest, SurfelHashBuildShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
@@ -1587,33 +1087,17 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelHashBuildShapeBuildsAsDescriptorBuff
     auto cellHead = makeStructuredUav(4u);
     ASSERT_TRUE(constants && pool && cellHead);
 
-    // Slots mirror surfel_binding_slots.h hash-build block (12..14); the segment-coherent pure-resource layout (a
-    // uniform buffer plus two storage buffers, no samplers) is the first Backend-C migration to mix CB + UAV.
+    // Heap descriptors replace the former local CBV/UAV entries.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(12u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(13u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(14u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
         << "surfel hash-build shape did not route to the descriptor-buffer path";
-    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
-    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 3u);
-
-    BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::ConstantBuffer(12u, constants.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(13u, pool.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(14u, cellHead.get()));
-
-    auto bindingSet = device.createBindingSet(setDesc, layout);
-    ASSERT_NE(bindingSet.get(), nullptr);
-    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
 
@@ -1652,36 +1136,17 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelAgeFreeShapeBuildsAsDescriptorBuffer
     auto freeList = makeStructuredUav(4u);
     ASSERT_TRUE(constants && pool && counter && freeList);
 
-    // Slots mirror surfel_binding_slots.h age-free block (12, 13, 15, 19); the segment-coherent pure-resource layout
-    // (a uniform buffer plus three storage buffers, no samplers) is the CB + UAV shape of hash-build with one
-    // additional storage buffer (the free-list).
+    // Constants, pool, counter, and free-list are selected by the shared heap-slot block.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(12u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(13u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(15u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(19u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
         << "surfel age-free shape did not route to the descriptor-buffer path";
-    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
-    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 4u);
-
-    BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::ConstantBuffer(12u, constants.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(13u, pool.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(15u, counter.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(19u, freeList.get()));
-
-    auto bindingSet = device.createBindingSet(setDesc, layout);
-    ASSERT_NE(bindingSet.get(), nullptr);
-    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
 
@@ -1719,40 +1184,22 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelTraceBuildArgsShapeBuildsAsDescripto
     auto args = makeStructuredUav(4u);
     ASSERT_TRUE(constants && counter && args);
 
-    // Slots mirror surfel_binding_slots.h trace-build-args block (0, 1, 2); the segment-coherent pure-resource layout
-    // (a uniform buffer plus two storage buffers, no samplers) is the minimal CB + UAV subset of the age-free shape --
-    // its two storage buffers are the BUMP_TOP counter read and the DispatchIndirectArguments write.
+    // Constants, counter, and indirect-argument output are heap descriptors.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(0u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(1u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(2u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
         << "surfel trace build-args shape did not route to the descriptor-buffer path";
-    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
-    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 3u);
-
-    BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::ConstantBuffer(0u, constants.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(1u, counter.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(2u, args.get()));
-
-    auto bindingSet = device.createBindingSet(setDesc, layout);
-    ASSERT_NE(bindingSet.get(), nullptr);
-    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
 
-// Surfel spawn allocates new surfels into the pool. Its two G-buffer inputs are descriptor-heap reads selected by an
-// eight-byte push block, so the local Backend-C shape is the persistent constant buffer plus four UAV buffers. Slots
-// mirror surfel_binding_slots.h's spawn block (12, 13, 14, 15, 19). This proof exercises that live production shape.
+// Surfel spawn selects both G-buffer inputs and all persistent surfel buffers through the descriptor heap. The local
+// layout is only the common selector block.
 TEST_F(DescriptorBufferRoundTripTest, SurfelSpawnShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
@@ -1785,45 +1232,22 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelSpawnShapeBuildsAsDescriptorBuffer){
     auto freeList = makeStructuredUav(4u);
     ASSERT_TRUE(constants && pool && cellHead && counter && freeList);
 
-    // The local bindings retain only the persistent surfel resources; heap-selected G-buffer inputs ride an 8-byte
-    // push range.
+    // No local persistent-buffer descriptors remain.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(12u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(13u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(14u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(15u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(19u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 8u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
         << "surfel spawn shape did not route to the descriptor-buffer path";
-    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
-    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 5u);
-
-    BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::ConstantBuffer(12u, constants.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(13u, pool.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(14u, cellHead.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(15u, counter.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(19u, freeList.get()));
-
-    auto bindingSet = device.createBindingSet(setDesc, layout);
-    ASSERT_NE(bindingSet.get(), nullptr);
-    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
 
-// Surfel resolve gathers irradiance from its persistent pool/cell-head into the half-res target. G-buffer world position
-// and normal are frame-heap reads selected by an eight-byte push block; the local shape therefore keeps the constant
-// buffer, two structured SRVs, and sparse output UAV (binding 5). This proof exercises that exact descriptor-buffer
-// block and push-constant range.
+// Surfel resolve gathers persistent heap buffers and writes its half-resolution output through the storage-image heap.
+// Its local layout is the same 14-u32 selector block as every other surfel pass.
 TEST_F(DescriptorBufferRoundTripTest, SurfelResolveShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
@@ -1865,95 +1289,52 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelResolveShapeBuildsAsDescriptorBuffer
     auto output = makeUavTexture(32u, 32u);
     ASSERT_TRUE(constants && pool && cellHead && output);
 
-    // Retain the output's sparse binding 5; former G-buffer slots 3 and 4 are selected from the global heap.
+    // No local CBV/SRV/UAV entries remain.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(0u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(1u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(2u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(5u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, 8u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
         << "surfel resolve shape did not route to the descriptor-buffer path";
-    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
-    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 4u);
-
-    BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::ConstantBuffer(0u, constants.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_SRV(1u, pool.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_SRV(2u, cellHead.get()));
-    setDesc.addItem(BindingSetItem::Texture_UAV(5u, output.get(), Format::RGBA16_FLOAT));
-
-    auto bindingSet = device.createBindingSet(setDesc, layout);
-    ASSERT_NE(bindingSet.get(), nullptr);
-    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
 
-// BVH bitonic-sort parity: the LBVH pre-sort over (Morton key, primitive-index payload) pairs. Its shape is
-// segment-coherent pure-resource (2 StructuredBuffer_UAV, no samplers) with push constants -- the first migrated
-// shape to carry ZERO read-only descriptors (a UAV-only resource segment). Push constants stay in the pipeline
-// layout, so they coexist with the opt-in.
-TEST_F(DescriptorBufferRoundTripTest, BvhSortShapeBuildsAsDescriptorBuffer){
+// BVH bitonic-sort parity: its keys and payload are global StorageBuffer-heap entries selected by the push block.
+// The pipeline-local leaf therefore has no resource entries or descriptor object; it must stay descriptor-buffer-compatible
+// alongside the heap's persistent resource/sampler layouts.
+TEST_F(DescriptorBufferRoundTripTest, BvhSortPushOnlyHeapLayoutBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/bvh_sort_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    auto makeStructuredUav = [&](const u32 stride) {
-        return device.createBuffer(
-            BufferDesc()
-                .setByteSize(stride * 4096u)
-                .setStructStride(stride)
-                .setCanHaveRawViews(true)
-                .setInitialState(ResourceStates::Common)
-                .setKeepInitialState(true)
-        );
-    };
-
-    auto keys = makeStructuredUav(4u);
-    auto payload = makeStructuredUav(4u);
-    ASSERT_TRUE(keys && payload);
-
-    // Slots mirror bvh/binding_slots.h sort block (0 keys, 1 payload).
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(0u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(1u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 8u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "bvh sort shape did not route to the descriptor-buffer path";
-    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
-    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 2u);
-
-    BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(0u, keys.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(1u, payload.get()));
-
-    auto bindingSet = device.createBindingSet(setDesc, layout);
-    ASSERT_NE(bindingSet.get(), nullptr);
-    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+        << "bvh sort push-only layout did not route to the descriptor-buffer path";
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+    EXPECT_TRUE(heap.getResourceLayout()->isDescriptorBufferCompatible());
+    EXPECT_TRUE(heap.getSamplerLayout()->isDescriptorBufferCompatible());
 }
 
 
-// BVH LBVH-build parity: the shared Morton/sort/Karras-topology/bottom-up-fit local layout. Stable read-only mesh
-// position/index inputs are now selected from the global heap by the 64-byte push block, so this descriptor-buffer
-// segment deliberately contains only the five transient StructuredBuffer UAVs at their preserved sparse slots.
-TEST_F(DescriptorBufferRoundTripTest, BvhBuildShapeBuildsAsDescriptorBuffer){
+// BVH LBVH-build parity: all five formerly-local scratch/work buffers are heap registrations. The local leaf only
+// carries the expanded push constants; heap writes retain each concrete buffer until deferred free retires its slot.
+TEST_F(DescriptorBufferRoundTripTest, BvhBuildPushOnlyHeapLayoutRegistersScratchBuffers){
     auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/bvh_build_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
@@ -1963,7 +1344,7 @@ TEST_F(DescriptorBufferRoundTripTest, BvhBuildShapeBuildsAsDescriptorBuffer){
             BufferDesc()
                 .setByteSize(stride * 4096u)
                 .setStructStride(stride)
-                .setCanHaveRawViews(true)
+                .setCanHaveUAVs(true)
                 .setInitialState(ResourceStates::Common)
                 .setKeepInitialState(true)
         );
@@ -1976,462 +1357,182 @@ TEST_F(DescriptorBufferRoundTripTest, BvhBuildShapeBuildsAsDescriptorBuffer){
     auto visitCounter = makeStructuredUav(4u);
     ASSERT_TRUE(buildKeys && buildPayload && nodes && parent && visitCounter);
 
-    // Slots 0/1 remain intentional gaps after the heap migration; these mirror the local build block's transient tail.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_KEYS, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_PAYLOAD, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_NODES, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_PARENT, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_VISIT_COUNTER, 1u));
-    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 8u + sizeof(Float4) * 2u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 12u + sizeof(Float4) * 2u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "bvh build shape did not route to the descriptor-buffer path";
-    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
-    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 5u);
+        << "bvh build push-only layout did not route to the descriptor-buffer path";
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 
-    BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_KEYS, buildKeys.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_PAYLOAD, buildPayload.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_NODES, nodes.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_PARENT, parent.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_BVH_BUILD_BINDING_VISIT_COUNTER, visitCounter.get()));
-
-    auto bindingSet = device.createBindingSet(setDesc, layout);
-    ASSERT_NE(bindingSet.get(), nullptr);
-    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+    Core::Buffer* buffers[] = {
+        buildKeys.get(),
+        buildPayload.get(),
+        nodes.get(),
+        parent.get(),
+        visitCounter.get(),
+    };
+    Vector<GpuDescriptorHandle, Alloc::GlobalArena> handles(descArena);
+    for(Core::Buffer* buffer : buffers){
+        const GpuDescriptorHandle handle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+        ASSERT_TRUE(handle.valid());
+        ASSERT_TRUE(heap.write(handle, DescriptorWriteItem::StructuredBuffer_UAV(0u, buffer)));
+        EXPECT_EQ(handle.descriptorClass(), GpuDescriptorClass::StorageBuffer);
+        handles.push_back(handle);
+    }
+    for(const GpuDescriptorHandle handle : handles)
+        heap.free(handle);
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
 }
 
 
-// Shadow geometry-downsample parity: the half-res G-buffer downsample feeding the soft-shadow a-trous resolve. Its
-// three G-buffer inputs and the shared scene-shading CB are all selected through the global heap, so its exact local
-// shape is the target-generation slot cbuffer + geometry-cache UAV, with the eight-u32 push-constant range carrying the
-// image slots and dimensions.
+// Shadow geometry-downsample reads its G-buffer inputs, scene payload, and output through the global heap. The local
+// leaf is therefore only the ten-word selector push ABI.
 TEST_F(DescriptorBufferRoundTripTest, ShadowGeometryDownsampleShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/shadow_geom_downsample_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    auto makeConstantBuffer = [&]() {
-        return device.createBuffer(
-            BufferDesc()
-                .setByteSize(256u)
-                .setIsConstantBuffer(true)
-                .setInitialState(ResourceStates::ConstantBuffer)
-                .setKeepInitialState(true)
-        );
-    };
-    auto makeUavTexture = [&](const u32 w, const u32 h) {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(w).setHeight(h)
-                .setFormat(Format::RGBA16_FLOAT)
-                .setInitialState(ResourceStates::UnorderedAccess)
-                .setKeepInitialState(true)
-        );
-    };
-
-    auto bindlessResources = makeConstantBuffer();
-    auto geometryOutput = makeUavTexture(16u, 16u);
-    ASSERT_TRUE(bindlessResources && geometryOutput);
-
-    // Slots mirror shadow_resolve_binding_slots.h downsample block: binding 3 retains the historical scene-CB position
-    // but now carries DeferredBindlessResourceSlots, while the sparse output stays at binding 4.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_BINDLESS_RESOURCES, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT, 1u));
-    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 8u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 10u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "shadow geometry downsample shape did not route to the descriptor-buffer path";
-    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
-    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 2u);
-
-    BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::ConstantBuffer(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_BINDLESS_RESOURCES, bindlessResources.get()));
-    setDesc.addItem(BindingSetItem::Texture_UAV(NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT, geometryOutput.get(), Format::RGBA16_FLOAT));
-
-    auto bindingSet = device.createBindingSet(setDesc, layout);
-    ASSERT_NE(bindingSet.get(), nullptr);
-    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+        << "shadow geometry downsample push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
 
-// Shadow resolve parity: the SVGF a-trous resolve (and its RGB variant). Its shape is segment-coherent pure-resource
-// (8 Texture_SRV + 1 ConstantBuffer + 2 Texture_UAV, no samplers) with push constants.
+// The SVGF a-trous resolve (and its RGB variant) selects every input, output, and scene payload from the global heap.
+// Its local leaf is the 21-word selector push ABI.
 TEST_F(DescriptorBufferRoundTripTest, ShadowResolveShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/shadow_resolve_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    auto makeConstantBuffer = [&]() {
-        return device.createBuffer(
-            BufferDesc()
-                .setByteSize(256u)
-                .setIsConstantBuffer(true)
-                .setInitialState(ResourceStates::ConstantBuffer)
-                .setKeepInitialState(true)
-        );
-    };
-    auto makeTexture = [&]() {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(32u).setHeight(32u)
-                .setFormat(Format::RGBA16_FLOAT)
-                .setInitialState(ResourceStates::ShaderResource)
-                .setKeepInitialState(true)
-        );
-    };
-    auto makeUavTexture = [&]() {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(32u).setHeight(32u)
-                .setFormat(Format::RGBA16_FLOAT)
-                .setInitialState(ResourceStates::UnorderedAccess)
-                .setKeepInitialState(true)
-        );
-    };
-
-    auto sceneShading = makeConstantBuffer();
-    auto softHalf = makeTexture();
-    auto geometry = makeTexture();
-    auto gbufferDepth = makeTexture();
-    auto inputColor = makeTexture();
-    auto moments = makeTexture();
-    auto gbufferWorldPos = makeTexture();
-    auto gbufferNormal = makeTexture();
-    auto output = makeUavTexture();
-    auto visibility = makeUavTexture();
-    ASSERT_TRUE(sceneShading && softHalf && geometry && gbufferDepth && inputColor && moments && gbufferWorldPos && gbufferNormal && output && visibility);
-
-    // Slots mirror shadow_resolve_binding_slots.h resolve block (0 soft-half .. 9 scene-shading).
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(0u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(1u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(2u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(3u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(4u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(5u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(6u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(7u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(8u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(9u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 21u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "shadow resolve shape did not route to the descriptor-buffer path";
-    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
-    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 10u);
-
-    BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::Texture_SRV(0u, softHalf.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(1u, geometry.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(2u, gbufferDepth.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_UAV(3u, output.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(4u, inputColor.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_UAV(5u, visibility.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(6u, moments.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(7u, gbufferWorldPos.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(8u, gbufferNormal.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::ConstantBuffer(9u, sceneShading.get()));
-
-    auto bindingSet = device.createBindingSet(setDesc, layout);
-    ASSERT_NE(bindingSet.get(), nullptr);
-    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+        << "shadow resolve push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
 
-// Shadow reproject-merge parity: the temporal accumulation pass. Its shape is segment-coherent pure-resource
-// (6 Texture_SRV + 2 Texture_UAV, no samplers) with push constants -- the first migrated shadow shape with NO
-// constant buffer (the dispatch parameters are push-constants only).
+// Shadow reproject-merge selects its temporal images and geometry from the global heap. Its local leaf retains the
+// 128-byte matrix-plus-selector push ABI only.
 TEST_F(DescriptorBufferRoundTripTest, ShadowReprojectMergeShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/shadow_reproject_merge_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    auto makeTexture = [&]() {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(32u).setHeight(32u)
-                .setFormat(Format::RGBA16_FLOAT)
-                .setInitialState(ResourceStates::ShaderResource)
-                .setKeepInitialState(true)
-        );
-    };
-    auto makeUavTexture = [&]() {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(32u).setHeight(32u)
-                .setFormat(Format::RGBA16_FLOAT)
-                .setInitialState(ResourceStates::UnorderedAccess)
-                .setKeepInitialState(true)
-        );
-    };
-
-    auto softTrace = makeTexture();
-    auto historyIn = makeTexture();
-    auto momentsIn = makeTexture();
-    auto geometryCurr = makeTexture();
-    auto geometryPrev = makeTexture();
-    auto gbufferWorldPos = makeTexture();
-    auto historyOut = makeUavTexture();
-    auto momentsOut = makeUavTexture();
-    ASSERT_TRUE(softTrace && historyIn && momentsIn && geometryCurr && geometryPrev && gbufferWorldPos && historyOut && momentsOut);
-
-    // Slots mirror shadow_reproject_merge_binding_slots.h reproject-merge block (0..7).
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(0u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(1u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(2u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(3u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(4u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_SRV(5u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(6u, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(7u, 1u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 32u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
 
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "shadow reproject-merge shape did not route to the descriptor-buffer path";
-    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
-    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 8u);
-
-    BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::Texture_SRV(0u, softTrace.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(1u, historyIn.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(2u, momentsIn.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(3u, geometryCurr.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(4u, geometryPrev.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_SRV(5u, gbufferWorldPos.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_UAV(6u, historyOut.get(), Format::RGBA16_FLOAT));
-    setDesc.addItem(BindingSetItem::Texture_UAV(7u, momentsOut.get(), Format::RGBA16_FLOAT));
-
-    auto bindingSet = device.createBindingSet(setDesc, layout);
-    ASSERT_NE(bindingSet.get(), nullptr);
-    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+        << "shadow reproject-merge push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
 
-// HW shadow trace parity: the shared inline-RayQuery occlusion layout used by BOTH the full-resolution hard fallback
-// (shadow_rayquery_cs) and the half-resolution soft opaque trace (shadow_rayquery_soft_cs). Its exact Backend-C local
-// shape is two pure-resource descriptors: the target-generation slot cbuffer and visibility UAV. The opaque query
-// never surface-shades, so all material-context resources are absent. The TLAS comes from immutable heap set 10;
-// G-buffer, scene-shading CB, and light list are heap reads.
+// The HW hard and soft inline-RayQuery passes select their TLAS, G-buffer inputs, and visibility outputs from the
+// global heap. They differ only in their six-word hard and eight-word soft push selector ABIs.
 TEST_F(DescriptorBufferRoundTripTest, ShadowRtTraceShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/shadow_rt_trace_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    auto makeUavTexture = [&]() {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(32u).setHeight(32u)
-                .setFormat(Format::RGBA16_FLOAT)
-                .setInitialState(ResourceStates::UnorderedAccess)
-                .setKeepInitialState(true)
-        );
+    struct RayQueryShape{
+        const char* name = nullptr;
+        u32 pushConstantWordCount = 0u;
     };
-    auto makeConstantBuffer = [&]() {
-        return device.createBuffer(
-            BufferDesc()
-                .setByteSize(256u)
-                .setIsConstantBuffer(true)
-                .setInitialState(ResourceStates::ConstantBuffer)
-                .setKeepInitialState(true)
-        );
+    const RayQueryShape shapes[] = {
+        { "hard", 6u },
+        { "soft", 8u },
     };
-    auto visibilityOutput = makeUavTexture();
-    auto bindlessResources = makeConstantBuffer();
-    ASSERT_TRUE(visibilityOutput && bindlessResources);
+    for(const RayQueryShape& shape : shapes){
+        SCOPED_TRACE(shape.name);
+        BindingLayoutDesc layoutDesc(descArena);
+        layoutDesc.setVisibility(ShaderType::Compute);
+        layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * shape.pushConstantWordCount));
 
-    // Exact Backend-C local layout: TLAS, G-buffer images, scene shading, and light list are heap resources. The
-    // 24-byte range covers NwbShadowRqSoftPushConstants, the larger shared hard/soft RayQuery push contract.
-    BindingLayoutDesc layoutDesc(descArena);
-    layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_SHADOW_RT_BINDING_BINDLESS_RESOURCES, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, 1u));
-    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 6u));
-
-    auto layout = device.createBindingLayout(layoutDesc);
-    ASSERT_NE(layout.get(), nullptr);
-
-    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "shadow RT trace Backend-C local shape did not route to the descriptor-buffer path";
-    EXPECT_GT(layout->getDescriptorBufferSetSizeBytes(), 0u);
-    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-    EXPECT_EQ(offsets.size(), 2u);
-
-    BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::ConstantBuffer(NWB_SHADOW_RT_BINDING_BINDLESS_RESOURCES, bindlessResources.get()));
-    setDesc.addItem(BindingSetItem::Texture_UAV(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, visibilityOutput.get(), Format::RGBA16_FLOAT));
-
-    auto bindingSet = device.createBindingSet(setDesc, layout);
-    ASSERT_NE(bindingSet.get(), nullptr);
-    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+        auto layout = device.createBindingLayout(layoutDesc);
+        ASSERT_NE(layout.get(), nullptr);
+        ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+            << "shadow RT " << shape.name << " push-only shape did not route to the descriptor-buffer path";
+        EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+        EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+        EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+    }
 }
 
 
-// Software-shadow parity: all nine decomposed SW producer kernels share this one local set. The target-generation
-// slot cbuffer at b22 selects G-buffer plus scene/light heap entries, while b8 selects the five global-heap material
-// context buffers. Historical local context SRVs remain gaps rather than returning to the Backend-C local segment.
+// All nine software-shadow kernels share one 20-word selector push ABI. Their G-buffer, context, output, scratch,
+// and indirect resources are global-heap entries, leaving no local descriptor bindings.
 TEST_F(DescriptorBufferRoundTripTest, SwShadowTraceShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/sw_shadow_trace_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    auto makeConstantBuffer = [&]() {
-        return device.createBuffer(
-            BufferDesc()
-                .setByteSize(256u)
-                .setIsConstantBuffer(true)
-                .setInitialState(ResourceStates::ConstantBuffer)
-                .setKeepInitialState(true)
-        );
-    };
-    auto makeStructuredUav = [&](const u32 stride) {
-        return device.createBuffer(
-            BufferDesc()
-                .setByteSize(stride * 256u)
-                .setStructStride(stride)
-                .setCanHaveRawViews(true)
-                .setCanHaveUAVs(true)
-                .setInitialState(ResourceStates::UnorderedAccess)
-                .setKeepInitialState(true)
-        );
-    };
-    auto makeUavTexture = [&]() {
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(32u).setHeight(32u)
-                .setArraySize(8u)
-                .setDimension(TextureDimension::Texture2DArray)
-                .setFormat(Format::RGBA16_FLOAT)
-                .setInUAV(true)
-                .setInitialState(ResourceStates::UnorderedAccess)
-                .setKeepInitialState(true)
-        );
-    };
-
-    auto bindlessResources = makeConstantBuffer();
-    auto materialContextSlots = makeConstantBuffer();
-    auto visibility = makeUavTexture();
-    auto coarse = makeUavTexture();
-    auto softHalf = makeUavTexture();
-    auto transparentSoftHalf = makeUavTexture();
-    auto edgeStats = makeStructuredUav(4u);
-    auto edgeCounter = makeStructuredUav(4u);
-    auto edgeList = makeStructuredUav(4u);
-    auto indirectArgs = makeStructuredUav(4u);
-    ASSERT_TRUE(
-        bindlessResources && materialContextSlots && visibility && coarse && softHalf && transparentSoftHalf
-        && edgeStats && edgeCounter && edgeList && indirectArgs
-    );
-    const TextureSubresourceSet shadowSubresources(0u, 1u, 0u, TextureSubresourceSet::AllArraySlices);
-
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.setUseDescriptorBuffer(true);
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, 1u));
-    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_SW_SHADOW_BINDING_MATERIAL_CONTEXT_SLOTS, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_COARSE, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_STATS, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_COUNTER, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_LIST, 1u));
-    layoutDesc.addItem(BindingLayoutItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_INDIRECT_ARGS, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_SOFT_HALF, 1u));
-    layoutDesc.addItem(BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_TRANSPARENT_SOFT_HALF, 1u));
-    layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(NWB_SW_SHADOW_BINDING_BINDLESS_RESOURCES, 1u));
-    // SwShadowMaxPushConstants covers the two seven-u32 adaptive resolve/classify contracts.
-    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 7u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 20u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);
     ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-        << "SW shadow trace shape did not route to the descriptor-buffer path";
-    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-    EXPECT_EQ(layout->getDescriptorBufferBindingOffsets().size(), 10u);
-
-    BindingSetDesc setDesc(descArena);
-    setDesc.addItem(BindingSetItem::Texture_UAV(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, visibility.get(), Format::RGBA16_FLOAT, shadowSubresources, TextureDimension::Texture2DArray));
-    setDesc.addItem(BindingSetItem::ConstantBuffer(NWB_SW_SHADOW_BINDING_MATERIAL_CONTEXT_SLOTS, materialContextSlots.get()));
-    setDesc.addItem(BindingSetItem::Texture_UAV(NWB_SW_SHADOW_BINDING_COARSE, coarse.get(), Format::RGBA16_FLOAT, shadowSubresources, TextureDimension::Texture2DArray));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_STATS, edgeStats.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_COUNTER, edgeCounter.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_EDGE_LIST, edgeList.get()));
-    setDesc.addItem(BindingSetItem::StructuredBuffer_UAV(NWB_SW_SHADOW_BINDING_INDIRECT_ARGS, indirectArgs.get()));
-    setDesc.addItem(BindingSetItem::Texture_UAV(NWB_SW_SHADOW_BINDING_SOFT_HALF, softHalf.get(), Format::RGBA16_FLOAT, shadowSubresources, TextureDimension::Texture2DArray));
-    setDesc.addItem(BindingSetItem::Texture_UAV(NWB_SW_SHADOW_BINDING_TRANSPARENT_SOFT_HALF, transparentSoftHalf.get(), Format::RGBA16_FLOAT, shadowSubresources, TextureDimension::Texture2DArray));
-    setDesc.addItem(BindingSetItem::ConstantBuffer(NWB_SW_SHADOW_BINDING_BINDLESS_RESOURCES, bindlessResources.get()));
-
-    auto bindingSet = device.createBindingSet(setDesc, layout);
-    ASSERT_NE(bindingSet.get(), nullptr);
-    EXPECT_EQ(bindingSet->getLayout(), layout.get());
+        << "SW shadow push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
 
 
-// Skinned-mesh compute now resolves all persistent streams (including skin/joint payloads and the RT attribute
-// output) through the global StorageBuffer heap. The three local set-0 layouts therefore retain only their sparse
-// slot cbuffer (skinning b12; bounds/repack b6) plus their existing push block. Verify each Backend-C local shape and
-// that the corresponding production pipeline description carries the global resource/sampler heap layouts at sets 8/9.
+// Skinned-mesh compute resolves every persistent stream and its per-runtime selector payload through the global heap.
+// Its three local leaves therefore retain only their dispatch push blocks. Verify those push-only layouts and their
+// composition with the global resource/sampler heap layouts.
 TEST_F(DescriptorBufferRoundTripTest, SkinnedMeshComputeShapesBuildAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& heap = device.getDescriptorHeap();
     ASSERT_TRUE(heap.isInitialized());
-    ASSERT_TRUE(heap.usesDescriptorBuffer());
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/skinned_mesh_compute_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    auto bindlessSlots = device.createBuffer(
-        BufferDesc()
-            .setByteSize(256u)
-            .setIsConstantBuffer(true)
-            .setInitialState(ResourceStates::ConstantBuffer)
-            .setKeepInitialState(true)
-    );
-    ASSERT_TRUE(bindlessSlots);
-
     struct ComputeShape{
         const char* name = nullptr;
-        u32 slotBinding = 0u;
         u32 pushConstantByteSize = 0u;
     };
     const ComputeShape shapes[] = {
-        { "skinning", NWB_SKINNED_MESH_BINDING_BINDLESS_RESOURCES, NWB_SKINNED_MESH_PUSH_CONSTANT_BYTE_SIZE },
-        { "bounds", NWB_SKINNED_MESH_BOUNDS_BINDING_BINDLESS_RESOURCES, NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE },
-        { "repack", NWB_SKINNED_MESH_REPACK_BINDING_BINDLESS_RESOURCES, NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE },
+        { "skinning", NWB_SKINNED_MESH_PUSH_CONSTANT_BYTE_SIZE },
+        { "bounds", NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE },
+        { "repack", NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE },
     };
 
     for(const ComputeShape& shape : shapes){
@@ -2440,27 +1541,16 @@ TEST_F(DescriptorBufferRoundTripTest, SkinnedMeshComputeShapesBuildAsDescriptorB
         BindingLayoutDesc layoutDesc(descArena);
         layoutDesc
             .setVisibility(ShaderType::Compute)
-            .setUseDescriptorBuffer(heap.usesDescriptorBuffer())
         ;
-        layoutDesc.addItem(BindingLayoutItem::ConstantBuffer(shape.slotBinding, 1u));
         layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, shape.pushConstantByteSize));
 
         auto layout = device.createBindingLayout(layoutDesc);
         ASSERT_NE(layout.get(), nullptr);
         ASSERT_TRUE(layout->isDescriptorBufferCompatible())
-            << shape.name << " local shape did not route to the descriptor-buffer path";
-        EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
-        const auto& offsets = layout->getDescriptorBufferBindingOffsets();
-        EXPECT_EQ(offsets.size(), 1u);
-        EXPECT_NE(offsets.find(shape.slotBinding), offsets.end());
-        EXPECT_EQ(offsets.find(0u), offsets.end());
-        EXPECT_EQ(offsets.find(shape.slotBinding - 1u), offsets.end());
-
-        BindingSetDesc setDesc(descArena);
-        setDesc.addItem(BindingSetItem::ConstantBuffer(shape.slotBinding, bindlessSlots.get()));
-        auto bindingSet = device.createBindingSet(setDesc, layout);
-        ASSERT_NE(bindingSet.get(), nullptr);
-        EXPECT_EQ(bindingSet->getLayout(), layout.get());
+            << shape.name << " push-only layout did not route to the descriptor-buffer path";
+        EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+        EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+        EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 
         // This is the exact three-layout composition used by each production skinned compute pipeline: its local
         // slot-CB set followed by the fixed resource/sampler heap sets. No shader is needed to validate descriptor
@@ -2479,22 +1569,18 @@ TEST_F(DescriptorBufferRoundTripTest, SkinnedMeshComputeShapesBuildAsDescriptorB
 }
 
 
-// Global-heap proof: the GpuDescriptorHeap must run on Backend C where the device advertises
-// VK_EXT_descriptor_buffer. Unlike the per-pass shape tests above (which exercise a frozen binding set), this proves
-// the heap itself -- a persistent, per-slot-writable structure -- (1) selected Backend C, (2) built descriptor-buffer-
+// Global-heap proof: the GpuDescriptorHeap requires the descriptor-buffer backend where the device advertises
+// VK_EXT_descriptor_buffer. Unlike the per-pass shape tests above (which exercise push-only pipeline layouts), this proves
+// the heap itself -- a persistent, per-slot-writable structure -- (1) selected the required backend, (2) built descriptor-buffer-
 // compatible bindless layouts at sets 8/9, (3) carved two persistent blocks from its segments, and (4)
 // routes write() through the descriptor-buffer path. This is the prerequisite the five heap-coupled tail pipelines
 // (surfel SW/HW trace, caustic SW/HW, SW shadow) embed, so their opt-in is only valid when these hold.
-TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRunsOnBackendC){
+TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRequiresDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& heap = device.getDescriptorHeap();
     ASSERT_TRUE(heap.isInitialized()) << "device-owned GpuDescriptorHeap was not initialized";
 
-    // Backend selection: the heap must be on Backend C here (the suite is already skipped where the extension is
-    // absent). A false result would mean the heap silently stayed on Backend A and the tail pipelines' opt-in would
-    // downgrade the whole pipeline to classic -- the exact regression this migration removes.
-    ASSERT_TRUE(heap.usesDescriptorBuffer())
-        << "global descriptor heap did not select Backend C despite the extension being present";
+    // Initialization proves the required descriptor-buffer path: no ordinary descriptor-set heap implementation exists.
 
     // The heap's two bindless layouts must be descriptor-buffer-compatible so a pipeline that embeds them at sets 8/9
     // passes the all-compatible wholesale-conversion gate. Each is pure-class by construction (resource / sampler).
@@ -2523,7 +1609,7 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRunsOnBackendC){
     EXPECT_TRUE(samplerBlock.valid())
         << "heap sampler descriptor-buffer block was not carved";
 
-    // write() must route through the descriptor-buffer path on Backend C: allocate a slot in the StorageBuffer class
+    // write() must route through the descriptor-buffer path: allocate a slot in the StorageBuffer class
     // and write a structured buffer into it. The write lands in the resource block at
     // block.offsetBytes + classBindingOffset + slot*descriptorSize; success proves the carve + class-offset cache +
     // write path.
@@ -2542,14 +1628,14 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRunsOnBackendC){
 
     const GpuDescriptorHandle handle = heap.allocate(GpuDescriptorClass::StorageBuffer);
     ASSERT_TRUE(handle.valid());
-    EXPECT_TRUE(heap.write(handle, BindingSetItem::StructuredBuffer_SRV(0u, structuredBuffer.get())))
+    EXPECT_TRUE(heap.write(handle, DescriptorWriteItem::StructuredBuffer_SRV(0u, structuredBuffer.get())))
         << "heap write() did not route through the descriptor-buffer path";
 
     heap.free(handle);
 
     // Deferred lighting consumes its per-light shadow visibility as Texture2DArray while ordinary G-buffer and
     // compositor inputs remain Texture2D. Both use VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, but the shader types differ,
-    // so this distinct heap class/binding must have a valid Backend-C descriptor-buffer write path as well.
+    // so this distinct heap class/binding must have a valid descriptor-buffer write path as well.
     auto sampledImageArray = device.createTexture(
         TextureDesc()
             .setWidth(32u)
@@ -2571,7 +1657,7 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRunsOnBackendC){
     ASSERT_TRUE(sampledImageArrayHandle.valid());
     EXPECT_TRUE(heap.write(
         sampledImageArrayHandle,
-        BindingSetItem::Texture_SRV(
+        DescriptorWriteItem::Texture_SRV(
             0u,
             sampledImageArray.get(),
             Format::RGBA16_FLOAT,
@@ -2592,7 +1678,7 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRunsOnBackendC){
 
     // The caustic resolve reads its R32_UINT fixed-point accumulator through a dedicated typed uint Texture2DArray
     // descriptor table. Its image-view format differs from the floating-point array above, so verify the distinct
-    // Backend-C class/binding's write and resource-retention path too.
+    // descriptor-buffer class/binding's write and resource-retention path too.
     auto sampledImageArrayUint = device.createTexture(
         TextureDesc()
             .setWidth(32u)
@@ -2614,7 +1700,7 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRunsOnBackendC){
     ASSERT_TRUE(sampledImageArrayUintHandle.valid());
     EXPECT_TRUE(heap.write(
         sampledImageArrayUintHandle,
-        BindingSetItem::Texture_SRV(
+        DescriptorWriteItem::Texture_SRV(
             0u,
             sampledImageArrayUint.get(),
             Format::R32_UINT,
@@ -2635,7 +1721,7 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRunsOnBackendC){
 
     // AVBOIT accumulation consumes its integrated transmittance as Texture3D. This needs a separate shader-side
     // descriptor array from Texture2D/Texture2DArray even though all three encode VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE.
-    // Verify the new class routes through Backend C and retains the volume through the same in-flight quarantine.
+    // Verify the new class routes through the descriptor-buffer path and retains the volume through the same in-flight quarantine.
     auto sampledImage3D = device.createTexture(
         TextureDesc()
             .setWidth(32u)
@@ -2657,7 +1743,7 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRunsOnBackendC){
     ASSERT_TRUE(sampledImage3DHandle.valid());
     EXPECT_TRUE(heap.write(
         sampledImage3DHandle,
-        BindingSetItem::Texture_SRV(
+        DescriptorWriteItem::Texture_SRV(
             0u,
             sampledImage3D.get(),
             Format::RGBA16_FLOAT,
@@ -2678,15 +1764,47 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRunsOnBackendC){
 }
 
 
-// Backend C's TLAS surface is deliberately a fixed one-descriptor set rather than an update-after-bind array: an
-// AccelStruct handle selects its own carved block, letting a replacement TLAS coexist with the block referenced by an
-// in-flight frame. Exercise the actual heap write path (not just a standalone BindingSet) on RT-capable devices.
+// A ray-tracing-capable device must expose the global TLAS through the required immutable descriptor-heap layout.
+// The renderer no longer has a supported local TLAS path, so a device that exposes RT but fails to create set 10
+// is a contract failure rather than a reason to skip the HW trace paths.
+TEST_F(DescriptorBufferRoundTripTest, RayTracingHeapRequiresDescriptorBufferTlasLayout){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
+
+    if(!device.queryFeatureSupport(Feature::RayTracingAccelStruct))
+        GTEST_SKIP() << "Ray tracing acceleration structures are not enabled on this device.";
+
+    ASSERT_TRUE(heap.hasAccelStructLayout())
+        << "ray-tracing-capable device has no required descriptor-buffer TLAS layout";
+    const auto* const tlasLayout = heap.getAccelStructLayout().get();
+    ASSERT_NE(tlasLayout, nullptr);
+    EXPECT_EQ(heap.getAccelStructSetIndex(), NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET);
+    EXPECT_TRUE(tlasLayout->isDescriptorBufferCompatible());
+    ASSERT_NE(tlasLayout->getBindlessDesc(), nullptr);
+    EXPECT_EQ(tlasLayout->getBindlessDesc()->layoutType, BindlessLayoutType::Immutable);
+    EXPECT_EQ(tlasLayout->getBindlessDesc()->maxCapacity, 1u);
+    EXPECT_EQ(tlasLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    EXPECT_GT(tlasLayout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_NE(
+        tlasLayout->getDescriptorBufferBindingOffsets().find(NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT),
+        tlasLayout->getDescriptorBufferBindingOffsets().end()
+    );
+}
+
+
+// The descriptor-buffer TLAS surface is deliberately an immutable one-descriptor global-heap layout rather than an
+// mutable descriptor array: an AccelStruct handle selects its own carved block, letting a replacement TLAS coexist
+// with the block referenced by an in-flight frame. Exercise the actual heap write path rather than a standalone descriptor object on
+// RT-capable devices.
 TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapWritesImmutableTlasBlock){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& heap = device.getDescriptorHeap();
-    ASSERT_TRUE(heap.isInitialized() && heap.usesDescriptorBuffer());
-    if(!heap.hasAccelStructLayout())
-        GTEST_SKIP() << "Backend C TLAS heap layout is unavailable because ray tracing is not enabled on this device.";
+    ASSERT_TRUE(heap.isInitialized());
+    if(!device.queryFeatureSupport(Feature::RayTracingAccelStruct))
+        GTEST_SKIP() << "Ray tracing acceleration structures are not enabled on this device.";
+    ASSERT_TRUE(heap.hasAccelStructLayout())
+        << "ray-tracing-capable device has no required descriptor-buffer TLAS layout";
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/heap_tlas_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
@@ -2699,7 +1817,7 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapWritesImmutableTlasBlo
 
     const GpuDescriptorHandle handle = heap.allocate(GpuDescriptorClass::AccelStruct);
     ASSERT_TRUE(handle.valid());
-    ASSERT_TRUE(heap.write(handle, BindingSetItem::RayTracingAccelStruct(0u, tlas.get())));
+    ASSERT_TRUE(heap.write(handle, DescriptorWriteItem::RayTracingAccelStruct(0u, tlas.get())));
 
     const auto block = heap.getAccelStructBufferBlock(handle);
     EXPECT_TRUE(block.valid());
@@ -2718,12 +1836,12 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapWritesImmutableTlasBlo
 // ImGui uses no local image/sampler set after the heap migration: its leaf set contains only the 32-byte per-draw
 // push block (scale/translate plus sampled-image and sampler slots), while the actual font atlas and every dynamic
 // ImTextureData image live in the global SampledImage/Sampler tables. This shape must remain descriptor-buffer
-// compatible with both heap layouts; otherwise the mixed historical set would silently pull the UI pipeline back to
-// Backend A on descriptor-buffer-capable devices.
+// compatible with both heap layouts; otherwise the mixed historical set would silently put the UI pipeline on the
+// unsupported ordinary descriptor-set path.
 TEST_F(DescriptorBufferRoundTripTest, ImguiHeapTextureAndSamplerLayoutBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& heap = device.getDescriptorHeap();
-    ASSERT_TRUE(heap.isInitialized() && heap.usesDescriptorBuffer());
+    ASSERT_TRUE(heap.isInitialized());
 
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/imgui_heap_desc_arena"};
     static constexpr u32 kImguiPushConstantBytes = sizeof(f32) * 4u + sizeof(u32) * 4u;
@@ -2733,7 +1851,6 @@ TEST_F(DescriptorBufferRoundTripTest, ImguiHeapTextureAndSamplerLayoutBuildsAsDe
     // gap form; the persistent pure resource/sampler heap tables occupy sets 8/9.
     BindingLayoutDesc leafDesc(descArena);
     leafDesc.setVisibility(ShaderType::AllGraphics);
-    leafDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
     leafDesc.addItem(BindingLayoutItem::PushConstants(0u, kImguiPushConstantBytes));
     auto leafLayout = device.createBindingLayout(leafDesc);
     ASSERT_NE(leafLayout.get(), nullptr);
@@ -2765,9 +1882,9 @@ TEST_F(DescriptorBufferRoundTripTest, ImguiHeapTextureAndSamplerLayoutBuildsAsDe
     ASSERT_TRUE(samplerHandle.valid());
     EXPECT_TRUE(heap.write(
         textureHandle,
-        BindingSetItem::Texture_SRV(0u, texture.get(), Format::RGBA8_UNORM, s_AllSubresources, TextureDimension::Texture2D)
+        DescriptorWriteItem::Texture_SRV(0u, texture.get(), Format::RGBA8_UNORM, s_AllSubresources, TextureDimension::Texture2D)
     ));
-    EXPECT_TRUE(heap.write(samplerHandle, BindingSetItem::Sampler(0u, sampler.get())));
+    EXPECT_TRUE(heap.write(samplerHandle, DescriptorWriteItem::Sampler(0u, sampler.get())));
 
     // Free mirrors ImGui texture destruction: deferred retirement keeps both resources alive until recorded UI draws
     // have drained, even though the owning ImTextureData resource may be erased immediately.
@@ -2778,42 +1895,27 @@ TEST_F(DescriptorBufferRoundTripTest, ImguiHeapTextureAndSamplerLayoutBuildsAsDe
 }
 
 
-// Heap-coupled layout compatibility proof: confirm the heap's two descriptor-buffer layouts (sets 8/9) and a
-// Backend-C leaf layout are ALL descriptor-buffer-compatible simultaneously -- the wholesale-conversion gate the five
-// tail pipelines must pass to opt in. A single non-compatible layout would downgrade the whole pipeline to classic,
-// so this simultaneous check is the precondition the tail opt-ins rely on. (The gap-set materialization and full
-// pipeline create are exercised by the soft-shadow smoke test, which carries a cooked shader; the binding-layer suite
-// has no shader loader, so it stops at the layout level like every other case here.)
-TEST_F(DescriptorBufferRoundTripTest, HeapCoupledLayoutsAreAllDescriptorBufferCompatible){
+// The global heap is the only resource-bearing descriptor transport. A pipeline-local BindingLayout may carry push
+// constants, but creating a local CBV/SRV leaf must fail instead of recreating the retired local descriptor path.
+TEST_F(DescriptorBufferRoundTripTest, PipelineLocalResourceLayoutsAreRejected){
     auto& device = DescriptorBufferRoundTripTest::device();
-    auto& heap = device.getDescriptorHeap();
-    ASSERT_TRUE(heap.isInitialized() && heap.usesDescriptorBuffer());
-    if(!heap.hasAccelStructLayout())
-        GTEST_SKIP() << "Backend C TLAS heap layout is unavailable because ray tracing is not enabled on this device.";
 
-    static constexpr Name kDescArenaName{"tests/descriptor_buffer/heap_coupled_desc_arena"};
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/local_resource_layout_rejected_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    // Leaf set 0: a segment-coherent pure-resource shape (CB + 2 StructuredBuffer SRV, no samplers), opting into
-    // Backend C iff the heap is -- mirroring how the tail pipelines gate their opt-in on the heap's backend.
     BindingLayoutDesc leafDesc(descArena);
     leafDesc.setVisibility(ShaderType::Compute);
-    leafDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
     leafDesc.addItem(BindingLayoutItem::ConstantBuffer(0u, 1u));
     leafDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(1u, 1u));
     leafDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(2u, 1u));
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        (void)device.createBindingLayout(leafDesc);
+    }, "");
+#else
     auto leafLayout = device.createBindingLayout(leafDesc);
-    ASSERT_NE(leafLayout.get(), nullptr);
-    ASSERT_TRUE(leafLayout->isDescriptorBufferCompatible())
-        << "leaf layout did not route to the descriptor-buffer path";
-
-    // All four embedded layouts must be descriptor-buffer-compatible for the wholesale-conversion gate -- the heap's
-    // two tables at sets 8/9, the fixed TLAS set at 10, and the leaf at set 0. This is the precondition the HW
-    // shadow/GI/caustic pipelines' opt-in depends on.
-    EXPECT_TRUE(heap.getResourceLayout()->isDescriptorBufferCompatible());
-    EXPECT_TRUE(heap.getSamplerLayout()->isDescriptorBufferCompatible());
-    EXPECT_TRUE(heap.getAccelStructLayout()->isDescriptorBufferCompatible());
-    EXPECT_TRUE(leafLayout->isDescriptorBufferCompatible());
+    EXPECT_FALSE(leafLayout);
+#endif
 }
 
 

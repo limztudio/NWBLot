@@ -53,6 +53,17 @@ struct NwbMeshGeneratedVertex{
 };
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
+// The compute-emulation target is a per-mesh writable StorageBuffer heap entry.  This typed alias shares the
+// canonical StorageBuffer table with the raw and read-only mesh-stream aliases; the push-constant lane below selects
+// the current mesh's entry without recreating a local descriptor set.
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate writable typed view of the StorageBuffer descriptor table.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+RWStructuredBuffer<NwbMeshGeneratedVertex, Std430DataLayout> g_NwbHeapMeshGeneratedVertexBuffers[];
+#pragma warning(pop)
+#endif
+
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
 uint2 nwbMeshPackGeneratedHalf4(const half4 value){
     return uint2(
         nwbPackHalf2x16(float2(value.xy)),
@@ -178,7 +189,13 @@ struct NwbMeshPushConstants{
 ConstantBuffer<NwbMeshPushConstants> g_NwbMeshPushConstants;
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
-[[vk::binding(NWB_MESH_BINDING_GENERATED_VERTEX, NWB_MESH_SET)]] RWStructuredBuffer<NwbMeshGeneratedVertex, Std430DataLayout> g_NwbMeshGeneratedVertices;
+uint nwbMeshFrameGeneratedVertexHeapSlot(){
+    return g_NwbMeshPushConstants.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX];
+}
+
+RWStructuredBuffer<NwbMeshGeneratedVertex, Std430DataLayout> nwbMeshGeneratedVertices(){
+    return g_NwbHeapMeshGeneratedVertexBuffers[nwbMeshFrameGeneratedVertexHeapSlot()];
+}
 #endif
 
 

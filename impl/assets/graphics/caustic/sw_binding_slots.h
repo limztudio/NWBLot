@@ -13,41 +13,11 @@
 // photonCount: each thread picks a caustic light + an emission point on the refractive-instance emission domain,
 // traces the photon through the same software scene/instance + per-mesh BVHs the SW shadow trace uses (adapted to
 // CLOSEST-hit), and splats the surviving flux at the opaque-receiver hit into the R32_UINT accumulators via
-// InterlockedAdd. The set uses the same heap-selected SW scene/material context as shadow (so the closest-hit hook
-// reads identical buffers + the per-hit surface dispatch resolves ior/transmission the SAME way) and adds caustic-specific
-// inputs/outputs: heap-selected emission-target AABBs, camera view, and G-buffer depth/world-position inputs (the
-// receiver identity reject), plus the local accumulator UAV.
-#define NWB_CAUSTIC_SW_SET 0
-
-// Keep the historical scene/light binding numbers stable as logical ABI positions. Binding 0 now carries the
-// target-generation resource-slot cbuffer instead of the scene-shading CB; binding 1 remains an intentional gap
-// because the light list is fetched from the global descriptor heap too.
-#define NWB_CAUSTIC_SW_BINDING_SCENE_SHADING 0
-#define NWB_CAUSTIC_SW_BINDING_LIGHT_LIST 1
-#define NWB_CAUSTIC_SW_BINDING_BINDLESS_RESOURCES NWB_CAUSTIC_SW_BINDING_SCENE_SHADING
-// Slots 2-4 are intentional ABI gaps: the caustic trace selects their former scene/material context through the b5
-// global StorageBuffer heap indirection below. Do not repurpose or renumber these holes.
-#define NWB_CAUSTIC_SW_BINDING_MATERIAL_CONTEXT_SLOTS 5 // ConstantBuffer<NwbRayTraceMaterialContextSlots>
-// Slots 6-8 are intentionally unused. SW caustics reads per-mesh nodes, positions, indices, and attributes from the
-// global descriptor heap through slots carried by the material record; b5 selects the scene/material context buffers.
-// Slots 9-10 are further intentional ABI gaps. Do not repurpose or renumber them.
-// Caustic-specific inputs/output:
-//  - EMISSION_TARGETS: historical local-layout position; now a logical StorageBuffer heap slot selecting the
-//    per-frame refractive-instance world AABBs (P1) the photons aim at.
-//  - VIEW: historical local-layout position; now a logical UniformBuffer heap slot selecting the camera view buffer
-//    (worldToClip) the splat projects the receiver hit through.
-//  - GBUFFER_DEPTH: historical local-layout position; now a logical heap-SRV slot selecting the G-buffer depth the
-//    splat uses to reject sky/background.
-//  - ACCUMULATOR: the R32_UINT fixed-point splat target (Texture2DArray, one layer per RGB channel).
-//  - GBUFFER_WORLD_POSITION: historical local-layout position; now a logical heap-SRV slot selecting the G-buffer
-//    world position the splat compares the photon's receiver hit against (the screen-space-leak reject -- a WORLD-
-//    distance test, robust at grazing angles where the device-depth gradient across one pixel can exceed any fixed
-//    device-depth tolerance and reject every valid splat).
-#define NWB_CAUSTIC_SW_BINDING_EMISSION_TARGETS 11 // logical heap-StorageBuffer position; selected through push constants
-#define NWB_CAUSTIC_SW_BINDING_VIEW 12 // logical heap-UniformBuffer position; selected through push constants
-#define NWB_CAUSTIC_SW_BINDING_GBUFFER_DEPTH 13 // logical heap-SRV position; selected through push constants
-#define NWB_CAUSTIC_SW_BINDING_ACCUMULATOR 14
-#define NWB_CAUSTIC_SW_BINDING_GBUFFER_WORLD_POSITION 15 // logical heap-SRV position; selected through push constants
+// InterlockedAdd. The push-only set uses the same heap-selected SW scene/material context as shadow (so the closest-hit
+// hook reads identical buffers + the per-hit surface dispatch resolves ior/transmission the SAME way), plus heap-selected
+// emission-target AABBs, camera view, G-buffer depth/world-position inputs, and accumulator storage.
+// The pass-local interface contains only the shared photon push block. Its UniformBuffer selector slots identify the
+// frame-resource and material-context payloads; the remaining push fields identify typed image/buffer heap entries.
 
 // One thread per photon in a 1D dispatch; 64 photons per group.
 #define NWB_CAUSTIC_SW_GROUP_SIZE 64

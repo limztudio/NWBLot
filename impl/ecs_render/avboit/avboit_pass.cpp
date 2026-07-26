@@ -40,20 +40,18 @@ static Core::BlendState::RenderTarget BuildAdditiveBlendTarget(const Core::Color
 static void DispatchAvboitCompute(
     Core::CommandList& commandList,
     Core::ComputePipeline* pipeline,
-    Core::BindingSet* bindingSet,
+    Core::GpuDescriptorHeap& heap,
     const AvboitFrameTargets& targets,
     const u32 groupCountX
 ){
     NWB_ASSERT(pipeline);
-    NWB_ASSERT(bindingSet);
-
-    commandList.setResourceStatesForBindingSet(bindingSet);
-    commandList.commitBarriers();
+    NWB_ASSERT(heap.isInitialized());
 
     Core::ComputeState computeState;
     computeState.setPipeline(pipeline);
-    computeState.addBindingSet(bindingSet);
+    // The pipeline's low set is push-only; its work resources are selected by heap slots.
     commandList.setComputeState(computeState);
+    heap.bindCompute(commandList, *pipeline);
 
     const RendererAvboitPushConstants pushConstants = BuildRendererAvboitPushConstants(targets);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
@@ -140,6 +138,9 @@ Core::RenderState BuildRendererAvboitAccumulateRenderState(){
 }
 
 RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets){
+    NWB_ASSERT(targets.deferredSlotsBufferDescriptor.valid());
+    NWB_ASSERT(targets.deferredSlotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
+
     RendererAvboitPushConstants pushConstants;
     pushConstants.frame[NWB_AVBOIT_PUSH_FRAME_FULL_WIDTH] = targets.fullWidth;
     pushConstants.frame[NWB_AVBOIT_PUSH_FRAME_FULL_HEIGHT] = targets.fullHeight;
@@ -154,6 +155,7 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTa
     pushConstants.volume[NWB_AVBOIT_PUSH_VOLUME_COVERAGE_WORD_COUNT] = DivideUp(targets.virtualSliceCount, NWB_AVBOIT_COVERAGE_SLICES_PER_WORD);
     pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE] = ECSRenderAvboitDetail::s_AvboitExtinctionFixedScale;
     pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_SELF_OCCLUSION_SLICE_BIAS] = ECSRenderAvboitDetail::s_AvboitSelfOcclusionSliceBias;
+    pushConstants.heapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES] = targets.deferredSlotsBufferDescriptor.slot();
     return pushConstants;
 }
 
@@ -315,7 +317,6 @@ void RendererAvboitSystem::buildTransparentCsgIntervals(
         targets.framebuffer.get(),
         MaterialPipelinePass::CsgReceiverSurface,
         nullptr,
-        nullptr,
         viewportState
     };
     m_renderer.materialSystem().renderMaterialPassDrawItems(
@@ -339,9 +340,10 @@ void RendererAvboitSystem::renderAvboitPasses(
 
     buildTransparentCsgIntervals(commandList, targets, csgFrameState);
 
-    // All occupancy/extinction variants discover opaque depth only through the global descriptor heap, which normal
-    // BindingSet state tracking cannot see. Keep the explicit transition before either material pass.
+    // Occupancy discovers opaque depth and writes coverage solely through global heap descriptors, which normal
+    // command-state tracking cannot see. Keep both explicit transitions before the material pass.
     commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(avboitTargets.coverageBuffer.get(), Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
 
     m_renderer.materialSystem().renderMaterialPass(
@@ -350,12 +352,18 @@ void RendererAvboitSystem::renderAvboitPasses(
         MaterialPipelinePass::AvboitOccupancy,
         true,
         csgFrameState,
-        avboitTargets.occupancyBindingSet.get(),
         &avboitTargets
     );
     commandList.endRenderPass();
 
     dispatchAvboitDepthWarp(commandList, avboitTargets);
+
+    // Extinction reads the warp/control outputs and writes both packed-extinction buffers through the heap.
+    commandList.setBufferState(avboitTargets.depthWarpBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(avboitTargets.controlBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(avboitTargets.extinctionBuffer.get(), Core::ResourceStates::UnorderedAccess);
+    commandList.setBufferState(avboitTargets.extinctionOverflowBuffer.get(), Core::ResourceStates::UnorderedAccess);
+    commandList.commitBarriers();
 
     m_renderer.materialSystem().renderMaterialPass(
         commandList,
@@ -363,20 +371,21 @@ void RendererAvboitSystem::renderAvboitPasses(
         MaterialPipelinePass::AvboitExtinction,
         true,
         csgFrameState,
-        avboitTargets.extinctionBindingSet.get(),
         &avboitTargets
     );
     commandList.endRenderPass();
 
     dispatchAvboitIntegration(commandList, avboitTargets);
 
-    // All accumulation variants sample the integrated Texture3D through the heap, so transition it explicitly
-    // instead of relying on local BindingSet state tracking.
+    // All accumulation variants sample the integrated Texture3D and both work buffers through the heap, so transition
+    // them explicitly instead of relying on a now-removed local descriptor state tracker.
     commandList.setTextureState(
         avboitTargets.transmittanceTexture.get(),
         ECSRenderDetail::s_FramebufferSubresources,
         Core::ResourceStates::ShaderResource
     );
+    commandList.setBufferState(avboitTargets.depthWarpBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(avboitTargets.controlBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
 
     m_renderer.materialSystem().renderMaterialPass(
@@ -385,7 +394,6 @@ void RendererAvboitSystem::renderAvboitPasses(
         MaterialPipelinePass::AvboitAccumulate,
         true,
         csgFrameState,
-        avboitTargets.accumulateBindingSet.get(),
         &avboitTargets
     );
     commandList.endRenderPass();
@@ -394,10 +402,18 @@ void RendererAvboitSystem::renderAvboitPasses(
 void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets){
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_AvboitDepthWarp, graphics().getDevice(), commandList);
 
+    // The depth-warp kernel reads coverage and writes the warp/control buffers through global heap descriptors.
+    commandList.setBufferState(targets.coverageBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(targets.depthWarpBuffer.get(), Core::ResourceStates::UnorderedAccess);
+    commandList.setBufferState(targets.controlBuffer.get(), Core::ResourceStates::UnorderedAccess);
+    commandList.commitBarriers();
+
+    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+
     __hidden_avboit::DispatchAvboitCompute(
         commandList,
         avboitState().m_depthWarpPipeline.get(),
-        targets.depthWarpBindingSet.get(),
+        heap,
         targets,
         NWB_AVBOIT_DEPTH_WARP_DISPATCH_GROUP_COUNT_X
     );
@@ -407,10 +423,24 @@ void RendererAvboitSystem::dispatchAvboitIntegration(Core::CommandList& commandL
     const u32 pixelCount = targets.lowWidth * targets.lowHeight;
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_AvboitIntegration, graphics().getDevice(), commandList);
 
+    // Integration reads all packed extinction inputs and writes the Texture3D through global heap descriptors. Keep
+    // its UAV transition explicit so the complete heap-mediated write/read sequence remains visible to the command list.
+    commandList.setBufferState(targets.extinctionBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(targets.controlBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(targets.extinctionOverflowBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setTextureState(
+        targets.transmittanceTexture.get(),
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::UnorderedAccess
+    );
+    commandList.commitBarriers();
+
+    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+
     __hidden_avboit::DispatchAvboitCompute(
         commandList,
         avboitState().m_integratePipeline.get(),
-        targets.integrateBindingSet.get(),
+        heap,
         targets,
         DivideUp(pixelCount, static_cast<u32>(NWB_AVBOIT_INTEGRATE_GROUP_SIZE_X))
     );

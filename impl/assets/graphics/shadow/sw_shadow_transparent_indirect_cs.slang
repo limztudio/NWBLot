@@ -19,30 +19,14 @@
 #include "sw_shadow_gbuffer.slangi"
 #include "sw_shadow_edge_record.slangi"
 
-struct NwbSwShadowTransparentIndirectPushConstants{
-    uint width;
-    uint height;
-    uint instanceCount;
-    // Threads per indirect-trace group (= NWB_SW_SHADOW_TRACE_GROUP): the flat record index is
-    // groupID.x * traceGroupSize + SV_GroupIndex.
-    uint traceGroupSize;
-};
-
-[[vk::push_constant]]
-ConstantBuffer<NwbSwShadowTransparentIndirectPushConstants> g_NwbSwShadowPush;
-
 #include "sw_shadow_ray.slangi"
 
 // The clamped trace count ([1]) guarding the tail + the compacted edge-record list this pass consumes.
-[[vk::binding(NWB_SW_SHADOW_BINDING_EDGE_COUNTER, NWB_SW_SHADOW_SET)]]
-RWStructuredBuffer<uint> g_NwbSwShadowEdgeCounter;
-
-[[vk::binding(NWB_SW_SHADOW_BINDING_EDGE_LIST, NWB_SW_SHADOW_SET)]]
-RWStructuredBuffer<uint> g_NwbSwShadowEdgeList;
+#define g_NwbSwShadowEdgeCounter NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeCounterStorageSlot)
+#define g_NwbSwShadowEdgeList NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeListStorageSlot)
 
 // The full-res visibility array: fold this edge's transmittance onto the pristine opaque mask with a single overwrite.
-[[vk::binding(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, NWB_SW_SHADOW_SET)]]
-RWTexture2DArray<float4> g_NwbSwShadowVisibility;
+#define g_NwbSwShadowVisibility NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

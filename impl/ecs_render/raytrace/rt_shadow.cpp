@@ -16,6 +16,145 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
+    if(handle.valid())
+        return true;
+
+    auto* device = graphics().getDevice();
+    if(!device || !device->getDescriptorHeap().isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
+        return false;
+    }
+
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    const Core::GpuDescriptorHandle acquired = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(!acquired.valid() || !heap.write(acquired, Core::BindingSetItem::StructuredBuffer_SRV(0u, &buffer))){
+        if(acquired.valid())
+            heap.free(acquired);
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material context buffer in the descriptor heap"));
+        return false;
+    }
+
+    handle = acquired;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RendererRayTracingSystem::replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
+    auto* device = graphics().getDevice();
+    if(!device || !device->getDescriptorHeap().isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
+        return false;
+    }
+
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    const Core::GpuDescriptorHandle acquired = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(!acquired.valid() || !heap.write(acquired, Core::BindingSetItem::StructuredBuffer_SRV(0u, &buffer))){
+        if(acquired.valid())
+            heap.free(acquired);
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to replace ray-trace material-context heap descriptor"));
+        return false;
+    }
+
+    if(handle.valid())
+        heap.free(handle);
+    handle = acquired;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
+    if(rayTracingState().m_rayTraceMaterialContextSlotsBuffer)
+        return true;
+
+    Core::BufferDesc slotsBufferDesc;
+    slotsBufferDesc
+        .setByteSize(sizeof(RayTraceMaterialContextSlots))
+        .setIsConstantBuffer(true)
+        .setDebugName(Name("raytrace_material_context_slots"))
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    rayTracingState().m_rayTraceMaterialContextSlotsBuffer = graphics().createBuffer(slotsBufferDesc);
+    if(!rayTracingState().m_rayTraceMaterialContextSlotsBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create ray-trace material-context slot buffer"));
+        return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RendererRayTracingSystem::uploadRayTraceMaterialContextSlots(Core::CommandList& commandList){
+    if(!ensureRayTraceMaterialContextSlotsBuffer())
+        return false;
+
+    RayTraceMaterialContextSlots slots;
+    const auto resolveStorageSlot = [](const Core::Buffer* buffer, const Core::GpuDescriptorHandle handle, u32& outSlot) -> bool{
+        if(!buffer){
+            outSlot = 0u;
+            return true;
+        }
+        if(!handle.valid() || handle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer)
+            return false;
+        outSlot = handle.slot();
+        return true;
+    };
+
+    const bool complete =
+        resolveStorageSlot(rayTracingState().m_sceneBvhNodeBuffer.get(), rayTracingState().m_sceneBvhNodeHeapHandle, slots.sceneBvhNodes)
+        && resolveStorageSlot(rayTracingState().m_sceneInstanceBuffer.get(), rayTracingState().m_sceneInstanceHeapHandle, slots.sceneInstances)
+        && resolveStorageSlot(rayTracingState().m_shadowInstanceMaterialBuffer.get(), rayTracingState().m_shadowInstanceMaterialHeapHandle, slots.instanceMaterial)
+        && resolveStorageSlot(rayTracingState().m_shadowMaterialTypedBuffer.get(), rayTracingState().m_shadowMaterialTypedHeapHandle, slots.materialTyped)
+        && resolveStorageSlot(rayTracingState().m_shadowInstanceBuffer.get(), rayTracingState().m_shadowInstanceHeapHandle, slots.meshInstances)
+    ;
+    if(!complete){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
+        return false;
+    }
+
+    Core::Buffer* const slotsBuffer = rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get();
+    commandList.setBufferState(slotsBuffer, Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.writeBuffer(slotsBuffer, &slots, sizeof(slots));
+    commandList.setBufferState(slotsBuffer, Core::ResourceStates::ConstantBuffer);
+    commandList.commitBarriers();
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
+    if(auto* device = graphics().getDevice()){
+        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+        if(heap.isInitialized()){
+            heap.free(rayTracingState().m_sceneBvhNodeHeapHandle);
+            heap.free(rayTracingState().m_sceneInstanceHeapHandle);
+            heap.free(rayTracingState().m_shadowInstanceMaterialHeapHandle);
+            heap.free(rayTracingState().m_shadowMaterialTypedHeapHandle);
+            heap.free(rayTracingState().m_shadowInstanceHeapHandle);
+        }
+    }
+    rayTracingState().m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::invalid();
+    rayTracingState().m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& targets){
     // The shadow-visibility image is the shared output of the shadow subsystem: both the hardware ray-traced
     // and the software-BVH backends write per-light colored transmittance into it, one Texture2DArray layer
@@ -249,18 +388,9 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
-    // Transition shared per-mesh geometry and material context to ShaderResource after buildSceneTlas used positions
-    // and indices for acceleration-structure input. Caustic and GI read these buffers through descriptor-heap slots.
-    for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot){
-        commandList.setBufferState(rayTracingState().m_shadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_shadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_shadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
-    }
-    commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
     // The RayQuery shaders fetch the G-buffer plus shared scene-shading/light-list buffers through descriptor-heap
     // slots, rather than local set descriptors. Stage those reads explicitly; the binding sets cover only the local
-    // TLAS/slot-cbuffer/material/output resources.
+    // TLAS/slot-cbuffer/output resources.
     commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -278,7 +408,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         const u32 softGroupsY = DivideUp(softHalfHeight, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE));
 
         // Derive the soft trace's local resource states (TLAS, slot cbuffer, and shadowSoftHalfA as the UAV output) from
-        // its binding set; the per-mesh/material context and heap-selected G-buffer/scene reads were staged above.
+        // its binding set; the heap-selected G-buffer/scene reads were staged above.
         commandList.setResourceStatesForBindingSet(rayTracingState().m_shadowSoftBindingSet.get());
         commandList.commitBarriers();
 
@@ -412,20 +542,24 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
     // The per-mesh BVH node buffers were left in UnorderedAccess by the build pass; move each distinct mesh's
-    // node + geometry buffers to ShaderResource for the traversal reads. The scene node buffer was already
-    // uploaded as a shader resource by buildSceneSwBvh; setResourceStatesForBindingSet derives the remaining local
-    // resources (including the target-generation slot cbuffer and visibility UAV).
+    // node + geometry buffers to ShaderResource for the traversal reads. All five shared scene/material context
+    // buffers are heap-selected rather than locally bound, so transition them explicitly too; the binding set derives
+    // only the target-generation and material-context cbuffers plus the local UAVs.
     for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){
         commandList.setBufferState(rayTracingState().m_swShadowMeshNodeBuffers[slot], Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_swShadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_swShadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_swShadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
     }
+    commandList.setBufferState(rayTracingState().m_sceneBvhNodeBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(rayTracingState().m_sceneInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(rayTracingState().m_shadowInstanceMaterialBuffer.get(), Core::ResourceStates::ShaderResource);
     // The per-hit transmittance dispatch reads the shadow-owned material-context buffers (built + uploaded by
     // buildSceneSwBvh on the shadow-prepare command list); move them explicitly alongside the per-mesh geometry
     // before traversal.
     commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+    if(rayTracingState().m_shadowInstanceBuffer)
+        commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
     // The trace selects its G-buffer, scene-shading, and light-list inputs through the descriptor heap, so their
     // resource states are no longer implied by the SW binding set.
     commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -753,7 +887,8 @@ void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayou
     // The hardware inline-RayQuery occlusion trace's bindings, in NWB_SHADOW_RT_* slot order (occlusion.slangi /
     // shadow_rayquery.slangi declare them). Its three G-buffer images are target-generation heap reads selected by push
     // slots, and the shared scene-shading/light-list heap entries are selected by the target-generation slot cbuffer.
-    // The local set therefore holds only the TLAS, slot cbuffer, persistent material context, and output. Shared by the
+    // The local set therefore holds only the TLAS, target-generation slot cbuffer, and output. The opaque trace never
+    // evaluates a material surface, so its former material-context SRVs are retained only as ABI gaps. Shared by the
     // full-resolution hard fallback and the half-resolution soft trace, so both use the identical local resource map.
     // Backend C reads the shared TLAS through set 10 of the global descriptor heap; Backend A retains its local
     // set-0 TLAS binding and the matching shader variant.
@@ -763,11 +898,6 @@ void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayou
     // intentionally left unbound because the light list is heap fetched too.
     layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SHADOW_RT_BINDING_BINDLESS_RESOURCES, 1));
     layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SHADOW_RT_BINDING_VISIBILITY_OUTPUT, 1)); // soft trace: half-res; hard fallback: full-res
-    // (slot 7, the per-instance occluder material table, is intentionally absent: the opaque fast path loads no
-    // per-instance material. The shared buffer stays for the SW/GI/caustics paths -- see binding_slots.h.)
-    // Only shared material-context buffers remain in this slot map; the opaque trace reads no per-mesh geometry.
-    layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MATERIAL_TYPED, 1));
-    layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INSTANCES, 1));
     // Soft shadow cone-jitter: the frame counter plus three heap G-buffer slots travel in both push blocks. Sized to the
     // LARGER of the two pipelines that share this layout -- the full-res hard trace sets ShadowRqPushConstants, while the
     // half-res SOFT trace (shadow_rayquery_soft_cs) sets the wider ShadowRqSoftPushConstants; a range sized to the max
@@ -783,8 +913,8 @@ void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayou
 
 void RendererRayTracingSystem::appendShadowTraceBindingSet(Core::BindingSetDesc& desc, DeferredFrameTargets& targets, Core::Texture* visibilityTarget)const{
     // The visibility UAV target differs per pass (half-res for the trace, full-res for the hard fallback); everything
-    // else uses the identical trace layout. Its shadow-owned material context is built by buildSceneTlas over ALL
-    // gathered occluders, unlike the draw-pass buffers, which hold only the opaque set at trace time.
+    // else uses the identical trace layout. The opaque trace consumes no material context; transparent material
+    // evaluation is exclusively the software traversal's responsibility.
     if(!graphics().getDevice()->getDescriptorHeap().usesDescriptorBuffer())
         desc.addItem(Core::BindingSetItem::RayTracingAccelStruct(NWB_SHADOW_RT_BINDING_TLAS, rayTracingState().m_tlas.get()));
     desc.addItem(Core::BindingSetItem::ConstantBuffer(
@@ -798,9 +928,6 @@ void RendererRayTracingSystem::appendShadowTraceBindingSet(Core::BindingSetDesc&
         ECSRenderDetail::s_ShadowVisibilitySubresources,
         Core::TextureDimension::Texture2DArray
     ));
-    // Slot 7 is unused because the opaque fast path loads no per-instance material.
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MATERIAL_TYPED, rayTracingState().m_shadowMaterialTypedBuffer.get()));
-    desc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SHADOW_RT_BINDING_MESH_INSTANCES, rayTracingState().m_shadowInstanceBuffer.get()));
 }
 
 
@@ -886,36 +1013,19 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
 bool RendererRayTracingSystem::ensureShadowBindingSet(DeferredFrameTargets& targets){
     NWB_ASSERT(rayTracingState().m_shadowBindingLayout);
     NWB_ASSERT(rayTracingState().m_tlas);
-    NWB_ASSERT(rayTracingState().m_shadowInstanceMaterialBuffer);
-    NWB_ASSERT(rayTracingState().m_shadowMeshCount > 0u);
     NWB_ASSERT(targets.shadowVisibility);
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(targets.bindless.slotsBuffer);
-    // The shared trace layout carries the shadow-owned material context (g_NwbMaterialTypedWords +
-    // g_NwbMeshInstances) built by buildSceneTlas over ALL gathered occluders, rather than the draw-pass buffers,
-    // which hold only the opaque set at trace time. buildSceneTlas uploads both before this binding set is created.
-    NWB_ASSERT(rayTracingState().m_shadowMaterialTypedBuffer);
-    NWB_ASSERT(rayTracingState().m_shadowInstanceBuffer);
 
     // Rebuild when any binding input that can change without a full invalidate changes: the TLAS (recreated when
-    // the live instance count outgrows its capacity), the instance-material table, the distinct-mesh count (the
-    // per-mesh descriptor arrays repopulate when the set of traced meshes changes), the target-generation slot cbuffer,
-    // and the shadow-owned material-context buffers (recreated when they outgrow their capacity). A resize resets the
-    // set via resetDeferredFrameTargets, so the target inputs need no separate key.
+    // the live instance count outgrows its capacity) or the target-generation slot cbuffer. A resize resets the set
+    // via resetDeferredFrameTargets, so the output needs no separate key.
     const Core::RayTracingAccelStruct* tlas = rayTracingState().m_tlas.get();
-    const Core::Buffer* instanceMaterialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
-    Core::Buffer* materialTypedBuffer = rayTracingState().m_shadowMaterialTypedBuffer.get();
-    Core::Buffer* meshInstanceBuffer = rayTracingState().m_shadowInstanceBuffer.get();
     Core::Buffer* bindlessResourcesBuffer = targets.bindless.slotsBuffer.get();
-    const u32 meshCount = rayTracingState().m_shadowMeshCount;
     if(
         rayTracingState().m_shadowBindingSet
         && rayTracingState().m_shadowBindingSetTlas == tlas
-        && rayTracingState().m_shadowBindingSetInstanceMaterial == instanceMaterialBuffer
-        && rayTracingState().m_shadowBindingSetMaterialTyped == materialTypedBuffer
-        && rayTracingState().m_shadowBindingSetMeshInstances == meshInstanceBuffer
         && rayTracingState().m_shadowBindingSetBindlessResources == bindlessResourcesBuffer
-        && rayTracingState().m_shadowBindingSetMeshCount == meshCount
     )
         return true;
 
@@ -929,19 +1039,11 @@ bool RendererRayTracingSystem::ensureShadowBindingSet(DeferredFrameTargets& targ
     if(!rayTracingState().m_shadowBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow binding set"));
         rayTracingState().m_shadowBindingSetTlas = nullptr;
-        rayTracingState().m_shadowBindingSetInstanceMaterial = nullptr;
-        rayTracingState().m_shadowBindingSetMaterialTyped = nullptr;
-        rayTracingState().m_shadowBindingSetMeshInstances = nullptr;
         rayTracingState().m_shadowBindingSetBindlessResources = nullptr;
-        rayTracingState().m_shadowBindingSetMeshCount = 0u;
         return false;
     }
     rayTracingState().m_shadowBindingSetTlas = tlas;
-    rayTracingState().m_shadowBindingSetInstanceMaterial = instanceMaterialBuffer;
-    rayTracingState().m_shadowBindingSetMaterialTyped = materialTypedBuffer;
-    rayTracingState().m_shadowBindingSetMeshInstances = meshInstanceBuffer;
     rayTracingState().m_shadowBindingSetBindlessResources = bindlessResourcesBuffer;
-    rayTracingState().m_shadowBindingSetMeshCount = meshCount;
     return true;
 }
 
@@ -1019,32 +1121,19 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
 bool RendererRayTracingSystem::ensureShadowSoftBindingSet(DeferredFrameTargets& targets){
     NWB_ASSERT(rayTracingState().m_shadowBindingLayout);
     NWB_ASSERT(rayTracingState().m_tlas);
-    NWB_ASSERT(rayTracingState().m_shadowInstanceMaterialBuffer);
-    NWB_ASSERT(rayTracingState().m_shadowMeshCount > 0u);
     NWB_ASSERT(targets.shadowSoftHalfA);
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(targets.bindless.slotsBuffer);
-    NWB_ASSERT(rayTracingState().m_shadowMaterialTypedBuffer);
-    NWB_ASSERT(rayTracingState().m_shadowInstanceBuffer);
 
-    // Rebuild on the SAME tracked-pointer keys as ensureShadowBindingSet (its own copies, so the soft set is independent
-    // of the hard set's rebuild): the TLAS, the instance-material table, the distinct-mesh count, the shadow-owned
-    // material-context buffers, and the target-generation slot cbuffer. A resize resets the set via
-    // resetDeferredFrameTargets, so the target inputs need no key.
+    // Rebuild on the same TLAS + target-generation slot-cbuffer keys as ensureShadowBindingSet (its own copies keep the
+    // soft set independent of the hard set's rebuild). A resize resets the set via resetDeferredFrameTargets, so the
+    // output needs no separate key.
     const Core::RayTracingAccelStruct* tlas = rayTracingState().m_tlas.get();
-    const Core::Buffer* instanceMaterialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
-    Core::Buffer* materialTypedBuffer = rayTracingState().m_shadowMaterialTypedBuffer.get();
-    Core::Buffer* meshInstanceBuffer = rayTracingState().m_shadowInstanceBuffer.get();
     Core::Buffer* bindlessResourcesBuffer = targets.bindless.slotsBuffer.get();
-    const u32 meshCount = rayTracingState().m_shadowMeshCount;
     if(
         rayTracingState().m_shadowSoftBindingSet
         && rayTracingState().m_shadowSoftBindingSetTlas == tlas
-        && rayTracingState().m_shadowSoftBindingSetInstanceMaterial == instanceMaterialBuffer
-        && rayTracingState().m_shadowSoftBindingSetMaterialTyped == materialTypedBuffer
-        && rayTracingState().m_shadowSoftBindingSetMeshInstances == meshInstanceBuffer
         && rayTracingState().m_shadowSoftBindingSetBindlessResources == bindlessResourcesBuffer
-        && rayTracingState().m_shadowSoftBindingSetMeshCount == meshCount
     )
         return true;
 
@@ -1059,19 +1148,11 @@ bool RendererRayTracingSystem::ensureShadowSoftBindingSet(DeferredFrameTargets& 
     if(!rayTracingState().m_shadowSoftBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow binding set"));
         rayTracingState().m_shadowSoftBindingSetTlas = nullptr;
-        rayTracingState().m_shadowSoftBindingSetInstanceMaterial = nullptr;
-        rayTracingState().m_shadowSoftBindingSetMaterialTyped = nullptr;
-        rayTracingState().m_shadowSoftBindingSetMeshInstances = nullptr;
         rayTracingState().m_shadowSoftBindingSetBindlessResources = nullptr;
-        rayTracingState().m_shadowSoftBindingSetMeshCount = 0u;
         return false;
     }
     rayTracingState().m_shadowSoftBindingSetTlas = tlas;
-    rayTracingState().m_shadowSoftBindingSetInstanceMaterial = instanceMaterialBuffer;
-    rayTracingState().m_shadowSoftBindingSetMaterialTyped = materialTypedBuffer;
-    rayTracingState().m_shadowSoftBindingSetMeshInstances = meshInstanceBuffer;
     rayTracingState().m_shadowSoftBindingSetBindlessResources = bindlessResourcesBuffer;
-    rayTracingState().m_shadowSoftBindingSetMeshCount = meshCount;
     return true;
 }
 
@@ -1098,13 +1179,10 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         // iff the heap is on Backend C.
         layoutDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
         // Bindings 3/4 remain historical scene/light ABI gaps; the cbuffer at 22 selects their heap entries instead.
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_SCENE_NODES, 1));
+        // The former scene/material SRVs at 5/7/12/13/14 are similarly heap-selected by the b8 trace-context cbuffer.
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_SCENE_INSTANCES, 1));
+        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SW_SHADOW_BINDING_MATERIAL_CONTEXT_SLOTS, 1));
         // Per-mesh geometry is fetched from the global descriptor heap through slots carried by the material record.
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_INSTANCE_MATERIAL, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_MATERIAL_TYPED, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_MESH_INSTANCES, 1));
         // Stage-2 adaptive transparent shadow: the half-res coarse transmittance scratch (written by the coarse trace,
         // UAV-read by the resolve) + the edge-fraction stats counter. Always present in the layout (the shader always
         // declares them); renderer state chooses which pass is dispatched and whether the counter is tallied.
@@ -1277,9 +1355,6 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
 
 bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& targets){
     NWB_ASSERT(rayTracingState().m_swShadowBindingLayout);
-    NWB_ASSERT(rayTracingState().m_sceneBvhNodeBuffer);
-    NWB_ASSERT(rayTracingState().m_sceneInstanceBuffer);
-    NWB_ASSERT(rayTracingState().m_shadowInstanceMaterialBuffer);
     NWB_ASSERT(rayTracingState().m_swShadowMeshCount > 0u);
     NWB_ASSERT(targets.shadowVisibility);
     NWB_ASSERT(targets.shadowCoarseTransmittance);
@@ -1291,41 +1366,23 @@ bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& ta
     NWB_ASSERT(rayTracingState().m_swShadowIndirectArgsBuffer);
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(targets.bindless.slotsBuffer);
-    // The material-constants context the per-hit transmittance dispatch reads (g_NwbMaterialTypedWords +
-    // g_NwbMeshInstances) is the SHADOW-OWNED combined pair built by buildSceneSwBvh over ALL gathered occluders,
-    // NOT the draw pass's buffers (those hold only one transparency class at trace time). buildSceneSwBvh uploads
-    // both before this binding set is created.
-    NWB_ASSERT(rayTracingState().m_shadowMaterialTypedBuffer);
-    NWB_ASSERT(rayTracingState().m_shadowInstanceBuffer);
+    NWB_ASSERT(rayTracingState().m_rayTraceMaterialContextSlotsBuffer);
 
-    // Rebuild when any binding input that can change without a full invalidate changes: the scene node /
-    // instance buffers (recreated when they outgrow their capacity), the visibility target (recreated on
-    // resize, which also resets this set via resetDeferredFrameTargets), the distinct-mesh count (the per-mesh
-    // descriptor arrays repopulate when the set of traced meshes changes), the target-generation bindless slot buffer,
-    // and the shadow-owned material-context buffers (recreated when they outgrow their capacity).
-    Core::Buffer* sceneNodeBuffer = rayTracingState().m_sceneBvhNodeBuffer.get();
-    Core::Buffer* instanceBuffer = rayTracingState().m_sceneInstanceBuffer.get();
-    Core::Buffer* instanceMaterialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
-    Core::Buffer* materialTypedBuffer = rayTracingState().m_shadowMaterialTypedBuffer.get();
-    Core::Buffer* meshInstanceBuffer = rayTracingState().m_shadowInstanceBuffer.get();
+    // Rebuild when a local binding input changes: the visibility target (recreated on resize, which also resets this
+    // set via resetDeferredFrameTargets), the target-generation bindless slot buffer, or the trace-context slot cbuffer.
+    // The five actual scene/material resources are globally heap-selected by that cbuffer and do not belong in this set.
+    Core::Buffer* materialContextSlotsBuffer = rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get();
     Core::Buffer* bindlessResourcesBuffer = targets.bindless.slotsBuffer.get();
     const Core::Texture* visibilityTarget = targets.shadowVisibility.get();
-    const u32 meshCount = rayTracingState().m_swShadowMeshCount;
     if(
         rayTracingState().m_swShadowBindingSet
-        && rayTracingState().m_swShadowBindingSetSceneNodes == sceneNodeBuffer
-        && rayTracingState().m_swShadowBindingSetInstances == instanceBuffer
-        && rayTracingState().m_swShadowBindingSetInstanceMaterial == instanceMaterialBuffer
-        && rayTracingState().m_swShadowBindingSetMaterialTyped == materialTypedBuffer
-        && rayTracingState().m_swShadowBindingSetMeshInstances == meshInstanceBuffer
+        && rayTracingState().m_swShadowBindingSetMaterialContextSlots == materialContextSlotsBuffer
         && rayTracingState().m_swShadowBindingSetBindlessResources == bindlessResourcesBuffer
         && rayTracingState().m_swShadowBindingSetVisibility == visibilityTarget
-        && rayTracingState().m_swShadowBindingSetMeshCount == meshCount
     )
         return true;
 
     Core::BindingSetDesc bindingSetDesc(arena());
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_SCENE_NODES, sceneNodeBuffer));
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
         NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT,
         targets.shadowVisibility.get(),
@@ -1333,10 +1390,10 @@ bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& ta
         ECSRenderDetail::s_ShadowVisibilitySubresources,
         Core::TextureDimension::Texture2DArray
     ));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_SCENE_INSTANCES, instanceBuffer));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_INSTANCE_MATERIAL, instanceMaterialBuffer));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_MATERIAL_TYPED, materialTypedBuffer));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_SW_SHADOW_BINDING_MESH_INSTANCES, meshInstanceBuffer));
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
+        NWB_SW_SHADOW_BINDING_MATERIAL_CONTEXT_SLOTS,
+        materialContextSlotsBuffer
+    ));
     // Stage-2 adaptive transparent shadow: the half-res coarse transmittance scratch (UAV) + the edge-fraction counter
     // (UAV). The coarse texture is recreated with the visibility target on resize, so tracking the visibility pointer in
     // the rebuild guard also covers it; the stats buffer is persistent.
@@ -1382,24 +1439,14 @@ bool RendererRayTracingSystem::ensureSwShadowBindingSet(DeferredFrameTargets& ta
     rayTracingState().m_swShadowBindingSet = device->createBindingSet(bindingSetDesc, rayTracingState().m_swShadowBindingLayout);
     if(!rayTracingState().m_swShadowBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow binding set"));
-        rayTracingState().m_swShadowBindingSetSceneNodes = nullptr;
-        rayTracingState().m_swShadowBindingSetInstances = nullptr;
-        rayTracingState().m_swShadowBindingSetInstanceMaterial = nullptr;
-        rayTracingState().m_swShadowBindingSetMaterialTyped = nullptr;
-        rayTracingState().m_swShadowBindingSetMeshInstances = nullptr;
+        rayTracingState().m_swShadowBindingSetMaterialContextSlots = nullptr;
         rayTracingState().m_swShadowBindingSetBindlessResources = nullptr;
         rayTracingState().m_swShadowBindingSetVisibility = nullptr;
-        rayTracingState().m_swShadowBindingSetMeshCount = 0u;
         return false;
     }
-    rayTracingState().m_swShadowBindingSetSceneNodes = sceneNodeBuffer;
-    rayTracingState().m_swShadowBindingSetInstances = instanceBuffer;
-    rayTracingState().m_swShadowBindingSetInstanceMaterial = instanceMaterialBuffer;
-    rayTracingState().m_swShadowBindingSetMaterialTyped = materialTypedBuffer;
-    rayTracingState().m_swShadowBindingSetMeshInstances = meshInstanceBuffer;
+    rayTracingState().m_swShadowBindingSetMaterialContextSlots = materialContextSlotsBuffer;
     rayTracingState().m_swShadowBindingSetBindlessResources = bindlessResourcesBuffer;
     rayTracingState().m_swShadowBindingSetVisibility = visibilityTarget;
-    rayTracingState().m_swShadowBindingSetMeshCount = meshCount;
     return true;
 }
 
@@ -1412,7 +1459,10 @@ bool RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instance
     // is a structured SRV (no UAV) that grows by doubling like the TLAS / scene-instance buffers. Shared by the
     // hardware and software backends (only one runs per frame), built lockstep with that backend's instances.
     if(rayTracingState().m_shadowInstanceMaterialBuffer && rayTracingState().m_shadowInstanceMaterialCapacity >= instanceCount)
-        return true;
+        return ensureRayTraceMaterialContextHeapHandle(
+            *rayTracingState().m_shadowInstanceMaterialBuffer.get(),
+            rayTracingState().m_shadowInstanceMaterialHeapHandle
+        );
 
     const usize capacity = ::NextGrowingCapacity(
         rayTracingState().m_shadowInstanceMaterialCapacity,
@@ -1427,11 +1477,14 @@ bool RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instance
         .setDebugName(Name("shadow_instance_material"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    rayTracingState().m_shadowInstanceMaterialBuffer = graphics().createBuffer(materialBufferDesc);
-    if(!rayTracingState().m_shadowInstanceMaterialBuffer){
+    Core::BufferHandle materialBuffer = graphics().createBuffer(materialBufferDesc);
+    if(!materialBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow instance material buffer"));
         return false;
     }
+    if(!replaceRayTraceMaterialContextHeapHandle(*materialBuffer.get(), rayTracingState().m_shadowInstanceMaterialHeapHandle))
+        return false;
+    rayTracingState().m_shadowInstanceMaterialBuffer = Move(materialBuffer);
     rayTracingState().m_shadowInstanceMaterialCapacity = capacity;
     return true;
 }
@@ -1445,9 +1498,15 @@ bool RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceC
     // structured SRV, grows by doubling like the draw pass's instance buffer. Built each frame over ALL gathered
     // occluders so the trace's surface hook can resolve the mutable storage offset that lives in translation.w.
     if(instanceCount == 0u)
-        return true;
+        return !rayTracingState().m_shadowInstanceBuffer || ensureRayTraceMaterialContextHeapHandle(
+            *rayTracingState().m_shadowInstanceBuffer.get(),
+            rayTracingState().m_shadowInstanceHeapHandle
+        );
     if(rayTracingState().m_shadowInstanceBuffer && rayTracingState().m_shadowInstanceCapacity >= instanceCount)
-        return true;
+        return ensureRayTraceMaterialContextHeapHandle(
+            *rayTracingState().m_shadowInstanceBuffer.get(),
+            rayTracingState().m_shadowInstanceHeapHandle
+        );
 
     const usize capacity = ::NextGrowingCapacity(rayTracingState().m_shadowInstanceCapacity, instanceCount);
     Core::BufferDesc instanceBufferDesc;
@@ -1457,11 +1516,14 @@ bool RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceC
         .setDebugName(Name("shadow_instance_context"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    rayTracingState().m_shadowInstanceBuffer = graphics().createBuffer(instanceBufferDesc);
-    if(!rayTracingState().m_shadowInstanceBuffer){
+    Core::BufferHandle instanceBuffer = graphics().createBuffer(instanceBufferDesc);
+    if(!instanceBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow instance context buffer"));
         return false;
     }
+    if(!replaceRayTraceMaterialContextHeapHandle(*instanceBuffer.get(), rayTracingState().m_shadowInstanceHeapHandle))
+        return false;
+    rayTracingState().m_shadowInstanceBuffer = Move(instanceBuffer);
     rayTracingState().m_shadowInstanceCapacity = capacity;
     return true;
 }
@@ -1477,7 +1539,10 @@ bool RendererRayTracingSystem::ensureShadowMaterialTypedBuffer(usize byteCount){
     usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
     requiredByteCount = AlignUp(requiredByteCount, sizeof(u32));
     if(rayTracingState().m_shadowMaterialTypedBuffer && rayTracingState().m_shadowMaterialTypedCapacity >= requiredByteCount)
-        return true;
+        return ensureRayTraceMaterialContextHeapHandle(
+            *rayTracingState().m_shadowMaterialTypedBuffer.get(),
+            rayTracingState().m_shadowMaterialTypedHeapHandle
+        );
 
     const usize capacity = ::NextGrowingCapacity(rayTracingState().m_shadowMaterialTypedCapacity, requiredByteCount);
     Core::BufferDesc materialTypedBufferDesc;
@@ -1487,11 +1552,14 @@ bool RendererRayTracingSystem::ensureShadowMaterialTypedBuffer(usize byteCount){
         .setDebugName(Name("shadow_material_typed"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    rayTracingState().m_shadowMaterialTypedBuffer = graphics().createBuffer(materialTypedBufferDesc);
-    if(!rayTracingState().m_shadowMaterialTypedBuffer){
+    Core::BufferHandle materialTypedBuffer = graphics().createBuffer(materialTypedBufferDesc);
+    if(!materialTypedBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow material typed buffer"));
         return false;
     }
+    if(!replaceRayTraceMaterialContextHeapHandle(*materialTypedBuffer.get(), rayTracingState().m_shadowMaterialTypedHeapHandle))
+        return false;
+    rayTracingState().m_shadowMaterialTypedBuffer = Move(materialTypedBuffer);
     rayTracingState().m_shadowMaterialTypedCapacity = capacity;
     return true;
 }

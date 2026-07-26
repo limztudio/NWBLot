@@ -410,8 +410,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
         // for this trace -- the heap-selected G-buffer images were staged before the geometry-downsample pass --
         // they are still in whatever state their last writer left (per-mesh node/geometry buffers from the SW BVH build
         // pass, the material context from buildSceneSwBvh, etc.). Move each mesh's node/position/index/attribute buffer
-        // to ShaderResource, then the two shadow-owned material-context buffers, then derive the rest (scene BVH read,
-        // target-generation slot cbuffer, transparentSoftHalf UAV) from the SW set. This mirrors the staging at the top of
+        // plus ALL five heap-selected scene/material context buffers to ShaderResource, then derive the rest (the two
+        // local slot cbuffers and transparentSoftHalf UAV) from the SW set. This mirrors the staging at the top of
         // renderGpuBvhShadowVisibility EXACTLY. On the SW path it is a harmless idempotent no-op: those resources were
         // already staged at the top of the SW render, so setResourceStatesForBindingSet finds them already in their
         // target states and emits no barriers.
@@ -421,6 +421,9 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
             commandList.setBufferState(rayTracingState().m_swShadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
             commandList.setBufferState(rayTracingState().m_swShadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
         }
+        commandList.setBufferState(rayTracingState().m_sceneBvhNodeBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_sceneInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_shadowInstanceMaterialBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
         // The SW trace now fetches shared scene shading + lights from the heap too; they are not represented in this

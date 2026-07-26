@@ -276,28 +276,6 @@ namespace __hidden_csg_interval_peel{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool CreateIntervalCapFillMaterialBindingLayout(
-    Core::GraphicsArena& arena,
-    Core::Device& device,
-    Core::BindingLayoutHandle& layout
-){
-    if(layout)
-        return true;
-
-    Core::BindingLayoutDesc bindingLayoutDesc(arena);
-    bindingLayoutDesc.setVisibility(Core::ShaderType::Pixel);
-    bindingLayoutDesc.setUseDescriptorBuffer(true);
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_MESH_BINDING_MATERIAL_TYPED, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_MESH_BINDING_INSTANCE, 1));
-
-    layout = device.createBindingLayout(bindingLayoutDesc);
-    return layout != nullptr;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] static bool CreateIntervalPeelPipeline(
     Core::Device& device,
     Core::ComputePipelineHandle& pipeline,
@@ -391,7 +369,6 @@ namespace __hidden_csg_interval_peel{
     const Core::ShaderHandle& pixelShader,
     const Core::BindingLayoutHandle& intervalSampleBindingLayout,
     const Core::BindingLayoutHandle& clipBindingLayout,
-    const Core::BindingLayoutHandle& materialBindingLayout,
     const Core::FramebufferInfo& framebufferInfo
 ){
     if(pipeline && pipeline->getFramebufferInfo() == framebufferInfo)
@@ -407,7 +384,6 @@ namespace __hidden_csg_interval_peel{
         .setRenderState(ECSRenderDetail::BuildCompositeRenderState())
         .addBindingLayout(intervalSampleBindingLayout)
         .addBindingLayout(clipBindingLayout)
-        .addBindingLayout(materialBindingLayout)
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
@@ -498,15 +474,6 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     ))
         return false;
 
-    if(capFillRequired && !__hidden_csg_interval_peel::CreateIntervalCapFillMaterialBindingLayout(
-        arena(),
-        *device,
-        csgState().m_intervalCapFillMaterialBindingLayout
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval cap fill material binding layout"));
-        return false;
-    }
-
     if(!csgState().m_intervalPeelComputeShader){
         if(!m_renderer.shaderSystem().loadShader(
             csgState().m_intervalPeelComputeShader,
@@ -594,7 +561,6 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         csgState().m_intervalCapFillPixelShader,
         csgState().m_intervalSampleBindingLayout,
         csgState().m_clipBindingLayout,
-        csgState().m_intervalCapFillMaterialBindingLayout,
         targets.framebuffer->getFramebufferInfo()
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval cap fill pipeline"));

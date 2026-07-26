@@ -94,6 +94,25 @@ struct MaterialPassDrawContext{
     const Core::ViewportState& viewportState;
 };
 
+
+// Per-frame descriptor-heap indirection for the material context shared by every ray-tracing consumer. The actual
+// scene-BVH, scene-instance, instance-material, typed-material, and mesh-instance buffers are persistent storage
+// descriptors in the global heap; this compact local cbuffer merely selects their slots. Keeping it separate from
+// DeferredBindlessResourceSlots matches the context's renderer-owned lifetime (it can grow independently of a target
+// generation) while preserving the target slot cbuffer's resize ownership.
+struct RayTraceMaterialContextSlots{
+    u32 sceneBvhNodes = 0u;
+    u32 sceneInstances = 0u;
+    u32 instanceMaterial = 0u;
+    u32 materialTyped = 0u;
+
+    u32 meshInstances = 0u;
+    u32 _reserved0 = 0u;
+    u32 _reserved1 = 0u;
+    u32 _reserved2 = 0u;
+};
+static_assert(sizeof(RayTraceMaterialContextSlots) == sizeof(u32) * 8u, "Ray-trace material-context slots must stay two uint4 lanes");
+
 // Per-frame slot indirection for ordinary-pass bindless consumers. The data is a std140-compatible sequence of seven
 // uint4 lanes in deferred/bindless_resources.slangi. Descriptor handles retain their class tag on
 // the CPU; shaders need only the global slot because each field names the descriptor array it indexes.

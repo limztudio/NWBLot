@@ -11,6 +11,7 @@
 
 #include "sw_binding_slots.h"
 #include "../deferred/bindless_resources.slangi"
+#include "../raytrace/material_context_slots.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,6 +24,12 @@
 
 [[vk::binding(NWB_SW_SHADOW_BINDING_BINDLESS_RESOURCES, NWB_SW_SHADOW_SET)]]
 ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbSwShadowBindlessResources;
+
+// The five scene/material context buffers are global StorageBuffer descriptors. This small local cbuffer selects their
+// current generations for every SW shadow pass without keeping local SRVs for the scene BVH, instance records, or
+// material-surface storage.
+[[vk::binding(NWB_SW_SHADOW_BINDING_MATERIAL_CONTEXT_SLOTS, NWB_SW_SHADOW_SET)]]
+ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbSwShadowMaterialContextSlots;
 
 
 // True where this texel is the cleared background (no geometry): fully lit, casts no candidate ray. The passes treat a

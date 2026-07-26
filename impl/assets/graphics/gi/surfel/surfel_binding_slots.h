@@ -10,13 +10,13 @@
 
 
 // Surfel GI bindings. Three compute passes + the deferred-lighting gather share the surfel pool / hash / counter /
-// constants; the TRACE pass additionally reuses the SW-BVH bindings (scene/instance/per-mesh, slots 0-10) the SW
+// constants; the TRACE pass additionally uses the heap-selected SW-BVH scene/material context (b11) the SW
 // shadow/caustic path already builds, so the trace body (gi_sw_trace.slangi: nwbGiTraceClosest +
 // nwbGiShadeHit + the cook-generated material-surface dispatch) is reused verbatim.
 //
 //   HASH_BUILD: constants + pool(UAV) + cellHead(UAV)                                  [runs BEFORE spawn]
 //   SPAWN     : constants + pool(UAV) + cellHead(UAV, this frame) + counter(UAV) + G-buffer worldPos/normal(SRV)
-//   TRACE     : SW-BVH slots 0-10 + constants + pool(UAV)
+//   TRACE     : target slot CB (b0) + trace-context slot CB (b11) + constants + pool(UAV)
 //   GATHER    : (in the resolve set) constants + pool(SRV) + cellHead(SRV)
 //
 // ONE SURFEL PER HASH BUCKET. The hash is (re)built from the live pool FIRST; the spawn then only fills buckets whose
@@ -28,8 +28,8 @@
 
 #define NWB_SURFEL_SET 0
 
-// SW-BVH slots 0-11 the TRACE reuses -- provided by the shared trace include (gi_sw_trace.slangi -> sw_binding_slots.h).
-// The surfel-specific bindings live at the tail so they never collide with the BVH slots the trace body declares.
+// b0 is the target-generation resource-slot cbuffer, b1-10 are intentional ABI gaps, and b11 is the heap-backed trace
+// material-context cbuffer supplied by gi_sw_trace.slangi. The surfel-specific bindings live at the tail.
 #define NWB_SURFEL_BINDING_CONSTANTS 12   // ConstantBuffer<NwbSurfelConstants>
 #define NWB_SURFEL_BINDING_POOL 13        // RWStructuredBuffer<NwbSurfel> (UAV) / StructuredBuffer (SRV at the gather)
 #define NWB_SURFEL_BINDING_CELL_HEAD 14   // RWStructuredBuffer<uint> (UAV build) / StructuredBuffer (SRV spawn+gather)

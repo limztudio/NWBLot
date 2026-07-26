@@ -9,6 +9,7 @@
 
 #include <core/ecs/system.h>
 #include <core/graphics/render_pass.h>
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <impl/ecs_mesh/runtime/mesh.h>
 #include <impl/ecs_mesh/components.h>
@@ -96,6 +97,50 @@ private:
     static_assert(sizeof(MeshletRepackPushConstants) == NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning repack push constants layout must match the shader ABI");
     static_assert(offsetof(MeshletRepackPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_MESHLET_COUNT, "MeshSkinning repack meshlet-count push offset drifted");
 
+    // Mirrors NwbSkinnedMeshBindlessResources exactly: four std140 uint4 lanes. Every handle below is a persistent
+    // StorageBuffer-heap registration; the slot buffer is the sole set-0 descriptor for all three compute passes.
+    struct RuntimeBindlessResourceSlots{
+        u32 restPosition = 0u;
+        u32 skinnedPosition = 0u;
+        u32 restNormal = 0u;
+        u32 skinnedNormal = 0u;
+
+        u32 restTangent = 0u;
+        u32 skinnedTangent = 0u;
+        u32 meshletDesc = 0u;
+        u32 positionRefDeltas = 0u;
+
+        u32 attributeRefDeltas = 0u;
+        u32 attributeSkins = 0u;
+        u32 skinInfluences = 0u;
+        u32 jointPalette = 0u;
+
+        u32 localVertexRefs = 0u;
+        u32 primitiveIndices = 0u;
+        u32 meshletBounds = 0u;
+        u32 attributeBuffer = 0u;
+    };
+    static_assert(sizeof(RuntimeBindlessResourceSlots) == sizeof(u32) * 16u, "MeshSkinning bindless resource slots must stay four uint4 lanes");
+
+    struct RuntimeBindlessHeapHandles{
+        Core::GpuDescriptorHandle restPosition = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle skinnedPosition = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle restNormal = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle skinnedNormal = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle restTangent = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle skinnedTangent = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle meshletDesc = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle positionRefDeltas = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle attributeRefDeltas = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle attributeSkins = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle skinInfluences = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle jointPalette = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle localVertexRefs = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle primitiveIndices = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle meshletBounds = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle attributeBuffer = Core::GpuDescriptorHandle::invalid();
+    };
+
     struct RuntimeResources{
         RuntimeMeshHandle handle;
         u32 editRevision = 0;
@@ -106,11 +151,40 @@ private:
         u32 jointCount = 0;
         Core::BufferHandle skinBuffer;
         Core::BufferHandle jointPaletteBuffer;
+        Core::BufferHandle bindlessResourceSlotsBuffer;
+        RuntimeBindlessResourceSlots bindlessResourceSlots;
+        RuntimeBindlessHeapHandles bindlessHeapHandles;
+        bool bindlessResourceSlotsUploaded = false;
         Core::BindingSetHandle skinningBindingSet;
         Core::BindingSetHandle boundsBindingSet;
         Core::BindingSetHandle repackBindingSet; // RT-only: per-frame skinned-normal -> RT attribute buffer repack (null when ray tracing is unsupported)
 
         [[nodiscard]] bool usesSkinning()const{ return skinCount != 0u && jointCount != 0u && skinningBindingSet != nullptr; }
+        [[nodiscard]] bool hasPersistentHeapDescriptors(const bool hasActiveSkin, const bool hasAttributeBuffer)const{
+            const auto storageHandle = [](const Core::GpuDescriptorHandle handle){
+                return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
+            };
+            const bool common =
+                bindlessResourceSlotsBuffer != nullptr
+                && storageHandle(bindlessHeapHandles.restPosition)
+                && storageHandle(bindlessHeapHandles.skinnedPosition)
+                && storageHandle(bindlessHeapHandles.restNormal)
+                && storageHandle(bindlessHeapHandles.skinnedNormal)
+                && storageHandle(bindlessHeapHandles.restTangent)
+                && storageHandle(bindlessHeapHandles.skinnedTangent)
+                && storageHandle(bindlessHeapHandles.meshletDesc)
+                && storageHandle(bindlessHeapHandles.positionRefDeltas)
+                && storageHandle(bindlessHeapHandles.attributeRefDeltas)
+                && storageHandle(bindlessHeapHandles.attributeSkins)
+                && storageHandle(bindlessHeapHandles.localVertexRefs)
+                && storageHandle(bindlessHeapHandles.primitiveIndices)
+                && storageHandle(bindlessHeapHandles.meshletBounds)
+            ;
+            return common
+                && (!hasActiveSkin || (storageHandle(bindlessHeapHandles.skinInfluences) && storageHandle(bindlessHeapHandles.jointPalette)))
+                && (!hasAttributeBuffer || storageHandle(bindlessHeapHandles.attributeBuffer))
+            ;
+        }
     };
 
     struct RuntimePayloadViews{
@@ -184,6 +258,9 @@ private:
         RuntimeResources*& outResources,
         bool& outResourcesRebuilt
     );
+    [[nodiscard]] bool createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources);
+    [[nodiscard]] bool uploadRuntimeResourceBindlessSlots(Core::CommandList& commandList, RuntimeResources& resources);
+    void releaseRuntimeResourceBindlessHeapHandles(RuntimeResources& resources);
     void pruneRuntimeResources();
 
 

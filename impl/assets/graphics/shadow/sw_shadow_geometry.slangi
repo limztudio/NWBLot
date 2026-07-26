@@ -18,6 +18,7 @@
 // Global descriptor-heap accessors for per-mesh geometry. The material record carries the slots; this include provides
 // NwbHeapBvhNodes() for nodes and NwbHeapRawBuffer() for positions, indices, and attributes.
 #include "../bindless/bindless_heap_bvh.slangi"
+#include "../bindless/bindless_heap_rt.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -26,29 +27,33 @@
 // The software-shadow scene geometry: the scene/instance BVH node buffer, the per-instance record, world->object
 // helpers, and vertex-attribute unpack. Per-mesh nodes, positions, indices, and attributes are read through descriptor
 // heap slots carried by the material record; shared backing buffers remain transitioned for those reads. This concern
-// declares the scene-node, instance, and instance-material bindings used by every BVH-walking pass.
+// declares typed heap aliases for the scene-node, instance, and instance-material buffers used by every BVH-walking
+// pass. Their uniform slots come from g_NwbSwShadowMaterialContextSlots (declared by sw_shadow_gbuffer.slangi before
+// this concern is included), so no local SRV remains in the SW shadow layout.
 
-
-[[vk::binding(NWB_SW_SHADOW_BINDING_SCENE_NODES, NWB_SW_SHADOW_SET)]]
-StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbSwShadowSceneNodes;
-
-// Per-instance record: the affine world->object transform (3 rows) and mesh-table slot. Mirrors the C++
-// SceneSwBvhInstanceGpu (64 bytes).
+// Per-instance record: the affine world->object transform (3 rows), an ABI-reserved word, and CPU-only leaf-cost
+// data. Mirrors the C++ SceneSwBvhInstanceGpu (64 bytes).
 struct NwbSwShadowInstance{
     float4 worldToObjectRow0;
     float4 worldToObjectRow1;
     float4 worldToObjectRow2;
-    uint meshIndex;
+    uint reservedMeshIndex;
     uint primitiveCount;
     uint pad0;
     uint pad1;
 };
 
-[[vk::binding(NWB_SW_SHADOW_BINDING_SCENE_INSTANCES, NWB_SW_SHADOW_SET)]]
-StructuredBuffer<NwbSwShadowInstance, Std430DataLayout> g_NwbSwShadowInstances;
+// The scene-instance table has a distinct 64-byte record stride but shares the global StorageBuffer descriptor class
+// with the BVH and material buffers. This view supplies its shader-side stride without a new descriptor class.
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table in bindless_heap.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbSwShadowInstance, Std430DataLayout> g_NwbHeapSwShadowSceneInstanceBuffers[];
+#pragma warning(pop)
 
-[[vk::binding(NWB_SW_SHADOW_BINDING_INSTANCE_MATERIAL, NWB_SW_SHADOW_SET)]]
-StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbSwShadowInstanceMaterial;
+StructuredBuffer<NwbSwShadowInstance, Std430DataLayout> NwbHeapSwShadowSceneInstances(const uint slot){
+    return g_NwbHeapSwShadowSceneInstanceBuffers[slot];
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

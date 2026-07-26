@@ -6,8 +6,10 @@
 #define NWB_GRAPHICS_CSG_RUNTIME_SLANGI
 
 #include "binding_slots.h"
+#include "clip_context.slangi"
 #include "constants.h"
 
+#include "../bindless/bindless_heap.slangi"
 #include "../mesh/runtime_constants.h"
 
 
@@ -47,6 +49,24 @@ struct NwbCsgSample{
     float3 normal;
 };
 
+// Receiver ranges and cutters are persistent CSG context buffers. Their slots are uniform for a draw/dispatch, so
+// these typed StorageBuffer aliases deliberately use ordinary indexing rather than NonUniformResourceIndex().
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed views of the global StorageBuffer descriptor table.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbCsgReceiverRange, Std430DataLayout> g_NwbHeapCsgReceiverRangeBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbCsgCutter, Std430DataLayout> g_NwbHeapCsgCutterBuffers[];
+#pragma warning(pop)
+
+StructuredBuffer<NwbCsgReceiverRange, Std430DataLayout> NwbHeapCsgReceiverRanges(const uint slot){
+    return g_NwbHeapCsgReceiverRangeBuffers[slot];
+}
+
+StructuredBuffer<NwbCsgCutter, Std430DataLayout> NwbHeapCsgCutters(const uint slot){
+    return g_NwbHeapCsgCutterBuffers[slot];
+}
+
 #if !defined(NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI) && !defined(NWB_CSG_MESH_INSTANCE_INDEX)
 struct NwbCsgMeshPushConstants{
     uint4 dispatch;
@@ -56,8 +76,9 @@ struct NwbCsgMeshPushConstants{
 };
 #endif
 
-[[vk::binding(NWB_CSG_BINDING_RECEIVER_RANGES, NWB_CSG_CLIP_SET)]] StructuredBuffer<NwbCsgReceiverRange, Std430DataLayout> g_NwbCsgReceiverRanges;
-[[vk::binding(NWB_CSG_BINDING_CUTTERS, NWB_CSG_CLIP_SET)]] StructuredBuffer<NwbCsgCutter, Std430DataLayout> g_NwbCsgCutters;
+// Historical local CSG clip SRVs at b0/b1 remain gaps. The clip context cbuffer selects their heap entries.
+#define g_NwbCsgReceiverRanges NwbHeapCsgReceiverRanges(g_NwbCsgClipContextSlots.receiverRanges)
+#define g_NwbCsgCutters NwbHeapCsgCutters(g_NwbCsgClipContextSlots.cutters)
 
 #if !defined(NWB_GRAPHICS_MESH_SHADER_RUNTIME_SLANGI) && !defined(NWB_CSG_MESH_INSTANCE_INDEX)
 [[vk::push_constant]]

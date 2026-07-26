@@ -1,0 +1,121 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Per-runtime skinned-mesh StorageBuffer-heap selectors. The C++ RuntimeBindlessResourceSlots mirror is four std140
+// uint4 lanes, so every skinning, bounds, and repack dispatch sees the same persistent stream generation.
+
+
+#ifndef NWB_GRAPHICS_SKINNED_MESH_BINDLESS_RESOURCES_SLANGI
+#define NWB_GRAPHICS_SKINNED_MESH_BINDLESS_RESOURCES_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../bindless/bindless_heap.slangi"
+#include "../mesh/meshlet_payload.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbSkinnedMeshSkinInfluence{
+    uint4 joint;
+    float4 weight;
+};
+
+struct NwbSkinnedMeshJointMatrix{
+    float4 row0;
+    float4 row1;
+    float4 row2;
+};
+
+struct NwbSkinnedMeshBindlessResources{
+    uint4 streamSlots0; // rest position, skinned position, rest normal, skinned normal
+    uint4 streamSlots1; // rest tangent, skinned tangent, meshlet desc, position-ref deltas
+    uint4 streamSlots2; // attribute-ref deltas, attribute skins, skin influences, joint palette
+    uint4 streamSlots3; // local vertex refs, primitive indices, meshlet bounds, RT attribute buffer
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// These aliases intentionally view the one global StorageBuffer descriptor table with the strides the skinned compute
+// passes require. Read-only and writable views share a Vulkan STORAGE_BUFFER descriptor; the resource access qualifier
+// remains shader-local, so each pass can fetch exactly the persistent stream it needs.
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed aliases of the global StorageBuffer descriptor table.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbHeapSkinnedMeshPositionBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+RWStructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbHeapSkinnedMeshWritablePositionBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbHeapSkinnedMeshHalf4Buffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbHeapSkinnedMeshWritableHalf4Buffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbHeapSkinnedMeshletDescBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> g_NwbHeapSkinnedMeshletLocalVertexRefBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<uint, Std430DataLayout> g_NwbHeapSkinnedMeshUintBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbSkinnedMeshSkinInfluence, Std430DataLayout> g_NwbHeapSkinnedMeshSkinInfluenceBuffers[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbSkinnedMeshJointMatrix, Std430DataLayout> g_NwbHeapSkinnedMeshJointMatrixBuffers[];
+#pragma warning(pop)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+StructuredBuffer<NwbMeshPosition, Std430DataLayout> nwbSkinnedMeshHeapPositions(const uint slot){
+    return g_NwbHeapSkinnedMeshPositionBuffers[NonUniformResourceIndex(slot)];
+}
+
+RWStructuredBuffer<NwbMeshPosition, Std430DataLayout> nwbSkinnedMeshHeapWritablePositions(const uint slot){
+    return g_NwbHeapSkinnedMeshWritablePositionBuffers[NonUniformResourceIndex(slot)];
+}
+
+StructuredBuffer<NwbMeshHalf4, Std430DataLayout> nwbSkinnedMeshHeapHalf4s(const uint slot){
+    return g_NwbHeapSkinnedMeshHalf4Buffers[NonUniformResourceIndex(slot)];
+}
+
+RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> nwbSkinnedMeshHeapWritableHalf4s(const uint slot){
+    return g_NwbHeapSkinnedMeshWritableHalf4Buffers[NonUniformResourceIndex(slot)];
+}
+
+StructuredBuffer<NwbMeshletDesc, Std430DataLayout> nwbSkinnedMeshHeapMeshlets(const uint slot){
+    return g_NwbHeapSkinnedMeshletDescBuffers[NonUniformResourceIndex(slot)];
+}
+
+StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> nwbSkinnedMeshHeapLocalVertexRefs(const uint slot){
+    return g_NwbHeapSkinnedMeshletLocalVertexRefBuffers[NonUniformResourceIndex(slot)];
+}
+
+StructuredBuffer<uint, Std430DataLayout> nwbSkinnedMeshHeapUints(const uint slot){
+    return g_NwbHeapSkinnedMeshUintBuffers[NonUniformResourceIndex(slot)];
+}
+
+StructuredBuffer<NwbSkinnedMeshSkinInfluence, Std430DataLayout> nwbSkinnedMeshHeapSkinInfluences(const uint slot){
+    return g_NwbHeapSkinnedMeshSkinInfluenceBuffers[NonUniformResourceIndex(slot)];
+}
+
+StructuredBuffer<NwbSkinnedMeshJointMatrix, Std430DataLayout> nwbSkinnedMeshHeapJointPalette(const uint slot){
+    return g_NwbHeapSkinnedMeshJointMatrixBuffers[NonUniformResourceIndex(slot)];
+}
+
+RWByteAddressBuffer nwbSkinnedMeshHeapWritableRawBuffer(const uint slot){
+    return g_NwbHeapStorageBuffers[NonUniformResourceIndex(slot)];
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

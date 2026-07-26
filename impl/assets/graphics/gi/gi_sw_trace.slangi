@@ -10,15 +10,18 @@
 
 
 // The SOFTWARE backend of the GI trace seam: walks the SW scene/instance/per-mesh BVH the SW shadow/caustic path
-// already builds and defines nwbGiTraceClosest (+ nwbGiSwInstanceClosest) accordingly. It declares the BVH bindings
-// (slots 0-10 of NWB_GI_SW_SET) via gi_trace_common.slangi (which also brings NwbGiProbeHit + the shared nwbGiShadeHit
-// Lambert shade + the scene light list). The HW twin is gi_hw_trace.slangi (inline RayQuery over the TLAS); both share
-// the common shade + NwbGiProbeHit, so a red wall bounces red identically. The producer's own shader supplies the
-// OUTPUT bindings + main() (the surfel path reduces rays in groupshared and running-means them into a surfel record).
+// already builds and defines nwbGiTraceClosest (+ nwbGiSwInstanceClosest) accordingly. Its only trace-context local
+// descriptor is the b11 slot cbuffer; it selects the scene BVH / instance and shadow material buffers from the global
+// StorageBuffer heap. gi_trace_common also brings NwbGiProbeHit + the shared nwbGiShadeHit Lambert shade + the scene
+// light list. The HW twin is gi_hw_trace.slangi (inline RayQuery over the TLAS); both share the common shade +
+// NwbGiProbeHit, so a red wall bounces red identically. The producer's own shader supplies the OUTPUT bindings + main()
+// (the surfel path reduces rays in groupshared and running-means them into a surfel record).
 
 
 #include "sw_binding_slots.h"
 #include "../deferred/bindless_resources.slangi"
+#include "../raytrace/material_context_slots.slangi"
+#include "../bindless/bindless_heap_rt.slangi"
 
 // The shared scene-shading CB + light list are target-generation heap entries. This trace's local slot cbuffer carries
 // their uniform heap indices in avboitSlots.z/.w; gi_trace_common's scene/buffer.slangi include therefore emits typed
@@ -29,16 +32,37 @@ ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbGiSwBindless
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbGiSwBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbGiSwBindlessResources.avboitSlots.w
 
+// Per-trace scene/material context. These five slots are uniform for the dispatch, and select typed aliases of the
+// global StorageBuffer table; no scene/material context SRV remains in this pass's local binding set.
+[[vk::binding(NWB_GI_SW_BINDING_MATERIAL_CONTEXT_SLOTS, NWB_GI_SW_SET)]]
+ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbGiSwMaterialContextSlots;
+
+// The generated material-surface evaluator reaches its typed words and mutable mesh-instance records through the
+// mesh bindless-frame route. Define these before material_typed_bindings.slangi is included by shadow_surface.slangi.
 #define NWB_MESH_SET NWB_GI_SW_SET
-#define NWB_MESH_BINDING_MATERIAL_TYPED NWB_GI_SW_BINDING_MATERIAL_TYPED
-#define NWB_MESH_BINDING_INSTANCE NWB_GI_SW_BINDING_MESH_INSTANCES
+#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
+#define NWB_MESH_VIEW_BUFFER_BINDLESS 1
+uint nwbMeshFrameMaterialTypedHeapSlot(){
+    return g_NwbGiSwMaterialContextSlots.sceneSlots.w;
+}
+uint nwbMeshFrameInstanceHeapSlot(){
+    return g_NwbGiSwMaterialContextSlots.materialSlots.x;
+}
+// The trace material surface never reads mesh view data; bindless view mode keeps bindless_heap_mesh.slangi from
+// declaring a phantom local view cbuffer while retaining a valid helper for any incidental include-time reference.
+uint nwbMeshFrameViewHeapSlot(){
+    return 0u;
+}
+// Provides the typed material-word and mesh-instance views that material_typed_bindings.slangi aliases above.
+#include "../bindless/bindless_heap_mesh.slangi"
+
 // GI shades direct scene lights with an occlusion ray; it never samples the screen-space shadow/caustic textures.
 // Omitting those declarations prevents their default set-0 bindings from aliasing GI's typed material buffers.
 #define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED 1
 
 // The generated shadow dispatch is also the material-surface evaluator for GI. It reads the typed material constants
-// and mutable instance storage through the mapped bindings above, so GI evaluates the authored NwbMeshSurface instead
-// of guessing one project-interface field.
+// and mutable instance storage through the heap-selected context above, so GI evaluates the authored NwbMeshSurface
+// instead of guessing one project-interface field.
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/transmittance_dispatch.slangi"
 
@@ -48,37 +72,40 @@ ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbGiSwBindless
 #include "../bvh/bvh_common.slangi"
 #include "../bvh/ray_intersect.slangi"
 
-// Global descriptor-heap accessors for per-mesh geometry. The material record carries the slots; this include provides
-// NwbHeapBvhNodes() for nodes and NwbHeapRawBuffer() for positions, indices, and attributes.
+// Global descriptor-heap accessors for per-mesh and scene BVH geometry. The material record carries per-mesh slots;
+// the b11 cbuffer carries the scene-node slot. This include provides NwbHeapBvhNodes() and NwbHeapRawBuffer().
 #include "../bindless/bindless_heap_bvh.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// --- BVH bindings (slots 0-10; identical to the SW shadow/caustic trace) ---
-
-[[vk::binding(NWB_GI_SW_BINDING_SCENE_NODES, NWB_GI_SW_SET)]]
-StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbGiSwSceneNodes;
+// --- Heap-selected SW scene records ---
 
 struct NwbGiSwInstance{
     float4 worldToObjectRow0;
     float4 worldToObjectRow1;
     float4 worldToObjectRow2;
-    uint meshIndex;
+    uint reservedMeshIndex;
     uint primitiveCount;
     uint pad0;
     uint pad1;
 };
 
-[[vk::binding(NWB_GI_SW_BINDING_SCENE_INSTANCES, NWB_GI_SW_SET)]]
-StructuredBuffer<NwbGiSwInstance, Std430DataLayout> g_NwbGiSwInstances;
+// The scene-instance table shares the StorageBuffer descriptor class with the per-mesh BVH, material, and typed
+// buffers. This pass-local typed alias supplies its 64-byte record stride without introducing a second heap class.
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbGiSwInstance, Std430DataLayout> g_NwbHeapGiSwInstanceBuffers[];
+#pragma warning(pop)
 
-[[vk::binding(NWB_GI_SW_BINDING_INSTANCE_MATERIAL, NWB_GI_SW_SET)]]
-StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbGiSwInstanceMaterial;
+StructuredBuffer<NwbGiSwInstance, Std430DataLayout> NwbHeapGiSwInstances(const uint slot){
+    return g_NwbHeapGiSwInstanceBuffers[slot];
+}
 
 // Per-mesh nodes, positions, indices, and attributes are read through descriptor-heap slots carried by the material
-// record. The shared C++ backing buffers remain transitioned for those heap reads.
+// record. The shared C++ backing buffers, including the scene tables selected above, remain transitioned for heap reads.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -170,8 +197,8 @@ NwbGiSwTriangleHit nwbGiSwRayTriangle(const float3 origin, const float3 directio
 // nearest triangle crossing. On hit, compute the geometric face normal for Lambert lighting and reconstruct the
 // authored material-surface inputs (normal + uv0 + typed material context) for the GI bounce albedo.
 void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, inout NwbGiProbeHit closest){
-    const NwbGiSwInstance instance = g_NwbGiSwInstances[instanceIndex];
-    const NwbRtInstanceMaterial material = g_NwbGiSwInstanceMaterial[instanceIndex];
+    const NwbGiSwInstance instance = NwbHeapGiSwInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
+    const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbGiSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
 
     const float3 origin = nwbGiSwTransformPoint(instance, worldOrigin);
     const float3 direction = nwbGiSwTransformVector(instance, worldDirection);
@@ -262,7 +289,7 @@ NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
 
     uint stack[NWB_GI_SW_SCENE_STACK_SIZE];
     uint stackPointer = 0u;
-    NwbBvhNode node = g_NwbGiSwSceneNodes[0u];
+    NwbBvhNode node = NwbHeapBvhNodes(g_NwbGiSwMaterialContextSlots.sceneSlots.x)[0u];
     bool active = nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0);
 
     [loop] while(active){
@@ -271,8 +298,8 @@ NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
             active = false;
         }
         else{
-            const NwbBvhNode leftNode = g_NwbGiSwSceneNodes[node.leftChild];
-            const NwbBvhNode rightNode = g_NwbGiSwSceneNodes[node.rightChild];
+            const NwbBvhNode leftNode = NwbHeapBvhNodes(g_NwbGiSwMaterialContextSlots.sceneSlots.x)[node.leftChild];
+            const NwbBvhNode rightNode = NwbHeapBvhNodes(g_NwbGiSwMaterialContextSlots.sceneSlots.x)[node.rightChild];
             float tLeft;
             const bool hitLeft = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, 0.0, tLeft);
             float tRight;
@@ -294,7 +321,7 @@ NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
         }
 
         [loop] while(stackPointer > 0u){
-            node = g_NwbGiSwSceneNodes[stack[--stackPointer]];
+            node = NwbHeapBvhNodes(g_NwbGiSwMaterialContextSlots.sceneSlots.x)[stack[--stackPointer]];
             if(nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0)){
                 active = true;
                 break;

@@ -47,6 +47,11 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
     outBackendReady = false;
     if(!targets.shadowVisibility)
         return false;
+    // Every trace binding set carries this renderer-owned cbuffer locally while the five actual scene/material
+    // buffers are addressed through the global storage-buffer heap. Create it before any of the binding-set ensure
+    // calls below; the current slots are uploaded after all gathers have completed on this command list.
+    if(!ensureRayTraceMaterialContextSlotsBuffer())
+        return false;
 
     // Caustic emission-target gather (P1) runs once per frame regardless of the shadow backend; it populates the
     // refractive-instance world AABBs the caustic producer will aim at and the count that gates caustic-light
@@ -74,11 +79,11 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
 
         // Hybrid TRANSPARENT shadow: when the scene holds a transparent occluder, also build the software scene/mesh
         // BVH and traversal pipeline. Its gather matches buildSceneTlas's (same RendererComponent view, aligned
-        // conditions), so the scene-BVH leaf index equals the hardware InstanceID and the material context it rebuilds
-        // is byte-identical -- leaving the HW caustic (which reads that context by InstanceID) untouched. The render
+        // conditions), so the scene-BVH leaf index equals the hardware InstanceID and the material context it builds
+        // remains byte-identical -- leaving the HW caustic (which reads that context by InstanceID) untouched. The render
         // runs the SW traversal as a second pass that MULTIPLIES its colored transparent transmittance onto the opaque
-        // mask. Built BEFORE prepareHwCausticResources so the (idempotently) rebuilt context buffers are final before
-        // the caustic binding set captures them. Opaque-only scenes skip all of this and pay no software cost.
+        // mask. Built BEFORE prepareHwCausticResources so its heap slots are final before the outer preparation uploads
+        // the shared material-context cbuffer. Opaque-only scenes skip all of this and pay no software cost.
         rayTracingState().m_hybridTransparentShadowReady = false;
         if(outBackendReady && rayTracingState().m_sceneHasTransparentOccluder){
             if(!preparePendingMeshSwBvhResources())

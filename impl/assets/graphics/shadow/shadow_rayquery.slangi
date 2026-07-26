@@ -23,8 +23,8 @@
 
 // The shared scene-shading CB + light list are target-generation heap entries. This local slot cbuffer carries their
 // uniform heap indices in avboitSlots.z/.w, so scene/buffer.slangi emits typed heap aliases instead of the historical
-// local bindings 4/5. The opaque trace only actually reads the TLAS, G-buffer, and light list; the material-context
-// machinery occlusion.slangi also pulls in compiles out on this path.
+// local bindings 4/5. The opaque trace only reads the TLAS, G-buffer, and light list; occlusion.slangi intentionally
+// contains no material-surface machinery.
 [[vk::binding(NWB_SHADOW_RT_BINDING_BINDLESS_RESOURCES, NWB_SHADOW_RT_SET)]]
 ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbShadowRqBindlessResources;
 #define NWB_SCENE_BUFFERS_FROM_HEAP 1

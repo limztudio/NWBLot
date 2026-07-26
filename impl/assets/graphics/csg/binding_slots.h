@@ -13,8 +13,9 @@
 #define NWB_CSG_CLIP_SET 1
 #endif
 
-#define NWB_CSG_BINDING_RECEIVER_RANGES 0
-#define NWB_CSG_BINDING_CUTTERS 1
+// Historical clip SRVs at bindings 0/1 are now intentional ABI gaps. A single local cbuffer selects their
+// persistent StorageBuffer heap entries (plus the cap-fill typed-material / mesh-instance entries) at binding 2.
+#define NWB_CSG_BINDING_CLIP_CONTEXT_SLOTS 2
 
 #ifndef NWB_CSG_INTERVAL_SET
 #define NWB_CSG_INTERVAL_SET 0
@@ -22,12 +23,6 @@
 
 #ifndef NWB_CSG_INTERVAL_SAMPLE_SET
 #define NWB_CSG_INTERVAL_SAMPLE_SET 2
-#endif
-
-// interval_cap_fill_ps overrides NWB_CSG_INTERVAL_SAMPLE_SET to 0, leaving this distinct third layout for the
-// full typed material surface evaluator (shadow_surface.slangi + generated transmittance dispatch).
-#ifndef NWB_CSG_CAP_FILL_MATERIAL_SET
-#define NWB_CSG_CAP_FILL_MATERIAL_SET 2
 #endif
 
 #define NWB_CSG_INTERVAL_BINDING_CAP_BACK_NORMAL 0

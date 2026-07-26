@@ -5,6 +5,8 @@
 #include "sw_binding_slots.h"
 #include "../mesh/runtime_constants.h"
 #include "../deferred/bindless_resources.slangi"
+#include "../raytrace/material_context_slots.slangi"
+#include "../bindless/bindless_heap_rt.slangi"
 
 // The shared scene-shading CB + light list are target-generation heap entries. This local slot cbuffer carries their
 // uniform heap indices in avboitSlots.z/.w, so scene/buffer.slangi emits typed heap aliases instead of the historical
@@ -15,19 +17,31 @@ ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbCausticSwBin
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbCausticSwBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbCausticSwBindlessResources.avboitSlots.w
 
-// Point the surface hook's material-constants context (g_NwbMaterialTypedWords + g_NwbMeshInstances, declared in
-// mesh/material_typed_bindings.slangi at NWB_MESH_SET / NWB_MESH_BINDING_*) at this pass's binding set so the
-// per-hit surface dispatch (which supplies a refractive occluder's ior / transmission) reads them here -- exactly
-// as the SW shadow traversal redirects them onto its own set.
+// The five trace-context buffers are global StorageBuffer heap entries. This compact local cbuffer is their only
+// set-0 descriptor: its uniform slots select the scene BVH / instance and material-surface buffers for this dispatch.
+[[vk::binding(NWB_CAUSTIC_SW_BINDING_MATERIAL_CONTEXT_SLOTS, NWB_CAUSTIC_SW_SET)]]
+ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbCausticSwMaterialContextSlots;
+
+// The per-hit surface dispatch reads its typed words and mutable mesh-instance records through the heap-selected
+// material context above. Do not let bindless_heap_mesh.slangi emit its unrelated local mesh-view descriptor.
 #define NWB_MESH_SET NWB_CAUSTIC_SW_SET
-#define NWB_MESH_BINDING_MATERIAL_TYPED NWB_CAUSTIC_SW_BINDING_MATERIAL_TYPED
-#define NWB_MESH_BINDING_INSTANCE NWB_CAUSTIC_SW_BINDING_MESH_INSTANCES
+#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
+#define NWB_MESH_VIEW_BUFFER_BINDLESS 1
+uint nwbMeshFrameMaterialTypedHeapSlot(){
+    return g_NwbCausticSwMaterialContextSlots.sceneSlots.w;
+}
+uint nwbMeshFrameInstanceHeapSlot(){
+    return g_NwbCausticSwMaterialContextSlots.materialSlots.x;
+}
+uint nwbMeshFrameViewHeapSlot(){
+    return 0u; // The caustic surface path does not consume the mesh-view alias.
+}
+#include "../bindless/bindless_heap_mesh.slangi"
 
 #include "../scene/buffer.slangi"
 #include "../bvh/bvh_common.slangi"
 #include "../bvh/ray_intersect.slangi"
 #include "../common/math.slangi"
-#include "../shadow/instance_material.slangi"
 
 // Global descriptor-heap accessors for per-mesh geometry. The material record carries the slots; this include provides
 // NwbHeapBvhNodes() for nodes and NwbHeapRawBuffer() for positions, indices, and attributes.
@@ -50,26 +64,29 @@ ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbCausticSwBin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_CAUSTIC_SW_BINDING_SCENE_NODES, NWB_CAUSTIC_SW_SET)]]
-StructuredBuffer<NwbBvhNode, Std430DataLayout> g_NwbCausticSwSceneNodes;
-
-// Per-instance record: the affine world->object transform (3 rows) and mesh-table slot. Mirrors the C++
-// SceneSwBvhInstanceGpu (64 bytes) / the SW shadow NwbSwShadowInstance.
+// Per-instance record: the affine world->object transform (3 rows), an ABI-reserved word, and CPU-only leaf-cost
+// data. Mirrors the C++ SceneSwBvhInstanceGpu (64 bytes) / the SW shadow NwbSwShadowInstance.
 struct NwbCausticSwInstance{
     float4 worldToObjectRow0;
     float4 worldToObjectRow1;
     float4 worldToObjectRow2;
-    uint meshIndex;
+    uint reservedMeshIndex;
     uint primitiveCount;
     uint pad0;
     uint pad1;
 };
 
-[[vk::binding(NWB_CAUSTIC_SW_BINDING_SCENE_INSTANCES, NWB_CAUSTIC_SW_SET)]]
-StructuredBuffer<NwbCausticSwInstance, Std430DataLayout> g_NwbCausticSwInstances;
+// The software scene-instance table has its own structured record stride, but shares the global StorageBuffer
+// descriptor class with all other trace-context buffers. The b5 cbuffer supplies this table's uniform heap slot.
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbCausticSwInstance, Std430DataLayout> g_NwbHeapCausticSwInstanceBuffers[];
+#pragma warning(pop)
 
-[[vk::binding(NWB_CAUSTIC_SW_BINDING_INSTANCE_MATERIAL, NWB_CAUSTIC_SW_SET)]]
-StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbCausticSwInstanceMaterial;
+StructuredBuffer<NwbCausticSwInstance, Std430DataLayout> NwbHeapCausticSwInstances(const uint slot){
+    return g_NwbHeapCausticSwInstanceBuffers[slot];
+}
 
 // Per-mesh nodes, positions, indices, and attributes are read through descriptor-heap slots carried by the material
 // record. The shared backing buffers remain transitioned for those heap reads.
@@ -192,8 +209,7 @@ NwbCausticSwVertexAttrib nwbCausticSwLoadVertexAttrib(const uint attributeSlot, 
     // attributeSlot is this mesh's per-corner attribute buffer's GLOBAL HEAP slot (carried on the instance material
     // record, populated lockstep with the mesh in rt_swbvh.cpp). It is non-uniform across the wave -- each photon's ray
     // hits a different mesh -- so the heap subscript MUST be NonUniformResourceIndex-tagged; NwbHeapRawBuffer() applies
-    // that internally and is re-invoked at each Load (mirroring the bounded g_NwbCausticSwMeshAttributes[
-    // NonUniformResourceIndex(meshIndex)] it replaces) so the decoration is applied fresh at every descriptor access.
+    // that internally and is re-invoked at each Load so the decoration is applied fresh at every descriptor access.
     // One Load4 for the whole 16-byte attribute record (packed normal in .xy, uv0 in .zw) -- a single memory request
     // instead of two dependent Load2s (bit-identical result, lower latency in the refractive-hit path).
     const uint4 packed = NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u);
@@ -218,17 +234,16 @@ NwbCausticSwVertexAttrib nwbCausticSwLoadVertexAttrib(const uint attributeSlot, 
 // optical params (ior / transmission) from the occluder's surface hook, evaluated through the SAME dispatch the
 // shadow trace uses.
 void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, inout NwbCausticHit closest){
-    const NwbCausticSwInstance instance = g_NwbCausticSwInstances[instanceIndex];
-    const NwbRtInstanceMaterial material = g_NwbCausticSwInstanceMaterial[instanceIndex];
+    const NwbCausticSwInstance instance = NwbHeapCausticSwInstances(g_NwbCausticSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
+    const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbCausticSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
     const bool refractive = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u;
     // This instance's per-mesh geometry (BVH nodes / indices / positions / attributes) is fetched from the global
-    // descriptor heap by the four per-buffer slots the material record carries (populated lockstep with the mesh -- and
-    // with instance.meshIndex -- in rt_swbvh.cpp). Each slot is NON-UNIFORM across the wave -- different photons' rays
+    // descriptor heap by the four per-buffer slots the material record carries (populated lockstep with the mesh in
+    // rt_swbvh.cpp). Each slot is NON-UNIFORM across the wave -- different photons' rays
     // hit different meshes -- so its heap subscript must be NonUniformResourceIndex-tagged; NwbHeapBvhNodes() /
     // NwbHeapRawBuffer() apply that internally and are re-invoked at EACH access below (never hoisted into a resource
-    // local) so the decoration is applied fresh at every subscript, exactly as the bounded
-    // g_NwbCausticSwMesh*[NonUniformResourceIndex(meshIndex)] arrays they replace did. Omitting it is undefined
-    // behaviour: a wave straddling a mesh boundary reads a DIFFERENT mesh's BVH/geometry for some lanes.
+    // local) so the decoration is applied fresh at every subscript. Omitting it is undefined behaviour: a wave
+    // straddling a mesh boundary reads a DIFFERENT mesh's BVH/geometry for some lanes.
     const float3 origin = nwbCausticSwTransformPoint(instance, worldOrigin);
     const float3 direction = nwbCausticSwTransformVector(instance, worldDirection);
     const float3 invDir = nwbBvhSafeInvDir(direction);
@@ -355,7 +370,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     // identical (closest-hit is order-independent).
     uint stack[NWB_CAUSTIC_SW_SCENE_STACK_SIZE];
     uint stackPointer = 0u;
-    NwbBvhNode node = g_NwbCausticSwSceneNodes[0u]; // root
+    NwbBvhNode node = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[0u]; // root
     bool active = nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0);
 
     [loop] while(active){
@@ -364,8 +379,8 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
             active = false; // -> pop below
         }
         else{
-            const NwbBvhNode leftNode = g_NwbCausticSwSceneNodes[node.leftChild];
-            const NwbBvhNode rightNode = g_NwbCausticSwSceneNodes[node.rightChild];
+            const NwbBvhNode leftNode = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[node.leftChild];
+            const NwbBvhNode rightNode = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[node.rightChild];
             float tLeft;
             const bool hitLeft = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, 0.0, tLeft);
             float tRight;
@@ -387,7 +402,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
         }
 
         [loop] while(stackPointer > 0u){
-            node = g_NwbCausticSwSceneNodes[stack[--stackPointer]];
+            node = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[stack[--stackPointer]];
             if(nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0)){
                 active = true;
                 break;

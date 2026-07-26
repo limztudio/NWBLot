@@ -46,7 +46,7 @@ decision for us:
 | Images / samplers / accel-structs | **Zero** | Phase 1's *deferred* image/sampler shader path was **not** on the critical path; AccelStruct's Backend-A rejection was irrelevant here |
 | Heap class needed | `GpuDescriptorClass::StorageBuffer` only | The **one class Phase 1 proved end-to-end** |
 | Backing store | 7 pointer-arrays (3 HW cap-32 + 4 SW cap-64) in `renderer_state.h:431-433,484-487`, filled only in `rt_swbvh.cpp` | Register once, consume six times |
-| Index pattern | `NonUniformResourceIndex(material.meshSlot)` in **all six** passes already | Heap kept the exact pattern; no shader-logic change to indexing |
+| Phase-2 index pattern | `NonUniformResourceIndex(material.meshSlot)` in **all six** passes at the time | Final migration uses `material.{index,attribute,position,node}Slot`; the former GPU `meshSlot` word is ABI-reserved |
 | Motivating pain | The **32-mesh HW cap** was forced by the single-stage compute descriptor budget of the inline-RayQuery passes (`shadow/binding_slots.h:40-44`) | This target directly delivered the win bindless exists for |
 
 **Conclusion:** the naive worry — "the per-mesh arrays include textures, so Phase 2 must first close
@@ -75,6 +75,8 @@ diverged.
 
 Excluded (not bounded arrays, stayed classic this phase): the scalar `MESH_INSTANCES`
 `StructuredBuffer_SRV(...,1)` and the scalar `RayTracingAccelStruct` TLAS in each layout.
+The later material-context migration moved the trace-side mesh-instance data to the shared heap;
+the Backend-A local TLAS fallback remains intentional.
 
 ---
 
@@ -176,14 +178,13 @@ the bounded arrays, so registration could be validated before any accessor moved
   index/attribute/position/node are **independent** global slots.
 - Phase 2 **widened the per-instance/mesh GPU record** with per-buffer heap slots: `indexSlot`,
   `attributeSlot`, `positionSlot`, and `nodeSlot` (SW only), populated from the M1 handles. They ride
-  the existing scalar `MESH_INSTANCES` structured buffer the passes already read (a single scalar
-  binding — stayed classic). Added additively and always populated, so passes still on the bounded
-  path during the staged rollout kept working.
-- **The host-index / shader-layout split (this is where the field's meaning changed).** `meshSlot`
-  **survived** — but only host-side: it still indexes the per-mesh Vectors and keys the descriptor
-  barriers. It became **shader-vestigial**: the shaders now read the new `*Slot` fields, not
-  `meshSlot`. Documentation and comments (through `ccb9d4c9`) were reworded to keep this split
-  explicit — *host indexing* vs *shader access through the descriptor-index heap layout*.
+  the instance-material record that the trace passes read. The later material-context migration moved
+  that record and `MESH_INSTANCES` into the shared trace-context heap, while retaining this record's
+  36-byte ABI.
+- **The host-index / shader-layout split (final form).** The builder-local `meshSlot` still indexes
+  the per-mesh Vectors and keys descriptor barriers. The GPU record word that formerly mirrored it is
+  now `reservedMeshSlot`, preserving the ABI without carrying a live selector. Shaders read the new
+  `*Slot` fields through the descriptor-index heap layout.
 
 ### 3.3 M3 — Rewrote the shader accessors (and one deletion the plan did not anticipate)
 
@@ -294,7 +295,10 @@ Per-step commit log:
 2. HW caustic migrated only **1** live read (attr); its index array was already dead and was dropped.
 3. The caps were retired by converting the fixed arrays to **arena Vectors**, not by deleting a
    constant in place — pulling in the `RtShadowState(GlobalArena&)` constructor-binding requirement.
-4. Removed `MESH_*` slots were **gapped, not renumbered**; `meshSlot` survived host-side (shader-vestigial).
+4. Removed `MESH_*` slots were **gapped, not renumbered**; builder-local `meshSlot` remains host-side,
+   while its former GPU-record word is ABI-reserved.
+5. The later material-context migration moved scene nodes/instances, instance materials, typed words,
+   and mesh-instance data into the shared trace-context heap for shadow, GI, and caustics.
 5. Rollout order was **SW-first, HW-structural** (not the plan's HW-shadow-first, all-pixel-gated),
    because HW runtime pixel A/B is driver-blocked on this host.
 
@@ -304,8 +308,8 @@ Per-step commit log:
 
 1. **Slang aliased-binding codegen (P3)** — the one genuinely novel shader risk. **Resolved:**
    validated on `bindless_roundtrip_cs` before the sweep; the manual-`Load` fallback was not needed.
-2. **Record widening (M2)** — **held:** widened additively, alignment kept, always populated;
-   `meshSlot` retained host-side so mid-rollout bounded-path passes were unaffected.
+2. **Record widening (M2)** — **held:** widened additively and alignment kept. The former GPU
+   `meshSlot` word is now explicitly reserved, while builder-local mesh indexing remains host-side.
 3. **`advanceFrame()` wiring (M1)** — **wired** at `module.cpp:706`; high-water logged, no leak.
 4. **Non-uniform feature portability (P4)** — **closed:** `shaderStorageBufferArrayNonUniformIndexing`
    is a required + enabled feature with a capability log.

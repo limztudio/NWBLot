@@ -9,28 +9,42 @@
 #include "hw_binding_slots.h"
 #include "../mesh/runtime_constants.h"
 #include "../deferred/bindless_resources.slangi"
+#include "../raytrace/material_context_slots.slangi"
+#include "../bindless/bindless_heap_rt.slangi"
 
 // The shared scene-shading CB + light list are target-generation heap entries. This local slot cbuffer carries their
 // uniform heap indices in avboitSlots.z/.w, so scene/buffer.slangi emits typed heap aliases instead of the historical
-// local bindings 1/2. Point the surface hook's material-constants context (g_NwbMaterialTypedWords +
-// g_NwbMeshInstances) at THIS pass's binding set so the per-hit surface dispatch (which supplies a refractive
-// occluder's ior / transmission) reads the SAME shadow-owned material buffers and resolves IDENTICALLY to the SW path.
+// local bindings 1/2. The per-hit surface dispatch (which supplies a refractive occluder's ior / transmission)
+// reads the same shadow-owned material buffers as the SW path through the trace-context heap slots below.
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_BINDLESS_RESOURCES, NWB_CAUSTIC_RT_SET)]]
 ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbCausticHwBindlessResources;
 #define NWB_SCENE_BUFFERS_FROM_HEAP 1
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbCausticHwBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbCausticHwBindlessResources.avboitSlots.w
+
+// The InstanceID material table and the material-surface evaluator's typed/instance buffers are global
+// StorageBuffer heap entries. This local b11 cbuffer supplies their uniform slots for the whole ray dispatch.
+[[vk::binding(NWB_CAUSTIC_RT_BINDING_MATERIAL_CONTEXT_SLOTS, NWB_CAUSTIC_RT_SET)]]
+ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbCausticHwMaterialContextSlots;
+
+// Route the per-hit surface dispatch through the heap-selected typed-word and mesh-instance buffers. The caustic
+// pass owns a separate local view cbuffer, so suppress bindless_heap_mesh's unrelated local mesh-view declaration.
 #define NWB_MESH_SET NWB_CAUSTIC_RT_SET
-#define NWB_MESH_BINDING_MATERIAL_TYPED NWB_CAUSTIC_RT_BINDING_MATERIAL_TYPED
-#define NWB_MESH_BINDING_INSTANCE NWB_CAUSTIC_RT_BINDING_MESH_INSTANCES
+#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
+#define NWB_MESH_VIEW_BUFFER_BINDLESS 1
+uint nwbMeshFrameMaterialTypedHeapSlot(){
+    return g_NwbCausticHwMaterialContextSlots.sceneSlots.w;
+}
+uint nwbMeshFrameInstanceHeapSlot(){
+    return g_NwbCausticHwMaterialContextSlots.materialSlots.x;
+}
+uint nwbMeshFrameViewHeapSlot(){
+    return 0u; // The caustic surface path does not consume the mesh-view alias.
+}
+#include "../bindless/bindless_heap_mesh.slangi"
 
 #include "../scene/buffer.slangi"
 #include "../common/math.slangi"
-#include "../shadow/instance_material.slangi"
-
-// Global descriptor-heap access to the corner attributes carried by the instance material record. The fixed-function
-// intersector supplies the triangle and barycentrics, so hardware caustics needs no BVH nodes, positions, or indices.
-#include "../bindless/bindless_heap.slangi"
 
 // The shadow trace's material-constants context (NwbShadowHit + the surface contract + the engine shadow physics
 // helpers) + the cook-generated per-hit surface dispatch (nwbShadowDispatchSurface), routed by
@@ -102,12 +116,14 @@ struct NwbCausticHwPushConstants{
 RaytracingAccelerationStructure g_NwbCausticHwTlas;
 #endif
 
-[[vk::binding(NWB_CAUSTIC_RT_BINDING_INSTANCE_MATERIAL, NWB_CAUSTIC_RT_SET)]]
-StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbCausticHwInstanceMaterial;
+// The fixed-function intersector supplies triangle/barycentric data; its InstanceID selects the heap-backed material
+// record through the b11 context cbuffer. Per-corner attributes remain separately addressed by that record's heap slot.
+StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> nwbCausticHwInstanceMaterials(){
+    return NwbHeapRtInstanceMaterials(g_NwbCausticHwMaterialContextSlots.sceneSlots.z);
+}
 
-// The closest-hit reads corner attributes through the material record's global heap slot. The shared backing buffer
-// remains transitioned for the heap read. The fixed-function intersector supplies the triangle and barycentrics; the
-// world hit point comes from WorldRayOrigin()+RayTCurrent()*WorldRayDirection().
+// The closest-hit reads corner attributes through the material record's global heap slot. The shared backing buffers
+// remain transitioned for those heap reads; the world hit point comes from WorldRayOrigin()+RayTCurrent()*WorldRayDirection().
 
 [[vk::binding(NWB_CAUSTIC_RT_BINDING_EMISSION_TARGETS, NWB_CAUSTIC_RT_SET)]]
 StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbCausticHwEmissionTargets;
@@ -144,12 +160,10 @@ struct NwbCausticHwVertexAttrib{
 
 NwbCausticHwVertexAttrib nwbCausticHwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
     // attributeSlot is this mesh's per-corner attribute buffer's GLOBAL HEAP slot (carried on the instance material
-    // record, populated lockstep with the mesh by the HW shadow builder in rt_swbvh.cpp -- the same mesh->attributeBuffer
-    // the bounded g_NwbCausticHwMeshAttributes[meshSlot] pointed at, so the fetched bytes are identical). It is
+    // record, populated lockstep with the mesh by the HW shadow builder in rt_swbvh.cpp). It is
     // non-uniform across the ray wave -- each hit is on a different instance/mesh -- so the heap subscript MUST be
-    // NonUniformResourceIndex-tagged; NwbHeapRawBuffer() applies that internally and is re-invoked at each Load (mirroring
-    // the bounded g_NwbCausticHwMeshAttributes[NonUniformResourceIndex(meshIndex)] it replaces) so the decoration is
-    // applied fresh at every descriptor access.
+    // NonUniformResourceIndex-tagged; NwbHeapRawBuffer() applies that internally and is re-invoked at each Load so the
+    // decoration is applied fresh at every descriptor access.
     // One Load4 for the whole 16-byte attribute record (packed normal in .xy, uv0 in .zw) -- one request instead of two
     // dependent Load2s (bit-identical; mirrors the SW producer).
     const uint4 packed = NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u);

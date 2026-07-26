@@ -13,8 +13,8 @@
 // photonCount: each thread picks a caustic light + an emission point on the refractive-instance emission domain,
 // traces the photon through the same software scene/instance + per-mesh BVHs the SW shadow trace uses (adapted to
 // CLOSEST-hit), and splats the surviving flux at the opaque-receiver hit into the R32_UINT accumulators via
-// InterlockedAdd. The set mirrors the SW shadow set's geometry slots (so the closest-hit hook reads identical
-// buffers + the per-hit surface dispatch resolves ior/transmission the SAME way) and adds the caustic-specific
+// InterlockedAdd. The set uses the same heap-selected SW scene/material context as shadow (so the closest-hit hook
+// reads identical buffers + the per-hit surface dispatch resolves ior/transmission the SAME way) and adds caustic-specific
 // inputs/outputs: the emission-target AABB buffer, the camera view buffer (worldToClip for the splat projection),
 // heap-selected G-buffer depth/world-position inputs (the receiver identity reject), and the accumulator UAV.
 #define NWB_CAUSTIC_SW_SET 0
@@ -25,15 +25,12 @@
 #define NWB_CAUSTIC_SW_BINDING_SCENE_SHADING 0
 #define NWB_CAUSTIC_SW_BINDING_LIGHT_LIST 1
 #define NWB_CAUSTIC_SW_BINDING_BINDLESS_RESOURCES NWB_CAUSTIC_SW_BINDING_SCENE_SHADING
-#define NWB_CAUSTIC_SW_BINDING_SCENE_NODES 2
-#define NWB_CAUSTIC_SW_BINDING_SCENE_INSTANCES 3
-#define NWB_CAUSTIC_SW_BINDING_INSTANCE_MATERIAL 4
-// Slots 5-8 are intentionally unused. SW caustics reads per-mesh nodes, positions, indices, and attributes from the
-// global descriptor heap through slots carried by the material record.
-// The shared material-constants context the per-hit surface dispatch reads (same buffers the SW shadow trace
-// binds at NWB_MESH_BINDING_MATERIAL_TYPED / NWB_MESH_BINDING_INSTANCE, pointed here for this pass).
-#define NWB_CAUSTIC_SW_BINDING_MATERIAL_TYPED 9
-#define NWB_CAUSTIC_SW_BINDING_MESH_INSTANCES 10
+// Slots 2-4 are intentional ABI gaps: the caustic trace selects their former scene/material context through the b5
+// global StorageBuffer heap indirection below. Do not repurpose or renumber these holes.
+#define NWB_CAUSTIC_SW_BINDING_MATERIAL_CONTEXT_SLOTS 5 // ConstantBuffer<NwbRayTraceMaterialContextSlots>
+// Slots 6-8 are intentionally unused. SW caustics reads per-mesh nodes, positions, indices, and attributes from the
+// global descriptor heap through slots carried by the material record; b5 selects the scene/material context buffers.
+// Slots 9-10 are further intentional ABI gaps. Do not repurpose or renumber them.
 // Caustic-specific inputs/output:
 //  - EMISSION_TARGETS: the per-frame refractive-instance world AABBs (P1) the photons aim at.
 //  - VIEW: the camera view buffer (worldToClip) the splat projects the receiver hit through.
@@ -53,9 +50,8 @@
 // One thread per photon in a 1D dispatch; 64 photons per group.
 #define NWB_CAUSTIC_SW_GROUP_SIZE 64
 
-// The caustic kernel reuses the SAME software per-mesh buffers + the SAME meshSlot indices the SW shadow scene BVH
-// produced (buildSceneSwBvh fills the shared dynamic distinct-mesh table in renderer_state.h). The per-mesh geometry
-// comes from the descriptor heap.
+// The caustic kernel reuses the SW shadow scene's heap-backed per-mesh geometry. The material record selects each
+// mesh's buffers through descriptor-heap slots.
 #include "../shadow/sw_binding_slots.h"
 
 // Per-thread traversal stack depths. With the FRONT-TO-BACK ordered descent (caustic_photon_sw_cs.slang) only the

@@ -2,37 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../mesh/meshlet_payload.slangi"
 #include "binding_slots.h"
+#include "bindless_resources.slangi"
 #include "constants.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct NwbSkinnedMeshSkinInfluence{
-    uint4 joint;
-    float4 weight;
-};
-
-struct NwbSkinnedMeshJointMatrix{
-    float4 row0;
-    float4 row1;
-    float4 row2;
-};
-
-[[vk::binding(NWB_SKINNED_MESH_BINDING_REST_POSITION, NWB_SKINNED_MESH_SET)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbSkinnedMeshRestPositions;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_SKINNED_POSITION, NWB_SKINNED_MESH_SET)]] RWStructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbSkinnedMeshSkinnedPositions;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_REST_NORMAL, NWB_SKINNED_MESH_SET)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshRestNormals;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_SKINNED_NORMAL, NWB_SKINNED_MESH_SET)]] RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshSkinnedNormals;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_REST_TANGENT, NWB_SKINNED_MESH_SET)]] StructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshRestTangents;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_SKINNED_TANGENT, NWB_SKINNED_MESH_SET)]] RWStructuredBuffer<NwbMeshHalf4, Std430DataLayout> g_NwbSkinnedMeshSkinnedTangents;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_MESHLET_DESC, NWB_SKINNED_MESH_SET)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbSkinnedMeshMeshlets;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_POSITION_REF_DELTAS, NWB_SKINNED_MESH_SET)]] ByteAddressBuffer g_NwbSkinnedMeshPositionRefDeltas;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_ATTRIBUTE_REF_DELTAS, NWB_SKINNED_MESH_SET)]] ByteAddressBuffer g_NwbSkinnedMeshAttributeRefDeltas;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_ATTRIBUTE_SKINS, NWB_SKINNED_MESH_SET)]] StructuredBuffer<uint, Std430DataLayout> g_NwbSkinnedMeshAttributeSkins;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_SKIN_INFLUENCES, NWB_SKINNED_MESH_SET)]] StructuredBuffer<NwbSkinnedMeshSkinInfluence, Std430DataLayout> g_NwbSkinnedMeshSkinInfluences;
-[[vk::binding(NWB_SKINNED_MESH_BINDING_JOINT_PALETTE, NWB_SKINNED_MESH_SET)]] StructuredBuffer<NwbSkinnedMeshJointMatrix, Std430DataLayout> g_NwbSkinnedMeshJointPalette;
+// All persistent mesh streams (including skin influences and the frame-updated joint palette) are selected from the
+// global StorageBuffer heap. The local b12 cbuffer is the only descriptor in this pass's set-0 layout.
+[[vk::binding(NWB_SKINNED_MESH_BINDING_BINDLESS_RESOURCES, NWB_SKINNED_MESH_SET)]]
+ConstantBuffer<NwbSkinnedMeshBindlessResources, Std140DataLayout> g_NwbSkinnedMeshBindlessResources;
 
 struct NwbSkinnedMeshPushConstants{
     uint4 payload0;
@@ -63,7 +44,7 @@ uint nwbSkinnedMeshSkinningMode(){
 }
 
 float4x4 nwbSkinnedMeshLoadJointMatrix(const uint jointId){
-    const NwbSkinnedMeshJointMatrix jointMatrix = g_NwbSkinnedMeshJointPalette[jointId];
+    const NwbSkinnedMeshJointMatrix jointMatrix = nwbSkinnedMeshHeapJointPalette(g_NwbSkinnedMeshBindlessResources.streamSlots2.w)[jointId];
     return float4x4(
         jointMatrix.row0,
         jointMatrix.row1,
@@ -118,7 +99,7 @@ bool nwbSkinnedMeshApplyLinearSkin(const uint skinIndex, inout float3 position, 
     if(skinIndex >= nwbSkinnedMeshSkinCount() || jointCount == 0u)
         return true;
 
-    const NwbSkinnedMeshSkinInfluence skin = g_NwbSkinnedMeshSkinInfluences[skinIndex];
+    const NwbSkinnedMeshSkinInfluence skin = nwbSkinnedMeshHeapSkinInfluences(g_NwbSkinnedMeshBindlessResources.streamSlots2.z)[skinIndex];
     float3 skinnedPosition = float3(0.0);
     float3 skinnedNormal = float3(0.0);
     float3 skinnedTangent = float3(0.0);
@@ -157,7 +138,7 @@ bool nwbSkinnedMeshApplyDualQuaternionSkin(const uint skinIndex, inout float3 po
     if(skinIndex >= nwbSkinnedMeshSkinCount() || jointCount == 0u)
         return true;
 
-    const NwbSkinnedMeshSkinInfluence skin = g_NwbSkinnedMeshSkinInfluences[skinIndex];
+    const NwbSkinnedMeshSkinInfluence skin = nwbSkinnedMeshHeapSkinInfluences(g_NwbSkinnedMeshBindlessResources.streamSlots2.z)[skinIndex];
     float4 blendedReal = float4(0.0);
     float4 blendedDual = float4(0.0);
     float4 referenceReal = float4(0.0);
@@ -170,7 +151,7 @@ bool nwbSkinnedMeshApplyDualQuaternionSkin(const uint skinIndex, inout float3 po
         if(abs(weight) <= NWB_SKINNED_MESH_EPSILON || jointId >= jointCount)
             continue;
 
-        const NwbSkinnedMeshJointMatrix jointPayload = g_NwbSkinnedMeshJointPalette[jointId];
+        const NwbSkinnedMeshJointMatrix jointPayload = nwbSkinnedMeshHeapJointPalette(g_NwbSkinnedMeshBindlessResources.streamSlots2.w)[jointId];
         float4 real = jointPayload.row0;
         float4 dual = jointPayload.row1;
         if(!nwbFiniteFloat4(real) || !nwbFiniteFloat4(dual))
@@ -220,13 +201,13 @@ void nwbSkinnedMeshSkinPosition(
     const uint localPositionIndex
 ){
     const NwbMeshletPositionStreamRef positionRef = nwbMeshletDecodePositionRef(
-        g_NwbSkinnedMeshPositionRefDeltas,
+        NwbHeapRawBuffer(g_NwbSkinnedMeshBindlessResources.streamSlots1.w),
         meshlet,
         decodeInfo,
         localPositionIndex,
         true
     );
-    float3 position = nwbMeshLoadPosition(g_NwbSkinnedMeshRestPositions[positionRef.position]);
+    float3 position = nwbMeshLoadPosition(nwbSkinnedMeshHeapPositions(g_NwbSkinnedMeshBindlessResources.streamSlots0.x)[positionRef.position]);
     float3 normal = float3(0.0, 0.0, 1.0);
     float4 tangent = float4(1.0, 0.0, 0.0, 1.0);
     const float3 preSkinPosition = position;
@@ -234,7 +215,7 @@ void nwbSkinnedMeshSkinPosition(
     if(!nwbFiniteFloat3(position))
         position = preSkinPosition;
 
-    g_NwbSkinnedMeshSkinnedPositions[positionRef.position] = nwbMeshStorePosition(position);
+    nwbSkinnedMeshHeapWritablePositions(g_NwbSkinnedMeshBindlessResources.streamSlots0.y)[positionRef.position] = nwbMeshStorePosition(position);
 }
 
 void nwbSkinnedMeshSkinAttribute(
@@ -243,7 +224,7 @@ void nwbSkinnedMeshSkinAttribute(
     const uint localAttributeIndex
 ){
     const NwbMeshletAttributeStreamRef attributeRef = nwbMeshletDecodeAttributeRef(
-        g_NwbSkinnedMeshAttributeRefDeltas,
+        NwbHeapRawBuffer(g_NwbSkinnedMeshBindlessResources.streamSlots2.x),
         meshlet,
         decodeInfo,
         localAttributeIndex
@@ -251,30 +232,30 @@ void nwbSkinnedMeshSkinAttribute(
     const uint attributeId = attributeRef.normal;
 
     float3 position = float3(0.0);
-    float3 normal = nwbMeshLoadHalf4(g_NwbSkinnedMeshRestNormals[attributeId]).xyz;
-    float4 tangent = nwbMeshLoadHalf4(g_NwbSkinnedMeshRestTangents[attributeId]);
+    float3 normal = nwbMeshLoadHalf4(nwbSkinnedMeshHeapHalf4s(g_NwbSkinnedMeshBindlessResources.streamSlots0.z)[attributeId]).xyz;
+    float4 tangent = nwbMeshLoadHalf4(nwbSkinnedMeshHeapHalf4s(g_NwbSkinnedMeshBindlessResources.streamSlots1.x)[attributeId]);
     const float3 restNormal = normal;
     const float4 restTangent = tangent;
 
     nwbOrthonormalizeFrame(normal, tangent, restNormal, restTangent);
     const float3 preSkinNormal = normal;
     const float4 preSkinTangent = tangent;
-    nwbSkinnedMeshApplySkin(g_NwbSkinnedMeshAttributeSkins[attributeId], position, normal, tangent);
+    nwbSkinnedMeshApplySkin(nwbSkinnedMeshHeapUints(g_NwbSkinnedMeshBindlessResources.streamSlots2.y)[attributeId], position, normal, tangent);
     if(!nwbFiniteFloat3(normal))
         normal = preSkinNormal;
     if(!nwbFiniteFloat4(tangent))
         tangent = preSkinTangent;
     nwbOrthonormalizeFrame(normal, tangent, preSkinNormal, preSkinTangent);
 
-    g_NwbSkinnedMeshSkinnedNormals[attributeId] = nwbMeshStoreHalf4(float4(normal, 0.0));
-    g_NwbSkinnedMeshSkinnedTangents[attributeId] = nwbMeshStoreHalf4(tangent);
+    nwbSkinnedMeshHeapWritableHalf4s(g_NwbSkinnedMeshBindlessResources.streamSlots0.w)[attributeId] = nwbMeshStoreHalf4(float4(normal, 0.0));
+    nwbSkinnedMeshHeapWritableHalf4s(g_NwbSkinnedMeshBindlessResources.streamSlots1.y)[attributeId] = nwbMeshStoreHalf4(tangent);
 }
 
 void nwbSkinnedMeshMain(const uint meshletIndex, const uint groupThreadIndex){
     if(meshletIndex >= nwbSkinnedMeshMeshletCount())
         return;
 
-    const NwbMeshletDesc meshlet = g_NwbSkinnedMeshMeshlets[meshletIndex];
+    const NwbMeshletDesc meshlet = nwbSkinnedMeshHeapMeshlets(g_NwbSkinnedMeshBindlessResources.streamSlots1.z)[meshletIndex];
     const NwbMeshletRefDecodeInfo decodeInfo = nwbMeshletBuildRefDecodeInfo(meshlet);
     const uint positionCount = nwbMeshletPositionCount(meshlet);
     const uint attributeCount = nwbMeshletAttributeCount(meshlet);

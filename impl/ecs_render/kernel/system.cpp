@@ -114,6 +114,9 @@ void RendererSystem::invalidateResources(){
         if(auto* device = m_graphics.getDevice())
             device->getDescriptorHeap().free(m_rayTracingState.m_tlasHeapHandle);
     }
+    // The trace material-context heap descriptors retain their backing buffers just like the TLAS descriptor. Retire
+    // them while the device heap is still live, before RendererRayTracingState releases those buffers below.
+    m_raytracingSystem.releaseRayTraceMaterialContextHeapHandles();
     // Deferred target generations own ordinary image/sampler heap slots. Release those handles while both the target
     // resources and the device heap are still live; RendererDeferredState then drops the remaining resource handles.
     m_deferredSystem.resetDeferredFrameTargets();
@@ -124,6 +127,9 @@ void RendererSystem::invalidateResources(){
     m_meshState.invalidateResources();
     m_materialState.invalidateResources();
     m_drawState.invalidateResources();
+    // CSG's persistent clip descriptors retain their receiver/cutter buffers, so retire them before the CSG state
+    // releases those buffers and its slot cbuffer.
+    m_csgSystem.releaseCsgClipContextHeapHandles();
     m_csgState.invalidateResources();
     m_deferredState.invalidateResources();
     m_avboitState.invalidateResources();
@@ -298,8 +304,14 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
             m_preparedShadowVisibilityReady
         )
     ;
+    // Scene/material gathers can replace a capacity-grown buffer and therefore its heap slot. Upload the completed
+    // five-slot indirection only after the full shadow/GI/caustic preparation path has settled on this frame's
+    // resource generations, but before the command list that will dispatch their binding sets is submitted.
+    const bool traceMaterialContextUploaded = shadowResourcesPrepared
+        && m_raytracingSystem.uploadRayTraceMaterialContextSlots(*m_shadowPrepareCommandList)
+    ;
     m_shadowPrepareCommandList->close();
-    if(!shadowResourcesPrepared)
+    if(!traceMaterialContextUploaded)
         return false;
 
     Core::CommandList* shadowPrepareCommandLists[] = { m_shadowPrepareCommandList.get() };

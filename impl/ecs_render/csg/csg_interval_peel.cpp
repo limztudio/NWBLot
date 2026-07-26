@@ -280,7 +280,8 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     NWB_ASSERT(csgState().m_intervalCapFillPipeline);
     NWB_ASSERT(csgState().m_intervalSampleBindingSet);
     NWB_ASSERT(csgState().m_clipBindingSet);
-    NWB_ASSERT(csgState().m_intervalCapFillMaterialBindingSet);
+    NWB_ASSERT(drawState().m_materialTypedBuffer);
+    NWB_ASSERT(drawState().m_instanceBuffer);
     NWB_ASSERT(targets.framebuffer);
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgCapFill, graphics().getDevice(), commandList);
@@ -288,7 +289,10 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     __hidden_csg_interval_peel::SetCsgIntervalSampleStorageStates(commandList, targets);
     commandList.setResourceStatesForBindingSet(csgState().m_intervalSampleBindingSet.get());
     commandList.setResourceStatesForBindingSet(csgState().m_clipBindingSet.get());
-    commandList.setResourceStatesForBindingSet(csgState().m_intervalCapFillMaterialBindingSet.get());
+    // The cap-fill surface evaluator now reaches typed words and mesh instances through heap slots, so its former
+    // local material binding set can no longer contribute these transitions automatically.
+    commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(drawState().m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
     setCsgClipBufferStates(commandList);
     commandList.commitBarriers();
 
@@ -304,7 +308,6 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     graphicsState.setViewport(viewportState);
     graphicsState.addBindingSet(csgState().m_intervalSampleBindingSet.get());
     graphicsState.addBindingSet(csgState().m_clipBindingSet.get());
-    graphicsState.addBindingSet(csgState().m_intervalCapFillMaterialBindingSet.get());
     commandList.setGraphicsState(graphicsState);
     graphics().getDevice()->getDescriptorHeap().bindGraphics(commandList, *csgState().m_intervalCapFillPipeline);
 

@@ -49,6 +49,11 @@ public:
     [[nodiscard]] bool createShadowVisibilityTarget(DeferredFrameTargets& targets);
     [[nodiscard]] bool createCausticTargets(DeferredFrameTargets& targets);
     [[nodiscard]] bool prepareShadowVisibilityResources(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena, bool& outBackendReady);
+    // The five trace material-context buffers are global heap descriptors. This uploads their current slot numbers
+    // into the small local cbuffer shared by RT shadow, surfel GI, and caustic producer binding sets.
+    [[nodiscard]] bool uploadRayTraceMaterialContextSlots(Core::CommandList& commandList);
+    // Retire the five heap descriptors before resource invalidation releases their backing buffers.
+    void releaseRayTraceMaterialContextHeapHandles();
     [[nodiscard]] bool renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearCausticTargets(Core::CommandList& commandList, DeferredFrameTargets& targets);
@@ -59,8 +64,8 @@ public:
     [[nodiscard]] bool renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool hasCausticWork()const noexcept;
     // Hardware ray-traced caustic photon producer (P4) -- the byte-parallel sibling of the SW producer above, run on
-    // the HW branch (RayTracingAccelStruct supported). Reuses the TLAS + the shadow material/geometry buffers + the
-    // shared R32_UINT accumulator + resolve; adds only a per-mesh position SRV array for the geometric face normal.
+    // the HW branch (RayTracingAccelStruct supported). Reuses the TLAS, heap-selected material/geometry context, and
+    // shared R32_UINT accumulator + resolve; its closest hit reconstructs the surface through material-record slots.
     [[nodiscard]] bool prepareHwCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool renderHwCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool hasHwCausticWork()const noexcept;
@@ -76,8 +81,9 @@ public:
     // pipelines. The buffers live on RendererRayTracingState so a window resize does not reset convergence.
     [[nodiscard]] bool ensureSurfelResources();
     // The three pass pipelines. Spawn and hash-build read the surfel buffers; spawn selects its G-buffer inputs from
-    // the descriptor heap. The trace reuses the SW scene BVH (slots 0-10) exactly like the SW shadow/caustic trace.
-    // Their layouts remain distinct because the cell-head is an SRV at spawn and a UAV at hash-build.
+    // the descriptor heap. The trace selects its SW scene BVH through the shared heap-slot cbuffer (b11); b0 is the
+    // target-generation slot cbuffer and b1-10 remain ABI gaps. Their layouts remain distinct because the cell-head
+    // is an SRV at spawn and a UAV at hash-build.
     [[nodiscard]] bool ensureSurfelSpawnPipeline();
     // Age-free (U1 recycling): one thread per pool slot; frees surfels unseen for maxAge frames + pushes their ids onto
     // the free-list. Reads only the persistent buffers, so pipeline + set are built once (like hash-build).
@@ -87,14 +93,14 @@ public:
     // U5 HW-RayQuery trace twin: the same surfel trace over the TLAS (inline RayQuery) instead of the SW BVH. Selected
     // by m_surfelUseHwTrace on the HW-shadow branch; gated on RayQuery + accel-struct support (like ensureShadowPipeline).
     [[nodiscard]] bool ensureSurfelTraceHwPipeline();
-    // The spawn + hash-build sets bind persistent surfel buffers only and are built once. The trace set carries the SW
-    // scene BVH + per-mesh arrays + surfel constants/pool plus the target-generation bindless slot cbuffer; rebuild it
-    // during prepare when that target generation, the scene BVH, or the distinct-mesh count changes.
+    // The spawn + hash-build sets bind persistent surfel buffers only and are built once. The trace set carries the
+    // target-generation and material-context slot cbuffers plus the surfel constants/pool; the cbuffer contents select
+    // the SW scene/material data from the global heap without rebuilding direct SRV bindings.
     [[nodiscard]] bool ensureSurfelSpawnBindingSet();
     [[nodiscard]] bool ensureSurfelAgeFreeBindingSet();
     [[nodiscard]] bool ensureSurfelHashBuildBindingSet();
     [[nodiscard]] bool ensureSurfelTraceBindingSet(DeferredFrameTargets& targets);
-    [[nodiscard]] bool ensureSurfelTraceHwBindingSet(DeferredFrameTargets& targets);   // U5 HW twin: TLAS + HW-resident per-mesh buffers
+    [[nodiscard]] bool ensureSurfelTraceHwBindingSet(DeferredFrameTargets& targets);   // U5 HW twin: local TLAS fallback + heap-selected hit context
     // The resolve pass: a COMPUTE gather-once-per-pixel into the screen-space surfelIrradiance texture the deferred
     // lighting samples (keeps the RW pool off the pixel shader -> no frames-in-flight pool race). Its persistent
     // buffers/output stay local; G-buffer world-position/normal are frame-heap reads selected by push constants.
@@ -133,9 +139,9 @@ private:
     // the HW opaque shadow feeds the SAME half-res -> temporal -> a-trous -> upsample denoise chain as the SW path.
     [[nodiscard]] bool ensureShadowSoftPipeline();
     [[nodiscard]] bool ensureShadowSoftBindingSet(DeferredFrameTargets& targets);
-    // Shared hardware opaque-shadow-trace local bindings (TLAS + scene/light + material context). The three G-buffer
-    // images are selected through target-generation heap slots in the push constants. (Factored out for clarity;
-    // visibilityTarget is the full-res or half-res output.)
+    // Shared hardware opaque-shadow-trace local bindings (Backend-A TLAS, target-generation slot cbuffer, output).
+    // The G-buffer, scene, and light reads are selected through heap slots. (Factored out for clarity; visibilityTarget
+    // is the full-res or half-res output.)
     void appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const;
     void appendShadowTraceBindingSet(Core::BindingSetDesc& desc, DeferredFrameTargets& targets, Core::Texture* visibilityTarget)const;
     // ensureSwShadowPipeline creates the shared software-shadow binding layout + persistent adaptive buffers once, then
@@ -251,6 +257,9 @@ private:
     [[nodiscard]] bool refitMeshSwBvhPrepared(Core::CommandList& commandList, Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
     [[nodiscard]] bool updateMeshSwBvh(Core::CommandList& commandList, MeshResources& meshResources);
     [[nodiscard]] bool ensureSceneBvhBuffers(u32 instanceCount);
+    [[nodiscard]] bool ensureRayTraceMaterialContextSlotsBuffer();
+    [[nodiscard]] bool ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);
+    [[nodiscard]] bool replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);
     [[nodiscard]] bool ensureCausticEmissionTargetBuffer(usize targetCount);
     [[nodiscard]] bool ensureShadowInstanceMaterialBuffer(usize instanceCount);
     [[nodiscard]] bool uploadShadowMaterialContextBuffers(

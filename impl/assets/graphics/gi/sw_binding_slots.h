@@ -9,11 +9,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared SOFTWARE (SW BVH) trace bindings declared by gi_sw_trace.slangi: slots 0-10, with 1 and 5-8 reserved. They
-// reuse the scene/instance and per-mesh BVH buffers built for SW shadow and caustics. Producers add output bindings at
-// >= 11. Slot 0 is the target-generation DeferredBindlessResourceSlots cbuffer; its avboitSlots.z/.w select the
-// shared scene-shading + light-list heap entries, so the historical local scene/light descriptors no longer occupy the
-// trace set.
+// Shared SOFTWARE (SW BVH) trace bindings declared by gi_sw_trace.slangi. Slot 0 is the target-generation
+// DeferredBindlessResourceSlots cbuffer; its avboitSlots.z/.w select the shared scene-shading + light-list heap
+// entries. Slot 11 is the trace-owned material-context slot cbuffer, which selects the scene BVH / instance and
+// shadow material buffers from the global storage-buffer heap. The surfel-specific tail starts at 12.
 
 #define NWB_GI_SW_SET 0
 
@@ -23,13 +22,10 @@
 #define NWB_GI_SW_BINDING_SCENE_SHADING 0
 #define NWB_GI_SW_BINDING_LIGHT_LIST 1
 #define NWB_GI_SW_BINDING_BINDLESS_RESOURCES NWB_GI_SW_BINDING_SCENE_SHADING
-#define NWB_GI_SW_BINDING_SCENE_NODES 2
-#define NWB_GI_SW_BINDING_SCENE_INSTANCES 3
-#define NWB_GI_SW_BINDING_INSTANCE_MATERIAL 4
-// Slots 5-8 are intentionally unused. SW GI reads per-mesh nodes, positions, indices, and attributes from the global
-// descriptor heap through slots carried by the material record.
-#define NWB_GI_SW_BINDING_MATERIAL_TYPED 9
-#define NWB_GI_SW_BINDING_MESH_INSTANCES 10
+// Slots 2-10 are intentional ABI gaps. SW GI reads per-mesh nodes, positions, indices, and attributes from the global
+// descriptor heap through slots carried by the material record; b11 supplies the global-heap scene/material slots.
+// Do not repurpose or renumber these holes.
+#define NWB_GI_SW_BINDING_MATERIAL_CONTEXT_SLOTS 11 // ConstantBuffer<NwbRayTraceMaterialContextSlots>
 
 // The GI surfel trace reuses the SAME software per-mesh buffers the SW shadow/caustic build (buildSceneSwBvh fills the
 // shared dynamic distinct-mesh table in renderer_state.h). The per-mesh geometry is fetched from the descriptor heap.

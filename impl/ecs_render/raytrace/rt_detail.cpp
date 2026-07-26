@@ -272,11 +272,10 @@ u32 BuildSceneBvhNode(
 // Builds the per-instance shadow-occluder material record from the cooked material surface info: the
 // transmittance-model id (dispatches the per-hit transmittance hook) + the transparent flag. Both shadow builders
 // append exactly one of these per instance, in instance push order, so the table indexes by shadow instance id.
-// The per-mesh attribute slot + the material-constants context (constant byte offset + g_NwbMeshInstances index)
-// are supplied by the caller, which resolves them alongside the occluder's mesh + per-entity instance mapping.
+// The material-constants context (constant byte offset + g_NwbMeshInstances index) is supplied by the caller.
+// The shadow builders fill the record's geometry heap slots after this helper returns.
 [[nodiscard]] NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterial(
     const MaterialSurfaceInfo& materialInfo,
-    const u32 meshSlot,
     const u32 materialConstantByteOffset,
     const u32 meshInstanceIndex
 ){
@@ -285,7 +284,6 @@ u32 BuildSceneBvhNode(
     material.flags =
         (materialInfo.transparent ? RtInstanceMaterialFlag::Transparent : RtInstanceMaterialFlag::None)
         | (materialInfo.refractive ? RtInstanceMaterialFlag::Refractive : RtInstanceMaterialFlag::None);
-    material.meshSlot = meshSlot;
     material.materialConstantByteOffset = materialConstantByteOffset;
     material.meshInstanceIndex = meshInstanceIndex;
     return material;

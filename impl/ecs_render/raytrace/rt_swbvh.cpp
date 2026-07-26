@@ -227,8 +227,9 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
     // Shadow-OWNED combined material-constants context, built lockstep with `instances`: the per-occluder
     // InstanceGpuData (g_NwbMeshInstances for the trace; index == InstanceID()) + the combined typed bytes
-    // (g_NwbMaterialTypedWords for the trace; each occluder's constant + mutable block). The draw pass's buffers
-    // hold only the opaque set at trace time, so the trace cannot use them -- see ensureShadowBindingSet.
+    // (g_NwbMaterialTypedWords for material-evaluating trace consumers; each occluder's constant + mutable block).
+    // The draw pass's buffers hold only the opaque set at trace time, so software shadow, GI, and caustics select these
+    // shadow-owned buffers through the shared heap-slot cbuffer; the hardware opaque shadow itself does not read them.
     InstanceGpuDataVector shadowInstanceData{ scratchArena };
     MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
     ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(
@@ -397,7 +398,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
                 materialConstantByteOffset
             ))
                 return false;
-            instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, meshSlot, materialConstantByteOffset, meshInstanceIndex);
+            instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, materialConstantByteOffset, meshInstanceIndex);
         }
         // Carry this mesh's heap slots on both resolved and fallback records. The HW opaque trace does not read
         // geometry; caustic and GI consume the slots by InstanceID. nodeSlot stays s_Max because this is the HW path.
@@ -565,7 +566,8 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     // Shadow-OWNED combined material-constants context, built lockstep with `instances` (see buildSceneTlas): the
     // per-occluder InstanceGpuData (g_NwbMeshInstances for the trace) + the combined typed bytes
     // (g_NwbMaterialTypedWords for the trace). The draw pass's buffers hold only one transparency class at trace
-    // time, so the software traversal binds these instead -- see ensureSwShadowBindingSet.
+    // time, so the software traversal selects these shadow-owned buffers through its heap-slot cbuffer -- see
+    // ensureSwShadowBindingSet.
     InstanceGpuDataVector shadowInstanceData{ scratchArena };
     MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
     ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(
@@ -734,7 +736,6 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
 
         SceneSwBvhInstanceGpu instance;
         StoreFloat(worldToObject, &instance.worldToObject);
-        instance.meshIndex = meshSlot;
         instance.primitiveCount = mesh->meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
 
         // Resolve the occluder material (transmittance-model id + transparent flag) + the material-constants
@@ -761,7 +762,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
                 materialConstantByteOffset
             ))
                 return false;
-            instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, meshSlot, materialConstantByteOffset, meshInstanceIndex);
+            instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, materialConstantByteOffset, meshInstanceIndex);
         }
         // Carry this mesh's four heap slots on both resolved and fallback records; software shadow traversal consumes
         // them next.
@@ -1730,11 +1731,17 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
             .setDebugName(Name("scene_bvh_nodes"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        rayTracingState().m_sceneBvhNodeBuffer = graphics().createBuffer(nodeBufferDesc);
-        if(!rayTracingState().m_sceneBvhNodeBuffer){
+        Core::BufferHandle nodeBuffer = graphics().createBuffer(nodeBufferDesc);
+        if(!nodeBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene BVH node buffer"));
             return false;
         }
+        // The slot cbuffer selects this structured view through the global StorageBuffer heap. Register the new
+        // generation before replacing the owned handle so a descriptor-allocation failure leaves the old
+        // buffer/descriptor pair intact for a retry on a later frame.
+        if(!replaceRayTraceMaterialContextHeapHandle(*nodeBuffer.get(), rayTracingState().m_sceneBvhNodeHeapHandle))
+            return false;
+        rayTracingState().m_sceneBvhNodeBuffer = Move(nodeBuffer);
         rayTracingState().m_sceneBvhNodeCapacity = capacity;
     }
 
@@ -1752,17 +1759,26 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
             .setDebugName(Name("scene_bvh_instances"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
-        rayTracingState().m_sceneInstanceBuffer = graphics().createBuffer(instanceBufferDesc);
-        if(!rayTracingState().m_sceneInstanceBuffer){
+        Core::BufferHandle instanceBuffer = graphics().createBuffer(instanceBufferDesc);
+        if(!instanceBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene BVH instance buffer"));
             return false;
         }
+        if(!replaceRayTraceMaterialContextHeapHandle(*instanceBuffer.get(), rayTracingState().m_sceneInstanceHeapHandle))
+            return false;
+        rayTracingState().m_sceneInstanceBuffer = Move(instanceBuffer);
         rayTracingState().m_sceneInstanceCapacity = capacity;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created software scene BVH buffers (capacity {} instances)")
             , static_cast<u64>(capacity)
         );
     }
-    return true;
+    return ensureRayTraceMaterialContextHeapHandle(
+        *rayTracingState().m_sceneBvhNodeBuffer.get(),
+        rayTracingState().m_sceneBvhNodeHeapHandle
+    ) && ensureRayTraceMaterialContextHeapHandle(
+        *rayTracingState().m_sceneInstanceBuffer.get(),
+        rayTracingState().m_sceneInstanceHeapHandle
+    );
 }
 
 

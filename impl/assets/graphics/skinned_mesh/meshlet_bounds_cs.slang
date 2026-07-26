@@ -2,8 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../mesh/meshlet_payload.slangi"
 #include "binding_slots.h"
+#include "bindless_resources.slangi"
 #include "constants.h"
 
 
@@ -17,12 +17,10 @@ static const float NWB_SKINNED_MESH_BOUNDS_RADIUS_INFLATION = 1.25;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_POSITIONS, NWB_SKINNED_MESH_BOUNDS_SET)]] StructuredBuffer<NwbMeshPosition, Std430DataLayout> g_NwbSkinnedMeshBoundsPositions;
-[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_MESHLET_DESC, NWB_SKINNED_MESH_BOUNDS_SET)]] StructuredBuffer<NwbMeshletDesc, Std430DataLayout> g_NwbSkinnedMeshBoundsMeshlets;
-[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_POSITION_REF_DELTAS, NWB_SKINNED_MESH_BOUNDS_SET)]] ByteAddressBuffer g_NwbSkinnedMeshBoundsPositionRefDeltas;
-[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_LOCAL_VERTEX_REFS, NWB_SKINNED_MESH_BOUNDS_SET)]] StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> g_NwbSkinnedMeshBoundsLocalVertexRefs;
-[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_PRIMITIVE_INDICES, NWB_SKINNED_MESH_BOUNDS_SET)]] ByteAddressBuffer g_NwbSkinnedMeshBoundsPrimitiveIndices;
-[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_DYNAMIC_BOUNDS, NWB_SKINNED_MESH_BOUNDS_SET)]] RWByteAddressBuffer g_NwbSkinnedMeshBoundsDynamicBounds;
+// All persistent sources and the dynamic bounds output are selected through the global StorageBuffer heap; b6 is the
+// only local descriptor and preserves the retired b0..5 ABI range as gaps.
+[[vk::binding(NWB_SKINNED_MESH_BOUNDS_BINDING_BINDLESS_RESOURCES, NWB_SKINNED_MESH_BOUNDS_SET)]]
+ConstantBuffer<NwbSkinnedMeshBindlessResources, Std140DataLayout> g_NwbSkinnedMeshBoundsBindlessResources;
 
 struct NwbSkinnedMeshBoundsPushConstants{
     uint4 payload0;
@@ -54,7 +52,7 @@ uint nwbSkinnedMeshBoundsMeshletCount(){
 }
 
 uint nwbSkinnedMeshBoundsLoadPrimitiveIndex(const uint primitiveIndex){
-    const uint word = g_NwbSkinnedMeshBoundsPrimitiveIndices.Load(primitiveIndex & ~NWB_MESHLET_PACKED_WORD_BYTE_MASK);
+    const uint word = NwbHeapRawBuffer(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots3.y).Load(primitiveIndex & ~NWB_MESHLET_PACKED_WORD_BYTE_MASK);
     return (word >> ((primitiveIndex & NWB_MESHLET_PACKED_WORD_BYTE_MASK) * NWB_MESHLET_PACKED_BYTE_BITS)) & NWB_MESHLET_PACKED_BYTE_MASK;
 }
 
@@ -74,13 +72,13 @@ bool nwbSkinnedMeshBoundsLoadLocalPosition(
     out float3 outPosition
 ){
     const NwbMeshletPositionStreamRef positionRef = nwbMeshletDecodePositionRef(
-        g_NwbSkinnedMeshBoundsPositionRefDeltas,
+        NwbHeapRawBuffer(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots1.w),
         meshlet,
         decodeInfo,
         localPositionIndex,
         true
     );
-    outPosition = nwbMeshLoadPosition(g_NwbSkinnedMeshBoundsPositions[positionRef.position]);
+    outPosition = nwbMeshLoadPosition(nwbSkinnedMeshHeapPositions(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots0.y)[positionRef.position]);
     return nwbFiniteFloat3(outPosition);
 }
 
@@ -90,7 +88,7 @@ bool nwbSkinnedMeshBoundsLoadLocalVertexPosition(
     const uint localVertexIndex,
     out float3 outPosition
 ){
-    const NwbMeshletLocalVertexRef localVertexRef = g_NwbSkinnedMeshBoundsLocalVertexRefs[meshlet.localVertexOffset + localVertexIndex];
+    const NwbMeshletLocalVertexRef localVertexRef = nwbSkinnedMeshHeapLocalVertexRefs(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots3.x)[meshlet.localVertexOffset + localVertexIndex];
     return nwbSkinnedMeshBoundsLoadLocalPosition(meshlet, decodeInfo, nwbMeshletLocalDeformedPosition(localVertexRef), outPosition);
 }
 
@@ -119,9 +117,9 @@ bool nwbSkinnedMeshBoundsFaceNormal(
 
 void nwbSkinnedMeshBoundsStore(const uint meshletIndex, const float4 sphere, const uint conePacked){
     const uint byteOffset = nwbMeshletBoundsByteOffset(meshletIndex);
-    g_NwbSkinnedMeshBoundsDynamicBounds.Store4(byteOffset + NWB_MESHLET_BOUNDS_SPHERE_BYTE_OFFSET, asuint(sphere));
-    g_NwbSkinnedMeshBoundsDynamicBounds.Store(byteOffset + NWB_MESHLET_BOUNDS_CONE_BYTE_OFFSET, conePacked);
-    g_NwbSkinnedMeshBoundsDynamicBounds.Store(byteOffset + NWB_MESHLET_BOUNDS_PADDING_BYTE_OFFSET, 0u);
+    nwbSkinnedMeshHeapWritableRawBuffer(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots3.z).Store4(byteOffset + NWB_MESHLET_BOUNDS_SPHERE_BYTE_OFFSET, asuint(sphere));
+    nwbSkinnedMeshHeapWritableRawBuffer(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots3.z).Store(byteOffset + NWB_MESHLET_BOUNDS_CONE_BYTE_OFFSET, conePacked);
+    nwbSkinnedMeshHeapWritableRawBuffer(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots3.z).Store(byteOffset + NWB_MESHLET_BOUNDS_PADDING_BYTE_OFFSET, 0u);
 }
 
 void nwbSkinnedMeshBoundsReduceMinMax(const uint groupThreadIndex){
@@ -313,7 +311,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     if(meshletIndex >= nwbSkinnedMeshBoundsMeshletCount())
         return;
 
-    const NwbMeshletDesc meshlet = g_NwbSkinnedMeshBoundsMeshlets[meshletIndex];
+    const NwbMeshletDesc meshlet = nwbSkinnedMeshHeapMeshlets(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots1.z)[meshletIndex];
     const NwbMeshletRefDecodeInfo decodeInfo = nwbMeshletBuildRefDecodeInfo(meshlet);
     const uint positionCount = nwbMeshletPositionCount(meshlet);
     const uint primitiveCount = nwbMeshletPrimitiveCount(meshlet);

@@ -33,8 +33,7 @@ public:
     [[nodiscard]] CsgFrameState buildFrameState(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool createCsgClipResources();
     void destroyCsgClipBindingSet();
-    void destroyCsgIntervalCapFillMaterialBindingSet();
-    [[nodiscard]] bool prepareCsgIntervalCapFillMaterialResources();
+    void releaseCsgClipContextHeapHandles();
     [[nodiscard]] bool createCsgPeelTargets(DeferredFrameTargets& targets);
     [[nodiscard]] bool createCsgIntervalPeelResources(DeferredFrameTargets& targets, bool capFillRequired);
     [[nodiscard]] bool createCsgIntervalSampleResources(DeferredFrameTargets& targets);

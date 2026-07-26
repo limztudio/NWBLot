@@ -13,6 +13,7 @@
 #include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/module.h>
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
 
 
@@ -228,6 +229,12 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
     NWB_ASSERT(!hasActiveSkin || resources->skinningBindingSet);
     NWB_ASSERT(!hasActiveSkin || resources->skinBuffer);
     NWB_ASSERT(!hasActiveSkin || resources->jointPaletteBuffer);
+    auto* device = m_graphics.getDevice();
+    if(!device || !device->getDescriptorHeap().isInitialized())
+        return false;
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!uploadRuntimeResourceBindlessSlots(commandList, *resources))
+        return false;
 
     if(!hasActiveSkin){
         if(skinnedMeshInputDirty || hadSkinningResources){
@@ -284,6 +291,7 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
     computeState.setPipeline(m_skinningComputePipeline.get());
     computeState.addBindingSet(resources->skinningBindingSet.get());
     commandList.setComputeState(computeState);
+    heap.bindCompute(commandList, *m_skinningComputePipeline.get());
 
     MeshSkinningPushConstants pushConstants;
     pushConstants.meshletCount = static_cast<u32>(instance.meshlets.size());
@@ -374,6 +382,7 @@ bool MeshSkinningSystem::dispatchMeshletBounds(
     computeState.setPipeline(m_boundsComputePipeline.get());
     computeState.addBindingSet(resources.boundsBindingSet.get());
     commandList.setComputeState(computeState);
+    m_graphics.getDevice()->getDescriptorHeap().bindCompute(commandList, *m_boundsComputePipeline.get());
 
     MeshletBoundsPushConstants pushConstants;
     pushConstants.meshletCount = static_cast<u32>(instance.meshlets.size());
@@ -415,6 +424,7 @@ bool MeshSkinningSystem::dispatchRepackNormals(
     computeState.setPipeline(m_repackComputePipeline.get());
     computeState.addBindingSet(resources.repackBindingSet.get());
     commandList.setComputeState(computeState);
+    m_graphics.getDevice()->getDescriptorHeap().bindCompute(commandList, *m_repackComputePipeline.get());
 
     MeshletRepackPushConstants pushConstants;
     pushConstants.meshletCount = static_cast<u32>(instance.meshlets.size());

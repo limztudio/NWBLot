@@ -361,6 +361,67 @@ template<typename CutterHandler>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] static bool AcquireCsgClipContextHeapHandle(
+    Core::Device& device,
+    Core::Buffer& buffer,
+    Core::GpuDescriptorHandle& outHandle
+){
+    outHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
+        return false;
+
+    const Core::GpuDescriptorHandle acquired = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(!acquired.valid() || !heap.write(acquired, Core::BindingSetItem::StructuredBuffer_SRV(0u, &buffer))){
+        if(acquired.valid())
+            heap.free(acquired);
+        return false;
+    }
+
+    outHandle = acquired;
+    return true;
+}
+
+
+[[nodiscard]] static bool ReplaceCsgClipContextHeapHandle(
+    Core::Device& device,
+    Core::Buffer& buffer,
+    Core::GpuDescriptorHandle& inOutHandle
+){
+    Core::GpuDescriptorHandle acquired;
+    if(!AcquireCsgClipContextHeapHandle(device, buffer, acquired)){
+        // The backing buffer was just replaced for capacity growth, so the former descriptor must not survive as a
+        // seemingly valid handle to retired storage. Leave the context explicitly unregistered for a later retry.
+        Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+        if(inOutHandle.valid() && heap.isInitialized())
+            heap.free(inOutHandle);
+        inOutHandle = Core::GpuDescriptorHandle::invalid();
+        return false;
+    }
+
+    // Never rewrite a descriptor a previous command list can still reach. A capacity replacement gets a fresh slot;
+    // free() retires the old descriptor only after the heap's in-flight quarantine has elapsed.
+    if(inOutHandle.valid())
+        device.getDescriptorHeap().free(inOutHandle);
+    inOutHandle = acquired;
+    return true;
+}
+
+
+[[nodiscard]] static bool EnsureCsgClipContextHeapHandle(
+    Core::Device& device,
+    Core::Buffer& buffer,
+    Core::GpuDescriptorHandle& inOutHandle
+){
+    if(inOutHandle.valid())
+        return inOutHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
+    return ReplaceCsgClipContextHeapHandle(device, buffer, inOutHandle);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -373,8 +434,9 @@ bool RendererCsgSystem::createCsgClipResources(){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Mesh | Core::ShaderType::Compute | Core::ShaderType::Pixel);
         bindingLayoutDesc.setUseDescriptorBuffer(true);
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CSG_BINDING_RECEIVER_RANGES, 1));
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CSG_BINDING_CUTTERS, 1));
+        // Legacy receiver-range/cutter SRV bindings 0/1 remain ABI gaps. The one cbuffer at b2 selects all four
+        // persistent clip/cap-fill StorageBuffer heap entries.
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CSG_BINDING_CLIP_CONTEXT_SLOTS, 1));
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
         csgState().m_clipBindingLayout = device->createBindingLayout(bindingLayoutDesc);
@@ -386,15 +448,14 @@ bool RendererCsgSystem::createCsgClipResources(){
 
     if(csgState().m_clipBindingSet)
         return true;
-    if(!csgState().m_receiverRangeBuffer || !csgState().m_cutterBuffer)
+    if(!csgState().m_clipContextSlotsBuffer)
         return true;
 
     Core::BindingSetDesc bindingSetDesc(arena());
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(
-        NWB_CSG_BINDING_RECEIVER_RANGES,
-        csgState().m_receiverRangeBuffer.get()
+    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(
+        NWB_CSG_BINDING_CLIP_CONTEXT_SLOTS,
+        csgState().m_clipContextSlotsBuffer.get()
     ));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CSG_BINDING_CUTTERS, csgState().m_cutterBuffer.get()));
 
     csgState().m_clipBindingSet = device->createBindingSet(bindingSetDesc, csgState().m_clipBindingLayout);
     if(!csgState().m_clipBindingSet){
@@ -409,42 +470,16 @@ void RendererCsgSystem::destroyCsgClipBindingSet(){
     csgState().m_clipBindingSet.reset();
 }
 
-void RendererCsgSystem::destroyCsgIntervalCapFillMaterialBindingSet(){
-    csgState().m_intervalCapFillMaterialBindingSet.reset();
-}
-
-bool RendererCsgSystem::prepareCsgIntervalCapFillMaterialResources(){
-    if(csgState().m_intervalCapFillMaterialBindingSet)
-        return true;
-    if(
-        !csgState().m_intervalCapFillMaterialBindingLayout
-        || !drawState().m_materialTypedBuffer
-        || !drawState().m_instanceBuffer
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval cap fill requires typed material and instance buffers"));
-        return false;
+void RendererCsgSystem::releaseCsgClipContextHeapHandles(){
+    if(auto* device = graphics().getDevice()){
+        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+        if(heap.isInitialized()){
+            heap.free(csgState().m_receiverRangeBufferHeapHandle);
+            heap.free(csgState().m_cutterBufferHeapHandle);
+        }
     }
-
-    Core::BindingSetDesc bindingSetDesc(arena());
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(
-        NWB_MESH_BINDING_MATERIAL_TYPED,
-        drawState().m_materialTypedBuffer.get()
-    ));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(
-        NWB_MESH_BINDING_INSTANCE,
-        drawState().m_instanceBuffer.get()
-    ));
-
-    csgState().m_intervalCapFillMaterialBindingSet = graphics().getDevice()->createBindingSet(
-        bindingSetDesc,
-        csgState().m_intervalCapFillMaterialBindingLayout
-    );
-    if(!csgState().m_intervalCapFillMaterialBindingSet){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG interval cap fill material binding set"));
-        return false;
-    }
-
-    return true;
+    csgState().m_receiverRangeBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
+    csgState().m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
 }
 
 bool RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeCount){
@@ -461,8 +496,14 @@ bool RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeC
         return false;
     }
 
-    if(csgState().m_receiverRangeBufferCapacity != oldCapacity)
-        destroyCsgClipBindingSet();
+    if(csgState().m_receiverRangeBufferCapacity != oldCapacity && !__hidden_csg_resources::ReplaceCsgClipContextHeapHandle(
+        *graphics().getDevice(),
+        *csgState().m_receiverRangeBuffer.get(),
+        csgState().m_receiverRangeBufferHeapHandle
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register replacement CSG receiver range buffer in the descriptor heap"));
+        return false;
+    }
     return true;
 }
 
@@ -480,28 +521,57 @@ bool RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
         return false;
     }
 
-    if(csgState().m_cutterBufferCapacity != oldCapacity)
-        destroyCsgClipBindingSet();
+    if(csgState().m_cutterBufferCapacity != oldCapacity && !__hidden_csg_resources::ReplaceCsgClipContextHeapHandle(
+        *graphics().getDevice(),
+        *csgState().m_cutterBuffer.get(),
+        csgState().m_cutterBufferHeapHandle
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register replacement CSG cutter buffer in the descriptor heap"));
+        return false;
+    }
     return true;
 }
 
 bool RendererCsgSystem::prepareCsgFrameBuffers(const CsgFrameGpuData& csgFrameData){
-    if(!csgFrameData.hasWork()){
-        // Material-pass preparation can grow the shared typed/instance buffers after an earlier CSG pass prepared
-        // its cap set. Refresh the set during setup (never from the render path) so it always tracks the latest
-        // buffers before an opaque cap fill consumes them.
-        if(!csgState().m_intervalCapFillMaterialBindingLayout)
-            return true;
-        return prepareCsgIntervalCapFillMaterialResources();
-    }
+    if(!csgFrameData.hasWork())
+        return true;
     if(
         !reserveCsgReceiverRangeBufferCapacity(csgFrameData.receiverRanges.size())
         || !reserveCsgCutterBufferCapacity(csgFrameData.cutters.size())
     )
         return false;
-    if(!csgState().m_clipBindingSet && !createCsgClipResources())
+    if(!m_renderer.meshSystem().createMeshFrameHeapHandles())
         return false;
-    if(!prepareCsgIntervalCapFillMaterialResources())
+    if(!csgState().m_clipContextSlotsBuffer){
+        Core::BufferDesc bufferDesc;
+        bufferDesc
+            .setByteSize(sizeof(CsgClipContextSlots))
+            .setIsConstantBuffer(true)
+            .setDebugName("engine/csg/clip_context_slots")
+            .enableAutomaticStateTracking(Core::ResourceStates::Common)
+        ;
+        csgState().m_clipContextSlotsBuffer = graphics().createBuffer(bufferDesc);
+        if(!csgState().m_clipContextSlotsBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG clip-context slot buffer"));
+            return false;
+        }
+    }
+    if(
+        !__hidden_csg_resources::EnsureCsgClipContextHeapHandle(
+            *graphics().getDevice(),
+            *csgState().m_receiverRangeBuffer.get(),
+            csgState().m_receiverRangeBufferHeapHandle
+        )
+        || !__hidden_csg_resources::EnsureCsgClipContextHeapHandle(
+            *graphics().getDevice(),
+            *csgState().m_cutterBuffer.get(),
+            csgState().m_cutterBufferHeapHandle
+        )
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG clip context heap registration is incomplete"));
+        return false;
+    }
+    if(!csgState().m_clipBindingSet && !createCsgClipResources())
         return false;
 
     return true;
@@ -516,8 +586,13 @@ bool RendererCsgSystem::csgFrameBuffersReady(const CsgFrameGpuData& csgFrameData
         && csgState().m_receiverRangeBufferCapacity >= csgFrameData.receiverRanges.size()
         && csgState().m_cutterBuffer
         && csgState().m_cutterBufferCapacity >= csgFrameData.cutters.size()
+        && csgState().m_clipContextSlotsBuffer
+        && csgState().m_receiverRangeBufferHeapHandle.valid()
+        && csgState().m_receiverRangeBufferHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        && csgState().m_cutterBufferHeapHandle.valid()
+        && csgState().m_cutterBufferHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        && m_renderer.meshSystem().meshFrameHeapHandlesReady()
         && csgState().m_clipBindingSet
-        && csgState().m_intervalCapFillMaterialBindingSet
     ;
 }
 
@@ -528,12 +603,23 @@ bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, co
     NWB_ASSERT(csgState().m_cutterBuffer);
     NWB_ASSERT(csgState().m_receiverRangeBufferCapacity >= csgFrameData.receiverRanges.size());
     NWB_ASSERT(csgState().m_cutterBufferCapacity >= csgFrameData.cutters.size());
+    NWB_ASSERT(csgState().m_clipContextSlotsBuffer);
+    NWB_ASSERT(csgState().m_receiverRangeBufferHeapHandle.valid());
+    NWB_ASSERT(csgState().m_cutterBufferHeapHandle.valid());
+    NWB_ASSERT(m_renderer.meshSystem().meshFrameHeapHandlesReady());
     NWB_ASSERT(csgState().m_clipBindingSet);
+
+    CsgClipContextSlots contextSlots;
+    contextSlots.receiverRanges = csgState().m_receiverRangeBufferHeapHandle.slot();
+    contextSlots.cutters = csgState().m_cutterBufferHeapHandle.slot();
+    contextSlots.materialTyped = drawState().m_materialTypedBufferHeapHandle.slot();
+    contextSlots.meshInstances = drawState().m_instanceBufferHeapHandle.slot();
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgUpload, graphics().getDevice(), commandList);
 
     commandList.setBufferState(csgState().m_receiverRangeBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.setBufferState(csgState().m_cutterBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.setBufferState(csgState().m_clipContextSlotsBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.writeBuffer(
         csgState().m_receiverRangeBuffer.get(),
@@ -545,6 +631,9 @@ bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, co
         csgFrameData.cutters.data(),
         csgFrameData.cutters.size() * sizeof(CsgCutterGpuData)
     );
+    // This upload follows every capacity-growth replacement and every mesh-frame handle refresh, so the draw never
+    // observes a stale descriptor slot from a retired receiver/cutter/material/instance generation.
+    commandList.writeBuffer(csgState().m_clipContextSlotsBuffer.get(), &contextSlots, sizeof(contextSlots));
     setCsgClipBufferStates(commandList);
     commandList.commitBarriers();
     return true;
@@ -553,6 +642,7 @@ bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, co
 void RendererCsgSystem::setCsgClipBufferStates(Core::CommandList& commandList){
     commandList.setBufferState(csgState().m_receiverRangeBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(csgState().m_cutterBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(csgState().m_clipContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
 }
 
 bool RendererCsgSystem::resolveCsgReceiverClipDrawInfo(

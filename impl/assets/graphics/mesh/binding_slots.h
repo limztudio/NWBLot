@@ -20,9 +20,8 @@
 #define NWB_MESH_BINDING_COLOR 4
 #define NWB_MESH_BINDING_MESHLET_DESC 5
 // The typed material-constant words + the per-instance mutable-storage records (material_typed_bindings.slangi).
-// A non-rasterizer consumer that reuses the surface hook's material-constants context in a different binding set
-// (the shadow trace, which redirects them onto its own slot map to avoid colliding with that set) overrides these
-// before including; the rasterizer leaves them at the mesh-set defaults.
+// Raster and CSG consumers use these direct mesh-set bindings. Trace consumers enable their heap-selected material
+// context before including the shared surface-hook code, so they do not override these binding numbers.
 #ifndef NWB_MESH_BINDING_MATERIAL_TYPED
 #define NWB_MESH_BINDING_MATERIAL_TYPED 6
 #endif

@@ -9,41 +9,27 @@
 #include "../deferred/binding_slots.h"
 #include "../mesh/runtime_constants.h"
 
+// Reuse the clip runtime's heap-selected receiver-range view. Cap fill has no receiver mesh invocation, so suppress
+// runtime.slangi's otherwise-unused fallback mesh push constant while retaining its typed receiver/cutter aliases.
+#define NWB_CSG_MESH_INSTANCE_INDEX 0u
+#include "runtime.slangi"
+#undef NWB_CSG_MESH_INSTANCE_INDEX
+
 // CSG caps have no source triangle, but they still evaluate the receiver's COMPLETE cook-generated surface hook.
-// Keep the typed words + per-instance mutable storage in a dedicated third binding set; this lets heterogeneous
-// .bind interfaces share the generated surface dispatcher without guessing an albedo field.
-#undef NWB_MESH_SET
-#define NWB_MESH_SET NWB_CSG_CAP_FILL_MATERIAL_SET
+// The clip-context cbuffer selects typed words and mutable mesh-instance storage from the global heap, leaving the
+// historical dedicated cap-material set (b6/b12) as an intentional gap.
+#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
+uint nwbMeshFrameMaterialTypedHeapSlot(){
+    return g_NwbCsgClipContextSlots.materialTyped;
+}
+uint nwbMeshFrameInstanceHeapSlot(){
+    return g_NwbCsgClipContextSlots.meshInstances;
+}
+// interval_sample.slangi has already declared the mesh-view cbuffer locally at set 0/b13. Its include guard
+// keeps bindless_heap_mesh.slangi from revisiting that declaration, so only material/instance access is heap-based.
+#include "../bindless/bindless_heap_mesh.slangi"
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/transmittance_dispatch.slangi"
-#undef NWB_MESH_SET
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Receiver-range view. The cap-fill PS only reads the receiver material info written by the CPU per
-// removed-interval; the layout must stay byte-identical to NwbCsgReceiverRange in runtime.slangi
-// (and to CsgReceiverRangeGpuData on the C++ side). The bind layout matches the CSG clip set bound
-// alongside the interval-sample set in renderCsgIntervalCaps.
-struct NwbCsgCapFillBounds{
-    float3 minBounds;
-    int minFlags;
-    float3 maxBounds;
-    int maxFlags;
-};
-
-struct NwbCsgCapFillReceiverRange{
-    uint4 rangeInfo;    // x: firstCutter, y: cutterCount, z: flags, w: shadingModelId
-    float4 worldToReceiverRow0;
-    float4 worldToReceiverRow1;
-    float4 worldToReceiverRow2;
-    NwbCsgCapFillBounds localBounds;
-    uint4 materialContext; // x: surface dispatch id, y: constant byte offset, z: mesh instance index
-};
-
-[[vk::binding(NWB_CSG_BINDING_RECEIVER_RANGES, NWB_CSG_CLIP_SET)]]
-StructuredBuffer<NwbCsgCapFillReceiverRange, Std430DataLayout> g_NwbCsgCapFillReceiverRanges;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,7 +69,7 @@ NwbCsgIntervalCapFillPixelOutput main(const NwbCsgIntervalCapFillPixelInput inpu
     if(!cap.visible)
         discard;
 
-    const NwbCsgCapFillReceiverRange receiver = g_NwbCsgCapFillReceiverRanges[cap.receiverIndex];
+    const NwbCsgReceiverRange receiver = g_NwbCsgReceiverRanges[cap.receiverIndex];
     NwbShadowHit hit;
     hit.meshInstanceIndex = receiver.materialContext.z;
     hit.shadowTransmittanceModelId = receiver.materialContext.x;

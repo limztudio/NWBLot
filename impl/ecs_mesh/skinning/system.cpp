@@ -306,19 +306,24 @@ void MeshSkinningSystem::pruneRuntimeResources(){
         return;
 
     for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end();){
-        const RuntimeResources& resources = it.value();
+        RuntimeResources& resources = it.value();
         const MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(resources.handle);
         if(instance && instance->valid() && instance->editRevision == resources.editRevision){
             ++it;
             continue;
         }
 
+        // Heap descriptors retain their backing buffers independently of this cache. Retire the generation before
+        // erasing it so the heap's in-flight quarantine can release both descriptor storage and retained resources.
+        releaseRuntimeResourceBindlessHeapHandles(resources);
         it = m_runtimeResources.erase(it);
     }
 }
 
 void MeshSkinningSystem::invalidateResources(){
     m_renderCommandList.reset();
+    for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end(); ++it)
+        releaseRuntimeResourceBindlessHeapHandles(it.value());
     m_runtimeResources.clear();
     m_runtimeMeshCache.clear();
 

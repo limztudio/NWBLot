@@ -173,13 +173,14 @@ inline constexpr u32 s_SceneBvhAxisCount = 3u;
 inline constexpr u32 s_SceneBvhSahBinCount = 12u;
 inline constexpr f32 s_SceneBvhSahTraversalCost = 1.0f;
 
-// CPU mirror of the per-instance record the software shadow traversal (U5) consumes. Holds the affine
-// world->object transform (so a world-space ray can be pushed into each instance's object space) plus the
-// per-mesh BVH / geometry references resolved when traversal is wired. 64 bytes / std430-friendly.
+// CPU mirror of the per-instance record the software shadow traversal consumes. Holds the affine world->object
+// transform (so a world-space ray can be pushed into each instance's object space), an ABI-reserved word, and the
+// CPU-side leaf cost used while building the scene BVH. Geometry is selected by the heap slots in the material record.
+// 64 bytes / std430-friendly.
 struct SceneSwBvhInstanceGpu{
     Float34 worldToObject{};   // affine world->object (row-major 3x4); pushes a world ray into object space
-    u32 meshIndex = 0u;        // slot into the parallel per-mesh node/position/index descriptor arrays
-    u32 primitiveCount = 0u;   // triangle count of the referenced mesh (sanity bound)
+    u32 reservedMeshIndex = 0u; // preserves the former per-mesh selector's ABI position
+    u32 primitiveCount = 0u;   // triangle count used as the CPU scene-BVH leaf cost
     u32 pad0 = 0u;
     u32 pad1 = 0u;
 };
@@ -198,25 +199,25 @@ struct NwbCausticEmissionTargetGpu{
 };
 static_assert(sizeof(NwbCausticEmissionTargetGpu) == sizeof(Float4) * 2u, "NwbCausticEmissionTargetGpu must stay a tight 32-byte std430 record");
 
-// CPU mirror of the shader NwbRtInstanceMaterial (shadow/instance_material.slangi, 20 bytes / five uints,
-// std430): the per-instance shadow-occluder transmittance-model id + flags + per-mesh attribute slot + the
+// CPU mirror of the shader NwbRtInstanceMaterial (shadow/instance_material.slangi, 36 bytes / nine uints,
+// std430): the per-instance shadow-occluder transmittance-model id + flags + the
 // material-constants context the surface hook needs (the constant block byte offset into g_NwbMaterialTypedWords
 // and the g_NwbMeshInstances index that resolves the mutable storage offset). Built per frame into one structured
 // buffer indexed by the shadow instance id (hardware InstanceID() == software scene-BVH leaf index), so the
 // hardware and software trace paths read the same record for the same entity. The model id dispatches the
-// per-hit transmittance hook; meshSlot is the host-side index into the per-mesh buffer Vectors (it fills the
-// heap slots below and drives host barriers), while the trace reaches geometry through those heap slots.
+// per-hit transmittance hook; reservedMeshSlot preserves the former selector's ABI position, while the trace reaches
+// geometry through the heap slots below.
 struct NwbRtInstanceMaterialGpu{
     u32 shadowTransmittanceModelId = Limit<u32>::s_Max;
     u32 flags = 0u;
-    u32 meshSlot = 0u;
+    u32 reservedMeshSlot = 0u;
     u32 materialConstantByteOffset = 0u;
     u32 meshInstanceIndex = 0u;
     // Per-buffer descriptor-heap slots (GpuDescriptorHandle::slot()) for this occluder's mesh geometry. These
     // slots are the pivot of the geometry-access split the other RT comments name by side. Host-index side: the
     // host registers each backing buffer in the global descriptor-index heap at BVH-build time and stores the
-    // returned slot here (indexed by meshSlot), and the per-mesh buffer Vectors survive only for host-side
-    // barriers. Shader-layout-only side: every RT pass reads that geometry through the pinned heap via
+    // returned slot here, and the per-mesh buffer Vectors survive only for host-side barriers. Shader-layout-only
+    // side: every RT pass reads that geometry through the pinned heap via
     // NwbHeapRawBuffer(<x>Slot), never through a bound per-mesh array. Default s_Max marks "unregistered";
     // nodeSlot is the SW BVH node buffer (SW-only, stays s_Max on hardware-built records).
     u32 indexSlot = Limit<u32>::s_Max;
@@ -640,7 +641,6 @@ u32 BuildSceneBvhNode(
 );
 [[nodiscard]] NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterial(
     const MaterialSurfaceInfo& materialInfo,
-    const u32 meshSlot,
     const u32 materialConstantByteOffset,
     const u32 meshInstanceIndex
 );

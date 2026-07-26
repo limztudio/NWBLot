@@ -14,8 +14,8 @@
 // the per-mesh stage, each instance's triangle BVH), and writes per-light colored transmittance into the
 // shadow-visibility Texture2DArray the deferred lighting pass samples. The local scene/light positions remain as ABI
 // gaps; the target-generation slot cbuffer at binding 22 selects those shared buffers through the descriptor heap.
-// Per-mesh triangle traversal uses descriptor-heap slots from the material record, and slots 13-14 provide its typed
-// context.
+// Per-mesh triangle traversal uses descriptor-heap slots from the material record. A compact cbuffer at slot 8 selects
+// its five shared scene/material buffers from that same heap; the former local SRV positions remain ABI gaps.
 #define NWB_SW_SHADOW_SET 0
 
 // Legacy local G-buffer and scene/light binding numbers retained as intentional gaps. Every SW trace pass selects the
@@ -25,19 +25,13 @@
 #define NWB_SW_SHADOW_BINDING_GBUFFER_DEPTH 2
 #define NWB_SW_SHADOW_BINDING_SCENE_SHADING 3
 #define NWB_SW_SHADOW_BINDING_LIGHT_LIST 4
-#define NWB_SW_SHADOW_BINDING_SCENE_NODES 5
 #define NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT 6
-#define NWB_SW_SHADOW_BINDING_SCENE_INSTANCES 7
-// Slots 8-11 are intentionally unused. SW shadow reads per-mesh nodes, positions, indices, and attributes from the
-// global descriptor heap through slots carried by the material record.
-// Per-instance occluder material table (NwbRtInstanceMaterial), indexed by the scene-BVH leaf instance index;
-// built lockstep with the scene-instance buffer so the array slot matches the traversal's instanceIndex.
-#define NWB_SW_SHADOW_BINDING_INSTANCE_MATERIAL 12
-// The shared material-constants context the per-hit transmittance dispatch reads (same buffers the rasterizer
-// binds at NWB_MESH_BINDING_MATERIAL_TYPED / NWB_MESH_BINDING_INSTANCE, pointed here for this pass): the typed
-// material-constant words + the per-instance mutable-storage records.
-#define NWB_SW_SHADOW_BINDING_MATERIAL_TYPED 13
-#define NWB_SW_SHADOW_BINDING_MESH_INSTANCES 14
+// The local NwbRayTraceMaterialContextSlots cbuffer. Its sceneSlots select scene BVH nodes, scene instances,
+// instance-material records, and typed words; materialSlots.x selects mesh-instance records.
+#define NWB_SW_SHADOW_BINDING_MATERIAL_CONTEXT_SLOTS 8
+// Slots 5, 7, and 9-14 are intentional ABI gaps. SW shadow reads per-mesh nodes, positions, indices, and attributes
+// from the global descriptor heap through slots carried by the material record; b8 selects the shared scene/material
+// context. Do not repurpose or renumber these holes.
 // Adaptive transparent shadow (coarse-trace + edge-refine):
 //  - COARSE: an RGBA16F Texture2DArray (one layer per shadow slot) the coarse transparent trace writes one transmittance
 //    per coarse block into and the adaptive resolve reads back to interpolate the flat interior / detect edges.

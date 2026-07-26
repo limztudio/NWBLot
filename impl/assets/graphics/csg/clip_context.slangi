@@ -1,0 +1,36 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CSG_CLIP_CONTEXT_SLANGI
+#define NWB_GRAPHICS_CSG_CLIP_CONTEXT_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "binding_slots.h"
+
+
+// Persistent CSG inputs live in the global StorageBuffer heap. This local uint4 is deliberately only slot
+// indirection: x/y select receiver ranges and cutters, while z/w select the cap-fill typed-material and
+// mesh-instance buffers. It is shared by the clip and cap-fill paths, so the old clip SRVs (b0/b1) and cap-fill
+// material SRVs (b6/b12 in its retired set) remain ABI gaps rather than being repurposed.
+struct NwbCsgClipContextSlots{
+    uint receiverRanges;
+    uint cutters;
+    uint materialTyped;
+    uint meshInstances;
+};
+
+[[vk::binding(NWB_CSG_BINDING_CLIP_CONTEXT_SLOTS, NWB_CSG_CLIP_SET)]]
+ConstantBuffer<NwbCsgClipContextSlots, Std140DataLayout> g_NwbCsgClipContextSlots;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -14,8 +14,8 @@
 // SAME 128x128 = 16384 grid the SW kernel sweeps) emits each photon in light space at the refractive-instance
 // emission AABBs, runs the SHARED iterative bounce loop (caustic_trace.slangi nwbCausticTracePhoton -- recursion
 // stays 1, a fresh TraceRay per segment via the backend hook), and splats the surviving flux at the opaque receiver
-// into the R32_UINT accumulators the resolve consumes. The set mirrors the shadow-RT geometry/material plumbing
-// (so the per-hit surface dispatch resolves ior/transmission IDENTICALLY). The refraction bends on the interpolated
+// into the R32_UINT accumulators the resolve consumes. Its heap-selected material context uses the same per-hit surface
+// dispatch as shadow (so ior/transmission resolves identically). The refraction bends on the interpolated
 // SHADING normal (from the per-vertex normals in the attribute buffer), so -- unlike a geometric-normal bend -- it
 // needs NO object-space position array; the world hit point comes from WorldRayOrigin()+RayTCurrent()*direction.
 #define NWB_CAUSTIC_RT_SET 0
@@ -27,13 +27,8 @@
 #define NWB_CAUSTIC_RT_BINDING_SCENE_SHADING 1
 #define NWB_CAUSTIC_RT_BINDING_LIGHT_LIST 2
 #define NWB_CAUSTIC_RT_BINDING_BINDLESS_RESOURCES NWB_CAUSTIC_RT_BINDING_SCENE_SHADING
-// Per-instance occluder material table (NwbRtInstanceMaterial, indexed by InstanceID(); built lockstep with the
-// TLAS instances by buildSceneTlas) -- the REFRACTIVE flag gates the physics, the rest feeds the surface dispatch.
-#define NWB_CAUSTIC_RT_BINDING_INSTANCE_MATERIAL 3
-// The shared material-constants context the per-hit surface dispatch reads (same buffers the rasterizer/shadow set
-// bind at NWB_MESH_BINDING_MATERIAL_TYPED / NWB_MESH_BINDING_INSTANCE, pointed here for this pass).
-#define NWB_CAUSTIC_RT_BINDING_MATERIAL_TYPED 4
-#define NWB_CAUSTIC_RT_BINDING_MESH_INSTANCES 5
+// Slots 3-5 are intentional ABI gaps: the caustic trace selects their former material context through the b11 global
+// StorageBuffer heap indirection below. Do not repurpose or renumber these holes.
 // Caustic-specific I/O. The two G-buffer positions remain reserved for ABI compatibility, but are now logical heap-
 // SRV selections carried in the shared photon-producer push constants.
 #define NWB_CAUSTIC_RT_BINDING_EMISSION_TARGETS 6
@@ -42,8 +37,10 @@
 #define NWB_CAUSTIC_RT_BINDING_GBUFFER_WORLD_POSITION 9 // logical heap-SRV position; selected through push constants
 #define NWB_CAUSTIC_RT_BINDING_ACCUMULATOR 10
 
-// Slots 11-12 are intentionally unused. The HW closest-hit gets the triangle from the fixed-function intersector and
-// reads corner attributes from the global descriptor heap through the material record's attributeSlot.
+// b11 was intentionally unused and now carries the shared heap-slot indirection. b12 remains an intentional gap.
+#define NWB_CAUSTIC_RT_BINDING_MATERIAL_CONTEXT_SLOTS 11 // ConstantBuffer<NwbRayTraceMaterialContextSlots>
+// The HW closest-hit gets the triangle from the fixed-function intersector and reads corner attributes from the global
+// descriptor heap through the material record's attributeSlot.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

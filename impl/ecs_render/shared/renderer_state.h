@@ -194,8 +194,6 @@ private:
     Core::BindingSetHandle m_receiverSurfaceBindingSet;
     Core::BindingLayoutHandle m_intervalSampleBindingLayout;
     Core::BindingSetHandle m_intervalSampleBindingSet;
-    Core::BindingLayoutHandle m_intervalCapFillMaterialBindingLayout;
-    Core::BindingSetHandle m_intervalCapFillMaterialBindingSet;
     Core::ShaderHandle m_intervalPeelComputeShader;
     Core::ShaderHandle m_receiverSpanBuildComputeShader;
     Core::ShaderHandle m_intervalCombineComputeShader;
@@ -206,6 +204,11 @@ private:
     Core::GraphicsPipelineHandle m_intervalCapFillPipeline;
     Core::BufferHandle m_receiverRangeBuffer;
     Core::BufferHandle m_cutterBuffer;
+    // CSG clip/cap-fill persistent inputs are StorageBuffer heap entries; this uint4 cbuffer selects their current
+    // slots without recreating a local receiver/cutter/material binding set on capacity growth.
+    Core::BufferHandle m_clipContextSlotsBuffer;
+    Core::GpuDescriptorHandle m_receiverRangeBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::BufferHandle m_intervalSampleStateBuffer;
     CsgFrameStateCacheSignature m_frameStateCacheSignature;
     CsgFrameState m_frameStateCache;
@@ -296,7 +299,6 @@ struct RtSceneBvhState{
     u64 m_tlasDeviceAddress = 0u;
     u32 m_tlasInstanceCount = 0u; // live TLAS instance count (set by buildSceneTlas); the HW caustic raygen's non-zero guard
     u32 m_sceneBvhInstanceCount = 0u;
-    u32 m_hwCausticBindingSetMeshCount = 0u;
     // HYBRID shadow split (RT hardware): the HW RayQuery pass casts the binary OPAQUE shadow; when the scene holds a
     // transparent occluder, the software traversal additionally casts the colored TRANSPARENT shadow and multiplies it
     // onto the opaque mask. m_sceneHasTransparentOccluder (set by buildSceneTlas) gates building the software BVH on RT
@@ -323,7 +325,15 @@ struct RtSceneBvhState{
     Core::BufferHandle m_bvhVisitCounterBuffer;
     usize m_bvhBuildCapacity = 0u;
     Core::BufferHandle m_sceneBvhNodeBuffer;  // CPU-built scene/instance LBVH (TLAS-analog), uploaded each frame
-    Core::BufferHandle m_sceneInstanceBuffer; // per-instance world->object transform + per-mesh refs
+    Core::BufferHandle m_sceneInstanceBuffer; // per-instance world->object transform + reserved ABI word + BVH leaf cost
+    // The software scene BVH's two persistent context buffers are global StorageBuffer heap entries. The common
+    // trace-context slot cbuffer selects these current generations for SW shadow, GI, and caustics.
+    Core::GpuDescriptorHandle m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
+    // Tiny renderer-owned metadata cbuffer shared by every trace binding set. It carries the five global heap slots
+    // for the scene/material context and is updated after each scene gather; it is intentionally local because it is
+    // slot indirection, not material data.
+    Core::BufferHandle m_rayTraceMaterialContextSlotsBuffer;
     usize m_sceneBvhNodeCapacity = 0u;
     usize m_sceneInstanceCapacity = 0u;
     // Soft opaque shadow TEMPORAL accumulation: the reproject-merge pass
@@ -377,35 +387,28 @@ struct RtSceneBvhState{
     Core::ShaderHandle m_swCausticShader;
     Core::ComputePipelineHandle m_swCausticPipeline;
     Core::BindingSetHandle m_swCausticBindingSet;
-    const Core::Buffer* m_swCausticBindingSetSceneNodes = nullptr;
-    const Core::Buffer* m_swCausticBindingSetInstances = nullptr;
-    const Core::Buffer* m_swCausticBindingSetInstanceMaterial = nullptr;
-    const Core::Buffer* m_swCausticBindingSetMaterialTyped = nullptr;
-    const Core::Buffer* m_swCausticBindingSetMeshInstances = nullptr;
+    // Renderer-owned slot-indirection cbuffer for the five heap-backed trace material-context buffers.
+    const Core::Buffer* m_swCausticBindingSetMaterialContextSlots = nullptr;
     const Core::Buffer* m_swCausticBindingSetEmissionTargets = nullptr;
     const Core::Buffer* m_swCausticBindingSetView = nullptr;
     const Core::Texture* m_swCausticBindingSetAccumulator = nullptr;
     const Core::Buffer* m_swCausticBindingSetBindlessResources = nullptr;
-    u32 m_swCausticBindingSetMeshCount = 0u;
     bool m_swCausticPipelineFailed = false;
     bool m_hwCausticPipelineFailed = false;
     bool m_hwCausticDispatchLogged = false;
     bool m_capabilityLogged = false;
-    // Hardware ray-traced caustic photon producer (P4) -- the byte-parallel sibling of the SW producer. Mirrors the
-    // shadow RT pipeline and REUSES m_tlas + the shadow instance-material / material-context / per-mesh
-    // index+attribute buffers verbatim (the refraction bends on the interpolated SHADING normal from the attribute
-    // buffer, so no per-mesh position array is needed). Feeds the SAME R32_UINT accumulator + the SAME resolve the SW
+    // Hardware ray-traced caustic photon producer (P4) -- the byte-parallel sibling of the SW producer. It uses the
+    // TLAS plus heap-selected instance-material, index, position, and attribute buffers; the refraction bends on the
+    // interpolated shading normal from the attributes. Feeds the SAME R32_UINT accumulator + the SAME resolve the SW
     // path uses. Its G-buffer depth/world-position reads use the frame heap and its target-generation slot cbuffer
-    // selects shared scene/light heap entries; the binding set is rebuilt when any cached local input changes,
-    // mirroring the shadow set.
+    // selects shared scene/light heap entries; the binding set is rebuilt only when a cached local input changes.
     Core::BindingLayoutHandle m_hwCausticBindingLayout;
     Core::RayTracingPipelineHandle m_hwCausticPipeline;
     Core::RayTracingShaderTableHandle m_hwCausticShaderTable;
     Core::BindingSetHandle m_hwCausticBindingSet;
     const Core::RayTracingAccelStruct* m_hwCausticBindingSetTlas = nullptr;
-    const Core::Buffer* m_hwCausticBindingSetInstanceMaterial = nullptr;
-    const Core::Buffer* m_hwCausticBindingSetMaterialTyped = nullptr;
-    const Core::Buffer* m_hwCausticBindingSetMeshInstances = nullptr;
+    // Renderer-owned slot-indirection cbuffer for the five heap-backed trace material-context buffers.
+    const Core::Buffer* m_hwCausticBindingSetMaterialContextSlots = nullptr;
     const Core::Buffer* m_hwCausticBindingSetEmissionTargets = nullptr;
     const Core::Buffer* m_hwCausticBindingSetView = nullptr;
     const Core::Texture* m_hwCausticBindingSetAccumulator = nullptr;
@@ -451,12 +454,8 @@ struct RtShadowState{
     Core::ComputePipelineHandle m_shadowPipeline;
     Core::BindingSetHandle m_shadowBindingSet;
     const Core::RayTracingAccelStruct* m_shadowBindingSetTlas = nullptr;
-    const Core::Buffer* m_shadowBindingSetInstanceMaterial = nullptr;
-    const Core::Buffer* m_shadowBindingSetMaterialTyped = nullptr;
-    const Core::Buffer* m_shadowBindingSetMeshInstances = nullptr;
     // The target-generation resource-slot cbuffer selects the heap-backed scene shading + light list.
     const Core::Buffer* m_shadowBindingSetBindlessResources = nullptr;
-    u32 m_shadowBindingSetMeshCount = 0u;
     // Active shadow slots this frame (= min(lightCount, NWB_SCENE_SHADOW_SLOT_COUNT)), set during the light upload and
     // read by the edge-adaptive shadow resolve so it only processes the slots that hold a light.
     u32 m_shadowSlotCount = 0u;
@@ -475,11 +474,17 @@ struct RtShadowState{
     // trace paths.
     Core::BufferHandle m_shadowInstanceBuffer;
     Core::BufferHandle m_shadowMaterialTypedBuffer;
+    // Global StorageBuffer heap entries for the three shadow-owned portions of the shared trace material context.
+    // A capacity-growth replacement receives a fresh descriptor so previously recorded work retains the old resource
+    // until the heap's deferred-free quarantine retires it.
+    Core::GpuDescriptorHandle m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::invalid();
     usize m_shadowInstanceCapacity = 0u;
     usize m_shadowMaterialTypedCapacity = 0u;
     // Per-frame distinct meshes referenced by the TLAS (filled by buildSceneTlas). The three backing buffers feed the
-    // global-heap descriptors the HW caustic/GI passes read (keyed by material.meshSlot); the HW GI trace also needs
-    // raw positions to derive geometric face normals, so the position buffer is tracked here too. Dynamic GlobalArena
+    // global-heap descriptors the HW caustic/GI passes read through material.{index,attribute,position}Slot; the HW GI
+    // trace also needs raw positions to derive geometric face normals, so the position buffer is tracked here too. Dynamic GlobalArena
     // Vectors (bound in the RtShadowState ctor above) grown on demand, so no distinct mesh is ever dropped.
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshIndexBuffers;
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> m_shadowMeshAttributeBuffers;
@@ -528,14 +533,10 @@ struct RtShadowState{
     // the SAME shared SW-shadow binding layout/set (it only adds the NWB_SW_SHADOW_BINDING_TRANSPARENT_SOFT_HALF UAV slot).
     Core::ShaderHandle m_swShadowTransparentSoftShader;
     Core::ComputePipelineHandle m_swShadowTransparentSoftPipeline;
-    const Core::Buffer* m_swShadowBindingSetSceneNodes = nullptr;
-    const Core::Buffer* m_swShadowBindingSetInstances = nullptr;
-    const Core::Buffer* m_swShadowBindingSetInstanceMaterial = nullptr;
-    const Core::Buffer* m_swShadowBindingSetMaterialTyped = nullptr;
-    const Core::Buffer* m_swShadowBindingSetMeshInstances = nullptr;
+    // Renderer-owned slot-indirection cbuffer for the five heap-backed trace material-context buffers.
+    const Core::Buffer* m_swShadowBindingSetMaterialContextSlots = nullptr;
     const Core::Buffer* m_swShadowBindingSetBindlessResources = nullptr;
     const Core::Texture* m_swShadowBindingSetVisibility = nullptr;
-    u32 m_swShadowBindingSetMeshCount = 0u;
     u32 m_swShadowMeshCount = 0u;
     // Per-frame distinct meshes referenced by the software scene BVH (filled by buildSceneSwBvh). The SW shadow /
     // caustic / GI traces fetch this geometry from the global descriptor heap by the per-buffer slots carried on the
@@ -629,8 +630,8 @@ struct RtSoftShadowState{
     // shared m_shadowBindingLayout (identical trace context; only the bound visibility-output texture differs -- the soft
     // set binds shadowSoftHalfA as the UAV output instead of the full-res shadowVisibility), so the HW opaque shadow can
     // run the SAME half-res -> temporal -> a-trous -> upsample soft-shadow denoise chain as the SW path. The binding set
-    // rebuilds on the SAME tracked-pointer keys as m_shadowBindingSet (TLAS / instance-material / material-context /
-    // target-generation resource-slot cbuffer / mesh-count), so a TLAS/G-buffer/target change rebuilds it.
+    // rebuilds on the same tracked-pointer keys as m_shadowBindingSet (TLAS + target-generation resource-slot cbuffer),
+    // so a TLAS or target-generation change rebuilds it.
     Core::ShaderHandle m_shadowSoftShader;
     Core::ComputePipelineHandle m_shadowSoftPipeline;
     bool m_shadowSoftPipelineFailed = false;
@@ -653,11 +654,7 @@ struct RtSoftShadowState{
     u32 m_softShadowSlotMask = 0u;
     Core::BindingSetHandle m_shadowSoftBindingSet;
     const Core::RayTracingAccelStruct* m_shadowSoftBindingSetTlas = nullptr;
-    const Core::Buffer* m_shadowSoftBindingSetInstanceMaterial = nullptr;
-    const Core::Buffer* m_shadowSoftBindingSetMaterialTyped = nullptr;
-    const Core::Buffer* m_shadowSoftBindingSetMeshInstances = nullptr;
     const Core::Buffer* m_shadowSoftBindingSetBindlessResources = nullptr;
-    u32 m_shadowSoftBindingSetMeshCount = 0u;
     // Soft opaque shadow (soft-ray-traced-shadow feature): a per-frame counter seeding the per-pixel low-discrepancy
     // cone-jitter sample. Incremented once per frame by whichever primary shadow producer runs (the HW RayQuery opaque
     // trace on the HW path, the no-RT software traversal otherwise -- mutually exclusive per frame), so each pixel's
@@ -833,34 +830,26 @@ struct RtSurfelGiState{
     Core::ShaderHandle m_surfelTraceBuildArgsShader;
     Core::ComputePipelineHandle m_surfelTraceBuildArgsPipeline;
     Core::BindingSetHandle m_surfelTraceBuildArgsBindingSet;
-    // Tracked pointers for the trace set rebuild (the SW scene BVH + per-mesh arrays + target-generation resource-slot
-    // cbuffer; mirrors the SW shadow set guard).
-    const Core::Buffer* m_surfelTraceBindingSetSceneNodes = nullptr;
-    const Core::Buffer* m_surfelTraceBindingSetInstances = nullptr;
-    const Core::Buffer* m_surfelTraceBindingSetMaterialTyped = nullptr;
-    const Core::Buffer* m_surfelTraceBindingSetMeshInstances = nullptr;
+    // Tracked local cbuffers for the trace set rebuild. The SW scene/material data itself stays global-heap addressed.
+    const Core::Buffer* m_surfelTraceBindingSetMaterialContextSlots = nullptr;
     const Core::Buffer* m_surfelTraceBindingSetBindlessResources = nullptr;
-    u32 m_surfelTraceBindingSetMeshCount = 0u;
     bool m_surfelTraceHwPipelineFailed = false;
     bool m_surfelUseHwTrace = false;
     bool m_surfelCountReadbackPending = false;
     bool m_surfelDispatchLogged = false;
     // U5 HW-RayQuery trace twin (surfel_trace_hw_cs / gi_hw_trace.slangi): a parallel pipeline + binding set that reads
-    // the scene TLAS + the HW-resident per-mesh position/index/attribute buffers and the shadow-owned typed material
-    // context instead of the SW BVH, reconstructing the authored surface at the hit. m_surfelUseHwTrace selects the
+    // the scene TLAS and reconstructs the authored surface through heap-selected material-record geometry slots instead
+    // of the SW BVH. m_surfelUseHwTrace selects the
     // path in ensureSurfelResources / prepareSurfelResources / renderSurfelGi (set true by the HW-shadow branch, false
-    // by the SW branch). Rebuild guard on {TLAS, instance-material, material-typed, mesh-instances, target-generation
-    // resource-slot cbuffer, meshCount}.
+    // by the SW branch). Rebuild guard on the TLAS plus target-generation and trace-context slot cbuffers.
     Core::BindingLayoutHandle m_surfelTraceHwBindingLayout;
     Core::ShaderHandle m_surfelTraceHwShader;
     Core::ComputePipelineHandle m_surfelTraceHwPipeline;
     Core::BindingSetHandle m_surfelTraceHwBindingSet;
     const Core::RayTracingAccelStruct* m_surfelTraceHwBindingSetTlas = nullptr;
-    const Core::Buffer* m_surfelTraceHwBindingSetInstanceMaterial = nullptr;
-    const Core::Buffer* m_surfelTraceHwBindingSetMaterialTyped = nullptr;
-    const Core::Buffer* m_surfelTraceHwBindingSetMeshInstances = nullptr;
+    // Renderer-owned slot-indirection cbuffer for the five heap-backed trace material-context buffers.
+    const Core::Buffer* m_surfelTraceHwBindingSetMaterialContextSlots = nullptr;
     const Core::Buffer* m_surfelTraceHwBindingSetBindlessResources = nullptr;
-    u32 m_surfelTraceHwBindingSetMeshCount = 0u;
     bool m_surfelTraceBuildArgsPipelineFailed = false;
     bool m_surfelUpsamplePipelineFailed = false;
     bool m_surfelResolvePipelineFailed = false;

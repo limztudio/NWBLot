@@ -17,8 +17,8 @@
 
 
 // The per-instance data + the typed material-constant buffer, shared by the mesh stage (runtime.slangi) and
-// the pixel stage (the material pixel shader, via gbuffer_io.slangi). Raster material shaders resolve both through
-// the global heap; trace and cap-fill users keep their dedicated local bindings by leaving the switch below off.
+// the pixel stage (the material pixel shader, via gbuffer_io.slangi). Raster and migrated trace shaders resolve both
+// through the global heap; consumers that leave the switch below off retain dedicated local bindings.
 struct NwbMeshInstanceData{
     float4 rotation;
     float3 translation;

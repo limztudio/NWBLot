@@ -18,7 +18,7 @@
 // barycentric difference between the intersectors (accepted within the converged-image A/B tolerance).
 [shader("closesthit")]
 void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttributes attributes){
-    const NwbRtInstanceMaterial material = g_NwbCausticHwInstanceMaterial[InstanceID()];
+    const NwbRtInstanceMaterial material = nwbCausticHwInstanceMaterials()[InstanceID()];
 
     payload.hit = 1u;
     payload.t = RayTCurrent();

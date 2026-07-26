@@ -14,12 +14,14 @@
 // committed ray-t, the GEOMETRIC face normal from the committed primitive's positions (same edge order + cross sign, so
 // HW==SW to sub-ULP), then evaluates the authored material surface with the SAME InstanceID-indexed material context
 // (hardware InstanceID() == SW scene-BVH leaf index). Reads the HW-resident per-mesh position/index/attribute buffers
-// (indexed by material.meshSlot) and typed material storage that the shadow path already binds. Shares NwbGiProbeHit +
+// through the descriptor-heap slots carried by that material record, plus typed material storage. Shares NwbGiProbeHit +
 // the Lambert shade with the SW path via gi_trace_common.slangi.
 
 
 #include "hw_binding_slots.h"
 #include "../deferred/bindless_resources.slangi"
+#include "../raytrace/material_context_slots.slangi"
+#include "../bindless/bindless_heap_rt.slangi"
 
 // The shared scene-shading CB + light list are target-generation heap entries. This trace's local slot cbuffer carries
 // their uniform heap indices in avboitSlots.z/.w; gi_trace_common's scene/buffer.slangi include therefore emits typed
@@ -30,23 +32,38 @@ ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbGiHwBindless
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbGiHwBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbGiHwBindlessResources.avboitSlots.w
 
+// The shared InstanceID material table and material-surface buffers are global StorageBuffer heap entries. This local
+// cbuffer keeps their selection uniform for the dispatch without retaining local b3/b7/b8 SRVs.
+[[vk::binding(NWB_GI_HW_BINDING_MATERIAL_CONTEXT_SLOTS, NWB_GI_HW_SET)]]
+ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbGiHwMaterialContextSlots;
+
 #define NWB_MESH_SET NWB_GI_HW_SET
-#define NWB_MESH_BINDING_MATERIAL_TYPED NWB_GI_HW_BINDING_MATERIAL_TYPED
-#define NWB_MESH_BINDING_INSTANCE NWB_GI_HW_BINDING_MESH_INSTANCES
+#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
+#define NWB_MESH_VIEW_BUFFER_BINDLESS 1
+uint nwbMeshFrameMaterialTypedHeapSlot(){
+    return g_NwbGiHwMaterialContextSlots.sceneSlots.w;
+}
+uint nwbMeshFrameInstanceHeapSlot(){
+    return g_NwbGiHwMaterialContextSlots.materialSlots.x;
+}
+uint nwbMeshFrameViewHeapSlot(){
+    return 0u;
+}
+#include "../bindless/bindless_heap_mesh.slangi"
+
 // GI shades direct scene lights with an occlusion ray; it never samples the screen-space shadow/caustic textures.
 // Omitting those declarations prevents their default set-0 bindings from aliasing GI's typed material buffers.
 #define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED 1
 
-// Reuse the cook-generated material-surface dispatch for GI albedo. The binding redirects above give the evaluator the
-// same typed constants and mutable instance storage its raster/shadow invocation reads.
+// Reuse the cook-generated material-surface dispatch for GI albedo. The heap-selected context above gives the evaluator
+// the same typed constants and mutable instance storage its raster/shadow invocation reads.
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/transmittance_dispatch.slangi"
 
 #include "gi_trace_common.slangi"
 
-// Global descriptor-heap accessors for the position, index, and attribute buffers carried by the instance-material
-// record. HW GI uses only raw buffers because inline RayQuery walks the TLAS without BVH-node access.
-#include "../bindless/bindless_heap.slangi"
+// bindless_heap_rt.slangi above also brings the raw geometry accessor. HW GI uses it for positions, indices, and
+// attributes carried by the heap-selected instance-material record; inline RayQuery itself walks the TLAS.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,9 +73,6 @@ ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbGiHwBindless
 [[vk::binding(NWB_GI_HW_BINDING_TLAS, NWB_GI_HW_SET)]]
 RaytracingAccelerationStructure g_NwbGiHwTlas;
 #endif
-
-[[vk::binding(NWB_GI_HW_BINDING_INSTANCE_MATERIAL, NWB_GI_HW_SET)]]
-StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbGiHwInstanceMaterial;
 
 // Per-mesh positions, indices, and attributes are read through descriptor-heap slots carried by the material record.
 // The shared backing buffers remain transitioned for those heap reads.
@@ -132,14 +146,14 @@ NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
         return closest;
 
     const uint instanceIndex = query.CommittedInstanceID();
-    const NwbRtInstanceMaterial material = g_NwbGiHwInstanceMaterial[instanceIndex];
+    const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbGiHwMaterialContextSlots.sceneSlots.z)[instanceIndex];
     const uint triangle = query.CommittedPrimitiveIndex();
 
     // This mesh's index / position / attribute geometry is fetched from the global descriptor heap by the per-buffer
     // slots the material record carries (populated lockstep with the mesh in rt_swbvh.cpp). Each slot is NON-UNIFORM
     // across the wave -- different rays hit different meshes -- so its heap subscript must be NonUniformResourceIndex-
     // tagged; NwbHeapRawBuffer() applies that internally and is re-invoked at EACH access below (never hoisted into a
-    // resource local), exactly as the bounded g_NwbGiHwMesh*[NonUniformResourceIndex(meshSlot)] arrays it replaces did.
+    // resource local) so the decoration is applied fresh at every descriptor access.
     const uint indexBase = triangle * 3u;
     const uint3 tri = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * 4u);
     const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(tri.x * 12u));

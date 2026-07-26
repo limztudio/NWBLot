@@ -10,31 +10,10 @@
 
 
 #include "binding_slots.h"
-#include "instance_material.slangi"
 
 // The G-buffer reads and (on Backend C) the shared TLAS come from the global descriptor heap. Backend A retains the
 // local set-0 TLAS descriptor below, while both backends select the target-generation G-buffer images by push slot.
 #include "../bindless/bindless_heap.slangi"
-
-// Map the shared material-constants context (g_NwbMaterialTypedWords + g_NwbMeshInstances, declared in
-// mesh/material_typed_bindings.slangi at NWB_MESH_SET / NWB_MESH_BINDING_*) into this pass's binding set. The
-// mesh-set defaults (slots 6/12) collide with this set's other slots, so they are moved onto the shadow-RT slot map.
-#define NWB_MESH_SET NWB_SHADOW_RT_SET
-#define NWB_MESH_BINDING_MATERIAL_TYPED NWB_SHADOW_RT_BINDING_MATERIAL_TYPED
-#define NWB_MESH_BINDING_INSTANCE NWB_SHADOW_RT_BINDING_MESH_INSTANCES
-
-// The shadow trace's material-constants context (NwbShadowHit + the per-invocation accessors + the surface
-// contract + the engine-side shadow physics helpers nwbShadowFresnelTransmittedFraction /
-// nwbShadowAbsorptionCoefficient the trace calls) + the cook-generated per-hit surface dispatch
-// (nwbShadowDispatchSurface), which #includes each transparent material's .bind + .surface and routes by
-// shadowTransmittanceModelId to return that occluder's optical params (ior / transmission).
-#include "shadow_surface.slangi"
-#include "shadow/generated/transmittance_dispatch.slangi"
-
-// Per-crossing integration helpers (NwbShadowVisibilityAccumulator / nwbShadowIntegrateCrossing /
-// nwbShadowFinalizeVisibility). The opaque RayQuery trace does not invoke them; the software traversal includes
-// the same helpers after its surface setup.
-#include "shadow_integrate.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

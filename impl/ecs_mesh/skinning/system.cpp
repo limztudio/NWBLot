@@ -177,10 +177,7 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
     if(!ready || !hasRenderWork)
         return ready;
 
-    if(!m_renderCommandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: render command list was not validated"));
-        return false;
-    }
+    NWB_ASSERT(m_renderCommandList);
 
     return true;
 }
@@ -260,8 +257,7 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
 
     auto& device = *m_graphics.getDevice();
     Core::CommandList* commandList = m_renderCommandList.get();
-    if(!commandList)
-        return;
+    NWB_ASSERT(commandList);
 
     bool submittedWork = false;
 

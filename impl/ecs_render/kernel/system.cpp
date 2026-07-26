@@ -278,15 +278,8 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     )
         return false;
 
-    if(!m_renderCommandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: render command list was not validated"));
-        return false;
-    }
-
-    if(!m_shadowPrepareCommandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow preparation command list was not validated"));
-        return false;
-    }
+    NWB_ASSERT(m_renderCommandList);
+    NWB_ASSERT(m_shadowPrepareCommandList);
 
     auto& device = *m_graphics.getDevice();
 
@@ -332,21 +325,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
 
-    if(!m_preparedCsgFrameStateValid)
-        return;
+    NWB_ASSERT(m_preparedCsgFrameStateValid);
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     const CsgFrameState csgFrameState = m_preparedCsgFrameState;
     const bool hasCsgFrameWork = !csgFrameState.empty();
     const bool hasOpaqueCsgFrameWork = csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
-    if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
-        return;
+    NWB_ASSERT(!hasCsgFrameWork || deferredTargets.csgIntervalTargetsValid());
     auto* device = m_graphics.getDevice();
     Core::CommandList* commandList = m_renderCommandList.get();
-    if(!commandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: render command list was not prepared"));
-        return;
-    }
+    NWB_ASSERT(commandList);
     commandList->open();
 
     // Reset every GPU-timing query pool on the device timeline now, while the command buffer has no render pass

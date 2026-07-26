@@ -321,10 +321,7 @@ bool UiSystem::prepareResources(Core::Framebuffer* framebuffer){
     if(__hidden_ui::HasTextureRequests(*drawData)){
         auto& device = *m_graphics.getDevice();
 
-        if(!m_prepareCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: preparation command list was not validated"));
-            return false;
-        }
+        NWB_ASSERT(m_prepareCommandList);
 
         m_prepareCommandList->open();
         const bool texturesReady = processTextureRequests(*m_prepareCommandList, *drawData);
@@ -345,10 +342,7 @@ bool UiSystem::prepareResources(Core::Framebuffer* framebuffer){
     if(drawData->TotalVtxCount <= 0 || drawData->TotalIdxCount <= 0)
         return true;
 
-    if(!m_renderCommandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: render command list was not validated"));
-        return false;
-    }
+    NWB_ASSERT(m_renderCommandList);
 
     return true;
 }
@@ -387,10 +381,7 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
     }
 
     Core::CommandList* commandList = m_renderCommandList.get();
-    if(!commandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: render command list was not prepared"));
-        return;
-    }
+    NWB_ASSERT(commandList);
 
     commandList->open();
     const bool success = uploadDrawBuffers(*commandList, *drawData);

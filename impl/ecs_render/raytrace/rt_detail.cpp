@@ -169,20 +169,18 @@ u32 BuildSceneBvhNode(
     u32* indices,
     const u32 lo,
     const u32 hi,
-    const Float4* instanceAabbMin,
-    const Float4* instanceAabbMax,
-    const Float4* instanceCentroid,
-    Vector<SceneBvhNodeBuildData, Core::Alloc::ScratchArena>& nodes,
+    const SceneBvhPrimitiveCalculation* primitiveBounds,
+    Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes,
     const u32* instanceLeafCost
 ){
     const u32 nodeIndex = static_cast<u32>(nodes.size());
-    nodes.push_back(SceneBvhNodeBuildData{});
+    nodes.push_back(SceneBvhNodeCalculation{});
 
     if((hi - lo) == 1u){
         const u32 instance = indices[lo];
-        SceneBvhNodeBuildData& node = nodes[nodeIndex];
-        node.aabbMin = instanceAabbMin[instance];
-        node.aabbMax = instanceAabbMax[instance];
+        SceneBvhNodeCalculation& node = nodes[nodeIndex];
+        node.aabbMin = primitiveBounds[instance].aabbMin;
+        node.aabbMax = primitiveBounds[instance].aabbMax;
         node.leftChild = BvhNodeIndex::LeafFlag | instance;
         node.rightChild = 1u;
         return nodeIndex;
@@ -200,7 +198,7 @@ u32 BuildSceneBvhNode(
     SIMDVector centroidMin = VectorReplicate(s_RayTracingFiniteInfinity);
     SIMDVector centroidMax = VectorReplicate(-s_RayTracingFiniteInfinity);
     for(u32 i = lo; i < hi; ++i){
-        const SIMDVector centroid = LoadFloat(instanceCentroid[indices[i]]);
+        const SIMDVector centroid = primitiveBounds[indices[i]].centroid;
         centroidMin = VectorMin(centroidMin, centroid);
         centroidMax = VectorMax(centroidMax, centroid);
     }
@@ -234,12 +232,12 @@ u32 BuildSceneBvhNode(
         }
         for(u32 i = lo; i < hi; ++i){
             const u32 instance = indices[i];
-            const f32 c = SceneBvhAxisComponent(LoadFloat(instanceCentroid[instance]), axis);
+            const f32 c = SceneBvhAxisComponent(primitiveBounds[instance].centroid, axis);
             u32 b = static_cast<u32>((c - loExtent) * invExtent);
             if(b >= s_SceneBvhSahBinCount)
                 b = s_SceneBvhSahBinCount - 1u;
-            binMin[b] = VectorMin(binMin[b], LoadFloat(instanceAabbMin[instance]));
-            binMax[b] = VectorMax(binMax[b], LoadFloat(instanceAabbMax[instance]));
+            binMin[b] = VectorMin(binMin[b], primitiveBounds[instance].aabbMin);
+            binMax[b] = VectorMax(binMax[b], primitiveBounds[instance].aabbMax);
             binCost[b] += leafCostOf(instance);
             ++binCount[b];
         }
@@ -313,7 +311,7 @@ u32 BuildSceneBvhNode(
         mid = lo;
         for(u32 i = lo; i < hi; ++i){
             const u32 instance = indices[i];
-            const f32 c = SceneBvhAxisComponent(LoadFloat(instanceCentroid[instance]), bestAxis);
+            const f32 c = SceneBvhAxisComponent(primitiveBounds[instance].centroid, bestAxis);
             u32 b = static_cast<u32>((c - loExtent) * invExtent);
             if(b >= s_SceneBvhSahBinCount)
                 b = s_SceneBvhSahBinCount - 1u;
@@ -329,12 +327,12 @@ u32 BuildSceneBvhNode(
     if(!anyAxisValid || mid == lo || mid == hi)
         mid = lo + (hi - lo) / 2u; // degenerate split (coincident centroids everywhere) -> count median; still correct
 
-    const u32 leftChild = BuildSceneBvhNode(indices, lo, mid, instanceAabbMin, instanceAabbMax, instanceCentroid, nodes, instanceLeafCost);
-    const u32 rightChild = BuildSceneBvhNode(indices, mid, hi, instanceAabbMin, instanceAabbMax, instanceCentroid, nodes, instanceLeafCost);
+    const u32 leftChild = BuildSceneBvhNode(indices, lo, mid, primitiveBounds, nodes, instanceLeafCost);
+    const u32 rightChild = BuildSceneBvhNode(indices, mid, hi, primitiveBounds, nodes, instanceLeafCost);
 
-    SceneBvhNodeBuildData& node = nodes[nodeIndex];
-    StoreFloat(VectorMin(LoadFloat(nodes[leftChild].aabbMin), LoadFloat(nodes[rightChild].aabbMin)), &node.aabbMin);
-    StoreFloat(VectorMax(LoadFloat(nodes[leftChild].aabbMax), LoadFloat(nodes[rightChild].aabbMax)), &node.aabbMax);
+    SceneBvhNodeCalculation& node = nodes[nodeIndex];
+    node.aabbMin = VectorMin(nodes[leftChild].aabbMin, nodes[rightChild].aabbMin);
+    node.aabbMax = VectorMax(nodes[leftChild].aabbMax, nodes[rightChild].aabbMax);
     node.leftChild = leftChild;
     node.rightChild = rightChild;
     return nodeIndex;

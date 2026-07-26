@@ -11,6 +11,7 @@ template<typename CookEntryT>
     MeshletTrianglePrecompute& outData
 ){
     outData.triangles.clear();
+    outData.triangleCalculations.clear();
     outData.positionTriangleOffsets.clear();
     outData.positionTriangleIndices.clear();
     outData.visitedTriangles.clear();
@@ -25,6 +26,7 @@ template<typename CookEntryT>
     }
 
     outData.triangles.resize(triangleCount);
+    outData.triangleCalculations.resize(triangleCount);
     outData.positionTriangleOffsets.resize(entry.positions.size() + 1u, 0u);
     outData.positionTriangleIndices.resize(indices.size());
     outData.visitedTriangles.resize(triangleCount, 0u);
@@ -46,6 +48,7 @@ template<typename CookEntryT>
 
     for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
         MeshletTriangleData& triangle = outData.triangles[triangleIndex];
+        MeshletTriangleCalculation& calculation = outData.triangleCalculations[triangleIndex];
         const usize indexOffset = triangleIndex * s_MeshletTriangleIndexCount;
         triangle.vertexRefs[0] = indices[indexOffset + 0u];
         triangle.vertexRefs[1] = indices[indexOffset + 1u];
@@ -59,11 +62,13 @@ template<typename CookEntryT>
         const SIMDVector p2 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[2u]]));
         const SIMDVector centroid = VectorScale(VectorAdd(VectorAdd(p0, p1), p2), 1.0f / 3.0f);
         const SIMDVector areaNormal = TriangleTests::AreaNormal(p0, p1, p2);
-        StoreFloat(p0, &triangle.positionVectors[0u]);
-        StoreFloat(p1, &triangle.positionVectors[1u]);
-        StoreFloat(p2, &triangle.positionVectors[2u]);
-        StoreFloat(VectorSetW(centroid, 0.0f), &triangle.centroid);
-        StoreFloat(VectorSetW(areaNormal, 0.0f), &triangle.areaNormal);
+        calculation.vectors = MakeMeshletTriangleVectors(
+            p0,
+            p1,
+            p2,
+            VectorSetW(centroid, 0.0f),
+            VectorSetW(areaNormal, 0.0f)
+        );
 
         const u32 triangleIndexU32 = static_cast<u32>(triangleIndex);
         for(const u32 positionIndex : triangle.positions){

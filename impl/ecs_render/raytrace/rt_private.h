@@ -131,9 +131,17 @@ struct NwbBvhNodeGpu{
 };
 static_assert(sizeof(NwbBvhNodeGpu) == 32u, "NwbBvhNodeGpu must match the shader NwbBvhNode std430 layout");
 
-struct SceneBvhNodeBuildData{
-    Float4 aabbMin;
-    Float4 aabbMax;
+// CPU-only, scratch-lifetime BVH build values. These remain in SIMD form while the recursive SAH build is
+// calculating; the caller packs the final GPU nodes into their typed Float3UInt storage layout afterward.
+struct SceneBvhPrimitiveCalculation{
+    SIMDVector aabbMin = {};
+    SIMDVector aabbMax = {};
+    SIMDVector centroid = {};
+};
+
+struct SceneBvhNodeCalculation{
+    SIMDVector aabbMin = {};
+    SIMDVector aabbMax = {};
     u32 leftChild = 0u;
     u32 rightChild = 0u;
 };
@@ -604,10 +612,8 @@ u32 BuildSceneBvhNode(
     u32* indices,
     const u32 lo,
     const u32 hi,
-    const Float4* instanceAabbMin,
-    const Float4* instanceAabbMax,
-    const Float4* instanceCentroid,
-    Vector<SceneBvhNodeBuildData, Core::Alloc::ScratchArena>& nodes,
+    const SceneBvhPrimitiveCalculation* primitiveBounds,
+    Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes,
     const u32* instanceLeafCost = nullptr
 );
 [[nodiscard]] NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterial(

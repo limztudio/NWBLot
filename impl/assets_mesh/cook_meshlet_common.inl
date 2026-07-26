@@ -15,9 +15,6 @@ struct MeshletTriangleVectors{
 struct MeshletTriangleData{
     u32 vertexRefs[s_MeshletTriangleIndexCount] = {};
     u32 positions[s_MeshletTriangleIndexCount] = {};
-    Float4 positionVectors[s_MeshletTriangleIndexCount] = {};
-    Float4 centroid = {};
-    Float4 areaNormal = {};
 };
 
 [[nodiscard]] static MeshletTriangleVectors MakeMeshletTriangleVectors(
@@ -38,24 +35,22 @@ struct MeshletTriangleData{
     };
 }
 
-[[nodiscard]] static MeshletTriangleVectors LoadMeshletTriangleVectors(const MeshletTriangleData& triangle){
-    return MakeMeshletTriangleVectors(
-        LoadFloat(triangle.positionVectors[0u]),
-        LoadFloat(triangle.positionVectors[1u]),
-        LoadFloat(triangle.positionVectors[2u]),
-        LoadFloat(triangle.centroid),
-        LoadFloat(triangle.areaNormal)
-    );
-}
+// CPU cook-scratch only. These values never cross an asset or GPU-memory boundary, so the meshlet scoring helpers
+// can stay entirely on calculation types after PrecomputeMeshletTriangleData performs the source-storage loads.
+struct MeshletTriangleCalculation{
+    MeshletTriangleVectors vectors;
+};
 
 struct MeshletTrianglePrecompute{
     Core::Assets::AssetVector<MeshletTriangleData> triangles;
+    Core::Assets::AssetVector<MeshletTriangleCalculation> triangleCalculations;
     Core::Assets::AssetVector<u32> positionTriangleOffsets;
     Core::Assets::AssetVector<u32> positionTriangleIndices;
     Core::Assets::AssetVector<u8> visitedTriangles;
 
     explicit MeshletTrianglePrecompute(Core::Assets::AssetArena& arena)
         : triangles(arena)
+        , triangleCalculations(arena)
         , positionTriangleOffsets(arena)
         , positionTriangleIndices(arena)
         , visitedTriangles(arena)

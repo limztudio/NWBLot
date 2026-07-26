@@ -55,7 +55,7 @@ static_assert(IsTriviallyCopyable_V<TriangleAreaNormal64>);
 
 #if defined(__AVX2__) || defined(_M_AVX2)
 template<typename Vector3Like>
-[[nodiscard]] __m256d LoadVector3F64(const Vector3Like& value){
+[[nodiscard]] __m256d MakeVector3F64(const Vector3Like& value){
     return _mm256_set_pd(
         0.0,
         static_cast<f64>(value.z),
@@ -64,10 +64,14 @@ template<typename Vector3Like>
     );
 }
 
-[[nodiscard]] TriangleAreaNormal64 StoreTriangleAreaNormal64(const __m256d value){
-    alignas(32) f64 lanes[4] = {};
-    _mm256_store_pd(lanes, value);
-    return TriangleAreaNormal64{ lanes[0], lanes[1], lanes[2] };
+[[nodiscard]] TriangleAreaNormal64 MakeTriangleAreaNormal64(const __m256d value){
+    const __m128d xy = _mm256_castpd256_pd128(value);
+    const __m128d z0 = _mm256_extractf128_pd(value, 1);
+    return TriangleAreaNormal64{
+        _mm_cvtsd_f64(xy),
+        _mm_cvtsd_f64(_mm_unpackhi_pd(xy, xy)),
+        _mm_cvtsd_f64(z0),
+    };
 }
 #endif
 
@@ -92,7 +96,13 @@ struct PositionKeyEqual{
     }
 };
 
-using PositionNormalMap = HashMap<PositionKey, Vec3, PositionKeyHasher, PositionKeyEqual>;
+// Import-only calculation scratch. SourceMesh keeps its serialized normals in Float#/Vec# streams; this map keeps
+// the accumulated values SIMD-resident until AppendInstanceMesh writes a completed corner.
+struct alignas(Float4) PositionNormalCalculation{
+    SIMDVector value = {};
+};
+
+using PositionNormalMap = HashMap<PositionKey, PositionNormalCalculation, PositionKeyHasher, PositionKeyEqual>;
 
 struct MeshSkinInfluenceHasher{
     usize operator()(const MeshSkinInfluence& value)const{
@@ -246,16 +256,24 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     };
 }
 
+[[nodiscard]] PositionKey MakePositionKey(const SIMDVector position){
+    return PositionKey{
+        FloatHashBits(VectorGetX(position)),
+        FloatHashBits(VectorGetY(position)),
+        FloatHashBits(VectorGetZ(position)),
+    };
+}
+
 template<typename Vector3Like>
 [[nodiscard]] TriangleAreaNormal64 BuildTriangleAreaNormal64(const Vector3Like& a, const Vector3Like& b, const Vector3Like& c){
 #if defined(__AVX2__) || defined(_M_AVX2)
-    const __m256d ab = _mm256_sub_pd(LoadVector3F64(b), LoadVector3F64(a));
-    const __m256d ac = _mm256_sub_pd(LoadVector3F64(c), LoadVector3F64(a));
+    const __m256d ab = _mm256_sub_pd(MakeVector3F64(b), MakeVector3F64(a));
+    const __m256d ac = _mm256_sub_pd(MakeVector3F64(c), MakeVector3F64(a));
     const __m256d abYzx = _mm256_permute4x64_pd(ab, _MM_SHUFFLE(3, 0, 2, 1));
     const __m256d abZxy = _mm256_permute4x64_pd(ab, _MM_SHUFFLE(3, 1, 0, 2));
     const __m256d acYzx = _mm256_permute4x64_pd(ac, _MM_SHUFFLE(3, 0, 2, 1));
     const __m256d acZxy = _mm256_permute4x64_pd(ac, _MM_SHUFFLE(3, 1, 0, 2));
-    return StoreTriangleAreaNormal64(_mm256_sub_pd(
+    return MakeTriangleAreaNormal64(_mm256_sub_pd(
         _mm256_mul_pd(abYzx, acZxy),
         _mm256_mul_pd(abZxy, acYzx)
     ));
@@ -286,6 +304,18 @@ template<typename Vector3Like>
     };
 #endif
 #endif
+}
+
+[[nodiscard]] TriangleAreaNormal64 BuildTriangleAreaNormal64(
+    const SIMDVector a,
+    const SIMDVector b,
+    const SIMDVector c
+){
+    return BuildTriangleAreaNormal64(
+        Vec3{ VectorGetX(a), VectorGetY(a), VectorGetZ(a) },
+        Vec3{ VectorGetX(b), VectorGetY(b), VectorGetZ(b) },
+        Vec3{ VectorGetX(c), VectorGetY(c), VectorGetZ(c) }
+    );
 }
 
 [[nodiscard]] f64 TriangleAreaNormalLengthSquared(const TriangleAreaNormal64& areaNormal){

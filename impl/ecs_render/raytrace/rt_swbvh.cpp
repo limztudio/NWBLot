@@ -559,12 +559,10 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     auto rendererView = world().view<RendererComponent>();
     const usize candidateCount = rendererView.candidateCount();
 
-    // Per-instance GPU records + the world-space AABBs / centroids the CPU build consumes (kept parallel so
-    // the BVH leaf payload indexes straight into the uploaded instance buffer).
+    // Per-instance GPU records + transient SIMD world-space AABB/centroid calculation values. The calculation
+    // records stay parallel to the uploaded instance buffer so the BVH leaf payload indexes it directly.
     Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena> instances{ scratchArena };
-    Vector<Float4, Core::Alloc::ScratchArena> instanceAabbMin{ scratchArena };
-    Vector<Float4, Core::Alloc::ScratchArena> instanceAabbMax{ scratchArena };
-    Vector<Float4, Core::Alloc::ScratchArena> instanceCentroid{ scratchArena };
+    Vector<SceneBvhPrimitiveCalculation, Core::Alloc::ScratchArena> instanceBvhPrimitives{ scratchArena };
     // Per-instance occluder material, built lockstep with `instances` (same push order) so the uploaded table
     // indexes by the scene-BVH leaf instance index the software traversal reads.
     Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
@@ -581,9 +579,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         scratchArena
     );
     instances.reserve(candidateCount);
-    instanceAabbMin.reserve(candidateCount);
-    instanceAabbMax.reserve(candidateCount);
-    instanceCentroid.reserve(candidateCount);
+    instanceBvhPrimitives.reserve(candidateCount);
     instanceMaterials.reserve(candidateCount);
     shadowInstanceData.reserve(candidateCount);
     shadowMutableTypedRanges.reserve(candidateCount);
@@ -751,17 +747,13 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         instanceMaterial.attributeSlot = rayTracingState().m_swShadowMeshAttributeHandles[meshSlot].slot();
         instanceMaterial.positionSlot = rayTracingState().m_swShadowMeshPositionHandles[meshSlot].slot();
         instanceMaterial.nodeSlot = rayTracingState().m_swShadowMeshNodeHandles[meshSlot].slot();
-        Float4 storedWorldMin;
-        Float4 storedWorldMax;
-        Float4 storedCentroid;
-        StoreFloat(worldMin, &storedWorldMin);
-        StoreFloat(worldMax, &storedWorldMax);
-        StoreFloat(VectorScale(VectorAdd(worldMin, worldMax), 0.5f), &storedCentroid);
+        SceneBvhPrimitiveCalculation bvhPrimitive;
+        bvhPrimitive.aabbMin = worldMin;
+        bvhPrimitive.aabbMax = worldMax;
+        bvhPrimitive.centroid = VectorScale(VectorAdd(worldMin, worldMax), 0.5f);
 
         instances.push_back(instance);
-        instanceAabbMin.push_back(storedWorldMin);
-        instanceAabbMax.push_back(storedWorldMax);
-        instanceCentroid.push_back(storedCentroid);
+        instanceBvhPrimitives.push_back(bvhPrimitive);
         instanceMaterials.push_back(instanceMaterial);
         shadowInstanceData.push_back(shadowInstance);
     }
@@ -795,22 +787,29 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         indices.push_back(i);
 
     const usize nodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
-    Vector<SceneBvhNodeBuildData, Core::Alloc::ScratchArena> buildNodes{ scratchArena };
+    Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena> buildNodes{ scratchArena };
     buildNodes.reserve(nodeCount);
     // Per-instance leaf cost = primitive count, so a large instance biases the SAH tree like a large primitive.
     Vector<u32, Core::Alloc::ScratchArena> instanceLeafCost{ scratchArena };
     instanceLeafCost.reserve(instanceCount);
     for(u32 i = 0u; i < instanceCount; ++i)
         instanceLeafCost.push_back(instances[i].primitiveCount);
-    __hidden_raytracing_system::BuildSceneBvhNode(indices.data(), 0u, instanceCount, instanceAabbMin.data(), instanceAabbMax.data(), instanceCentroid.data(), buildNodes, instanceLeafCost.data());
+    __hidden_raytracing_system::BuildSceneBvhNode(
+        indices.data(),
+        0u,
+        instanceCount,
+        instanceBvhPrimitives.data(),
+        buildNodes,
+        instanceLeafCost.data()
+    );
     NWB_ASSERT(buildNodes.size() == nodeCount);
 
     Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena> nodes{ scratchArena };
     nodes.reserve(buildNodes.size());
-    for(const SceneBvhNodeBuildData& buildNode : buildNodes){
+    for(const SceneBvhNodeCalculation& buildNode : buildNodes){
         NwbBvhNodeGpu node;
-        StoreFloatInt(LoadFloat(buildNode.aabbMin), buildNode.leftChild, &node.aabbMinLeftChild);
-        StoreFloatInt(LoadFloat(buildNode.aabbMax), buildNode.rightChild, &node.aabbMaxRightChild);
+        StoreFloatInt(buildNode.aabbMin, buildNode.leftChild, &node.aabbMinLeftChild);
+        StoreFloatInt(buildNode.aabbMax, buildNode.rightChild, &node.aabbMaxRightChild);
         nodes.push_back(node);
     }
 

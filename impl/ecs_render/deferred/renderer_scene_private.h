@@ -81,7 +81,21 @@ inline f32 ShadowSlotImportance(
     return VectorGetX(VectorMultiply(radiantImportance, VectorMin(coverageSquared, s_SIMDOne)));
 }
 
-inline u32 ResolveSceneLights(Core::ECS::World& world, SceneLightGpuData* outLights, const u32 maxLights){
+// Caustic importance: pure radiant power (luminance * intensity), the same energy proxy ShadowSlotImportance
+// uses, but WITHOUT the screen-coverage weighting (the caustic budget is aimed at the refractive occluders, not
+// the camera). Higher = more worth a scarce caustic slot.
+inline f32 CausticSlotImportance(const SIMDVector colorIntensity){
+    const SIMDVector luminance = Vector3Dot(colorIntensity, VectorSet(0.2126f, 0.7152f, 0.0722f, 0.0f));
+    const SIMDVector intensity = VectorMax(VectorSplatW(colorIntensity), VectorZero());
+    return VectorGetX(VectorMultiply(luminance, intensity));
+}
+
+inline u32 ResolveSceneLights(
+    Core::ECS::World& world,
+    SceneLightGpuData* outLights,
+    f32* outCausticImportance,
+    const u32 maxLights
+){
     if(maxLights == 0u)
         return 0u;
 
@@ -96,6 +110,7 @@ inline u32 ResolveSceneLights(Core::ECS::World& world, SceneLightGpuData* outLig
     for(usize i = 0u; i < gatheredCount; ++i){
         const NWB::Impl::Scene::SceneLight& src = sceneLights[i];
         SceneLightGpuData& dst = outLights[i];
+        const SIMDVector colorIntensity = LoadFloat(src.colorIntensity);
         dst.position = src.position;
         dst.direction = src.direction;
         dst.colorIntensity = src.colorIntensity;
@@ -106,6 +121,7 @@ inline u32 ResolveSceneLights(Core::ECS::World& world, SceneLightGpuData* outLig
             src.enableCaustics ? s_CausticSlotUnassigned : s_CausticSlotDisabled
         ); // z = shadow slot; w = caustic slot, or disabled when the light did not opt in
         dst.params2 = Float4(src.angularRadius, src.sourceRadius, 0.f, 0.f); // soft-shadow source size
+        outCausticImportance[i] = CausticSlotImportance(colorIntensity);
     }
 
     // Importance-ranked shadow-slot allocator: hand the bounded pool of NWB_SCENE_SHADOW_SLOT_COUNT slots to
@@ -155,21 +171,17 @@ inline bool CausticLightEnabled(const SceneLightGpuData& light){
     return light.params.w >= (s_CausticSlotUnassigned - 0.5f);
 }
 
-// Caustic importance: pure radiant power (luminance * intensity), the same energy proxy ShadowSlotImportance
-// uses, but WITHOUT the screen-coverage weighting (the caustic budget is aimed at the refractive occluders, not
-// the camera). Higher = more worth a scarce caustic slot.
-inline f32 CausticSlotImportance(const SIMDVector colorIntensity){
-    const SIMDVector luminance = Vector3Dot(colorIntensity, VectorSet(0.2126f, 0.7152f, 0.0722f, 0.0f));
-    const SIMDVector intensity = VectorMax(VectorSplatW(colorIntensity), VectorZero());
-    return VectorGetX(VectorMultiply(luminance, intensity));
-}
-
 // Assigns the bounded pool of NWB_SCENE_CAUSTIC_SLOT_COUNT caustic slots to the most important caustic-enabled,
 // caustic-eligible lights, writing the chosen slot index into params.w (negative = no slot). Operates on the
 // already-resolved light array (call AFTER ResolveSceneLights). CRUCIAL GATE: caustics only exist when the scene
 // holds at least one refractive instance AND the light explicitly opted in; a normal transparent-shadow scene with
 // refractive materials therefore remains a shadow test, not a photon-caustic test.
-inline u32 ResolveCausticLights(SceneLightGpuData* outLights, const u32 lightCount, const u32 refractiveInstanceCount){
+inline u32 ResolveCausticLights(
+    SceneLightGpuData* outLights,
+    const f32* causticImportance,
+    const u32 lightCount,
+    const u32 refractiveInstanceCount
+){
     if(refractiveInstanceCount == 0u || lightCount == 0u)
         return 0u;
 
@@ -186,7 +198,7 @@ inline u32 ResolveCausticLights(SceneLightGpuData* outLights, const u32 lightCou
                 continue;
             if(!CausticLightEligible(outLights[i]))
                 continue;
-            const f32 importance = CausticSlotImportance(LoadFloat(outLights[i].colorIntensity));
+            const f32 importance = causticImportance[i];
             if(importance > bestImportance){
                 bestImportance = importance;
                 bestIndex = i;

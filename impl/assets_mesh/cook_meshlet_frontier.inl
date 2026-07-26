@@ -117,9 +117,9 @@ static void AddMeshletTriangleToScoreState(
         return false;
 
     localTriangleIndices.push_back(triangleIndex);
-    const MeshletTriangleVectors triangleVectors = LoadMeshletTriangleVectors(triangle);
+    const MeshletTriangleVectors& triangleVectors = trianglePrecompute.triangleCalculations[triangleIndex].vectors;
     const auto triangleAreaNormalAt = [&](const u32 otherTriangleIndex){
-        return LoadFloat(trianglePrecompute.triangles[otherTriangleIndex].areaNormal);
+        return trianglePrecompute.triangleCalculations[otherTriangleIndex].vectors.areaNormal;
     };
     AddMeshletTriangleToScoreState(localTriangleIndices, triangleVectors, triangleAreaNormalAt, scoreState);
     trianglePrecompute.visitedTriangles[triangleIndex] = 1u;

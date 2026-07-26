@@ -257,7 +257,7 @@ bool BuildInfluence(
         }
 
         outInfluence.joint[writtenInfluenceCount] = clusterJoints[weight.cluster_index];
-        outInfluence.weight.raw[writtenInfluenceCount] = static_cast<f32>(value);
+        outWeights = VectorSetByIndex(outWeights, static_cast<f32>(value), writtenInfluenceCount);
         weightSum += value;
         ++writtenInfluenceCount;
     }
@@ -267,11 +267,7 @@ bool BuildInfluence(
         return false;
     }
 
-    outWeights = VectorScale(
-        LoadFloat(outInfluence.weight),
-        static_cast<f32>(1.0 / weightSum)
-    );
-    StoreFloat(outWeights, &outInfluence.weight);
+    outWeights = VectorScale(outWeights, static_cast<f32>(1.0 / weightSum));
 
     return true;
 }

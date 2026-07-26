@@ -36,9 +36,9 @@ static void UpdateBestMeshletCandidateIfBetter(
     if(!MeshletCanFitTriangle(meshlet, localVertexRefs, triangle, sharedVertexCount, missingVertexCount))
         return;
 
-    const MeshletTriangleVectors triangleVectors = LoadMeshletTriangleVectors(triangle);
+    const MeshletTriangleVectors& triangleVectors = trianglePrecompute.triangleCalculations[triangleIndex].vectors;
     const auto triangleAreaNormalAt = [&](const u32 otherTriangleIndex){
-        return LoadFloat(trianglePrecompute.triangles[otherTriangleIndex].areaNormal);
+        return trianglePrecompute.triangleCalculations[otherTriangleIndex].vectors.areaNormal;
     };
     const f32 score = ScoreMeshletCandidate(
         triangleIndices,

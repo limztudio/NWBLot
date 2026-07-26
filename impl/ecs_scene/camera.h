@@ -94,6 +94,27 @@ static_assert(alignof(CameraProjectionData) >= alignof(Float4), "CameraProjectio
     ;
 }
 
+[[nodiscard]] inline bool CameraProjectionStorageValid(
+    const Float4& projectionParams,
+    const f32 aspectRatio,
+    const f32 tanHalfVerticalFov
+){
+    return
+        IsFinite(aspectRatio)
+        && IsFinite(tanHalfVerticalFov)
+        && IsFinite(projectionParams.x)
+        && IsFinite(projectionParams.y)
+        && IsFinite(projectionParams.z)
+        && IsFinite(projectionParams.w)
+        && aspectRatio > 0.0f
+        && tanHalfVerticalFov > 0.0f
+        && projectionParams.x > 0.0f
+        && projectionParams.y > 0.0f
+        && projectionParams.z > 0.0f
+        && projectionParams.w < 0.0f
+    ;
+}
+
 [[nodiscard]] inline bool TryBuildCameraProjectionData(
     const CameraComponent& camera,
     const f32 fallbackAspectRatio,
@@ -172,8 +193,8 @@ struct SceneCameraView{
             entity.valid()
             && transform != nullptr
             && camera != nullptr
-            && CameraProjectionDataValid(
-                LoadFloat(projectionData.projectionParams),
+            && CameraProjectionStorageValid(
+                projectionData.projectionParams,
                 projectionData.aspectRatio,
                 projectionData.tanHalfVerticalFov
             )

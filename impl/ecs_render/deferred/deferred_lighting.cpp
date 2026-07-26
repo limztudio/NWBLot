@@ -142,13 +142,24 @@ bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& command
     NWB_ASSERT(deferredState().m_lightBuffer);
 
     ECSRenderDetail::SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS];
-    const u32 lightCount = ECSRenderDetail::ResolveSceneLights(world(), lightData, NWB_SCENE_MAX_LIGHTS);
+    f32 causticLightImportance[NWB_SCENE_MAX_LIGHTS];
+    const u32 lightCount = ECSRenderDetail::ResolveSceneLights(
+        world(),
+        lightData,
+        causticLightImportance,
+        NWB_SCENE_MAX_LIGHTS
+    );
 
     // Caustic-light classification (P1): rank the opted-in directional/spot lights and assign a caustic slot into
     // each chosen light's params.w, gated on the scene holding at least one refractive instance (gathered earlier this
     // frame by prepareCausticEmissionTargets into the ray-tracing state).
     const u32 refractiveInstanceCount = rayTracingState().m_causticRefractiveInstanceCount;
-    const u32 causticLightCount = ECSRenderDetail::ResolveCausticLights(lightData, lightCount, refractiveInstanceCount);
+    const u32 causticLightCount = ECSRenderDetail::ResolveCausticLights(
+        lightData,
+        causticLightImportance,
+        lightCount,
+        refractiveInstanceCount
+    );
     rayTracingState().m_causticLightCount = causticLightCount;
     // Active shadow slots = the importance-ranked pool ResolveSceneLights filled (slots 0..min(lightCount,N)-1); the
     // half-res shadow upsample reads this so it only reconstructs the slots that hold a light.

@@ -394,18 +394,18 @@ TEST_F(DescriptorBufferRoundTripTest, ManagerRejectsMismatchedWritesAndInvalidBl
     // suite can validate it without stopping the parent test run; final builds still verify the ordinary false return.
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
     EXPECT_DEATH_IF_SUPPORTED({
-        (void)mgr.allocate(
+        EXPECT_FALSE(mgr.allocate(
             static_cast<GraphicsBackend::DescriptorBufferSegmentKind::Enum>(0xffu),
             descriptorSize,
             mgr.getOffsetAlignmentBytes()
-        );
+        ).valid());
     }, "");
     EXPECT_DEATH_IF_SUPPORTED({
-        (void)mgr.allocate(
+        EXPECT_FALSE(mgr.allocate(
             GraphicsBackend::DescriptorBufferSegmentKind::Resource,
             descriptorSize,
             0u
-        );
+        ).valid());
     }, "");
 #else
     EXPECT_FALSE(mgr.allocate(
@@ -430,7 +430,7 @@ TEST_F(DescriptorBufferRoundTripTest, ManagerRejectsMismatchedWritesAndInvalidBl
     const DescriptorWriteItem item = DescriptorWriteItem::RawBuffer_UAV(0u, storageBuffer.get());
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
     EXPECT_DEATH_IF_SUPPORTED({
-        (void)mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_SAMPLER);
+        EXPECT_FALSE(mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_SAMPLER));
     }, "");
 #else
     EXPECT_FALSE(mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_SAMPLER));
@@ -458,7 +458,7 @@ TEST_F(DescriptorBufferRoundTripTest, ManagerRejectsMismatchedWritesAndInvalidBl
     EXPECT_NE(replacement.allocationSerial, segment.allocationSerial);
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
     EXPECT_DEATH_IF_SUPPORTED({
-        (void)mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+        EXPECT_FALSE(mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER));
     }, "");
 #else
     EXPECT_FALSE(mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER));
@@ -484,7 +484,7 @@ TEST_F(DescriptorBufferRoundTripTest, MixedDescriptorBufferLayoutIsRejected){
     ;
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
     EXPECT_DEATH_IF_SUPPORTED({
-        (void)device.createBindlessLayout(layoutDesc);
+        EXPECT_FALSE(device.createBindlessLayout(layoutDesc));
     }, "");
 #else
     auto layout = device.createBindlessLayout(layoutDesc);
@@ -520,7 +520,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetiredAndDoubleFreed
     heap.free(retired);
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
     EXPECT_DEATH_IF_SUPPORTED({
-        (void)heap.write(retired, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get()));
+        EXPECT_FALSE(heap.write(retired, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
     }, "");
     EXPECT_DEATH_IF_SUPPORTED({
         heap.free(retired);
@@ -1910,7 +1910,7 @@ TEST_F(DescriptorBufferRoundTripTest, PipelineLocalResourceLayoutsAreRejected){
     leafDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(2u, 1u));
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
     EXPECT_DEATH_IF_SUPPORTED({
-        (void)device.createBindingLayout(leafDesc);
+        EXPECT_FALSE(device.createBindingLayout(leafDesc));
     }, "");
 #else
     auto leafLayout = device.createBindingLayout(leafDesc);

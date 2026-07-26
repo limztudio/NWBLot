@@ -93,6 +93,29 @@ TEST(Telemetry, RecorderFiltersAndCopiesPayload){
     EXPECT_EQ(view.eventAt(1u), nullptr);
 }
 
+TEST(Telemetry, RecorderMovesOwnedPayload){
+    TestArena testArena;
+    Telemetry::Recorder recorder(testArena.arena);
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    payload.push_back(4u);
+    payload.push_back(5u);
+    payload.push_back(6u);
+    const u8* const payloadData = payload.data();
+
+    EXPECT_TRUE(recorder.recordPayload(Telemetry::EventKind::PerfFrame, 13u, Move(payload), 7u));
+
+    const Telemetry::EventRecord* record = recorder.view().eventAt(0u);
+    ASSERT_NE(record, nullptr);
+    EXPECT_EQ(record->payload.data(), payloadData);
+    EXPECT_EQ(record->header.payloadBytes, 3u);
+    EXPECT_EQ(record->payload.size(), 3u);
+    EXPECT_EQ(record->payload[0u], 4u);
+    EXPECT_EQ(record->payload[1u], 5u);
+    EXPECT_EQ(record->payload[2u], 6u);
+}
+
 TEST(Telemetry, RecorderClearAndDisabledState){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);

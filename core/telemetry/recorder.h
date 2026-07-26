@@ -96,13 +96,21 @@ public:
         usize payloadBytes,
         u32 streamId = 0u
     );
+    [[nodiscard]] bool recordPayload(
+        EventKind::Enum kind,
+        u64 frameIndex,
+        TelemetryBytes&& payload,
+        u32 streamId = 0u
+    );
     [[nodiscard]] bool append(const EventHeader& header, const void* payload, usize payloadBytes);
+    [[nodiscard]] bool append(const EventHeader& header, TelemetryBytes&& payload);
 
 
 private:
     [[nodiscard]] bool enabledUnlocked()const{ return m_capture.enabled(); }
     [[nodiscard]] bool enabledUnlocked(EventKind::Enum kind)const{ return CaptureAllowsEventKind(m_capture, kind); }
     [[nodiscard]] bool appendUnlocked(const EventHeader& header, const void* payload, usize payloadBytes);
+    [[nodiscard]] bool appendPayloadUnlocked(const EventHeader& header, TelemetryBytes&& payload);
     [[nodiscard]] const EventRecord* eventAt(usize index)const;
 
 
@@ -138,7 +146,7 @@ template<typename BuildPayloadT>
     if(!buildPayload(recorder.arena(), payload))
         return false;
 
-    return recorder.recordBinary(kind, frameIndex, payload.data(), payload.size(), streamId);
+    return recorder.recordPayload(kind, frameIndex, Move(payload), streamId);
 }
 
 

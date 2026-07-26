@@ -8,6 +8,7 @@
 #include "global.h"
 
 #include <global/binary.h>
+#include <global/thread.h>
 
 #include <fstream>
 
@@ -346,9 +347,16 @@ private:
 private:
     static void globalUpdate(T* self){
         for(;;){
-            auto curTime = TimerNow();
-            if(DurationInSeconds<f32>(curTime, self->m_lastTime) < UPDATE_INTERVAL)
+            const Timer curTime = TimerNow();
+            const f32 elapsedSeconds = DurationInSeconds<f32>(curTime, self->m_lastTime);
+            if(elapsedSeconds < UPDATE_INTERVAL){
+                // Ordinary updates are interval-bound. Sleep until the next deadline instead of consuming a core
+                // repeatedly polling the timer; the existing cadence still bounds message and shutdown latency.
+                const f32 remainingSeconds = UPDATE_INTERVAL - elapsedSeconds;
+                const u32 sleepMilliseconds = Max<u32>(1u, static_cast<u32>(Ceil(remainingSeconds * 1000.0f)));
+                SleepMS(sleepMilliseconds);
                 continue;
+            }
 
             self->m_lastTime = curTime;
 

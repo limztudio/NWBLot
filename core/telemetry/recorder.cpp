@@ -98,9 +98,34 @@ bool Recorder::recordBinary(
     return appendUnlocked(header, payload, payloadBytes);
 }
 
+bool Recorder::recordPayload(
+    const EventKind::Enum kind,
+    const u64 frameIndex,
+    TelemetryBytes&& payload,
+    const u32 streamId
+){
+    ScopedLock lock(m_mutex);
+    if(!enabledUnlocked(kind))
+        return false;
+
+    EventHeader header;
+    header.kind = kind;
+    header.streamId = streamId;
+    header.frameIndex = frameIndex;
+    header.timestampNanoseconds = __hidden_telemetry_recorder::TimestampNanoseconds();
+    header.payloadBytes = payload.size();
+
+    return appendPayloadUnlocked(header, Move(payload));
+}
+
 bool Recorder::append(const EventHeader& header, const void* payload, const usize payloadBytes){
     ScopedLock lock(m_mutex);
     return appendUnlocked(header, payload, payloadBytes);
+}
+
+bool Recorder::append(const EventHeader& header, TelemetryBytes&& payload){
+    ScopedLock lock(m_mutex);
+    return appendPayloadUnlocked(header, Move(payload));
 }
 
 bool Recorder::appendUnlocked(const EventHeader& header, const void* payload, const usize payloadBytes){
@@ -122,6 +147,27 @@ bool Recorder::appendUnlocked(const EventHeader& header, const void* payload, co
         NWB_MEMCPY(record->payload.data(), record->payload.size(), payload, payloadBytes);
     }
 
+    m_events.push_back(Move(record));
+    return true;
+}
+
+bool Recorder::appendPayloadUnlocked(const EventHeader& header, TelemetryBytes&& payload){
+    if(!header.valid())
+        return false;
+    if(header.payloadBytes != payload.size())
+        return false;
+
+    // Built payloads use the recorder arena and can transfer their backing allocation. Preserve the raw-byte append
+    // behavior for callers whose payload belongs to a different arena.
+    if(payload.get_allocator().arenaPtr() != &m_arena)
+        return appendUnlocked(header, payload.data(), payload.size());
+
+    auto record = MakeGlobalUnique<EventRecord>(m_arena, m_arena);
+    if(!record)
+        return false;
+
+    record->header = header;
+    record->payload = Move(payload);
     m_events.push_back(Move(record));
     return true;
 }

@@ -261,7 +261,7 @@ DecodeResult DecodeEventStream(TelemetryArena& arena, const void* const bytes, c
         }
         cursor += eventResult.bytesRead;
 
-        if(!outRecorder.append(event.header, event.payload.data(), event.payload.size())){
+        if(!outRecorder.append(event.header, Move(event.payload))){
             result.status = DecodeStatus::InvalidHeader;
             result.bytesRead = cursor;
             return result;

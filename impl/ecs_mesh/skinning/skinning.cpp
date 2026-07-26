@@ -228,10 +228,10 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
     NWB_ASSERT(resources->bindlessHeapHandles.resourceSlots.valid());
     NWB_ASSERT(!hasActiveSkin || resources->skinBuffer);
     NWB_ASSERT(!hasActiveSkin || resources->jointPaletteBuffer);
-    auto* device = m_graphics.getDevice();
-    if(!device || !device->getDescriptorHeap().isInitialized())
+    auto& device = *m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
         return false;
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(!uploadRuntimeResourceBindlessSlots(commandList, *resources))
         return false;
 

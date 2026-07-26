@@ -170,12 +170,11 @@ void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
     )
         return;
 
-    if(auto* device = graphics().getDevice()){
-        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
-        if(heap.isInitialized()){
-            heap.free(rayTracingState().m_causticEmissionTargetHeapHandle);
-            heap.free(rayTracingState().m_causticMaterialContextSlotsHeapHandle);
-        }
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(heap.isInitialized()){
+        heap.free(rayTracingState().m_causticEmissionTargetHeapHandle);
+        heap.free(rayTracingState().m_causticMaterialContextSlotsHeapHandle);
     }
     rayTracingState().m_causticEmissionTargetHeapHandle = Core::GpuDescriptorHandle::invalid();
     rayTracingState().m_causticMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
@@ -186,12 +185,8 @@ void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
 
 
 bool RendererRayTracingSystem::ensureCausticMaterialContextSlotsHeapHandle(){
-    auto* device = graphics().getDevice();
-    if(!device){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic photon selectors require a graphics device"));
-        return false;
-    }
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic photon selectors require the initialized global descriptor heap"));
         return false;
@@ -1344,12 +1339,12 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
     // structured SRV (no UAV) that grows by doubling like the scene-BVH / instance-material buffers. It owns a
     // persistent StorageBuffer heap descriptor: capacity replacement acquires a new slot before retiring the old
     // one, preserving already-recorded photon dispatches until the heap's deferred-free quarantine drains.
-    auto* device = graphics().getDevice();
-    if(!device || !device->getDescriptorHeap().isInitialized()){
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic emission targets require the initialized global descriptor heap"));
         return false;
     }
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
 
     const auto acquireHeapHandle = [&](Core::Buffer& buffer, Core::GpuDescriptorHandle& outHandle) -> bool{
         const Core::GpuDescriptorHandle acquired = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);

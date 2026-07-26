@@ -98,13 +98,8 @@ bool RendererAvboitSystem::registerAvboitFrameTargetDescriptors(
     DeferredFrameTargets& createdTargets,
     AvboitFrameTargets& avboitTargets
 ){
-    auto* device = graphics().getDevice();
-    if(!device){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT target bindings require a graphics device"));
-        return false;
-    }
-
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT target bindings require the descriptor-buffer global heap"));
         return false;

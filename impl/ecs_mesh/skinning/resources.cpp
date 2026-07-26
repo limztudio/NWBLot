@@ -97,32 +97,29 @@ static bool RegisterUniformBuffer(
 
 
 void MeshSkinningSystem::releaseRuntimeResourceBindlessHeapHandles(RuntimeResources& resources){
-    if(auto* device = m_graphics.getDevice()){
-        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
-        if(heap.isInitialized()){
-            const auto release = [&](Core::GpuDescriptorHandle& handle){
-                if(handle.valid())
-                    heap.free(handle);
-                handle = Core::GpuDescriptorHandle::invalid();
-            };
-            release(resources.bindlessHeapHandles.resourceSlots);
-            release(resources.bindlessHeapHandles.restPosition);
-            release(resources.bindlessHeapHandles.skinnedPosition);
-            release(resources.bindlessHeapHandles.restNormal);
-            release(resources.bindlessHeapHandles.skinnedNormal);
-            release(resources.bindlessHeapHandles.restTangent);
-            release(resources.bindlessHeapHandles.skinnedTangent);
-            release(resources.bindlessHeapHandles.meshletDesc);
-            release(resources.bindlessHeapHandles.positionRefDeltas);
-            release(resources.bindlessHeapHandles.attributeRefDeltas);
-            release(resources.bindlessHeapHandles.attributeSkins);
-            release(resources.bindlessHeapHandles.skinInfluences);
-            release(resources.bindlessHeapHandles.jointPalette);
-            release(resources.bindlessHeapHandles.localVertexRefs);
-            release(resources.bindlessHeapHandles.primitiveIndices);
-            release(resources.bindlessHeapHandles.meshletBounds);
-            release(resources.bindlessHeapHandles.attributeBuffer);
-        }
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice()->getDescriptorHeap();
+    if(heap.isInitialized()){
+        const auto release = [&](Core::GpuDescriptorHandle& handle){
+            if(handle.valid())
+                heap.free(handle);
+            handle = Core::GpuDescriptorHandle::invalid();
+        };
+        release(resources.bindlessHeapHandles.resourceSlots);
+        release(resources.bindlessHeapHandles.restPosition);
+        release(resources.bindlessHeapHandles.skinnedPosition);
+        release(resources.bindlessHeapHandles.restNormal);
+        release(resources.bindlessHeapHandles.skinnedNormal);
+        release(resources.bindlessHeapHandles.restTangent);
+        release(resources.bindlessHeapHandles.skinnedTangent);
+        release(resources.bindlessHeapHandles.meshletDesc);
+        release(resources.bindlessHeapHandles.positionRefDeltas);
+        release(resources.bindlessHeapHandles.attributeRefDeltas);
+        release(resources.bindlessHeapHandles.attributeSkins);
+        release(resources.bindlessHeapHandles.skinInfluences);
+        release(resources.bindlessHeapHandles.jointPalette);
+        release(resources.bindlessHeapHandles.localVertexRefs);
+        release(resources.bindlessHeapHandles.primitiveIndices);
+        release(resources.bindlessHeapHandles.meshletBounds);
     }
     resources.bindlessHeapHandles = RuntimeBindlessHeapHandles{};
     resources.bindlessResourceSlots = RuntimeBindlessResourceSlots{};
@@ -130,13 +127,12 @@ void MeshSkinningSystem::releaseRuntimeResourceBindlessHeapHandles(RuntimeResour
 }
 
 bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources){
-    auto* device = m_graphics.getDevice();
-    if(!device || !device->getDescriptorHeap().isInitialized()){
+    auto& device = *m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' requires the initialized global descriptor heap"), instance.handle.value);
         return false;
     }
-
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     const auto fail = [&](){
         releaseRuntimeResourceBindlessHeapHandles(resources);
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to register persistent compute buffers for runtime mesh '{}' in the descriptor heap"), instance.handle.value);
@@ -293,10 +289,6 @@ bool MeshSkinningSystem::ensureRuntimeResources(
     rebuilt.skinCount = skinCount;
     rebuilt.jointCount = jointCount;
 
-    if(!m_graphics.getDevice()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: no graphics device for runtime mesh '{}'"), instance.handle.value);
-        return false;
-    }
     const auto failRebuild = [&](){
         releaseRuntimeResourceBindlessHeapHandles(rebuilt);
         return false;

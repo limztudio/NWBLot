@@ -61,12 +61,8 @@ static bool LoadComputeShader(
 
 
 bool MeshSkinningSystem::ensureSkinningPipeline(){
-    auto* device = m_graphics.getDevice();
-    if(!device){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: no graphics device for the skinning compute pipeline"));
-        return false;
-    }
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = *m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: skinning compute requires the initialized global descriptor heap"));
         return false;
@@ -81,7 +77,7 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
         // this local layout only for the dispatch push constants.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshSkinningPushConstants)));
 
-        m_skinningBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        m_skinningBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_skinningBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skinning binding layout"));
             return false;
@@ -108,7 +104,7 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    m_skinningComputePipeline = device->createComputePipeline(pipelineDesc);
+    m_skinningComputePipeline = device.createComputePipeline(pipelineDesc);
     if(m_skinningComputePipeline)
         return true;
 
@@ -117,12 +113,8 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
 }
 
 bool MeshSkinningSystem::ensureBoundsPipeline(){
-    auto* device = m_graphics.getDevice();
-    if(!device){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: no graphics device for the meshlet-bounds compute pipeline"));
-        return false;
-    }
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = *m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: meshlet-bounds compute requires the initialized global descriptor heap"));
         return false;
@@ -136,7 +128,7 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
         // The per-runtime selector payload is a global UniformBuffer heap entry selected by a push-constant word.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshletBoundsPushConstants)));
 
-        m_boundsBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        m_boundsBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_boundsBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create bounds binding layout"));
             return false;
@@ -163,7 +155,7 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    m_boundsComputePipeline = device->createComputePipeline(pipelineDesc);
+    m_boundsComputePipeline = device.createComputePipeline(pipelineDesc);
     if(m_boundsComputePipeline)
         return true;
 
@@ -172,12 +164,8 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
 }
 
 bool MeshSkinningSystem::ensureRepackPipeline(){
-    auto* device = m_graphics.getDevice();
-    if(!device){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: no graphics device for the normal-repack compute pipeline"));
-        return false;
-    }
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = *m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: normal-repack compute requires the initialized global descriptor heap"));
         return false;
@@ -191,7 +179,7 @@ bool MeshSkinningSystem::ensureRepackPipeline(){
         // The per-runtime selector payload is a global UniformBuffer heap entry selected by a push-constant word.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshletRepackPushConstants)));
 
-        m_repackBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        m_repackBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_repackBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create repack binding layout"));
             return false;
@@ -218,7 +206,7 @@ bool MeshSkinningSystem::ensureRepackPipeline(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    m_repackComputePipeline = device->createComputePipeline(pipelineDesc);
+    m_repackComputePipeline = device.createComputePipeline(pipelineDesc);
     if(m_repackComputePipeline)
         return true;
 

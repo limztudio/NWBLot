@@ -946,14 +946,13 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
 
 
 void RendererRayTracingSystem::releaseSwBvhScratchHeapHandles(){
-    if(auto* device = graphics().getDevice()){
-        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
-        if(heap.isInitialized()){
-            __hidden_rt_swbvh::RetireHeapHandle(heap, rayTracingState().m_bvhSortKeysHeapHandle);
-            __hidden_rt_swbvh::RetireHeapHandle(heap, rayTracingState().m_bvhSortPayloadHeapHandle);
-            __hidden_rt_swbvh::RetireHeapHandle(heap, rayTracingState().m_bvhVisitCounterHeapHandle);
-            return;
-        }
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(heap.isInitialized()){
+        __hidden_rt_swbvh::RetireHeapHandle(heap, rayTracingState().m_bvhSortKeysHeapHandle);
+        __hidden_rt_swbvh::RetireHeapHandle(heap, rayTracingState().m_bvhSortPayloadHeapHandle);
+        __hidden_rt_swbvh::RetireHeapHandle(heap, rayTracingState().m_bvhVisitCounterHeapHandle);
+        return;
     }
     rayTracingState().m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::invalid();
     rayTracingState().m_bvhSortPayloadHeapHandle = Core::GpuDescriptorHandle::invalid();

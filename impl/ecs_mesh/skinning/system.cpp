@@ -258,7 +258,7 @@ bool MeshSkinningSystem::containsRuntimeMesh(const Name& meshKey, const u64 vers
 void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
     static_cast<void>(framebuffer);
 
-    auto* device = m_graphics.getDevice();
+    auto& device = *m_graphics.getDevice();
     Core::CommandList* commandList = m_renderCommandList.get();
     if(!commandList)
         return;
@@ -297,7 +297,7 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
 
     if(submittedWork){
         Core::CommandList* commandLists[] = { commandList };
-        device->executeCommandLists(commandLists, 1);
+        device.executeCommandLists(commandLists, 1);
     }
 }
 

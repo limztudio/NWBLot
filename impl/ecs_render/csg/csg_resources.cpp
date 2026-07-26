@@ -479,14 +479,13 @@ bool RendererCsgSystem::createCsgClipResources(){
 }
 
 void RendererCsgSystem::releaseCsgClipContextHeapHandles(){
-    if(auto* device = graphics().getDevice()){
-        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
-        if(heap.isInitialized()){
-            heap.free(csgState().m_receiverRangeBufferHeapHandle);
-            heap.free(csgState().m_cutterBufferHeapHandle);
-            heap.free(csgState().m_clipContextSlotsHeapHandle);
-            heap.free(csgState().m_intervalSampleStateHeapHandle);
-        }
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(heap.isInitialized()){
+        heap.free(csgState().m_receiverRangeBufferHeapHandle);
+        heap.free(csgState().m_cutterBufferHeapHandle);
+        heap.free(csgState().m_clipContextSlotsHeapHandle);
+        heap.free(csgState().m_intervalSampleStateHeapHandle);
     }
     csgState().m_receiverRangeBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
     csgState().m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::invalid();

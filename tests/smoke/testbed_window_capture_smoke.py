@@ -167,6 +167,35 @@ def request_windows_graceful_exit(pid):
     return bool(targets)
 
 
+def request_linux_graceful_exit(window_title):
+    # Run the shared X11 helper instead of importing it: importing the helper opens libX11 eagerly, while the capture
+    # smoke must still be able to fall back to SIGTERM when no X server or libX11 is available. The helper locates the
+    # top-level window by title and posts WM_DELETE_WINDOW, which reaches the app's normal shutdown path.
+    if not window_title:
+        return False
+
+    close_helper = Path(__file__).with_name("x11_graceful_close.py")
+    try:
+        result = subprocess.run(
+            [sys.executable, str(close_helper), window_title, "5.0"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=6.0,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        write_status(f"Linux graceful X11 close failed for '{window_title}' ({error}); terminating")
+        return False
+
+    if result.returncode == 0:
+        return True
+
+    detail = (result.stderr or result.stdout).strip()
+    suffix = f": {detail}" if detail else ""
+    write_status(f"Linux graceful X11 close failed for '{window_title}' (exit {result.returncode}){suffix}; terminating")
+    return False
+
+
 def create_process_output_capture(working_directory, name):
     try:
         stream = tempfile.NamedTemporaryFile(
@@ -217,7 +246,7 @@ def launch_captured_process(command, working_directory, env, name):
     return process
 
 
-def terminate_process(process, name):
+def terminate_process(process, name, window_title=""):
     if process is None:
         return
 
@@ -228,7 +257,8 @@ def terminate_process(process, name):
         # Prefer a graceful shutdown so the app's normal exit path runs (e.g. the NWB_BUILDMODE Name-symbol sidecar write);
         # a hard terminate() (TerminateProcess on Windows) would skip it. The window capture has already happened by the
         # time we tear down, so this never affects what was captured -- only how the app exits.
-        if platform.system() == "Windows":
+        host_platform = platform.system()
+        if host_platform == "Windows":
             try:
                 if request_windows_graceful_exit(process.pid):
                     try:
@@ -238,6 +268,14 @@ def terminate_process(process, name):
                         write_status(f"{name}: did not exit after WM_CLOSE; terminating")
             except OSError as error:
                 write_status(f"{name}: graceful WM_CLOSE failed ({error}); terminating")
+
+        elif host_platform == "Linux" and window_title:
+            if request_linux_graceful_exit(window_title):
+                try:
+                    process.wait(timeout=10.0)
+                    return
+                except subprocess.TimeoutExpired:
+                    write_status(f"{name}: did not exit after X11 WM_DELETE_WINDOW; terminating")
 
         process.terminate()
         try:
@@ -1582,7 +1620,7 @@ def launch_and_capture(args, backend):
         validate_expected_log_messages(log_directory, log_baseline, log_pattern, args.expect_log_message, args.reject_log_message)
         return result
     finally:
-        terminate_process(testbed_process, "testbed")
+        terminate_process(testbed_process, "testbed", args.window_title)
         terminate_process(logserver_process, "logserver")
 
 
@@ -1673,3 +1711,4 @@ def main(argv):
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
+

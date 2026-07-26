@@ -94,13 +94,13 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buf
     if(handle.valid())
         return true;
 
-    auto* device = graphics().getDevice();
-    if(!device || !device->getDescriptorHeap().isInitialized()){
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
         return false;
     }
 
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(!__hidden_rt_shadow::EnsureHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material context buffer in the descriptor heap"));
         return false;
@@ -113,13 +113,13 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buf
 
 
 bool RendererRayTracingSystem::replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
-    auto* device = graphics().getDevice();
-    if(!device || !device->getDescriptorHeap().isInitialized()){
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
         return false;
     }
 
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(!__hidden_rt_shadow::ReplaceHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to replace ray-trace material-context heap descriptor"));
         return false;
@@ -188,12 +188,12 @@ bool RendererRayTracingSystem::uploadRayTraceMaterialContextSlots(Core::CommandL
     commandList.writeBuffer(slotsBuffer, &slots, sizeof(slots));
     commandList.setBufferState(slotsBuffer, Core::ResourceStates::ConstantBuffer);
     commandList.commitBarriers();
-    auto* device = graphics().getDevice();
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(
-        !device
-        || !device->getDescriptorHeap().isInitialized()
+        !heap.isInitialized()
         || !__hidden_rt_shadow::EnsureHeapBuffer(
-            device->getDescriptorHeap(),
+            heap,
             *slotsBuffer,
             Core::GpuDescriptorClass::UniformBuffer,
             false,
@@ -211,20 +211,19 @@ bool RendererRayTracingSystem::uploadRayTraceMaterialContextSlots(Core::CommandL
 
 
 void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
-    if(auto* device = graphics().getDevice()){
-        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
-        if(heap.isInitialized()){
-            heap.free(rayTracingState().m_sceneBvhNodeHeapHandle);
-            heap.free(rayTracingState().m_sceneInstanceHeapHandle);
-            heap.free(rayTracingState().m_shadowInstanceMaterialHeapHandle);
-            heap.free(rayTracingState().m_shadowMaterialTypedHeapHandle);
-            heap.free(rayTracingState().m_shadowInstanceHeapHandle);
-            heap.free(rayTracingState().m_shadowMaterialContextSlotsHeapHandle);
-            heap.free(rayTracingState().m_swShadowEdgeStatsHeapHandle);
-            heap.free(rayTracingState().m_swShadowEdgeCounterHeapHandle);
-            heap.free(rayTracingState().m_swShadowEdgeListHeapHandle);
-            heap.free(rayTracingState().m_swShadowIndirectArgsHeapHandle);
-        }
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(heap.isInitialized()){
+        heap.free(rayTracingState().m_sceneBvhNodeHeapHandle);
+        heap.free(rayTracingState().m_sceneInstanceHeapHandle);
+        heap.free(rayTracingState().m_shadowInstanceMaterialHeapHandle);
+        heap.free(rayTracingState().m_shadowMaterialTypedHeapHandle);
+        heap.free(rayTracingState().m_shadowInstanceHeapHandle);
+        heap.free(rayTracingState().m_shadowMaterialContextSlotsHeapHandle);
+        heap.free(rayTracingState().m_swShadowEdgeStatsHeapHandle);
+        heap.free(rayTracingState().m_swShadowEdgeCounterHeapHandle);
+        heap.free(rayTracingState().m_swShadowEdgeListHeapHandle);
+        heap.free(rayTracingState().m_swShadowIndirectArgsHeapHandle);
     }
     rayTracingState().m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
     rayTracingState().m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
@@ -449,12 +448,12 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         rayTracingState().m_swShadowEdgeListCapacity = 0u;
         return false;
     }
-    auto* device = graphics().getDevice();
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(
-        !device
-        || !device->getDescriptorHeap().isInitialized()
+        !heap.isInitialized()
         || !__hidden_rt_shadow::ReplaceHeapBuffer(
-            device->getDescriptorHeap(),
+            heap,
             *edgeListBuffer.get(),
             Core::GpuDescriptorClass::StorageBuffer,
             true,
@@ -1172,8 +1171,9 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
     if(rayTracingState().m_swShadowPipelineFailed)
         return false;
 
-    auto* device = graphics().getDevice();
-    if(!device || !device->getDescriptorHeap().isInitialized()){
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software shadows require the initialized global descriptor heap"));
         rayTracingState().m_swShadowPipelineFailed = true;
         return false;
@@ -1185,7 +1185,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         // Every selector, writable target, and work buffer is heap-addressed by one fixed push ABI.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwShadowHeapPushConstants)));
 
-        rayTracingState().m_swShadowBindingLayout = device->createBindingLayout(layoutDesc);
+        rayTracingState().m_swShadowBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_swShadowBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow binding layout"));
             rayTracingState().m_swShadowPipelineFailed = true;
@@ -1261,7 +1261,6 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         }
     }
 
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     const bool heapResourcesReady =
         __hidden_rt_shadow::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowEdgeStatsHeapHandle)
         && __hidden_rt_shadow::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowEdgeCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowEdgeCounterHeapHandle)

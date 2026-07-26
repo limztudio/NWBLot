@@ -89,12 +89,8 @@ bool UiSystem::ensureRenderResources(Core::Framebuffer* framebuffer){
     if(!framebuffer)
         return false;
 
-    auto* device = m_graphics.getDevice();
-    if(!device){
-        NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: cannot create render resources without a graphics device"));
-        return false;
-    }
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = *m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: ImGui rendering requires the initialized global descriptor heap"));
         return false;
@@ -110,7 +106,7 @@ bool UiSystem::ensureRenderResources(Core::Framebuffer* framebuffer){
         bindingLayoutDesc.setVisibility(Core::ShaderType::AllGraphics);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(UiPushConstants)));
 
-        m_bindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        m_bindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_bindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create binding layout"));
             return false;
@@ -123,7 +119,7 @@ bool UiSystem::ensureRenderResources(Core::Framebuffer* framebuffer){
             .setAllFilters(true)
             .setAllAddressModes(Core::SamplerAddressMode::Clamp)
         ;
-        m_sampler = device->createSampler(samplerDesc);
+        m_sampler = device.createSampler(samplerDesc);
         if(!m_sampler){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create sampler"));
             return false;
@@ -151,7 +147,7 @@ bool UiSystem::ensureRenderResources(Core::Framebuffer* framebuffer){
         .addBindingLayout(heap.getSamplerLayout())
     ;
 
-    m_pipeline = device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
+    m_pipeline = device.createGraphicsPipeline(pipelineDesc, framebufferInfo);
     if(!m_pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create graphics pipeline"));
         return false;
@@ -196,6 +192,8 @@ bool UiSystem::ensureInputLayout(){
     if(!m_vertexShader)
         return false;
 
+    auto& device = *m_graphics.getDevice();
+
     Core::VertexAttributeDesc attributes[NWB_IMGUI_VERTEX_ATTRIBUTE_COUNT];
     attributes[NWB_IMGUI_VERTEX_POSITION_LOCATION]
         .setFormat(Core::Format::RG32_FLOAT)
@@ -219,7 +217,7 @@ bool UiSystem::ensureInputLayout(){
         .setName("COLOR")
     ;
 
-    m_inputLayout = m_graphics.getDevice()->createInputLayout(
+    m_inputLayout = device.createInputLayout(
         attributes,
         NWB_IMGUI_VERTEX_ATTRIBUTE_COUNT,
         m_vertexShader.get()
@@ -242,7 +240,7 @@ bool UiSystem::ensureBuffers(const usize vertexCount, const usize indexCount){
     }
 #endif
 
-    auto* device = m_graphics.getDevice();
+    auto& device = *m_graphics.getDevice();
     if(!m_vertexBuffer || m_vertexBufferCapacity < vertexCount){
         const usize capacity = ::NextGrowingCapacity(
             m_vertexBufferCapacity,
@@ -258,7 +256,7 @@ bool UiSystem::ensureBuffers(const usize vertexCount, const usize indexCount){
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
 
-        m_vertexBuffer = device->createBuffer(bufferDesc);
+        m_vertexBuffer = device.createBuffer(bufferDesc);
         if(!m_vertexBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create vertex buffer"));
             return false;
@@ -281,7 +279,7 @@ bool UiSystem::ensureBuffers(const usize vertexCount, const usize indexCount){
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
 
-        m_indexBuffer = device->createBuffer(bufferDesc);
+        m_indexBuffer = device.createBuffer(bufferDesc);
         if(!m_indexBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to create index buffer"));
             return false;

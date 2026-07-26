@@ -150,11 +150,7 @@ UiSystem::~UiSystem(){
         ImGuiIO& io = ImGui::GetIO();
         if(io.BackendRendererUserData == this)
             io.BackendRendererUserData = nullptr;
-        // The heap retains each dynamic ImGui texture/sampler through its in-flight quarantine. Retire all handles
-        // before clearing the owning handles so the font atlas and arbitrary ImTextureData entries remain valid for
-        // already-recorded draws.
-        releaseDescriptorHeapResources();
-        m_textures.clear();
+        invalidateResources();
         ImGui::DestroyContext(m_imguiContext);
         m_imguiContext = nullptr;
     }
@@ -234,6 +230,44 @@ bool UiSystem::validateResources(const u32 width, const u32 height, const u32 sa
 
     Core::Framebuffer* framebuffer = m_graphics.getCurrentFramebuffer();
     return !framebuffer || ensureRenderResources(framebuffer);
+}
+
+void UiSystem::invalidateResources(){
+    if(m_imguiContext){
+        setCurrentContext();
+#if defined(IMGUI_HAS_TEXTURES)
+        ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
+        for(ImTextureData* textureData : platformIO.Textures){
+            if(!textureData)
+                continue;
+
+            textureData->BackendUserData = nullptr;
+            textureData->SetTexID(ImTextureID_Invalid);
+            textureData->SetStatus(ImTextureStatus_Destroyed);
+        }
+#endif
+    }
+
+    // Descriptor heap entries retain the backing textures/sampler through their deferred-free quarantine. Graphics
+    // invalidates render passes while the device is still live, so retire descriptors before releasing those resources.
+    releaseDescriptorHeapResources();
+    m_textures.clear();
+    m_textureUploadScratch.clear();
+
+    m_prepareCommandList.reset();
+    m_renderCommandList.reset();
+    m_bindingLayout.reset();
+    m_sampler.reset();
+    m_vertexShader.reset();
+    m_pixelShader.reset();
+    m_inputLayout.reset();
+    m_pipeline.reset();
+    m_vertexBuffer.reset();
+    m_indexBuffer.reset();
+    m_vertexBufferCapacity = 0u;
+    m_indexBufferCapacity = 0u;
+    m_frameStarted = false;
+    m_frameFinished = false;
 }
 
 bool UiSystem::ensureFrameCommandLists(){
@@ -345,7 +379,7 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
     if(!m_pipeline)
         return;
 
-    auto* device = m_graphics.getDevice();
+    auto& device = *m_graphics.getDevice();
     if(drawData->TotalVtxCount <= 0 || drawData->TotalIdxCount <= 0){
         m_frameStarted = false;
         m_frameFinished = false;
@@ -367,7 +401,7 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
     commandList->close();
     if(success){
         Core::CommandList* commandLists[] = { commandList };
-        device->executeCommandLists(commandLists, 1);
+        device.executeCommandLists(commandLists, 1);
         m_frameStarted = false;
         m_frameFinished = false;
     }
@@ -414,10 +448,10 @@ bool UiSystem::uploadDrawBuffers(Core::CommandList& commandList, ImDrawData& dra
 void UiSystem::renderDrawData(Core::CommandList& commandList, Core::Framebuffer* framebuffer, ImDrawData& drawData){
     if(drawData.TotalVtxCount <= 0 || drawData.TotalIdxCount <= 0)
         return;
-    auto* device = m_graphics.getDevice();
-    if(!device || !m_samplerHeapHandle.valid())
+    auto& device = *m_graphics.getDevice();
+    if(!m_samplerHeapHandle.valid())
         return;
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return;
 

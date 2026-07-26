@@ -801,20 +801,19 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
 
 
 void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
-    if(auto* device = graphics().getDevice()){
-        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
-        if(heap.isInitialized()){
-            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelConstantsHeapHandle);
-            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelPoolHeapHandle);
-            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelCellHeadHeapHandle);
-            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelCounterHeapHandle);
-            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelTraceIndirectArgsHeapHandle);
-            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelFreeListHeapHandle);
-            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelPoolSnapshotHeapHandle);
-            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelCellHeadSnapshotHeapHandle);
-            __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelMaterialContextSlotsHeapHandle);
-            return;
-        }
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(heap.isInitialized()){
+        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelConstantsHeapHandle);
+        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelPoolHeapHandle);
+        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelCellHeadHeapHandle);
+        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelCounterHeapHandle);
+        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelTraceIndirectArgsHeapHandle);
+        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelFreeListHeapHandle);
+        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelPoolSnapshotHeapHandle);
+        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelCellHeadSnapshotHeapHandle);
+        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelMaterialContextSlotsHeapHandle);
+        return;
     }
 
     rayTracingState().m_surfelConstantsHeapHandle = Core::GpuDescriptorHandle::invalid();

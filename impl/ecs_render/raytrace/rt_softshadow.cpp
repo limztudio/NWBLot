@@ -301,15 +301,15 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
     if(rayTracingState().m_shadowGeometryDownsamplePipelineFailed)
         return false;
 
-    auto* device = graphics().getDevice();
-    if(!device || !device->getDescriptorHeap().isInitialized())
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
         return false;
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(!rayTracingState().m_shadowGeometryDownsampleBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowGeometryDownsamplePushConstants)));
-        rayTracingState().m_shadowGeometryDownsampleBindingLayout = device->createBindingLayout(layoutDesc);
+        rayTracingState().m_shadowGeometryDownsampleBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_shadowGeometryDownsampleBindingLayout){
             rayTracingState().m_shadowGeometryDownsamplePipelineFailed = true;
             return false;
@@ -332,7 +332,7 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    rayTracingState().m_shadowGeometryDownsamplePipeline = device->createComputePipeline(pipelineDesc);
+    rayTracingState().m_shadowGeometryDownsamplePipeline = device.createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_shadowGeometryDownsamplePipeline){
         rayTracingState().m_shadowGeometryDownsamplePipelineFailed = true;
         return false;
@@ -350,15 +350,15 @@ bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
     if(rayTracingState().m_shadowResolvePipelineFailed)
         return false;
 
-    auto* device = graphics().getDevice();
-    if(!device || !device->getDescriptorHeap().isInitialized())
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
         return false;
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(!rayTracingState().m_shadowResolveBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowResolvePushConstants)));
-        rayTracingState().m_shadowResolveBindingLayout = device->createBindingLayout(layoutDesc);
+        rayTracingState().m_shadowResolveBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_shadowResolveBindingLayout){
             rayTracingState().m_shadowResolvePipelineFailed = true;
             return false;
@@ -381,7 +381,7 @@ bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    rayTracingState().m_shadowResolvePipeline = device->createComputePipeline(pipelineDesc);
+    rayTracingState().m_shadowResolvePipeline = device.createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_shadowResolvePipeline){
         rayTracingState().m_shadowResolvePipelineFailed = true;
         return false;
@@ -399,10 +399,10 @@ bool RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
     if(rayTracingState().m_shadowResolveRgbPipelineFailed || !rayTracingState().m_shadowResolveBindingLayout)
         return false;
 
-    auto* device = graphics().getDevice();
-    if(!device || !device->getDescriptorHeap().isInitialized())
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
         return false;
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(!m_renderer.shaderSystem().loadShader(
         rayTracingState().m_shadowResolveRgbShader,
         AssetsGraphicsShadow::s_SoftResolveRgbShaderName,
@@ -420,7 +420,7 @@ bool RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    rayTracingState().m_shadowResolveRgbPipeline = device->createComputePipeline(pipelineDesc);
+    rayTracingState().m_shadowResolveRgbPipeline = device.createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_shadowResolveRgbPipeline){
         rayTracingState().m_shadowResolveRgbPipelineFailed = true;
         return false;
@@ -523,15 +523,15 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
     if(rayTracingState().m_shadowReprojectMergePipelineFailed)
         return false;
 
-    auto* device = graphics().getDevice();
-    if(!device || !device->getDescriptorHeap().isInitialized())
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(!heap.isInitialized())
         return false;
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
     if(!rayTracingState().m_shadowReprojectMergeBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowReprojectMergePushConstants)));
-        rayTracingState().m_shadowReprojectMergeBindingLayout = device->createBindingLayout(layoutDesc);
+        rayTracingState().m_shadowReprojectMergeBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_shadowReprojectMergeBindingLayout){
             rayTracingState().m_shadowReprojectMergePipelineFailed = true;
             return false;
@@ -554,7 +554,7 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    rayTracingState().m_shadowReprojectMergePipeline = device->createComputePipeline(pipelineDesc);
+    rayTracingState().m_shadowReprojectMergePipeline = device.createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_shadowReprojectMergePipeline){
         rayTracingState().m_shadowReprojectMergePipelineFailed = true;
         return false;
@@ -590,3 +590,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

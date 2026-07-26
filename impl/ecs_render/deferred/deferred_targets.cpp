@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+
 #include <impl/ecs_render/kernel/renderer_private.h>
 
 
@@ -110,16 +111,14 @@ static void ClearCsgIntervalTargets(
 void RendererDeferredSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
     // AVBOIT owns its five transient work-buffer registrations plus the writable transmittance StorageImage. The
     // shared deferred slot-payload descriptor is borrowed, so release only owned descriptors before their targets.
-    if(auto* device = graphics().getDevice()){
-        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
-        if(heap.isInitialized()){
-            heap.free(targets.coverageBufferDescriptor);
-            heap.free(targets.depthWarpBufferDescriptor);
-            heap.free(targets.controlBufferDescriptor);
-            heap.free(targets.extinctionBufferDescriptor);
-            heap.free(targets.extinctionOverflowBufferDescriptor);
-            heap.free(targets.transmittanceTextureStorageDescriptor);
-        }
+    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    if(heap.isInitialized()){
+        heap.free(targets.coverageBufferDescriptor);
+        heap.free(targets.depthWarpBufferDescriptor);
+        heap.free(targets.controlBufferDescriptor);
+        heap.free(targets.extinctionBufferDescriptor);
+        heap.free(targets.extinctionOverflowBufferDescriptor);
+        heap.free(targets.transmittanceTextureStorageDescriptor);
     }
 
     targets.lowFramebuffer.reset();
@@ -140,13 +139,8 @@ void RendererDeferredSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets
 }
 
 bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameTargets& targets){
-    auto* device = graphics().getDevice();
-    if(!device){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot create deferred bindless resources without a graphics device"));
-        return false;
-    }
-
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = *graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred lighting/compositor requires the global descriptor heap"));
         return false;
@@ -392,77 +386,75 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
 }
 
 void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTargets& targets){
-    if(auto* device = graphics().getDevice()){
-        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
-        if(heap.isInitialized()){
-            heap.free(targets.bindless.slotsBufferDescriptor);
-            heap.free(targets.bindless.gbufferBaseColor);
-            heap.free(targets.bindless.gbufferNormal);
-            heap.free(targets.bindless.gbufferWorldPosition);
-            heap.free(targets.bindless.gbufferDepth);
-            heap.free(targets.bindless.shadowVisibility);
-            heap.free(targets.bindless.shadowVisibilityStorage);
-            heap.free(targets.bindless.causticIrradiance);
-            heap.free(targets.bindless.causticIrradianceStorage);
-            heap.free(targets.bindless.surfelIrradiance);
-            heap.free(targets.bindless.surfelIrradianceStorage);
-            heap.free(targets.bindless.surfelIrradianceHalf);
-            heap.free(targets.bindless.surfelIrradianceHalfStorage);
-            heap.free(targets.bindless.sampler);
-            heap.free(targets.bindless.opaqueColor);
-            heap.free(targets.bindless.avboitAccumColor);
-            heap.free(targets.bindless.avboitAccumExtinction);
-            heap.free(targets.bindless.avboitTransmittance);
-            heap.free(targets.bindless.avboitLinearSampler);
-            heap.free(targets.bindless.sceneShading);
-            heap.free(targets.bindless.lightList);
-            heap.free(targets.bindless.causticAccumulator);
-            heap.free(targets.bindless.causticAccumulatorStorage);
-            heap.free(targets.bindless.causticHistory);
-            heap.free(targets.bindless.causticHistoryStorage);
-            heap.free(targets.bindless.causticResolveHalf);
-            heap.free(targets.bindless.causticResolveHalfStorage);
-            heap.free(targets.bindless.causticResolveGeometry);
-            heap.free(targets.bindless.causticResolveGeometryStorage);
-            heap.free(targets.bindless.shadowCoarseTransmittanceStorage);
-            heap.free(targets.bindless.shadowSoftGeometry);
-            heap.free(targets.bindless.shadowSoftGeometryStorage);
-            heap.free(targets.bindless.shadowSoftGeometryPrev);
-            heap.free(targets.bindless.shadowSoftGeometryPrevStorage);
-            heap.free(targets.bindless.shadowSoftHalfA);
-            heap.free(targets.bindless.shadowSoftHalfAStorage);
-            heap.free(targets.bindless.shadowSoftHalfB);
-            heap.free(targets.bindless.shadowSoftHalfBStorage);
-            heap.free(targets.bindless.shadowHistA);
-            heap.free(targets.bindless.shadowHistAStorage);
-            heap.free(targets.bindless.shadowHistB);
-            heap.free(targets.bindless.shadowHistBStorage);
-            heap.free(targets.bindless.shadowMomentsA);
-            heap.free(targets.bindless.shadowMomentsAStorage);
-            heap.free(targets.bindless.shadowMomentsB);
-            heap.free(targets.bindless.shadowMomentsBStorage);
-            heap.free(targets.bindless.transparentSoftHalf);
-            heap.free(targets.bindless.transparentSoftHalfStorage);
-            heap.free(targets.bindless.transparentHistA);
-            heap.free(targets.bindless.transparentHistAStorage);
-            heap.free(targets.bindless.transparentHistB);
-            heap.free(targets.bindless.transparentHistBStorage);
-            heap.free(targets.bindless.transparentMomentsA);
-            heap.free(targets.bindless.transparentMomentsAStorage);
-            heap.free(targets.bindless.transparentMomentsB);
-            heap.free(targets.bindless.transparentMomentsBStorage);
-            heap.free(targets.bindless.csgCapBackNormal);
-            heap.free(targets.bindless.csgIntervalDepth);
-            heap.free(targets.bindless.csgIntervalId);
-            heap.free(targets.bindless.csgReceiverEventData);
-            heap.free(targets.bindless.csgReceiverEventCount);
-            heap.free(targets.bindless.csgReceiverSpanData);
-            heap.free(targets.bindless.csgReceiverSpanCount);
-            heap.free(targets.bindless.csgRemovedIntervalDepth);
-            heap.free(targets.bindless.csgRemovedIntervalCapNormal);
-            heap.free(targets.bindless.csgRemovedIntervalData);
-            heap.free(targets.bindless.csgRemovedIntervalCount);
-        }
+    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    if(heap.isInitialized()){
+        heap.free(targets.bindless.slotsBufferDescriptor);
+        heap.free(targets.bindless.gbufferBaseColor);
+        heap.free(targets.bindless.gbufferNormal);
+        heap.free(targets.bindless.gbufferWorldPosition);
+        heap.free(targets.bindless.gbufferDepth);
+        heap.free(targets.bindless.shadowVisibility);
+        heap.free(targets.bindless.shadowVisibilityStorage);
+        heap.free(targets.bindless.causticIrradiance);
+        heap.free(targets.bindless.causticIrradianceStorage);
+        heap.free(targets.bindless.surfelIrradiance);
+        heap.free(targets.bindless.surfelIrradianceStorage);
+        heap.free(targets.bindless.surfelIrradianceHalf);
+        heap.free(targets.bindless.surfelIrradianceHalfStorage);
+        heap.free(targets.bindless.sampler);
+        heap.free(targets.bindless.opaqueColor);
+        heap.free(targets.bindless.avboitAccumColor);
+        heap.free(targets.bindless.avboitAccumExtinction);
+        heap.free(targets.bindless.avboitTransmittance);
+        heap.free(targets.bindless.avboitLinearSampler);
+        heap.free(targets.bindless.sceneShading);
+        heap.free(targets.bindless.lightList);
+        heap.free(targets.bindless.causticAccumulator);
+        heap.free(targets.bindless.causticAccumulatorStorage);
+        heap.free(targets.bindless.causticHistory);
+        heap.free(targets.bindless.causticHistoryStorage);
+        heap.free(targets.bindless.causticResolveHalf);
+        heap.free(targets.bindless.causticResolveHalfStorage);
+        heap.free(targets.bindless.causticResolveGeometry);
+        heap.free(targets.bindless.causticResolveGeometryStorage);
+        heap.free(targets.bindless.shadowCoarseTransmittanceStorage);
+        heap.free(targets.bindless.shadowSoftGeometry);
+        heap.free(targets.bindless.shadowSoftGeometryStorage);
+        heap.free(targets.bindless.shadowSoftGeometryPrev);
+        heap.free(targets.bindless.shadowSoftGeometryPrevStorage);
+        heap.free(targets.bindless.shadowSoftHalfA);
+        heap.free(targets.bindless.shadowSoftHalfAStorage);
+        heap.free(targets.bindless.shadowSoftHalfB);
+        heap.free(targets.bindless.shadowSoftHalfBStorage);
+        heap.free(targets.bindless.shadowHistA);
+        heap.free(targets.bindless.shadowHistAStorage);
+        heap.free(targets.bindless.shadowHistB);
+        heap.free(targets.bindless.shadowHistBStorage);
+        heap.free(targets.bindless.shadowMomentsA);
+        heap.free(targets.bindless.shadowMomentsAStorage);
+        heap.free(targets.bindless.shadowMomentsB);
+        heap.free(targets.bindless.shadowMomentsBStorage);
+        heap.free(targets.bindless.transparentSoftHalf);
+        heap.free(targets.bindless.transparentSoftHalfStorage);
+        heap.free(targets.bindless.transparentHistA);
+        heap.free(targets.bindless.transparentHistAStorage);
+        heap.free(targets.bindless.transparentHistB);
+        heap.free(targets.bindless.transparentHistBStorage);
+        heap.free(targets.bindless.transparentMomentsA);
+        heap.free(targets.bindless.transparentMomentsAStorage);
+        heap.free(targets.bindless.transparentMomentsB);
+        heap.free(targets.bindless.transparentMomentsBStorage);
+        heap.free(targets.bindless.csgCapBackNormal);
+        heap.free(targets.bindless.csgIntervalDepth);
+        heap.free(targets.bindless.csgIntervalId);
+        heap.free(targets.bindless.csgReceiverEventData);
+        heap.free(targets.bindless.csgReceiverEventCount);
+        heap.free(targets.bindless.csgReceiverSpanData);
+        heap.free(targets.bindless.csgReceiverSpanCount);
+        heap.free(targets.bindless.csgRemovedIntervalDepth);
+        heap.free(targets.bindless.csgRemovedIntervalCapNormal);
+        heap.free(targets.bindless.csgRemovedIntervalData);
+        heap.free(targets.bindless.csgRemovedIntervalCount);
     }
     targets.bindless = DeferredBindlessFrameResources{};
 }
@@ -521,27 +513,27 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     }
 
-    auto* device = graphics().getDevice();
-    const Core::Format::Enum albedoFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(*device);
-    const Core::Format::Enum normalFormat = ECSRenderDetail::SelectGBufferVectorFormat(*device);
-    const Core::Format::Enum worldPositionFormat = ECSRenderDetail::SelectGBufferVectorFormat(*device);
-    const Core::Format::Enum opaqueColorFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(*device);
-    const Core::Format::Enum depthFormat = ECSRenderDetail::SelectGBufferDepthFormat(*device);
-    const Core::Format::Enum csgCapNormalFormat = ECSRenderDetail::SelectCsgCapNormalFormat(*device);
-    const Core::Format::Enum csgIntervalDepthFormat = ECSRenderDetail::SelectCsgIntervalDepthFormat(*device);
-    const Core::Format::Enum csgIntervalIdFormat = ECSRenderDetail::SelectCsgIntervalIdFormat(*device);
-    const Core::Format::Enum csgReceiverEventDataFormat = ECSRenderDetail::SelectCsgReceiverEventDataFormat(*device);
-    const Core::Format::Enum csgReceiverEventCountFormat = ECSRenderDetail::SelectCsgReceiverEventCountFormat(*device);
-    const Core::Format::Enum csgReceiverSpanDataFormat = ECSRenderDetail::SelectCsgReceiverSpanDataFormat(*device);
-    const Core::Format::Enum csgReceiverSpanCountFormat = ECSRenderDetail::SelectCsgReceiverSpanCountFormat(*device);
-    const Core::Format::Enum csgRemovedIntervalDepthFormat = ECSRenderDetail::SelectCsgRemovedIntervalDepthFormat(*device);
-    const Core::Format::Enum csgRemovedIntervalCapNormalFormat = ECSRenderDetail::SelectCsgRemovedIntervalCapNormalFormat(*device);
-    const Core::Format::Enum csgRemovedIntervalDataFormat = ECSRenderDetail::SelectCsgRemovedIntervalDataFormat(*device);
-    const Core::Format::Enum csgRemovedIntervalCountFormat = ECSRenderDetail::SelectCsgRemovedIntervalCountFormat(*device);
-    const Core::Format::Enum avboitLowRasterFormat = SelectRendererAvboitLowRasterFormat(*device);
-    const Core::Format::Enum avboitAccumColorFormat = SelectRendererAvboitAccumColorFormat(*device);
-    const Core::Format::Enum avboitAccumExtinctionFormat = SelectRendererAvboitAccumExtinctionFormat(*device);
-    const Core::Format::Enum avboitTransmittanceFormat = SelectRendererAvboitTransmittanceFormat(*device);
+    auto& device = *graphics().getDevice();
+    const Core::Format::Enum albedoFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(device);
+    const Core::Format::Enum normalFormat = ECSRenderDetail::SelectGBufferVectorFormat(device);
+    const Core::Format::Enum worldPositionFormat = ECSRenderDetail::SelectGBufferVectorFormat(device);
+    const Core::Format::Enum opaqueColorFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(device);
+    const Core::Format::Enum depthFormat = ECSRenderDetail::SelectGBufferDepthFormat(device);
+    const Core::Format::Enum csgCapNormalFormat = ECSRenderDetail::SelectCsgCapNormalFormat(device);
+    const Core::Format::Enum csgIntervalDepthFormat = ECSRenderDetail::SelectCsgIntervalDepthFormat(device);
+    const Core::Format::Enum csgIntervalIdFormat = ECSRenderDetail::SelectCsgIntervalIdFormat(device);
+    const Core::Format::Enum csgReceiverEventDataFormat = ECSRenderDetail::SelectCsgReceiverEventDataFormat(device);
+    const Core::Format::Enum csgReceiverEventCountFormat = ECSRenderDetail::SelectCsgReceiverEventCountFormat(device);
+    const Core::Format::Enum csgReceiverSpanDataFormat = ECSRenderDetail::SelectCsgReceiverSpanDataFormat(device);
+    const Core::Format::Enum csgReceiverSpanCountFormat = ECSRenderDetail::SelectCsgReceiverSpanCountFormat(device);
+    const Core::Format::Enum csgRemovedIntervalDepthFormat = ECSRenderDetail::SelectCsgRemovedIntervalDepthFormat(device);
+    const Core::Format::Enum csgRemovedIntervalCapNormalFormat = ECSRenderDetail::SelectCsgRemovedIntervalCapNormalFormat(device);
+    const Core::Format::Enum csgRemovedIntervalDataFormat = ECSRenderDetail::SelectCsgRemovedIntervalDataFormat(device);
+    const Core::Format::Enum csgRemovedIntervalCountFormat = ECSRenderDetail::SelectCsgRemovedIntervalCountFormat(device);
+    const Core::Format::Enum avboitLowRasterFormat = SelectRendererAvboitLowRasterFormat(device);
+    const Core::Format::Enum avboitAccumColorFormat = SelectRendererAvboitAccumColorFormat(device);
+    const Core::Format::Enum avboitAccumExtinctionFormat = SelectRendererAvboitAccumExtinctionFormat(device);
+    const Core::Format::Enum avboitTransmittanceFormat = SelectRendererAvboitTransmittanceFormat(device);
     if(
         albedoFormat == Core::Format::UNKNOWN
         || normalFormat == Core::Format::UNKNOWN
@@ -700,7 +692,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     for(const Core::FramebufferAttachment& attachment : gbufferAttachments)
         framebufferDesc.addColorAttachment(attachment);
     framebufferDesc.setDepthAttachment(createdTargets.depth.get(), ECSRenderDetail::s_FramebufferSubresources);
-    createdTargets.framebuffer = device->createFramebuffer(framebufferDesc);
+    createdTargets.framebuffer = device.createFramebuffer(framebufferDesc);
     if(!createdTargets.framebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred framebuffer"));
         return false;
@@ -708,7 +700,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
 
     Core::FramebufferDesc opaqueLightingFramebufferDesc;
     opaqueLightingFramebufferDesc.addColorAttachment(createdTargets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources);
-    createdTargets.opaqueLightingFramebuffer = device->createFramebuffer(opaqueLightingFramebufferDesc);
+    createdTargets.opaqueLightingFramebuffer = device.createFramebuffer(opaqueLightingFramebufferDesc);
     if(!createdTargets.opaqueLightingFramebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting framebuffer"));
         return false;

@@ -111,8 +111,8 @@ void RendererSystem::invalidateResources(){
     // quarantine matures. Retire it before RendererRayTracingState releases the current TLAS so resource invalidation
     // cannot strand a descriptor-buffer block (or its retained AS) until device shutdown.
     if(m_rayTracingState.m_tlasHeapHandle.valid()){
-        if(auto* device = m_graphics.getDevice())
-            device->getDescriptorHeap().free(m_rayTracingState.m_tlasHeapHandle);
+        auto& device = *m_graphics.getDevice();
+        device.getDescriptorHeap().free(m_rayTracingState.m_tlasHeapHandle);
     }
     // The persistent caustic-emission and trace material-context heap descriptors retain their backing buffers just
     // like the TLAS descriptor. Retire them while the device heap is still live, before RendererRayTracingState

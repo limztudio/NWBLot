@@ -118,12 +118,10 @@ struct BindingLayoutDesc{
     // pipeline must not reuse a descriptor set index.
     bool registerSpaceIsDescriptorSet = false;
 
-    // Phase 3 (Backend C / VK_EXT_descriptor_buffer): when true the layout is built with the
+    // Backend C (VK_EXT_descriptor_buffer): when true the layout is built with the
     // VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT flag and its binding sets allocate from the
-    // DescriptorBufferManager rather than classic descriptor pools. Default false keeps the legacy classic path
-    // (Backend A) as the switchable fallback until each migrated pass proves parity, per the Phase 3 plan. A
-    // descriptor-buffer layout is mutually exclusive with the classic descriptor-set path: both need exclusive
-    // control of the descriptor-set-layout create flags, and the two cannot be mixed in one pipeline layout.
+    // DescriptorBufferManager rather than classic descriptor pools. Default false selects the portability fallback.
+    // Descriptor-buffer and classic layouts cannot be mixed in one pipeline layout.
     bool useDescriptorBuffer = false;
 
     explicit BindingLayoutDesc(GraphicsArena& arena)

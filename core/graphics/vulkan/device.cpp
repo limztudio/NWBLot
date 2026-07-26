@@ -447,9 +447,8 @@ Device::Device(const DeviceDesc& desc)
 
 
     // Stand up the Backend C descriptor-buffer manager (VK_EXT_descriptor_buffer). The extension and its properties
-    // are already detected/enabled/queried above; this carves the two global segments (resource + sampler) and leaves
-    // them dark - no pipeline consumer is wired until the binding-layer conversion (Phase 3 steps 2-4). Failure is
-    // non-fatal (Backend A remains the floor) but logged loudly.
+    // are already detected/enabled/queried above; this carves the two global segments (resource + sampler) consumed
+    // by descriptor-buffer-compatible pipelines. Failure is non-fatal (Backend A remains the floor) but logged loudly.
     if(m_context.extensions.EXT_descriptor_buffer){
         if(!m_descriptorBufferManager.initialize()){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Descriptor buffer manager initialization failed; Backend C is disabled."));

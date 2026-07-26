@@ -1373,9 +1373,10 @@ inline void AttachPipelineBindingState(
 // Layout choice: one large descriptor buffer per type (a "global segment"), sub-allocated by byte offset through a
 // free-range suballocator (FreeRange vector + bump pointer). Resource descriptors live in the
 // resource segment (images, texel buffers, storage/uniform buffers, AS); sampler descriptors in the sampler segment.
-// All descriptors are aligned to descriptorBufferOffsetAlignment. No pipeline consumer is wired in this step; the
-// manager is dark - constructed at Device init, enabled only where the extension is present, exercised solely by its
-// own round-trip test until the binding-layer conversion (Phase 3 steps 2-4) lights it up.
+// Set blocks are aligned to descriptorBufferOffsetAlignment; descriptor arrays advance by their driver-reported
+// descriptor size. Descriptor-buffer-compatible pipelines bind these segments through CommandList; the round-trip
+// suite independently verifies allocation, byte encoding, and layout invariants. The manager is enabled only where
+// the extension is present, while Backend A remains the portability fallback.
 
 namespace DescriptorBufferSegmentKind{
     enum Enum : u8{
@@ -1389,8 +1390,16 @@ struct DescriptorBufferSegment{
     DescriptorBufferSegmentKind::Enum kind = DescriptorBufferSegmentKind::None;
     u32 offsetBytes = 0;
     u32 sizeBytes = 0;
+    // Monotonic allocation identity. A recycled byte range receives a new serial so stale segment copies cannot
+    // write through a newly allocated owner that happens to reuse the same offset and size.
+    u64 allocationSerial = 0;
 
-    [[nodiscard]] bool valid()const{ return kind != DescriptorBufferSegmentKind::None && sizeBytes > 0; }
+    [[nodiscard]] bool valid()const{
+        return (kind == DescriptorBufferSegmentKind::Resource || kind == DescriptorBufferSegmentKind::Sampler)
+            && sizeBytes > 0
+            && allocationSerial != 0u
+        ;
+    }
 };
 
 class DescriptorBufferManager final : NoCopy{
@@ -1402,7 +1411,9 @@ private:
     };
 
     // One sub-allocated descriptor buffer: a HOST-mapped VkBuffer + its device address + a free-range list and a bump
-    // pointer sharing one mutex. The mapped pointer is the write target for vkGetDescriptorEXT; the device address is
+    // pointer sharing one mutex. liveAllocations is kept ordered by byte offset and records ownership of every carved
+    // range, so free() and writeDescriptor() can reject stale, overlapping, and out-of-block accesses without a
+    // linear scan on each write. The mapped pointer is the write target for vkGetDescriptorEXT; the device address is
     // what vkCmdBindDescriptorBuffersEXT binds.
     struct SegmentStorage{
         VkBuffer buffer = VK_NULL_HANDLE;
@@ -1411,13 +1422,18 @@ private:
         VkDeviceAddress deviceAddress = 0;
         u32 capacityBytes = 0;
         u32 writableOffsetBytes = 0;
+        // Deliberately not reset by shutdownSegment(), so a segment recreated after device-manager recovery does not
+        // make an old byte-range handle look live again.
+        u64 nextAllocationSerial = 1u;
         VkDescriptorBufferBindingInfoEXT bindingInfo{};
         Futex mutex;
         Vector<FreeRange, Alloc::GlobalArena> freeRanges;
+        Vector<DescriptorBufferSegment, Alloc::GlobalArena> liveAllocations;
 
 
         explicit SegmentStorage(Alloc::GlobalArena& arena)
             : freeRanges(arena)
+            , liveAllocations(arena)
         {}
     };
 
@@ -1433,10 +1449,11 @@ public:
 
     [[nodiscard]] bool isEnabled()const{ return m_enabled; }
 
-    // Per-type descriptor footprint from descriptorBufferProperties, strided up to descriptorBufferOffsetAlignment.
-    // Returns 0 when the backend is disabled (caller must not write).
+    // Per-type descriptor footprint from descriptorBufferProperties. Descriptor arrays advance by this exact byte
+    // size; descriptorBufferOffsetAlignment applies to a set block's vkCmdSetDescriptorBufferOffsetsEXT offset, not
+    // each array element. Returns 0 when the backend is disabled (caller must not write).
     [[nodiscard]] u32 getDescriptorSize(VkDescriptorType descriptorType)const;
-    [[nodiscard]] u32 getDescriptorStride(VkDescriptorType descriptorType)const;
+    [[nodiscard]] u32 getOffsetAlignmentBytes()const;
 
     // The buffer-binding records a consuming command buffer hands to vkCmdBindDescriptorBuffersEXT. Stable for the
     // lifetime of the manager after initialize(); null until then.
@@ -1447,17 +1464,19 @@ public:
     [[nodiscard]] u32 getResourceBufferIndex()const{ return 0; }
     [[nodiscard]] u32 getSamplerBufferIndex()const{ return 1; }
 
-    // Carve `sizeBytes` (already stride-aligned) out of the segment; returned offset is aligned to
-    // descriptorBufferOffsetAlignment. Free-list first, bump-pointer fallback. The carved bytes are zeroed so a stale
-    // read before the first write cannot leak a neighboring descriptor.
+    // Carve `sizeBytes` out of the segment. alignmentBytes must be a non-zero multiple of
+    // descriptorBufferOffsetAlignment, so the returned offset is valid for vkCmdSetDescriptorBufferOffsetsEXT.
+    // Free-list first, bump-pointer fallback. The carved bytes are zeroed so a stale read before the first write
+    // cannot leak a neighboring descriptor.
     [[nodiscard]] DescriptorBufferSegment allocate(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes);
     void free(const DescriptorBufferSegment& segment);
 
-    // Write one descriptor into the segment at `dstOffsetBytes` (a byte offset into the segment's mapped buffer).
-    // Routes the BindingSetItem to vkGetDescriptorEXT through VkDescriptorGetInfoEXT + VkDescriptorDataEXT; the only
-    // Vulkan write path that encodes an acceleration-structure handle, which is why the TLAS migration routes here.
-    // `descriptorType` selects the VkDescriptorDataEXT union arm and the per-type size.
-    bool writeDescriptor(const BindingSetItem& item, u32 dstOffsetBytes, VkDescriptorType descriptorType);
+    // Write one descriptor into `allocation` at `dstOffsetBytes` (a byte offset into the segment's mapped buffer).
+    // The exact live allocation identity is checked under the segment lock, preventing stale byte offsets from
+    // writing a recycled range. Routes the BindingSetItem to vkGetDescriptorEXT through VkDescriptorGetInfoEXT +
+    // VkDescriptorDataEXT; the only Vulkan write path that encodes an acceleration-structure handle, which is why
+    // the TLAS migration routes here. `descriptorType` selects the VkDescriptorDataEXT union arm and per-type size.
+    bool writeDescriptor(const BindingSetItem& item, const DescriptorBufferSegment& allocation, u32 dstOffsetBytes, VkDescriptorType descriptorType);
 
 
 private:
@@ -1577,9 +1596,13 @@ private:
         u32 capacity = 0;
         u32 nextFresh = 0;
         Vector<u32, Alloc::GlobalArena> freeList;
+        // 1 while a handle owns the slot, 0 while it is free or in the deferred-free quarantine. This rejects a
+        // double free or a write through a retired handle before the raw slot value can be recycled.
+        Vector<u8, Alloc::GlobalArena> liveSlots;
 
         explicit SlotAllocator(Alloc::GlobalArena& arena)
             : freeList(arena)
+            , liveSlots(arena)
         {}
     };
     struct RetiredSlot{
@@ -1598,7 +1621,7 @@ private:
     // released only after the descriptor handle's deferred-free quarantine matures.
     // Returns false (logged) if either persistent carve fails -- initialize() then leaves the heap uninitialized.
     bool initializeDescriptorBufferBlocks(u32 offsetAlignmentBytes);
-    // Backend C write: place one descriptor in the heap's carved block at blockOffset + classOffset + slot*stride.
+    // Backend C write: place one descriptor in the heap's carved block at blockOffset + classOffset + slot*descriptorSize.
     // writeItem already carries the authoritative class slot/arrayElement/type; descriptorClass selects the block.
     bool writeDescriptorBuffer(const BindingSetItem& writeItem, GpuDescriptorClass::Enum descriptorClass);
 
@@ -1628,7 +1651,7 @@ private:
     // tables (m_resourceTable/m_samplerTable) and binds them with vkCmdBindDescriptorSets. On Backend C the same
     // global heap is stored as bytes in one carved block per segment (resource OR sampler) of the
     // DescriptorBufferManager's mapped buffer, sized to the driver-queried set block for the heap's bindless layout;
-    // write() memcpy's each registered descriptor at blockOffset + classBindingOffset + slot*stride, and
+    // write() encodes each registered descriptor at blockOffset + classBindingOffset + slot*descriptorSize, and
     // bindCompute/bindRayTracing record vkCmdSetDescriptorBufferOffsetsEXT against the two persistent blocks. The
     // block is carved once in initialize() and lives for the heap's lifetime (the heap is not frame-scoped like a
     // binding set), so write() does not re-carve. m_usesDescriptorBuffer is false when the extension is absent, in
@@ -1646,7 +1669,7 @@ private:
     Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_samplerDescriptorResources;
     u32 m_accelStructBufferBindingOffset = 0u;
     // The driver-queried byte offset of each class's register space within its set block (slot -> bytes); write()
-    // addresses a descriptor as block.offsetBytes + classOffset[handle.slot] + handle.slotIndex()*stride.
+    // addresses a descriptor as block.offsetBytes + classOffset[class] + handle.slotIndex()*descriptorSize.
     u32 m_classBufferOffset[GpuDescriptorClass::kCount] = {};
 
     SlotAllocator m_resourceSlots;
@@ -1656,7 +1679,7 @@ private:
     Vector<RetiredSlot, Alloc::GlobalArena> m_retired;
     u64 m_frameCounter = 0;
 
-    Futex m_mutex;
+    mutable Futex m_mutex;
     bool m_initialized = false;
 };
 
@@ -1881,7 +1904,7 @@ private:
     // (vkGetDescriptorSetLayoutSizeEXT), the segment that holds it (Resource for non-sampler sets / Sampler for
     // sampler-only sets; mixed sets downgrade to non-compatible), and each non-push-constant binding's byte offset
     // within that block (vkGetDescriptorSetLayoutBindingOffsetEXT). createBindingSet carves one block per set and
-    // writes each binding's descriptors at blockOffset + bindingOffset + arrayElement*stride.
+    // writes each binding's descriptors at blockOffset + bindingOffset + arrayElement*descriptorSize.
     u32 m_descriptorBufferSetSizeBytes = 0;
     DescriptorBufferSegmentKind::Enum m_descriptorBufferSegmentKind = DescriptorBufferSegmentKind::None;
     HashMap<u32, u32, Hasher<u32>, EqualTo<u32>, Alloc::GlobalArena> m_descriptorBufferBindingOffsets;
@@ -2483,11 +2506,10 @@ public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType);
     // Global descriptor heap. Valid only after Device initialization completes.
     [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap(){ return m_gpuDescriptorHeap; }
-    // Phase-3 Backend-C descriptor-buffer manager (VK_EXT_descriptor_buffer). Disabled (returns isEnabled()==false)
-    // when the extension is absent or its segments failed to initialize; the classic descriptor-set path (Backend A)
-    // remains the portability floor in that case. Valid only after Device init completes. Exposed because the
-    // binding-layer conversion needs a stable manager handle and the descriptor-buffer bind path is the only Vulkan
-    // write that encodes an acceleration-structure handle (TLAS migration).
+    // Backend-C descriptor-buffer manager (VK_EXT_descriptor_buffer). Disabled (returns isEnabled()==false) when the
+    // extension is absent or its segments failed to initialize; the classic descriptor-set path (Backend A) remains
+    // the portability floor in that case. Valid only after Device init completes. Exposed because descriptor-buffer
+    // writes encode acceleration-structure handles for the TLAS path.
     [[nodiscard]] DescriptorBufferManager& getDescriptorBufferManager(){ return m_descriptorBufferManager; }
 
 

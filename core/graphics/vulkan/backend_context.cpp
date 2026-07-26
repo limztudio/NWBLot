@@ -113,8 +113,8 @@ struct OptionalDeviceFeatureSet{
     VkPhysicalDeviceFragmentShadingRateFeaturesKHR fragmentShadingRate = MakeVkFeatureStruct<VkPhysicalDeviceFragmentShadingRateFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR);
     VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT mutableDescriptorType = MakeVkFeatureStruct<VkPhysicalDeviceMutableDescriptorTypeFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MUTABLE_DESCRIPTOR_TYPE_FEATURES_EXT);
     // Backend C: VK_EXT_descriptor_buffer (descriptor-as-memory). It is advertised by the BC-250/RADV target and
-    // natively encodes acceleration structures via VkDescriptorGetInfoEXT, which is why the TLAS migration is bound
-    // to it. Phase 3 enables it here; consumer wiring follows in later steps.
+    // natively encodes acceleration structures via VkDescriptorGetInfoEXT; descriptor-buffer-compatible pipelines
+    // consume it through the production binding path.
     VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptorBuffer = MakeVkFeatureStruct<VkPhysicalDeviceDescriptorBufferFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT);
     VkPhysicalDeviceFaultFeaturesEXT deviceFault = MakeVkFeatureStruct<VkPhysicalDeviceFaultFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT);
 };

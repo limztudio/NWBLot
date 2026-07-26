@@ -218,26 +218,6 @@ constexpr DescriptorBufferSegmentKind::Enum GetDescriptorBufferSegmentKind(Resou
     return type == ResourceType::Sampler ? DescriptorBufferSegmentKind::Sampler : DescriptorBufferSegmentKind::Resource;
 }
 
-// Bindless sibling of ResolveDescriptorBufferSegmentKind: a bindless layout's register spaces are all one class by
-// construction (the global heap uses a pure MutableSrvUavCbv resource set and a pure MutableSampler sampler set), so a
-// coherent bindless set resolves to exactly one segment. A register-space mix (e.g. a Sampler alongside image/buffer
-// types in one set) is not segment-coherent and downgrades to the classic path, identical to the classic-layout rule.
-constexpr DescriptorBufferSegmentKind::Enum ResolveBindlessDescriptorBufferSegmentKind(const BindlessLayoutDesc& desc){
-    DescriptorBufferSegmentKind::Enum resolved = DescriptorBufferSegmentKind::None;
-    bool seen = false;
-    for(const auto& item : desc.registerSpaces){
-        const DescriptorBufferSegmentKind::Enum kind = GetDescriptorBufferSegmentKind(item.type);
-        if(!seen){
-            resolved = kind;
-            seen = true;
-        }
-        else if(resolved != kind){
-            return DescriptorBufferSegmentKind::None;
-        }
-    }
-    return seen ? resolved : DescriptorBufferSegmentKind::None;
-}
-
 constexpr bool IsSupportedDescriptorBindingType(ResourceType::Enum type){
     switch(type){
     case ResourceType::Texture_SRV:
@@ -258,33 +238,95 @@ constexpr bool IsSupportedDescriptorBindingType(ResourceType::Enum type){
     }
 }
 
-// Backend C: which resource types the descriptor-buffer path can serve. Identical to the heap gate except the
-// descriptor-buffer extension defines acceleration-structure descriptors through vkGetDescriptorEXT, so AS bindings
-// are supported here (they are the one type the heap path excludes).
-constexpr bool IsDescriptorBufferCompatibleType(ResourceType::Enum type){
-    return IsSupportedDescriptorBindingType(type);
+// An opted-in descriptor-buffer layout must be decided before vkCreateDescriptorSetLayout: a layout created with
+// VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT cannot later fall back to descriptor-set allocation.
+// Keep the decision separate from the driver queries below so a mixed sampler/resource shape stays fully classic.
+bool IsDescriptorBufferBackendReady(const VulkanContext& context){
+    return context.extensions.EXT_descriptor_buffer
+        && context.descriptorBufferManager
+        && context.descriptorBufferManager->isEnabled()
+    ;
 }
 
-// Backend C: a descriptor-buffer set block lives entirely in ONE segment (resource OR sampler). A layout is
-// segment-coherent only if every non-push-constant binding resolves to the same segment; a mixed set (a sampler
-// alongside resource descriptors) is downgraded to the classic fallback rather than split across two buffers.
-// Returns Resource/Sampler for a coherent set, None for a mixed or empty set.
-constexpr DescriptorBufferSegmentKind::Enum ResolveDescriptorBufferSegmentKind(const BindingLayoutDesc& desc){
-    DescriptorBufferSegmentKind::Enum resolved = DescriptorBufferSegmentKind::None;
-    bool seen = false;
+bool TryResolveDescriptorBufferLayout(
+    const BindingLayoutDesc& desc,
+    DescriptorBufferSegmentKind::Enum& outSegmentKind,
+    bool& outHasDescriptors
+){
+    outSegmentKind = DescriptorBufferSegmentKind::None;
+    outHasDescriptors = false;
+
     for(const auto& item : desc.bindings){
         if(item.type == ResourceType::PushConstants || item.type == ResourceType::None)
             continue;
-        const DescriptorBufferSegmentKind::Enum kind = GetDescriptorBufferSegmentKind(item.type);
-        if(!seen){
-            resolved = kind;
-            seen = true;
+        // vkGetDescriptorEXT supports every binding type accepted by this backend, including acceleration structures.
+        if(!IsSupportedDescriptorBindingType(item.type))
+            return false;
+
+        const DescriptorBufferSegmentKind::Enum itemSegmentKind = GetDescriptorBufferSegmentKind(item.type);
+        if(!outHasDescriptors){
+            outSegmentKind = itemSegmentKind;
+            outHasDescriptors = true;
         }
-        else if(resolved != kind){
-            return DescriptorBufferSegmentKind::None;
-        }
+        else if(outSegmentKind != itemSegmentKind)
+            return false;
     }
-    return seen ? resolved : DescriptorBufferSegmentKind::None;
+
+    return true;
+}
+
+bool TryResolveBindlessDescriptorBufferLayout(
+    const BindlessLayoutDesc& desc,
+    DescriptorBufferSegmentKind::Enum& outSegmentKind
+){
+    outSegmentKind = DescriptorBufferSegmentKind::None;
+    bool hasDescriptors = false;
+
+    for(const auto& item : desc.registerSpaces){
+        if(!IsSupportedDescriptorBindingType(item.type))
+            return false;
+
+        const DescriptorBufferSegmentKind::Enum itemSegmentKind = GetDescriptorBufferSegmentKind(item.type);
+        if(!hasDescriptors){
+            outSegmentKind = itemSegmentKind;
+            hasDescriptors = true;
+        }
+        else if(outSegmentKind != itemSegmentKind)
+            return false;
+    }
+
+    return hasDescriptors;
+}
+
+bool ValidateDescriptorBufferBindingFootprint(
+    DescriptorBufferManager& manager,
+    const VkDescriptorType descriptorType,
+    const u32 descriptorCount,
+    const VkDeviceSize setSizeBytes,
+    const VkDeviceSize bindingOffsetBytes,
+    const u32 bindingSlot,
+    const tchar* operationName
+){
+    const u32 descriptorSize = manager.getDescriptorSize(descriptorType);
+    if(
+        descriptorSize == 0u
+        || descriptorCount == 0u
+        || setSizeBytes == 0u
+        || setSizeBytes > UINT32_MAX
+        || bindingOffsetBytes > UINT32_MAX
+        || bindingOffsetBytes >= setSizeBytes
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor-buffer binding {} has an invalid footprint."), operationName, bindingSlot);
+        return false;
+    }
+
+    const VkDeviceSize availableBytes = setSizeBytes - bindingOffsetBytes;
+    if(static_cast<VkDeviceSize>(descriptorCount) > availableBytes / descriptorSize){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor-buffer binding {} exceeds its {}-byte set block."), operationName, bindingSlot, setSizeBytes);
+        return false;
+    }
+
+    return true;
 }
 
 constexpr bool UsesDescriptorBufferInfo(ResourceType::Enum type){
@@ -597,6 +639,23 @@ bool Device::createPipelineLayoutForBindingLayouts(
         anyExplicitSet = isExplicit;
     }
 
+    // A descriptor-buffer set layout cannot be consumed by the classic descriptor-set bind path.  Decide this before
+    // either positional or explicit placement so a mixed collection never produces a pipeline layout whose bind mode
+    // is ambiguous (or whose descriptor-buffer layout is later handed to vkCmdBindDescriptorSets).
+    bool anyDescriptorBufferCompatible = false;
+    bool allDescriptorBufferCompatible = true;
+    for(const auto& bindingLayout : bindingLayouts){
+        const auto* layout = bindingLayout.get();
+        if(layout && layout->isDescriptorBufferCompatible())
+            anyDescriptorBufferCompatible = true;
+        else
+            allDescriptorBufferCompatible = false;
+    }
+    if(anyDescriptorBufferCompatible && !allDescriptorBufferCompatible){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor-buffer and classic descriptor-set layouts cannot be mixed in one pipeline layout."), operationName);
+        return false;
+    }
+
     if(!anyExplicitSet){
         // Positional path: concatenate every layout's sets in list order.
         descriptorSetLayouts.reserve(descriptorSetLayoutCount);
@@ -622,15 +681,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
         // set layouts with classic ones -- so gap-fill with the descriptor-buffer-flagged empty layout instead of the
         // classic one. This is the path the heap-coupled tail pipelines hit: their leaf set (0) + heap sets (8/9) are
         // all descriptor-buffer-compatible, and sets 1-7 must be the descriptor-buffer empty sibling.
-        bool anyDescriptorBufferCompatible = false;
-        for(const auto& bindingLayout : bindingLayouts){
-            const auto* layout = bindingLayout.get();
-            if(layout && layout->isDescriptorBufferCompatible()){
-                anyDescriptorBufferCompatible = true;
-                break;
-            }
-        }
-        const VkDescriptorSetLayout gapSetLayout = (anyDescriptorBufferCompatible && m_context.extensions.EXT_descriptor_buffer)
+        const VkDescriptorSetLayout gapSetLayout = (allDescriptorBufferCompatible && m_context.extensions.EXT_descriptor_buffer)
             ? getOrCreateEmptyDescriptorBufferSetLayout()
             : VK_NULL_HANDLE;
         if(anyDescriptorBufferCompatible && gapSetLayout == VK_NULL_HANDLE){
@@ -697,13 +748,12 @@ bool Device::configurePipelineBindings(
 )const{
     outBindings.m_pipelineLayout = VK_NULL_HANDLE;
     outBindings.m_ownsPipelineLayout = false;
+    outBindings.m_usesDescriptorBuffer = false;
     outBindings.m_pushConstantByteSize = 0;
 
-    // Backend C: a pipeline uses the descriptor-buffer path only when EVERY layout opts in and is buffer-compatible
-    // -- descriptor-buffer set layouts cannot be mixed with classic descriptor sets in one pipeline layout (the
-    // wholesale-conversion constraint), so a single non-compatible layout downgrades the whole pipeline to classic.
-    // The pipeline layout itself is still a normal VkPipelineLayout built from the (flagged) set layouts, so it is
-    // created by the same createPipelineLayoutForBindingLayouts call; the flag only selects the command bind path.
+    // Backend C: a pipeline uses the descriptor-buffer path only when EVERY layout opts in and is buffer-compatible.
+    // Descriptor-buffer and classic layouts cannot be mixed in one pipeline layout, so the layout assembler rejects a
+    // mixed collection rather than selecting a classic bind command for descriptor-buffer-flagged set layouts.
     if(m_context.extensions.EXT_descriptor_buffer && m_context.descriptorBufferManager && m_context.descriptorBufferManager->isEnabled()){
         bool allBufferCompatible = !bindingLayouts.empty();
         for(const auto& layoutResource : bindingLayouts){
@@ -749,13 +799,14 @@ void Device::appendPipelineShaderStage(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Backend C - VK_EXT_descriptor_buffer manager (Phase 3 step 1b)
+// Backend C - VK_EXT_descriptor_buffer manager
 //
 // Two HOST-mapped VkBuffers sub-allocated by byte offset through a shared free-range list + bump pointer. Descriptor
 // buffers use their own usage bits, their own offset alignment (descriptorBufferOffsetAlignment), and write
 // descriptors through vkGetDescriptorEXT (VkDescriptorGetInfoEXT + VkDescriptorDataEXT). vkGetDescriptorEXT is also
 // the only path that encodes an acceleration-structure handle, which is why the TLAS migration routes through this
-// manager. No consumer is wired here; the manager is dark until Phase 3 steps 2-4.
+// manager. Descriptor-buffer-compatible pipelines consume these segments through CommandList's Backend-C binding
+// path; Backend A remains the portability fallback.
 
 
 DescriptorBufferManager::DescriptorBufferManager(const VulkanContext& context, VulkanAllocator& allocator)
@@ -782,38 +833,52 @@ bool DescriptorBufferManager::initialize(){
     constexpr u32 s_TargetResourceSegmentBytes = 32u * 1024u * 1024u;
     constexpr u32 s_TargetSamplerSegmentBytes = 2u * 1024u * 1024u;
 
-    if(
-        props.resourceDescriptorBufferAddressSpaceSize > UINT32_MAX
-        || props.samplerDescriptorBufferAddressSpaceSize > UINT32_MAX
-        || props.descriptorBufferOffsetAlignment > UINT32_MAX
-        || props.maxResourceDescriptorBufferRange > UINT32_MAX
-        || props.maxSamplerDescriptorBufferRange > UINT32_MAX
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer properties exceed supported 32-bit segment offsets."));
+    // Segment offsets are intentionally 32-bit, but a driver may advertise a larger address space than this manager
+    // chooses to reserve. Only the alignment participates in our offset arithmetic; capacities are clamped to the
+    // modest targets below before conversion to u32.
+    if(props.descriptorBufferOffsetAlignment == 0 || props.descriptorBufferOffsetAlignment > UINT32_MAX){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer offset alignment is outside the supported 32-bit range."));
         return false;
     }
 
     const u32 offsetAlignment = static_cast<u32>(props.descriptorBufferOffsetAlignment);
-    if(offsetAlignment == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer offset alignment is zero; cannot sub-allocate."));
+    if(
+        props.maxDescriptorBufferBindings < 2u
+        || props.maxResourceDescriptorBufferBindings == 0u
+        || props.maxSamplerDescriptorBufferBindings == 0u
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer limits cannot bind the required resource and sampler segments."));
         return false;
     }
 
-    const u32 resourceMaxBytes = static_cast<u32>(Min<VkDeviceSize>(props.resourceDescriptorBufferAddressSpaceSize, props.maxResourceDescriptorBufferRange));
-    const u32 samplerMaxBytes = static_cast<u32>(Min<VkDeviceSize>(props.samplerDescriptorBufferAddressSpaceSize, props.maxSamplerDescriptorBufferRange));
+    const VkDeviceSize resourceMaxBytes = Min<VkDeviceSize>(props.resourceDescriptorBufferAddressSpaceSize, props.maxResourceDescriptorBufferRange);
+    const VkDeviceSize samplerMaxBytes = Min<VkDeviceSize>(props.samplerDescriptorBufferAddressSpaceSize, props.maxSamplerDescriptorBufferRange);
+
+    const auto makeCapacity = [&](const VkDeviceSize maximumBytes, const u32 targetBytes, u32& outCapacityBytes) -> bool{
+        const VkDeviceSize cappedBytes = Min<VkDeviceSize>(maximumBytes, targetBytes);
+        const VkDeviceSize alignedBytes = cappedBytes - (cappedBytes % offsetAlignment);
+        if(alignedBytes == 0u)
+            return false;
+        outCapacityBytes = static_cast<u32>(alignedBytes);
+        return true;
+    };
 
     u32 resourceCapacityBytes = 0;
     u32 samplerCapacityBytes = 0;
     if(
-        !AlignUpU32Checked(Min(resourceMaxBytes, s_TargetResourceSegmentBytes), offsetAlignment, resourceCapacityBytes)
-        || !AlignUpU32Checked(Min(samplerMaxBytes, s_TargetSamplerSegmentBytes), offsetAlignment, samplerCapacityBytes)
+        !makeCapacity(resourceMaxBytes, s_TargetResourceSegmentBytes, resourceCapacityBytes)
+        || !makeCapacity(samplerMaxBytes, s_TargetSamplerSegmentBytes, samplerCapacityBytes)
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer requested capacity overflows 32-bit segment offsets."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer properties do not allow aligned global segments."));
         return false;
     }
 
-    if(resourceCapacityBytes == 0u || samplerCapacityBytes == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer properties do not allow creating usable global segments."));
+    const VkDeviceSize totalCapacityBytes = static_cast<VkDeviceSize>(resourceCapacityBytes) + samplerCapacityBytes;
+    if(totalCapacityBytes > props.descriptorBufferAddressSpaceSize){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer global address space {} cannot hold the requested {} bytes of resource and sampler segments.")
+            , props.descriptorBufferAddressSpaceSize
+            , totalCapacityBytes
+        );
         return false;
     }
 
@@ -860,30 +925,57 @@ u32 DescriptorBufferManager::getDescriptorSize(const VkDescriptorType descriptor
     return size > UINT32_MAX ? 0u : static_cast<u32>(size);
 }
 
-u32 DescriptorBufferManager::getDescriptorStride(const VkDescriptorType descriptorType)const{
-    const u32 descriptorSize = getDescriptorSize(descriptorType);
-    if(descriptorSize == 0)
-        return 0;
-
-    // Descriptors are tightly packed at descriptorBufferOffsetAlignment; the stride is the size rounded up to that
-    // alignment (matching how vkCmdSetDescriptorBufferOffsetsEXT addresses each descriptor array element).
-    const VkDeviceSize alignment = m_context.descriptorBufferProperties.descriptorBufferOffsetAlignment;
-    const VkDeviceSize stride = (descriptorSize + alignment - 1u) & ~(alignment - 1u);
-    return stride > UINT32_MAX ? 0u : static_cast<u32>(stride);
+u32 DescriptorBufferManager::getOffsetAlignmentBytes()const{
+    return VulkanDetail::GetDescriptorBufferOffsetAlignmentBytes(m_context);
 }
 
 DescriptorBufferSegment DescriptorBufferManager::allocate(const DescriptorBufferSegmentKind::Enum kind, const u32 sizeBytes, const u32 alignmentBytes){
     DescriptorBufferSegment result{};
-    if(!m_enabled || kind == DescriptorBufferSegmentKind::None || sizeBytes == 0)
+    if(!m_enabled || sizeBytes == 0)
         return result;
+    if(kind != DescriptorBufferSegmentKind::Resource && kind != DescriptorBufferSegmentKind::Sampler){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer allocation rejected: invalid segment kind {}."), static_cast<u32>(kind));
+        return result;
+    }
+
+    const u32 requiredAlignmentBytes = getOffsetAlignmentBytes();
+    if(alignmentBytes == 0u || (alignmentBytes % requiredAlignmentBytes) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer allocation rejected: alignment {} is not a non-zero multiple of required alignment {}.")
+            , alignmentBytes
+            , requiredAlignmentBytes
+        );
+        return result;
+    }
 
     SegmentStorage& segment = kind == DescriptorBufferSegmentKind::Sampler ? m_samplerSegment : m_resourceSegment;
     auto clearAllocation = [&](const DescriptorBufferSegment& allocation){
         if(allocation.valid() && segment.mappedMemory)
             NWB_MEMSET(static_cast<u8*>(segment.mappedMemory) + allocation.offsetBytes, 0, allocation.sizeBytes);
     };
+    auto finishAllocation = [&](const u32 offsetBytes) -> DescriptorBufferSegment{
+        result.kind = kind;
+        result.offsetBytes = offsetBytes;
+        result.sizeBytes = sizeBytes;
+        result.allocationSerial = segment.nextAllocationSerial++;
+        clearAllocation(result);
+        // Keep live ranges ordered by byte offset. writeDescriptor() can then locate the only possible owner with a
+        // binary search instead of walking every persistent binding-set block on every descriptor update.
+        usize insertIndex = 0u;
+        while(
+            insertIndex < segment.liveAllocations.size()
+            && segment.liveAllocations[insertIndex].offsetBytes < result.offsetBytes
+        )
+            ++insertIndex;
+        segment.liveAllocations.insert(segment.liveAllocations.begin() + insertIndex, result);
+        return result;
+    };
 
     ScopedLock lock(segment.mutex);
+
+    if(segment.nextAllocationSerial == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer allocation rejected: allocation serial space is exhausted."));
+        return result;
+    }
 
     for(usize i = 0; i < segment.freeRanges.size(); ++i){
         FreeRange range = segment.freeRanges[i];
@@ -918,11 +1010,7 @@ DescriptorBufferSegment DescriptorBufferManager::allocate(const DescriptorBuffer
             segment.freeRanges.erase(segment.freeRanges.begin() + i);
         }
 
-        result.kind = kind;
-        result.offsetBytes = alignedOffset;
-        result.sizeBytes = sizeBytes;
-        clearAllocation(result);
-        return result;
+        return finishAllocation(alignedOffset);
     }
 
     u32 alignedOffset = 0;
@@ -939,20 +1027,51 @@ DescriptorBufferSegment DescriptorBufferManager::allocate(const DescriptorBuffer
     }
 
     segment.writableOffsetBytes = alignedOffset + sizeBytes;
-    result.kind = kind;
-    result.offsetBytes = alignedOffset;
-    result.sizeBytes = sizeBytes;
-    clearAllocation(result);
-    return result;
+    return finishAllocation(alignedOffset);
 }
 
 void DescriptorBufferManager::free(const DescriptorBufferSegment& segment){
-    if(!segment.valid())
+    if(!m_enabled || segment.sizeBytes == 0u)
         return;
+    if(segment.kind != DescriptorBufferSegmentKind::Resource && segment.kind != DescriptorBufferSegmentKind::Sampler){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: invalid segment kind {}."), static_cast<u32>(segment.kind));
+        return;
+    }
+    if(segment.allocationSerial == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: allocation serial is invalid."));
+        return;
+    }
 
     SegmentStorage& storage = segment.kind == DescriptorBufferSegmentKind::Sampler ? m_samplerSegment : m_resourceSegment;
 
     ScopedLock lock(storage.mutex);
+
+    if(
+        segment.offsetBytes > storage.capacityBytes
+        || segment.sizeBytes > storage.capacityBytes - segment.offsetBytes
+        || segment.offsetBytes > storage.writableOffsetBytes
+        || segment.sizeBytes > storage.writableOffsetBytes - segment.offsetBytes
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: range {} + {} is outside the live segment."), segment.offsetBytes, segment.sizeBytes);
+        return;
+    }
+
+    usize allocationIndex = 0u;
+    while(
+        allocationIndex < storage.liveAllocations.size()
+        && storage.liveAllocations[allocationIndex].offsetBytes < segment.offsetBytes
+    )
+        ++allocationIndex;
+    if(
+        allocationIndex == storage.liveAllocations.size()
+        || storage.liveAllocations[allocationIndex].kind != segment.kind
+        || storage.liveAllocations[allocationIndex].offsetBytes != segment.offsetBytes
+        || storage.liveAllocations[allocationIndex].sizeBytes != segment.sizeBytes
+        || storage.liveAllocations[allocationIndex].allocationSerial != segment.allocationSerial
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: range {} + {} is not a live allocation."), segment.offsetBytes, segment.sizeBytes);
+        return;
+    }
 
     const auto rangeEnd = [](const FreeRange& range, u32& outEnd) -> bool{
         if(range.sizeBytes > UINT32_MAX - range.offsetBytes)
@@ -962,6 +1081,21 @@ void DescriptorBufferManager::free(const DescriptorBufferSegment& segment){
     };
 
     FreeRange freedRange{ segment.offsetBytes, segment.sizeBytes };
+    for(const FreeRange& range : storage.freeRanges){
+        u32 rangeEndBytes = 0u;
+        if(
+            !rangeEnd(range, rangeEndBytes)
+            || (
+                freedRange.offsetBytes < rangeEndBytes
+                && range.offsetBytes < freedRange.offsetBytes + freedRange.sizeBytes
+            )
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: range {} + {} overlaps a free range."), segment.offsetBytes, segment.sizeBytes);
+            return;
+        }
+    }
+
+    storage.liveAllocations.erase(storage.liveAllocations.begin() + allocationIndex);
     usize insertIndex = 0u;
     while(insertIndex < storage.freeRanges.size() && storage.freeRanges[insertIndex].offsetBytes < freedRange.offsetBytes)
         ++insertIndex;
@@ -991,17 +1125,41 @@ void DescriptorBufferManager::free(const DescriptorBufferSegment& segment){
         mergeAdjacentAt(insertIndex - 1u);
 }
 
-bool DescriptorBufferManager::writeDescriptor(const BindingSetItem& item, const u32 dstOffsetBytes, const VkDescriptorType descriptorType){
+bool DescriptorBufferManager::writeDescriptor(
+    const BindingSetItem& item,
+    const DescriptorBufferSegment& allocation,
+    const u32 dstOffsetBytes,
+    const VkDescriptorType descriptorType
+){
     if(!m_enabled)
         return false;
+    if(!allocation.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: allocation is invalid."));
+        return false;
+    }
+    if(
+        !VulkanDetail::IsSupportedDescriptorBindingType(item.type)
+        || VulkanDetail::ConvertDescriptorType(item.type) != descriptorType
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: resource type {} does not match descriptor type {}.")
+            , static_cast<u32>(item.type)
+            , static_cast<u32>(descriptorType)
+        );
+        return false;
+    }
 
     // Sampler is the one type that lives in the separate sampler segment (RADV requires samplers in their own
     // descriptor buffer binding); every other type writes into the resource segment.
     const bool isSampler = (descriptorType == VK_DESCRIPTOR_TYPE_SAMPLER);
-    SegmentStorage& segment = isSampler ? m_samplerSegment : m_resourceSegment;
-    auto* dstBytes = static_cast<u8*>(segment.mappedMemory);
-    if(!dstBytes)
+    const DescriptorBufferSegmentKind::Enum expectedKind = isSampler
+        ? DescriptorBufferSegmentKind::Sampler
+        : DescriptorBufferSegmentKind::Resource
+    ;
+    if(allocation.kind != expectedKind){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: allocation has the wrong segment kind."));
         return false;
+    }
+    SegmentStorage& storage = isSampler ? m_samplerSegment : m_resourceSegment;
 
     const u32 descriptorSize = getDescriptorSize(descriptorType);
     if(descriptorSize == 0){
@@ -1012,10 +1170,54 @@ bool DescriptorBufferManager::writeDescriptor(const BindingSetItem& item, const 
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: resource handle is null."));
         return false;
     }
-    if(dstOffsetBytes > segment.capacityBytes || descriptorSize > segment.capacityBytes - dstOffsetBytes){
+    if(dstOffsetBytes < allocation.offsetBytes){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: offset {} precedes its allocation."), dstOffsetBytes);
+        return false;
+    }
+    const u32 allocationRelativeOffsetBytes = dstOffsetBytes - allocation.offsetBytes;
+    if(
+        allocationRelativeOffsetBytes > allocation.sizeBytes
+        || descriptorSize > allocation.sizeBytes - allocationRelativeOffsetBytes
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: offset {} + size {} exceeds its allocation."), dstOffsetBytes, descriptorSize);
+        return false;
+    }
+
+    ScopedLock lock(storage.mutex);
+
+    auto* dstBytes = static_cast<u8*>(storage.mappedMemory);
+    if(!dstBytes)
+        return false;
+    if(dstOffsetBytes > storage.capacityBytes || descriptorSize > storage.capacityBytes - dstOffsetBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: offset {} + size {} exceeds segment capacity {}.")
-            , dstOffsetBytes, descriptorSize, segment.capacityBytes
+            , dstOffsetBytes, descriptorSize, storage.capacityBytes
         );
+        return false;
+    }
+    // liveAllocations stays ordered by offset, so only the range immediately preceding dstOffsetBytes can own the
+    // requested descriptor bytes. Match its full allocation identity, not just its byte range, so a stale segment
+    // cannot target a newly recycled allocation at the same offset.
+    usize first = 0u;
+    usize last = storage.liveAllocations.size();
+    while(first < last){
+        const usize middle = first + (last - first) / 2u;
+        if(storage.liveAllocations[middle].offsetBytes <= dstOffsetBytes)
+            first = middle + 1u;
+        else
+            last = middle;
+    }
+
+    bool ownsLiveAllocation = false;
+    if(first > 0u){
+        const DescriptorBufferSegment& liveAllocation = storage.liveAllocations[first - 1u];
+        ownsLiveAllocation = liveAllocation.kind == allocation.kind
+            && liveAllocation.offsetBytes == allocation.offsetBytes
+            && liveAllocation.sizeBytes == allocation.sizeBytes
+            && liveAllocation.allocationSerial == allocation.allocationSerial
+        ;
+    }
+    if(!ownsLiveAllocation){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: allocation is not live for offset {}."), dstOffsetBytes);
         return false;
     }
 
@@ -1036,8 +1238,13 @@ bool DescriptorBufferManager::writeDescriptor(const BindingSetItem& item, const 
         BufferRange range;
         if(!VulkanDetail::ResolveDescriptorBufferRange(item, *buffer, range))
             return false;
+        const VkDeviceAddress bufferAddress = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress());
+        if(bufferAddress == 0u || range.byteOffset > UINT64_MAX - bufferAddress){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: buffer has no valid device address."));
+            return false;
+        }
         addressInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT;
-        addressInfo.address = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress()) + range.byteOffset;
+        addressInfo.address = bufferAddress + range.byteOffset;
         addressInfo.range = range.byteSize;
         getInfo.data.pStorageBuffer = &addressInfo;
         getInfo.data.pUniformBuffer = &addressInfo;
@@ -1053,12 +1260,17 @@ bool DescriptorBufferManager::writeDescriptor(const BindingSetItem& item, const 
             BufferRange range;
             if(!VulkanDetail::ResolveDescriptorBufferRange(item, *buffer, range))
                 return false;
+            const VkDeviceAddress bufferAddress = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress());
+            if(bufferAddress == 0u || range.byteOffset > UINT64_MAX - bufferAddress){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: typed buffer has no valid device address."));
+                return false;
+            }
             const Format::Enum viewFormat = item.format != Format::UNKNOWN ? item.format : bufferDesc.format;
             const VkFormat vkFormat = ConvertFormat(viewFormat);
             if(vkFormat == VK_FORMAT_UNDEFINED)
                 return false;
             addressInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT;
-            addressInfo.address = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress()) + range.byteOffset;
+            addressInfo.address = bufferAddress + range.byteOffset;
             addressInfo.range = range.byteSize;
             addressInfo.format = vkFormat;
             getInfo.data.pUniformTexelBuffer = &addressInfo;
@@ -1083,6 +1295,8 @@ bool DescriptorBufferManager::writeDescriptor(const BindingSetItem& item, const 
             if(!sampler)
                 return false;
             samplerHandle = sampler->m_sampler;
+            if(samplerHandle == VK_NULL_HANDLE)
+                return false;
             getInfo.data.pSampler = &samplerHandle;
             break;
         }
@@ -1093,6 +1307,8 @@ bool DescriptorBufferManager::writeDescriptor(const BindingSetItem& item, const 
             if(!as)
                 return false;
             accelStructAddress = static_cast<VkDeviceAddress>(as->getDeviceAddress());
+            if(accelStructAddress == 0u)
+                return false;
             getInfo.data.accelerationStructure = accelStructAddress;
             break;
         }
@@ -1167,6 +1383,7 @@ void DescriptorBufferManager::shutdownSegment(SegmentStorage& segment){
     segment.writableOffsetBytes = 0;
     segment.bindingInfo = {};
     segment.freeRanges.clear();
+    segment.liveAllocations.clear();
 }
 
 
@@ -1303,6 +1520,17 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     const u32 pushConstantByteSize = VulkanDetail::GetPushConstantByteSize(desc);
     layout->m_pushConstantByteSize = pushConstantByteSize;
 
+    DescriptorBufferSegmentKind::Enum descriptorBufferSegmentKind = DescriptorBufferSegmentKind::None;
+    bool descriptorBufferHasDescriptors = false;
+    const bool useDescriptorBuffer = desc.useDescriptorBuffer
+        && VulkanDetail::IsDescriptorBufferBackendReady(m_context)
+        && VulkanDetail::TryResolveDescriptorBufferLayout(
+            desc,
+            descriptorBufferSegmentKind,
+            descriptorBufferHasDescriptors
+        )
+    ;
+
     auto layoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
     layoutInfo.bindingCount = static_cast<u32>(bindings.size());
     layoutInfo.pBindings = bindings.data();
@@ -1310,7 +1538,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     // Backend C: descriptor-buffer layouts must set this create flag. Classic (Backend A) layouts leave it clear; the
     // two are mutually exclusive on the descriptor-set-layout object, so a descriptor-buffer layout can only ever be
     // consumed through the descriptor-buffer command bind path.
-    if(desc.useDescriptorBuffer && m_context.extensions.EXT_descriptor_buffer){
+    if(useDescriptorBuffer){
         layoutInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     }
 
@@ -1337,64 +1565,47 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
         return nullptr;
     }
 
-    // Backend C (VK_EXT_descriptor_buffer): when the layout opts in, query the driver for the set block's total size
-    // and each binding's offset within it, and record the single segment the block lives in. Push constants are still
-    // carried by the pipeline layout, not the descriptor buffer, so they are allowed alongside descriptor-buffer
-    // bindings. A set that mixes a sampler with resource descriptors is NOT segment-coherent (a descriptor-buffer set
-    // block lives in exactly one segment) and downgrades to non-compatible; an unknown/unsupported type does too.
-    // A zero-binding layout is instead a compatible gap set: it needs no descriptor block. On downgrade the caller's
-    // opt-in is a silent no-op and the classic descriptor-set path serves the layout.
-    if(desc.useDescriptorBuffer && m_context.extensions.EXT_descriptor_buffer && m_context.descriptorBufferManager && m_context.descriptorBufferManager->isEnabled() && !layout->m_descriptorSetLayouts.empty()){
-        const VkDescriptorSetLayout setLayout = layout->m_descriptorSetLayouts[0];
-        const DescriptorBufferSegmentKind::Enum segmentKind = VulkanDetail::ResolveDescriptorBufferSegmentKind(desc);
-        bool hasDescriptors = false;
-        for(const auto& item : desc.bindings){
-            if(item.type != ResourceType::PushConstants && item.type != ResourceType::None){
-                hasDescriptors = true;
-                break;
-            }
-        }
-        // A zero-binding descriptor-buffer layout is a valid pipeline gap set. It carries no block allocation and
-        // is selected with the harmless zero offset when a caller supplies a null placeholder in the set sequence.
-        bool compatible = !hasDescriptors || (segmentKind != DescriptorBufferSegmentKind::None);
+    // Backend C (VK_EXT_descriptor_buffer): the preflight above selected the descriptor-buffer create flag only for
+    // an eligible, segment-coherent layout. Once that flag is set, a failed driver query is fatal for this layout --
+    // it cannot be reinterpreted as a classic descriptor-set layout after creation. Push-only layouts are valid
+    // descriptor-buffer gap sets and intentionally retain a zero block size / None segment kind.
+    if(useDescriptorBuffer){
+        layout->m_descriptorBufferCompatible = true;
+        if(descriptorBufferHasDescriptors){
+            NWB_ASSERT(descriptorBufferSegmentKind != DescriptorBufferSegmentKind::None);
 
-        if(compatible && hasDescriptors){
-            // Confirm every non-push-constant binding is a type the path can serve.
+            const VkDescriptorSetLayout descriptorSetLayout = layout->m_descriptorSetLayouts[0];
+            VkDeviceSize setSizeBytes = 0;
+            vkGetDescriptorSetLayoutSizeEXT(m_context.device, descriptorSetLayout, &setSizeBytes);
+            if(setSizeBytes == 0u || setSizeBytes > UINT32_MAX){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create binding layout: descriptor-buffer set size is invalid."));
+                DestroyArenaObject(m_context.objectArena, layout);
+                return nullptr;
+            }
+
+            layout->m_descriptorBufferBindingOffsets.reserve(desc.bindings.size());
             for(const auto& item : desc.bindings){
                 if(item.type == ResourceType::PushConstants || item.type == ResourceType::None)
                     continue;
-                if(!VulkanDetail::IsDescriptorBufferCompatibleType(item.type)){
-                    compatible = false;
-                    break;
+
+                VkDeviceSize bindingOffsetBytes = 0;
+                vkGetDescriptorSetLayoutBindingOffsetEXT(m_context.device, descriptorSetLayout, item.slot, &bindingOffsetBytes);
+                if(!VulkanDetail::ValidateDescriptorBufferBindingFootprint(
+                    *m_context.descriptorBufferManager,
+                    VulkanDetail::ConvertDescriptorType(item.type),
+                    item.getArraySize(),
+                    setSizeBytes,
+                    bindingOffsetBytes,
+                    item.slot,
+                    NWB_TEXT("binding layout")
+                )){
+                    DestroyArenaObject(m_context.objectArena, layout);
+                    return nullptr;
                 }
+                layout->m_descriptorBufferBindingOffsets.insert_or_assign(item.slot, static_cast<u32>(bindingOffsetBytes));
             }
-        }
-
-        if(compatible && hasDescriptors){
-            VkDeviceSize setSizeBytes = 0;
-            vkGetDescriptorSetLayoutSizeEXT(m_context.device, setLayout, &setSizeBytes);
-            if(setSizeBytes == 0 || setSizeBytes > UINT32_MAX)
-                compatible = false;
-
-            if(compatible){
-                layout->m_descriptorBufferBindingOffsets.reserve(desc.bindings.size());
-                for(const auto& item : desc.bindings){
-                    if(item.type == ResourceType::PushConstants || item.type == ResourceType::None)
-                        continue;
-                    VkDeviceSize bindingOffsetBytes = 0;
-                    vkGetDescriptorSetLayoutBindingOffsetEXT(m_context.device, setLayout, item.slot, &bindingOffsetBytes);
-                    layout->m_descriptorBufferBindingOffsets.insert_or_assign(item.slot, static_cast<u32>(bindingOffsetBytes));
-                }
-                layout->m_descriptorBufferSetSizeBytes = static_cast<u32>(setSizeBytes);
-                layout->m_descriptorBufferSegmentKind = segmentKind;
-            }
-        }
-
-        layout->m_descriptorBufferCompatible = compatible;
-        if(!layout->m_descriptorBufferCompatible){
-            layout->m_descriptorBufferSetSizeBytes = 0;
-            layout->m_descriptorBufferSegmentKind = DescriptorBufferSegmentKind::None;
-            layout->m_descriptorBufferBindingOffsets.clear();
+            layout->m_descriptorBufferSetSizeBytes = static_cast<u32>(setSizeBytes);
+            layout->m_descriptorBufferSegmentKind = descriptorBufferSegmentKind;
         }
     }
 
@@ -1455,8 +1666,13 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
         bindingFlags.push_back(0);
     }
 
+    DescriptorBufferSegmentKind::Enum descriptorBufferSegmentKind = DescriptorBufferSegmentKind::None;
+    const bool useDescriptorBuffer = desc.useDescriptorBuffer
+        && VulkanDetail::IsDescriptorBufferBackendReady(m_context)
+        && VulkanDetail::TryResolveBindlessDescriptorBufferLayout(desc, descriptorBufferSegmentKind)
+    ;
+
     auto bindingFlagsInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutBindingFlagsCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO);
-    const bool useDescriptorBuffer = desc.useDescriptorBuffer && m_context.extensions.EXT_descriptor_buffer;
     if(!useDescriptorBuffer){
         for(VkDescriptorBindingFlags& flags : bindingFlags)
             flags = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
@@ -1488,50 +1704,42 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     }
     layout->m_descriptorSetLayouts.push_back(setLayout);
 
-    // Backend C: when a bindless layout opts in on an extension-capable device, query the driver for the set block's
-    // total size and each register-space's byte offset within it, and record the single segment the block lives in.
-    // This is the bindless mirror of the classic createBindingLayout path -- the global descriptor heap sets this on
-    // its resource/sampler layouts so the heap-coupled tail pipelines can embed descriptor-buffer layouts at sets 8/9.
-    // A non-segment-coherent bindless set (a register-space mix) downgrades to the classic path; the opt-in is then a
-    // silent no-op and the classic descriptor-table path serves the heap unchanged.
-    if(desc.useDescriptorBuffer && m_context.extensions.EXT_descriptor_buffer && m_context.descriptorBufferManager && m_context.descriptorBufferManager->isEnabled()){
-        const VkDescriptorSetLayout setLayoutForQuery = layout->m_descriptorSetLayouts[0];
-        const DescriptorBufferSegmentKind::Enum segmentKind = VulkanDetail::ResolveBindlessDescriptorBufferSegmentKind(desc);
-        bool compatible = (segmentKind != DescriptorBufferSegmentKind::None);
+    // Backend C bindless mirror: the preflight selects a descriptor-buffer layout only when every register space can
+    // live in one segment. A failed size/offset query cannot fall back after the flagged layout exists, so reject it
+    // rather than returning a layout that a classic descriptor table cannot legally allocate from.
+    if(useDescriptorBuffer){
+        NWB_ASSERT(descriptorBufferSegmentKind != DescriptorBufferSegmentKind::None);
 
-        if(compatible){
-            for(const auto& item : desc.registerSpaces){
-                if(!VulkanDetail::IsDescriptorBufferCompatibleType(item.type)){
-                    compatible = false;
-                    break;
-                }
+        const VkDescriptorSetLayout descriptorSetLayout = layout->m_descriptorSetLayouts[0];
+        VkDeviceSize setSizeBytes = 0;
+        vkGetDescriptorSetLayoutSizeEXT(m_context.device, descriptorSetLayout, &setSizeBytes);
+        if(setSizeBytes == 0u || setSizeBytes > UINT32_MAX){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: descriptor-buffer set size is invalid."));
+            DestroyArenaObject(m_context.objectArena, layout);
+            return nullptr;
+        }
+
+        layout->m_descriptorBufferBindingOffsets.reserve(desc.registerSpaces.size());
+        for(const auto& item : desc.registerSpaces){
+            VkDeviceSize bindingOffsetBytes = 0;
+            vkGetDescriptorSetLayoutBindingOffsetEXT(m_context.device, descriptorSetLayout, item.slot, &bindingOffsetBytes);
+            if(!VulkanDetail::ValidateDescriptorBufferBindingFootprint(
+                *m_context.descriptorBufferManager,
+                VulkanDetail::ConvertDescriptorType(item.type),
+                maxCapacity,
+                setSizeBytes,
+                bindingOffsetBytes,
+                item.slot,
+                NWB_TEXT("bindless layout")
+            )){
+                DestroyArenaObject(m_context.objectArena, layout);
+                return nullptr;
             }
+            layout->m_descriptorBufferBindingOffsets.insert_or_assign(item.slot, static_cast<u32>(bindingOffsetBytes));
         }
-
-        if(compatible){
-            VkDeviceSize setSizeBytes = 0;
-            vkGetDescriptorSetLayoutSizeEXT(m_context.device, setLayoutForQuery, &setSizeBytes);
-            if(setSizeBytes == 0 || setSizeBytes > UINT32_MAX)
-                compatible = false;
-
-            if(compatible){
-                layout->m_descriptorBufferBindingOffsets.reserve(desc.registerSpaces.size());
-                for(const auto& item : desc.registerSpaces){
-                    VkDeviceSize bindingOffsetBytes = 0;
-                    vkGetDescriptorSetLayoutBindingOffsetEXT(m_context.device, setLayoutForQuery, item.slot, &bindingOffsetBytes);
-                    layout->m_descriptorBufferBindingOffsets.insert_or_assign(item.slot, static_cast<u32>(bindingOffsetBytes));
-                }
-                layout->m_descriptorBufferSetSizeBytes = static_cast<u32>(setSizeBytes);
-                layout->m_descriptorBufferSegmentKind = segmentKind;
-            }
-        }
-
-        layout->m_descriptorBufferCompatible = compatible;
-        if(!layout->m_descriptorBufferCompatible){
-            layout->m_descriptorBufferSetSizeBytes = 0;
-            layout->m_descriptorBufferSegmentKind = DescriptorBufferSegmentKind::None;
-            layout->m_descriptorBufferBindingOffsets.clear();
-        }
+        layout->m_descriptorBufferSetSizeBytes = static_cast<u32>(setSizeBytes);
+        layout->m_descriptorBufferSegmentKind = descriptorBufferSegmentKind;
+        layout->m_descriptorBufferCompatible = true;
     }
 
     if(
@@ -2016,47 +2224,87 @@ BindingSetHandle Device::createBindingSet(const BindingSetDesc& desc, const Bind
     );
 
     // Backend C: carve ONE contiguous block for this set's descriptor buffer (sized by the layout's driver-queried
-    // set size), then write each non-push-constant binding's descriptor(s) at blockOffset + bindingOffset +
-    // arrayElement*stride. A single binding set's block always lives in one segment (resource OR sampler); the layout
-    // is only buffer-compatible when segment-coherent, so a single carve suffices. The carve is freed in the
-    // destructor through the manager; the writes are plain host memcpy into the mapped segment (vkGetDescriptorEXT).
-    if(layout->m_descriptorBufferCompatible && m_context.descriptorBufferManager){
+    // set size), then write each non-push-constant binding at blockOffset + bindingOffset +
+    // arrayElement*descriptorSize. A single binding set's block always lives in one segment (resource OR sampler);
+    // the layout is only buffer-compatible when segment-coherent, so a single carve suffices. The carve is freed in
+    // the destructor through the manager; the writes are plain host writes through vkGetDescriptorEXT.
+    if(layout->m_descriptorBufferCompatible){
+        if(!m_context.descriptorBufferManager || !m_context.descriptorBufferManager->isEnabled()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor-buffer binding set: descriptor buffer manager is unavailable."));
+            DestroyArenaObject(m_context.objectArena, bindingSet);
+            return nullptr;
+        }
+
         const u32 setSizeBytes = layout->m_descriptorBufferSetSizeBytes;
         const DescriptorBufferSegmentKind::Enum segmentKind = layout->m_descriptorBufferSegmentKind;
-        if(setSizeBytes == 0 || segmentKind == DescriptorBufferSegmentKind::None){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate descriptor buffer block: layout has no set size"));
-            DestroyArenaObject(m_context.objectArena, bindingSet);
-            return nullptr;
-        }
-
-        const VkDeviceSize offsetAlignment = m_context.descriptorBufferProperties.descriptorBufferOffsetAlignment;
-        const u32 alignmentBytes = (offsetAlignment == 0 || offsetAlignment > UINT32_MAX) ? 1u : static_cast<u32>(offsetAlignment);
-        const DescriptorBufferSegment block = m_context.descriptorBufferManager->allocate(segmentKind, setSizeBytes, alignmentBytes);
-        if(!block.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate descriptor buffer block ({} bytes)"), setSizeBytes);
-            DestroyArenaObject(m_context.objectArena, bindingSet);
-            return nullptr;
-        }
-        bindingSet->m_descriptorBufferAllocations.push_back(block);
-
         const auto& bindingOffsets = layout->getDescriptorBufferBindingOffsets();
-        for(const auto& item : desc.bindings){
-            if(item.type == ResourceType::PushConstants || item.type == ResourceType::None)
-                continue;
-            if(!item.resourceHandle)
-                continue;
-
-            const auto offsetIt = bindingOffsets.find(item.slot);
-            if(offsetIt == bindingOffsets.end()){
-                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Descriptor buffer binding slot {} has no layout offset; skipped"), item.slot);
-                continue;
+        if(setSizeBytes == 0u){
+            // Push-only / zero-binding layouts are valid descriptor-buffer gap sets. They intentionally carry no
+            // allocation and bind through the harmless zero offset in bindDescriptorBufferState().
+            if(segmentKind != DescriptorBufferSegmentKind::None || !bindingOffsets.empty()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor-buffer binding set: zero-sized layout has descriptor metadata."));
+                DestroyArenaObject(m_context.objectArena, bindingSet);
+                return nullptr;
             }
+        }
+        else if(segmentKind == DescriptorBufferSegmentKind::None){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate descriptor buffer block: layout has no segment kind."));
+            DestroyArenaObject(m_context.objectArena, bindingSet);
+            return nullptr;
+        }
 
-            const VkDescriptorType descriptorType = VulkanDetail::ConvertDescriptorType(item.type);
-            const u32 descriptorStride = m_context.descriptorBufferManager->getDescriptorStride(descriptorType);
-            const u32 bindingBaseOffset = block.offsetBytes + offsetIt->second + item.arrayElement * descriptorStride;
-            if(!m_context.descriptorBufferManager->writeDescriptor(item, bindingBaseOffset, descriptorType))
-                NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to write descriptor buffer entry for slot {}"), item.slot);
+        if(setSizeBytes > 0u){
+            const u32 alignmentBytes = m_context.descriptorBufferManager->getOffsetAlignmentBytes();
+            const DescriptorBufferSegment block = m_context.descriptorBufferManager->allocate(segmentKind, setSizeBytes, alignmentBytes);
+            if(!block.valid()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate descriptor buffer block ({} bytes)"), setSizeBytes);
+                DestroyArenaObject(m_context.objectArena, bindingSet);
+                return nullptr;
+            }
+            bindingSet->m_descriptorBufferAllocations.push_back(block);
+
+            for(const auto& item : desc.bindings){
+                if(item.type == ResourceType::PushConstants || item.type == ResourceType::None || !item.resourceHandle)
+                    continue;
+
+                // Match the classic write path: descriptor-buffer writes must agree with the layout's type and array
+                // bounds before their byte address is calculated.
+                const BindingLayoutItem* layoutBinding = VulkanDetail::FindLayoutBinding(layout->m_desc, item.slot, item.type);
+                if(!layoutBinding){
+                    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring descriptor-buffer binding set item for slot {}: layout does not contain resource type {} at that slot")
+                        , item.slot
+                        , static_cast<u32>(item.type)
+                    );
+                    continue;
+                }
+                if(item.arrayElement >= layoutBinding->getArraySize()){
+                    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ignoring descriptor-buffer binding set item for slot {} with out-of-range array element {}"), item.slot, item.arrayElement);
+                    continue;
+                }
+
+                const auto offsetIt = bindingOffsets.find(item.slot);
+                if(offsetIt == bindingOffsets.end()){
+                    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Descriptor buffer binding slot {} has no layout offset; skipped"), item.slot);
+                    continue;
+                }
+
+                const VkDescriptorType descriptorType = VulkanDetail::ConvertDescriptorType(item.type);
+                const u32 descriptorSize = m_context.descriptorBufferManager->getDescriptorSize(descriptorType);
+                const u64 relativeOffsetBytes = static_cast<u64>(offsetIt->second) + static_cast<u64>(item.arrayElement) * descriptorSize;
+                if(
+                    descriptorSize == 0u
+                    || relativeOffsetBytes > block.sizeBytes
+                    || descriptorSize > block.sizeBytes - relativeOffsetBytes
+                    || static_cast<u64>(block.offsetBytes) + relativeOffsetBytes > UINT32_MAX
+                ){
+                    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Descriptor buffer binding slot {} does not fit in its carved block; skipped"), item.slot);
+                    continue;
+                }
+
+                const u32 bindingBaseOffset = static_cast<u32>(static_cast<u64>(block.offsetBytes) + relativeOffsetBytes);
+                if(!m_context.descriptorBufferManager->writeDescriptor(item, block, bindingBaseOffset, descriptorType))
+                    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to write descriptor buffer entry for slot {}"), item.slot);
+            }
         }
     }
 
@@ -2287,6 +2535,34 @@ void CommandList::bindDescriptorBufferHeap(
     if(!m_context.descriptorBufferManager || !m_context.descriptorBufferManager->isEnabled())
         return;
 
+    const DescriptorBufferSegment& resourceBlock = heap.getResourceBufferBlock();
+    const DescriptorBufferSegment& samplerBlock = heap.getSamplerBufferBlock();
+    const DescriptorBufferSegment accelStructBlock = heap.getAccelStructBufferBlock(accelStructHandle);
+    const bool bindAccelStruct = accelStructHandle.valid();
+    if(
+        !resourceBlock.valid()
+        || resourceBlock.kind != DescriptorBufferSegmentKind::Resource
+        || !samplerBlock.valid()
+        || samplerBlock.kind != DescriptorBufferSegmentKind::Sampler
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot bind descriptor-buffer heap: persistent resource or sampler block is invalid."));
+        return;
+    }
+    if(bindAccelStruct && (!accelStructBlock.valid() || accelStructBlock.kind != DescriptorBufferSegmentKind::Resource)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot bind descriptor-buffer TLAS heap handle {}: descriptor block is invalid."), accelStructHandle.value);
+        return;
+    }
+
+    const u32 offsetAlignmentBytes = m_context.descriptorBufferManager->getOffsetAlignmentBytes();
+    if(
+        (resourceBlock.offsetBytes % offsetAlignmentBytes) != 0u
+        || (samplerBlock.offsetBytes % offsetAlignmentBytes) != 0u
+        || (bindAccelStruct && (accelStructBlock.offsetBytes % offsetAlignmentBytes) != 0u)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot bind descriptor-buffer heap: a set block offset is misaligned."));
+        return;
+    }
+
     // Bind both segments once for this command buffer (idempotent with bindDescriptorBufferState's bind; the driver
     // accepts a re-bind at the same addresses). The order (resource=0, sampler=1) matches the manager's indices.
     VkDescriptorBufferBindingInfoEXT bindingInfos[2] = {
@@ -2294,15 +2570,6 @@ void CommandList::bindDescriptorBufferHeap(
         m_context.descriptorBufferManager->getSamplerBindingInfo()
     };
     vkCmdBindDescriptorBuffersEXT(m_currentCmdBuf->m_cmdBuf, 2u, bindingInfos);
-
-    const DescriptorBufferSegment& resourceBlock = heap.getResourceBufferBlock();
-    const DescriptorBufferSegment& samplerBlock = heap.getSamplerBufferBlock();
-    const DescriptorBufferSegment accelStructBlock = heap.getAccelStructBufferBlock(accelStructHandle);
-    const bool bindAccelStruct = accelStructHandle.valid();
-    if(bindAccelStruct && !accelStructBlock.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot bind descriptor-buffer TLAS heap handle {}: descriptor block is invalid."), accelStructHandle.value);
-        return;
-    }
 
     // The heap sets occupy the manager's two segments: resource -> resource segment, sampler -> sampler segment,
     // optional TLAS -> resource segment. They are contiguous at 8/9/10, so one API call selects all required blocks.
@@ -2357,11 +2624,12 @@ void CommandList::bindDescriptorBufferState(const VkPipelineBindPoint bindPoint,
     bufferIndices.reserve(bindings.size());
     offsets.reserve(bindings.size());
 
+    const u32 offsetAlignmentBytes = m_context.descriptorBufferManager->getOffsetAlignmentBytes();
+
     for(usize i = 0; i < bindings.size(); ++i){
         auto* bindingSet = bindings[i];
-        if(!bindingSet || bindingSet->m_descriptorBufferAllocations.empty()){
-            // A null/gap set is not expected on the buffer path (pipelines are wholesale-converted), but guard with
-            // zeros so a contiguous run still records valid indices/offsets against the bound segments.
+        if(!bindingSet){
+            // A null gap is represented by the descriptor-buffer-compatible empty layout and a harmless zero offset.
             bufferIndices.push_back(0u);
             offsets.push_back(0);
             continue;
@@ -2369,13 +2637,31 @@ void CommandList::bindDescriptorBufferState(const VkPipelineBindPoint bindPoint,
 
         const auto* layout = bindingSet->getLayout();
         if(!layout || !layout->isDescriptorBufferCompatible()){
-            bufferIndices.push_back(0u);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot bind descriptor-buffer state: binding set {} is not descriptor-buffer-compatible."), i);
+            return;
+        }
+
+        if(bindingSet->m_descriptorBufferAllocations.empty()){
+            if(layout->getDescriptorBufferSetSizeBytes() != 0u){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot bind descriptor-buffer state: binding set {} has no carved descriptor block."), i);
+                return;
+            }
+            bufferIndices.push_back(m_context.descriptorBufferManager->getResourceBufferIndex());
             offsets.push_back(0);
             continue;
         }
 
         const DescriptorBufferSegment& block = bindingSet->m_descriptorBufferAllocations[0];
-        const u32 bufferIndex = (layout->getDescriptorBufferSegmentKind() == DescriptorBufferSegmentKind::Sampler)
+        const DescriptorBufferSegmentKind::Enum segmentKind = layout->getDescriptorBufferSegmentKind();
+        if(
+            !block.valid()
+            || block.kind != segmentKind
+            || (block.offsetBytes % offsetAlignmentBytes) != 0u
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot bind descriptor-buffer state: binding set {} has an invalid or misaligned descriptor block."), i);
+            return;
+        }
+        const u32 bufferIndex = segmentKind == DescriptorBufferSegmentKind::Sampler
             ? m_context.descriptorBufferManager->getSamplerBufferIndex()
             : m_context.descriptorBufferManager->getResourceBufferIndex();
         bufferIndices.push_back(bufferIndex);

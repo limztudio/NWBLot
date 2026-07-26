@@ -1,14 +1,13 @@
-// Backend C round-trip proof — VK_EXT_descriptor_buffer (Phase 3, step 1c).
+// Backend C round-trip proof — VK_EXT_descriptor_buffer.
 //
-// This is the dark-manager hardware proof the GpuDescriptorHeap (Backend A) self-test was for Phase 1: stand up a
-// real headless GPU device and exercise DescriptorBufferManager::allocate / writeDescriptor / free across every
-// descriptor class, asserting the vkGetDescriptorEXT path actually produces descriptor bytes into the HOST-mapped
-// segments and that the free-range sub-allocator is sound.
+// Stand up a real headless GPU device and exercise DescriptorBufferManager::allocate / writeDescriptor / free across
+// every descriptor class, asserting the vkGetDescriptorEXT path actually produces descriptor bytes into the
+// HOST-mapped segments and that the free-range sub-allocator is sound.
 //
-// No pipeline consumes the manager yet; this test is its sole consumer until the Phase-3 binding-layer conversion
-// (steps 2-4) lights it up. The GPU bind step (vkCmdBindDescriptorBuffersEXT / vkCmdSetDescriptorBufferOffsetsEXT)
-// is deliberately not exercised here: CommandList exposes no VkCommandBuffer accessor and the conversion will add
-// that path as production code, not a test-only hook (see .helper policy on production test hooks).
+// Production descriptor-buffer-compatible pipelines consume the manager through CommandList. Alongside allocation,
+// byte encoding, layout, and heap-lifetime invariants, this suite submits a production compute pipeline and validates
+// GPU output written through vkCmdBindDescriptorBuffersEXT / vkCmdSetDescriptorBufferOffsetsEXT. It does so without a
+// test-only command-buffer escape hatch (see .helper policy on production test hooks).
 //
 // GPU-optional host: the suite SKIPS (never fails) when the extension is absent — Backend A remains the
 // portability floor on such runners, so its absence is an environment condition, not a regression.
@@ -73,6 +72,51 @@ using namespace Core;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_descriptor_buffer_submission{
+
+
+// `glslangValidator --stdin -S comp -V --target-env vulkan1.2` from this tiny GLSL program:
+//
+//   layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+//   layout(push_constant) uniform TestPushConstants { uint marker; } pushConstants;
+//   layout(set = 0, binding = 0, std430) buffer Output { uint value; } outputBuffer;
+//   void main() { outputBuffer.value = pushConstants.marker; }
+//
+// Keep this self-contained instead of adding a shader-cook/JIT dependency to a headless backend regression. The
+// device still creates the shader and pipeline through the normal production RHI APIs.
+inline constexpr u32 s_ComputeShaderSpirv[] = {
+    0x07230203u, 0x00010500u, 0x0008000bu, 0x00000017u, 0x00000000u, 0x00020011u, 0x00000001u, 0x0006000bu,
+    0x00000001u, 0x4c534c47u, 0x6474732eu, 0x3035342eu, 0x00000000u, 0x0003000eu, 0x00000000u, 0x00000001u,
+    0x0007000fu, 0x00000005u, 0x00000004u, 0x6e69616du, 0x00000000u, 0x00000009u, 0x0000000eu, 0x00060010u,
+    0x00000004u, 0x00000011u, 0x00000001u, 0x00000001u, 0x00000001u, 0x00030003u, 0x00000002u, 0x000001c2u,
+    0x00040005u, 0x00000004u, 0x6e69616du, 0x00000000u, 0x00040005u, 0x00000007u, 0x7074754fu, 0x00007475u,
+    0x00050006u, 0x00000007u, 0x00000000u, 0x756c6176u, 0x00000065u, 0x00060005u, 0x00000009u, 0x7074756fu,
+    0x75427475u, 0x72656666u, 0x00000000u, 0x00070005u, 0x0000000cu, 0x74736554u, 0x68737550u, 0x736e6f43u,
+    0x746e6174u, 0x00000073u, 0x00050006u, 0x0000000cu, 0x00000000u, 0x6b72616du, 0x00007265u, 0x00060005u,
+    0x0000000eu, 0x68737570u, 0x736e6f43u, 0x746e6174u, 0x00000073u, 0x00030047u, 0x00000007u, 0x00000002u,
+    0x00050048u, 0x00000007u, 0x00000000u, 0x00000023u, 0x00000000u, 0x00040047u, 0x00000009u, 0x00000021u,
+    0x00000000u, 0x00040047u, 0x00000009u, 0x00000022u, 0x00000000u, 0x00030047u, 0x0000000cu, 0x00000002u,
+    0x00050048u, 0x0000000cu, 0x00000000u, 0x00000023u, 0x00000000u, 0x00040047u, 0x00000016u, 0x0000000bu,
+    0x00000019u, 0x00020013u, 0x00000002u, 0x00030021u, 0x00000003u, 0x00000002u, 0x00040015u, 0x00000006u,
+    0x00000020u, 0x00000000u, 0x0003001eu, 0x00000007u, 0x00000006u, 0x00040020u, 0x00000008u, 0x0000000cu,
+    0x00000007u, 0x0004003bu, 0x00000008u, 0x00000009u, 0x0000000cu, 0x00040015u, 0x0000000au, 0x00000020u,
+    0x00000001u, 0x0004002bu, 0x0000000au, 0x0000000bu, 0x00000000u, 0x0003001eu, 0x0000000cu, 0x00000006u,
+    0x00040020u, 0x0000000du, 0x00000009u, 0x0000000cu, 0x0004003bu, 0x0000000du, 0x0000000eu, 0x00000009u,
+    0x00040020u, 0x0000000fu, 0x00000009u, 0x00000006u, 0x00040020u, 0x00000012u, 0x0000000cu, 0x00000006u,
+    0x00040017u, 0x00000014u, 0x00000006u, 0x00000003u, 0x0004002bu, 0x00000006u, 0x00000015u, 0x00000001u,
+    0x0006002cu, 0x00000014u, 0x00000016u, 0x00000015u, 0x00000015u, 0x00000015u, 0x00050036u, 0x00000002u,
+    0x00000004u, 0x00000000u, 0x00000003u, 0x000200f8u, 0x00000005u, 0x00050041u, 0x0000000fu, 0x00000010u,
+    0x0000000eu, 0x0000000bu, 0x0004003du, 0x00000006u, 0x00000011u, 0x00000010u, 0x00050041u, 0x00000012u,
+    0x00000013u, 0x00000009u, 0x0000000bu, 0x0003003eu, 0x00000013u, 0x00000011u, 0x000100fdu, 0x00010038u,
+};
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Brings up a real headless GPU device with the minimum dependency set Graphics requires, mirroring Core::Frame's
 // construction. The device carries both the classic Backend-A descriptor heap and the Backend-C descriptor-buffer
 // manager; createHeadlessDevice() creates no window/swap chain, so this runs on any host with a Vulkan driver.
@@ -120,6 +164,12 @@ private:
 class DescriptorBufferRoundTripTest : public ::testing::Test{
 protected:
     static void SetUpTestSuite(){
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+        // The hardening checks intentionally exercise diagnostic rejection paths.  This fixture owns a worker pool,
+        // so use Google Test's re-exec death-test mode rather than forking a live multi-threaded Vulkan process.
+        GTEST_FLAG_SET(death_test_style, "threadsafe");
+#endif
+
         // The device-creation path emits log messages, and every NWB_LOGGER_* macro fatally asserts a logger is
         // installed (log.h:276). Register the capturing logger before bring-up so failures are recorded rather than
         // crashing the process, then keep it registered for the suite's lifetime.
@@ -189,6 +239,122 @@ TEST_F(DescriptorBufferRoundTripTest, ManagerEnabledAndSegmentsMapped){
 }
 
 
+// End-to-end Backend-C proof: the normal CommandList path must bind two distinct descriptor-buffer blocks, dispatch
+// a production compute pipeline for each, and make each GPU-written value visible to a CPU readback. The two distinct
+// push-constant values make this sensitive to ignored, stale, or swapped vkCmdSetDescriptorBufferOffsetsEXT offsets;
+// descriptor byte generation alone cannot prove that contract.
+TEST_F(DescriptorBufferRoundTripTest, CommandListSubmissionConsumesDistinctDescriptorBufferOffsets){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/submission_desc_arena"};
+    static constexpr Name kShaderName{"tests/descriptor_buffer/submission_compute_shader"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    const auto createOutputBuffer = [&device]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(sizeof(u32))
+                .setCanHaveRawViews(true)
+                .setCpuAccess(CpuAccessMode::Read)
+                .setInitialState(ResourceStates::Common)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto firstOutput = createOutputBuffer();
+    auto secondOutput = createOutputBuffer();
+    ASSERT_TRUE(firstOutput && secondOutput);
+
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc
+        .setVisibility(ShaderType::Compute)
+        .setUseDescriptorBuffer(true)
+        .addItem(BindingLayoutItem::RawBuffer_UAV(0u, 1u))
+        .addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32)))
+    ;
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_TRUE(layout);
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "submission layout did not select Backend C";
+
+    const auto createOutputBindingSet = [&](Buffer* output) {
+        BindingSetDesc setDesc(descArena);
+        setDesc.addItem(BindingSetItem::RawBuffer_UAV(0u, output));
+        return device.createBindingSet(setDesc, layout);
+    };
+
+    // Keep both sets alive through the entire recording/submission. They receive independent carved blocks in the
+    // resource segment, so the second dispatch cannot pass if CommandList reuses the first block's offset.
+    auto firstBindingSet = createOutputBindingSet(firstOutput.get());
+    auto secondBindingSet = createOutputBindingSet(secondOutput.get());
+    ASSERT_TRUE(firstBindingSet && secondBindingSet);
+
+    ShaderDesc shaderDesc(descArena);
+    shaderDesc
+        .setDebugName(kShaderName)
+        .setShaderType(ShaderType::Compute)
+        .setEntryName("main")
+    ;
+    auto shader = device.createShader(
+        shaderDesc,
+        __hidden_descriptor_buffer_submission::s_ComputeShaderSpirv,
+        sizeof(__hidden_descriptor_buffer_submission::s_ComputeShaderSpirv)
+    );
+    ASSERT_TRUE(shader);
+
+    ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(shader)
+        .addBindingLayout(layout)
+    ;
+    auto pipeline = device.createComputePipeline(pipelineDesc);
+    ASSERT_TRUE(pipeline);
+    ASSERT_TRUE(pipeline->m_usesDescriptorBuffer)
+        << "submission pipeline did not carry the descriptor-buffer create flag";
+
+    auto commandList = device.createCommandList();
+    ASSERT_TRUE(commandList);
+    commandList->open();
+
+    static constexpr u32 kFirstMarker = 0x13579bdfu;
+    static constexpr u32 kSecondMarker = 0x2468ace0u;
+
+    ComputeState firstState;
+    firstState
+        .setPipeline(pipeline.get())
+        .addBindingSet(firstBindingSet.get())
+    ;
+    commandList->setComputeState(firstState);
+    commandList->setPushConstants(&kFirstMarker, sizeof(kFirstMarker));
+    commandList->dispatch(1u, 1u, 1u);
+
+    ComputeState secondState;
+    secondState
+        .setPipeline(pipeline.get())
+        .addBindingSet(secondBindingSet.get())
+    ;
+    commandList->setComputeState(secondState);
+    commandList->setPushConstants(&kSecondMarker, sizeof(kSecondMarker));
+    commandList->dispatch(1u, 1u, 1u);
+
+    commandList->close();
+
+    CommandList* commandLists[] = { commandList.get() };
+    EXPECT_NE(device.executeCommandLists(commandLists, 1u), 0u);
+    ASSERT_TRUE(device.waitForIdle());
+
+    const auto expectOutput = [&device](Buffer* output, const u32 expectedValue) {
+        auto* const mapped = static_cast<const u32*>(device.mapBuffer(output, CpuAccessMode::Read));
+        ASSERT_NE(mapped, nullptr);
+        const u32 actualValue = *mapped;
+        device.unmapBuffer(output);
+        EXPECT_EQ(actualValue, expectedValue);
+    };
+    expectOutput(firstOutput.get(), kFirstMarker);
+    expectOutput(secondOutput.get(), kSecondMarker);
+}
+
+
 // Carve one storage-buffer descriptor out of the resource segment and confirm writeDescriptor succeeds via the
 // vkGetDescriptorEXT path. Free returns the range to the free list. Storage buffer is the descriptor class every
 // raytrace pass binds, so it is the most representative round trip.
@@ -206,17 +372,17 @@ TEST_F(DescriptorBufferRoundTripTest, RoundTripsStorageBufferDescriptor){
     );
     ASSERT_NE(storageBuffer.get(), nullptr);
 
-    const u32 stride = mgr.getDescriptorStride(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-    ASSERT_GT(stride, 0u);
+    const u32 descriptorSize = mgr.getDescriptorSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+    ASSERT_GT(descriptorSize, 0u);
 
-    const auto segment = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, stride, stride);
+    const auto segment = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, mgr.getOffsetAlignmentBytes());
     ASSERT_TRUE(segment.valid());
 
     // The authoritative round-trip signal is writeDescriptor's return: a failed vkGetDescriptorEXT returns false and
     // logs at ERROR (the capturing logger would surface it). Byte-level inspection of the mapped segment is private
-    // to the manager; the conversion trusts the return value plus the non-zero-stride gate below.
+    // to the manager; the conversion trusts the return value plus the non-zero-size gate below.
     const BindingSetItem item = BindingSetItem::RawBuffer_UAV(0u, storageBuffer.get());
-    const bool wrote = mgr.writeDescriptor(item, segment.offsetBytes, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+    const bool wrote = mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
     EXPECT_TRUE(wrote);
 
     mgr.free(segment);
@@ -238,14 +404,14 @@ TEST_F(DescriptorBufferRoundTripTest, RoundTripsUniformBufferDescriptor){
     );
     ASSERT_NE(constantBuffer.get(), nullptr);
 
-    const u32 stride = mgr.getDescriptorStride(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    ASSERT_GT(stride, 0u);
+    const u32 descriptorSize = mgr.getDescriptorSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    ASSERT_GT(descriptorSize, 0u);
 
-    const auto segment = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, stride, stride);
+    const auto segment = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, mgr.getOffsetAlignmentBytes());
     ASSERT_TRUE(segment.valid());
 
     const BindingSetItem item = BindingSetItem::ConstantBuffer(0u, constantBuffer.get());
-    const bool wrote = mgr.writeDescriptor(item, segment.offsetBytes, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    const bool wrote = mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     EXPECT_TRUE(wrote);
 
     mgr.free(segment);
@@ -268,14 +434,14 @@ TEST_F(DescriptorBufferRoundTripTest, RoundTripsSampledImageDescriptor){
     );
     ASSERT_NE(texture.get(), nullptr);
 
-    const u32 stride = mgr.getDescriptorStride(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
-    ASSERT_GT(stride, 0u);
+    const u32 descriptorSize = mgr.getDescriptorSize(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+    ASSERT_GT(descriptorSize, 0u);
 
-    const auto segment = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, stride, stride);
+    const auto segment = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, mgr.getOffsetAlignmentBytes());
     ASSERT_TRUE(segment.valid());
 
     const BindingSetItem item = BindingSetItem::Texture_SRV(0u, texture.get());
-    const bool wrote = mgr.writeDescriptor(item, segment.offsetBytes, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+    const bool wrote = mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
     EXPECT_TRUE(wrote);
 
     mgr.free(segment);
@@ -291,15 +457,15 @@ TEST_F(DescriptorBufferRoundTripTest, RoundTripsSamplerDescriptor){
     auto sampler = device.createSampler(SamplerDesc().setAllFilters(true));
     ASSERT_NE(sampler.get(), nullptr);
 
-    const u32 stride = mgr.getDescriptorStride(VK_DESCRIPTOR_TYPE_SAMPLER);
-    ASSERT_GT(stride, 0u);
+    const u32 descriptorSize = mgr.getDescriptorSize(VK_DESCRIPTOR_TYPE_SAMPLER);
+    ASSERT_GT(descriptorSize, 0u);
 
-    const auto segment = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Sampler, stride, stride);
+    const auto segment = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Sampler, descriptorSize, mgr.getOffsetAlignmentBytes());
     ASSERT_TRUE(segment.valid());
     EXPECT_EQ(segment.kind, GraphicsBackend::DescriptorBufferSegmentKind::Sampler);
 
     const BindingSetItem item = BindingSetItem::Sampler(0u, sampler.get());
-    const bool wrote = mgr.writeDescriptor(item, segment.offsetBytes, VK_DESCRIPTOR_TYPE_SAMPLER);
+    const bool wrote = mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_SAMPLER);
     EXPECT_TRUE(wrote);
 
     mgr.free(segment);
@@ -307,20 +473,19 @@ TEST_F(DescriptorBufferRoundTripTest, RoundTripsSamplerDescriptor){
 
 
 // Free-list reuse: allocate a range, free it, allocate the same size again — the second carve must be satisfied from
-// the free list and succeed. This is the sub-allocator correctness check the dark
-// manager needs before live wiring can trust allocate/free churn across frames.
+// the free list and succeed. This proves the sub-allocator remains safe under live allocate/free churn across frames.
 TEST_F(DescriptorBufferRoundTripTest, FreeListReusesFreedRange){
     auto& mgr = manager();
 
-    const u32 stride = mgr.getDescriptorStride(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-    ASSERT_GT(stride, 0u);
+    const u32 descriptorSize = mgr.getDescriptorSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+    ASSERT_GT(descriptorSize, 0u);
 
-    const auto first = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, stride, stride);
+    const auto first = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, mgr.getOffsetAlignmentBytes());
     ASSERT_TRUE(first.valid());
 
     mgr.free(first);
 
-    const auto second = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, stride, stride);
+    const auto second = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, mgr.getOffsetAlignmentBytes());
     ASSERT_TRUE(second.valid());
     // Same offset: the freed range was the head of the free list and exactly matched the request.
     EXPECT_EQ(second.offsetBytes, first.offsetBytes);
@@ -329,10 +494,9 @@ TEST_F(DescriptorBufferRoundTripTest, FreeListReusesFreedRange){
 }
 
 
-// getDescriptorStride is the per-type footprint strided up to descriptorBufferOffsetAlignment. Every type the
-// conversion routes through writeDescriptor must report a non-zero stride; a zero stride would make allocate() carve
-// zero bytes and writeDescriptor() reject the write. Cover the full set the binding layer will exercise.
-TEST_F(DescriptorBufferRoundTripTest, EveryDescriptorTypeReportsNonZeroStride){
+// Descriptor array elements advance by the driver-reported descriptor size. Every type the conversion routes through
+// writeDescriptor must report a non-zero size; a zero size would make allocation and writes reject the descriptor.
+TEST_F(DescriptorBufferRoundTripTest, EveryDescriptorTypeReportsNonZeroSize){
     auto& mgr = manager();
 
     static constexpr VkDescriptorType kTypes[] = {
@@ -347,34 +511,218 @@ TEST_F(DescriptorBufferRoundTripTest, EveryDescriptorTypeReportsNonZeroStride){
     };
 
     for(const VkDescriptorType type : kTypes){
-        EXPECT_GT(mgr.getDescriptorStride(type), 0u)
-            << "descriptor type " << static_cast<u32>(type) << " reported a zero stride";
         EXPECT_GT(mgr.getDescriptorSize(type), 0u)
             << "descriptor type " << static_cast<u32>(type) << " reported a zero size";
     }
 }
 
 
-// Alignment: carve two adjacent ranges and confirm each offset is stride-aligned, and the second does not overlap the
-// first. This is the invariant vkCmdSetDescriptorBufferOffsetsEXT's offset argument must honor, so the allocator must
-// never hand back a misaligned or overlapping offset.
-TEST_F(DescriptorBufferRoundTripTest, AllocationsAreStrideAligned){
+// Alignment: carve two adjacent ranges and confirm each block offset is descriptorBufferOffsetAlignment-aligned, and
+// the second does not overlap the first. That is the invariant vkCmdSetDescriptorBufferOffsetsEXT must honor.
+TEST_F(DescriptorBufferRoundTripTest, AllocationsAreDescriptorBufferOffsetAligned){
     auto& mgr = manager();
 
-    const u32 stride = mgr.getDescriptorStride(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-    ASSERT_GT(stride, 0u);
+    const u32 descriptorSize = mgr.getDescriptorSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+    const u32 offsetAlignment = mgr.getOffsetAlignmentBytes();
+    ASSERT_GT(descriptorSize, 0u);
+    ASSERT_GT(offsetAlignment, 0u);
 
-    const auto a = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, stride, stride);
-    const auto b = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, stride, stride);
+    const auto a = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, offsetAlignment);
+    const auto b = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, offsetAlignment);
     ASSERT_TRUE(a.valid());
     ASSERT_TRUE(b.valid());
 
-    EXPECT_EQ(a.offsetBytes % stride, 0u);
-    EXPECT_EQ(b.offsetBytes % stride, 0u);
+    EXPECT_EQ(a.offsetBytes % offsetAlignment, 0u);
+    EXPECT_EQ(b.offsetBytes % offsetAlignment, 0u);
     EXPECT_GE(b.offsetBytes, a.offsetBytes + a.sizeBytes);
 
     mgr.free(a);
     mgr.free(b);
+}
+
+
+// The manager's public byte-write entry point must not reinterpret a resource payload through the wrong
+// VkDescriptorDataEXT union arm, and allocation/free inputs must preserve the block-ownership invariant.
+TEST_F(DescriptorBufferRoundTripTest, ManagerRejectsMismatchedWritesAndInvalidBlocks){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& mgr = manager();
+
+    auto storageBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(4096u)
+            .setStructStride(16u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(storageBuffer);
+
+    const u32 descriptorSize = mgr.getDescriptorSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+    ASSERT_GT(descriptorSize, 0u);
+
+    // Invalid public descriptor-buffer operations are diagnostic contract failures in developer builds: the error
+    // logger deliberately raises a soft break after rejecting them. Exercise that policy in child processes so this
+    // suite can validate it without stopping the parent test run; final builds still verify the ordinary false return.
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        (void)mgr.allocate(
+            static_cast<GraphicsBackend::DescriptorBufferSegmentKind::Enum>(0xffu),
+            descriptorSize,
+            mgr.getOffsetAlignmentBytes()
+        );
+    }, "");
+    EXPECT_DEATH_IF_SUPPORTED({
+        (void)mgr.allocate(
+            GraphicsBackend::DescriptorBufferSegmentKind::Resource,
+            descriptorSize,
+            0u
+        );
+    }, "");
+#else
+    EXPECT_FALSE(mgr.allocate(
+        static_cast<GraphicsBackend::DescriptorBufferSegmentKind::Enum>(0xffu),
+        descriptorSize,
+        mgr.getOffsetAlignmentBytes()
+    ).valid());
+    EXPECT_FALSE(mgr.allocate(
+        GraphicsBackend::DescriptorBufferSegmentKind::Resource,
+        descriptorSize,
+        0u
+    ).valid());
+#endif
+
+    const auto segment = mgr.allocate(
+        GraphicsBackend::DescriptorBufferSegmentKind::Resource,
+        descriptorSize,
+        mgr.getOffsetAlignmentBytes()
+    );
+    ASSERT_TRUE(segment.valid());
+
+    const BindingSetItem item = BindingSetItem::RawBuffer_UAV(0u, storageBuffer.get());
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        (void)mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_SAMPLER);
+    }, "");
+#else
+    EXPECT_FALSE(mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_SAMPLER));
+#endif
+    EXPECT_TRUE(mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER));
+
+    mgr.free(segment);
+    // A duplicate free must be rejected instead of inserting a second copy of the range into the free list.
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        mgr.free(segment);
+    }, "");
+#else
+    mgr.free(segment);
+#endif
+
+    // Reusing the manager after a free gives the new owner a different allocation serial. A stale segment copy must
+    // not be allowed to write even if a future free-list allocation happens to recycle its byte range.
+    const auto replacement = mgr.allocate(
+        GraphicsBackend::DescriptorBufferSegmentKind::Resource,
+        descriptorSize,
+        mgr.getOffsetAlignmentBytes()
+    );
+    ASSERT_TRUE(replacement.valid());
+    EXPECT_NE(replacement.allocationSerial, segment.allocationSerial);
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        (void)mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+    }, "");
+#else
+    EXPECT_FALSE(mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER));
+#endif
+    EXPECT_TRUE(mgr.writeDescriptor(item, replacement, replacement.offsetBytes, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER));
+    mgr.free(replacement);
+}
+
+
+// A sampler/resource mix is not segment-coherent. An opt-in must therefore produce a wholly classic layout before
+// Vulkan sees the descriptor-buffer create flag, so its ordinary descriptor table remains legal and usable.
+TEST_F(DescriptorBufferRoundTripTest, MixedDescriptorBufferOptInFallsBackToClassicLayout){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/mixed_layout_fallback_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto texture = device.createTexture(
+        TextureDesc()
+            .setWidth(16u)
+            .setHeight(16u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInitialState(ResourceStates::ShaderResource)
+            .setKeepInitialState(true)
+    );
+    auto sampler = device.createSampler(SamplerDesc().setAllFilters(true));
+    ASSERT_TRUE(texture && sampler);
+
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc
+        .setVisibility(ShaderType::Compute)
+        .setUseDescriptorBuffer(true)
+        .addItem(BindingLayoutItem::Texture_SRV(0u, 1u))
+        .addItem(BindingLayoutItem::Sampler(1u, 1u))
+    ;
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_TRUE(layout);
+    EXPECT_FALSE(layout->isDescriptorBufferCompatible());
+
+    BindingSetDesc setDesc(descArena);
+    setDesc
+        .addItem(BindingSetItem::Texture_SRV(0u, texture.get()))
+        .addItem(BindingSetItem::Sampler(1u, sampler.get()))
+    ;
+    EXPECT_TRUE(device.createBindingSet(setDesc, layout));
+}
+
+
+// Heap slots are raw ABI values, so lifecycle bookkeeping must prevent a duplicate free from recycling the same raw
+// slot twice and must reject a write through a handle that is already in its deferred-free quarantine.
+TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetiredAndDoubleFreedHandles){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    GraphicsBackend::GpuDescriptorHeap heap(device);
+    GpuDescriptorHeapDesc heapDesc;
+    heapDesc.setResourceCapacity(2u).setSamplerCapacity(1u);
+    ASSERT_TRUE(heap.initialize(heapDesc));
+
+    auto storageBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(4096u)
+            .setStructStride(16u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(storageBuffer);
+
+    const GpuDescriptorHandle retired = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(retired.valid());
+    ASSERT_TRUE(heap.write(retired, BindingSetItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
+
+    heap.free(retired);
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        (void)heap.write(retired, BindingSetItem::StructuredBuffer_UAV(0u, storageBuffer.get()));
+    }, "");
+    EXPECT_DEATH_IF_SUPPORTED({
+        heap.free(retired);
+    }, "");
+#else
+    EXPECT_FALSE(heap.write(retired, BindingSetItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
+    heap.free(retired);
+#endif
+
+    for(u32 frame = 0u; frame < 8u; ++frame)
+        heap.advanceFrame();
+
+    const GpuDescriptorHandle first = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    const GpuDescriptorHandle second = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(first.valid());
+    ASSERT_TRUE(second.valid());
+    EXPECT_NE(first, second);
 }
 
 
@@ -2192,8 +2540,9 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRunsOnBackendC){
         << "heap sampler descriptor-buffer block was not carved";
 
     // write() must route through the descriptor-buffer path on Backend C: allocate a slot in the StorageBuffer class
-    // and write a structured buffer into it. The write is a host memcpy into the resource block at
-    // block.offsetBytes + classBindingOffset + slot*stride; success proves the carve + class-offset cache + write path.
+    // and write a structured buffer into it. The write lands in the resource block at
+    // block.offsetBytes + classBindingOffset + slot*descriptorSize; success proves the carve + class-offset cache +
+    // write path.
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/heap_write_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 

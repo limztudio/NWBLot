@@ -18,15 +18,14 @@
 // CSG caps have no source triangle, but they still evaluate the receiver's COMPLETE cook-generated surface hook.
 // The clip-context cbuffer selects typed words and mutable mesh-instance storage from the global heap, leaving the
 // historical dedicated cap-material set (b6/b12) as an intentional gap.
-#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbCsgClipContextSlots.materialTyped;
 }
 uint nwbMeshFrameInstanceHeapSlot(){
     return g_NwbCsgClipContextSlots.meshInstances;
 }
-// interval_sample.slangi has already declared the mesh-view cbuffer locally at set 0/b13. Its include guard
-// keeps bindless_heap_mesh.slangi from revisiting that declaration, so only material/instance access is heap-based.
+// interval_sample.slangi already included bindless_heap_mesh.slangi with its b18-selected mesh-view alias. Its include
+// guard keeps this include focused on the cap-fill material/instance accessors above.
 #include "../bindless/bindless_heap_mesh.slangi"
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/transmittance_dispatch.slangi"

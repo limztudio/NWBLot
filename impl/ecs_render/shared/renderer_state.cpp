@@ -234,6 +234,7 @@ void RendererRayTracingState::invalidateResources(){
     m_sceneInstanceCapacity = 0u;
     m_sceneBvhInstanceCount = 0u;
     m_causticEmissionTargetBuffer.reset();
+    m_causticEmissionTargetHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_causticEmissionTargetCapacity = 0u;
     m_causticRefractiveInstanceCount = 0u;
     m_causticLightCount = 0u;
@@ -366,8 +367,6 @@ void RendererRayTracingState::invalidateResources(){
     m_swCausticPipeline.reset();
     m_swCausticBindingSet.reset();
     m_swCausticBindingSetMaterialContextSlots = nullptr;
-    m_swCausticBindingSetEmissionTargets = nullptr;
-    m_swCausticBindingSetView = nullptr;
     m_swCausticBindingSetAccumulator = nullptr;
     m_swCausticBindingSetBindlessResources = nullptr;
     m_hwCausticBindingLayout.reset();
@@ -376,8 +375,6 @@ void RendererRayTracingState::invalidateResources(){
     m_hwCausticBindingSet.reset();
     m_hwCausticBindingSetTlas = nullptr;
     m_hwCausticBindingSetMaterialContextSlots = nullptr;
-    m_hwCausticBindingSetEmissionTargets = nullptr;
-    m_hwCausticBindingSetView = nullptr;
     m_hwCausticBindingSetAccumulator = nullptr;
     m_hwCausticBindingSetBindlessResources = nullptr;
     m_causticResolveBindingLayout.reset();

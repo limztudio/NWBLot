@@ -114,8 +114,10 @@ void RendererSystem::invalidateResources(){
         if(auto* device = m_graphics.getDevice())
             device->getDescriptorHeap().free(m_rayTracingState.m_tlasHeapHandle);
     }
-    // The trace material-context heap descriptors retain their backing buffers just like the TLAS descriptor. Retire
-    // them while the device heap is still live, before RendererRayTracingState releases those buffers below.
+    // The persistent caustic-emission and trace material-context heap descriptors retain their backing buffers just
+    // like the TLAS descriptor. Retire them while the device heap is still live, before RendererRayTracingState
+    // releases those buffers below.
+    m_raytracingSystem.releaseCausticEmissionTargetHeapHandle();
     m_raytracingSystem.releaseRayTraceMaterialContextHeapHandles();
     // Deferred target generations own ordinary image/sampler heap slots. Release those handles while both the target
     // resources and the device heap are still live; RendererDeferredState then drops the remaining resource handles.

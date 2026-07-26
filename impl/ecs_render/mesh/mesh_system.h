@@ -45,6 +45,7 @@ public:
     [[nodiscard]] bool createMeshGeometryHeapHandles(MeshResources& mesh);
     [[nodiscard]] bool meshGeometryHeapHandlesReady(const MeshResources& mesh)const;
     void populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const;
+    [[nodiscard]] bool ensureMeshSwBvhInputHeapHandles(MeshResources& mesh);
     void releaseMeshGeometryHeapHandles(MeshResources& mesh);
     void releaseAllMeshGeometryHeapHandles();
     template<typename BindingHandler>

@@ -12,32 +12,6 @@
 #include "binding_slots.h"
 #include "constants.h"
 
-#ifndef NWB_CSG_INTERVAL_SAMPLE_MESH_VIEW_SET
-#define NWB_CSG_INTERVAL_SAMPLE_MESH_VIEW_SET NWB_CSG_INTERVAL_SAMPLE_SET
-#endif
-
-// Interval sampling shares the mesh camera view buffer, but binds it in the interval-sample descriptor set.
-#ifndef NWB_MESH_VIEW_SET
-#define NWB_MESH_VIEW_SET NWB_CSG_INTERVAL_SAMPLE_MESH_VIEW_SET
-#define NWB_CSG_INTERVAL_SAMPLE_DEFAULTED_MESH_VIEW_SET 1
-#endif
-#include "../mesh/view_buffer.slangi"
-#ifdef NWB_CSG_INTERVAL_SAMPLE_DEFAULTED_MESH_VIEW_SET
-#undef NWB_MESH_VIEW_SET
-#undef NWB_CSG_INTERVAL_SAMPLE_DEFAULTED_MESH_VIEW_SET
-#endif
-
-// This include participates in two pipeline layouts: the receiver-surface material layout at its normal sample set,
-// and the cap-fill fullscreen layout after interval_cap_fill_ps overrides that set to 0. Bind the shared deferred
-// slot cbuffer at whichever local set this variant selected.
-#define NWB_CSG_BINDLESS_RESOURCES_SET NWB_CSG_INTERVAL_SAMPLE_SET
-#include "bindless_resources.slangi"
-#undef NWB_CSG_BINDLESS_RESOURCES_SET
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #ifndef NWB_CSG_RECEIVER_EVENTS_WRITABLE
 #define NWB_CSG_RECEIVER_EVENTS_WRITABLE 0
 #endif
@@ -48,10 +22,26 @@
 
 struct NwbCsgIntervalSampleState{
     uint4 workRect;
+    // x = global UniformBuffer heap slot for the shared mesh view. yzw remain reserved so this stays a std140 lane.
+    uint4 resourceSlots;
 };
 
 [[vk::binding(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, NWB_CSG_INTERVAL_SAMPLE_SET)]]
 ConstantBuffer<NwbCsgIntervalSampleState> g_NwbCsgIntervalSampleState;
+
+// Receiver-surface, CSG material, AVBOIT, and cap-fill sampling all carry the ordinary mesh-view input in their
+// existing b18 state payload. This leaves the historical direct b13 cbuffer as a deliberate ABI gap.
+#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
+#define NWB_MESH_VIEW_BUFFER_BINDLESS 1
+#define NWB_MESH_VIEW_BUFFER_HEAP_SLOT (g_NwbCsgIntervalSampleState.resourceSlots.x)
+#include "../bindless/bindless_heap_mesh.slangi"
+
+// This include participates in two pipeline layouts: the receiver-surface material layout at its normal sample set,
+// and the cap-fill fullscreen layout after interval_cap_fill_ps overrides that set to 0. Bind the shared deferred
+// slot cbuffer at whichever local set this variant selected.
+#define NWB_CSG_BINDLESS_RESOURCES_SET NWB_CSG_INTERVAL_SAMPLE_SET
+#include "bindless_resources.slangi"
+#undef NWB_CSG_BINDLESS_RESOURCES_SET
 
 #if NWB_CSG_RECEIVER_EVENTS_WRITABLE
 // Event data layout: .x = receiverIndex, .y = faceSign, .z = asuint(linear depth), .w = unused. The former local

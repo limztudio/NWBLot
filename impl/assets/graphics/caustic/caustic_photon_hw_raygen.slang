@@ -81,8 +81,9 @@ void main(){
     // images into diagonal caustic streaks shooting far across the receiver (see caustic_photon_sw_cs.slang). Shared
     // with the SW path so the two stay byte-parallel per photon.
     const uint targetIndex = nwbCausticHashU32(photonIndex) % g_NwbCausticHwPushConstants.emissionTargetCount;
-    const float3 targetAabbMin = g_NwbCausticHwEmissionTargets[targetIndex].aabbMin.xyz;
-    const float3 targetAabbMax = g_NwbCausticHwEmissionTargets[targetIndex].aabbMax.xyz;
+    const NwbCausticEmissionTarget target = nwbCausticHwEmissionTargets()[targetIndex];
+    const float3 targetAabbMin = target.aabbMin.xyz;
+    const float3 targetAabbMax = target.aabbMax.xyz;
 
     const float2 cell = nwbCausticJitteredCheckerboardCell(
         photonIndex,

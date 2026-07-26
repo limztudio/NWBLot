@@ -162,6 +162,22 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
+    if(!rayTracingState().m_causticEmissionTargetHeapHandle.valid())
+        return;
+
+    if(auto* device = graphics().getDevice()){
+        Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+        if(heap.isInitialized())
+            heap.free(rayTracingState().m_causticEmissionTargetHeapHandle);
+    }
+    rayTracingState().m_causticEmissionTargetHeapHandle = Core::GpuDescriptorHandle::invalid();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& targets){
     // Additive caustic producer targets, the inverted-lifecycle sibling of the shadow visibility target. The
     // deferred lighting pass always samples the resolved irradiance (nwbBxdfCausticIrradiance), so it is allocated
@@ -515,6 +531,11 @@ bool RendererRayTracingSystem::hasCausticWork()const noexcept{
         && rayTracingState().m_sceneBvhInstanceCount > 0u
         && rayTracingState().m_swShadowMeshCount > 0u
         && rayTracingState().m_causticEmissionTargetBuffer
+        && rayTracingState().m_causticEmissionTargetHeapHandle.valid()
+        && rayTracingState().m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        && drawState().m_meshViewBuffer
+        && drawState().m_meshViewBufferHeapHandle.valid()
+        && drawState().m_meshViewBufferHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
     ;
 }
 
@@ -538,8 +559,21 @@ bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTarget
         || !rayTracingState().m_causticEmissionTargetBuffer
     )
         return true;
-    if(!targets.causticAccumulator || !targets.causticIrradiance || !drawState().m_meshViewBuffer)
+    if(
+        !targets.causticAccumulator
+        || !targets.causticIrradiance
+        || !drawState().m_meshViewBuffer
+        || !drawState().m_meshViewBufferHeapHandle.valid()
+        || !rayTracingState().m_causticEmissionTargetHeapHandle.valid()
+    )
         return true;
+    if(
+        drawState().m_meshViewBufferHeapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
+        || rayTracingState().m_causticEmissionTargetHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic photon heap input has an unexpected descriptor class"));
+        return false;
+    }
 
     const bool producerReady = ensureSwCausticPipeline() && ensureSwCausticBindingSet(targets);
     const bool resolveReady =
@@ -609,9 +643,9 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
 
         // The per-mesh BVH node + geometry buffers were left in ShaderResource by the SW shadow pass; re-assert the
         // state for every traced mesh, plus all five heap-selected scene/material-context buffers and the caustic
-        // emission-target buffer. Heap descriptors are not visible to setResourceStatesForBindingSet, so these remain
-        // explicit. The G-buffer plus shared scene/light reads are selected from the frame heap; the local slot/view/
-        // accumulator resources still come from the binding set.
+        // emission-target/view buffers. Heap descriptors are not visible to setResourceStatesForBindingSet, so these
+        // remain explicit. The G-buffer plus shared scene/light reads are selected from the frame heap; only the local
+        // slot cbuffers and accumulator remain in the binding set.
         for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){
             commandList.setBufferState(rayTracingState().m_swShadowMeshNodeBuffers[slot], Core::ResourceStates::ShaderResource);
             commandList.setBufferState(rayTracingState().m_swShadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
@@ -624,6 +658,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_causticEmissionTargetBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
         commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
@@ -645,6 +680,8 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         pushConstants.frameIndex = rayTracingState().m_swCausticFrameIndex;
         pushConstants.depthSlot = targets.bindless.gbufferDepth.slot();
         pushConstants.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
+        pushConstants.emissionTargetSlot = rayTracingState().m_causticEmissionTargetHeapHandle.slot();
+        pushConstants.viewSlot = drawState().m_meshViewBufferHeapHandle.slot();
 
         Core::ComputeState computeState;
         computeState.setPipeline(rayTracingState().m_swCausticPipeline.get());
@@ -692,14 +729,12 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // The target-generation resource-slot cbuffer selects the shared scene-shading + light-list heap entries;
-        // G-buffer reads are also frame-heap slots selected by push constants. The five BVH/material buffers are
-        // likewise heap-selected through one local context cbuffer, leaving only caustic-specific I/O here. The heap
-        // layouts remain at 8/9; Backend A retains its classic set path.
+        // the emission targets, camera view, and G-buffer reads are heap slots selected by push constants. The five
+        // BVH/material buffers are likewise heap-selected through one local context cbuffer, leaving only the local
+        // slot cbuffers and accumulator UAV here. The heap layouts remain at 8/9; Backend A retains its classic path.
         layoutDesc.setUseDescriptorBuffer(heap.usesDescriptorBuffer());
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_BINDLESS_RESOURCES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_MATERIAL_CONTEXT_SLOTS, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_EMISSION_TARGETS, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_VIEW, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_SW_BINDING_ACCUMULATOR, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticPhotonPushConstants)));
 
@@ -760,24 +795,24 @@ bool RendererRayTracingSystem::ensureSwCausticBindingSet(DeferredFrameTargets& t
     NWB_ASSERT(rayTracingState().m_shadowInstanceMaterialBuffer);
     NWB_ASSERT(rayTracingState().m_swShadowMeshCount > 0u);
     NWB_ASSERT(rayTracingState().m_causticEmissionTargetBuffer);
+    NWB_ASSERT(rayTracingState().m_causticEmissionTargetHeapHandle.valid());
+    NWB_ASSERT(rayTracingState().m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer);
     NWB_ASSERT(targets.causticAccumulator);
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(targets.bindless.slotsBuffer);
     NWB_ASSERT(drawState().m_meshViewBuffer);
+    NWB_ASSERT(drawState().m_meshViewBufferHeapHandle.valid());
+    NWB_ASSERT(drawState().m_meshViewBufferHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
     NWB_ASSERT(rayTracingState().m_shadowMaterialTypedBuffer);
     NWB_ASSERT(rayTracingState().m_shadowInstanceBuffer);
     NWB_ASSERT(rayTracingState().m_rayTraceMaterialContextSlotsBuffer);
 
     Core::Buffer* materialContextSlotsBuffer = rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get();
-    Core::Buffer* emissionTargetBuffer = rayTracingState().m_causticEmissionTargetBuffer.get();
-    Core::Buffer* viewBuffer = drawState().m_meshViewBuffer.get();
     Core::Buffer* bindlessResourcesBuffer = targets.bindless.slotsBuffer.get();
     const Core::Texture* accumulatorTarget = targets.causticAccumulator.get();
     if(
         rayTracingState().m_swCausticBindingSet
         && rayTracingState().m_swCausticBindingSetMaterialContextSlots == materialContextSlotsBuffer
-        && rayTracingState().m_swCausticBindingSetEmissionTargets == emissionTargetBuffer
-        && rayTracingState().m_swCausticBindingSetView == viewBuffer
         && rayTracingState().m_swCausticBindingSetAccumulator == accumulatorTarget
         && rayTracingState().m_swCausticBindingSetBindlessResources == bindlessResourcesBuffer
     )
@@ -786,8 +821,6 @@ bool RendererRayTracingSystem::ensureSwCausticBindingSet(DeferredFrameTargets& t
     Core::BindingSetDesc bindingSetDesc(arena());
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_BINDLESS_RESOURCES, bindlessResourcesBuffer));
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_MATERIAL_CONTEXT_SLOTS, materialContextSlotsBuffer));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_SW_BINDING_EMISSION_TARGETS, emissionTargetBuffer));
-    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_CAUSTIC_SW_BINDING_VIEW, viewBuffer));
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
         NWB_CAUSTIC_SW_BINDING_ACCUMULATOR,
         targets.causticAccumulator.get(),
@@ -804,15 +837,11 @@ bool RendererRayTracingSystem::ensureSwCausticBindingSet(DeferredFrameTargets& t
     if(!rayTracingState().m_swCausticBindingSet){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software caustic binding set"));
         rayTracingState().m_swCausticBindingSetMaterialContextSlots = nullptr;
-        rayTracingState().m_swCausticBindingSetEmissionTargets = nullptr;
-        rayTracingState().m_swCausticBindingSetView = nullptr;
         rayTracingState().m_swCausticBindingSetAccumulator = nullptr;
         rayTracingState().m_swCausticBindingSetBindlessResources = nullptr;
         return false;
     }
     rayTracingState().m_swCausticBindingSetMaterialContextSlots = materialContextSlotsBuffer;
-    rayTracingState().m_swCausticBindingSetEmissionTargets = emissionTargetBuffer;
-    rayTracingState().m_swCausticBindingSetView = viewBuffer;
     rayTracingState().m_swCausticBindingSetAccumulator = accumulatorTarget;
     rayTracingState().m_swCausticBindingSetBindlessResources = bindlessResourcesBuffer;
     return true;
@@ -1070,12 +1099,9 @@ bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
     if(!rayTracingState().m_causticAccumulatorDecayBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Phase 3 (Backend C): caustic accumulator decay is the third pass migrated to VK_EXT_descriptor_buffer, after
-        // caustic resolve and geometry downsample. Its shape is segment-coherent pure-resource (a lone texture UAV, no
-        // samplers) with push constants, which the descriptor-buffer path serves wholesale -- the minimal single-UAV
-        // case. The opt-in declares intent only; where the extension is absent the backend downgrades this layout to
-        // non-descriptor-buffer-compatible and the classic descriptor-set path (Backend A) serves the pass unchanged,
-        // so no device capability gate is needed here.
+        // This pure-resource layout (a lone texture UAV plus push constants) is descriptor-buffer compatible. Where
+        // the extension is absent, the backend uses the classic descriptor-set path (Backend A) without a capability
+        // gate.
         layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_ACCUMULATOR_DECAY_BINDING_ACCUMULATOR, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticAccumulatorDecayPushConstants)));
@@ -1170,9 +1196,9 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
 
     if(!rayTracingState().m_hwCausticBindingLayout){
         // Mirrors the shadow RT layout (TLAS + target-generation scene/light slot cbuffer + heap-selected material
-        // context) and adds the caustic I/O (emission targets, view, heap-selected G-buffer depth/world position for
-        // the splat, the R32_UINT accumulator UAV) + the push constants (byte-identical to the SW producer's). No
-        // per-mesh geometry arrays:
+        // context). Emission targets, view, and G-buffer depth/world position are selected from the global heap by
+        // the byte-identical photon push block, leaving the R32_UINT accumulator as the only caustic I/O local to the
+        // set. No per-mesh geometry arrays:
         // the closest-hit fetches
         // its per-corner attributes from the global descriptor heap (sets 8/9, pinned below) by the material record's
         // attributeSlot, and the refraction bends on that interpolated shading normal (so it needs no positions/indices).
@@ -1185,8 +1211,6 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
             layoutDesc.addItem(Core::BindingLayoutItem::RayTracingAccelStruct(NWB_CAUSTIC_RT_BINDING_TLAS, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_BINDLESS_RESOURCES, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_MATERIAL_CONTEXT_SLOTS, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_EMISSION_TARGETS, 1));
-        layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_VIEW, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::Texture_UAV(NWB_CAUSTIC_RT_BINDING_ACCUMULATOR, 1));
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticPhotonPushConstants)));
 
@@ -1282,27 +1306,26 @@ bool RendererRayTracingSystem::ensureCausticRtBindingSet(DeferredFrameTargets& t
     NWB_ASSERT(rayTracingState().m_shadowMaterialTypedBuffer);
     NWB_ASSERT(rayTracingState().m_shadowInstanceBuffer);
     NWB_ASSERT(rayTracingState().m_causticEmissionTargetBuffer);
+    NWB_ASSERT(rayTracingState().m_causticEmissionTargetHeapHandle.valid());
+    NWB_ASSERT(rayTracingState().m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer);
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(targets.bindless.slotsBuffer);
     NWB_ASSERT(drawState().m_meshViewBuffer);
+    NWB_ASSERT(drawState().m_meshViewBufferHeapHandle.valid());
+    NWB_ASSERT(drawState().m_meshViewBufferHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
     NWB_ASSERT(targets.causticAccumulator);
     NWB_ASSERT(rayTracingState().m_rayTraceMaterialContextSlotsBuffer);
 
-    // Rebuild only when a local descriptor changes. The shared scene/material buffers are selected by the contents of
-    // the persistent material-context cbuffer, so capacity growth updates that cbuffer without recreating this set.
-    // G-buffer inputs arrive through frame heap slots.
+    // Rebuild only when a local descriptor changes. The shared scene/material buffers, photon emission inputs, and
+    // view are heap-selected, so capacity growth only changes the pushed heap slot rather than recreating this set.
     const Core::RayTracingAccelStruct* tlas = rayTracingState().m_tlas.get();
     Core::Buffer* materialContextSlotsBuffer = rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get();
-    Core::Buffer* emissionTargetBuffer = rayTracingState().m_causticEmissionTargetBuffer.get();
-    Core::Buffer* viewBuffer = drawState().m_meshViewBuffer.get();
     Core::Buffer* bindlessResourcesBuffer = targets.bindless.slotsBuffer.get();
     const Core::Texture* accumulatorTarget = targets.causticAccumulator.get();
     if(
         rayTracingState().m_hwCausticBindingSet
         && rayTracingState().m_hwCausticBindingSetTlas == tlas
         && rayTracingState().m_hwCausticBindingSetMaterialContextSlots == materialContextSlotsBuffer
-        && rayTracingState().m_hwCausticBindingSetEmissionTargets == emissionTargetBuffer
-        && rayTracingState().m_hwCausticBindingSetView == viewBuffer
         && rayTracingState().m_hwCausticBindingSetAccumulator == accumulatorTarget
         && rayTracingState().m_hwCausticBindingSetBindlessResources == bindlessResourcesBuffer
     )
@@ -1314,8 +1337,6 @@ bool RendererRayTracingSystem::ensureCausticRtBindingSet(DeferredFrameTargets& t
         bindingSetDesc.addItem(Core::BindingSetItem::RayTracingAccelStruct(NWB_CAUSTIC_RT_BINDING_TLAS, rayTracingState().m_tlas.get()));
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_BINDLESS_RESOURCES, bindlessResourcesBuffer));
     bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_MATERIAL_CONTEXT_SLOTS, materialContextSlotsBuffer));
-    bindingSetDesc.addItem(Core::BindingSetItem::StructuredBuffer_SRV(NWB_CAUSTIC_RT_BINDING_EMISSION_TARGETS, emissionTargetBuffer));
-    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_CAUSTIC_RT_BINDING_VIEW, viewBuffer));
     bindingSetDesc.addItem(Core::BindingSetItem::Texture_UAV(
         NWB_CAUSTIC_RT_BINDING_ACCUMULATOR,
         targets.causticAccumulator.get(),
@@ -1333,16 +1354,12 @@ bool RendererRayTracingSystem::ensureCausticRtBindingSet(DeferredFrameTargets& t
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware caustic binding set"));
         rayTracingState().m_hwCausticBindingSetTlas = nullptr;
         rayTracingState().m_hwCausticBindingSetMaterialContextSlots = nullptr;
-        rayTracingState().m_hwCausticBindingSetEmissionTargets = nullptr;
-        rayTracingState().m_hwCausticBindingSetView = nullptr;
         rayTracingState().m_hwCausticBindingSetAccumulator = nullptr;
         rayTracingState().m_hwCausticBindingSetBindlessResources = nullptr;
         return false;
     }
     rayTracingState().m_hwCausticBindingSetTlas = tlas;
     rayTracingState().m_hwCausticBindingSetMaterialContextSlots = materialContextSlotsBuffer;
-    rayTracingState().m_hwCausticBindingSetEmissionTargets = emissionTargetBuffer;
-    rayTracingState().m_hwCausticBindingSetView = viewBuffer;
     rayTracingState().m_hwCausticBindingSetAccumulator = accumulatorTarget;
     rayTracingState().m_hwCausticBindingSetBindlessResources = bindlessResourcesBuffer;
     return true;
@@ -1362,6 +1379,11 @@ bool RendererRayTracingSystem::hasHwCausticWork()const noexcept{
         && rayTracingState().m_tlas
         && rayTracingState().m_shadowMeshCount > 0u
         && rayTracingState().m_causticEmissionTargetBuffer
+        && rayTracingState().m_causticEmissionTargetHeapHandle.valid()
+        && rayTracingState().m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        && drawState().m_meshViewBuffer
+        && drawState().m_meshViewBufferHeapHandle.valid()
+        && drawState().m_meshViewBufferHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
     ;
 }
 
@@ -1383,8 +1405,21 @@ bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& t
         || !rayTracingState().m_causticEmissionTargetBuffer
     )
         return true;
-    if(!targets.causticAccumulator || !targets.causticIrradiance || !drawState().m_meshViewBuffer)
+    if(
+        !targets.causticAccumulator
+        || !targets.causticIrradiance
+        || !drawState().m_meshViewBuffer
+        || !drawState().m_meshViewBufferHeapHandle.valid()
+        || !rayTracingState().m_causticEmissionTargetHeapHandle.valid()
+    )
         return true;
+    if(
+        drawState().m_meshViewBufferHeapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
+        || rayTracingState().m_causticEmissionTargetHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic photon heap input has an unexpected descriptor class"));
+        return false;
+    }
 
     const bool producerReady = ensureCausticRtPipeline() && ensureCausticRtBindingSet(targets);
     const bool resolveReady =
@@ -1442,15 +1477,16 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
 
         // Move the per-mesh attribute byte buffers to ShaderResource (the heap descriptors the closest-hit reads by
         // attributeSlot point at them, so they still need the transition) + the shadow-owned material context + the
-        // emission targets. The G-buffer plus shared scene/light reads are selected from the frame heap, so stage them
-        // explicitly; setResourceStatesForBindingSet derives the TLAS, slot/view CBs, and accumulator UAV. HW caustics
-        // needs no index buffer because the fixed-function intersector supplies the hit triangle.
+        // emission/view buffers. The G-buffer plus shared scene/light reads are selected from the frame heap, so stage
+        // them explicitly; setResourceStatesForBindingSet derives the TLAS, local slot CBs, and accumulator UAV. HW
+        // caustics needs no index buffer because the fixed-function intersector supplies the hit triangle.
         for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot)
             commandList.setBufferState(rayTracingState().m_shadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowInstanceMaterialBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_causticEmissionTargetBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
         commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
@@ -1477,6 +1513,8 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         pushConstants.frameIndex = rayTracingState().m_hwCausticFrameIndex;
         pushConstants.depthSlot = targets.bindless.gbufferDepth.slot();
         pushConstants.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
+        pushConstants.emissionTargetSlot = rayTracingState().m_causticEmissionTargetHeapHandle.slot();
+        pushConstants.viewSlot = drawState().m_meshViewBufferHeapHandle.slot();
 
         Core::RayTracingState rayTracingPassState;
         rayTracingPassState.setShaderTable(rayTracingState().m_hwCausticShaderTable.get());
@@ -1525,9 +1563,38 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
 
 bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCount){
     // The caustic emission-target list is CPU-written each frame and read by the caustic producer, so it is a
-    // structured SRV (no UAV) that grows by doubling like the scene-BVH / instance-material buffers.
-    if(rayTracingState().m_causticEmissionTargetBuffer && rayTracingState().m_causticEmissionTargetCapacity >= targetCount)
+    // structured SRV (no UAV) that grows by doubling like the scene-BVH / instance-material buffers. It owns a
+    // persistent StorageBuffer heap descriptor: capacity replacement acquires a new slot before retiring the old
+    // one, preserving already-recorded photon dispatches until the heap's deferred-free quarantine drains.
+    auto* device = graphics().getDevice();
+    if(!device || !device->getDescriptorHeap().isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic emission targets require the initialized global descriptor heap"));
+        return false;
+    }
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+
+    const auto acquireHeapHandle = [&](Core::Buffer& buffer, Core::GpuDescriptorHandle& outHandle) -> bool{
+        const Core::GpuDescriptorHandle acquired = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        if(!acquired.valid() || !heap.write(acquired, Core::BindingSetItem::StructuredBuffer_SRV(0u, &buffer))){
+            if(acquired.valid())
+                heap.free(acquired);
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register caustic emission targets in the descriptor heap"));
+            return false;
+        }
+        outHandle = acquired;
         return true;
+    };
+
+    if(rayTracingState().m_causticEmissionTargetBuffer && rayTracingState().m_causticEmissionTargetCapacity >= targetCount){
+        if(rayTracingState().m_causticEmissionTargetHeapHandle.valid()){
+            NWB_ASSERT(rayTracingState().m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer);
+            return true;
+        }
+        return acquireHeapHandle(
+            *rayTracingState().m_causticEmissionTargetBuffer.get(),
+            rayTracingState().m_causticEmissionTargetHeapHandle
+        );
+    }
 
     const usize capacity = ::NextGrowingCapacity(
         rayTracingState().m_causticEmissionTargetCapacity,
@@ -1542,11 +1609,20 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
         .setDebugName(Name("caustic_emission_targets"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
-    rayTracingState().m_causticEmissionTargetBuffer = graphics().createBuffer(targetBufferDesc);
-    if(!rayTracingState().m_causticEmissionTargetBuffer){
+    Core::BufferHandle targetBuffer = graphics().createBuffer(targetBufferDesc);
+    if(!targetBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic emission-target buffer"));
         return false;
     }
+
+    Core::GpuDescriptorHandle targetHeapHandle = Core::GpuDescriptorHandle::invalid();
+    if(!acquireHeapHandle(*targetBuffer.get(), targetHeapHandle))
+        return false;
+
+    if(rayTracingState().m_causticEmissionTargetHeapHandle.valid())
+        heap.free(rayTracingState().m_causticEmissionTargetHeapHandle);
+    rayTracingState().m_causticEmissionTargetBuffer = Move(targetBuffer);
+    rayTracingState().m_causticEmissionTargetHeapHandle = targetHeapHandle;
     rayTracingState().m_causticEmissionTargetCapacity = capacity;
     NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created caustic emission-target buffer (capacity {} targets)")
         , static_cast<u64>(capacity)

@@ -67,6 +67,11 @@ struct MeshResources : public RuntimeMeshBuffers{
     // One persistent StorageBuffer heap handle per former mesh-source binding slot. Slots are lazy-created when a
     // material draw is prepared, cached with this mesh resource, and retired before runtime meshes are replaced.
     Core::GpuDescriptorHandle geometryHeapHandles[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
+    // The software-BVH build consumes these two stable read-only streams through the global StorageBuffer heap.
+    // They are deliberately separate from geometryHeapHandles: triangleIndexBuffer is the reconstructed RT stream,
+    // not one of the raster mesh-source bindings above.
+    Core::GpuDescriptorHandle swBvhPositionHeapHandle;
+    Core::GpuDescriptorHandle swBvhTriangleIndexHeapHandle;
     Core::BufferHandle swBvhNodeBuffer;     // per-mesh software LBVH nodes (no-hardware-RT shadow fallback)
     Core::BufferHandle swBvhParentBuffer;   // per-mesh software LBVH parent links (persist across refits)
     Core::BindingSetHandle swBvhBindingSet; // per-mesh software LBVH build/refit binding set

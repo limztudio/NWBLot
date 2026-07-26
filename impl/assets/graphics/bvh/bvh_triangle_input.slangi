@@ -16,6 +16,7 @@
 
 #include "binding_slots.h"
 #include "bvh_common.slangi"
+#include "../bindless/bindless_heap.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,12 +24,6 @@
 
 [[vk::push_constant]]
 ConstantBuffer<NwbBvhBuildPushConstants> g_NwbBvhBuildPushConstants;
-
-[[vk::binding(NWB_BVH_BUILD_BINDING_POSITIONS, NWB_BVH_BUILD_SET)]]
-ByteAddressBuffer g_NwbBvhPositions;
-
-[[vk::binding(NWB_BVH_BUILD_BINDING_TRIANGLE_INDICES, NWB_BVH_BUILD_SET)]]
-ByteAddressBuffer g_NwbBvhTriangleIndices;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,12 +36,14 @@ void nwbBvhLoadTrianglePositions(
     out float3 outP2
 ){
     const uint indexBase = triangle * 3u;
-    const uint i0 = g_NwbBvhTriangleIndices.Load(indexBase * 4u);
-    const uint i1 = g_NwbBvhTriangleIndices.Load((indexBase + 1u) * 4u);
-    const uint i2 = g_NwbBvhTriangleIndices.Load((indexBase + 2u) * 4u);
-    outP0 = asfloat(g_NwbBvhPositions.Load3(i0 * 12u));
-    outP1 = asfloat(g_NwbBvhPositions.Load3(i1 * 12u));
-    outP2 = asfloat(g_NwbBvhPositions.Load3(i2 * 12u));
+    const uint indexHeapSlot = g_NwbBvhBuildPushConstants.triangleIndexHeapSlot;
+    const uint positionHeapSlot = g_NwbBvhBuildPushConstants.positionHeapSlot;
+    const uint i0 = NwbHeapRawBuffer(indexHeapSlot).Load(indexBase * 4u);
+    const uint i1 = NwbHeapRawBuffer(indexHeapSlot).Load((indexBase + 1u) * 4u);
+    const uint i2 = NwbHeapRawBuffer(indexHeapSlot).Load((indexBase + 2u) * 4u);
+    outP0 = asfloat(NwbHeapRawBuffer(positionHeapSlot).Load3(i0 * 12u));
+    outP1 = asfloat(NwbHeapRawBuffer(positionHeapSlot).Load3(i1 * 12u));
+    outP2 = asfloat(NwbHeapRawBuffer(positionHeapSlot).Load3(i2 * 12u));
 }
 
 

@@ -116,12 +116,9 @@ bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
     if(!rayTracingState().m_surfelAgeFreeBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Phase 3 (Backend C): surfel age-free is the third surfel-GI pass migrated to VK_EXT_descriptor_buffer, after
-        // surfel upsample and hash-build. Its shape is segment-coherent pure-resource (1 ConstantBuffer + 3
-        // StructuredBuffer_UAV, no samplers), the same CB + UAV mix as hash-build with one additional storage buffer
-        // (the free-list). The opt-in declares intent only; where the extension is absent the backend downgrades this
-        // layout to non-descriptor-buffer-compatible and the classic descriptor-set path (Backend A) serves the pass
-        // unchanged, so no device capability gate is needed here.
+        // This pure-resource layout (one constant buffer plus three StructuredBuffer UAVs) is descriptor-buffer
+        // compatible. The free-list is the additional storage buffer beyond hash-build. Where the extension is absent,
+        // the backend uses the classic descriptor-set path (Backend A) without a capability gate.
         layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // pool (write alive = 0)
@@ -176,12 +173,9 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
     if(!rayTracingState().m_surfelHashBuildBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Phase 3 (Backend C): surfel hash-build is the second surfel-GI pass migrated to VK_EXT_descriptor_buffer, after
-        // surfel upsample. Its shape is segment-coherent pure-resource (1 ConstantBuffer + 2 StructuredBuffer_UAV, no
-        // samplers) -- the first Backend-C layout to carry a uniform buffer alongside storage buffers, extending the
-        // texture-only shapes of the prior five migrations. The opt-in declares intent only; where the extension is
-        // absent the backend downgrades this layout to non-descriptor-buffer-compatible and the classic descriptor-set
-        // path (Backend A) serves the pass unchanged, so no device capability gate is needed here.
+        // This pure-resource layout (one constant buffer plus two StructuredBuffer UAVs) is descriptor-buffer
+        // compatible. Where the extension is absent, the backend uses the classic descriptor-set path (Backend A)
+        // without a capability gate.
         layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_BINDING_CONSTANTS, 1)); // surfel constants
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_BINDING_POOL, 1)); // pool
@@ -1003,12 +997,9 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
     if(!rayTracingState().m_surfelTraceBuildArgsBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Phase 3 (Backend C): surfel trace build-args is the fourth surfel-GI pass migrated to VK_EXT_descriptor_buffer,
-        // after surfel upsample, hash-build, and age-free. Its shape is segment-coherent pure-resource (1 ConstantBuffer +
-        // 2 StructuredBuffer_UAV, no samplers), the minimal CB + UAV subset of the age-free shape (its two storage buffers
-        // are the counter read and the indirect-args write). The opt-in declares intent only; where the extension is absent
-        // the backend downgrades this layout to non-descriptor-buffer-compatible and the classic descriptor-set path
-        // (Backend A) serves the pass unchanged, so no device capability gate is needed here.
+        // This pure-resource layout (one constant buffer plus two StructuredBuffer UAVs) is descriptor-buffer
+        // compatible. Its storage buffers are the counter read and indirect-args write. Where the extension is absent,
+        // the backend uses the classic descriptor-set path (Backend A) without a capability gate.
         layoutDesc.setUseDescriptorBuffer(true);
         layoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_SURFEL_TRACE_BUILDARGS_BINDING_CONSTANTS, 1)); // surfel constants (divisor .w)
         layoutDesc.addItem(Core::BindingLayoutItem::StructuredBuffer_UAV(NWB_SURFEL_TRACE_BUILDARGS_BINDING_COUNTER, 1)); // counter (read BUMP_TOP)

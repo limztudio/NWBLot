@@ -3,7 +3,7 @@
 
 The migration is a pure descriptor-indirection swap (heap slot -> the same
 underlying buffer the bounded per-mesh array held), so the ONLY expected difference is the
-surfel-GI producer's temporal floor (DDGI probe Monte-Carlo trace + temporal-blend/EMA),
+surfel-GI producer's temporal floor (surfel ray tracing + temporal accumulation/EMA),
 which concentrates in the bounced-lighting features (the red/blue indirect bleed on the
 shadowed floor). A correct 4b diff is therefore indistinguishable from a two-identical-run
 noise-floor diff -- diffuse grain in the GI features. A structured, hard-edged band (a

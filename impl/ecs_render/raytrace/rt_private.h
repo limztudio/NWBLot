@@ -141,10 +141,13 @@ struct BvhBuildPushConstants{
     u32 internalCount = 0u;
     u32 refitMode = 0u;
     u32 pad0 = 0u;
+    u32 positionHeapSlot = Limit<u32>::s_Max;
+    u32 triangleIndexHeapSlot = Limit<u32>::s_Max;
+    u32 pad1[2] = {};
     Float4 aabbMin = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     Float4 aabbMax = Float4(0.0f, 0.0f, 0.0f, 0.0f);
 };
-static_assert(sizeof(BvhBuildPushConstants) == sizeof(u32) * 4u + sizeof(Float4) * 2u, "BvhBuildPushConstants must match the shader NwbBvhBuildPushConstants layout");
+static_assert(sizeof(BvhBuildPushConstants) == sizeof(u32) * 8u + sizeof(Float4) * 2u, "BvhBuildPushConstants must match the shader NwbBvhBuildPushConstants layout");
 
 // BVH node child-link encoding, mirroring the bvh_common.slangi shader constants (NWB_BVH_LEAF_FLAG /
 // NWB_BVH_INVALID) for CPU-side BVH build + validation + clears: a leaf sets `LeafFlag` on its leftChild and packs
@@ -464,8 +467,8 @@ static_assert(sizeof(ShadowReprojectMergePushConstants) == sizeof(f32) * 16u + s
 // (caustic/caustic_photon_sw_cs.slang) and the hardware ray-traced producer (caustic/caustic_photon_hw_raygen.slang).
 // The byte-identical layout across the two backends is a parity invariant (same photon grid / flux). frameIndex drives
 // the 2x temporal-reuse checkerboard phase on BOTH backends (each emits half the grid per frame; the splat-space EMA
-// recombines the two halves). The trailing frame-texture slots select the depth/world-position G-buffer images from
-// the global descriptor heap for both producers.
+// recombines the two halves). The trailing slots select the depth/world-position G-buffer images, the refractive
+// emission-target buffer, and the mesh view buffer from the global descriptor heap for both producers.
 struct CausticPhotonPushConstants{
     u32 width = 0u;
     u32 height = 0u;
@@ -476,8 +479,10 @@ struct CausticPhotonPushConstants{
     u32 frameIndex = 0u; // 2x temporal-reuse checkerboard phase: (frameIndex & 1) selects which half of the grid this frame emits (SW + HW)
     u32 depthSlot = 0u; // SampledImage: full-resolution depth G-buffer
     u32 worldPositionSlot = 0u; // SampledImage: full-resolution world-position G-buffer
+    u32 emissionTargetSlot = 0u; // StorageBuffer: refractive-instance emission AABBs
+    u32 viewSlot = 0u; // UniformBuffer: mesh view / worldToClip
 };
-static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 9u, "CausticPhotonPushConstants must match the shader push-constant layout");
+static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 11u, "CausticPhotonPushConstants must match the shader push-constant layout");
 
 // CPU mirror of the caustic resolve push constants (caustic/caustic_resolve_cs.slang). The resolve is an N-pass
 // edge-avoiding a-trous wavelet denoise: per pass it carries the wavelet dilation (stepWidth) and whether this is the

@@ -378,19 +378,15 @@ struct RtSceneBvhState{
     const Core::Texture* m_transparentReprojectMergeMomentsB = nullptr;
     // Software caustic photon producer (P3) — the no-hardware-ray-tracing fallback. It reuses the same software
     // scene/instance + per-mesh BVH buffers the SW shadow trace builds (the shared m_swShadowMesh* table serves
-    // shadow, caustic, and GI alike), and adds the caustic-specific local inputs/output
-    // (the P1 emission-target buffer, the camera view buffer, and the R32_UINT accumulators). G-buffer depth/world
-    // position are frame-heap reads selected through the shared photon push constants. The target-generation slot
-    // cbuffer selects shared scene/light heap entries. The binding set is rebuilt when any cached local input changes,
-    // mirroring the SW shadow set.
+    // shadow, caustic, and GI alike). The emission targets, camera view, and G-buffer depth/world position are global-
+    // heap reads selected through the shared photon push constants. The target-generation slot cbuffer selects shared
+    // scene/light heap entries; only the slot cbuffers and R32_UINT accumulator stay local.
     Core::BindingLayoutHandle m_swCausticBindingLayout;
     Core::ShaderHandle m_swCausticShader;
     Core::ComputePipelineHandle m_swCausticPipeline;
     Core::BindingSetHandle m_swCausticBindingSet;
     // Renderer-owned slot-indirection cbuffer for the five heap-backed trace material-context buffers.
     const Core::Buffer* m_swCausticBindingSetMaterialContextSlots = nullptr;
-    const Core::Buffer* m_swCausticBindingSetEmissionTargets = nullptr;
-    const Core::Buffer* m_swCausticBindingSetView = nullptr;
     const Core::Texture* m_swCausticBindingSetAccumulator = nullptr;
     const Core::Buffer* m_swCausticBindingSetBindlessResources = nullptr;
     bool m_swCausticPipelineFailed = false;
@@ -400,8 +396,8 @@ struct RtSceneBvhState{
     // Hardware ray-traced caustic photon producer (P4) -- the byte-parallel sibling of the SW producer. It uses the
     // TLAS plus heap-selected instance-material, index, position, and attribute buffers; the refraction bends on the
     // interpolated shading normal from the attributes. Feeds the SAME R32_UINT accumulator + the SAME resolve the SW
-    // path uses. Its G-buffer depth/world-position reads use the frame heap and its target-generation slot cbuffer
-    // selects shared scene/light heap entries; the binding set is rebuilt only when a cached local input changes.
+    // path uses. Its emission/view/G-buffer reads use the global heap and its target-generation slot cbuffer selects
+    // shared scene/light entries; only the slot cbuffers, Backend-A TLAS, and accumulator remain local.
     Core::BindingLayoutHandle m_hwCausticBindingLayout;
     Core::RayTracingPipelineHandle m_hwCausticPipeline;
     Core::RayTracingShaderTableHandle m_hwCausticShaderTable;
@@ -409,8 +405,6 @@ struct RtSceneBvhState{
     const Core::RayTracingAccelStruct* m_hwCausticBindingSetTlas = nullptr;
     // Renderer-owned slot-indirection cbuffer for the five heap-backed trace material-context buffers.
     const Core::Buffer* m_hwCausticBindingSetMaterialContextSlots = nullptr;
-    const Core::Buffer* m_hwCausticBindingSetEmissionTargets = nullptr;
-    const Core::Buffer* m_hwCausticBindingSetView = nullptr;
     const Core::Texture* m_hwCausticBindingSetAccumulator = nullptr;
     const Core::Buffer* m_hwCausticBindingSetBindlessResources = nullptr;
     bool m_bvhSortPipelineFailed = false;
@@ -710,6 +704,9 @@ struct RtCausticState{
     // zero caustic lights). m_causticTargetBoundsMin/Max hold the combined extent over all targets (for the P1 gate
     // log); m_causticEmissionGateLogged rate-limits that log.
     Core::BufferHandle m_causticEmissionTargetBuffer;
+    // Global StorageBuffer heap descriptor for the emission-target buffer. Capacity replacement acquires a new slot
+    // before retiring this one, so recorded photon dispatches retain their original generation until GPU completion.
+    Core::GpuDescriptorHandle m_causticEmissionTargetHeapHandle = Core::GpuDescriptorHandle::invalid();
     usize m_causticEmissionTargetCapacity = 0u;
     u32 m_causticRefractiveInstanceCount = 0u;
     // Caustic-light count assigned this frame by ResolveCausticLights (cached in updateSceneShadingBuffer). Gates

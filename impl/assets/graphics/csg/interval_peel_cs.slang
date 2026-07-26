@@ -6,8 +6,6 @@
 #include "constants.h"
 #include "bindless_resources.slangi"
 
-#include "../mesh/view_buffer.slangi"
-
 #define NWB_CSG_MESH_INSTANCE_INDEX 0u
 #include "runtime.slangi"
 
@@ -18,6 +16,7 @@
 struct NwbCsgIntervalDispatchPushConstants{
     uint4 frame;
     uint4 workRegion;
+    uint4 resourceSlots;
 };
 
 struct NwbCsgIntervalPeelEntry{
@@ -31,6 +30,13 @@ struct NwbCsgIntervalPeelEntry{
 
 [[vk::push_constant]]
 ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPushConstants;
+
+// The standalone peel dispatch has no mesh draw constants. Its view UniformBuffer slot therefore rides in its own
+// push payload, while b13 remains an intentional local-layout gap.
+#define NWB_MESH_FRAME_RESOURCES_BINDLESS 1
+#define NWB_MESH_VIEW_BUFFER_BINDLESS 1
+#define NWB_MESH_VIEW_BUFFER_HEAP_SLOT (g_NwbCsgIntervalDispatchPushConstants.resourceSlots[NWB_CSG_INTERVAL_DISPATCH_PUSH_RESOURCE_SLOT_VIEW])
+#include "../bindless/bindless_heap_mesh.slangi"
 
 // Historical local bindings 0..2 are now gaps. The target-generation slots select their typed Texture2DArray UAVs
 // from the StorageImage heap; the device's required formatless-storage-image support permits the two float formats.

@@ -20,6 +20,7 @@ struct NwbCsgRemovedIntervalEntry{
 struct NwbCsgIntervalDispatchPushConstants{
     uint4 frame;
     uint4 workRegion;
+    uint4 resourceSlots;
 };
 
 [[vk::push_constant]]

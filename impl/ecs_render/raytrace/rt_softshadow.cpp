@@ -554,7 +554,7 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
     if(!rayTracingState().m_shadowGeometryDownsampleBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Phase 3 (Backend C): the G-buffer inputs and shared scene-shading CB now arrive through the global heap.
+        // The G-buffer inputs and shared scene-shading CB arrive through the global heap.
         // This local descriptor-buffer segment therefore holds only the target-generation slot cbuffer + geometry-cache
         // UAV. Push constants carry the three SampledImage slots, while the fixed high heap sets preserve Backend-A
         // descriptor-indexing fallback.
@@ -669,7 +669,7 @@ bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
     if(!rayTracingState().m_shadowResolveBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Phase 3 (Backend C): all seven sampled frame images now use target-generation heap slots. The residual local
+        // All seven sampled frame images use target-generation heap slots. The residual local
         // descriptor-buffer segment is the two UAVs + scene CB; the RGB variant shares it unchanged. The local binding
         // numbers intentionally remain sparse so the established ABI gaps are not renumbered.
         layoutDesc.setUseDescriptorBuffer(true);

@@ -34,7 +34,13 @@ struct NwbMeshViewBuffer{
 #endif
 
 #if NWB_MESH_VIEW_BUFFER_BINDLESS
+// Most mesh consumers select the global view descriptor from their per-draw frame slots. Narrower consumers such as
+// CSG interval passes can supply their own uniform slot through this hook without reintroducing a local b13 binding.
+#if defined(NWB_MESH_VIEW_BUFFER_HEAP_SLOT)
+#define g_NwbMeshViewBuffer NwbHeapMeshViewBuffer(NWB_MESH_VIEW_BUFFER_HEAP_SLOT)
+#else
 #define g_NwbMeshViewBuffer NwbHeapMeshViewBuffer(nwbMeshFrameViewHeapSlot())
+#endif
 #else
 [[vk::binding(NWB_MESH_BINDING_VIEW, NWB_MESH_VIEW_SET)]]
 ConstantBuffer<NwbMeshViewBuffer, Std140DataLayout> g_NwbMeshViewBuffer;

@@ -479,7 +479,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         if(!__hidden_material_pipeline::AddCsgGraphicsBindingLayouts(pipelineDesc, csgBindingUse, csgBindingLayouts))
             return false;
         // The mesh stage resolves every immutable geometry stream through the global StorageBuffer heap. Keep both
-        // fixed heap layouts in every mesh pipeline so Backend A/Binder and Backend C descriptor-buffer binding use
+        // fixed heap layouts in every mesh pipeline so Backend-A descriptor binding and Backend-C descriptor-buffer binding use
         // the same set-8/9 contract; the sampler layout is part of that frozen heap surface even though geometry uses
         // only the resource table today.
         pipelineDesc

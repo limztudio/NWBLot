@@ -33,12 +33,12 @@ namespace __hidden_csg_interval_peel{
     bindingLayoutDesc.setVisibility(visibility);
     bindingLayoutDesc.setUseDescriptorBuffer(true);
     // All CSG interval/peel textures are target-generation StorageImage heap entries. Retain their historical local
-    // binding numbers as gaps and carry only the shared DeferredBindlessResourceSlots cbuffer at binding 17.
+    // binding numbers as gaps. The ordinary mesh view now arrives through a heap slot in the dispatch/b18 payload,
+    // so its former direct b13 cbuffer is also an intentional gap; local state carries only the shared target slots.
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_BINDLESS_RESOURCES, 1));
     const bool usesSampleState = receiverEventAccess != CsgTextureAccess::None || removedIntervalAccess != CsgTextureAccess::None;
     if(usesSampleState)
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, 1));
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, 1));
 
     (void)intervalAccess;
 
@@ -54,7 +54,6 @@ namespace __hidden_csg_interval_peel{
     Core::GraphicsArena& arena,
     Core::Device& device,
     const DeferredFrameTargets& targets,
-    Core::Buffer* meshViewBuffer,
     Core::Buffer* sampleStateBuffer,
     Core::BindingLayout* layout,
     Core::BindingSetHandle& bindingSet,
@@ -66,8 +65,7 @@ namespace __hidden_csg_interval_peel{
         return true;
     const bool usesSampleState = receiverEventAccess != CsgTextureAccess::None || removedIntervalAccess != CsgTextureAccess::None;
     if(
-        !meshViewBuffer
-        || (usesSampleState && !sampleStateBuffer)
+        (usesSampleState && !sampleStateBuffer)
         || !layout
         || !targets.bindless.valid()
         || !targets.bindless.slotsBuffer
@@ -110,7 +108,6 @@ namespace __hidden_csg_interval_peel{
     ));
     if(usesSampleState)
         bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_CSG_INTERVAL_BINDING_SAMPLE_STATE, sampleStateBuffer));
-    bindingSetDesc.addItem(Core::BindingSetItem::ConstantBuffer(NWB_MESH_BINDING_VIEW, meshViewBuffer));
 
     bindingSet = device.createBindingSet(bindingSetDesc, layout);
     return bindingSet != nullptr;
@@ -571,7 +568,6 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
         arena(),
         *device,
         targets,
-        drawState().m_meshViewBuffer.get(),
         nullptr,
         csgState().m_intervalPeelBindingLayout.get(),
         csgState().m_intervalPeelBindingSet,
@@ -650,7 +646,6 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
         arena(),
         *device,
         targets,
-        drawState().m_meshViewBuffer.get(),
         csgState().m_intervalSampleStateBuffer.get(),
         csgState().m_receiverSurfaceBindingLayout.get(),
         csgState().m_receiverSurfaceBindingSet,
@@ -666,7 +661,6 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
         arena(),
         *device,
         targets,
-        drawState().m_meshViewBuffer.get(),
         csgState().m_intervalSampleStateBuffer.get(),
         csgState().m_intervalSampleBindingLayout.get(),
         csgState().m_intervalSampleBindingSet,

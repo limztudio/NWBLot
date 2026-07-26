@@ -29,10 +29,10 @@
 #define NWB_CAUSTIC_RT_BINDING_BINDLESS_RESOURCES NWB_CAUSTIC_RT_BINDING_SCENE_SHADING
 // Slots 3-5 are intentional ABI gaps: the caustic trace selects their former material context through the b11 global
 // StorageBuffer heap indirection below. Do not repurpose or renumber these holes.
-// Caustic-specific I/O. The two G-buffer positions remain reserved for ABI compatibility, but are now logical heap-
-// SRV selections carried in the shared photon-producer push constants.
-#define NWB_CAUSTIC_RT_BINDING_EMISSION_TARGETS 6
-#define NWB_CAUSTIC_RT_BINDING_VIEW 7
+// Caustic-specific I/O. The emission-target/view/G-buffer positions remain reserved for ABI compatibility, but are
+// now logical heap selections carried in the shared photon-producer push constants.
+#define NWB_CAUSTIC_RT_BINDING_EMISSION_TARGETS 6 // logical heap-StorageBuffer position; selected through push constants
+#define NWB_CAUSTIC_RT_BINDING_VIEW 7 // logical heap-UniformBuffer position; selected through push constants
 #define NWB_CAUSTIC_RT_BINDING_GBUFFER_DEPTH 8 // logical heap-SRV position; selected through push constants
 #define NWB_CAUSTIC_RT_BINDING_GBUFFER_WORLD_POSITION 9 // logical heap-SRV position; selected through push constants
 #define NWB_CAUSTIC_RT_BINDING_ACCUMULATOR 10

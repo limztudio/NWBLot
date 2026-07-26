@@ -93,7 +93,7 @@ private:
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("GiTestSmokeProject"));
 
         // Force ray-tracing emulation so the SOFTWARE GI path runs even on RT-capable hardware -- the SW path is
-        // the one that runs the full DDGI chain (probe trace -> blend -> border -> flip), so the _sw_smoke build
+        // the one that runs the surfel trace and temporal-accumulation path, so the _sw_smoke build
         // is the intended way to see the indirect bounce. Default OFF: the HW (hybrid) path.
 #if defined(NWB_GI_TEST_FORCE_RT_EMULATION) && (!defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES))
         NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
@@ -127,7 +127,7 @@ public:
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
 
         // ONE directional light: aimed so the red wall is lit but the floor beside it is in direct shadow. The
-        // indirect red bounce off the lit wall onto the shadowed floor is the DDGI pass signal.
+        // indirect red bounce off the lit wall onto the shadowed floor is the surfel-GI pass signal.
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,
             s_DirectionalLightPitch,

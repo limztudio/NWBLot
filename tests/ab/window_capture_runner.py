@@ -2,7 +2,7 @@
 """Shared smoke-window capture runner for the manual A/B capture scripts.
 
 Boots the engine logserver, launches a smoke binary, waits for its X11 window to appear,
-settles for a configured duration (letting temporal accumulators / probe fields converge),
+settles for a configured duration (letting temporal accumulators / lighting fields converge),
 captures the window to a BMP, and tears both processes down. The per-A/B differences --
 binary to run, window title, runtime path, settle window, and any frozen spin/yaw env var --
 are supplied by each directory's capture.py wrapper.

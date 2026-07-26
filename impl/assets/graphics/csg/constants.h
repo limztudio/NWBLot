@@ -77,7 +77,8 @@
 #define NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_OFFSET_Y 1u
 #define NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_EXTENT_X 2u
 #define NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_EXTENT_Y 3u
-#define NWB_CSG_INTERVAL_DISPATCH_PUSH_CONSTANT_BYTE_SIZE 32u
+#define NWB_CSG_INTERVAL_DISPATCH_PUSH_RESOURCE_SLOT_VIEW 0u
+#define NWB_CSG_INTERVAL_DISPATCH_PUSH_CONSTANT_BYTE_SIZE 48u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

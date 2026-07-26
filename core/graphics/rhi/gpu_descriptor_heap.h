@@ -19,8 +19,8 @@ NWB_CORE_BEGIN
 //
 // A resource registered in the heap is addressed everywhere - C++ and shader - by a single opaque 32-bit
 // GpuDescriptorHandle. The handle bit-layout and class taxonomy are identical on every backend, so a handle
-// minted on the descriptor-indexing path is byte-for-byte valid on an optional descriptor-heap accelerator. See
-// docs/design/bindless-phase1-rhi-heap.md for the original design.
+// minted on the descriptor-indexing path is byte-for-byte valid on the descriptor-buffer path when that backend is
+// available. See docs/design/bindless-phase1-rhi-heap.md for the original design.
 
 
 // The resource classes a shader must select between. Each class maps to exactly one register space / descriptor

@@ -115,7 +115,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         const float3 rayDir = normalize(dirLocal.x * tangent + dirLocal.y * bitangent + dirLocal.z * n);
 
         const float3 origin = surfel.position + n * normalBias;
-        const NwbGiProbeHit hit = nwbGiTraceClosest(origin, rayDir, 0.001, 1.0e4);
+        const NwbGiTraceHit hit = nwbGiTraceClosest(origin, rayDir, 0.001, 1.0e4);
         float3 radiance = float3(0.0, 0.0, 0.0);
         if(hit.hit){
             radiance = nwbGiShadeHit(hit, rayDir);

@@ -244,6 +244,65 @@ void RendererMeshSystem::populateMeshGeometryHeapSlots(InstanceGpuData& outInsta
     });
 }
 
+bool RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(MeshResources& mesh){
+    const auto inputsReady = [&mesh](){
+        return
+            mesh.swBvhPositionHeapHandle.valid()
+            && mesh.swBvhPositionHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+            && mesh.swBvhTriangleIndexHeapHandle.valid()
+            && mesh.swBvhTriangleIndexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        ;
+    };
+    if(inputsReady())
+        return true;
+
+    if(mesh.swBvhPositionHeapHandle.valid() || mesh.swBvhTriangleIndexHeapHandle.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has a partial software-BVH input heap registration")
+            , StringConvert(mesh.meshName.c_str())
+        );
+        return false;
+    }
+    if(!mesh.positionBuffer || !mesh.triangleIndexBuffer){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has no software-BVH position or triangle-index input")
+            , StringConvert(mesh.meshName.c_str())
+        );
+        return false;
+    }
+
+    auto* device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    if(!heap.isInitialized()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' requires the initialized global descriptor heap for software-BVH inputs")
+            , StringConvert(mesh.meshName.c_str())
+        );
+        return false;
+    }
+
+    const Core::GpuDescriptorHandle positionHandle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    const Core::GpuDescriptorHandle triangleIndexHandle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    const bool registered =
+        positionHandle.valid()
+        && triangleIndexHandle.valid()
+        && heap.write(positionHandle, Core::BindingSetItem::RawBuffer_SRV(0u, mesh.positionBuffer.get()))
+        && heap.write(triangleIndexHandle, Core::BindingSetItem::RawBuffer_SRV(0u, mesh.triangleIndexBuffer.get()))
+    ;
+    if(!registered){
+        if(positionHandle.valid())
+            heap.free(positionHandle);
+        if(triangleIndexHandle.valid())
+            heap.free(triangleIndexHandle);
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register software-BVH inputs for mesh '{}'")
+            , StringConvert(mesh.meshName.c_str())
+        );
+        return false;
+    }
+
+    mesh.swBvhPositionHeapHandle = positionHandle;
+    mesh.swBvhTriangleIndexHeapHandle = triangleIndexHandle;
+    NWB_ASSERT(inputsReady());
+    return true;
+}
+
 void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
     auto* device = graphics().getDevice();
     if(device && device->getDescriptorHeap().isInitialized()){
@@ -253,11 +312,19 @@ void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
                 heap.free(handle);
             handle = Core::GpuDescriptorHandle::invalid();
         }
+        if(mesh.swBvhPositionHeapHandle.valid())
+            heap.free(mesh.swBvhPositionHeapHandle);
+        if(mesh.swBvhTriangleIndexHeapHandle.valid())
+            heap.free(mesh.swBvhTriangleIndexHeapHandle);
+        mesh.swBvhPositionHeapHandle = Core::GpuDescriptorHandle::invalid();
+        mesh.swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::invalid();
         return;
     }
 
     for(Core::GpuDescriptorHandle& handle : mesh.geometryHeapHandles)
         handle = Core::GpuDescriptorHandle::invalid();
+    mesh.swBvhPositionHeapHandle = Core::GpuDescriptorHandle::invalid();
+    mesh.swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::invalid();
 }
 
 void RendererMeshSystem::releaseAllMeshGeometryHeapHandles(){

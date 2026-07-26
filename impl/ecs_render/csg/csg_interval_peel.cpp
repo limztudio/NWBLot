@@ -66,7 +66,8 @@ static void SetCsgIntervalSampleStorageStates(Core::CommandList& commandList, co
 
 [[nodiscard]] static CsgIntervalSampleStateGpuData BuildCsgIntervalSampleState(
     const DeferredFrameTargets& targets,
-    const CsgFrameGpuData& csgFrameData
+    const CsgFrameGpuData& csgFrameData,
+    const u32 meshViewHeapSlot
 ){
     const Core::Rect workRect = ResolveCsgFrameWorkRect(targets, csgFrameData);
 
@@ -75,6 +76,7 @@ static void SetCsgIntervalSampleStorageStates(Core::CommandList& commandList, co
     state.workMinY = static_cast<u32>(Max(workRect.minY, 0));
     state.workMaxX = static_cast<u32>(Max(workRect.maxX, 0));
     state.workMaxY = static_cast<u32>(Max(workRect.maxY, 0));
+    state.meshViewHeapSlot = meshViewHeapSlot;
     return state;
 }
 
@@ -84,7 +86,8 @@ static void SetCsgIntervalSampleStorageStates(Core::CommandList& commandList, co
 
 [[nodiscard]] static CsgIntervalDispatchPushConstants BuildCsgIntervalDispatchPushConstants(
     const DeferredFrameTargets& targets,
-    const CsgFrameGpuData& csgFrameData
+    const CsgFrameGpuData& csgFrameData,
+    const u32 meshViewHeapSlot
 ){
     const Core::Rect workRect = ResolveCsgFrameWorkRect(targets, csgFrameData);
 
@@ -97,6 +100,7 @@ static void SetCsgIntervalSampleStorageStates(Core::CommandList& commandList, co
     pushConstants.workOffsetY = static_cast<u32>(Max(workRect.minY, 0));
     pushConstants.workExtentX = static_cast<u32>(Max(workRect.width(), 0));
     pushConstants.workExtentY = static_cast<u32>(Max(workRect.height(), 0));
+    pushConstants.meshViewHeapSlot = meshViewHeapSlot;
     return pushConstants;
 }
 
@@ -111,7 +115,8 @@ static void DispatchCsgIntervalCompute(
     const CsgFrameGpuData& csgFrameData,
     Core::ComputePipeline* pipeline,
     Core::BindingSet* bindingSet,
-    Core::BindingSet* extraBindingSet = nullptr
+    Core::BindingSet* extraBindingSet = nullptr,
+    const u32 meshViewHeapSlot = 0u
 ){
     Core::ComputeState computeState;
     computeState.setPipeline(pipeline);
@@ -124,7 +129,7 @@ static void DispatchCsgIntervalCompute(
     heap.bindCompute(commandList, *pipeline);
 
     const CsgIntervalDispatchPushConstants pushConstants =
-        BuildCsgIntervalDispatchPushConstants(targets, csgFrameData)
+        BuildCsgIntervalDispatchPushConstants(targets, csgFrameData, meshViewHeapSlot)
     ;
     if(pushConstants.workExtentX == 0u || pushConstants.workExtentY == 0u)
         return;
@@ -152,11 +157,16 @@ bool RendererCsgSystem::uploadCsgIntervalSampleState(
         return true;
     if(!csgState().m_intervalSampleStateBuffer)
         return false;
+    NWB_ASSERT(m_renderer.meshSystem().meshFrameHeapHandlesReady());
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgSampleStateUpload, graphics().getDevice(), commandList);
 
     const __hidden_csg_interval_peel::CsgIntervalSampleStateGpuData state =
-        __hidden_csg_interval_peel::BuildCsgIntervalSampleState(targets, csgFrameData)
+        __hidden_csg_interval_peel::BuildCsgIntervalSampleState(
+            targets,
+            csgFrameData,
+            drawState().m_meshViewBufferHeapHandle.slot()
+        )
     ;
     commandList.setBufferState(csgState().m_intervalSampleStateBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
@@ -190,12 +200,17 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
     NWB_ASSERT(csgState().m_intervalPeelPipeline);
     NWB_ASSERT(csgState().m_intervalPeelBindingSet);
     NWB_ASSERT(csgState().m_clipBindingSet);
+    NWB_ASSERT(drawState().m_meshViewBuffer);
+    NWB_ASSERT(m_renderer.meshSystem().meshFrameHeapHandlesReady());
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalPeel, graphics().getDevice(), commandList);
 
     __hidden_csg_interval_peel::SetCsgIntervalPeelStorageStates(commandList, targets);
     commandList.setResourceStatesForBindingSet(csgState().m_intervalPeelBindingSet.get());
     commandList.setResourceStatesForBindingSet(csgState().m_clipBindingSet.get());
+    // The view no longer resides in the local interval binding set; transition the heap-selected UniformBuffer
+    // explicitly before the standalone peel dispatch.
+    commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
     setCsgClipBufferStates(commandList);
     commandList.commitBarriers();
 
@@ -206,7 +221,8 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
         csgFrameData,
         csgState().m_intervalPeelPipeline.get(),
         csgState().m_intervalPeelBindingSet.get(),
-        csgState().m_clipBindingSet.get()
+        csgState().m_clipBindingSet.get(),
+        drawState().m_meshViewBufferHeapHandle.slot()
     );
 }
 
@@ -282,6 +298,7 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     NWB_ASSERT(csgState().m_clipBindingSet);
     NWB_ASSERT(drawState().m_materialTypedBuffer);
     NWB_ASSERT(drawState().m_instanceBuffer);
+    NWB_ASSERT(drawState().m_meshViewBuffer);
     NWB_ASSERT(targets.framebuffer);
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgCapFill, graphics().getDevice(), commandList);
@@ -293,6 +310,7 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     // local material binding set can no longer contribute these transitions automatically.
     commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(drawState().m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
     setCsgClipBufferStates(commandList);
     commandList.commitBarriers();
 

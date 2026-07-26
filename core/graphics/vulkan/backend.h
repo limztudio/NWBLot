@@ -1361,7 +1361,7 @@ inline void AttachPipelineBindingState(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Backend C - VK_EXT_descriptor_buffer descriptor-buffer manager (Phase 3)
+// Backend C - VK_EXT_descriptor_buffer descriptor-buffer manager
 //
 // Descriptor-as-memory: unlike Backend A (descriptor indexing), Backend C stores descriptors as ordinary bytes in one
 // HOST-mappable buffer per type and binds them with vkCmdBindDescriptorBuffersEXT + vkCmdSetDescriptorBufferOffsetsEXT.

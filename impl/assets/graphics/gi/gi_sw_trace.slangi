@@ -12,9 +12,9 @@
 // The SOFTWARE backend of the GI trace seam: walks the SW scene/instance/per-mesh BVH the SW shadow/caustic path
 // already builds and defines nwbGiTraceClosest (+ nwbGiSwInstanceClosest) accordingly. Its only trace-context local
 // descriptor is the b11 slot cbuffer; it selects the scene BVH / instance and shadow material buffers from the global
-// StorageBuffer heap. gi_trace_common also brings NwbGiProbeHit + the shared nwbGiShadeHit Lambert shade + the scene
+// StorageBuffer heap. gi_trace_common also brings NwbGiTraceHit + the shared nwbGiShadeHit Lambert shade + the scene
 // light list. The HW twin is gi_hw_trace.slangi (inline RayQuery over the TLAS); both share the common shade +
-// NwbGiProbeHit, so a red wall bounces red identically. The producer's own shader supplies the OUTPUT bindings + main()
+// NwbGiTraceHit, so a red wall bounces red identically. The producer's own shader supplies the OUTPUT bindings + main()
 // (the surfel path reduces rays in groupshared and running-means them into a surfel record).
 
 
@@ -66,7 +66,7 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/transmittance_dispatch.slangi"
 
-// The shared trace body: NwbGiProbeHit + nwbGiShadeHit + the scene/light bindings + the nwbGiTraceClosest seam decl.
+// The shared trace body: NwbGiTraceHit + nwbGiShadeHit + the scene/light bindings + the nwbGiTraceClosest seam decl.
 #include "gi_trace_common.slangi"
 // SW-only: the CPU-built scene/instance/per-mesh BVH node type.
 #include "../bvh/bvh_common.slangi"
@@ -196,7 +196,7 @@ NwbGiSwTriangleHit nwbGiSwRayTriangle(const float3 origin, const float3 directio
 // Per-instance closest-hit refinement: push the world ray into object space, walk the mesh BVH front-to-back, keep the
 // nearest triangle crossing. On hit, compute the geometric face normal for Lambert lighting and reconstruct the
 // authored material-surface inputs (normal + uv0 + typed material context) for the GI bounce albedo.
-void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, inout NwbGiProbeHit closest){
+void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, inout NwbGiTraceHit closest){
     const NwbGiSwInstance instance = NwbHeapGiSwInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbGiSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
 
@@ -277,8 +277,8 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
 }
 
 // Scene-BVH closest-hit over all instances (front-to-back ordered). Returns the nearest hit across all meshes.
-NwbGiProbeHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, float tMax){
-    NwbGiProbeHit closest;
+NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, float tMax){
+    NwbGiTraceHit closest;
     closest.hit = false;
     closest.t = tMax;
     closest.worldPos = float3(0.0, 0.0, 0.0);

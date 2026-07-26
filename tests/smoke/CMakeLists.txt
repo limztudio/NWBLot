@@ -727,8 +727,8 @@ if(Python3_Interpreter_FOUND)
         )
         add_dependencies(nwb_soft_shadow_test_sw_smoke nwb_skinning_culling_benchmark_assets)
 
-        # Dedicated DDGI GI scene: an open-top box with saturated-red and saturated-blue walls, plus a directional light
-        # aimed to leave the floor in direct shadow. The red-to-blue indirect bleed on that floor is the DDGI pass signal.
+        # Dedicated surfel-GI scene: an open-top box with saturated-red and saturated-blue walls, plus a directional light
+        # aimed to leave the floor in direct shadow. The red-to-blue indirect bleed on that floor is the surfel-GI pass signal.
         # Reuses the benchmark's cooked assets (ground material).
         nwb_declare_executable(nwb_gi_test_smoke)
         target_sources(nwb_gi_test_smoke PRIVATE
@@ -740,8 +740,8 @@ if(Python3_Interpreter_FOUND)
         )
         add_dependencies(nwb_gi_test_smoke nwb_skinning_culling_benchmark_assets)
 
-        # Forced-software-emulation sibling: the SW GI path (probe trace -> blend -> border) runs even on RT
-        # hardware, for the SW-first DDGI verification.
+        # Forced-software-emulation sibling: the SW surfel trace and temporal-accumulation path runs even on RT
+        # hardware, for SW-first surfel-GI verification.
         nwb_declare_executable(nwb_gi_test_sw_smoke)
         target_sources(nwb_gi_test_sw_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/gi_test_project.cpp"

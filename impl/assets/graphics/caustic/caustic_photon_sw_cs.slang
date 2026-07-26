@@ -98,9 +98,6 @@ struct NwbCausticEmissionTarget{
     float4 aabbMax;
 };
 
-[[vk::binding(NWB_CAUSTIC_SW_BINDING_EMISSION_TARGETS, NWB_CAUSTIC_SW_SET)]]
-StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbCausticSwEmissionTargets;
-
 // Camera view buffer: only worldToClip is read (to project the receiver hit to a screen pixel for the splat).
 // Std140 layout matching the C++ MeshViewGpuData / the mesh view_buffer.slangi struct.
 struct NwbCausticSwView{
@@ -110,8 +107,16 @@ struct NwbCausticSwView{
     float4 frustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];
 };
 
-[[vk::binding(NWB_CAUSTIC_SW_BINDING_VIEW, NWB_CAUSTIC_SW_SET)]]
-ConstantBuffer<NwbCausticSwView, Std140DataLayout> g_NwbCausticSwView;
+// The caustic-specific producer inputs share the global heap's StorageBuffer / UniformBuffer tables with the trace
+// material context and mesh-frame view. Their slots are uniform for one dispatch and ride the photon push block, so
+// no NonUniformResourceIndex decoration is needed here.
+#pragma warning(push)
+#pragma warning(disable: 39001) // Deliberate typed aliases of the global heap descriptor tables.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbHeapCausticSwEmissionTargets[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbCausticSwView, Std140DataLayout> g_NwbHeapCausticSwViews[];
+#pragma warning(pop)
 
 [[vk::binding(NWB_CAUSTIC_SW_BINDING_ACCUMULATOR, NWB_CAUSTIC_SW_SET)]]
 RWTexture2DArray<uint> g_NwbCausticSwAccumulator;
@@ -126,6 +131,8 @@ struct NwbCausticSwPushConstants{
     uint frameIndex; // SW 2x temporal-reuse checkerboard phase: (frameIndex & 1) selects which half of the grid this frame emits
     uint depthSlot;
     uint worldPositionSlot;
+    uint emissionTargetSlot;
+    uint viewSlot;
 };
 
 [[vk::push_constant]]
@@ -138,6 +145,14 @@ Texture2D<float4> nwbCausticSwGbufferDepth(){
 
 Texture2D<float4> nwbCausticSwGbufferWorldPosition(){
     return NwbHeapSampledImage2D(g_NwbCausticSwPushConstants.worldPositionSlot);
+}
+
+StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> nwbCausticSwEmissionTargets(){
+    return g_NwbHeapCausticSwEmissionTargets[g_NwbCausticSwPushConstants.emissionTargetSlot];
+}
+
+ConstantBuffer<NwbCausticSwView, Std140DataLayout> nwbCausticSwView(){
+    return g_NwbHeapCausticSwViews[g_NwbCausticSwPushConstants.viewSlot];
 }
 
 
@@ -417,7 +432,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_CAUSTIC_SPLAT_VIEW g_NwbCausticSwView
+#define NWB_CAUSTIC_SPLAT_VIEW nwbCausticSwView()
 #define NWB_CAUSTIC_SPLAT_PUSH g_NwbCausticSwPushConstants
 #define NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH nwbCausticSwGbufferDepth()
 #define NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION nwbCausticSwGbufferWorldPosition()
@@ -460,8 +475,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // shooting far across the receiver (invisible when sparse, glaring once dense). The hash decorrelates target from
     // cell, so each target gets a uniformly-scattered subset of the stratified grid -> no stripes, caustic stays put.
     const uint targetIndex = nwbCausticHashU32(photonIndex) % g_NwbCausticSwPushConstants.emissionTargetCount;
-    const float3 targetAabbMin = g_NwbCausticSwEmissionTargets[targetIndex].aabbMin.xyz;
-    const float3 targetAabbMax = g_NwbCausticSwEmissionTargets[targetIndex].aabbMax.xyz;
+    const NwbCausticEmissionTarget target = nwbCausticSwEmissionTargets()[targetIndex];
+    const float3 targetAabbMin = target.aabbMin.xyz;
+    const float3 targetAabbMax = target.aabbMax.xyz;
 
     const float2 cell = nwbCausticJitteredCheckerboardCell(
         photonIndex,

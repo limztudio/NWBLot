@@ -6,7 +6,7 @@ GI twin of ../caustic_bindless_step4/capture.py: the exe basename picks the HW p
 captures both sides of the surfel-GI bindless-heap accessor migration. The GI test scene is
 static (an open-top box with a red +X wall and a blue -X wall under a fixed directional light
 -> indirect red/blue bleed onto the shadowed floor), so before/after captures line up
-frame-for-frame; the DDGI probe field is left to converge across the settle window before the
+frame-for-frame; the surfel-GI temporal state is left to converge across the settle window before the
 read. Two identical runs still differ by a small temporal-blend (EMA) floor concentrated in
 the bounced-lighting features.
 
@@ -24,7 +24,7 @@ from window_capture_runner import REPO, capture_smoke_window
 # runs from that runtime rather than the transparent-multi smoke runtime.
 RUNTIME = REPO / "__cmake/build/linux-clang-x64/Testing/skinning_culling_benchmark_runtime/opt"
 TITLE = "NWB GI Test"
-# DDGI probes converge over a temporal blend, so give the field time to settle before the read;
+# Surfel GI converges through temporal accumulation, so give its state time to settle before the read;
 # two identical runs still differ by a small EMA floor in the bounced-lighting features.
 SETTLE = float(os.environ.get("GI_SETTLE", "6.0"))
 

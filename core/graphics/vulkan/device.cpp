@@ -457,7 +457,7 @@ Device::Device(const DeviceDesc& desc)
     }
 
     // Bring the global descriptor heap live for every run. Descriptor indexing is the portable path, so initialize it
-    // independently of optional descriptor-heap acceleration and NWB_DEBUG. Capacity 0 selects a default clamped to
+    // independently of the optional Backend-C descriptor-buffer path and NWB_DEBUG. Capacity 0 selects a default clamped to
     // the device's update-after-bind limits; initialization failures are logged for bindless consumers.
     {
         GpuDescriptorHeapDesc heapDesc;

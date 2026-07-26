@@ -1,7 +1,7 @@
 # Standalone headless Vulkan round-trip proof for Backend C (VK_EXT_descriptor_buffer).
 #
 # Brings up a real headless GPU device (no window, no swap chain) and exercises
-# DescriptorBufferManager::allocate/writeDescriptor/free across every descriptor class,
+# DescriptorBufferManager::allocate/writeDescriptor/free across the covered descriptor classes,
 # asserting the vkGetDescriptorEXT bytes are produced and the segment sub-allocator is sound.
 # Descriptor-buffer-compatible production pipelines consume the manager; this suite also submits a
 # minimal production compute pipeline and verifies GPU readback through descriptor-buffer offsets.

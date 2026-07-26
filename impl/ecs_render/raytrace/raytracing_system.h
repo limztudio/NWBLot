@@ -46,6 +46,8 @@ public:
     [[nodiscard]] bool buildSceneTlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool buildSceneSwBvh(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool prepareCausticEmissionTargets(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
+    // Retire the persistent caustic-emission heap descriptor before resource invalidation releases its buffer.
+    void releaseCausticEmissionTargetHeapHandle();
     [[nodiscard]] bool createShadowVisibilityTarget(DeferredFrameTargets& targets);
     [[nodiscard]] bool createCausticTargets(DeferredFrameTargets& targets);
     [[nodiscard]] bool prepareShadowVisibilityResources(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena, bool& outBackendReady);
@@ -248,13 +250,13 @@ private:
     [[nodiscard]] bool ensureBvhBuildPipeline();
     [[nodiscard]] bool ensureBvhVisitCounterBuffer(usize primitiveCount);
     [[nodiscard]] bool createMeshBvhStorage(usize primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer);
-    [[nodiscard]] bool ensureMeshBvhBindingSet(Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, Core::Buffer* nodeBuffer, Core::Buffer* parentBuffer, Core::BindingSetHandle& bindingSet);
-    [[nodiscard]] bool ensureMeshSwBvhResources(Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
-    [[nodiscard]] bool meshSwBvhResourcesReady(Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, const Core::BindingSetHandle& bindingSet);
-    [[nodiscard]] bool buildMeshSwBvh(Core::CommandList& commandList, Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount, const SIMDVector aabbMin, const SIMDVector aabbMax, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
-    [[nodiscard]] bool buildMeshSwBvhPrepared(Core::CommandList& commandList, Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount, const SIMDVector aabbMin, const SIMDVector aabbMax, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
-    [[nodiscard]] bool refitMeshSwBvh(Core::CommandList& commandList, Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
-    [[nodiscard]] bool refitMeshSwBvhPrepared(Core::CommandList& commandList, Core::Buffer* positionBuffer, Core::Buffer* triangleIndexBuffer, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
+    [[nodiscard]] bool ensureMeshBvhBindingSet(Core::Buffer* nodeBuffer, Core::Buffer* parentBuffer, Core::BindingSetHandle& bindingSet);
+    [[nodiscard]] bool ensureMeshSwBvhResources(u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
+    [[nodiscard]] bool meshSwBvhResourcesReady(const Core::BufferHandle& nodeBuffer, const Core::BufferHandle& parentBuffer, const Core::BindingSetHandle& bindingSet);
+    [[nodiscard]] bool buildMeshSwBvh(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, const SIMDVector aabbMin, const SIMDVector aabbMax, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
+    [[nodiscard]] bool buildMeshSwBvhPrepared(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, const SIMDVector aabbMin, const SIMDVector aabbMax, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
+    [[nodiscard]] bool refitMeshSwBvh(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
+    [[nodiscard]] bool refitMeshSwBvhPrepared(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::BindingSetHandle& bindingSet);
     [[nodiscard]] bool updateMeshSwBvh(Core::CommandList& commandList, MeshResources& meshResources);
     [[nodiscard]] bool ensureSceneBvhBuffers(u32 instanceCount);
     [[nodiscard]] bool ensureRayTraceMaterialContextSlotsBuffer();

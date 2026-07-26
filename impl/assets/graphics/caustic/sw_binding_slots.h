@@ -15,8 +15,8 @@
 // CLOSEST-hit), and splats the surviving flux at the opaque-receiver hit into the R32_UINT accumulators via
 // InterlockedAdd. The set uses the same heap-selected SW scene/material context as shadow (so the closest-hit hook
 // reads identical buffers + the per-hit surface dispatch resolves ior/transmission the SAME way) and adds caustic-specific
-// inputs/outputs: the emission-target AABB buffer, the camera view buffer (worldToClip for the splat projection),
-// heap-selected G-buffer depth/world-position inputs (the receiver identity reject), and the accumulator UAV.
+// inputs/outputs: heap-selected emission-target AABBs, camera view, and G-buffer depth/world-position inputs (the
+// receiver identity reject), plus the local accumulator UAV.
 #define NWB_CAUSTIC_SW_SET 0
 
 // Keep the historical scene/light binding numbers stable as logical ABI positions. Binding 0 now carries the
@@ -32,8 +32,10 @@
 // global descriptor heap through slots carried by the material record; b5 selects the scene/material context buffers.
 // Slots 9-10 are further intentional ABI gaps. Do not repurpose or renumber them.
 // Caustic-specific inputs/output:
-//  - EMISSION_TARGETS: the per-frame refractive-instance world AABBs (P1) the photons aim at.
-//  - VIEW: the camera view buffer (worldToClip) the splat projects the receiver hit through.
+//  - EMISSION_TARGETS: historical local-layout position; now a logical StorageBuffer heap slot selecting the
+//    per-frame refractive-instance world AABBs (P1) the photons aim at.
+//  - VIEW: historical local-layout position; now a logical UniformBuffer heap slot selecting the camera view buffer
+//    (worldToClip) the splat projects the receiver hit through.
 //  - GBUFFER_DEPTH: historical local-layout position; now a logical heap-SRV slot selecting the G-buffer depth the
 //    splat uses to reject sky/background.
 //  - ACCUMULATOR: the R32_UINT fixed-point splat target (Texture2DArray, one layer per RGB channel).
@@ -41,8 +43,8 @@
 //    world position the splat compares the photon's receiver hit against (the screen-space-leak reject -- a WORLD-
 //    distance test, robust at grazing angles where the device-depth gradient across one pixel can exceed any fixed
 //    device-depth tolerance and reject every valid splat).
-#define NWB_CAUSTIC_SW_BINDING_EMISSION_TARGETS 11
-#define NWB_CAUSTIC_SW_BINDING_VIEW 12
+#define NWB_CAUSTIC_SW_BINDING_EMISSION_TARGETS 11 // logical heap-StorageBuffer position; selected through push constants
+#define NWB_CAUSTIC_SW_BINDING_VIEW 12 // logical heap-UniformBuffer position; selected through push constants
 #define NWB_CAUSTIC_SW_BINDING_GBUFFER_DEPTH 13 // logical heap-SRV position; selected through push constants
 #define NWB_CAUSTIC_SW_BINDING_ACCUMULATOR 14
 #define NWB_CAUSTIC_SW_BINDING_GBUFFER_WORLD_POSITION 15 // logical heap-SRV position; selected through push constants

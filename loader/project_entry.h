@@ -117,6 +117,7 @@ public:
 
 ProjectFrameClientSize QueryProjectFrameClientSize();
 const tchar* QueryProjectWindowTitle();
+bool ConfigureProjectGraphics(Core::Graphics& graphics);
 UniquePtr<IProjectEntryCallbacks> CreateProjectEntryCallbacks(ProjectRuntimeContext& context);
 
 bool CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& outWorld);

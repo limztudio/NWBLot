@@ -6,6 +6,7 @@
 
 
 #include "coopvec.h"
+#include "gpu_descriptor_heap.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -270,6 +271,7 @@ struct DeviceCreationParameters : public InstanceParameters{
     GraphicsVector<GraphicsString> optionalBackendDeviceExtensions;
     GraphicsVector<usize> ignoredValidationMessageLocations;
 
+    GpuDescriptorHeapAbi bindlessHeapAbi;
     Path pipelineCacheDirectory;
 
     explicit DeviceCreationParameters(GraphicsArena& arena)

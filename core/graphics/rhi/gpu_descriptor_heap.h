@@ -83,15 +83,56 @@ inline constexpr bool operator!=(const GpuDescriptorHandle lhs, const GpuDescrip
 static_assert(sizeof(GpuDescriptorHandle) == 4, "GpuDescriptorHandle is supposed to be a single 32-bit word");
 
 
+// Project/bootstrap-owned values that connect the renderer's generic descriptor heap to the shared shader ABI.
+// Core carries and validates this typed payload without depending on the implementation-owned macro contract that
+// supplies it. The Vulkan backend performs its stricter descriptor-layout range and ordering checks at initialize().
+struct GpuDescriptorHeapAbi{
+    static constexpr u32 s_Unspecified = s_MaxU32;
+
+    u32 resourceSetIndex = s_Unspecified;
+    u32 samplerSetIndex = s_Unspecified;
+    u32 accelStructSetIndex = s_Unspecified;
+    u32 sampledImageBinding = s_Unspecified;
+    u32 storageImageBinding = s_Unspecified;
+    u32 sampledBufferBinding = s_Unspecified;
+    u32 storageBufferBinding = s_Unspecified;
+    u32 uniformBufferBinding = s_Unspecified;
+    u32 sampledImage2DArrayBinding = s_Unspecified;
+    u32 sampledImage3DBinding = s_Unspecified;
+    u32 sampledImage2DArrayUintBinding = s_Unspecified;
+    u32 samplerBinding = s_Unspecified;
+    u32 accelStructBinding = s_Unspecified;
+
+    [[nodiscard]] constexpr bool valid()const{
+        return resourceSetIndex != s_Unspecified
+            && samplerSetIndex != s_Unspecified
+            && accelStructSetIndex != s_Unspecified
+            && sampledImageBinding != s_Unspecified
+            && storageImageBinding != s_Unspecified
+            && sampledBufferBinding != s_Unspecified
+            && storageBufferBinding != s_Unspecified
+            && uniformBufferBinding != s_Unspecified
+            && sampledImage2DArrayBinding != s_Unspecified
+            && sampledImage3DBinding != s_Unspecified
+            && sampledImage2DArrayUintBinding != s_Unspecified
+            && samplerBinding != s_Unspecified
+            && accelStructBinding != s_Unspecified
+        ;
+    }
+};
+
+
 // Capacities are hard ceilings: the heap is not auto-grown mid-frame. Effective caps are clamped to the device's
 // descriptor-layout limits at initialize() time and logged (no silent truncation). Zero means "use the renderer
 // default".
 struct GpuDescriptorHeapDesc{
     u32 resourceCapacity = 0;   // slots shared by all non-sampler classes (one global namespace, see design 3.4)
     u32 samplerCapacity = 0;    // samplers live in their own global namespace
+    GpuDescriptorHeapAbi bindlessHeapAbi;
 
     constexpr GpuDescriptorHeapDesc& setResourceCapacity(u32 value){ resourceCapacity = value; return *this; }
     constexpr GpuDescriptorHeapDesc& setSamplerCapacity(u32 value){ samplerCapacity = value; return *this; }
+    constexpr GpuDescriptorHeapDesc& setBindlessHeapAbi(const GpuDescriptorHeapAbi& value){ bindlessHeapAbi = value; return *this; }
 };
 
 

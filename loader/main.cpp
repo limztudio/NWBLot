@@ -314,6 +314,10 @@ static int RunProjectRuntime(
         frame.graphics().setWindowTitle(MakeNotNull(projectWindowTitle));
         const NWB::Path resourceMountDirectory = __hidden_loader::ResolveResourceMountDirectory(arena);
         frame.graphics().setPipelineCacheDirectory(resourceMountDirectory);
+        if(!NWB::ConfigureProjectGraphics(frame.graphics())){
+            NWB_LOGGER_FATAL(NWB_TEXT("Loader: project graphics ABI configuration failed before device initialization"));
+            return -1;
+        }
         if(!__hidden_loader::ApplyGraphicsOptions(frame.graphics(), options))
             return -1;
 

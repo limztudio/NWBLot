@@ -25,7 +25,7 @@
 #include <core/graphics/backend_selection.h>
 #include <core/perf/timing.h>
 #include <impl/assets/graphics/avboit/constants.h>
-#include <impl/assets/graphics/bindless/binding_slots.h>
+#include <impl/assets/graphics/bindless/runtime_abi.h>
 #include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <tests/capturing_logger.h>
 
@@ -83,6 +83,8 @@ public:
     // Returns false on driver/instance failure (no Vulkan, no physical device, etc.). The caller SKIPS in that case
     // rather than failing — a CI runner without a GPU is an environment condition.
     [[nodiscard]] bool initialize(){
+        if(!m_graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()))
+            return false;
         return m_graphics.createHeadlessDevice();
     }
 
@@ -500,7 +502,11 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetiredAndDoubleFreed
 
     GraphicsBackend::GpuDescriptorHeap heap(device);
     GpuDescriptorHeapDesc heapDesc;
-    heapDesc.setResourceCapacity(2u).setSamplerCapacity(1u);
+    heapDesc
+        .setResourceCapacity(2u)
+        .setSamplerCapacity(1u)
+        .setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
+    ;
     ASSERT_TRUE(heap.initialize(heapDesc));
 
     auto storageBuffer = device.createBuffer(

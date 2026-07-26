@@ -8,6 +8,7 @@
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/module.h>
 #include <core/telemetry/frame_graph_registry.h>
+#include <impl/assets/graphics/bindless/runtime_abi.h>
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_mesh/module.h>
 #include <impl/ecs_model/module.h>
@@ -27,6 +28,10 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 const tchar* NWB::QueryProjectWindowTitle(){
     return NWB_TEXT("NWB Testbed");
+}
+
+bool NWB::ConfigureProjectGraphics(Core::Graphics& graphics){
+    return graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi());
 }
 
 

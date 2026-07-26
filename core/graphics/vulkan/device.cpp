@@ -460,6 +460,7 @@ Device::Device(const DeviceDesc& desc)
     // The global heap is mandatory. Capacity 0 selects a default clamped to the device's descriptor-layout limits.
     if(m_context.extensions.EXT_descriptor_buffer && m_descriptorBufferManager.isEnabled()){
         GpuDescriptorHeapDesc heapDesc;
+        heapDesc.setBindlessHeapAbi(desc.bindlessHeapAbi);
         if(!m_gpuDescriptorHeap.initialize(heapDesc))
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Required global GpuDescriptorHeap initialization failed."));
     }

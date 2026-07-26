@@ -79,6 +79,7 @@ struct DeviceDesc{
     bool gpuCrashDiagnosticsEnabled = false;
     bool logBufferLifetime = false;
 
+    GpuDescriptorHeapAbi bindlessHeapAbi;
     GraphicsString vulkanLibraryName;
     Path pipelineCacheDirectory;
 

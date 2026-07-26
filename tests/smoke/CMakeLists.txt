@@ -40,6 +40,9 @@ if(Python3_Interpreter_FOUND)
     endfunction()
 
     function(nwb_configure_runtime_smoke_target TARGET_NAME RUNTIME_ROOT)
+        target_sources("${TARGET_NAME}" PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/graphics_abi.cpp"
+        )
         set_target_properties("${TARGET_NAME}" PROPERTIES
             DEBUGGER_WORKING_DIRECTORY "${RUNTIME_ROOT}"
             WIN32_EXECUTABLE ON
@@ -53,6 +56,7 @@ if(Python3_Interpreter_FOUND)
             nwb_ecs_mesh
             nwb_ecs_render
             nwb_ecs_model_renderer
+            nwb_assets_graphics
             ${ARGN}
             "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_mesh>"
             "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_skeleton>"

@@ -57,6 +57,40 @@ namespace __hidden_vulkan_descriptor_heap{
         default:                                return ResourceType::None;
         }
     }
+
+    bool IsBindlessHeapAbiValid(const GpuDescriptorHeapAbi& abi){
+        if(!abi.valid())
+            return false;
+        if(
+            abi.resourceSetIndex < s_MaxBindingLayouts
+            || abi.samplerSetIndex < s_MaxBindingLayouts
+            || abi.accelStructSetIndex < s_MaxBindingLayouts
+            || abi.resourceSetIndex == abi.samplerSetIndex
+            || abi.resourceSetIndex == abi.accelStructSetIndex
+            || abi.samplerSetIndex == abi.accelStructSetIndex
+        )
+            return false;
+
+        const u32 resourceBindings[s_ResourceClassCount] = {
+            abi.sampledImageBinding,
+            abi.storageImageBinding,
+            abi.sampledBufferBinding,
+            abi.storageBufferBinding,
+            abi.uniformBufferBinding,
+            abi.sampledImage2DArrayBinding,
+            abi.sampledImage3DBinding,
+            abi.sampledImage2DArrayUintBinding,
+        };
+        for(u32 bindingIndex = 0u; bindingIndex < s_ResourceClassCount; ++bindingIndex){
+            const u32 binding = resourceBindings[bindingIndex];
+            if(
+                binding >= s_MaxBindlessRegisterSpaces
+                || (bindingIndex > 0u && resourceBindings[bindingIndex - 1u] >= binding)
+            )
+                return false;
+        }
+        return abi.samplerBinding < s_MaxBindlessRegisterSpaces && abi.accelStructBinding < s_MaxBindlessRegisterSpaces;
+    }
 };
 
 
@@ -83,20 +117,21 @@ GpuDescriptorHeap::~GpuDescriptorHeap(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptorClass){
+u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptorClass)const{
     // Register-space binding numbers inside each fixed-capacity descriptor-buffer layout. Sampler counts from 0 in
     // its own table.
+    const GpuDescriptorHeapAbi& abi = m_desc.bindlessHeapAbi;
     switch(descriptorClass){
-    case GpuDescriptorClass::SampledImage:  return NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE;
-    case GpuDescriptorClass::StorageImage:  return NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE;
-    case GpuDescriptorClass::SampledBuffer: return NWB_BINDLESS_HEAP_BINDING_SAMPLED_BUFFER;
-    case GpuDescriptorClass::StorageBuffer: return NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER;
-    case GpuDescriptorClass::UniformBuffer: return NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER;
-    case GpuDescriptorClass::AccelStruct:   return NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT;
-    case GpuDescriptorClass::Sampler:       return NWB_BINDLESS_HEAP_BINDING_SAMPLER;
-    case GpuDescriptorClass::SampledImage2DArray: return NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY;
-    case GpuDescriptorClass::SampledImage3D: return NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_3D;
-    case GpuDescriptorClass::SampledImage2DArrayUint: return NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY_UINT;
+    case GpuDescriptorClass::SampledImage:  return abi.sampledImageBinding;
+    case GpuDescriptorClass::StorageImage:  return abi.storageImageBinding;
+    case GpuDescriptorClass::SampledBuffer: return abi.sampledBufferBinding;
+    case GpuDescriptorClass::StorageBuffer: return abi.storageBufferBinding;
+    case GpuDescriptorClass::UniformBuffer: return abi.uniformBufferBinding;
+    case GpuDescriptorClass::AccelStruct:   return abi.accelStructBinding;
+    case GpuDescriptorClass::Sampler:       return abi.samplerBinding;
+    case GpuDescriptorClass::SampledImage2DArray: return abi.sampledImage2DArrayBinding;
+    case GpuDescriptorClass::SampledImage3D: return abi.sampledImage3DBinding;
+    case GpuDescriptorClass::SampledImage2DArrayUint: return abi.sampledImage2DArrayUintBinding;
     default:                                return 0u;
     }
 }
@@ -170,6 +205,10 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         shutdown();
         return false;
     };
+    if(!IsBindlessHeapAbiValid(m_desc.bindlessHeapAbi)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap requires a complete, distinct high-set bindless ABI with ascending resource bindings."));
+        return failInitialization();
+    }
 
     // The renderer's global heap has no fallback. Fail initialization unless the descriptor-buffer manager is live
     // before any heap layout or slot state is created.
@@ -230,7 +269,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .setLayoutType(BindlessLayoutType::MutableSrvUavCbv)
         .setMaxCapacity(resourceCapacity)
         .setVisibility(ShaderType::All)
-        .setDescriptorSetIndex(m_resourceSetIndex)   // reserved set 8 - createPipelineLayoutForBindingLayouts gap-fills 0..7
+        .setDescriptorSetIndex(m_desc.bindlessHeapAbi.resourceSetIndex)
         .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImage), resourceCapacity))
         .addRegisterSpace(BindingLayoutItem::Texture_UAV(getRegisterSlot(GpuDescriptorClass::StorageImage), resourceCapacity))
         .addRegisterSpace(BindingLayoutItem::TypedBuffer_SRV(getRegisterSlot(GpuDescriptorClass::SampledBuffer), resourceCapacity))
@@ -261,7 +300,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .setLayoutType(BindlessLayoutType::MutableSampler)
         .setMaxCapacity(samplerCapacity)
         .setVisibility(ShaderType::All)
-        .setDescriptorSetIndex(m_samplerSetIndex)   // reserved set 9
+        .setDescriptorSetIndex(m_desc.bindlessHeapAbi.samplerSetIndex)
         .addRegisterSpace(BindingLayoutItem::Sampler(getRegisterSlot(GpuDescriptorClass::Sampler), samplerCapacity))
     ;
 
@@ -283,8 +322,8 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
             .setLayoutType(BindlessLayoutType::Immutable)
             .setMaxCapacity(1u)
             .setVisibility(ShaderType::All)
-            .setDescriptorSetIndex(m_accelStructSetIndex)
-            .addRegisterSpace(BindingLayoutItem::RayTracingAccelStruct(NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT, 1u))
+            .setDescriptorSetIndex(m_desc.bindlessHeapAbi.accelStructSetIndex)
+            .addRegisterSpace(BindingLayoutItem::RayTracingAccelStruct(getRegisterSlot(GpuDescriptorClass::AccelStruct), 1u))
         ;
         m_accelStructLayout = m_device.createBindlessLayout(accelStructLayoutDesc);
         if(!m_accelStructLayout || !m_accelStructLayout->isDescriptorBufferCompatible()){
@@ -293,7 +332,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         }
 
         const auto& bindingOffsets = m_accelStructLayout->getDescriptorBufferBindingOffsets();
-        const auto offsetIt = bindingOffsets.find(NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT);
+        const auto offsetIt = bindingOffsets.find(getRegisterSlot(GpuDescriptorClass::AccelStruct));
         if(offsetIt == bindingOffsets.end()){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap TLAS descriptor-buffer layout has no binding offset."));
             return failInitialization();
@@ -345,8 +384,8 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: GpuDescriptorHeap initialized (descriptor buffer): resource capacity {}, sampler capacity {} (sets {}/{}).")
         , resourceCapacity
         , samplerCapacity
-        , m_resourceSetIndex
-        , m_samplerSetIndex
+        , m_desc.bindlessHeapAbi.resourceSetIndex
+        , m_desc.bindlessHeapAbi.samplerSetIndex
     );
     return true;
 }

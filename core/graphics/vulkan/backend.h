@@ -8,7 +8,6 @@
 #include "module.h"
 
 #include <core/common/log.h>
-#include <impl/assets/graphics/bindless/binding_slots.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1554,9 +1553,9 @@ public:
 
     [[nodiscard]] u32 getResourceCapacity()const{ return m_resourceSlots.capacity; }
     [[nodiscard]] u32 getSamplerCapacity()const{ return m_samplerSlots.capacity; }
-    [[nodiscard]] u32 getResourceSetIndex()const{ return m_resourceSetIndex; }
-    [[nodiscard]] u32 getSamplerSetIndex()const{ return m_samplerSetIndex; }
-    [[nodiscard]] u32 getAccelStructSetIndex()const{ return m_accelStructSetIndex; }
+    [[nodiscard]] u32 getResourceSetIndex()const{ return m_desc.bindlessHeapAbi.resourceSetIndex; }
+    [[nodiscard]] u32 getSamplerSetIndex()const{ return m_desc.bindlessHeapAbi.samplerSetIndex; }
+    [[nodiscard]] u32 getAccelStructSetIndex()const{ return m_desc.bindlessHeapAbi.accelStructSetIndex; }
     // The two bindless layouts a consuming pipeline must be built from (resource -> set 8, sampler -> set 9), in that
     // order, so the pipeline layout matches what bind()/bindCompute() bind against. Null until descriptor-buffer
     // initialization succeeds.
@@ -1567,7 +1566,7 @@ public:
     [[nodiscard]] const BindingLayoutHandle& getAccelStructLayout()const{ return m_accelStructLayout; }
     [[nodiscard]] bool hasAccelStructLayout()const{ return m_accelStructLayout != nullptr; }
     // The register-space binding number a class occupies inside its table (SPIR-V binding within the heap set).
-    [[nodiscard]] static u32 getRegisterSlot(GpuDescriptorClass::Enum descriptorClass);
+    [[nodiscard]] u32 getRegisterSlot(GpuDescriptorClass::Enum descriptorClass)const;
     // The persistent carved block for each segment (resource/sampler) -- its offset is what
     // vkCmdSetDescriptorBufferOffsetsEXT binds at the heap's set index. Only valid after initialize().
     [[nodiscard]] const DescriptorBufferSegment& getResourceBufferBlock()const{ return m_resourceBufferBlock; }
@@ -1615,15 +1614,6 @@ private:
     const VulkanContext& m_context;
 
     GpuDescriptorHeapDesc m_desc;
-
-    // Set index each table occupies in a consuming pipeline layout. Resource/sampler are pinned through explicit
-    // BindlessLayoutDesc set indices, including the immutable TLAS layout at the next high set, leaving
-    // pipeline-local push-constant-only low sets collision-free.
-    // These MUST stay in lockstep with the shader contract in impl/assets/graphics/bindless/binding_slots.h
-    // (NWB_BINDLESS_HEAP_RESOURCE_SET / _SAMPLER_SET / _ACCEL_STRUCT_SET).
-    u32 m_resourceSetIndex = NWB_BINDLESS_HEAP_RESOURCE_SET;
-    u32 m_samplerSetIndex = NWB_BINDLESS_HEAP_SAMPLER_SET;
-    u32 m_accelStructSetIndex = NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET;
 
     BindingLayoutHandle m_resourceLayout;
     BindingLayoutHandle m_samplerLayout;

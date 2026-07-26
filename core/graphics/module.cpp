@@ -404,6 +404,14 @@ bool Graphics::setDebugRuntimeEnabled(bool enabled){
     return true;
 }
 
+bool Graphics::setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi){
+    if(!abi.valid() || getDevice())
+        return false;
+
+    m_deviceCreationParams.bindlessHeapAbi = abi;
+    return true;
+}
+
 void Graphics::setPipelineCacheDirectory(const Path& directory){
     m_deviceCreationParams.pipelineCacheDirectory = directory;
 }

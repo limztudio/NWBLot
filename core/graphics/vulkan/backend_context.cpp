@@ -1919,6 +1919,7 @@ bool BackendContext::createDevice(){
     deviceDesc.rayTracingLinearSweptSpheresSupported = m_rayTracingLinearSweptSpheresSupported;
     deviceDesc.gpuCrashDiagnosticsEnabled = m_deviceParams.enableGpuCrashDiagnostics;
     deviceDesc.logBufferLifetime = m_deviceParams.logBufferLifetime;
+    deviceDesc.bindlessHeapAbi = m_deviceParams.bindlessHeapAbi;
     deviceDesc.vulkanLibraryName = m_deviceParams.backendLibraryName;
     deviceDesc.pipelineCacheDirectory = m_deviceParams.pipelineCacheDirectory;
 

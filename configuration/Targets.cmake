@@ -31,9 +31,6 @@ endfunction()
 
 function(nwb_declare_interface_library target)
     add_library(${target} INTERFACE)
-    target_include_directories(${target} INTERFACE
-        "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>"
-    )
     target_link_libraries(${target} INTERFACE
         nwb::tsl_headers
         nwb_internal_headers

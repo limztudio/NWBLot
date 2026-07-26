@@ -103,6 +103,7 @@ public:
     bool createHeadlessDevice();
     bool createInstance(const InstanceParameters& params);
     bool setDebugRuntimeEnabled(bool enabled);
+    bool setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi);
     void setPipelineCacheDirectory(const Path& directory);
     bool runFrame(){ return animateRenderPresent(); }
     void updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);

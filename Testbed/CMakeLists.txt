@@ -21,6 +21,7 @@ target_link_libraries(testbed PRIVATE
     nwb_ecs_render
     nwb_ecs_model_renderer
     nwb_ecs_ui
+    nwb_assets_graphics
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_mesh>"
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_skeleton>"
     "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_model>"

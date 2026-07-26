@@ -18,4 +18,5 @@ target_link_libraries(nwb_descriptor_buffer_tests PRIVATE
     nwb_perf
     nwb_alloc
     nwb_common
+    nwb_assets_graphics
 )

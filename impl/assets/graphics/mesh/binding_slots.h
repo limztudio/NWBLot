@@ -15,9 +15,9 @@
 #define NWB_MESH_BINDING_UV0 3
 #define NWB_MESH_BINDING_COLOR 4
 #define NWB_MESH_BINDING_MESHLET_DESC 5
-// The typed material-constant words + the per-instance mutable-storage records (material_typed_bindings.slangi).
-// Raster and CSG consumers use these direct mesh-set bindings. Trace consumers enable their heap-selected material
-// context before including the shared surface-hook code, so they do not override these binding numbers.
+// Stable source-slot identities for typed material words and per-instance mutable storage
+// (material_typed_bindings.slangi). Both resources resolve through the frame descriptor heap; CSG reuses the
+// preserved typed-material slot for its UniformBuffer context selector.
 #ifndef NWB_MESH_BINDING_MATERIAL_TYPED
 #define NWB_MESH_BINDING_MATERIAL_TYPED 6
 #endif

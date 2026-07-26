@@ -268,12 +268,7 @@ bool BuildInfluence(
     }
 
     outWeights = VectorScale(
-        VectorSet(
-            outInfluence.weight.x,
-            outInfluence.weight.y,
-            outInfluence.weight.z,
-            outInfluence.weight.w
-        ),
+        LoadFloat(outInfluence.weight),
         static_cast<f32>(1.0 / weightSum)
     );
     StoreFloat(outWeights, &outInfluence.weight);

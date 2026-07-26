@@ -88,54 +88,11 @@ static constexpr AStringView s_NameField = "name";
 static constexpr AStringView s_ParentField = "parent";
 static constexpr AStringView s_LocalBindPoseField = "local_bind_pose";
 static constexpr AStringView s_SkeletonMetaKind = "Skeleton";
+static constexpr AStringView s_SkeletonJointMetaKind = "Skeleton joint meta";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] bool ReadNameField(
-    const Path& nwbFilePath,
-    const Value& object,
-    const AStringView objectKind,
-    const AStringView fieldName,
-    const bool required,
-    Name& outName
-){
-    outName = NAME_NONE;
-
-    const Value* fieldValue = FindField(object, fieldName);
-    if(!fieldValue){
-        if(!required)
-            return true;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': field '{}' is required")
-            , StringConvert(objectKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-    if(!fieldValue->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': field '{}' must be a string")
-            , StringConvert(objectKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    const MStringView text = fieldValue->asString();
-    outName = Name(AStringView(text.data(), text.size()));
-    if(required && !outName){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': field '{}' must not be empty")
-            , StringConvert(objectKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-    return true;
-}
 
 [[nodiscard]] bool ValidateSkeletonAssetFields(const Path& nwbFilePath, const Value& asset){
     return Core::Assets::ValidateMetadataAssetFields(
@@ -161,8 +118,8 @@ static constexpr AStringView s_SkeletonMetaKind = "Skeleton";
     if(!ValidateSkeletonJointFields(nwbFilePath, jointValue))
         return false;
     if(
-        !ReadNameField(nwbFilePath, jointValue, "Skeleton joint", s_NameField, true, outJoint.name)
-        || !ReadNameField(nwbFilePath, jointValue, "Skeleton joint", s_ParentField, false, outJoint.parent)
+        !Core::Assets::ReadMetadataNameField(nwbFilePath, jointValue, s_SkeletonJointMetaKind, s_NameField, true, outJoint.name)
+        || !Core::Assets::ReadMetadataNameField(nwbFilePath, jointValue, s_SkeletonJointMetaKind, s_ParentField, false, outJoint.parent)
     )
         return false;
 

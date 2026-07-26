@@ -36,66 +36,6 @@ inline constexpr u32 s_SurfelCountLogDelay = 3u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_rt_surfel_gi{
-    [[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass){
-        return handle.valid() && handle.descriptorClass() == descriptorClass;
-    }
-
-    [[nodiscard]] bool RegisterHeapBuffer(
-        Core::GpuDescriptorHeap& heap,
-        Core::Buffer& buffer,
-        const Core::GpuDescriptorClass::Enum descriptorClass,
-        const bool writable,
-        Core::GpuDescriptorHandle& outHandle
-    ){
-        outHandle = Core::GpuDescriptorHandle::invalid();
-        const Core::GpuDescriptorHandle handle = heap.allocate(descriptorClass);
-        if(!handle.valid())
-            return false;
-
-        const Core::DescriptorWriteItem item = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
-            ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
-            : (writable
-                ? Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, &buffer)
-                : Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, &buffer)
-            )
-        ;
-        if(!heap.write(handle, item)){
-            heap.free(handle);
-            return false;
-        }
-        outHandle = handle;
-        return true;
-    }
-
-    [[nodiscard]] bool EnsureHeapBuffer(
-        Core::GpuDescriptorHeap& heap,
-        Core::Buffer& buffer,
-        const Core::GpuDescriptorClass::Enum descriptorClass,
-        const bool writable,
-        Core::GpuDescriptorHandle& inOutHandle
-    ){
-        if(inOutHandle.valid())
-            return IsHeapHandle(inOutHandle, descriptorClass);
-
-        Core::GpuDescriptorHandle acquired;
-        if(!RegisterHeapBuffer(heap, buffer, descriptorClass, writable, acquired))
-            return false;
-        inOutHandle = acquired;
-        return true;
-    }
-
-    void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle){
-        if(handle.valid())
-            heap.free(handle);
-        handle = Core::GpuDescriptorHandle::invalid();
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
     if(rayTracingState().m_surfelSpawnPipeline)
         return true;
@@ -525,14 +465,14 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
     // Register each persistent surfel buffer exactly once in the global heap. The typed shader aliases choose read or
     // writable views at use time; the descriptor itself owns the backing-buffer lifetime until its retirement delay.
     if(
-        !__hidden_rt_surfel_gi::EnsureHeapBuffer(heap, *rayTracingState().m_surfelConstants.get(), Core::GpuDescriptorClass::UniformBuffer, false, rayTracingState().m_surfelConstantsHeapHandle)
-        || !__hidden_rt_surfel_gi::EnsureHeapBuffer(heap, *rayTracingState().m_surfelPoolBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelPoolHeapHandle)
-        || !__hidden_rt_surfel_gi::EnsureHeapBuffer(heap, *rayTracingState().m_surfelCellHeadBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelCellHeadHeapHandle)
-        || !__hidden_rt_surfel_gi::EnsureHeapBuffer(heap, *rayTracingState().m_surfelCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelCounterHeapHandle)
-        || !__hidden_rt_surfel_gi::EnsureHeapBuffer(heap, *rayTracingState().m_surfelTraceIndirectArgsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelTraceIndirectArgsHeapHandle)
-        || !__hidden_rt_surfel_gi::EnsureHeapBuffer(heap, *rayTracingState().m_surfelFreeListBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelFreeListHeapHandle)
-        || !__hidden_rt_surfel_gi::EnsureHeapBuffer(heap, *rayTracingState().m_surfelPoolSnapshotBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, false, rayTracingState().m_surfelPoolSnapshotHeapHandle)
-        || !__hidden_rt_surfel_gi::EnsureHeapBuffer(heap, *rayTracingState().m_surfelCellHeadSnapshotBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, false, rayTracingState().m_surfelCellHeadSnapshotHeapHandle)
+        !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelConstants.get(), Core::GpuDescriptorClass::UniformBuffer, false, rayTracingState().m_surfelConstantsHeapHandle)
+        || !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelPoolBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelPoolHeapHandle)
+        || !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelCellHeadBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelCellHeadHeapHandle)
+        || !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelCounterHeapHandle)
+        || !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelTraceIndirectArgsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelTraceIndirectArgsHeapHandle)
+        || !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelFreeListBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelFreeListHeapHandle)
+        || !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelPoolSnapshotBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, false, rayTracingState().m_surfelPoolSnapshotHeapHandle)
+        || !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelCellHeadSnapshotBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, false, rayTracingState().m_surfelCellHeadSnapshotHeapHandle)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register persistent surfel resources in the descriptor heap"));
         return false;
@@ -804,15 +744,15 @@ void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
     auto& device = *graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(heap.isInitialized()){
-        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelConstantsHeapHandle);
-        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelPoolHeapHandle);
-        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelCellHeadHeapHandle);
-        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelCounterHeapHandle);
-        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelTraceIndirectArgsHeapHandle);
-        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelFreeListHeapHandle);
-        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelPoolSnapshotHeapHandle);
-        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelCellHeadSnapshotHeapHandle);
-        __hidden_rt_surfel_gi::RetireHeapHandle(heap, rayTracingState().m_surfelMaterialContextSlotsHeapHandle);
+        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelConstantsHeapHandle);
+        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelPoolHeapHandle);
+        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelCellHeadHeapHandle);
+        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelCounterHeapHandle);
+        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelTraceIndirectArgsHeapHandle);
+        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelFreeListHeapHandle);
+        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelPoolSnapshotHeapHandle);
+        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelCellHeadSnapshotHeapHandle);
+        __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelMaterialContextSlotsHeapHandle);
         return;
     }
 
@@ -856,9 +796,9 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
     if(
         !targets.bindless.valid()
-        || !__hidden_rt_surfel_gi::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
         || !rayTracingState().m_rayTraceMaterialContextSlotsBuffer
-        || !__hidden_rt_surfel_gi::EnsureHeapBuffer(
+        || !__hidden_raytracing_system::EnsureHeapBuffer(
             heap,
             *rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(),
             Core::GpuDescriptorClass::UniformBuffer,
@@ -966,22 +906,22 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         !targets.bindless.valid()
         || !deferredState().m_sceneShadingBuffer
         || !deferredState().m_lightBuffer
-        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelConstantsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
-        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelPoolHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelCellHeadHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelTraceIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelFreeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelPoolSnapshotHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelCellHeadSnapshotHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_surfelMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
-        || !__hidden_rt_surfel_gi::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
-        || !__hidden_rt_surfel_gi::IsHeapHandle(targets.bindless.gbufferWorldPosition, Core::GpuDescriptorClass::SampledImage)
-        || !__hidden_rt_surfel_gi::IsHeapHandle(targets.bindless.gbufferNormal, Core::GpuDescriptorClass::SampledImage)
-        || !__hidden_rt_surfel_gi::IsHeapHandle(targets.bindless.surfelIrradianceHalf, Core::GpuDescriptorClass::SampledImage)
-        || !__hidden_rt_surfel_gi::IsHeapHandle(targets.bindless.surfelIrradianceHalfStorage, Core::GpuDescriptorClass::StorageImage)
-        || !__hidden_rt_surfel_gi::IsHeapHandle(targets.bindless.surfelIrradianceStorage, Core::GpuDescriptorClass::StorageImage)
-        || (useHwTrace && (!rayTracingState().m_tlas || !__hidden_rt_surfel_gi::IsHeapHandle(rayTracingState().m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)))
+        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelConstantsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelPoolHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelCellHeadHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelTraceIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelFreeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelPoolSnapshotHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelCellHeadSnapshotHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_surfelMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.gbufferWorldPosition, Core::GpuDescriptorClass::SampledImage)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.gbufferNormal, Core::GpuDescriptorClass::SampledImage)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.surfelIrradianceHalf, Core::GpuDescriptorClass::SampledImage)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.surfelIrradianceHalfStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.surfelIrradianceStorage, Core::GpuDescriptorClass::StorageImage)
+        || (useHwTrace && (!rayTracingState().m_tlas || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_tlasHeapHandle, Core::GpuDescriptorClass::AccelStruct)))
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel GI heap registration is incomplete"));
         return false;
@@ -1146,18 +1086,10 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
             commandList.setBufferState(rayTracingState().m_shadowInstanceMaterialBuffer.get(), Core::ResourceStates::ShaderResource);
             commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
             commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
         }
         else{
-            for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){
-                commandList.setBufferState(rayTracingState().m_swShadowMeshNodeBuffers[slot], Core::ResourceStates::ShaderResource);
-                commandList.setBufferState(rayTracingState().m_swShadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
-                commandList.setBufferState(rayTracingState().m_swShadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
-                commandList.setBufferState(rayTracingState().m_swShadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
-            }
-            commandList.setBufferState(rayTracingState().m_sceneBvhNodeBuffer.get(), Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(rayTracingState().m_sceneInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(rayTracingState().m_shadowInstanceMaterialBuffer.get(), Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+            transitionSwShadowTraversalResources(commandList);
             commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
         }
         if(useHwTrace)
@@ -1166,7 +1098,6 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
         commandList.setBufferState(rayTracingState().m_surfelPoolSnapshotBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_surfelCellHeadSnapshotBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
         commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
         commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
         commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);

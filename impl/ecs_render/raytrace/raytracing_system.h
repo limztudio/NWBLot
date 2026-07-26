@@ -229,6 +229,8 @@ private:
     [[nodiscard]] bool ensureRayTraceMaterialContextSlotsBuffer();
     [[nodiscard]] bool ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);
     [[nodiscard]] bool replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);
+    // Stages the shared heap-selected software-BVH traversal inputs; callers own pass-specific resources and barriers.
+    void transitionSwShadowTraversalResources(Core::CommandList& commandList);
     [[nodiscard]] bool ensureCausticEmissionTargetBuffer(usize targetCount);
     [[nodiscard]] bool ensureShadowInstanceMaterialBuffer(usize instanceCount);
     [[nodiscard]] bool uploadShadowMaterialContextBuffers(

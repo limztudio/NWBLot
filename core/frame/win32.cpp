@@ -3,6 +3,7 @@
 
 
 #include "module.h"
+#include "frame_detail.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -118,14 +119,6 @@ static bool AdjustWindowRectForDpi(RECT& rect, DWORD style, BOOL hasMenu, DWORD 
     }
 
     return AdjustWindowRectEx(&rect, style, hasMenu, styleEx) != FALSE;
-}
-
-static u16 ClampInitialWindowDimension(const u16 requestedDimension, const i32 maxClientDimension){
-    if(maxClientDimension <= 0)
-        return requestedDimension;
-
-    const u32 clampedDimension = Min<u32>(static_cast<u32>(requestedDimension), static_cast<u32>(maxClientDimension));
-    return static_cast<u16>(Min<u32>(clampedDimension, s_MaxU16));
 }
 
 static bool IsExtendedKey(LPARAM lParam){

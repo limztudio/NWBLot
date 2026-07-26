@@ -16,80 +16,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_rt_shadow{
-    [[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass){
-        return handle.valid() && handle.descriptorClass() == descriptorClass;
-    }
-
-    [[nodiscard]] bool RegisterHeapBuffer(
-        Core::GpuDescriptorHeap& heap,
-        Core::Buffer& buffer,
-        const Core::GpuDescriptorClass::Enum descriptorClass,
-        const bool writable,
-        Core::GpuDescriptorHandle& outHandle
-    ){
-        outHandle = Core::GpuDescriptorHandle::invalid();
-        const Core::GpuDescriptorHandle handle = heap.allocate(descriptorClass);
-        if(!handle.valid())
-            return false;
-        const Core::DescriptorWriteItem item = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
-            ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
-            : (writable
-                ? Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, &buffer)
-                : Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, &buffer)
-            )
-        ;
-        if(!heap.write(handle, item)){
-            heap.free(handle);
-            return false;
-        }
-        outHandle = handle;
-        return true;
-    }
-
-    [[nodiscard]] bool EnsureHeapBuffer(
-        Core::GpuDescriptorHeap& heap,
-        Core::Buffer& buffer,
-        const Core::GpuDescriptorClass::Enum descriptorClass,
-        const bool writable,
-        Core::GpuDescriptorHandle& inOutHandle
-    ){
-        if(inOutHandle.valid())
-            return IsHeapHandle(inOutHandle, descriptorClass);
-        Core::GpuDescriptorHandle acquired;
-        if(!RegisterHeapBuffer(heap, buffer, descriptorClass, writable, acquired))
-            return false;
-        inOutHandle = acquired;
-        return true;
-    }
-
-    [[nodiscard]] bool ReplaceHeapBuffer(
-        Core::GpuDescriptorHeap& heap,
-        Core::Buffer& buffer,
-        const Core::GpuDescriptorClass::Enum descriptorClass,
-        const bool writable,
-        Core::GpuDescriptorHandle& inOutHandle
-    ){
-        Core::GpuDescriptorHandle acquired;
-        if(!RegisterHeapBuffer(heap, buffer, descriptorClass, writable, acquired))
-            return false;
-        if(inOutHandle.valid())
-            heap.free(inOutHandle);
-        inOutHandle = acquired;
-        return true;
-    }
-
-    void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle){
-        if(handle.valid())
-            heap.free(handle);
-        handle = Core::GpuDescriptorHandle::invalid();
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
     if(handle.valid())
         return true;
@@ -101,7 +27,7 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buf
         return false;
     }
 
-    if(!__hidden_rt_shadow::EnsureHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
+    if(!__hidden_raytracing_system::EnsureHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material context buffer in the descriptor heap"));
         return false;
     }
@@ -120,7 +46,7 @@ bool RendererRayTracingSystem::replaceRayTraceMaterialContextHeapHandle(Core::Bu
         return false;
     }
 
-    if(!__hidden_rt_shadow::ReplaceHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
+    if(!__hidden_raytracing_system::ReplaceHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false, handle)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to replace ray-trace material-context heap descriptor"));
         return false;
     }
@@ -192,7 +118,7 @@ bool RendererRayTracingSystem::uploadRayTraceMaterialContextSlots(Core::CommandL
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(
         !heap.isInitialized()
-        || !__hidden_rt_shadow::EnsureHeapBuffer(
+        || !__hidden_raytracing_system::EnsureHeapBuffer(
             heap,
             *slotsBuffer,
             Core::GpuDescriptorClass::UniformBuffer,
@@ -452,7 +378,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(
         !heap.isInitialized()
-        || !__hidden_rt_shadow::ReplaceHeapBuffer(
+        || !__hidden_raytracing_system::ReplaceHeapBuffer(
             heap,
             *edgeListBuffer.get(),
             Core::GpuDescriptorClass::StorageBuffer,
@@ -484,9 +410,9 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         !heap.isInitialized()
         || !rayTracingState().m_tlasHeapHandle.valid()
         || !targets.bindless.valid()
-        || !__hidden_rt_shadow::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
-        || !__hidden_rt_shadow::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
-        || !__hidden_rt_shadow::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow trace heap resources are incomplete"));
         return false;
@@ -638,16 +564,16 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     if(
         !heap.isInitialized()
         || !targets.bindless.valid()
-        || !__hidden_rt_shadow::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
-        || !__hidden_rt_shadow::IsHeapHandle(rayTracingState().m_shadowMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
-        || !__hidden_rt_shadow::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
-        || !__hidden_rt_shadow::IsHeapHandle(targets.bindless.shadowCoarseTransmittanceStorage, Core::GpuDescriptorClass::StorageImage)
-        || !__hidden_rt_shadow::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
-        || !__hidden_rt_shadow::IsHeapHandle(targets.bindless.transparentSoftHalfStorage, Core::GpuDescriptorClass::StorageImage)
-        || !__hidden_rt_shadow::IsHeapHandle(rayTracingState().m_swShadowEdgeStatsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_rt_shadow::IsHeapHandle(rayTracingState().m_swShadowEdgeCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_rt_shadow::IsHeapHandle(rayTracingState().m_swShadowEdgeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !__hidden_rt_shadow::IsHeapHandle(rayTracingState().m_swShadowIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_shadowMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.shadowCoarseTransmittanceStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.transparentSoftHalfStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_swShadowEdgeStatsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_swShadowEdgeCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_swShadowEdgeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(rayTracingState().m_swShadowIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software-shadow heap resources are incomplete"));
         return false;
@@ -655,22 +581,9 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
-    // The per-mesh BVH node buffers were left in UnorderedAccess by the build pass; move each distinct mesh's
-    // node + geometry buffers to ShaderResource for the traversal reads. All five shared scene/material context
-    // buffers are heap-selected, so transition them explicitly too; the heap does not encode resource states.
-    for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){
-        commandList.setBufferState(rayTracingState().m_swShadowMeshNodeBuffers[slot], Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_swShadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_swShadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_swShadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
-    }
-    commandList.setBufferState(rayTracingState().m_sceneBvhNodeBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(rayTracingState().m_sceneInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(rayTracingState().m_shadowInstanceMaterialBuffer.get(), Core::ResourceStates::ShaderResource);
-    // The per-hit transmittance dispatch reads the shadow-owned material-context buffers (built + uploaded by
-    // buildSceneSwBvh on the shadow-prepare command list); move them explicitly alongside the per-mesh geometry
-    // before traversal.
-    commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+    // The per-mesh BVH node buffers were left in UnorderedAccess by the build pass; stage every heap-selected
+    // software traversal input before dispatch.
+    transitionSwShadowTraversalResources(commandList);
     if(rayTracingState().m_shadowInstanceBuffer)
         commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
     // The trace selects its G-buffer, scene-shading, and light-list inputs through the descriptor heap, so their
@@ -681,7 +594,6 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
     commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.setBufferState(rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
     // The two software sub-passes that write the visibility UAV (the opaque pre-pass + the transparent resolve/multiply)
     // need a UAV barrier between them, and the Stage-2 coarse->resolve handoff needs one on the coarse texture. Enable
     // UAV barriers on both so each commitBarriers between dispatches syncs the read-after-write hazard on the same image.
@@ -1262,9 +1174,9 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
     }
 
     const bool heapResourcesReady =
-        __hidden_rt_shadow::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowEdgeStatsHeapHandle)
-        && __hidden_rt_shadow::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowEdgeCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowEdgeCounterHeapHandle)
-        && __hidden_rt_shadow::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowIndirectArgsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowIndirectArgsHeapHandle)
+        __hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowEdgeStatsHeapHandle)
+        && __hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowEdgeCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowEdgeCounterHeapHandle)
+        && __hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_swShadowIndirectArgsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_swShadowIndirectArgsHeapHandle)
     ;
     if(!heapResourcesReady){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register software-shadow work buffers in the descriptor heap"));

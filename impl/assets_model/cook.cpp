@@ -165,68 +165,6 @@ static constexpr AStringView s_TransformField = "transform";
     );
 }
 
-[[nodiscard]] bool ReadStringField(
-    const Path& nwbFilePath,
-    const Value& object,
-    const AStringView objectKind,
-    const AStringView fieldName,
-    const bool required,
-    Name& outName
-){
-    outName = NAME_NONE;
-
-    const Value* fieldValue = object.findField(fieldName);
-    if(!fieldValue){
-        if(!required)
-            return true;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required")
-            , StringConvert(objectKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-    if(!fieldValue->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a string")
-            , StringConvert(objectKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    const MStringView text = fieldValue->asString();
-    outName = Name(AStringView(text.data(), text.size()));
-    if(required && !outName){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must not be empty")
-            , StringConvert(objectKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-    return true;
-}
-
-template<typename AssetT>
-[[nodiscard]] bool ReadAssetRefField(
-    const Path& nwbFilePath,
-    const Value& object,
-    const AStringView objectKind,
-    const AStringView fieldName,
-    const bool required,
-    Core::Assets::AssetRef<AssetT>& outRef
-){
-    Name assetName = NAME_NONE;
-    if(!ReadStringField(nwbFilePath, object, objectKind, fieldName, required, assetName))
-        return false;
-
-    outRef = {};
-    outRef.virtualPath = assetName;
-    return !required || outRef.valid();
-}
-
 [[nodiscard]] bool ReadFloatValue(
     const Path& nwbFilePath,
     const Value& value,
@@ -365,7 +303,7 @@ template<typename ObjectVectorT, typename ParseObjectFn>
     if(!ValidateModelObjectFields(nwbFilePath, objectValue, s_ObjectKind, { s_SkeletonField, s_TransformField }))
         return false;
 
-    return ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_SkeletonField, true, outObject.skeleton)
+    return Core::Assets::ReadMetadataAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_SkeletonField, true, outObject.skeleton)
         && ReadTransformField(nwbFilePath, objectValue, s_ObjectKind, outObject.transform)
     ;
 }
@@ -387,10 +325,10 @@ template<typename ObjectVectorT, typename ParseObjectFn>
     ))
         return false;
 
-    return ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MeshField, true, outObject.mesh)
-        && ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MaterialField, false, outObject.material)
-        && ReadStringField(nwbFilePath, objectValue, s_ObjectKind, s_ParentObjectField, false, outObject.parentObject)
-        && ReadStringField(nwbFilePath, objectValue, s_ObjectKind, s_ParentJointField, false, outObject.parentJoint)
+    return Core::Assets::ReadMetadataAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MeshField, true, outObject.mesh)
+        && Core::Assets::ReadMetadataAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MaterialField, false, outObject.material)
+        && Core::Assets::ReadMetadataNameField(nwbFilePath, objectValue, s_ObjectKind, s_ParentObjectField, false, outObject.parentObject)
+        && Core::Assets::ReadMetadataNameField(nwbFilePath, objectValue, s_ObjectKind, s_ParentJointField, false, outObject.parentJoint)
         && ReadTransformField(nwbFilePath, objectValue, s_ObjectKind, outObject.transform)
     ;
 }
@@ -412,10 +350,10 @@ template<typename ObjectVectorT, typename ParseObjectFn>
     ))
         return false;
 
-    return ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MeshField, true, outObject.mesh)
-        && ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_SkinField, true, outObject.skin)
-        && ReadAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MaterialField, false, outObject.material)
-        && ReadStringField(nwbFilePath, objectValue, s_ObjectKind, s_SkeletonField, true, outObject.skeletonObject)
+    return Core::Assets::ReadMetadataAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MeshField, true, outObject.mesh)
+        && Core::Assets::ReadMetadataAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_SkinField, true, outObject.skin)
+        && Core::Assets::ReadMetadataAssetRefField(nwbFilePath, objectValue, s_ObjectKind, s_MaterialField, false, outObject.material)
+        && Core::Assets::ReadMetadataNameField(nwbFilePath, objectValue, s_ObjectKind, s_SkeletonField, true, outObject.skeletonObject)
         && ReadTransformField(nwbFilePath, objectValue, s_ObjectKind, outObject.transform)
     ;
 }

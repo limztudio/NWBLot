@@ -38,6 +38,16 @@ struct MeshletTriangleData{
     };
 }
 
+[[nodiscard]] static MeshletTriangleVectors LoadMeshletTriangleVectors(const MeshletTriangleData& triangle){
+    return MakeMeshletTriangleVectors(
+        LoadFloat(triangle.positionVectors[0u]),
+        LoadFloat(triangle.positionVectors[1u]),
+        LoadFloat(triangle.positionVectors[2u]),
+        LoadFloat(triangle.centroid),
+        LoadFloat(triangle.areaNormal)
+    );
+}
+
 struct MeshletTrianglePrecompute{
     Core::Assets::AssetVector<MeshletTriangleData> triangles;
     Core::Assets::AssetVector<u32> positionTriangleOffsets;

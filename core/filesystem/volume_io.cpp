@@ -521,13 +521,12 @@ bool VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
     }
 
     for(;;){
-        const u64 segmentCount = static_cast<u64>(m_segmentPaths.size());
-        if(segmentCount > Limit<u64>::s_Max / m_segmentSize){
+        u64 capacity = 0;
+        if(!computeLogicalCapacityLocked(capacity)){
             __hidden_filesystem::LogFailure(m_volumeName, "ensureCapacity", "capacity overflow while computing current volume size");
             return false;
         }
 
-        const u64 capacity = segmentCount * m_segmentSize;
         if(requiredBytes <= capacity)
             return true;
 
@@ -542,6 +541,19 @@ bool VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
         if(!createSegmentLocked(m_segmentPaths.size()))
             return false;
     }
+}
+
+bool VolumeFileSystem::computeLogicalCapacityLocked(u64& outCapacityBytes)const{
+    outCapacityBytes = 0;
+    if(m_segmentSize == 0)
+        return false;
+
+    const u64 segmentCount = static_cast<u64>(m_segmentPaths.size());
+    if(segmentCount > Limit<u64>::s_Max / m_segmentSize)
+        return false;
+
+    outCapacityBytes = segmentCount * m_segmentSize;
+    return true;
 }
 
 bool VolumeFileSystem::computePhysicalCapacityLocked(u64& outCapacityBytes)const{
@@ -643,11 +655,11 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
         return false;
     }
 
-    if(static_cast<u64>(m_segmentPaths.size()) > Limit<u64>::s_Max / m_segmentSize){
+    u64 capacityBytes = 0;
+    if(!computeLogicalCapacityLocked(capacityBytes)){
         __hidden_filesystem::LogFailure(m_volumeName, "moveBytes", "capacity overflow");
         return false;
     }
-    const u64 capacityBytes = static_cast<u64>(m_segmentPaths.size()) * m_segmentSize;
     if(sourceEndOffset > capacityBytes){
         NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): moveBytes failed: source range [{}..{}) exceeds capacity {}")
             , StringConvert(m_volumeName)

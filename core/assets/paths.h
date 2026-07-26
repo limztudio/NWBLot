@@ -6,6 +6,7 @@
 
 
 #include "global.h"
+#include "ref.h"
 
 #include <core/common/log.h>
 
@@ -365,6 +366,71 @@ template<typename MetadataValue>
             return IsListedMetadataAssetField(fieldName, allowedFields);
         }
     );
+}
+
+// Shared cooker-side metadata field readers. Asset names and typed references always validate the same missing,
+// string-type, and required-nonempty contract before a cooker consumes them.
+template<typename MetadataValue>
+[[nodiscard]] inline bool ReadMetadataNameField(
+    const Path& nwbFilePath,
+    const MetadataValue& object,
+    const AStringView diagnosticPrefix,
+    const AStringView fieldName,
+    const bool required,
+    Name& outName
+){
+    outName = NAME_NONE;
+
+    const auto* fieldValue = object.findField(fieldName);
+    if(!fieldValue){
+        if(!required)
+            return true;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required")
+            , StringConvert(diagnosticPrefix)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+    if(!fieldValue->isString()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a string")
+            , StringConvert(diagnosticPrefix)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+
+    const auto text = fieldValue->asString();
+    outName = Name(AStringView(text.data(), text.size()));
+    if(required && !outName){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must not be empty")
+            , StringConvert(diagnosticPrefix)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+    return true;
+}
+
+template<typename AssetT, typename MetadataValue>
+[[nodiscard]] inline bool ReadMetadataAssetRefField(
+    const Path& nwbFilePath,
+    const MetadataValue& object,
+    const AStringView diagnosticPrefix,
+    const AStringView fieldName,
+    const bool required,
+    AssetRef<AssetT>& outRef
+){
+    Name assetName = NAME_NONE;
+    if(!ReadMetadataNameField(nwbFilePath, object, diagnosticPrefix, fieldName, required, assetName))
+        return false;
+
+    outRef = {};
+    outRef.virtualPath = assetName;
+    return !required || outRef.valid();
 }
 
 [[nodiscard]] inline bool BuildMetadataDerivedAssetVirtualPath(

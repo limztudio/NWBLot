@@ -44,6 +44,7 @@ static constexpr AStringView s_ModuleIncludeField = "module_include";
 static constexpr AStringView s_EvalField = "eval";
 static constexpr AStringView s_SlangIncludeExtension = ".slangi";
 static constexpr AStringView s_EvalShapeIdDefineName = "NWB_CSG_EVAL_SHAPE_ID";
+static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,42 +56,6 @@ static constexpr AStringView s_EvalShapeIdDefineName = "NWB_CSG_EVAL_SHAPE_ID";
         || fieldName == s_ModuleIncludeField
         || fieldName == s_EvalField
     ;
-}
-
-[[nodiscard]] static bool ParseRequiredNameField(
-    const Path& nwbFilePath,
-    const Metascript::Value& asset,
-    const AStringView fieldName,
-    Name& outName
-){
-    outName = NAME_NONE;
-
-    const Metascript::Value* fieldValue = asset.findField(fieldName);
-    if(!fieldValue){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' is required")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-    if(!fieldValue->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must be a string")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    const Metascript::MStringView text = fieldValue->asString();
-    outName = Name(AStringView(text.data(), text.size()));
-    if(!outName){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must not be empty")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-    return true;
 }
 
 [[nodiscard]] static bool ParseOptionalStringField(
@@ -400,9 +365,9 @@ bool ParseCsgShapeCookMetadata(
     ))
         return false;
 
-    if(!ParseRequiredNameField(nwbFilePath, asset, s_ShapeField, outEntry.shapeName))
+    if(!Core::Assets::ReadMetadataNameField(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, s_ShapeField, true, outEntry.shapeName))
         return false;
-    if(!ParseRequiredNameField(nwbFilePath, asset, s_ModuleField, outEntry.shaderModule))
+    if(!Core::Assets::ReadMetadataNameField(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, s_ModuleField, true, outEntry.shaderModule))
         return false;
     if(!ParseRequiredStringField(nwbFilePath, asset, s_EvalField, outEntry.evalInclude))
         return false;

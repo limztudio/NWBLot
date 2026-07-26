@@ -30,12 +30,6 @@ struct ShadowReprojectMergeHeapResources{
     u32 momentsOutStorageSlot = 0u;
 };
 
-
-[[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass){
-    return handle.valid() && handle.descriptorClass() == descriptorClass;
-}
-
-
 };
 
 
@@ -50,12 +44,12 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
     if(
         !heap.isInitialized()
-        || !__hidden_rt_softshadow::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
-        || !__hidden_rt_softshadow::IsHeapHandle(targets.bindless.sceneShading, Core::GpuDescriptorClass::UniformBuffer)
-        || !__hidden_rt_softshadow::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
-        || !__hidden_rt_softshadow::IsHeapHandle(targets.bindless.shadowSoftGeometryStorage, Core::GpuDescriptorClass::StorageImage)
-        || !__hidden_rt_softshadow::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
-        || !__hidden_rt_softshadow::IsHeapHandle(targets.bindless.shadowSoftHalfBStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.sceneShading, Core::GpuDescriptorClass::UniformBuffer)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.shadowSoftGeometryStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
+        || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.shadowSoftHalfBStorage, Core::GpuDescriptorClass::StorageImage)
     )
         return;
 
@@ -198,19 +192,9 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
     dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, opaqueDispatch);
 
     if(rayTracingState().m_softTransparentReady){
-        // The transparent SW trace is shared by the HW and SW opaque paths, so stage every heap-selected traversal input.
-        for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){
-            commandList.setBufferState(rayTracingState().m_swShadowMeshNodeBuffers[slot], Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(rayTracingState().m_swShadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(rayTracingState().m_swShadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
-            commandList.setBufferState(rayTracingState().m_swShadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
-        }
-        commandList.setBufferState(rayTracingState().m_sceneBvhNodeBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_sceneInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_shadowInstanceMaterialBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+        // The transparent SW trace is shared by the HW and SW opaque paths, so stage its common traversal inputs.
+        transitionSwShadowTraversalResources(commandList);
         commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
         commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
         commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
         commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);

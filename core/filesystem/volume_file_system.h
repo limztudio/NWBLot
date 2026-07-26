@@ -95,6 +95,7 @@ private:
 
     bool createSegmentLocked(usize segmentIndex);
     bool ensureCapacityLocked(u64 requiredBytes);
+    bool computeLogicalCapacityLocked(u64& outCapacityBytes)const;
 
     bool loadMetadataLocked();
     bool flushMetadataLocked();

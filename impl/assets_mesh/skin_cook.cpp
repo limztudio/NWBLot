@@ -94,72 +94,17 @@ static constexpr AStringView s_InverseBindMatricesField = "inverse_bind_matrices
 static constexpr AStringView s_JointsField = "joints";
 static constexpr AStringView s_WeightsField = "weights";
 static constexpr AStringView s_SkinMetaKind = "Skin";
+static constexpr AStringView s_SkinMetaDiagnosticPrefix = "Skin meta";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ReadNameField(
-    const Path& nwbFilePath,
-    const Value& object,
-    const AStringView fieldName,
-    const bool required,
-    Name& outName
-){
-    outName = NAME_NONE;
-
-    const Value* fieldValue = FindField(object, fieldName);
-    if(!fieldValue){
-        if(!required)
-            return true;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': field '{}' is required")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-    if(!fieldValue->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': field '{}' must be a string")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    const MStringView text = fieldValue->asString();
-    outName = Name(AStringView(text.data(), text.size()));
-    if(required && !outName){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': field '{}' must not be empty")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-    return true;
-}
-
-template<typename AssetT>
-[[nodiscard]] bool ReadAssetRefField(
-    const Path& nwbFilePath,
-    const Value& object,
-    const AStringView fieldName,
-    Core::Assets::AssetRef<AssetT>& outRef
-){
-    Name assetName = NAME_NONE;
-    if(!ReadNameField(nwbFilePath, object, fieldName, true, assetName))
-        return false;
-
-    outRef = {};
-    outRef.virtualPath = assetName;
-    return outRef.valid();
-}
-
 [[nodiscard]] bool ValidateSkinAssetFields(const Path& nwbFilePath, const Value& asset){
     return Core::Assets::ValidateMetadataAssetFields(
         nwbFilePath,
         asset,
-        "Skin meta",
+        s_SkinMetaDiagnosticPrefix,
         { s_MeshField, s_SkeletonField, s_InfluencesField, s_InverseBindMatricesField }
     );
 }
@@ -478,8 +423,8 @@ bool ParseSkinCookMetadata(
     if(!ValidateSkinAssetFields(nwbFilePath, asset))
         return false;
     if(
-        !ReadAssetRefField(nwbFilePath, asset, s_MeshField, outEntry.mesh)
-        || !ReadAssetRefField(nwbFilePath, asset, s_SkeletonField, outEntry.skeleton)
+        !Core::Assets::ReadMetadataAssetRefField(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_MeshField, true, outEntry.mesh)
+        || !Core::Assets::ReadMetadataAssetRefField(nwbFilePath, asset, s_SkinMetaDiagnosticPrefix, s_SkeletonField, true, outEntry.skeleton)
         || !ParseSkinInfluences(nwbFilePath, asset, outEntry.influences)
         || !ParseInverseBindMatrices(nwbFilePath, asset, outEntry.inverseBindMatrices)
         || !ValidateSkinInfluenceJointIndices(nwbFilePath, outEntry)

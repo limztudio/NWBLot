@@ -554,8 +554,9 @@ inline constexpr f32 s_SwShadowSceneBoundsRelativePadding = 0.10f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared helpers defined in rt_detail.cpp, used across the raytracing_* TUs (scene-BVH build + per-instance
-// occluder-material resolve). Moved out of the anon TU namespace so the split TUs can all reach them.
+// Shared helpers defined in rt_detail.cpp, used across the raytracing_* TUs (scene-BVH build, descriptor-heap
+// registrations, and per-instance occluder-material resolve). Moved out of the anon TU namespace so the split TUs
+// can all reach them.
 namespace __hidden_raytracing_system{
 
 
@@ -576,6 +577,29 @@ void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noe
     RenderableMeshDesc& outResolvedMesh,
     MeshResources*& outMesh
 );
+[[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass);
+[[nodiscard]] bool RegisterHeapBuffer(
+    Core::GpuDescriptorHeap& heap,
+    Core::Buffer& buffer,
+    Core::GpuDescriptorClass::Enum descriptorClass,
+    bool writable,
+    Core::GpuDescriptorHandle& outHandle
+);
+[[nodiscard]] bool EnsureHeapBuffer(
+    Core::GpuDescriptorHeap& heap,
+    Core::Buffer& buffer,
+    Core::GpuDescriptorClass::Enum descriptorClass,
+    bool writable,
+    Core::GpuDescriptorHandle& inOutHandle
+);
+[[nodiscard]] bool ReplaceHeapBuffer(
+    Core::GpuDescriptorHeap& heap,
+    Core::Buffer& buffer,
+    Core::GpuDescriptorClass::Enum descriptorClass,
+    bool writable,
+    Core::GpuDescriptorHandle& inOutHandle
+);
+void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle);
 u32 BuildSceneBvhNode(
     u32* indices,
     const u32 lo,

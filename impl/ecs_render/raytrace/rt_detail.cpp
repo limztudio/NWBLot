@@ -83,6 +83,77 @@ bool ResolveRenderableMeshResources(
     ;
 }
 
+[[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass){
+    return handle.valid() && handle.descriptorClass() == descriptorClass;
+}
+
+[[nodiscard]] bool RegisterHeapBuffer(
+    Core::GpuDescriptorHeap& heap,
+    Core::Buffer& buffer,
+    const Core::GpuDescriptorClass::Enum descriptorClass,
+    const bool writable,
+    Core::GpuDescriptorHandle& outHandle
+){
+    outHandle = Core::GpuDescriptorHandle::invalid();
+
+    const Core::GpuDescriptorHandle handle = heap.allocate(descriptorClass);
+    if(!handle.valid())
+        return false;
+
+    const Core::DescriptorWriteItem item = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
+        ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
+        : (writable
+            ? Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, &buffer)
+            : Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, &buffer)
+        )
+    ;
+    if(!heap.write(handle, item)){
+        heap.free(handle);
+        return false;
+    }
+    outHandle = handle;
+    return true;
+}
+
+[[nodiscard]] bool EnsureHeapBuffer(
+    Core::GpuDescriptorHeap& heap,
+    Core::Buffer& buffer,
+    const Core::GpuDescriptorClass::Enum descriptorClass,
+    const bool writable,
+    Core::GpuDescriptorHandle& inOutHandle
+){
+    if(inOutHandle.valid())
+        return IsHeapHandle(inOutHandle, descriptorClass);
+
+    Core::GpuDescriptorHandle acquired;
+    if(!RegisterHeapBuffer(heap, buffer, descriptorClass, writable, acquired))
+        return false;
+    inOutHandle = acquired;
+    return true;
+}
+
+[[nodiscard]] bool ReplaceHeapBuffer(
+    Core::GpuDescriptorHeap& heap,
+    Core::Buffer& buffer,
+    const Core::GpuDescriptorClass::Enum descriptorClass,
+    const bool writable,
+    Core::GpuDescriptorHandle& inOutHandle
+){
+    Core::GpuDescriptorHandle acquired;
+    if(!RegisterHeapBuffer(heap, buffer, descriptorClass, writable, acquired))
+        return false;
+    if(inOutHandle.valid())
+        heap.free(inOutHandle);
+    inOutHandle = acquired;
+    return true;
+}
+
+void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle){
+    if(handle.valid())
+        heap.free(handle);
+    handle = Core::GpuDescriptorHandle::invalid();
+}
+
 // Recursively builds a binary BVH over the [lo, hi) slice of the instance-index permutation, appending nodes
 // to `nodes` (the first node appended for the whole range is the root, index 0). Each internal node splits on
 // the axis + bin boundary of lowest binned-SAH cost: it sweeps a fixed-grid binning of all three centroid axes,
@@ -294,6 +365,27 @@ u32 BuildSceneBvhNode(
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererRayTracingSystem::transitionSwShadowTraversalResources(Core::CommandList& commandList){
+    // The software traversal selects every mesh, scene, and material-context input through the descriptor heap. Keep
+    // their common state staging in one place so shadow, soft-shadow, surfel GI, and caustics cannot drift as the
+    // shared ABI grows.
+    for(u32 slot = 0u; slot < rayTracingState().m_swShadowMeshCount; ++slot){
+        commandList.setBufferState(rayTracingState().m_swShadowMeshNodeBuffers[slot], Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_swShadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_swShadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_swShadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
+    }
+    commandList.setBufferState(rayTracingState().m_sceneBvhNodeBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(rayTracingState().m_sceneInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(rayTracingState().m_shadowInstanceMaterialBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(rayTracingState().m_shadowMaterialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -101,11 +101,11 @@ bool VolumeFileSystem::loadMetadataLocked(){
         return false;
     }
 
-    if(static_cast<u64>(m_segmentPaths.size()) > Limit<u64>::s_Max / m_segmentSize){
+    u64 maxVolumeBytes = 0;
+    if(!computeLogicalCapacityLocked(maxVolumeBytes)){
         __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "segment capacity overflow");
         return false;
     }
-    const u64 maxVolumeBytes = static_cast<u64>(m_segmentPaths.size()) * m_segmentSize;
     if(header.nextFreeOffset > maxVolumeBytes){
         __hidden_filesystem::LogFailure(m_volumeName, "loadMetadata", "next free offset exceeds volume capacity");
         return false;
@@ -202,11 +202,12 @@ bool VolumeFileSystem::flushMetadataLocked(){
         __hidden_filesystem::LogFailure(m_volumeName, "flushMetadata", "next free offset points inside metadata area");
         return false;
     }
-    if(static_cast<u64>(m_segmentPaths.size()) > Limit<u64>::s_Max / m_segmentSize){
+    u64 maxVolumeBytes = 0;
+    if(!computeLogicalCapacityLocked(maxVolumeBytes)){
         __hidden_filesystem::LogFailure(m_volumeName, "flushMetadata", "segment capacity overflow");
         return false;
     }
-    if(m_nextFreeOffset > static_cast<u64>(m_segmentPaths.size()) * m_segmentSize){
+    if(m_nextFreeOffset > maxVolumeBytes){
         __hidden_filesystem::LogFailure(m_volumeName, "flushMetadata", "next free offset exceeds volume capacity");
         return false;
     }

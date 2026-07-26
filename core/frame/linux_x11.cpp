@@ -3,6 +3,7 @@
 
 
 #include "linux_platform.h"
+#include "frame_detail.h"
 #include "input_helpers.h"
 
 #include <X11/XKBlib.h>
@@ -89,14 +90,6 @@ static void SetDeleteWindowMessage(Common::LinuxFrame& frameData, Atom atom){
 
 static void ResetKeyStates(){
     NWB_MEMSET(s_KeyStates, 0, sizeof(s_KeyStates));
-}
-
-static u16 ClampInitialWindowDimension(const u16 requestedDimension, const i32 displayDimension){
-    if(displayDimension <= 0)
-        return requestedDimension;
-
-    const u32 clampedDimension = Min<u32>(static_cast<u32>(requestedDimension), static_cast<u32>(displayDimension));
-    return static_cast<u16>(Min<u32>(clampedDimension, s_MaxU16));
 }
 
 static i32 TranslateModifiers(u32 state){

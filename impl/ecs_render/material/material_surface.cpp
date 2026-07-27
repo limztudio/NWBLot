@@ -11,6 +11,9 @@
 NWB_IMPL_BEGIN
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
     const Material& material,
     const Name& materialPath,
@@ -62,9 +65,6 @@ bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
 
     return true;
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo){
     outInfo = nullptr;

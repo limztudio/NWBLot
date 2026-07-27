@@ -789,7 +789,10 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
         commandList.setBufferState(counter, Core::ResourceStates::UnorderedAccess);
         commandList.setBufferState(freeList, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
-        rayTracingState().m_surfelResourcesNeedClear = false;
+        // The clear belongs to the preparation command list. Do not mark the persistent buffers initialized until
+        // RendererSystem has successfully submitted that list; otherwise a rejected preparation would let the next
+        // frame trace uninitialized pool/cell-head/counter contents.
+        rayTracingState().m_surfelResourcesClearPending = true;
     }
 
     // Upload the params CB. The cell size sets the surfel spacing (one surfel per hash cell); the gather radius is a bit
@@ -826,6 +829,19 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
     commandList.setBufferState(cb, Core::ResourceStates::ConstantBuffer);
     commandList.commitBarriers();
     return true;
+}
+
+void RendererRayTracingSystem::finalizeSurfelResourceInitialization(){
+    if(!rayTracingState().m_surfelResourcesClearPending)
+        return;
+
+    rayTracingState().m_surfelResourcesClearPending = false;
+    rayTracingState().m_surfelResourcesNeedClear = false;
+}
+
+void RendererRayTracingSystem::discardSurfelResourceInitialization(){
+    // NeedClear deliberately remains set so the next successful preparation list re-records the one-shot clear.
+    rayTracingState().m_surfelResourcesClearPending = false;
 }
 
 bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, DeferredFrameTargets& targets){

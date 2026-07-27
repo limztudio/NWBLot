@@ -45,6 +45,10 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
     bool& outBackendReady
 ){
     outBackendReady = false;
+    // Surfel GI is a per-frame consumer of the scene built below. Never let an empty or rejected preparation packet
+    // reuse the preceding frame's scene/backend selection and dispatch against stale trace inputs.
+    rayTracingState().m_surfelEnabled = false;
+    rayTracingState().m_surfelUseHwTrace = false;
     if(!targets.shadowVisibility)
         return false;
     // The trace material-context selector is itself a global UniformBuffer heap entry. Create its backing buffer before

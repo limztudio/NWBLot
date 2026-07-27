@@ -335,7 +335,18 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
 
     auto& device = *m_graphics.getDevice();
 
+    // The preparation list owns the first upload of this target generation's descriptor-slot payload and may also
+    // contain the one-shot clear for a newly-created surfel pool. Neither CPU marker may commit before submission.
+    const bool deferredBindlessSlotsWereUploaded = deferredTargets.bindless.slotsUploaded;
+    m_raytracingSystem.discardSurfelResourceInitialization();
     Core::GpuTimingSubmissionTicket shadowPrepareTimingTicket(m_graphics.gpuTiming());
+    const auto discardShadowPrepare = [&](){
+        shadowPrepareTimingTicket.discard();
+        m_shadowPrepareStateHandoff.reset();
+        m_preparedShadowVisibilityReady = false;
+        deferredTargets.bindless.slotsUploaded = deferredBindlessSlotsWereUploaded;
+        m_raytracingSystem.discardSurfelResourceInitialization();
+    };
     bool shadowPrepareRecorded = false;
     const Core::Graphics::JobHandle shadowPrepareJob = m_graphics.scheduleGraphicsJob([
         this,
@@ -346,20 +357,23 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(shadowPrepareTimingTicket);
         shadowPrepareRecorded = recordShadowPrepareCommandList(deferredTargets);
     });
-    if(!shadowPrepareJob.valid())
+    if(!shadowPrepareJob.valid()){
+        discardShadowPrepare();
         return false;
+    }
 
     m_graphics.waitJob(shadowPrepareJob);
     if(!shadowPrepareRecorded){
-        shadowPrepareTimingTicket.discard();
+        discardShadowPrepare();
         return false;
     }
 
     Core::CommandList* shadowPrepareCommandLists[] = { m_shadowPrepareCommandList.get() };
     if(!shadowPrepareTimingTicket.submit(device, shadowPrepareCommandLists, 1u)){
-        m_shadowPrepareStateHandoff.reset();
+        discardShadowPrepare();
         return false;
     }
+    m_raytracingSystem.finalizeSurfelResourceInitialization();
 
     return true;
 }
@@ -433,14 +447,84 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_postGbufferFanInStateHandoff.reset();
     m_raytracingSystem.discardSoftShadowTemporalHistory();
 
+    // Recording a packet can advance CPU mirrors (temporal phases, readback cadence, and the AVBOIT clear latch)
+    // before the five command buffers have reached the Graphics queue. Preserve them so every rejection path below can
+    // make the following frame record the same GPU work again instead of treating an abandoned packet as completed.
+    struct PostGbufferPacketCpuState{
+        bool avboitTargetsNeedClear = true;
+        bool deferredBindlessSlotsUploaded = false;
+        u32 softShadowFrameIndex = 0u;
+        u32 swShadowEdgeStatsTick = 0u;
+        bool swShadowEdgeStatsPending = false;
+        u32 swShadowEdgeStatsPendingTick = 0u;
+        bool swShadowDispatchLogged = false;
+        bool causticAccumulatorInitialized = false;
+        u32 swCausticFrameIndex = 0u;
+        u32 hwCausticFrameIndex = 0u;
+        bool swCausticDispatchLogged = false;
+        bool hwCausticDispatchLogged = false;
+        bool causticEmissionGateLogged = false;
+        u32 surfelFrameIndex = 0u;
+        bool surfelSeeded = false;
+        bool surfelCountReadbackPending = false;
+        u32 surfelCountReadbackFrame = 0u;
+    };
+    const PostGbufferPacketCpuState postGbufferPacketCpuState{
+        m_avboitState.m_targetsNeedClear,
+        deferredTargets.bindless.slotsUploaded,
+        m_rayTracingState.m_softShadowFrameIndex,
+        m_rayTracingState.m_swShadowEdgeStatsTick,
+        m_rayTracingState.m_swShadowEdgeStatsPending,
+        m_rayTracingState.m_swShadowEdgeStatsPendingTick,
+        m_rayTracingState.m_swShadowDispatchLogged,
+        m_rayTracingState.m_causticAccumulatorInitialized,
+        m_rayTracingState.m_swCausticFrameIndex,
+        m_rayTracingState.m_hwCausticFrameIndex,
+        m_rayTracingState.m_swCausticDispatchLogged,
+        m_rayTracingState.m_hwCausticDispatchLogged,
+        m_rayTracingState.m_causticEmissionGateLogged,
+        m_rayTracingState.m_surfelFrameIndex,
+        m_rayTracingState.m_surfelSeeded,
+        m_rayTracingState.m_surfelCountReadbackPending,
+        m_rayTracingState.m_surfelCountReadbackFrame,
+    };
+    const auto restorePostGbufferPacketCpuState = [&](){
+        m_avboitState.m_targetsNeedClear = postGbufferPacketCpuState.avboitTargetsNeedClear;
+        deferredTargets.bindless.slotsUploaded = postGbufferPacketCpuState.deferredBindlessSlotsUploaded;
+        // The G-buffer writer updates its CPU upload mirrors while recording. Its writes did not reach the device if
+        // this packet batch is abandoned, so force both uploads on the retry rather than restoring stale byte caches.
+        m_drawState.m_meshViewGpuDataValid = false;
+        m_deferredState.m_sceneShadingGpuDataValid = false;
+
+        m_rayTracingState.m_softShadowFrameIndex = postGbufferPacketCpuState.softShadowFrameIndex;
+        m_rayTracingState.m_swShadowEdgeStatsTick = postGbufferPacketCpuState.swShadowEdgeStatsTick;
+        m_rayTracingState.m_swShadowEdgeStatsPending = postGbufferPacketCpuState.swShadowEdgeStatsPending;
+        m_rayTracingState.m_swShadowEdgeStatsPendingTick = postGbufferPacketCpuState.swShadowEdgeStatsPendingTick;
+        m_rayTracingState.m_swShadowDispatchLogged = postGbufferPacketCpuState.swShadowDispatchLogged;
+        m_rayTracingState.m_causticAccumulatorInitialized = postGbufferPacketCpuState.causticAccumulatorInitialized;
+        m_rayTracingState.m_swCausticFrameIndex = postGbufferPacketCpuState.swCausticFrameIndex;
+        m_rayTracingState.m_hwCausticFrameIndex = postGbufferPacketCpuState.hwCausticFrameIndex;
+        m_rayTracingState.m_swCausticDispatchLogged = postGbufferPacketCpuState.swCausticDispatchLogged;
+        m_rayTracingState.m_hwCausticDispatchLogged = postGbufferPacketCpuState.hwCausticDispatchLogged;
+        m_rayTracingState.m_causticEmissionGateLogged = postGbufferPacketCpuState.causticEmissionGateLogged;
+        m_rayTracingState.m_surfelFrameIndex = postGbufferPacketCpuState.surfelFrameIndex;
+        m_rayTracingState.m_surfelSeeded = postGbufferPacketCpuState.surfelSeeded;
+        m_rayTracingState.m_surfelCountReadbackPending = postGbufferPacketCpuState.surfelCountReadbackPending;
+        m_rayTracingState.m_surfelCountReadbackFrame = postGbufferPacketCpuState.surfelCountReadbackFrame;
+    };
+
     Core::GpuTimingSubmissionTicket renderTimingTicket(m_graphics.gpuTiming());
-    Core::GlobalUniquePtr<Core::GpuTimingMeasure> frameTiming;
+    // This scope crosses two synchronously-waited graphics jobs, so it cannot live in either worker's scratch
+    // arena. Keep its small state in the caller's frame stack instead of allocating it from the renderer's
+    // persistent object arena.
+    Optional<Core::GpuTimingMeasure> frameTiming;
     const auto discardRenderPackets = [&](){
         if(frameTiming){
             frameTiming->discardTiming();
             frameTiming.reset();
         }
         renderTimingTicket.discard();
+        restorePostGbufferPacketCpuState();
         m_raytracingSystem.discardSoftShadowTemporalHistory();
         m_gbufferStateHandoff.reset();
         m_postGbufferNormalizedStateHandoff.reset();
@@ -471,8 +555,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         // Graphics has already reset every timer-query pool in the frame preamble, before shadow preparation and
         // every other render pass. This list can therefore begin the renderer frame scope without invalidating an
         // earlier pass's current-frame timestamps.
-        frameTiming = Core::MakeGlobalUnique<Core::GpuTimingMeasure>(
-            m_arena,
+        frameTiming.emplace(
             m_graphics.gpuTiming(),
             RendererGpuTimingScope::s_Frame,
             device,

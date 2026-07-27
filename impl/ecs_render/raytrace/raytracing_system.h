@@ -86,6 +86,11 @@ public:
     // passes (the SW trace reuses the SW scene BVH).
     [[nodiscard]] bool hasSurfelWork()const noexcept;
     [[nodiscard]] bool prepareSurfelResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    // The first surfel-pool clear is recorded into the shadow-preparation list. Keep the pool marked dirty until that
+    // list is actually submitted, so a rejected preparation packet retries the initialization rather than tracing
+    // uninitialized persistent buffers.
+    void finalizeSurfelResourceInitialization();
+    void discardSurfelResourceInitialization();
     [[nodiscard]] bool renderSurfelGi(Core::CommandList& commandList, DeferredFrameTargets& targets);
     // Lazily create the persistent surfel buffers (pool / cell-head / counter / params CB) + the three pass
     // pipelines. The buffers live on RendererRayTracingState so a window resize does not reset convergence.

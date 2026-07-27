@@ -773,8 +773,10 @@ struct RtSurfelGiState{
     // bootstrap in one frame), set true after the first trace.
     bool m_surfelSeeded = false;
     // m_surfelResourcesNeedClear: set when the buffers are (re)created in ensureSurfelResources (no command list) and
-    // consumed once in prepareSurfelResources (which has one) to clear the pool/cell-head/counter before the first pass.
+    // retained until the preparation submission that records their clear succeeds. m_surfelResourcesClearPending marks
+    // that clear in the currently-recorded preparation list; a rejected list leaves NeedClear set for the retry.
     bool m_surfelResourcesNeedClear = false;
+    bool m_surfelResourcesClearPending = false;
 };
 
 

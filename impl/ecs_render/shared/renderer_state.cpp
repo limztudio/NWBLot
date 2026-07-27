@@ -377,6 +377,7 @@ void RendererRayTracingState::invalidateResources(){
     m_surfelCountReadbackPending = false;
     m_surfelSeeded = false;
     m_surfelResourcesNeedClear = false;
+    m_surfelResourcesClearPending = false;
     m_surfelEnabled = false;
     m_surfelSpawnPipelineFailed = false;
     m_surfelHashBuildPipelineFailed = false;

@@ -17,6 +17,9 @@ NWB_IMPL_BEGIN
 namespace __hidden_rt_softshadow{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct ShadowReprojectMergeHeapResources{
     Core::Texture* softTrace = nullptr;
     Core::Texture* historyIn = nullptr;
@@ -29,6 +32,10 @@ struct ShadowReprojectMergeHeapResources{
     u32 historyOutStorageSlot = 0u;
     u32 momentsOutStorageSlot = 0u;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 };
 
@@ -275,10 +282,6 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
     swapSoftShadowTemporalHistory(targets);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
     if(rayTracingState().m_shadowGeometryDownsamplePipeline)
         return true;
@@ -323,10 +326,6 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
     }
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
     if(rayTracingState().m_shadowResolvePipeline)
@@ -373,10 +372,6 @@ bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
     if(rayTracingState().m_shadowResolveRgbPipeline)
         return true;
@@ -411,10 +406,6 @@ bool RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
     }
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slotStart, u32 slotCount, const SoftShadowResolveDispatch& dispatch){
     NWB_ASSERT(dispatch.pipeline);
@@ -497,10 +488,6 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
     runPass(dispatch.upsampleResources, 1u, ShadowResolveStage::Upsample, fullGroupsX, fullGroupsY);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
     if(rayTracingState().m_shadowReprojectMergePipeline)
         return true;
@@ -545,10 +532,6 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
     }
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void RendererRayTracingSystem::swapSoftShadowTemporalHistory(DeferredFrameTargets& targets){
     if(!rayTracingState().m_softShadowTemporalReady)

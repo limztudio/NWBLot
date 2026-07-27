@@ -18,7 +18,7 @@ NWB_IMPL_BEGIN
 
 
 namespace ECSRenderDetail{
-struct MeshFrameHeapSlots;
+    struct MeshFrameHeapSlots;
 }
 
 

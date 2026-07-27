@@ -253,6 +253,7 @@ static void BuildResolvedClipCutterGpuData(
     return true;
 }
 
+
 [[nodiscard]] static CsgClipCutterResolveResult::Enum ResolveReceiverClipCutter(
     const CsgShapeRegistry& shapeRegistry,
     const CsgCutterComponent& cutter,
@@ -314,6 +315,7 @@ static void BuildResolvedClipCutterGpuData(
     return CsgClipCutterResolveResult::Ready;
 }
 
+
 template<typename CutterHandler>
 [[nodiscard]] static bool ForEachReceiverClipCutter(
     const CsgShapeRegistry& shapeRegistry,
@@ -356,9 +358,6 @@ template<typename CutterHandler>
     );
     return resolved;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] static bool AcquireCsgStorageBufferHeapHandle(

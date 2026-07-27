@@ -16,6 +16,12 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+thread_local GpuTimingSubmissionTicket* GpuTimingRecorder::s_activeSubmissionTicket = nullptr;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void GpuTimingAccumulator::collect(Device& device, Perf::TimingSink& timing, const u32 epoch){
     if(!m_enabled)
         return;
@@ -110,19 +116,37 @@ GpuTimingScope GpuTimingAccumulator::beginQuery(
     commandList.beginTimerQuery(record.query.get());
     record.frameIndex = frameIndex;
     record.epoch = epoch;
-    return GpuTimingScope{ this, record.query.get(), index };
+    ++m_nextReservation;
+    if(m_nextReservation == 0u)
+        ++m_nextReservation;
+    record.reservation = m_nextReservation;
+    return GpuTimingScope{ this, record.query.get(), index, record.reservation };
 }
 
-void GpuTimingAccumulator::endQuery(CommandList& commandList, const GpuTimingScope& scope){
+bool GpuTimingAccumulator::endQuery(CommandList& commandList, const GpuTimingScope& scope){
+    if(!scope.valid() || scope.accumulator != this || scope.index >= m_queries.size())
+        return false;
+
+    QueryRecord& record = m_queries[scope.index];
+    if(record.query.get() != scope.query || record.reservation != scope.reservation)
+        return false;
+
+    commandList.endTimerQuery(record.query.get());
+    record.pending = true;
+    return true;
+}
+
+void GpuTimingAccumulator::discardQuery(const GpuTimingScope& scope){
     if(!scope.valid() || scope.accumulator != this || scope.index >= m_queries.size())
         return;
 
     QueryRecord& record = m_queries[scope.index];
-    if(record.query.get() != scope.query)
+    if(record.query.get() != scope.query || record.reservation != scope.reservation)
         return;
 
-    commandList.endTimerQuery(record.query.get());
-    record.pending = true;
+    // The command buffer that wrote this pair never reached the device, so its timestamp values cannot become
+    // observable. Keep the preamble-established deviceReady state intact: a later scope may still use this pool.
+    record.pending = false;
 }
 
 bool GpuTimingAccumulator::reserveQueries(Device& device, const u32 queryCount){
@@ -247,6 +271,11 @@ GpuTimingScope GpuTimingRecorder::beginScope(const Name& scopeName, Device* devi
     if(!m_accumulatorsActive || !scopeName || !device)
         return {};
 
+    GpuTimingSubmissionTicket* const ticket = activeSubmissionTicket();
+    NWB_ASSERT_MSG(ticket, NWB_TEXT("GPU timing scopes must be recorded inside a submission ticket"));
+    if(!ticket)
+        return {};
+
     GpuTimingAccumulator* accumulator = nullptr;
     auto found = m_accumulators.find(scopeName);
     if(found != m_accumulators.end())
@@ -260,14 +289,32 @@ GpuTimingScope GpuTimingRecorder::beginScope(const Name& scopeName, Device* devi
     if(!accumulator)
         return {};
 
-    return accumulator->beginQuery(*device, commandList, m_currentFrameIndex, m_epoch);
+    GpuTimingScope scope = accumulator->beginQuery(*device, commandList, m_currentFrameIndex, m_epoch);
+    scope.submissionTicket = ticket;
+    return scope;
 }
 
 void GpuTimingRecorder::endScope(CommandList& commandList, const GpuTimingScope& scope){
     if(!scope.valid())
         return;
 
-    scope.accumulator->endQuery(commandList, scope);
+    if(!scope.accumulator->endQuery(commandList, scope))
+        return;
+
+    if(scope.submissionTicket)
+        scope.submissionTicket->trackScope(scope);
+}
+
+void GpuTimingRecorder::discardScope(const GpuTimingScope& scope){
+    if(!scope.valid())
+        return;
+
+    scope.accumulator->discardQuery(scope);
+}
+
+GpuTimingSubmissionTicket* GpuTimingRecorder::activeSubmissionTicket()const{
+    GpuTimingSubmissionTicket* ticket = s_activeSubmissionTicket;
+    return ticket && &ticket->m_recorder == this ? ticket : nullptr;
 }
 
 GpuTimingAccumulator* GpuTimingRecorder::findOrCreateAccumulator(const Name& scopeName){
@@ -307,6 +354,133 @@ void GpuTimingRecorder::advanceEpoch(){
     ++m_epoch;
     if(m_epoch == 0u)
         m_epoch = 1u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GpuTimingSubmissionTicket::RecordingScope::RecordingScope(GpuTimingSubmissionTicket& ticket)
+    : m_ticket(ticket)
+    , m_previousTicket(m_ticket.activateOnCurrentThread())
+{}
+
+GpuTimingSubmissionTicket::RecordingScope::~RecordingScope(){
+    m_ticket.deactivateOnCurrentThread(m_previousTicket);
+}
+
+
+GpuTimingSubmissionTicket::GpuTimingSubmissionTicket(GpuTimingRecorder& recorder)
+    : m_recorder(recorder)
+    , m_scopes(recorder.m_arena)
+{}
+
+GpuTimingSubmissionTicket::~GpuTimingSubmissionTicket(){
+    discard();
+}
+
+bool GpuTimingSubmissionTicket::submit(
+    Device& device,
+    CommandList* const* commandLists,
+    const usize commandListCount,
+    const CommandQueue::Enum executionQueue
+){
+    {
+        ScopedLock lock(m_mutex);
+        NWB_ASSERT_MSG(m_recordingScopeCount == 0u, NWB_TEXT("GPU timing submission ticket submitted while command recording is still active"));
+        if(m_resolved || m_recordingScopeCount != 0u)
+            return false;
+    }
+
+    if(!commandLists || commandListCount == 0u){
+        discard();
+        return false;
+    }
+
+    // Queue::submit omits command lists whose buffer is absent. Reject that condition before submission rather than
+    // allowing a producer from a split timing scope to execute without the consumer that contains its end timestamp.
+    for(usize i = 0u; i < commandListCount; ++i){
+        if(!commandLists[i] || !commandLists[i]->hasCommandBuffer()){
+            discard();
+            return false;
+        }
+    }
+
+    bool submitted = false;
+    device.executeCommandLists(commandLists, commandListCount, executionQueue, &submitted);
+    if(submitted)
+        confirm();
+    else
+        discard();
+    return submitted;
+}
+
+void GpuTimingSubmissionTicket::discard(){
+    ScopedLock lock(m_mutex);
+    if(m_resolved)
+        return;
+
+    NWB_ASSERT_MSG(m_recordingScopeCount == 0u, NWB_TEXT("GPU timing submission ticket discarded while command recording is still active"));
+    if(m_recordingScopeCount != 0u)
+        return;
+
+    for(const GpuTimingScope& scope : m_scopes)
+        m_recorder.discardScope(scope);
+    m_scopes.clear();
+    m_resolved = true;
+}
+
+void GpuTimingSubmissionTicket::trackScope(const GpuTimingScope& scope){
+    if(!scope.valid())
+        return;
+
+    ScopedLock lock(m_mutex);
+    NWB_ASSERT_MSG(!m_resolved, NWB_TEXT("GPU timing scope ended after its submission ticket was resolved"));
+    if(m_resolved){
+        m_recorder.discardScope(scope);
+        return;
+    }
+
+    m_scopes.push_back(scope);
+}
+
+GpuTimingSubmissionTicket* GpuTimingSubmissionTicket::activateOnCurrentThread(){
+    ScopedLock lock(m_mutex);
+    NWB_ASSERT_MSG(!m_resolved, NWB_TEXT("GPU timing submission ticket activated after it was resolved"));
+    if(m_resolved)
+        return GpuTimingRecorder::s_activeSubmissionTicket;
+
+    GpuTimingSubmissionTicket* previousTicket = GpuTimingRecorder::s_activeSubmissionTicket;
+    GpuTimingRecorder::s_activeSubmissionTicket = this;
+    ++m_recordingScopeCount;
+    return previousTicket;
+}
+
+void GpuTimingSubmissionTicket::deactivateOnCurrentThread(GpuTimingSubmissionTicket* previousTicket){
+    NWB_ASSERT_MSG(GpuTimingRecorder::s_activeSubmissionTicket == this, NWB_TEXT("GPU timing submission ticket recording scope closed out of order"));
+    if(GpuTimingRecorder::s_activeSubmissionTicket != this)
+        return;
+
+    GpuTimingRecorder::s_activeSubmissionTicket = previousTicket;
+    ScopedLock lock(m_mutex);
+    NWB_ASSERT(m_recordingScopeCount > 0u);
+    if(m_recordingScopeCount > 0u)
+        --m_recordingScopeCount;
+}
+
+void GpuTimingSubmissionTicket::confirm(){
+    ScopedLock lock(m_mutex);
+    if(m_resolved)
+        return;
+
+    NWB_ASSERT_MSG(m_recordingScopeCount == 0u, NWB_TEXT("GPU timing submission ticket confirmed while command recording is still active"));
+    if(m_recordingScopeCount != 0u)
+        return;
+
+    // endQuery() already marked these records pending so no later scope can reuse them. Successful submission means
+    // collect() now owns retirement; clearing the ticket only drops its rollback handles.
+    m_scopes.clear();
+    m_resolved = true;
 }
 
 

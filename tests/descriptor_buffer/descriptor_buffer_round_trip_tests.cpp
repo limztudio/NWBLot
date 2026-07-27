@@ -186,6 +186,7 @@ Optional<Common::LoggerRegistrationGuard> DescriptorBufferRoundTripTest::s_logge
 
 inline constexpr GpuTimingScopeDefinition s_FrameTimingPreambleScope("tests/frame_timing_preamble");
 inline constexpr GpuTimingScopeDefinition s_FrameTimingLateActivationScope("tests/frame_timing_late_activation");
+inline constexpr GpuTimingScopeDefinition s_SubmissionTicketScope("tests/timing_submission_ticket");
 
 
 // Records a timing scope inside dynamic rendering, where vkCmdResetQueryPool is illegal. The scope can therefore
@@ -234,18 +235,25 @@ public:
         if(!commandList)
             return;
 
-        commandList->open();
-        GraphicsState graphicsState;
-        graphicsState.setFramebuffer(m_framebuffer.get());
-        commandList->setGraphicsState(graphicsState);
         {
-            GpuTimingMeasure timing(getGraphics().gpuTiming(), m_timingScope, device, *commandList);
-        }
-        commandList->endRenderPass();
-        commandList->close();
+            GpuTimingSubmissionTicket timingTicket(getGraphics().gpuTiming());
+            {
+                GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
 
-        CommandList* commandLists[] = { commandList.get() };
-        device->executeCommandLists(commandLists, 1u, CommandQueue::Graphics, &m_recorded);
+                commandList->open();
+                GraphicsState graphicsState;
+                graphicsState.setFramebuffer(m_framebuffer.get());
+                commandList->setGraphicsState(graphicsState);
+                {
+                    GpuTimingMeasure timing(getGraphics().gpuTiming(), m_timingScope, device, *commandList);
+                }
+                commandList->endRenderPass();
+                commandList->close();
+            }
+
+            CommandList* commandLists[] = { commandList.get() };
+            m_recorded = timingTicket.submit(*device, commandLists, 1u);
+        }
     }
 
     [[nodiscard]] bool recorded()const{ return m_recorded; }
@@ -333,6 +341,100 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQuer
     graphics.render();
     ASSERT_TRUE(device.waitForIdle());
     EXPECT_TRUE(timingSink.stats(s_FrameTimingLateActivationScope.identity).valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
+// A frame metric starts on the G-buffer primary and ends on the ordered post-G-buffer primary. If that batch is
+// abandoned, the query slot must be released before the next dynamic-rendering scope records; it cannot grow a new
+// query pool there because vkCmdResetQueryPool is illegal inside the render pass.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedSplitScope){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_SubmissionTicketScope.identity, &device, 1u));
+
+    auto target = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInRenderTarget(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(target.get(), nullptr);
+    auto framebuffer = device.createFramebuffer(FramebufferDesc().addColorAttachment(target.get()));
+    ASSERT_NE(framebuffer.get(), nullptr);
+
+    // Establish the one prepared pool on the device timeline, exactly as Graphics::render() does before its passes.
+    auto resetCommandList = device.createCommandList();
+    ASSERT_NE(resetCommandList.get(), nullptr);
+    resetCommandList->open();
+    timing.recordFrameReset(*resetCommandList);
+    resetCommandList->close();
+    CommandList* resetCommandLists[] = { resetCommandList.get() };
+    bool resetSubmitted = false;
+    device.executeCommandLists(resetCommandLists, 1u, CommandQueue::Graphics, &resetSubmitted);
+    ASSERT_TRUE(resetSubmitted);
+    timing.confirmFrameReset();
+
+    auto producer = device.createCommandList();
+    auto consumer = device.createCommandList();
+    ASSERT_NE(producer.get(), nullptr);
+    ASSERT_NE(consumer.get(), nullptr);
+    {
+        GpuTimingSubmissionTicket rejectedTicket(timing);
+        {
+            GpuTimingSubmissionTicket::RecordingScope timingRecording(rejectedTicket);
+            producer->open();
+            GraphicsState graphicsState;
+            graphicsState.setFramebuffer(framebuffer.get());
+            producer->setGraphicsState(graphicsState);
+
+            GpuTimingMeasure rejectedTiming(timing, s_SubmissionTicketScope, &device, *producer);
+            rejectedTiming.finishMarker();
+            producer->endRenderPass();
+            producer->close();
+
+            consumer->open();
+            rejectedTiming.finishTiming(*consumer);
+            consumer->close();
+        }
+
+        // A missing consumer must reject the whole batch rather than submit the producer alone. This is the same
+        // rollback path used when Vulkan rejects an otherwise complete submission.
+        CommandList* rejectedCommandLists[] = { producer.get(), nullptr };
+        EXPECT_FALSE(rejectedTicket.submit(device, rejectedCommandLists, 2u));
+    }
+    producer.reset();
+    consumer.reset();
+
+    auto acceptedCommandList = device.createCommandList();
+    ASSERT_NE(acceptedCommandList.get(), nullptr);
+    GpuTimingSubmissionTicket acceptedTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(acceptedTicket);
+        acceptedCommandList->open();
+        GraphicsState graphicsState;
+        graphicsState.setFramebuffer(framebuffer.get());
+        acceptedCommandList->setGraphicsState(graphicsState);
+        {
+            GpuTimingMeasure acceptedTiming(timing, s_SubmissionTicketScope, &device, *acceptedCommandList);
+        }
+        acceptedCommandList->endRenderPass();
+        acceptedCommandList->close();
+    }
+
+    CommandList* acceptedCommandLists[] = { acceptedCommandList.get() };
+    ASSERT_TRUE(acceptedTicket.submit(device, acceptedCommandLists, 1u));
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 1u);
+    EXPECT_TRUE(timingSink.stats(s_SubmissionTicketScope.identity).valid());
 
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();

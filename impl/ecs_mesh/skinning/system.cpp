@@ -259,41 +259,45 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* commandList = m_renderCommandList.get();
     NWB_ASSERT(commandList);
 
+    Core::GpuTimingSubmissionTicket timingTicket(m_graphics.gpuTiming());
     bool submittedWork = false;
 
-    commandList->open();
+    {
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
+        commandList->open();
 
-    m_world.view<SkinnedMeshBindingComponent>().each(
-        [&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
-            if(!binding.runtimeMesh.valid())
-                return;
+        m_world.view<SkinnedMeshBindingComponent>().each(
+            [&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
+                if(!binding.runtimeMesh.valid())
+                    return;
 
-            MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
-            if(!instance)
-                return;
-            NWB_ASSERT(instance->valid());
+                MeshSkinningRuntimeInstance* instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
+                if(!instance)
+                    return;
+                NWB_ASSERT(instance->valid());
 
-            const SkeletonJointPaletteComponent* jointPalette = nullptr;
-            const SkeletonPoseComponent* skeletonPose = nullptr;
-            __hidden_system::ResolveSkeletonComponents(m_world, entity, binding.skeletonEntity, jointPalette, skeletonPose);
-            const auto foundResources = m_runtimeResources.find(instance->handle.value);
-            const bool hadSkinningResources = foundResources != m_runtimeResources.end() && foundResources.value().usesSkinning();
-            if(!__hidden_system::HasPotentialSkinningWork(
-                *instance,
-                jointPalette,
-                skeletonPose
-            ) && !hadSkinningResources)
-                return;
-            if(dispatchRuntimeMesh(*commandList, *instance, jointPalette, skeletonPose))
-                submittedWork = true;
-        }
-    );
+                const SkeletonJointPaletteComponent* jointPalette = nullptr;
+                const SkeletonPoseComponent* skeletonPose = nullptr;
+                __hidden_system::ResolveSkeletonComponents(m_world, entity, binding.skeletonEntity, jointPalette, skeletonPose);
+                const auto foundResources = m_runtimeResources.find(instance->handle.value);
+                const bool hadSkinningResources = foundResources != m_runtimeResources.end() && foundResources.value().usesSkinning();
+                if(!__hidden_system::HasPotentialSkinningWork(
+                    *instance,
+                    jointPalette,
+                    skeletonPose
+                ) && !hadSkinningResources)
+                    return;
+                if(dispatchRuntimeMesh(*commandList, *instance, jointPalette, skeletonPose))
+                    submittedWork = true;
+            }
+        );
 
-    commandList->close();
+        commandList->close();
+    }
 
     if(submittedWork){
         Core::CommandList* commandLists[] = { commandList };
-        device.executeCommandLists(commandLists, 1);
+        timingTicket.submit(device, commandLists, 1u);
     }
 }
 

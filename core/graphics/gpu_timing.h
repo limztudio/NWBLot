@@ -21,13 +21,19 @@ NWB_CORE_BEGIN
 
 class GpuTimingAccumulator;
 class GpuTimingMeasure;
+class GpuTimingRecorder;
+class GpuTimingSubmissionTicket;
 
 struct GpuTimingScope{
     GpuTimingAccumulator* accumulator = nullptr;
     TimerQuery* query = nullptr;
     u32 index = Limit<u32>::s_Max;
+    // Distinguishes a reused query-pool slot from an earlier scope that was discarded after its command list failed
+    // to submit. Submission tickets only release a record when this reservation still owns it.
+    u64 reservation = 0u;
+    GpuTimingSubmissionTicket* submissionTicket = nullptr;
 
-    [[nodiscard]] bool valid()const{ return accumulator != nullptr && query != nullptr && index != Limit<u32>::s_Max; }
+    [[nodiscard]] bool valid()const{ return accumulator != nullptr && query != nullptr && index != Limit<u32>::s_Max && reservation != 0u; }
 };
 
 
@@ -59,6 +65,7 @@ private:
         TimerQueryHandle query;
         u64 frameIndex = 0u;
         u32 epoch = 0u;
+        u64 reservation = 0u;
         bool pending = false;
         // Set while a frame-preamble command list contains a reset for this pool. It becomes deviceReady only after
         // that command list has been submitted successfully.
@@ -94,7 +101,8 @@ public:
     [[nodiscard]] bool materializeRequestedQueries(Device& device);
     [[nodiscard]] bool reserveQueries(Device& device, u32 queryCount);
     [[nodiscard]] GpuTimingScope beginQuery(Device& device, CommandList& commandList, u64 frameIndex, u32 epoch);
-    void endQuery(CommandList& commandList, const GpuTimingScope& scope);
+    [[nodiscard]] bool endQuery(CommandList& commandList, const GpuTimingScope& scope);
+    void discardQuery(const GpuTimingScope& scope);
 
 
 private:
@@ -106,6 +114,7 @@ private:
     QueryVector m_queries;
     Perf::TimingScopeId m_timingScope;
     u32 m_requestedQueryCount = 0u;
+    u64 m_nextReservation = 0u;
     bool m_enabled = false;
 };
 
@@ -115,6 +124,7 @@ private:
 
 class GpuTimingRecorder final : NoCopy{
     friend class GpuTimingMeasure;
+    friend class GpuTimingSubmissionTicket;
 
 private:
     using AccumulatorPtr = GlobalUniquePtr<GpuTimingAccumulator>;
@@ -152,7 +162,9 @@ public:
 private:
     [[nodiscard]] GpuTimingScope beginScope(const Name& scopeName, Device* device, CommandList& commandList);
     void endScope(CommandList& commandList, const GpuTimingScope& scope);
+    void discardScope(const GpuTimingScope& scope);
     [[nodiscard]] GpuTimingAccumulator* findOrCreateAccumulator(const Name& scopeName);
+    [[nodiscard]] GpuTimingSubmissionTicket* activeSubmissionTicket()const;
     void syncActiveState();
     void advanceEpoch();
 
@@ -165,6 +177,67 @@ private:
     u32 m_epoch = 1u;
     bool m_accumulatorsActive = false;
     bool m_enabled = false;
+
+    static thread_local GpuTimingSubmissionTicket* s_activeSubmissionTicket;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Couples timestamp-query ownership to one complete queue submission. Keep a RecordingScope active while recording
+// every primary command buffer that can contain a timing endpoint, then submit that whole ordered batch through this
+// ticket. If recording aborts or the submission is rejected, the ticket releases the reserved query slots; a
+// successful submission retains them until collect() observes their results. This supports a timing scope whose
+// start and end timestamps live in separate primary command buffers.
+class GpuTimingSubmissionTicket final : NoCopy{
+public:
+    class RecordingScope final : NoCopy{
+    public:
+        explicit RecordingScope(GpuTimingSubmissionTicket& ticket);
+        ~RecordingScope();
+
+
+    private:
+        GpuTimingSubmissionTicket& m_ticket;
+        GpuTimingSubmissionTicket* m_previousTicket = nullptr;
+    };
+
+
+public:
+    explicit GpuTimingSubmissionTicket(GpuTimingRecorder& recorder);
+    ~GpuTimingSubmissionTicket();
+
+
+public:
+    // Validates that every supplied command list still owns a ready command buffer, submits them together in their
+    // supplied order, and resolves every timing scope recorded under this ticket. A partial split submission is
+    // rejected before reaching Vulkan so a cross-list timing scope can never be left waiting for a missing endpoint.
+    [[nodiscard]] bool submit(
+        Device& device,
+        CommandList* const* commandLists,
+        usize commandListCount,
+        CommandQueue::Enum executionQueue = CommandQueue::Graphics
+    );
+    // Explicitly releases all timing scopes when a caller elects not to submit its recorded command lists.
+    void discard();
+
+
+private:
+    friend class GpuTimingRecorder;
+
+    void trackScope(const GpuTimingScope& scope);
+    [[nodiscard]] GpuTimingSubmissionTicket* activateOnCurrentThread();
+    void deactivateOnCurrentThread(GpuTimingSubmissionTicket* previousTicket);
+    void confirm();
+
+
+private:
+    GpuTimingRecorder& m_recorder;
+    Vector<GpuTimingScope, Alloc::GlobalArena> m_scopes;
+    Futex m_mutex;
+    u32 m_recordingScopeCount = 0u;
+    bool m_resolved = false;
 };
 
 

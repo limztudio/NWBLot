@@ -297,21 +297,28 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
 
     auto& device = *m_graphics.getDevice();
 
+    Core::GpuTimingSubmissionTicket shadowPrepareTimingTicket(m_graphics.gpuTiming());
     bool shadowPrepareRecorded = false;
-    const Core::Graphics::JobHandle shadowPrepareJob = m_graphics.scheduleGraphicsJob([this, &deferredTargets, &shadowPrepareRecorded](){
+    const Core::Graphics::JobHandle shadowPrepareJob = m_graphics.scheduleGraphicsJob([
+        this,
+        &deferredTargets,
+        &shadowPrepareRecorded,
+        &shadowPrepareTimingTicket
+    ](){
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(shadowPrepareTimingTicket);
         shadowPrepareRecorded = recordShadowPrepareCommandList(deferredTargets);
     });
     if(!shadowPrepareJob.valid())
         return false;
 
     m_graphics.waitJob(shadowPrepareJob);
-    if(!shadowPrepareRecorded)
+    if(!shadowPrepareRecorded){
+        shadowPrepareTimingTicket.discard();
         return false;
+    }
 
     Core::CommandList* shadowPrepareCommandLists[] = { m_shadowPrepareCommandList.get() };
-    bool shadowPrepareSubmitted = false;
-    device.executeCommandLists(shadowPrepareCommandLists, 1u, Core::CommandQueue::Graphics, &shadowPrepareSubmitted);
-    if(!shadowPrepareSubmitted){
+    if(!shadowPrepareTimingTicket.submit(device, shadowPrepareCommandLists, 1u)){
         m_shadowPrepareStateHandoff.reset();
         return false;
     }
@@ -373,6 +380,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(gbufferCommandList);
     NWB_ASSERT(postGbufferCommandList);
 
+    Core::GpuTimingSubmissionTicket renderTimingTicket(m_graphics.gpuTiming());
     bool commandListReady = false;
     const Core::Graphics::JobHandle recordingJob = m_graphics.scheduleGraphicsJob([
         this,
@@ -383,8 +391,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         device,
         gbufferCommandList,
         postGbufferCommandList,
-        &commandListReady
+        &commandListReady,
+        &renderTimingTicket
     ](){
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
         Core::CommandList* commandList = gbufferCommandList;
         commandList->open(&m_shadowPrepareStateHandoff);
@@ -611,16 +621,20 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         // above remains local to the producer command buffer; this ending timestamp preserves the full frame metric.
         frameTiming.finishTiming(*commandList);
         commandList->close();
+        commandListReady = commandListReady && commandList->hasCommandBuffer();
     });
     if(!recordingJob.valid())
         return;
 
     m_graphics.waitJob(recordingJob);
-    if(!commandListReady)
+    if(!commandListReady){
+        renderTimingTicket.discard();
         return;
+    }
 
     Core::CommandList* commandLists[] = { gbufferCommandList, postGbufferCommandList };
-    device->executeCommandLists(commandLists, 2);
+    if(!renderTimingTicket.submit(*device, commandLists, 2u))
+        m_gbufferStateHandoff.reset();
 }
 
 

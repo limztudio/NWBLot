@@ -797,8 +797,6 @@ public:
 
 public:
     void invalidateResources();
-
-
 };
 
 

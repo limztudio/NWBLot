@@ -146,8 +146,8 @@ void CommandList::retainStagingBuffer(Buffer& buffer){
     m_currentCmdBuf->m_referencedStagingBuffers.emplace_back(&buffer, BufferHandle::deleter_type(&m_context.objectArena));
 }
 
-Device* CommandList::getDevice(){
-    return &m_device;
+Device& CommandList::getDevice(){
+    return m_device;
 }
 
 bool CommandList::validateIndirectBuffer(Buffer* bufferResource, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const{

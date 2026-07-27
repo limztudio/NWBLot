@@ -228,11 +228,12 @@ public:
         if(m_recorded || !m_framebuffer)
             return;
 
-        auto* device = getGraphics().getDevice();
-        if(!device)
+        auto* const devicePtr = getGraphics().getDevice();
+        if(!devicePtr)
             return;
+        auto& device = *devicePtr;
 
-        CommandListHandle commandList = device->createCommandList();
+        CommandListHandle commandList = device.createCommandList();
         if(!commandList)
             return;
 
@@ -253,7 +254,7 @@ public:
             }
 
             CommandList* commandLists[] = { commandList.get() };
-            m_recorded = timingTicket.submit(*device, commandLists, 1u);
+            m_recorded = timingTicket.submit(device, commandLists, 1u);
         }
     }
 
@@ -295,7 +296,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleResetsTimerQueriesBef
     auto& timingSink = s_scope->gpuTimingSink();
 
     s_scope->setGpuTimingEnabled(true);
-    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingPreambleScope.identity, &device, 1u));
+    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingPreambleScope.identity, device, 1u));
 
     FrameTimingPreambleProbePass probePass(graphics);
     ASSERT_TRUE(probePass.initialize());
@@ -326,7 +327,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQuer
     auto& timingSink = s_scope->gpuTimingSink();
 
     s_scope->setGpuTimingEnabled(false);
-    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingLateActivationScope.identity, &device, 1u));
+    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingLateActivationScope.identity, device, 1u));
     s_scope->setGpuTimingEnabled(true);
 
     FrameTimingPreambleProbePass probePass(graphics, s_FrameTimingLateActivationScope);
@@ -359,7 +360,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
     auto& timingSink = s_scope->gpuTimingSink();
 
     s_scope->setGpuTimingEnabled(true);
-    ASSERT_TRUE(timing.prepareScopeQueries(s_SubmissionTicketScope.identity, &device, 1u));
+    ASSERT_TRUE(timing.prepareScopeQueries(s_SubmissionTicketScope.identity, device, 1u));
 
     auto target = device.createTexture(
         TextureDesc()
@@ -396,7 +397,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
             graphicsState.setFramebuffer(framebuffer.get());
             abandonedCommandList->setGraphicsState(graphicsState);
             {
-                GpuTimingMeasure abandonedTiming(timing, s_SubmissionTicketScope, &device, *abandonedCommandList);
+                GpuTimingMeasure abandonedTiming(timing, s_SubmissionTicketScope, device, *abandonedCommandList);
                 abandonedTiming.discardTiming();
             }
             abandonedCommandList->endRenderPass();
@@ -417,7 +418,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
             graphicsState.setFramebuffer(framebuffer.get());
             producer->setGraphicsState(graphicsState);
 
-            GpuTimingMeasure rejectedTiming(timing, s_SubmissionTicketScope, &device, *producer);
+            GpuTimingMeasure rejectedTiming(timing, s_SubmissionTicketScope, device, *producer);
             rejectedTiming.finishMarker();
             producer->endRenderPass();
             producer->close();
@@ -445,7 +446,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
         graphicsState.setFramebuffer(framebuffer.get());
         acceptedCommandList->setGraphicsState(graphicsState);
         {
-            GpuTimingMeasure acceptedTiming(timing, s_SubmissionTicketScope, &device, *acceptedCommandList);
+            GpuTimingMeasure acceptedTiming(timing, s_SubmissionTicketScope, device, *acceptedCommandList);
         }
         acceptedCommandList->endRenderPass();
         acceptedCommandList->close();
@@ -471,7 +472,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
     auto& timingSink = s_scope->gpuTimingSink();
 
     s_scope->setGpuTimingEnabled(true);
-    ASSERT_TRUE(timing.prepareScopeQueries(s_ConcurrentSubmissionTicketScope.identity, &device, 2u));
+    ASSERT_TRUE(timing.prepareScopeQueries(s_ConcurrentSubmissionTicketScope.identity, device, 2u));
 
     auto resetCommandList = device.createCommandList();
     ASSERT_NE(resetCommandList.get(), nullptr);
@@ -500,7 +501,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
         recordingStarted.count_down();
         recordingStarted.wait();
         {
-            GpuTimingMeasure measure(timing, s_ConcurrentSubmissionTicketScope, &device, *firstCommandList);
+            GpuTimingMeasure measure(timing, s_ConcurrentSubmissionTicketScope, device, *firstCommandList);
             queryReservationsStarted.count_down();
             queryReservationsStarted.wait();
         }
@@ -513,7 +514,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
         recordingStarted.count_down();
         recordingStarted.wait();
         {
-            GpuTimingMeasure measure(timing, s_ConcurrentSubmissionTicketScope, &device, *secondCommandList);
+            GpuTimingMeasure measure(timing, s_ConcurrentSubmissionTicketScope, device, *secondCommandList);
             queryReservationsStarted.count_down();
             queryReservationsStarted.wait();
         }

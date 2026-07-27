@@ -2156,7 +2156,7 @@ public:
     ResourceStates::Mask getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel);
     ResourceStates::Mask getBufferState(Buffer* buffer);
 
-    Device* getDevice();
+    Device& getDevice();
     const CommandListParameters& getDescription(){ return m_desc; }
 
 private:

@@ -781,7 +781,7 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     if(clearCsgTargets)
         __hidden_deferred_targets::AssertCsgIntervalTargetsAvailable(targets);
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredClear, graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredClear, *graphics().getDevice(), commandList);
 
     const __hidden_deferred_targets::CsgIntervalSubresources csgSubresources =
         __hidden_deferred_targets::MakeCsgIntervalSubresources(targets)
@@ -812,7 +812,7 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
         commandList.clearTextureFloat(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
 
     if(clearCsgTargets){
-        Core::GpuTimingMeasure csgClearTiming(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, graphics().getDevice(), commandList);
+        Core::GpuTimingMeasure csgClearTiming(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, *graphics().getDevice(), commandList);
 
         __hidden_deferred_targets::ClearCsgIntervalTargets(commandList, targets, csgSubresources, csgClearRect);
     }
@@ -832,7 +832,7 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
 void RendererDeferredSystem::clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::Rect& csgClearRect){
     __hidden_deferred_targets::AssertCsgIntervalTargetsAvailable(targets);
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, *graphics().getDevice(), commandList);
 
     const __hidden_deferred_targets::CsgIntervalSubresources csgSubresources =
         __hidden_deferred_targets::MakeCsgIntervalSubresources(targets)

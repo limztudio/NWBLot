@@ -644,7 +644,7 @@ bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, co
     contextSlots.deferredBindlessResources = deferredState().m_targets.bindless.slotsBufferDescriptor.slot();
     contextSlots.intervalSampleState = csgState().m_intervalSampleStateHeapHandle.slot();
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgUpload, graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgUpload, *graphics().getDevice(), commandList);
 
     commandList.setBufferState(csgState().m_receiverRangeBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.setBufferState(csgState().m_cutterBuffer.get(), Core::ResourceStates::CopyDest);

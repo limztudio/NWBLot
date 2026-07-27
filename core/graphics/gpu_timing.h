@@ -147,7 +147,7 @@ public:
     void beginFrame(u64 frameIndex);
     // Declares the capacity a scope needs. When capture is inactive this records the request without allocating GPU
     // query pools, so a later capture activation can materialize them before its first frame preamble.
-    [[nodiscard]] bool prepareScopeQueries(const Name& scopeName, Device* device, u32 queryCount);
+    [[nodiscard]] bool prepareScopeQueries(const Name& scopeName, Device& device, u32 queryCount);
     // Materializes every declared scope before the frame preamble. Graphics calls this after capture can be toggled
     // on at runtime and before dynamic-rendering scopes need their query pools reset.
     [[nodiscard]] bool materializeRequestedQueries(Device& device);
@@ -163,7 +163,7 @@ public:
 
 
 private:
-    [[nodiscard]] GpuTimingScope beginScope(const Name& scopeName, Device* device, CommandList& commandList);
+    [[nodiscard]] GpuTimingScope beginScope(const Name& scopeName, Device& device, CommandList& commandList);
     void endScope(CommandList& commandList, const GpuTimingScope& scope);
     void discardScope(const GpuTimingScope& scope);
     [[nodiscard]] GpuTimingAccumulator* findOrCreateAccumulator(const Name& scopeName);
@@ -262,7 +262,7 @@ public:
     GpuTimingMeasure(
         GpuTimingRecorder& recorder,
         const GpuTimingScopeDefinition& scopeDefinition,
-        Device* device,
+        Device& device,
         CommandList& commandList
     );
     ~GpuTimingMeasure();

@@ -162,7 +162,7 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTa
 void RendererAvboitSystem::clearAvboitTargets(Core::CommandList& commandList, AvboitFrameTargets& targets){
     NWB_ASSERT(targets.valid());
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_AvboitClear, graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_AvboitClear, *graphics().getDevice(), commandList);
 
     commandList.setTextureState(targets.lowRasterTarget.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     commandList.setTextureState(targets.accumColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
@@ -244,7 +244,7 @@ void RendererAvboitSystem::buildTransparentCsgIntervals(
     if(!csgFrameState.hasTransparentStaticWork && !csgFrameState.hasTransparentSkinnedWork)
         return;
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_TransparentCsgIntervals, graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_TransparentCsgIntervals, *graphics().getDevice(), commandList);
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TransparentCsgIntervalArena);
     MaterialPassDrawItemPartitions drawItems{scratchArena};
@@ -400,7 +400,7 @@ void RendererAvboitSystem::renderAvboitPasses(
 }
 
 void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets){
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_AvboitDepthWarp, graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_AvboitDepthWarp, *graphics().getDevice(), commandList);
 
     // The depth-warp kernel reads coverage and writes the warp/control buffers through global heap descriptors.
     commandList.setBufferState(targets.coverageBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -421,7 +421,7 @@ void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandLis
 
 void RendererAvboitSystem::dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets){
     const u32 pixelCount = targets.lowWidth * targets.lowHeight;
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_AvboitIntegration, graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_AvboitIntegration, *graphics().getDevice(), commandList);
 
     // Integration reads all packed extinction inputs and writes the Texture3D through global heap descriptors. Keep
     // its UAV transition explicit so the complete heap-mediated write/read sequence remains visible to the command list.

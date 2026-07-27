@@ -260,7 +260,7 @@ bool RendererSystem::prepareGpuTimingScopes(){
     };
 
     for(const ScopeReservation& reservation : scopeReservations){
-        if(!m_graphics.gpuTiming().prepareScopeQueries(reservation.scope->identity, &device, reservation.queryCount)){
+        if(!m_graphics.gpuTiming().prepareScopeQueries(reservation.scope->identity, device, reservation.queryCount)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to prepare GPU timing scope '{}'"), reservation.scope->identity.c_str());
             return false;
         }
@@ -558,7 +558,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         frameTiming.emplace(
             m_graphics.gpuTiming(),
             RendererGpuTimingScope::s_Frame,
-            &device,
+            device,
             *commandList
         );
         if(!frameTiming)
@@ -646,7 +646,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 deferredViewportState
             };
             if(regularDrawResourcesReady && !opaqueDrawItems.regular.empty()){
-                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueRegular, &device, *commandList);
+                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueRegular, device, *commandList);
 
                 m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.regular);
             }
@@ -664,7 +664,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 csgIntervalViewportState
             };
             if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
-                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsgReceiverSurface, &device, *commandList);
+                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsgReceiverSurface, device, *commandList);
 
                 m_materialSystem.renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, opaqueDrawItems.csgReceiverSurface);
             }
@@ -674,7 +674,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_csgSystem.dispatchCsgIntervalCombine(*commandList, deferredTargets, csgFrameData);
             if(csgSampleStateReady && csgDrawResourcesReady){
                 if(!opaqueDrawItems.csg.empty()){
-                    Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsg, &device, *commandList);
+                    Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsg, device, *commandList);
 
                     m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
                 }

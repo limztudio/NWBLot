@@ -291,6 +291,7 @@ Updated: 2026-07-08
 - Strictly distinguish references vs pointers:
   - Parameters:
     - Use references (`T&`, `const T&`) for required, non-null inputs by default.
+    - Do not downgrade a required reference parameter to a pointer merely to accommodate a caller or simplify plumbing; it obscures the required-input contract. When an input is mandatory, change the function interface/callers to pass a reference instead.
     - Use `NotNull<T*>` only when pointer semantics are required (e.g., nullable interop boundaries, pointer identity APIs, or reseating semantics) but null is still invalid.
     - For required C-string style inputs (`const char*`, `const tchar*`), prefer `NotNull<const char*>` / `NotNull<const tchar*>` instead of raw pointers.
     - Use raw pointers (`T*`) only when null is a valid and meaningful state.

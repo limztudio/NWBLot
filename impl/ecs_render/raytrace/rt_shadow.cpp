@@ -395,7 +395,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         return false;
     }
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, *graphics().getDevice(), commandList);
 
     // All resources are selected by global heap slots; transition every backing object explicitly.
     commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -548,7 +548,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         return false;
     }
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, *graphics().getDevice(), commandList);
 
     // The per-mesh BVH node buffers were left in UnorderedAccess by the build pass; stage every heap-selected
     // software traversal input before dispatch.

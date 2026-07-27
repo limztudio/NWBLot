@@ -130,7 +130,7 @@ bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandL
     commandList.setTextureState(targets.avboit.accumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredComposite, graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredComposite, *graphics().getDevice(), commandList);
 
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(presentationFramebuffer->getFramebufferInfo().getViewport());

@@ -369,7 +369,7 @@ void RendererRayTracingSystem::clearCausticTargets(Core::CommandList& commandLis
 }
 
 void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticResolve, graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticResolve, *graphics().getDevice(), commandList);
     NWB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
     NWB_ASSERT(heap.isInitialized());
@@ -658,7 +658,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         return false;
 
     {
-        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, graphics().getDevice(), commandList);
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, *graphics().getDevice(), commandList);
 
         // Splat-space temporal EMA step (enabled paths only): decay the resident accumulator (or clear it on the first
         // frame / after a resize) before this frame's splat. clearCausticTargets skipped the accumulator clear when
@@ -1154,7 +1154,7 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         return false;
 
     {
-        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, graphics().getDevice(), commandList);
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, *graphics().getDevice(), commandList);
 
         // Splat-space temporal EMA step (enabled paths only): decay the resident accumulator (or clear it on the first
         // frame / after a resize) before this frame's splat. Byte-identical to the SW producer's temporal step.

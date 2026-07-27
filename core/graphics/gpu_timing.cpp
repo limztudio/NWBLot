@@ -228,10 +228,10 @@ void GpuTimingRecorder::beginFrame(const u64 frameIndex){
     m_currentFrameIndex = frameIndex;
 }
 
-bool GpuTimingRecorder::prepareScopeQueries(const Name& scopeName, Device* device, const u32 queryCount){
+bool GpuTimingRecorder::prepareScopeQueries(const Name& scopeName, Device& device, const u32 queryCount){
     ScopedLock lock(m_mutex);
     syncActiveState();
-    if(!scopeName || !device)
+    if(!scopeName)
         return false;
 
     GpuTimingAccumulator* accumulator = findOrCreateAccumulator(scopeName);
@@ -239,7 +239,7 @@ bool GpuTimingRecorder::prepareScopeQueries(const Name& scopeName, Device* devic
         return false;
 
     accumulator->requestQueries(queryCount);
-    return !m_accumulatorsActive || accumulator->materializeRequestedQueries(*device);
+    return !m_accumulatorsActive || accumulator->materializeRequestedQueries(device);
 }
 
 bool GpuTimingRecorder::materializeRequestedQueries(Device& device){
@@ -287,10 +287,10 @@ void GpuTimingRecorder::discardFrameResetLocked(){
         it.value()->discardFrameReset();
 }
 
-GpuTimingScope GpuTimingRecorder::beginScope(const Name& scopeName, Device* device, CommandList& commandList){
+GpuTimingScope GpuTimingRecorder::beginScope(const Name& scopeName, Device& device, CommandList& commandList){
     ScopedLock lock(m_mutex);
     syncActiveState();
-    if(!m_accumulatorsActive || !scopeName || !device)
+    if(!m_accumulatorsActive || !scopeName)
         return {};
 
     GpuTimingSubmissionTicket* const ticket = activeSubmissionTicket();
@@ -311,7 +311,7 @@ GpuTimingScope GpuTimingRecorder::beginScope(const Name& scopeName, Device* devi
     if(!accumulator)
         return {};
 
-    GpuTimingScope scope = accumulator->beginQuery(*device, commandList, m_currentFrameIndex, m_epoch);
+    GpuTimingScope scope = accumulator->beginQuery(device, commandList, m_currentFrameIndex, m_epoch);
     scope.submissionTicket = ticket;
     return scope;
 }
@@ -520,7 +520,7 @@ void GpuTimingSubmissionTicket::confirm(){
 GpuTimingMeasure::GpuTimingMeasure(
     GpuTimingRecorder& recorder,
     const GpuTimingScopeDefinition& scopeDefinition,
-    Device* device,
+    Device& device,
     CommandList& commandList
 )
     : m_recorder(recorder)

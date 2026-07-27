@@ -200,7 +200,7 @@ void RendererMaterialSystem::renderMaterialPass(
     Core::GpuTimingMeasure timing(
         graphics().gpuTiming(),
         __hidden_material_pass::MaterialPassGpuTimingScope(pass),
-        graphics().getDevice(),
+        *graphics().getDevice(),
         commandList
     );
 

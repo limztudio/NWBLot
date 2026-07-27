@@ -242,7 +242,7 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
 
         setMaterialPassDrawPushConstants(context, drawItem, mesh);
         {
-            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, graphics().getDevice(), context.commandList);
+            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, *graphics().getDevice(), context.commandList);
 
             context.commandList.dispatchMesh(mesh.meshletCount);
         }
@@ -298,7 +298,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
             materialPassDrawDispatchFlags(context, drawItem, mesh)
         );
         {
-            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, graphics().getDevice(), context.commandList);
+            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, *graphics().getDevice(), context.commandList);
 
             context.commandList.dispatch(mesh.meshletCount);
         }
@@ -324,7 +324,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         Core::DrawArguments drawArgs;
         drawArgs.setVertexCount(mesh.meshletPrimitiveIndexCount);
         {
-            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_Raster, graphics().getDevice(), context.commandList);
+            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_Raster, *graphics().getDevice(), context.commandList);
 
             context.commandList.draw(drawArgs);
         }

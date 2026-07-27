@@ -1563,7 +1563,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     // Per-mesh (buildMeshSwBvh runs once per rebuild), so all sort dispatches in a frame accumulate into one
     // render.sw_bvh_sort average. Scoped here, not in bvhBitonicSort(), so the one-shot self-test sort stays out.
     {
-        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SwBvhSort, graphics().getDevice(), commandList);
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SwBvhSort, *graphics().getDevice(), commandList);
         if(!bvhBitonicSort(commandList, primitiveCount, paddedCount))
             return false;
     }

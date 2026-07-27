@@ -302,7 +302,7 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
     pushConstants.bindlessResourceSlots = resources->bindlessHeapHandles.resourceSlots.slot();
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_Skinning, m_graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_Skinning, *m_graphics.getDevice(), commandList);
 
         commandList.dispatch(pushConstants.meshletCount, 1, 1);
     }
@@ -390,7 +390,7 @@ bool MeshSkinningSystem::dispatchMeshletBounds(
     pushConstants.bindlessResourceSlots = resources.bindlessHeapHandles.resourceSlots.slot();
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_MeshletBounds, m_graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_MeshletBounds, *m_graphics.getDevice(), commandList);
 
         commandList.dispatch(pushConstants.meshletCount, 1, 1);
     }
@@ -432,7 +432,7 @@ bool MeshSkinningSystem::dispatchRepackNormals(
     pushConstants.bindlessResourceSlots = resources.bindlessHeapHandles.resourceSlots.slot();
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_RepackNormals, m_graphics.getDevice(), commandList);
+        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), MeshSkinningGpuTimingScope::s_RepackNormals, *m_graphics.getDevice(), commandList);
 
         commandList.dispatch(pushConstants.meshletCount, 1, 1);
     }

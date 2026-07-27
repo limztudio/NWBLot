@@ -97,9 +97,6 @@ using CsgReceiverRangeGpuDataVector = Vector<CsgReceiverRangeGpuData, Core::Allo
 using CsgCutterGpuDataVector = Vector<CsgCutterGpuData, Core::Alloc::ScratchArena>;
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 struct CsgFrameWorkRegion{
     u32 minX = Limit<u32>::s_Max;
     u32 minY = Limit<u32>::s_Max;
@@ -141,10 +138,6 @@ struct CsgFrameWorkRegion{
         );
     }
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 struct CsgReceiverClipDrawInfo{
     u32 cutterCount = 0u;

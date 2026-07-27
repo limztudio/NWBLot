@@ -8,6 +8,7 @@
 
 #include <global/algorithm.h>
 #include <global/allocation_size.h>
+#include <global/arena_c_allocator.h>
 #include <global/arena_object.h>
 #include <global/binary.h>
 #include <global/blocking_io.h>
@@ -21,13 +22,17 @@
 #include <global/hash_utils.h>
 #include <global/inplace_function.h>
 #include <global/limit.h>
+#include <global/math/frame.h>
 #include <global/math/type.h>
 #include <global/math/vector.h>
+#include <global/mesh/tangent_frame_rebuild.h>
+#include <global/overflow.h>
 #include <global/process_execution.h>
 #include <global/text_utils.h>
 #include <global/type_counter.h>
 
 #include <core/alloc/persistent.h>
+#include <core/alloc/scratch.h>
 #include <core/common/name_symbols.h>
 
 
@@ -209,6 +214,12 @@ TEST(Global, AllocationSizeHelpers){
     EXPECT_EQ(Alignment(1u, 37u), 37u);
     EXPECT_EQ(Alignment(8u, 37u), 40u);
     EXPECT_EQ(Alignment(16u, 48u), 48u);
+
+    usize product = Limit<usize>::s_Max;
+    EXPECT_TRUE(::TryMultiply<usize>(7u, 6u, product));
+    EXPECT_EQ(product, 42u);
+    EXPECT_FALSE(::TryMultiply<usize>(Limit<usize>::s_Max, 2u, product));
+    EXPECT_EQ(product, 0u);
 }
 
 TEST(Global, GenericAllocationAndTypeHelpers){
@@ -220,10 +231,29 @@ TEST(Global, GenericAllocationAndTypeHelpers){
     ::DestroyArenaObject(arena, probe);
     EXPECT_TRUE(destroyed);
 
+    u32* const values = ::AllocateArenaTyped<u32>(arena, 2u);
+    ASSERT_NE(values, nullptr);
+    values[0u] = 11u;
+    values[1u] = 42u;
+    EXPECT_EQ(values[0u], 11u);
+    EXPECT_EQ(values[1u], 42u);
+    ::DeallocateArenaTyped<u32>(arena, values, 2u);
+
     const usize firstId = ::TypeCounter<TypeCounterFirstTag>::id<u32>();
     EXPECT_EQ(firstId, ::TypeCounter<TypeCounterFirstTag>::id<u32>());
     EXPECT_NE(firstId, ::TypeCounter<TypeCounterFirstTag>::id<u64>());
     EXPECT_EQ(::TypeCounter<TypeCounterSecondTag>::id<u32>(), 0u);
+}
+
+TEST(Global, ForwardAsTuplePreservesReferences){
+    i32 first = 3;
+    i32 second = 7;
+    auto values = ::ForwardAsTuple(first, second);
+    ::Get<0u>(values) = 11;
+    ::Get<1u>(values) = 13;
+
+    EXPECT_EQ(first, 11);
+    EXPECT_EQ(second, 13);
 }
 
 TEST(Global, GrowingCapacityHelpers){
@@ -1023,6 +1053,12 @@ TEST(Global, DiagnosticEventHook){
     EXPECT_EQ(DiagnosticEventNameFromCategory("unknown"), nullptr);
     EXPECT_EQ(DiagnosticEventNameFromRecord(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error }), DiagnosticEventName::s_Error);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "tangent_frame_tests.inl"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -33,7 +33,8 @@ namespace __hidden_skinning{
 
 
 static bool BufferPayloadBytes(const usize count, const usize stride, usize& outBytes, const tchar* label){
-    if(RuntimeMeshBufferUpload::PayloadByteCount(count, stride, outBytes))
+    outBytes = 0u;
+    if(stride != 0u && TryMultiply<usize>(count, stride, outBytes))
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);

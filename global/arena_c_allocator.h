@@ -5,9 +5,42 @@
 #pragma once
 
 
+#include "allocation_size.h"
 #include "compile.h"
 #include "limit.h"
 #include "type.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename T, typename ArenaT>
+[[nodiscard]] inline T* AllocateArenaTyped(ArenaT& arena, const usize count){
+    static_assert(sizeof(T) > 0, "value_type must be complete before calling allocate.");
+    const usize byteCount = SizeOf<sizeof(T)>(count);
+    if(byteCount == 0u)
+        return nullptr;
+
+    if(IsConstantEvaluated())
+        return reinterpret_cast<T*>(arena.allocate(1u, byteCount));
+
+    return reinterpret_cast<T*>(arena.allocate(alignof(T), byteCount));
+}
+
+template<typename T, typename ArenaT>
+inline void DeallocateArenaTyped(ArenaT& arena, void* const ptr, const usize count){
+    static_assert(sizeof(T) > 0, "value_type must be complete before calling deallocate.");
+    const usize byteCount = SizeOf<sizeof(T)>(count);
+    if(byteCount == 0u)
+        return;
+
+    if(IsConstantEvaluated()){
+        arena.deallocate(ptr, 1u, byteCount);
+        return;
+    }
+
+    arena.deallocate(ptr, alignof(T), byteCount);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -69,6 +69,16 @@ template<typename T>
 }
 
 template<typename T>
+[[nodiscard]] constexpr bool TryMultiply(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs, T& outValue){
+    outValue = T(0);
+    if(MultiplyOverflows<T>(lhs, rhs))
+        return false;
+
+    outValue = static_cast<T>(lhs * rhs);
+    return true;
+}
+
+template<typename T>
 [[nodiscard]] constexpr bool DivideOverflows(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs){
     if constexpr(IsSigned_V<T>)
         return lhs == Limit<T>::s_Min && rhs == T(-1);

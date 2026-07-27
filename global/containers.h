@@ -71,6 +71,8 @@ template<typename... Args>
 using Tuple = std::tuple<Args...>;
 template<typename... Args>
 constexpr auto MakeTuple(Args&&... args){ return std::make_tuple(Forward<Args>(args)...); }
+template<typename... Args>
+constexpr auto ForwardAsTuple(Args&&... args){ return Tuple<Args&&...>(Forward<Args>(args)...); }
 template<size_t I, typename... Args>
 constexpr auto& Get(Tuple<Args...>& t){ return std::get<I>(t); }
 template<size_t I, typename... Args>

@@ -46,6 +46,7 @@ namespace UtilityDetail{
 
 
 inline constexpr Name s_UtilityArena("utilities/fbx_to_nwb/utility");
+inline constexpr Name s_SourceTangentRebuildScratch("utilities/fbx_to_nwb/source_tangent_rebuild");
 
 inline Core::Alloc::GlobalArena& Arena(){
     static Core::Alloc::GlobalArena s_Arena(s_UtilityArena);

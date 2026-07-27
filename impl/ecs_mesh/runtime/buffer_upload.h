@@ -8,6 +8,7 @@
 #include "../../global.h"
 
 #include <core/graphics/module.h>
+#include <global/overflow.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,31 +41,6 @@ namespace BufferSetupFailure{
     };
 };
 
-[[nodiscard]] inline bool PayloadByteCount(const usize count, const usize stride, usize& outBytes)noexcept{
-    outBytes = 0u;
-    if(stride == 0u || count > Limit<usize>::s_Max / stride)
-        return false;
-
-    outBytes = count * stride;
-    return true;
-}
-
-template<typename PayloadT>
-[[nodiscard]] inline bool PayloadByteCount(const usize count, usize& outBytes)noexcept{
-    return PayloadByteCount(count, sizeof(PayloadT), outBytes);
-}
-
-template<typename PayloadT>
-[[nodiscard]] inline bool PayloadByteCountFits(const usize count)noexcept{
-    usize payloadBytes = 0u;
-    return PayloadByteCount<PayloadT>(count, payloadBytes);
-}
-
-template<typename PayloadT, typename PayloadVector>
-[[nodiscard]] inline bool PayloadByteCountFits(const PayloadVector& payload)noexcept{
-    return PayloadByteCountFits<PayloadT>(payload.size());
-}
-
 template<typename PayloadT>
 [[nodiscard]] inline Core::BufferHandle SetupBuffer(
     Core::Graphics& graphics,
@@ -74,7 +50,7 @@ template<typename PayloadT>
     const BufferFlags flags = {}
 ){
     usize payloadBytes = 0u;
-    if(!PayloadByteCount<PayloadT>(count, payloadBytes))
+    if(!TryMultiply<usize>(count, sizeof(PayloadT), payloadBytes))
         return {};
 
     Core::Graphics::BufferSetupDesc setup;
@@ -112,7 +88,7 @@ template<typename PayloadT, typename PayloadVector>
     outBuffer = nullptr;
     if(payload.empty())
         return BufferSetupFailure::EmptyPayload;
-    if(!PayloadByteCountFits<PayloadT>(payload))
+    if(MultiplyOverflows<usize>(payload.size(), sizeof(PayloadT)))
         return BufferSetupFailure::ByteSizeOverflow;
 
     outBuffer = SetupBuffer<PayloadT>(graphics, debugName, payload, flags);

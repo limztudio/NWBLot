@@ -48,10 +48,6 @@ inline constexpr Core::TextureSubresourceSet s_ShadowVisibilitySubresources = Co
 inline constexpr u32 s_CausticAccumulatorChannelCount = 3u;
 inline constexpr Core::TextureSubresourceSet s_CausticAccumulatorSubresources = Core::TextureSubresourceSet(0, 1, 0, s_CausticAccumulatorChannelCount);
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 inline constexpr Name s_InstanceBufferName("ecs_render/instance_data");
 inline constexpr Name s_MaterialTypedBufferName("ecs_render/material_typed_data");
 inline constexpr Name s_CsgReceiverRangeBufferName("ecs_render/csg_receiver_ranges");

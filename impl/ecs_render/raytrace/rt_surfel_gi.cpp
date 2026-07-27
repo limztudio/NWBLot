@@ -91,10 +91,6 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
     if(rayTracingState().m_surfelAgeFreePipeline)
         return true;
@@ -149,10 +145,6 @@ bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
     NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel age-free compute pipeline"));
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
     if(rayTracingState().m_surfelHashBuildPipeline)
@@ -209,10 +201,6 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
     if(rayTracingState().m_surfelTracePipeline)
         return true;
@@ -267,10 +255,6 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
     NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel trace compute pipeline"));
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::ensureSurfelResources(){
     // Create the persistent pool / cell-head / counter / params buffers lazily. They live on RendererRayTracingState
@@ -485,10 +469,6 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // U5 HW-RayQuery trace twin. Same 5 surfel passes; only the TRACE swaps its pipeline: inline RayQuery over the scene
 // TLAS (surfel_trace_hw_cs -> gi_hw_trace.slangi) instead of the SW BVH walk. Gated on accel-struct + ray-query support,
 // so it only builds on the HW-shadow branch (which is where surfels are enabled on real RT hardware).
@@ -559,10 +539,6 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
     if(rayTracingState().m_surfelResolvePipeline)
         return true;
@@ -617,10 +593,6 @@ bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
     NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel resolve compute pipeline"));
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
     if(rayTracingState().m_surfelUpsamplePipeline)
@@ -677,10 +649,6 @@ bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
     if(rayTracingState().m_surfelTraceBuildArgsPipeline)
         return true;
@@ -736,10 +704,6 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
     auto& device = *graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
@@ -767,19 +731,11 @@ void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
     rayTracingState().m_surfelMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::hasSurfelWork()const noexcept{
     // Surfel GI is disabled until m_surfelEnabled is set (in prepareShadowVisibilityResources, once the SW scene BVH is
     // resident). A zero-init pool + 0xFFFFFFFF cell heads make the gather a no-op (-> hemiAmbient) until then.
     return rayTracingState().m_surfelEnabled;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!hasSurfelWork())
@@ -871,10 +827,6 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
     commandList.commitBarriers();
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!hasSurfelWork())

@@ -25,9 +25,6 @@ namespace __hidden_csg_interval_peel{
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static void SetCsgIntervalPeelStorageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
     commandList.setTextureState(targets.csgCapBackNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
     commandList.setTextureState(targets.csgIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
@@ -64,9 +61,6 @@ static void SetCsgIntervalSampleStorageStates(Core::CommandList& commandList, co
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] static CsgIntervalSampleStateGpuData BuildCsgIntervalSampleState(
     const DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
@@ -82,9 +76,6 @@ static void SetCsgIntervalSampleStorageStates(Core::CommandList& commandList, co
     state.meshViewHeapSlot = meshViewHeapSlot;
     return state;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] static CsgIntervalDispatchPushConstants BuildCsgIntervalDispatchPushConstants(
@@ -108,9 +99,6 @@ static void SetCsgIntervalSampleStorageStates(Core::CommandList& commandList, co
     pushConstants.csgContextHeapSlot = csgContextHeapSlot;
     return pushConstants;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static void DispatchCsgIntervalCompute(
@@ -182,18 +170,10 @@ bool RendererCsgSystem::uploadCsgIntervalSampleState(
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererCsgSystem::invalidateCsgIntervalPeelPipelines(){
     // Target descriptors are target-generation heap entries, not pipeline-local descriptor objects. Pipelines remain reusable
     // across target replacement; CreateIntervalCapFillPipeline refreshes its framebuffer-dependent variant.
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void RendererCsgSystem::dispatchCsgIntervalPeels(
     Core::CommandList& commandList,
@@ -227,10 +207,6 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
     );
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
@@ -257,10 +233,6 @@ void RendererCsgSystem::dispatchCsgReceiverSpanBuild(
     );
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererCsgSystem::dispatchCsgIntervalCombine(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
@@ -286,10 +258,6 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
         csgState().m_clipContextSlotsHeapHandle.slot()
     );
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData){
     NWB_ASSERT(csgState().m_intervalCapFillPipeline);

@@ -56,15 +56,6 @@ namespace __hidden_material_instance{
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Single source of truth for the cache-validity check shared by the prepare and the find paths.
 // Both must compare the same set of identity/revision fields, otherwise the find-only path can disagree with
 // the prepare path about whether a cached entry is still live. Centralizing the comparison keeps the two in
@@ -81,6 +72,12 @@ namespace __hidden_material_instance{
         && cacheEntry.revision == materialInstance.revision
     ;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -238,7 +235,7 @@ bool RendererMaterialSystem::prepareMaterialInstanceMutableTypedBytes(
 
     auto it = materialState().m_instanceMutableCache.try_emplace(entity, arena()).first;
     MaterialInstanceMutableCacheEntry& cacheEntry = it.value();
-    if(materialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance)){
+    if(__hidden_material_instance::materialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance)){
         outMutableTypedBytes = &cacheEntry.mutableTypedBytes;
         return true;
     }
@@ -278,7 +275,7 @@ bool RendererMaterialSystem::findPreparedMaterialInstanceMutableTypedBytes(
         return false;
 
     const MaterialInstanceMutableCacheEntry& cacheEntry = found.value();
-    if(!materialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance))
+    if(!__hidden_material_instance::materialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance))
         return false;
 
     outMutableTypedBytes = &cacheEntry.mutableTypedBytes;

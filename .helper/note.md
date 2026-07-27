@@ -1,11 +1,11 @@
 # NWBLot Notes
 
-Updated: 2026-07-27
+Updated: 2026-07-28
 
 ## Important Rules
 
-1. `IDevice` is an essential object in `Graphics`. Do not add runtime null checks for local `IDevice* device` retrievals in this layer.
-2. Use `getDevice()` and rely on invariant/assert behavior instead of defensive null handling that adds overhead and hides invalid states.
+1. `Graphics` owns a required `GraphicsBackend::Device` while its renderer runtime is live. Express that invariant in graphics/rendering APIs and local bindings with `Device&` (or `const Device&`), not a non-null `Device*`; reserve pointers for documented lifecycle or genuinely optional-device boundaries.
+2. `Graphics::getDevice()` currently returns `Device*` for historical lifecycle behavior. Converting that accessor, the backend contract, and its callers to a reference-based live-device API is a deliberate follow-up; until then, do not add defensive null checks on normal live-renderer paths that hide invalid states.
 3. Asset-to-asset and component-to-asset bindings must use typed `Core::Assets::AssetRef<T>`, not raw `Name` or string forms.
 4. Graphics pipeline caches must include framebuffer/render-target compatibility in the cache key; material/shader identity alone is not enough when pipeline creation depends on framebuffer info.
 5. Basic built-in mesh should live in `.nwb` metadata payloads, not as hardcoded vertex/index arrays inside the cooker.

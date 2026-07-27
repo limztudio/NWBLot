@@ -426,7 +426,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const CsgFrameState csgFrameState = m_preparedCsgFrameState;
     const bool hasOpaqueCsgFrameWork = csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
     NWB_ASSERT(csgFrameState.empty() || deferredTargets.csgIntervalTargetsValid());
-    auto* device = m_graphics.getDevice();
+    auto& device = *m_graphics.getDevice();
     Core::CommandList* gbufferCommandList = m_gbufferCommandList.get();
     Core::CommandList* postGbufferNormalizeCommandList = m_postGbufferNormalizeCommandList.get();
     Core::CommandList* shadowVisibilityCommandList = m_shadowVisibilityCommandList.get();
@@ -437,7 +437,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(shadowVisibilityCommandList);
     NWB_ASSERT(causticsSurfelGiCommandList);
     NWB_ASSERT(postGbufferCommandList);
-    if(!device || !gbufferCommandList || !postGbufferNormalizeCommandList || !shadowVisibilityCommandList || !causticsSurfelGiCommandList || !postGbufferCommandList)
+    if(!gbufferCommandList || !postGbufferNormalizeCommandList || !shadowVisibilityCommandList || !causticsSurfelGiCommandList || !postGbufferCommandList)
         return;
 
     m_gbufferStateHandoff.reset();
@@ -539,7 +539,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &deferredTargets,
         csgFrameState,
         hasOpaqueCsgFrameWork,
-        device,
+        &device,
         gbufferCommandList,
         &frameTiming,
         &gbufferCommandListReady,
@@ -558,7 +558,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         frameTiming.emplace(
             m_graphics.gpuTiming(),
             RendererGpuTimingScope::s_Frame,
-            device,
+            &device,
             *commandList
         );
         if(!frameTiming)
@@ -646,7 +646,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 deferredViewportState
             };
             if(regularDrawResourcesReady && !opaqueDrawItems.regular.empty()){
-                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueRegular, device, *commandList);
+                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueRegular, &device, *commandList);
 
                 m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.regular);
             }
@@ -664,7 +664,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 csgIntervalViewportState
             };
             if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
-                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsgReceiverSurface, device, *commandList);
+                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsgReceiverSurface, &device, *commandList);
 
                 m_materialSystem.renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, opaqueDrawItems.csgReceiverSurface);
             }
@@ -674,7 +674,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_csgSystem.dispatchCsgIntervalCombine(*commandList, deferredTargets, csgFrameData);
             if(csgSampleStateReady && csgDrawResourcesReady){
                 if(!opaqueDrawItems.csg.empty()){
-                    Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsg, device, *commandList);
+                    Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsg, &device, *commandList);
 
                     m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
                 }
@@ -914,7 +914,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         causticsSurfelGiCommandList,
         postGbufferCommandList,
     };
-    if(!renderTimingTicket.submit(*device, commandLists, 5u)){
+    if(!renderTimingTicket.submit(device, commandLists, 5u)){
         discardRenderPackets();
         return;
     }

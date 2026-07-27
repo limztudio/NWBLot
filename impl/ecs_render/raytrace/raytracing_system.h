@@ -82,8 +82,8 @@ public:
     // Surfel GI: the feature gate + prep + render hooks. hasSurfelWork returns m_surfelEnabled (set in
     // prepareShadowVisibilityResources once the SW scene BVH is resident). prepareSurfelResources creates the
     // persistent pool/hash/counter/params buffers + pipelines, clears them on (re)creation, and uploads the params
-    // CB. renderSurfelGi consumes the prepared heap slots and runs the spawn -> hash-build -> trace
-    // passes (the SW trace reuses the SW scene BVH).
+    // CB. renderSurfelGi consumes the prepared heap slots and records the complete surfel update and resolve sequence
+    // (the SW trace reuses the SW scene BVH).
     [[nodiscard]] bool hasSurfelWork()const noexcept;
     [[nodiscard]] bool prepareSurfelResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
     // The first surfel-pool clear is recorded into the shadow-preparation list. Keep the pool marked dirty until that
@@ -92,7 +92,7 @@ public:
     void finalizeSurfelResourceInitialization();
     void discardSurfelResourceInitialization();
     [[nodiscard]] bool renderSurfelGi(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    // Lazily create the persistent surfel buffers (pool / cell-head / counter / params CB) + the three pass
+    // Lazily create the persistent surfel buffers (pool / cell-head / counter / params CB) and their per-pass
     // pipelines. The buffers live on RendererRayTracingState so a window resize does not reset convergence.
     [[nodiscard]] bool ensureSurfelResources();
     // The surfel pass pipelines use only their common push range plus the global heap resource/sampler layouts.

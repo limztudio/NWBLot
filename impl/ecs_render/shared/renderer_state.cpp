@@ -386,7 +386,6 @@ void RendererRayTracingState::invalidateResources(){
     m_surfelResolvePipelineFailed = false;
     m_surfelUpsamplePipelineFailed = false;
     m_surfelTraceBuildArgsPipelineFailed = false;
-    m_surfelDispatchLogged = false;
     m_shadowPipelineFailed = false;
     m_shadowSoftPipelineFailed = false;
     m_bvhSortPipelineFailed = false;

@@ -668,10 +668,10 @@ struct RtSurfelGiState{
     // ---- Surfel GI state ----
     // Screen-spawned, world-hashed surfels integrate one-bounce diffuse GI. The persistent buffers (pool / cell-head /
     // counter / params CB) live HERE (beside the caustic block), NOT on DeferredFrameTargets, which is torn down on
-    // every window resize and would silently reset surfel convergence. Lifetime = device reset only. Three compute
-    // passes per frame: spawn (screen tiles -> bump-allocate a surfel where existing coverage is low) -> hash-build
-    // (link live surfels into the spatial-hash cell lists) -> trace (one workgroup per surfel, 64 SW rays -> EMA
-    // irradiance), then resolve to the screen-space texture the deferred lighting pass samples.
+    // every window resize and would silently reset surfel convergence. Lifetime = device reset only. Each frame
+    // snapshots the previous pool/hash, age-frees stale surfels, spawns and hash-links new surfels, derives indirect
+    // trace arguments, traces one workgroup per surfel (64 SW rays -> EMA irradiance), then resolves and upsamples the
+    // screen-space irradiance sampled by deferred lighting.
     // Every surfel pass is descriptor-heap-only. The separate layouts retain their independent pipeline lifetimes but
     // carry the same push-constant selector ABI; all CBV/SRV/UAV resources live in the global heap.
     Core::BindingLayoutHandle m_surfelSpawnBindingLayout;
@@ -711,7 +711,6 @@ struct RtSurfelGiState{
     bool m_surfelTraceHwPipelineFailed = false;
     bool m_surfelUseHwTrace = false;
     bool m_surfelCountReadbackPending = false;
-    bool m_surfelDispatchLogged = false;
     // HW-RayQuery trace twin (surfel_trace_hw_cs / gi_hw_trace.slangi): a parallel pipeline that reads
     // the scene TLAS and reconstructs the authored surface through heap-selected material-record geometry slots instead
     // of the SW BVH. m_surfelUseHwTrace selects the

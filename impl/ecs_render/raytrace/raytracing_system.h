@@ -61,6 +61,9 @@ public:
     void releaseSwBvhScratchHeapHandles();
     // Retire the persistent surfel descriptor generations before resource invalidation releases their backing buffers.
     void releaseSurfelGiHeapHandles();
+    // Normalizes the G-buffer and trace inputs shared by the independent shadow and caustics/surfel-GI packets.
+    // The prelude records these transitions once before both packets import the resulting state snapshot.
+    void normalizePostGbufferPacketResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearCausticTargets(Core::CommandList& commandList, DeferredFrameTargets& targets);
@@ -115,6 +118,11 @@ public:
     // ready AND the transparent SW scene BVH + RGB resolve/merge sets built). When true, the colored TRANSPARENT shadow
     // is traced + denoised + multiplied onto the soft-opaque visibility inside renderShadowVisibility's soft chain.
     [[nodiscard]] bool softTransparentShadowReady()const noexcept;
+    // Soft-shadow recording cannot swap the target-generation handles while the sibling caustics/surfel-GI packet
+    // validates the shared bindless bundle. Finalize the deferred temporal swap only after the ordered submission
+    // succeeds, or discard it when packet recording/submission is abandoned.
+    void finalizeSoftShadowTemporalHistory(DeferredFrameTargets& targets);
+    void discardSoftShadowTemporalHistory();
 
 
 private:
@@ -180,8 +188,8 @@ private:
     // Backend-agnostic soft-shadow denoise + transparent fold, run AFTER whichever backend (SW BVH or HW RayQuery) wrote
     // the half-res soft opaque trace into shadowSoftHalfA (and synced it to UnorderedAccess): geometry downsample ->
     // per-slot [temporal reproject-merge -> a-trous resolve OVERWRITE] -> the guarded soft colored-transparent trace+fold
-    // -> temporal history swap. Reads only the shared soft/temporal buffers + the G-buffer, so the same chain denoises both
-    // backends. softGroupsX/Y are the half-res dispatch grid; frameIndex seeds the trace jitter.
+    // -> deferred temporal-history finalization. Reads only the shared soft/temporal buffers + the G-buffer, so the same
+    // chain denoises both backends. softGroupsX/Y are the half-res dispatch grid; frameIndex seeds the trace jitter.
     void dispatchSoftShadowDenoiseAndTransparentFold(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 frameIndex, u32 softGroupsX, u32 softGroupsY);
     // Soft opaque shadow TEMPORAL accumulation: the reproject-merge pass
     // inserted per slot between the soft trace and the a-trous resolve. The pipeline is push-only and heap slots select

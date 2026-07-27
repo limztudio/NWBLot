@@ -706,6 +706,140 @@ TEST_F(DescriptorBufferRoundTripTest, NormalizedStatePreludeFansInIndependentBra
 }
 
 
+// Mirrors RendererSystem's post-G-buffer sequence: normalize the G-buffer once, record the shadow and
+// caustics/surfel-GI packets on separate graphics workers, fan their output states in, then let deferred lighting
+// consume all three outputs in the one ordered Graphics submission.
+TEST_F(DescriptorBufferRoundTripTest, RendererPostGbufferPacketsFanInBeforeLighting){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const auto makeGbufferTarget = [&device](){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setFormat(Format::RGBA8_UNORM)
+                .setInRenderTarget(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const auto makePacketOutput = [&device](){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setFormat(Format::RGBA8_UNORM)
+                .setInUAV(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+
+    auto worldPosition = makeGbufferTarget();
+    auto normal = makeGbufferTarget();
+    auto depth = makeGbufferTarget();
+    auto shadowVisibility = makePacketOutput();
+    auto causticIrradiance = makePacketOutput();
+    auto surfelIrradiance = makePacketOutput();
+    ASSERT_NE(worldPosition.get(), nullptr);
+    ASSERT_NE(normal.get(), nullptr);
+    ASSERT_NE(depth.get(), nullptr);
+    ASSERT_NE(shadowVisibility.get(), nullptr);
+    ASSERT_NE(causticIrradiance.get(), nullptr);
+    ASSERT_NE(surfelIrradiance.get(), nullptr);
+
+    CommandListResourceStateHandoff gbufferState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff normalizedState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff shadowState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff causticsSurfelGiState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff fanInState(DescriptorBufferRoundTripTest::arena());
+    auto gbuffer = device.createCommandList();
+    auto prelude = device.createCommandList();
+    auto shadow = device.createCommandList();
+    auto causticsSurfelGi = device.createCommandList();
+    auto lighting = device.createCommandList();
+    ASSERT_NE(gbuffer.get(), nullptr);
+    ASSERT_NE(prelude.get(), nullptr);
+    ASSERT_NE(shadow.get(), nullptr);
+    ASSERT_NE(causticsSurfelGi.get(), nullptr);
+    ASSERT_NE(lighting.get(), nullptr);
+
+    gbuffer->open();
+    gbuffer->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::RenderTarget);
+    gbuffer->setTextureState(normal.get(), s_AllSubresources, ResourceStates::RenderTarget);
+    gbuffer->setTextureState(depth.get(), s_AllSubresources, ResourceStates::RenderTarget);
+    gbuffer->close(&gbufferState);
+    ASSERT_TRUE(gbufferState.valid());
+
+    prelude->open(&gbufferState);
+    prelude->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    prelude->setTextureState(normal.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    prelude->setTextureState(depth.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    prelude->close(&normalizedState);
+    ASSERT_TRUE(normalizedState.valid());
+
+    Latch recordingStarted(2);
+    bool shadowRecorded = false;
+    bool causticsSurfelGiRecorded = false;
+    const Graphics::JobHandle shadowJob = graphics.scheduleGraphicsJob([&](){
+        recordingStarted.count_down();
+        recordingStarted.wait();
+        shadow->open(&normalizedState);
+        shadow->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        shadow->setTextureState(normal.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        shadow->setTextureState(depth.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        shadow->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+        shadow->close(&shadowState);
+        shadowRecorded = shadowState.valid() && shadow->hasCommandBuffer();
+    });
+    const Graphics::JobHandle causticsSurfelGiJob = graphics.scheduleGraphicsJob([&](){
+        recordingStarted.count_down();
+        recordingStarted.wait();
+        causticsSurfelGi->open(&normalizedState);
+        causticsSurfelGi->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        causticsSurfelGi->setTextureState(normal.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        causticsSurfelGi->setTextureState(depth.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        causticsSurfelGi->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+        causticsSurfelGi->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+        causticsSurfelGi->close(&causticsSurfelGiState);
+        causticsSurfelGiRecorded = causticsSurfelGiState.valid() && causticsSurfelGi->hasCommandBuffer();
+    });
+    ASSERT_TRUE(shadowJob.valid());
+    ASSERT_TRUE(causticsSurfelGiJob.valid());
+
+    graphics.waitJob(shadowJob);
+    graphics.waitJob(causticsSurfelGiJob);
+    ASSERT_TRUE(shadowRecorded);
+    ASSERT_TRUE(causticsSurfelGiRecorded);
+
+    const CommandListResourceStateHandoff* branchStates[] = { &shadowState, &causticsSurfelGiState };
+    ASSERT_TRUE(fanInState.buildFanIn(normalizedState, branchStates, 2u));
+    ASSERT_TRUE(fanInState.valid());
+
+    lighting->open(&fanInState);
+    EXPECT_EQ(lighting->getTextureSubresourceState(worldPosition.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(lighting->getTextureSubresourceState(normal.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(lighting->getTextureSubresourceState(depth.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(lighting->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(lighting->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(lighting->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::UnorderedAccess);
+    lighting->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    lighting->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    lighting->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    lighting->close();
+
+    CommandList* commandLists[] = {
+        gbuffer.get(),
+        prelude.get(),
+        shadow.get(),
+        causticsSurfelGi.get(),
+        lighting.get(),
+    };
+    bool submitted = false;
+    EXPECT_GT(device.executeCommandLists(commandLists, 5u, CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_TRUE(submitted);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Fan-in only accepts branch deltas that agree on every shared resource. A scheduler must split or serialize
 // conflicting packets instead of selecting one final layout arbitrarily.
 TEST_F(DescriptorBufferRoundTripTest, StateFanInRejectsConflictingBranchFinalStates){

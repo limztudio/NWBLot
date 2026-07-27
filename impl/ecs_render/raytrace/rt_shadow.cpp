@@ -284,6 +284,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         return false;
     }
     rayTracingState().m_softShadowTemporalSeeded = false;
+    rayTracingState().m_softShadowTemporalHistoryAdvancePending = false;
     rayTracingState().m_prevWorldToClipValid = false;
     rayTracingState().m_softShadowHistoryFrontIsA = 1u;
 
@@ -682,7 +683,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.commitBarriers();
 
             // Denoise the half-res soft-A trace into the full-res visibility (geometry downsample -> per-slot temporal
-            // merge + a-trous resolve -> the guarded soft transparent trace+fold -> temporal history swap). Backend-
+            // merge + a-trous resolve -> the guarded soft transparent trace+fold -> deferred temporal finalization). Backend-
             // agnostic: it reads ONLY the shared soft/temporal buffers + the G-buffer, so the SAME helper serves the HW
             // opaque-soft trace (which wrote soft-A above via the RayQuery pipeline). softTransparentRan mirrors the fold's
             // effect (the helper's fold sets it internally iff m_softTransparentReady): the transparent fallback below is

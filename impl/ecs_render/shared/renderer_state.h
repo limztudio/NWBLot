@@ -576,6 +576,10 @@ struct RtSoftShadowState{
     // Cleared whenever the temporal targets are (re)created (createShadowVisibilityTarget); the FIRST merge dispatch sets it
     // true. Until then the merge treats every pixel as n=0 (pure current sample) -- the clean first-frame / post-resize path.
     bool m_softShadowTemporalSeeded = false;
+    // The soft packet records its temporal output before the independent caustics/surfel-GI packet finishes validating
+    // the shared deferred target bundle. Defer the CPU-side history-handle swap until the complete ordered submission
+    // succeeds, so worker recording never mutates that shared bundle concurrently.
+    bool m_softShadowTemporalHistoryAdvancePending = false;
     bool m_shadowReprojectMergePipelineFailed = false;
     // Gates (mirror m_softShadowReady / m_softShadowTemporalReady): set by prepareShadowVisibilityResources when the RGB
     // resolve and shared transparent merge pipelines are ready. Non-fatal: a failure leaves the soft transparent path off; the

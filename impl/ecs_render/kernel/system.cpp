@@ -39,6 +39,10 @@ RendererSystem::RendererSystem(
     , m_rayTracingState(arena)
     , m_shadowPrepareStateHandoff(arena)
     , m_gbufferStateHandoff(arena)
+    , m_postGbufferNormalizedStateHandoff(arena)
+    , m_shadowVisibilityStateHandoff(arena)
+    , m_causticsSurfelGiStateHandoff(arena)
+    , m_postGbufferFanInStateHandoff(arena)
     , m_shaderSystem(*this)
     , m_meshSystem(*this)
     , m_materialSystem(*this)
@@ -109,7 +113,14 @@ void RendererSystem::invalidateResources(){
     m_preparedShadowVisibilityReady = false;
     m_shadowPrepareStateHandoff.reset();
     m_gbufferStateHandoff.reset();
+    m_postGbufferNormalizedStateHandoff.reset();
+    m_shadowVisibilityStateHandoff.reset();
+    m_causticsSurfelGiStateHandoff.reset();
+    m_postGbufferFanInStateHandoff.reset();
     m_gbufferCommandList.reset();
+    m_postGbufferNormalizeCommandList.reset();
+    m_shadowVisibilityCommandList.reset();
+    m_causticsSurfelGiCommandList.reset();
     m_postGbufferCommandList.reset();
     m_shadowPrepareCommandList.reset();
     // The descriptor-buffer TLAS descriptor owns a retained acceleration-structure handle until its in-flight-frame
@@ -157,6 +168,30 @@ bool RendererSystem::ensureFrameCommandLists(){
         m_gbufferCommandList = device.createCommandList();
         if(!m_gbufferCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create G-buffer command list"));
+            return false;
+        }
+    }
+
+    if(!m_postGbufferNormalizeCommandList){
+        m_postGbufferNormalizeCommandList = device.createCommandList();
+        if(!m_postGbufferNormalizeCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create post-G-buffer normalization command list"));
+            return false;
+        }
+    }
+
+    if(!m_shadowVisibilityCommandList){
+        m_shadowVisibilityCommandList = device.createCommandList();
+        if(!m_shadowVisibilityCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow-visibility command list"));
+            return false;
+        }
+    }
+
+    if(!m_causticsSurfelGiCommandList){
+        m_causticsSurfelGiCommandList = device.createCommandList();
+        if(!m_causticsSurfelGiCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustics/surfel-GI command list"));
             return false;
         }
     }
@@ -292,6 +327,9 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
         return false;
 
     NWB_ASSERT(m_gbufferCommandList);
+    NWB_ASSERT(m_postGbufferNormalizeCommandList);
+    NWB_ASSERT(m_shadowVisibilityCommandList);
+    NWB_ASSERT(m_causticsSurfelGiCommandList);
     NWB_ASSERT(m_postGbufferCommandList);
     NWB_ASSERT(m_shadowPrepareCommandList);
 
@@ -376,33 +414,72 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(csgFrameState.empty() || deferredTargets.csgIntervalTargetsValid());
     auto* device = m_graphics.getDevice();
     Core::CommandList* gbufferCommandList = m_gbufferCommandList.get();
+    Core::CommandList* postGbufferNormalizeCommandList = m_postGbufferNormalizeCommandList.get();
+    Core::CommandList* shadowVisibilityCommandList = m_shadowVisibilityCommandList.get();
+    Core::CommandList* causticsSurfelGiCommandList = m_causticsSurfelGiCommandList.get();
     Core::CommandList* postGbufferCommandList = m_postGbufferCommandList.get();
     NWB_ASSERT(gbufferCommandList);
+    NWB_ASSERT(postGbufferNormalizeCommandList);
+    NWB_ASSERT(shadowVisibilityCommandList);
+    NWB_ASSERT(causticsSurfelGiCommandList);
     NWB_ASSERT(postGbufferCommandList);
+    if(!device || !gbufferCommandList || !postGbufferNormalizeCommandList || !shadowVisibilityCommandList || !causticsSurfelGiCommandList || !postGbufferCommandList)
+        return;
+
+    m_gbufferStateHandoff.reset();
+    m_postGbufferNormalizedStateHandoff.reset();
+    m_shadowVisibilityStateHandoff.reset();
+    m_causticsSurfelGiStateHandoff.reset();
+    m_postGbufferFanInStateHandoff.reset();
+    m_raytracingSystem.discardSoftShadowTemporalHistory();
 
     Core::GpuTimingSubmissionTicket renderTimingTicket(m_graphics.gpuTiming());
-    bool commandListReady = false;
-    const Core::Graphics::JobHandle recordingJob = m_graphics.scheduleGraphicsJob([
+    Core::GlobalUniquePtr<Core::GpuTimingMeasure> frameTiming;
+    const auto discardRenderPackets = [&](){
+        if(frameTiming){
+            frameTiming->discardTiming();
+            frameTiming.reset();
+        }
+        renderTimingTicket.discard();
+        m_raytracingSystem.discardSoftShadowTemporalHistory();
+        m_gbufferStateHandoff.reset();
+        m_postGbufferNormalizedStateHandoff.reset();
+        m_shadowVisibilityStateHandoff.reset();
+        m_causticsSurfelGiStateHandoff.reset();
+        m_postGbufferFanInStateHandoff.reset();
+    };
+
+    bool gbufferCommandListReady = false;
+    const Core::Graphics::JobHandle gbufferRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
-        framebuffer,
         &deferredTargets,
         csgFrameState,
         hasOpaqueCsgFrameWork,
         device,
         gbufferCommandList,
-        postGbufferCommandList,
-        &commandListReady,
+        &frameTiming,
+        &gbufferCommandListReady,
         &renderTimingTicket
     ](){
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
         Core::CommandList* commandList = gbufferCommandList;
         commandList->open(&m_shadowPrepareStateHandoff);
+        if(!commandList->hasCommandBuffer())
+            return;
 
         // Graphics has already reset every timer-query pool in the frame preamble, before shadow preparation and
         // every other render pass. This list can therefore begin the renderer frame scope without invalidating an
         // earlier pass's current-frame timestamps.
-        Core::GpuTimingMeasure frameTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Frame, device, *commandList);
+        frameTiming = Core::MakeGlobalUnique<Core::GpuTimingMeasure>(
+            m_arena,
+            m_graphics.gpuTiming(),
+            RendererGpuTimingScope::s_Frame,
+            device,
+            *commandList
+        );
+        if(!frameTiming)
+            return;
 
         MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
         InstanceGpuDataVector instanceData{scratchArena};
@@ -524,117 +601,243 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         commandList->endRenderPass();
 
-        // The opaque/G-buffer producer and every post-G-buffer consumer remain ordered on Graphics, but use
-        // distinct primary command buffers. Capture the actual final tracked state only after close has appended
-        // keepInitialState restores; the next list imports that snapshot before recording its first barrier.
-        // The job records this producer/consumer pair serially because the consumer imports the producer's final
-        // tracked state. Independent future packets can use separate graphics jobs without changing submission order.
-        frameTiming.finishMarker();
+        // The opaque producer exports its final tracked state after close-time keepInitialState restores. The next
+        // packet is a normalization prelude; it imports this snapshot before the two independent workers record.
+        frameTiming->finishMarker();
         commandList->close(&m_gbufferStateHandoff);
         if(!m_gbufferStateHandoff.valid()){
-            frameTiming.discardTiming();
+            frameTiming->discardTiming();
+            frameTiming.reset();
             return;
         }
-        commandListReady = true;
+        gbufferCommandListReady = commandList->hasCommandBuffer();
+    });
+    if(!gbufferRecordingJob.valid()){
+        discardRenderPackets();
+        return;
+    }
 
-        commandList = postGbufferCommandList;
-        commandList->open(&m_gbufferStateHandoff);
+    m_graphics.waitJob(gbufferRecordingJob);
+    if(!gbufferCommandListReady || !frameTiming){
+        discardRenderPackets();
+        return;
+    }
 
-        const bool hardwareShadowSupported =
-            m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
-            && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
+    // Normalize every G-buffer/trace input shared by the sibling packets once. The two workers import the exact
+    // same snapshot below, so neither can record a stale transition from the opaque producer's final state.
+    bool postGbufferNormalizeCommandListReady = false;
+    const Core::Graphics::JobHandle postGbufferNormalizeRecordingJob = m_graphics.scheduleGraphicsJob([
+        this,
+        &deferredTargets,
+        postGbufferNormalizeCommandList,
+        &postGbufferNormalizeCommandListReady
+    ](){
+        postGbufferNormalizeCommandList->open(&m_gbufferStateHandoff);
+        if(!postGbufferNormalizeCommandList->hasCommandBuffer())
+            return;
+
+        m_raytracingSystem.normalizePostGbufferPacketResources(*postGbufferNormalizeCommandList, deferredTargets);
+        postGbufferNormalizeCommandList->close(&m_postGbufferNormalizedStateHandoff);
+        postGbufferNormalizeCommandListReady =
+            m_postGbufferNormalizedStateHandoff.valid()
+            && postGbufferNormalizeCommandList->hasCommandBuffer()
         ;
+    });
+    if(!postGbufferNormalizeRecordingJob.valid()){
+        discardRenderPackets();
+        return;
+    }
+
+    m_graphics.waitJob(postGbufferNormalizeRecordingJob);
+    if(!postGbufferNormalizeCommandListReady){
+        discardRenderPackets();
+        return;
+    }
+
+    const bool shadowVisibilityPrepared = m_preparedShadowVisibilityReady;
+    const bool hardwareShadowSupported =
+        m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
+        && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
+    ;
+
+    // The shadow packet owns only visibility/soft-shadow outputs. The caustics+GI packet owns only its irradiance
+    // and persistent surfel outputs; all shared inputs already have their common read state in the prelude.
+    bool shadowVisibilityCommandListReady = false;
+    bool causticsSurfelGiCommandListReady = false;
+    const Core::Graphics::JobHandle shadowVisibilityRecordingJob = m_graphics.scheduleGraphicsJob([
+        this,
+        &deferredTargets,
+        shadowVisibilityPrepared,
+        hardwareShadowSupported,
+        shadowVisibilityCommandList,
+        &shadowVisibilityCommandListReady,
+        &renderTimingTicket
+    ](){
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
+        shadowVisibilityCommandList->open(&m_postGbufferNormalizedStateHandoff);
+        if(!shadowVisibilityCommandList->hasCommandBuffer())
+            return;
 
         bool shadowVisibilityWritten = false;
-        if(m_preparedShadowVisibilityReady && hardwareShadowSupported){
-            // renderShadowVisibility casts the opaque shadow through the half-res soft denoise chain and, when
-            // softTransparentShadowReady is true, folds colored transparent shadow into that same chain. Transparent shadow
-            // stays on the software Moeller-Trumbore path: HW RayQuery and SW traversal can disagree by +/-1 crossing at
-            // grazing silhouettes, which corrupts the colored chord even though the binary opaque test is unaffected.
-            shadowVisibilityWritten = m_raytracingSystem.renderShadowVisibility(*commandList, deferredTargets);
+        if(shadowVisibilityPrepared && hardwareShadowSupported){
+            // The HW opaque trace feeds the soft denoise chain when available. Transparent shadow stays on the
+            // software path, with a hybrid multiply fallback when the colored soft fold was not prepared.
+            shadowVisibilityWritten = m_raytracingSystem.renderShadowVisibility(*shadowVisibilityCommandList, deferredTargets);
             if(!shadowVisibilityWritten)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
-            // Hybrid multiply fallback: if the soft transparent fold did not run but the scene still has a transparent
-            // occluder with a ready SW BVH, run the transparent software trace as a second pass and multiply it onto the
-            // opaque mask. Skip it when renderShadowVisibility already folded the colored shadow.
             else if(!m_raytracingSystem.softTransparentShadowReady() && m_raytracingSystem.hybridTransparentShadowReady()){
-                if(!m_raytracingSystem.renderGpuBvhShadowVisibility(*commandList, deferredTargets, true))
+                if(!m_raytracingSystem.renderGpuBvhShadowVisibility(*shadowVisibilityCommandList, deferredTargets, true))
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow pass failed"));
             }
         }
-        else if(m_preparedShadowVisibilityReady){
-            // No hardware ray tracing: trace the same per-light occlusion against the software scene/instance
-            // BVH prepared earlier this frame.
-            shadowVisibilityWritten = m_raytracingSystem.renderGpuBvhShadowVisibility(*commandList, deferredTargets);
+        else if(shadowVisibilityPrepared){
+            shadowVisibilityWritten = m_raytracingSystem.renderGpuBvhShadowVisibility(*shadowVisibilityCommandList, deferredTargets);
         }
-        // The deferred lighting pass always samples the visibility image; clear it to "all lit" on any frame neither shadow backend wrote it so lighting never reads stale or undefined occlusion.
+        // Deferred lighting samples visibility every frame, so retain the all-lit fallback whenever neither backend
+        // emitted it rather than exposing the previous frame's contents.
         if(!shadowVisibilityWritten)
-            m_raytracingSystem.clearShadowVisibility(*commandList, deferredTargets);
+            m_raytracingSystem.clearShadowVisibility(*shadowVisibilityCommandList, deferredTargets);
 
-        // The deferred lighting pass always samples the caustic irradiance image (additive). Clear the caustic
-        // targets to BLACK unconditionally so the additive term is a no-op and the buffers are always a valid black
-        // input -- the inverse of the shadow buffer's all-lit white default. The producer below overwrites them only
-        // when there is caustic work.
-        m_raytracingSystem.clearCausticTargets(*commandList, deferredTargets);
+        shadowVisibilityCommandList->close(&m_shadowVisibilityStateHandoff);
+        shadowVisibilityCommandListReady =
+            m_shadowVisibilityStateHandoff.valid()
+            && shadowVisibilityCommandList->hasCommandBuffer()
+        ;
+    });
+    const Core::Graphics::JobHandle causticsSurfelGiRecordingJob = m_graphics.scheduleGraphicsJob([
+        this,
+        &deferredTargets,
+        shadowVisibilityPrepared,
+        hardwareShadowSupported,
+        causticsSurfelGiCommandList,
+        &causticsSurfelGiCommandListReady,
+        &renderTimingTicket
+    ](){
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
+        causticsSurfelGiCommandList->open(&m_postGbufferNormalizedStateHandoff);
+        if(!causticsSurfelGiCommandList->hasCommandBuffer())
+            return;
 
-        // Caustic producer -- EXACTLY ONE backend runs per frame, mirroring the shadow backend split above: the
-        // hardware ray-traced producer on the HW path, the software-BVH producer otherwise. Both emit
-        // photons into the just-cleared R32_UINT accumulators, then resolve them into the RGBA16F irradiance buffer
-        // the lighting pass adds pre-tonemap. Each runs only when there is >=1 caustic light AND >=1 refractive
-        // instance (has*CausticWork, checked inside); else the black-cleared buffer is the additive no-op. Runs
-        // BEFORE renderDeferredLighting so the lighting read sees the resolve.
-        if(m_preparedShadowVisibilityReady){
-            // A false result with no caustic work is the common no-op. If work was present, preserve the black-cleared
-            // fallback while surfacing that the producer or resolve pass could not be recorded.
+        // Black is the additive identity for caustics. Keep that valid no-op input even when no refractive scene
+        // work was prepared or the selected producer fails to record.
+        m_raytracingSystem.clearCausticTargets(*causticsSurfelGiCommandList, deferredTargets);
+        if(shadowVisibilityPrepared){
             if(hardwareShadowSupported){
-                const bool causticsDispatched = m_raytracingSystem.renderHwCaustics(*commandList, deferredTargets);
+                const bool causticsDispatched = m_raytracingSystem.renderHwCaustics(*causticsSurfelGiCommandList, deferredTargets);
                 if(!causticsDispatched && m_raytracingSystem.hasHwCausticWork())
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic render pass failed"));
             }
             else{
-                const bool causticsDispatched = m_raytracingSystem.renderGpuBvhCaustics(*commandList, deferredTargets);
+                const bool causticsDispatched = m_raytracingSystem.renderGpuBvhCaustics(*causticsSurfelGiCommandList, deferredTargets);
                 if(!causticsDispatched && m_raytracingSystem.hasCausticWork())
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software caustic render pass failed"));
             }
         }
 
-        // Surfel GI render hook: the spawn -> hash-build -> trace passes run between the caustic producer and the
-        // deferred lighting, so the lighting gather sees this frame's integrated surfel irradiance. Inert (returns
-        // true without dispatching) until m_surfelEnabled is set once the SW scene BVH is resident.
-        if(!m_raytracingSystem.renderSurfelGi(*commandList, deferredTargets))
+        // Spawn -> hash build -> trace -> resolve remains one ordered packet, so its persistent surfel buffers never
+        // become visible to another worker halfway through their per-frame update.
+        if(!m_raytracingSystem.renderSurfelGi(*causticsSurfelGiCommandList, deferredTargets))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel GI render pass failed"));
 
-        commandListReady = m_deferredSystem.renderDeferredLighting(*commandList, deferredTargets);
-        if(commandListReady){
-            const bool hasTransparentRenderers = m_preparedHasTransparentRenderers;
-            if(hasTransparentRenderers || m_avboitState.m_targetsNeedClear){
-                m_avboitSystem.clearAvboitTargets(*commandList, deferredTargets.avboit);
-                m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
-            }
-            if(hasTransparentRenderers)
-                m_avboitSystem.renderAvboitPasses(*commandList, deferredTargets, csgFrameState);
-
-            commandListReady = m_deferredSystem.renderDeferredComposite(*commandList, deferredTargets, framebuffer);
-        }
-
-        // Vulkan timestamps may span command buffers as long as submission order is fixed. The debug marker closed
-        // above remains local to the producer command buffer; this ending timestamp preserves the full frame metric.
-        frameTiming.finishTiming(*commandList);
-        commandList->close();
-        commandListReady = commandListReady && commandList->hasCommandBuffer();
+        causticsSurfelGiCommandList->close(&m_causticsSurfelGiStateHandoff);
+        causticsSurfelGiCommandListReady =
+            m_causticsSurfelGiStateHandoff.valid()
+            && causticsSurfelGiCommandList->hasCommandBuffer()
+        ;
     });
-    if(!recordingJob.valid())
-        return;
-
-    m_graphics.waitJob(recordingJob);
-    if(!commandListReady){
-        renderTimingTicket.discard();
+    if(!shadowVisibilityRecordingJob.valid() || !causticsSurfelGiRecordingJob.valid()){
+        if(shadowVisibilityRecordingJob.valid())
+            m_graphics.waitJob(shadowVisibilityRecordingJob);
+        if(causticsSurfelGiRecordingJob.valid())
+            m_graphics.waitJob(causticsSurfelGiRecordingJob);
+        discardRenderPackets();
         return;
     }
 
-    Core::CommandList* commandLists[] = { gbufferCommandList, postGbufferCommandList };
-    if(!renderTimingTicket.submit(*device, commandLists, 2u))
-        m_gbufferStateHandoff.reset();
+    m_graphics.waitJob(shadowVisibilityRecordingJob);
+    m_graphics.waitJob(causticsSurfelGiRecordingJob);
+    if(!shadowVisibilityCommandListReady || !causticsSurfelGiCommandListReady){
+        discardRenderPackets();
+        return;
+    }
+
+    const Core::CommandListResourceStateHandoff* postGbufferBranchStates[] = {
+        &m_shadowVisibilityStateHandoff,
+        &m_causticsSurfelGiStateHandoff,
+    };
+    if(!m_postGbufferFanInStateHandoff.buildFanIn(
+        m_postGbufferNormalizedStateHandoff,
+        postGbufferBranchStates,
+        2u
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: post-G-buffer packet state fan-in failed"));
+        discardRenderPackets();
+        return;
+    }
+
+    const bool hasTransparentRenderers = m_preparedHasTransparentRenderers;
+    bool postGbufferCommandListReady = false;
+    const Core::Graphics::JobHandle postGbufferRecordingJob = m_graphics.scheduleGraphicsJob([
+        this,
+        framebuffer,
+        &deferredTargets,
+        csgFrameState,
+        hasTransparentRenderers,
+        postGbufferCommandList,
+        &frameTiming,
+        &postGbufferCommandListReady,
+        &renderTimingTicket
+    ](){
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
+        postGbufferCommandList->open(&m_postGbufferFanInStateHandoff);
+        if(!postGbufferCommandList->hasCommandBuffer())
+            return;
+
+        bool commandListReady = m_deferredSystem.renderDeferredLighting(*postGbufferCommandList, deferredTargets);
+        if(commandListReady){
+            if(hasTransparentRenderers || m_avboitState.m_targetsNeedClear){
+                m_avboitSystem.clearAvboitTargets(*postGbufferCommandList, deferredTargets.avboit);
+                m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
+            }
+            if(hasTransparentRenderers)
+                m_avboitSystem.renderAvboitPasses(*postGbufferCommandList, deferredTargets, csgFrameState);
+
+            commandListReady = m_deferredSystem.renderDeferredComposite(*postGbufferCommandList, deferredTargets, framebuffer);
+        }
+
+        // This endpoint completes the frame scope opened on the G-buffer command buffer. All five command buffers are
+        // submitted in the fixed Graphics-queue order below, so the timestamps remain one contiguous frame metric.
+        frameTiming->finishTiming(*postGbufferCommandList);
+        postGbufferCommandList->close();
+        postGbufferCommandListReady = commandListReady && postGbufferCommandList->hasCommandBuffer();
+    });
+    if(!postGbufferRecordingJob.valid()){
+        discardRenderPackets();
+        return;
+    }
+
+    m_graphics.waitJob(postGbufferRecordingJob);
+    if(!postGbufferCommandListReady){
+        discardRenderPackets();
+        return;
+    }
+
+    // Workers only record. The GPU still receives one ordered Graphics submission: opaque producer -> normalized
+    // prelude -> shadow visibility -> caustics/surfel GI -> lighting/transparency/composite consumer.
+    Core::CommandList* commandLists[] = {
+        gbufferCommandList,
+        postGbufferNormalizeCommandList,
+        shadowVisibilityCommandList,
+        causticsSurfelGiCommandList,
+        postGbufferCommandList,
+    };
+    if(!renderTimingTicket.submit(*device, commandLists, 5u)){
+        discardRenderPackets();
+        return;
+    }
+
+    frameTiming.reset();
+    m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
 }
 
 

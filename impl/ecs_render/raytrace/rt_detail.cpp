@@ -385,6 +385,33 @@ void RendererRayTracingSystem::transitionSwShadowTraversalResources(Core::Comman
     commandList.setBufferState(rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
 }
 
+void RendererRayTracingSystem::normalizePostGbufferPacketResources(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    // The two post-G-buffer packets record from the same handoff. Move every input they can share to its common
+    // read state here, before either worker records a transition from the G-buffer/prepare producer's state. This
+    // keeps the ordered Graphics submission free of duplicate stale-layout barriers while still leaving each packet's
+    // writable output resources exclusively owned by that packet.
+    commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+    commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+    commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+
+    // The software traversal table is common to SW shadow, SW caustics, and SW surfel GI. The hardware path shares
+    // its per-mesh geometry/material records with caustics and surfel GI; stage the superset so either packet can
+    // remain read-only with respect to the normalized snapshot.
+    transitionSwShadowTraversalResources(commandList);
+    commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+    for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot){
+        commandList.setBufferState(rayTracingState().m_shadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_shadowMeshIndexBuffers[slot], Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(rayTracingState().m_shadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
+    }
+    commandList.setAccelStructState(rayTracingState().m_tlas.get(), Core::ResourceStates::AccelStructRead);
+    commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    commandList.setBufferState(rayTracingState().m_causticEmissionTargetBuffer.get(), Core::ResourceStates::ShaderResource);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

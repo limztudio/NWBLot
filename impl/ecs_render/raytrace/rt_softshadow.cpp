@@ -279,7 +279,11 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
         dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, transparentDispatch);
     }
 
-    swapSoftShadowTemporalHistory(targets);
+    // Do not mutate the target-generation handles while the sibling caustics/surfel-GI worker can still validate
+    // targets.bindless. RendererSystem finalizes this pending CPU-side swap only after its complete ordered Graphics
+    // submission succeeds.
+    if(rayTracingState().m_softShadowTemporalReady)
+        rayTracingState().m_softShadowTemporalHistoryAdvancePending = true;
 }
 
 bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
@@ -547,6 +551,18 @@ void RendererRayTracingSystem::swapSoftShadowTemporalHistory(DeferredFrameTarget
     Swap(targets.bindless.shadowSoftGeometry, targets.bindless.shadowSoftGeometryPrev);
     Swap(targets.bindless.shadowSoftGeometryStorage, targets.bindless.shadowSoftGeometryPrevStorage);
     rayTracingState().m_softShadowHistoryFrontIsA ^= 1u;
+}
+
+void RendererRayTracingSystem::finalizeSoftShadowTemporalHistory(DeferredFrameTargets& targets){
+    if(!rayTracingState().m_softShadowTemporalHistoryAdvancePending)
+        return;
+
+    rayTracingState().m_softShadowTemporalHistoryAdvancePending = false;
+    swapSoftShadowTemporalHistory(targets);
+}
+
+void RendererRayTracingSystem::discardSoftShadowTemporalHistory(){
+    rayTracingState().m_softShadowTemporalHistoryAdvancePending = false;
 }
 
 

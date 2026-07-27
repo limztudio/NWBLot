@@ -136,7 +136,14 @@ private:
     CsgFrameState m_preparedCsgFrameState;
     Core::CommandListResourceStateHandoff m_shadowPrepareStateHandoff;
     Core::CommandListResourceStateHandoff m_gbufferStateHandoff;
+    Core::CommandListResourceStateHandoff m_postGbufferNormalizedStateHandoff;
+    Core::CommandListResourceStateHandoff m_shadowVisibilityStateHandoff;
+    Core::CommandListResourceStateHandoff m_causticsSurfelGiStateHandoff;
+    Core::CommandListResourceStateHandoff m_postGbufferFanInStateHandoff;
     Core::CommandListHandle m_gbufferCommandList;
+    Core::CommandListHandle m_postGbufferNormalizeCommandList;
+    Core::CommandListHandle m_shadowVisibilityCommandList;
+    Core::CommandListHandle m_causticsSurfelGiCommandList;
     Core::CommandListHandle m_postGbufferCommandList;
     Core::CommandListHandle m_shadowPrepareCommandList;
     bool m_preparedCsgFrameStateValid = false;

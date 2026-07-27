@@ -280,6 +280,7 @@ void RendererRayTracingState::invalidateResources(){
     m_prevWorldToClipValid = false;
     m_softShadowHistoryFrontIsA = 1u;
     m_softShadowTemporalSeeded = false;
+    m_softShadowTemporalHistoryAdvancePending = false;
     m_softShadowTemporalReady = false;
     m_shadowReprojectMergeBindingLayout.reset();
     m_shadowReprojectMergeShader.reset();

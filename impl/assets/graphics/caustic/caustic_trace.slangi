@@ -20,8 +20,8 @@
 
 // Shared caustic photon-transport layer. ALL per-bounce physics (Snell refraction, Fresnel transmitted fraction,
 // Beer-Lambert absorption, flux update, eta flip) + the photon emission aim + the iterative bounce loop + the splat
-// math live here using ONLY Slang built-ins, so the software-BVH photon kernel (P3) and the hardware ray-traced
-// producer (P4) #include the IDENTICAL text and lower to byte-identical arithmetic (the HW/SW parity mandate). Each
+// math live here using ONLY Slang built-ins, so the software-BVH photon kernel and the hardware ray-traced producer
+// #include the IDENTICAL text and lower to byte-identical arithmetic (the HW/SW parity mandate). Each
 // backend provides ONLY the closest-hit geometry hook (nwbCausticTraceClosest) -- HW via TraceRay + closest-hit, SW
 // via the explicit-stack BVH descent -- and this shared loop does all the arithmetic + the deposit. The bounce bends
 // on the GEOMETRIC face normal the hook returns (not the interpolated shading normal), so the two intersectors agree.
@@ -277,7 +277,7 @@ uint nwbCausticHashU32(uint x){
 // parallel STRIPES; stratified noise instead reads as honest caustic grain the spatial a-trous resolve smooths.
 // FRAME-INDEPENDENT (no frameIndex term): the per-frame splat is byte-identical every frame, so a static scene is
 // FLICKER-FREE under the spatial-only resolve and a moving scene presents a stable caustic shape each frame.
-// Deterministic in photonIndex so the HW (P4) and SW producers jitter IDENTICALLY for the same photon.
+// Deterministic in photonIndex so the HW and SW producers jitter IDENTICALLY for the same photon.
 float2 nwbCausticEmissionJitter(uint photonIndex){
     const uint h0 = nwbCausticHashU32(photonIndex * 0x9E3779B9u + 0x85EBCA6Bu);
     const uint h1 = nwbCausticHashU32(h0 ^ 0x68E31DA4u);

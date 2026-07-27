@@ -134,16 +134,10 @@ bool nwbShadowResolveValidAtHalf(const int2 halfTexel){
 // without bleeding across a receiver depth/silhouette discontinuity or an orientation crease.
 static const float s_NwbShadowResolveKernel[5] = { 1.0 / 16.0, 4.0 / 16.0, 6.0 / 16.0, 4.0 / 16.0, 1.0 / 16.0 };
 
-// Normal edge-stop exponent: taps whose receiver normal diverges from the centre's fall off as pow(max(dot,0), N). This is
-// deliberately gentle: the receiver normal is a HALF-res point-sampled cache, and on a smoothly
-// CURVING receiver (a character torso/hip) adjacent half-res texels legitimately differ by ~10-20deg while the far a-trous
-// taps (dilation up to 16) diverge much more. A pow-32 stop (half-weight at ~11deg) treated that smooth curvature as an
-// orientation crease and starved every reconstruction stage (wavelet + upsample) down to 1-2 near-parallel taps, so the
-// residual per-frame trace noise was never averaged -> the clustered self-shadow grain. pow-8 (half-weight at ~45deg)
-// restores the tap support needed to average that noise on the curve, while a REAL discontinuity is still rejected by the
-// camera-DISTANCE stop (a silhouette/crease almost always carries a depth jump) and the shadow terminator is still held
-// sharp by the VALUE stop -- so smoothing on curvature costs no cross-surface bleed. Flat receivers are unaffected (their
-// taps are parallel -> dot~=1 -> pow-8 == pow-32 == 1).
+// Normal edge-stop exponent: taps whose receiver normal diverges from the centre's fall off as pow(max(dot,0), N). It is
+// deliberately gentle because adjacent half-res texels on a smoothly curving receiver can differ by 10-20 degrees. Power
+// 8 preserves enough taps to average trace noise on curvature, while the camera-distance and value stops reject real
+// discontinuities. Flat receivers are unaffected (parallel taps have dot~=1).
 #define NWB_SHADOW_RESOLVE_NORMAL_POWER 8.0
 
 // Camera-distance edge-stop fraction: the distance sigma is this fraction of the camera distance (a few percent keeps
@@ -152,10 +146,9 @@ static const float s_NwbShadowResolveKernel[5] = { 1.0 / 16.0, 4.0 / 16.0, 6.0 /
 #define NWB_SHADOW_RESOLVE_UPSAMPLE_DIST_FRAC 0.02
 #define NWB_SHADOW_RESOLVE_WAVELET_DIST_FRAC 0.02
 
-// FAST GUIDED FILTER upsample (He 2010) parameters. The stage-2 upsample fits a local linear model vis ~= a*dist + b over a
-// (2*RADIUS+1)^2 half-res window from its box-filtered moments and evaluates it at the full-res pixel, replacing the 2x2
-// joint-bilateral that COLLAPSED to a single noisy tap on curvature (the clustered self-shadow grain). RADIUS = half-res
-// window radius (1 -> 3x3 half-res = 6x6 full-res footprint).
+// FAST GUIDED FILTER upsample (He 2010) parameters. The upsample fits a local linear model vis ~= a*dist + b over a
+// (2*RADIUS+1)^2 half-res window from its box-filtered moments and evaluates it at the full-res pixel, avoiding a
+// single noisy tap on curvature. RADIUS = half-res window radius (1 -> 3x3 half-res = 6x6 full-res footprint).
 #define NWB_SHADOW_RESOLVE_GUIDED_RADIUS 1
 // GUIDED_EPS_FRAC: the guided-filter regularisation eps = (this * cameraDistance)^2 -- the "degree of smoothing". Larger ->
 // a -> 0 -> the window box-averages (kills grain where camera distance does not correlate with the shadow, i.e. within a
@@ -188,17 +181,9 @@ float nwbShadowResolveNormalWeightVec(const float3 centerNormal, const float2 ta
 // The history length n at/above which the temporal moment variance is statistically trustworthy; below it (freshly
 // disoccluded) the temporal m2-m1^2 is built from too few samples, so fall back to the SPATIAL luma variance.
 #define NWB_SHADOW_RESOLVE_VARIANCE_MIN_HISTORY 4.0
-// Per-variant value-edge-stop TIGHTNESS scale. The COLORED TRANSPARENT (RGB) glass tint is a WEAK, low-contrast signal that a
-// loose value stop + wide a-trous spreads thin over the soft penumbra until it WASHES OUT to gray -- the reported "soft glass
-// shadow is hard to recognise" while a near-hard one reads fine. So the RGB variant TIGHTENS the value stop (0.20 = a 5x tighter
-// luminance sigma) to reject taps across the tint edge and KEEP the colored shadow's per-pixel contrast, recovering its
-// visibility toward the near-hard reference. The OPAQUE (scalar) path is UNCHANGED (1.0): its sharp binary edge already has
-// strong contrast and wants the fuller fill. Applied to BOTH the variance scale and the EPS floor so a converged transparent
-// pixel also gets the tighter stop. Measured on the soft-shadow test scene (glass green-tint density vs the near-hard
-// NWB_SOFT_SHADOW_TEST_ANGLE=0.002 reference): scale 0.20 lifts the soft glass shadow's green-tint mass from ~1.05 (loose) to
-// ~1.18, essentially the near-hard reference's ~1.19, with NO measurable added speckle (the 3x3 high-pass RMS in the glass band
-// is unchanged vs the loose config and vs the near-hard reference -- the temporal reproject-merge, not the value stop, governs
-// the residual per-frame noise). 0.35 was also tried (~1.15-1.17); 0.20 recovers a touch more contrast at the same noise.
+// Per-variant value-edge-stop TIGHTNESS scale. The low-contrast RGB glass tint needs a tighter stop (0.20) to preserve
+// per-pixel color through the soft penumbra. The scalar opaque path stays at 1.0 for fuller fill. Apply the scale to
+// both the variance and epsilon terms so converged transparent pixels retain the tighter stop.
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
     #define NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE 0.20
 #else
@@ -341,7 +326,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const uint fold = g_NwbShadowResolvePushConstants.upsampleFold;
         for(uint slot = slotStart; slot < slotEnd; ++slot){
             if(background){
-                // OVERWRITE mode writes the LIT identity for a background pixel; FOLD mode leaves the prior (opaque) value
+                // OVERWRITE mode writes the LIT identity for a background pixel; FOLD mode leaves the existing opaque value
                 // UNTOUCHED -- writing white here would clobber the opaque result at a background full-res texel.
                 if(fold == 0u)
                     g_NwbShadowResolveVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0); // LIT identity

@@ -1,14 +1,8 @@
 #!/usr/bin/env python3
-"""Pixel-parity diff for the GI bindless step-4b A/B.
+"""Pixel-parity diff for surfel-GI captures.
 
-The migration is a pure descriptor-indirection swap (heap slot -> the same
-underlying buffer the bounded per-mesh array held), so the ONLY expected difference is the
-surfel-GI producer's temporal floor (surfel ray tracing + temporal accumulation/EMA),
-which concentrates in the bounced-lighting features (the red/blue indirect bleed on the
-shadowed floor). A correct 4b diff is therefore indistinguishable from a two-identical-run
-noise-floor diff -- diffuse grain in the GI features. A structured, hard-edged band (a
-non-uniform-indexing miss reading another mesh's geometry along a wave-tile boundary) is
-the failure signature and would push the max FAR above the floor.
+Temporal accumulation leaves diffuse noise-floor grain in bounced-lighting features. A
+structured hard-edged band indicates a non-uniform-indexing failure at a wave-tile boundary.
 
     python diff.py <before.(bmp|png)> <after.(bmp|png)> <diff-out.png>
 """

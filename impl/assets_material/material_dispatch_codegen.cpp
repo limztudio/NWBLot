@@ -76,8 +76,7 @@ bool AssignMaterialShadingModelIdsImpl(
 
     for(MaterialCookEntry& entry : materialEntries){
         const AStringView source(entry.bxdfSource);
-        // uniqueSources is sorted + deduped, so a binary search locates the id in O(log N) instead of the
-        // earlier O(N) linear scan per material.
+        // uniqueSources is sorted and deduplicated, so a binary search locates the id in O(log N).
         const auto sourceIt = LowerBound(uniqueSources.begin(), uniqueSources.end(), source);
         if(sourceIt == uniqueSources.end() || *sourceIt != source){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign shading model id for '{}'"), StringConvert(entry.virtualPath.c_str()));
@@ -116,8 +115,7 @@ bool AssignMaterialShadingModelIdsImpl(
         }
 
         const AStringView surface(entry.surfaceSource);
-        // uniqueSurfaces is sorted + deduped, so a binary search locates the id in O(log N) instead of the
-        // earlier O(N) linear scan per material.
+        // uniqueSurfaces is sorted and deduplicated, so a binary search locates the id in O(log N).
         const auto surfaceIt = LowerBound(uniqueSurfaces.begin(), uniqueSurfaces.end(), surface);
         if(surfaceIt == uniqueSurfaces.end() || *surfaceIt != surface){
             NWB_LOGGER_ERROR(NWB_TEXT("Material cook: failed to assign shadow transmittance id for '{}'"), StringConvert(entry.virtualPath.c_str()));

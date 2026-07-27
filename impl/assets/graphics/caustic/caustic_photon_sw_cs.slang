@@ -107,7 +107,7 @@ StructuredBuffer<NwbCausticSwInstance, Std430DataLayout> NwbHeapCausticSwInstanc
 // Per-mesh nodes, positions, indices, and attributes are read through descriptor-heap slots carried by the material
 // record. The shared backing buffers remain transitioned for those heap reads.
 
-// One caustic emission target (P1): the world-space AABB of a refractive instance. Mirrors the C++
+// One caustic emission target: the world-space AABB of a refractive instance. Mirrors the C++
 // NwbCausticEmissionTargetGpu (32 bytes; the w lanes are unused padding).
 struct NwbCausticEmissionTarget{
     float4 aabbMin;

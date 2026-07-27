@@ -18,8 +18,7 @@ NWB_TELEMETRY_BEGIN
 
 
 // Single telemetry wire-format revision shared by the stream header, event header, and per-event identity.
-// (Per-payload codecs keep their own independent version constants.) Dev-stage: client + server rebuild
-// together, so this is a self-describing revision marker, not a decode gate.
+// Per-payload codecs keep independent version constants.
 inline constexpr u16 s_TelemetryFormatVersion = 1u;
 inline constexpr u32 s_EventMagic = 0x4E574254u; // NWBT
 

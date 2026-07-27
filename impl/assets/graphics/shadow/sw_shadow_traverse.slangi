@@ -92,24 +92,19 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     const float3 direction = nwbSwShadowTransformVector(instance, worldDirection);
     const float3 invDir = nwbSwShadowSafeInvDir(direction);
 
-    // Front-to-back traversal: instead of pushing both children unordered (a ray-agnostic order that reaches the
-    // first opaque hit / the transmittance floor only after a full deep dive), we rank the two children by ray-entry
-    // distance, DESCEND THE NEAR ONE INLINE, and push ONLY THE FAR ONE. The near subtree is therefore always
-    // processed before any farther one, so the opaque `return` and the near-zero-transmittance early-out fire at the
-    // earliest possible node, skipping every farther subtree they make irrelevant. The stack holds only deferred far
-    // nodes (one per internal node, half the old loop's two), so it covers a 2x deeper tree -- the stack-exhaustion
-    // guard drops from +2 to +1.
+    // Front-to-back traversal ranks the two children by ray-entry distance, descends the near child inline, and pushes
+    // only the far child. The opaque `return` and near-zero-transmittance early-out therefore fire before irrelevant
+    // farther subtrees. The stack holds one deferred far node per internal node, allowing a deeper tree.
     //
     // Order-independence (pure perf, never a quality change): the integrator (shadow_integrate.slangi::
     // nwbShadowIntegrateCrossing + nwbShadowFinalizeVisibility) bins crossings PER OCCLUDER and the finalize SORTS
     // each bin's hit distances before pairing them into chords, so the result depends only on the SET of crossings
-    // found in [tMin,tMax] -- never their visit order. Reordering the walk only changes WHICH nodes are visited:
-    // an opaque hit stops the walk the instant that triangle is tested (as before), and a transparent trace must
-    // still collect every crossing, so near-first only interleaves them earlier. The far child's deferral is bounded
+    // found in [tMin,tMax] -- never their visit order. An opaque hit stops the walk when its triangle is tested, and a
+    // transparent trace still collects every crossing. The far child's deferral is bounded
     // by the same [tMin,tMax] slab test, so the miss set is identical. tMax is NOT narrowed: a transparent
     // occluder's crossing cannot bound later occluders, so narrowing it would drop real crossings and change the
     // result. The accept/reject decision stays with nwbSwShadowRayAabbEntryT (miss -> NWB_SW_SHADOW_AABB_MISS ->
-    // sorts last -> never the near child), so a box dropped here would have been skipped by the old loop too.
+    // sorts last -> never the near child), so dropped boxes are misses.
     uint stack[NWB_SW_SHADOW_MESH_STACK_SIZE];
     uint stackPointer = 0u;
     uint nodeIndex = 0u; // per-mesh root
@@ -181,9 +176,8 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
                 const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
                 const float3 geometricNormal = cross(v1 - v0, v2 - v0);
                 nwbShadowIntegrateCrossing(acc, instanceIndex, surface.refractionIor, surface.shadowAbsorptionTint, geometricNormal, objectNormal, smoothNormalWeight, direction, triangleHit.t);
-                // Cost safeguard for deeply-stacked transparency: stop once effectively opaque, but KEEP the
-                // accumulated (near-zero) value -- the finalize applies the same Beer-Lambert term. Hard-zeroing here
-                // was order-dependent and could snap an overlap pixel to pure black.
+                // Cost safeguard for deeply-stacked transparency: stop once effectively opaque, but keep the
+                // accumulated near-zero value so finalize applies the Beer-Lambert term without blackening overlaps.
                 if(max(max(acc.transmittance.x, acc.transmittance.y), acc.transmittance.z) < NWB_SW_SHADOW_TRANSMITTANCE_EPSILON)
                     return;
             }

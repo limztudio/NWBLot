@@ -22,7 +22,7 @@
 // Resolve gathers the surfel field once per half-resolution pixel into a heap-selected storage image; deferred
 // lighting subsequently samples the full-resolution upsampled result.
 #define NWB_SURFEL_RESOLVE_GROUP_SIZE 8
-// Half-res resolve factor (U6): the resolve gather -- the (2*EXTENT+1)^3 = 5x5x5 = 125-cell hotspot -- runs at 1/FACTOR^2
+// Half-res resolve factor: the resolve gather -- the (2*EXTENT+1)^3 = 5x5x5 = 125-cell hotspot -- runs at 1/FACTOR^2
 // the pixels, then the upsample reconstructs full-res. FACTOR 2 quarters the gather threads (a half-res 5x5x5 ~= a
 // full-res 3x3x3 in cost), which is what pays back the seam fix's 27->125 cell widening.
 #define NWB_SURFEL_RESOLVE_HALF_FACTOR 2
@@ -50,14 +50,14 @@
 #define NWB_SURFEL_TRACE_INDIRECT_ARGS_WORD_COUNT 3u
 
 // g_SurfelCounter layout: index 0 = bump-allocation top (fresh slots ever handed out; CAS-capped at poolCapacity so
-// it is a true high-water mark, never overshoots), index 1 = free-list top (live LIFO depth of recycled ids, U1).
+// it is a true high-water mark, never overshoots), index 1 = free-list top (live LIFO depth of recycled ids).
 // Invariant: alive_count + FREE_TOP == BUMP_TOP <= poolCapacity, so live = BUMP_TOP - FREE_TOP is exact. Kept as named
 // indices so the age-free / spawn passes agree. NWB_SURFEL_COUNTER_SIZE is the buffer length.
 #define NWB_SURFEL_COUNTER_BUMP_TOP 0u
 #define NWB_SURFEL_COUNTER_FREE_TOP 1u
 #define NWB_SURFEL_COUNTER_SIZE 2u
 
-// Byte size of one NwbSurfel record (surfel_record.slangi: 6 x float4 = 96B -- U3 grew it with the 3 SH colour lanes).
+// Byte size of one NwbSurfel record (surfel_record.slangi: 6 x float4 = 96B with three SH colour lanes).
 // The C++ pool buffer sizes its stride off this so the RWStructuredBuffer<NwbSurfel> stride matches the std430 record.
 #define NWB_SURFEL_RECORD_SIZE 96u
 
@@ -75,11 +75,11 @@
 #define NWB_SURFEL_MAX_WALK 16u
 
 // Defaults (Default tier). Pool + hash are power-of-two so the hash mask works; the spawn tile bounds spawns/frame.
-#define NWB_SURFEL_POOL_CAPACITY 16384u        // 16384 * 96B = 1.5 MB pool (U3 record; the U4 snapshot mirrors it)
+#define NWB_SURFEL_POOL_CAPACITY 16384u        // 16384 * 96B = 1.5 MB pool (the snapshot mirrors it)
 #define NWB_SURFEL_HASH_CELL_COUNT 262144u     // 2^18 * 4B = 1 MB cell-head table
 // One surfel per hash cell: the CELL_SIZE sets the surfel spacing (GI resolution); the RADIUS is a bit larger so the
 // gather's distance-weighted blend of neighbouring cells' surfels overlaps smoothly without coverage gaps.
-#define NWB_SURFEL_CELL_SIZE 0.6f              // world units -- hash cell edge = surfel spacing (depth-scaled in U6)
+#define NWB_SURFEL_CELL_SIZE 0.6f              // world units -- hash cell edge = surfel spacing
 #define NWB_SURFEL_DEFAULT_RADIUS 0.9f         // world units -- gather falloff radius (~1.5x cell for neighbour overlap)
 // Gather window half-extent in cells: the resolve + bounce gathers walk a (2*EXTENT+1)^3 cell neighbourhood. It MUST be
 // >= ceil(DEFAULT_RADIUS / CELL_SIZE) so a surfel whose falloff sphere reaches the query is ALWAYS inside the walked
@@ -87,7 +87,7 @@
 // the query crosses a cell boundary, so the blended irradiance jumps -- a hard seam then runs along every cell boundary
 // (a horizontal band across a wall, blocky patches on the floor). ceil(0.9 / 0.6) = 2 -> a 5x5x5 walk. The distance
 // weight still clamps the actual blend to the radius, so the wider walk only recovers the missed near surfels, it does
-// not over-blur. Revisit this if U6 makes the cell size depth-scaled (the ratio -- not the extent -- is what must hold).
+// not over-blur. If the cell size becomes depth-scaled, preserve this ratio rather than the extent.
 #define NWB_SURFEL_GATHER_CELL_EXTENT 2
 #define NWB_SURFEL_SPAWN_TILE 16u              // one spawn candidate per 16x16 screen tile
 // One-dimensional workgroup width shared by the maintenance passes. Keep the CPU dispatches and the
@@ -106,11 +106,11 @@
 // TRUE average is required (not a fixed-alpha EMA): each frame rotates the Fibonacci ray set, so successive estimates
 // are decorrelated Monte-Carlo samples -- a fixed-alpha EMA over them never converges (holds a permanent ~sqrt(alpha)
 // noise residual, visible as flicker on the brightest bleed), whereas the running mean drives variance -> 0. The cap
-// keeps a bounded memory so a future dynamic-lighting unit still propagates (lower it for faster response).
+// keeps a bounded memory so dynamic-lighting changes still propagate (lower it for faster response).
 #define NWB_SURFEL_MAX_ACCUM 64u
-#define NWB_SURFEL_MAX_AGE 60u                 // recycle a surfel unseen for this many frames (U1)
+#define NWB_SURFEL_MAX_AGE 60u                 // recycle a surfel unseen for this many frames
 #define NWB_SURFEL_GROUP_SIZE 8                 // spawn/hash-build tile threads (8x8 = 64)
-// Per-channel ceiling on the U4 surfel->surfel bounce (mean-radiance scale). MANDATORY, not just a safety net: the SH
+// Per-channel ceiling on the surfel-to-surfel bounce (mean-radiance scale). MANDATORY, not just a safety net: the SH
 // reconstruction clamps each channel >= 0, which rectifies the negative lobes of the 2-band directional field and injects
 // a little energy every bounce -- in a fully-enclosed high-albedo corner that can push the effective per-bounce gain
 // toward 1.0 and creep the equilibrium bright. Capping the gathered bounce bounds that injection. ~2x the scene's

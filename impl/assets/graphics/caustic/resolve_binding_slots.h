@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Caustic resolve pass (P3): an EDGE-AVOIDING A-TROUS WAVELET denoise run as N ping-pong compute passes. The first
+// Caustic resolve pass: an EDGE-AVOIDING A-TROUS WAVELET denoise run as N ping-pong compute passes. The first
 // pass converts the R32_UINT fixed-point splat accumulators into RGBA16F irradiance (un-scale the fixed point, divide
 // by the receiver area subtended per pixel -- the photon-DENSITY -> physical-BRIGHTNESS conversion -- and apply the
 // causticIntensity exposure) AND does the first wavelet step; later passes only run the wavelet at a doubled dilation.

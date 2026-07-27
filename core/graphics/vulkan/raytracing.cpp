@@ -1839,8 +1839,8 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     if(!attachAccelStructBuildScratchBuffer(buildInfo, scratchSize, "AS_BuildScratch", NWB_TEXT("allocate BLAS scratch buffer")))
         return;
 
-    // Rebuilding or refitting a BLAS in place writes (and an update also reads) the same acceleration-structure storage the previous build wrote. Insert an acceleration-structure
-    // write barrier so the prior build finishes first; on a single queue this also covers the cross-frame dependency for per-frame skinned refits.
+    // Reusing an acceleration structure requires a build-write barrier; on a single queue it also covers the
+    // cross-frame dependency for per-frame skinned refits.
     if(as->m_built){
         auto reuseBarrier = VulkanDetail::MakeVkStruct<VkMemoryBarrier2>(VK_STRUCTURE_TYPE_MEMORY_BARRIER_2);
         reuseBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;

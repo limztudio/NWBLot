@@ -45,22 +45,22 @@ ConstantBuffer<NwbCsgIntervalSampleState, Std140DataLayout> NwbHeapCsgIntervalSa
     NwbHeapCsgIntervalSampleState(g_NwbCsgClipContextSlots.intervalSampleState)
 
 // Receiver-surface, CSG material, AVBOIT, and cap-fill sampling all carry the ordinary mesh-view input in their
-// existing b18 state payload. This leaves the historical direct b13 cbuffer as a deliberate ABI gap.
+// existing b18 state payload. This leaves direct b13 as a deliberate ABI gap.
 #define NWB_MESH_VIEW_BUFFER_HEAP_SLOT (g_NwbCsgIntervalSampleState.resourceSlots.x)
 #include "../bindless/bindless_heap_mesh.slangi"
 
 #include "bindless_resources.slangi"
 
 #if NWB_CSG_RECEIVER_EVENTS_WRITABLE
-// Event data layout: .x = receiverIndex, .y = faceSign, .z = asuint(linear depth), .w = unused. The former local
-// bindings 5/6 are heap-selected through the shared cbuffer at binding 17.
+// Event data layout: .x = receiverIndex, .y = faceSign, .z = asuint(linear depth), .w = unused. Bindings 5/6 are
+// heap-selected through the shared cbuffer at binding 17.
 #define g_NwbCsgReceiverEventData (NwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgPeelSlots.w))
 #define g_NwbCsgReceiverEventCount (NwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgSpanSlots.x))
 #endif
 
 #if NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
-// The cap-fill/sample reads use the same StorageImage entries as the combine producer. The old local bindings
-// 12/14/15/16 remain gaps; reads through a storage-image alias preserve the typed Load/GetDimensions contract.
+// The cap-fill/sample reads use the same StorageImage entries as the combine producer. Bindings 12/14/15/16 remain
+// gaps; reads through a storage-image alias preserve the typed Load/GetDimensions contract.
 #define g_NwbCsgRemovedIntervalDepth (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgSpanSlots.w))
 #define g_NwbCsgRemovedIntervalCapNormal (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgRemovedSlots.x))
 #define g_NwbCsgRemovedIntervalData (NwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgRemovedSlots.y))

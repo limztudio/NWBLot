@@ -9,8 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Retired local scene-binding slots. Preserve these ABI gaps for archived shader variants, but active renderer
-// consumers must select scene resources through the global descriptor heap.
+// Scene bindings 4 and 6 remain ABI positions for archived shader variants; active renderer consumers select scene
+// resources through the global descriptor heap.
 #define NWB_SCENE_SHADING_DEFAULT_SET 0
 #define NWB_SCENE_SHADING_DEFAULT_BINDING 4
 
@@ -33,11 +33,11 @@
 // Point lights are excluded because omnidirectional emission would spread the photon budget too thin.
 #define NWB_SCENE_CAUSTIC_SLOT_COUNT 4u
 
-// Retired local shadow-visibility SRV slot; active consumers use a heap-selected resource alias.
+// Shadow-visibility binding 7 remains an ABI position; active consumers use a heap-selected resource alias.
 #define NWB_SCENE_SHADOW_VISIBILITY_DEFAULT_SET 0
 #define NWB_SCENE_SHADOW_VISIBILITY_DEFAULT_BINDING 7
 
-// Retired local additive caustic-irradiance SRV slot. Unlike the multiplicative shadow visibility, this is additive
+// Caustic-irradiance binding 8 remains an ABI position. Unlike multiplicative shadow visibility, this is additive
 // scene-referred irradiance the caustic producer focuses onto receivers; an unwritten / black buffer is a no-op.
 #define NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_SET 0
 #define NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_BINDING 8

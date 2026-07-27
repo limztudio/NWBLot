@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
-"""Capture a soft-shadow-test smoke window to a BMP for the SW-shadow bindless step-4b A/B.
+"""Capture a soft-shadow-test smoke window to a BMP.
 
-Parameterized twin of ../shadow_opaque_fastpath/capture_soft_shadow.py: the exe basename
-picks the HW hybrid (soft_shadow_test_smoke) or the full-software (soft_shadow_test_sw_smoke)
-path, so one script captures both sides of the bindless-heap accessor migration. The caster
-yaw is pinned (NWB_SOFT_SHADOW_TEST_SPIN_ANGLE) so before/after captures line up
-pixel-for-pixel.
+The executable basename selects the HW-hybrid or full-software path. The caster yaw is pinned
+with NWB_SOFT_SHADOW_TEST_SPIN_ANGLE so comparison captures line up pixel-for-pixel.
 
     python capture.py <exe-basename> <output.bmp>
 """

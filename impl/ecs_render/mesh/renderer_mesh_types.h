@@ -65,7 +65,7 @@ struct MeshResources : public RuntimeMeshBuffers{
     Core::RayTracingAccelStructHandle blas;
     // The compute-emulation output is selected from the global StorageBuffer heap through the fourth mesh push lane.
     Core::GpuDescriptorHandle emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
-    // One persistent StorageBuffer heap handle per former mesh-source binding slot. Slots are lazy-created when a
+    // One persistent StorageBuffer heap handle per mesh-source ABI slot. Slots are lazy-created when a
     // material draw is prepared, cached with this mesh resource, and retired before runtime meshes are replaced.
     Core::GpuDescriptorHandle geometryHeapHandles[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
     // The software-BVH build consumes these two stable read-only streams through the global StorageBuffer heap.

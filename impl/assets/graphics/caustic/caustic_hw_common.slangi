@@ -93,7 +93,7 @@ struct NwbCausticHwPayload{
     uint isRefractive;
 };
 
-// One caustic emission target (P1): the world-space AABB of a refractive instance. Mirrors the C++
+// One caustic emission target: the world-space AABB of a refractive instance. Mirrors the C++
 // NwbCausticEmissionTargetGpu (32 bytes) + the SW kernel's NwbCausticEmissionTarget (the w lanes are padding).
 struct NwbCausticEmissionTarget{
     float4 aabbMin;

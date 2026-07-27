@@ -190,7 +190,6 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         }
     }
 
-    // Step 1: Collect shader stages
     PipelineShaderStageVector shaderStages{ scratchArena };
     PipelineSpecializationInfoVector specInfos{ scratchArena };
     shaderStages.reserve(VulkanDetail::s_MaxGraphicsPipelineShaderStageCount);
@@ -221,7 +220,6 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     ))
         return nullptr;
 
-    // Step 2: Vertex input state from InputLayout
     auto vertexInputInfo = VulkanDetail::MakeVkStruct<VkPipelineVertexInputStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO);
     if(desc.inputLayout){
         auto* layout = desc.inputLayout.get();
@@ -232,7 +230,6 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         vertexInputInfo.pVertexAttributeDescriptions = layout->m_vkAttributes.data();
     }
 
-    // Step 3: Input assembly
     auto inputAssembly = VulkanDetail::MakeVkStruct<VkPipelineInputAssemblyStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO);
     inputAssembly.topology = VulkanDetail::ConvertPrimitiveTopology(desc.primType);
     inputAssembly.primitiveRestartEnable = VK_FALSE;
@@ -240,7 +237,6 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     auto tessellationState = VulkanDetail::MakeVkStruct<VkPipelineTessellationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO);
     tessellationState.patchControlPoints = desc.patchControlPoints;
 
-    // Step 4: Rasterization state
     const RasterState& rasterState = desc.renderState.rasterState;
     auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(
         rasterState,
@@ -248,7 +244,6 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         rasterState.depthClipEnable ? VK_FALSE : VK_TRUE
     );
 
-    // Step 5: Fixed-function state
     VkDynamicState dynamicStates[] = {
         VK_DYNAMIC_STATE_VIEWPORT,
         VK_DYNAMIC_STATE_SCISSOR,

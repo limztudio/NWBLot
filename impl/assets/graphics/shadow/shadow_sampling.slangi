@@ -25,8 +25,8 @@
 // a cheap hash-derived Cranley-Patterson offset. R2 alone (same sequence value for every pixel each frame) would
 // correlate the penumbra noise across the whole image into a coherent breathing; the per-pixel rotation decorrelates
 // neighbours (a blue-noise-ish screen-space distribution) so the denoise averages independent estimates. Frame-
-// indexing the sequence walks each pixel across the source disk over successive frames, which the (future) temporal
-// stage integrates and which even now keeps the single-frame estimate unbiased in expectation.
+// indexing the sequence walks each pixel across the source disk over successive frames; temporal accumulation integrates
+// those samples while each single-frame estimate remains unbiased in expectation.
 
 
 // Integer hash (PCG-style, Wang/Jenkins lineage) -> a well-mixed 32-bit value. Used to derive the per-pixel

@@ -73,8 +73,7 @@ bool nwbSwShadowLoadCoarseLight(
 ){
     const float slotF = g_NwbSceneLights[lightIndex].params.z;
     if(slotF < 0.0){
-        // Callers ignore this value when false, but every out path must still be initialized for Slang and for any
-        // future caller that refactors its control flow.
+        // Callers ignore this value when false, but every out path must still be initialized for Slang.
         outLight.slot = 0u;
         outLight.samples.t00 = half3(0.0h);
         outLight.samples.t10 = half3(0.0h);

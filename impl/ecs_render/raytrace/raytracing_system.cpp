@@ -52,7 +52,7 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
     if(!ensureRayTraceMaterialContextSlotsBuffer())
         return false;
 
-    // Caustic emission-target gather (P1) runs once per frame regardless of the shadow backend; it populates the
+    // Caustic emission-target gather runs once per frame regardless of the shadow backend; it populates the
     // refractive-instance world AABBs the caustic producer will aim at and the count that gates caustic-light
     // assignment in updateSceneShadingBuffer. A failure here is non-fatal to shadows (no consumer reads it yet).
     if(!prepareCausticEmissionTargets(commandList, scratchArena))
@@ -150,7 +150,7 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
         if(!prepareHwCausticResources(targets))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic producer resource preparation failed"));
 
-        // Enable surfel GI on the HW path (U5): the HW RayQuery trace twin reuses the TLAS + the HW-resident per-mesh
+        // Enable surfel GI on the HW path: the HW RayQuery trace twin reuses the TLAS + the HW-resident per-mesh
         // geometry + InstanceID-material record the shadow/caustic path already built -- this is the ONLY place surfels
         // run on real RT hardware. Gated on the HW shadow backend being ready (so the TLAS + material context are
         // resident) + a non-empty TLAS. m_tlasInstanceCount (NOT m_sceneBvhInstanceCount, which the SW-only scene BVH
@@ -177,11 +177,9 @@ bool RendererRayTracingSystem::prepareShadowVisibilityResources(
     }
 
     // Enable surfel GI on the SW path (the surfel trace reuses the SW scene BVH the SW shadow/caustic paths built) and
-    // create its resources THIS frame -- here, in the prepare phase, right after the SW scene BVH is resident. Doing
-    // the lazy creation after the enable (instead of a frame earlier, before the enable) removes surfel GI's one-frame
-    // startup latency: renderSurfelGi in the render phase can spawn/hash/trace on the very same frame the surfels
-    // become active, so a single bootstrap frame already shows a bounce (the unfocused smoke app renders only that
-    // frame). The pool/hash/pipeline resources live on RendererRayTracingState so a resize does not reset convergence.
+    // create its resources in the prepare phase right after the scene BVH is resident. renderSurfelGi can then spawn,
+    // hash, and trace on the same frame surfels become active. The pool/hash/pipeline resources live on
+    // RendererRayTracingState so a resize does not reset convergence.
     if(rayTracingState().m_sceneBvhInstanceCount > 0u && rayTracingState().m_swShadowMeshCount > 0u){
         rayTracingState().m_surfelEnabled = true;
         rayTracingState().m_surfelUseHwTrace = false;   // SW branch: the surfel trace walks the SW scene BVH

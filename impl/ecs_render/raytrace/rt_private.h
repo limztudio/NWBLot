@@ -208,7 +208,7 @@ static_assert(sizeof(SceneSwBvhInstanceGpu) == sizeof(Float34) + sizeof(u32) * 4
 // Initial capacity (in records) of the per-frame caustic emission-target buffer; grows by doubling.
 inline constexpr usize s_CausticEmissionTargetInitialCapacity = 32u;
 
-// CPU/GPU record of one caustic emission target (P1): the world-space AABB of a refractive instance. The caustic
+// CPU/GPU record of one caustic emission target: the world-space AABB of a refractive instance. The caustic
 // photon producer aims its light-side emission domain at these boxes; all caustic lights share one global target list.
 // A tight 32-byte std430-friendly record ({ float4 aabbMin; float4 aabbMax; }); the w lanes are unused padding (kept
 // for SIMD-friendly 16-byte lanes / std430 float4 alignment).
@@ -224,7 +224,7 @@ static_assert(sizeof(NwbCausticEmissionTargetGpu) == sizeof(Float4) * 2u, "NwbCa
 // and the g_NwbMeshInstances index that resolves the mutable storage offset). Built per frame into one structured
 // buffer indexed by the shadow instance id (hardware InstanceID() == software scene-BVH leaf index), so the
 // hardware and software trace paths read the same record for the same entity. The model id dispatches the
-// per-hit transmittance hook; reservedMeshSlot preserves the former selector's ABI position, while the trace reaches
+// per-hit transmittance hook; reservedMeshSlot preserves its ABI position, while the trace reaches
 // geometry through the heap slots below.
 struct NwbRtInstanceMaterialGpu{
     u32 shadowTransmittanceModelId = Limit<u32>::s_Max;

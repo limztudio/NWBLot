@@ -137,7 +137,7 @@ u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptor
 }
 
 GpuDescriptorHeap::SlotAllocator& GpuDescriptorHeap::allocatorForClass(const GpuDescriptorClass::Enum descriptorClass){
-    // All ordinary non-sampler classes share one global slot namespace (design 3.4). Acceleration structures are
+    // All ordinary non-sampler classes share one global slot namespace. Acceleration structures are
     // intentionally separate: each slot selects a fixed descriptor-buffer block at set 10 rather than an element
     // of the resource descriptor array.
     if(descriptorClass == GpuDescriptorClass::Sampler)
@@ -737,7 +737,7 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
         return true;
     };
 
-    // The public class enum intentionally keeps legacy tags stable, so the resource classes are listed explicitly
+    // The public class enum has stable tags, so the resource classes are listed explicitly
     // rather than assuming the non-sampler subset is contiguous. They stay in ascending register-slot order.
     static constexpr GpuDescriptorClass::Enum s_ResourceClasses[] = {
         GpuDescriptorClass::SampledImage,

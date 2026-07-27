@@ -679,10 +679,9 @@ void Device::appendPipelineShaderStage(
 //
 // Two HOST-mapped VkBuffers sub-allocated by byte offset through a shared free-range list + bump pointer. Descriptor
 // buffers use their own usage bits, their own offset alignment (descriptorBufferOffsetAlignment), and write
-// descriptors through vkGetDescriptorEXT (VkDescriptorGetInfoEXT + VkDescriptorDataEXT). vkGetDescriptorEXT is also
-// the only path that encodes an acceleration-structure handle, which is why the TLAS migration routes through this
-// manager. Descriptor-buffer-compatible pipelines consume these segments through CommandList's descriptor-buffer
-// binding path; the renderer has no ordinary descriptor-set transport.
+// descriptors through vkGetDescriptorEXT (VkDescriptorGetInfoEXT + VkDescriptorDataEXT), which natively encodes
+// acceleration-structure handles. Descriptor-buffer-compatible pipelines consume these segments through
+// CommandList's descriptor-buffer binding path; the renderer has no ordinary descriptor-set transport.
 
 
 DescriptorBufferManager::DescriptorBufferManager(const VulkanContext& context, VulkanAllocator& allocator)
@@ -1355,7 +1354,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
         return nullptr;
     }
 
-    // Pipeline-local layouts now carry push constants only, so their descriptor-buffer block is intentionally empty.
+    // Pipeline-local layouts carry push constants only, so their descriptor-buffer block is intentionally empty.
     // Resource-bearing descriptor blocks are owned exclusively by GpuDescriptorHeap.
     layout->m_descriptorBufferCompatible = true;
 

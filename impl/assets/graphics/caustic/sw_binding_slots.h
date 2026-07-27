@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Software (compute) caustic photon producer -- the no-hardware-ray-tracing fallback (P3). A 1D dispatch over
+// Software (compute) caustic photon producer -- the no-hardware-ray-tracing fallback. A 1D dispatch over
 // photonCount: each thread picks a caustic light + an emission point on the refractive-instance emission domain,
 // traces the photon through the same software scene/instance + per-mesh BVHs the SW shadow trace uses (adapted to
 // CLOSEST-hit), and splats the surviving flux at the opaque-receiver hit into the R32_UINT accumulators via

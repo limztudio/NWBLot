@@ -30,8 +30,8 @@ ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPush
 #include "bindless_resources.slangi"
 #undef NWB_CSG_CONTEXT_HEAP_SLOT
 
-// The event read and span write images share the global StorageImage table. Their historical local bindings 5/6/9/10
-// remain gaps; the heap-selected CSG context resolves the correct typed array views.
+// The event read and span write images share the global StorageImage table. Bindings 5/6/9/10 remain ABI gaps; the
+// heap-selected CSG context resolves the correct typed array views.
 #define g_NwbCsgReceiverEventData (NwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgPeelSlots.w))
 #define g_NwbCsgReceiverEventCount (NwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgSpanSlots.x))
 #define g_NwbCsgReceiverSpanData (NwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgSpanSlots.y))

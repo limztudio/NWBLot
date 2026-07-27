@@ -79,8 +79,8 @@
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION 0
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_NORMAL 1
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH 2
-// Historical scene-shading position. It now carries the DeferredBindlessResourceSlots cbuffer whose avboitSlots.z
-// selects the uniform-buffer heap entry; retain the number rather than renumbering the geometry-output binding.
+// This scene-shading ABI position carries the DeferredBindlessResourceSlots cbuffer whose avboitSlots.z selects the
+// uniform-buffer heap entry; retain the number rather than renumbering the geometry-output binding.
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_SCENE_SHADING 3
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_BINDLESS_RESOURCES NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_SCENE_SHADING
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT 4
@@ -99,24 +99,14 @@
 #define NWB_SHADOW_RESOLVE_CHANNELS_RGB    3
 
 // A-trous wavelet pass count (the dispatch runs a PREPARE copy first, then this many wavelet passes at dilation 1<<pass).
-// Run at HALF resolution. REDUCED 5 -> 3 -> 1: render.shadow_visibility was the only SW pass over the 1ms cutoff on the
-// stress scene, and the a-trous wavelet passes were its largest single cost. 1 pass keeps only the dilation-1 (2px
-// full-equivalent) tap -- the cheapest possible denoise that still runs the edge-avoiding wavelet kernel once -- and the
-// temporal reproject-merge upstream (plus the bilateral upsample downstream) carry the bulk of the low-frequency
-// reconstruction the wider passes used to do. The accepted cost is noticeably MORE penumbra grain on a curved self-shadow /
-// freshly-disoccluded region. MUST stay ODD so the final wavelet lands in soft-A (the upsample's input; see the dispatch
-// static_assert).
+// One half-resolution dilation-1 pass provides the spatial denoise; temporal reproject-merge and the bilateral upsample
+// supply the remaining low-frequency reconstruction. It MUST stay odd so the final wavelet lands in soft-A, the upsample
+// input (see the dispatch static_assert).
 #define NWB_SHADOW_RESOLVE_PASS_COUNT 1
 
-// A-trous wavelet pass count for the soft COLORED-TRANSPARENT resolve. Set to ONE (vs the opaque 5), for VISIBILITY not just
-// perf: the colored glass tint is a WEAK, low-contrast signal, and every extra a-trous pass SPREADS that faint tint thinner
-// over the wide soft penumbra -- past ~1 pass the green wash-out the near-hard reference does NOT have. A measured pass sweep
-// {1,3,5} (glass-shadow green-tint density vs the near-hard NWB_SOFT_SHADOW_TEST_ANGLE=0.002 reference) showed the tint mass
-// monotonically FALLING with pass count (1 pass ~= the near-hard reference; 3 and 5 progressively washed out). Paired with the
-// TIGHTENED transparent value edge-stop (NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE for the RGB variant), 1 pass fully recovers the
-// colored shadow's per-pixel contrast toward the near-hard look AND is the cheapest (~3ms/pass at half-res on the test iGPU).
-// MUST be ODD (like the opaque 5): the dispatch seeds the ping-pong so the final wavelet lands in soft-A ONLY for an odd count,
-// and the fixed upsample dispatch reads soft-A. 1, 3, 5 are all odd.
+// A-trous wavelet pass count for the soft colored-transparent resolve. One pass preserves the low-contrast tint, which
+// wider filtering would spread thin across the penumbra. It MUST be odd so the final wavelet lands in soft-A, the fixed
+// upsample input.
 #define NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT 1
 
 // LDS (groupshared) tiling for the wavelet: passes with dilation stepWidth <= LDS_MAX_STEP cooperatively load the

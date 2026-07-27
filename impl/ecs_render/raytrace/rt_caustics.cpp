@@ -45,7 +45,7 @@ struct CausticResolvePassResources{
 
 
 bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
-    // Caustic emission-target gather (P1, CPU only): collect the world-space AABB of every refractive instance in
+    // Caustic emission-target gather (CPU only): collect the world-space AABB of every refractive instance in
     // the scene -- the domain the caustic photon producer aims at. Runs once per frame regardless of the shadow
     // backend (HW TLAS or SW BVH); mirrors buildSceneSwBvh's mesh/transform resolve + 8-corner world AABB but does
     // NOT require a software BVH and keeps ONLY instances whose material is refractive. The count gates caustic-light
@@ -268,7 +268,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         return false;
     }
 
-    // U6 half-res surfel producer: the resolve gathers into this (1/HALF_FACTOR each axis); surfel_upsample_cs reconstructs
+    // Half-res surfel producer: the resolve gathers into this (1/HALF_FACTOR each axis); surfel_upsample_cs reconstructs
     // the full-res surfelIrradiance above. Same RGBA16F format; transient (no clear -- written + read within the GI block).
     Core::TextureDesc surfelIrradianceHalfDesc;
     surfelIrradianceHalfDesc
@@ -639,7 +639,7 @@ bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameT
 }
 
 bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    // Software caustic photon producer + resolve — the no-hardware-ray-tracing fallback (P3). Dispatched in the
+    // Software caustic photon producer + resolve — the no-hardware-ray-tracing fallback. Dispatched in the
     // SW-fallback branch right after the SW shadow pass and BEFORE deferred lighting (which reads the resolved
     // irradiance). The accumulators were already cleared to black by clearCausticTargets this frame. Runs only when
     // hasCausticWork() holds (>=1 caustic light AND >=1 refractive instance), so an empty buffer = additive no-op.
@@ -1128,7 +1128,7 @@ bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& t
 }
 
 bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    // Hardware ray-traced caustic photon producer + resolve (P4) -- the byte-parallel sibling of renderGpuBvhCaustics,
+    // Hardware ray-traced caustic photon producer + resolve -- the byte-parallel sibling of renderGpuBvhCaustics,
     // dispatched in the HW branch right after the shadow pass + clearCausticTargets and BEFORE deferred lighting. The
     // raygen runs the SHARED iterative bounce loop (recursion 1) over the TLAS and splats into the SAME R32_UINT
     // accumulator the SAME resolve consumes, so the HW + SW paths converge to the same caustic (Monte-Carlo A/B).

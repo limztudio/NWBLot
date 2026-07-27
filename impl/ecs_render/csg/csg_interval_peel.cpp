@@ -270,8 +270,8 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgCapFill, graphics().getDevice(), commandList);
 
     __hidden_csg_interval_peel::SetCsgIntervalSampleStorageStates(commandList, targets);
-    // The cap-fill surface evaluator now reaches typed words and mesh instances through heap slots, so its former
-    // pipeline-local material descriptor can no longer contribute these transitions automatically.
+    // The cap-fill surface evaluator reaches typed words and mesh instances through heap slots, so its pipeline-local
+    // material descriptor cannot contribute these transitions automatically.
     commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(drawState().m_instanceBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);

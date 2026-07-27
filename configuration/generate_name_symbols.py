@@ -106,10 +106,7 @@ def configure_and_build(arguments):
 
 
 def clean_stale_sidecars(arguments):
-    # A capture must reflect THIS run only. WriteDefaultFile writes "<exe>.namesym" into the (persistent) buildmode bin
-    # dir, so a workload that crashes or is hard-killed before its graceful exit would otherwise leave a PRIOR run's
-    # sidecar in place -- which collect would then copy as if freshly captured. Clearing first makes a post-run empty
-    # glob correctly hard-fail, and prevents a silent stale/partial-stale mix from reaching the release logserver.
+    # Clear persistent sidecars so collection cannot mistake output from an interrupted run for current output.
     removed = 0
     for old in glob.glob(os.path.join(arguments.buildmode_bin_dir, "*.namesym")):
         try:

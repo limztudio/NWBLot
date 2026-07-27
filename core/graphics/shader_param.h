@@ -81,20 +81,20 @@ inline constexpr u32 s_MaxGeometryIndex = 16777215;
 // CLAS construction and template construction share this ABI prefix exactly. Keep it macro-defined rather than using
 // a C++ base type: this header is also consumed as a shader ABI and both structs must remain plain contiguous records.
 #define NWB_INDIRECT_TRIANGLE_COMMON_ARGS_FIELDS \
-    u32               clusterId;                         /* The user specified cluster Id. */ \
-    u32               clusterFlags;                      /* Cluster operation flags. */ \
+    u32               clusterId; \
+    u32               clusterFlags; \
     u32               triangleCount : 9;                 /* The number of triangles (max 256). */ \
     u32               vertexCount : 9;                   /* The number of vertices (max 256). */ \
-    u32               positionTruncateBitCount : 6;      /* The number of bits to truncate from position values. */ \
-    u32               indexFormat : 4;                   /* The index-buffer element format. */ \
-    u32               opacityMicromapIndexFormat : 4;    /* The opacity-micromap index format. */ \
+    u32               positionTruncateBitCount : 6; \
+    u32               indexFormat : 4; \
+    u32               opacityMicromapIndexFormat : 4; \
     u32               baseGeometryIndexAndFlags;         /* Low 24 bits = base geometry index; high 8 bits = flags. */ \
     u16               indexBufferStride;                 /* indexBuffer element stride in bytes. */ \
     u16               vertexBufferStride;                /* vertexBuffer element stride in bytes. */ \
     u16               geometryIndexAndFlagsBufferStride; /* geometryIndexBuffer element stride in bytes. */ \
     u16               opacityMicromapIndexBufferStride;  /* opacityMicromapIndexBuffer element stride in bytes. */ \
-    GpuVirtualAddress indexBuffer;                        /* CLAS index buffer. */ \
-    GpuVirtualAddress vertexBuffer;                       /* CLAS vertex buffer. */ \
+    GpuVirtualAddress indexBuffer; \
+    GpuVirtualAddress vertexBuffer; \
     GpuVirtualAddress geometryIndexAndFlagsBuffer;        /* Optional per-triangle geometry-index/flag data. */ \
     GpuVirtualAddress opacityMicromapArray;               /* Optional valid opacity-micromap array. */ \
     GpuVirtualAddress opacityMicromapIndexBuffer;         /* Optional opacity-micromap index buffer. */
@@ -105,22 +105,22 @@ struct IndirectTriangleClasArgs{
 
 struct IndirectTriangleTemplateArgs{
     NWB_INDIRECT_TRIANGLE_COMMON_ARGS_FIELDS
-    GpuVirtualAddress instantiationBoundingBoxLimit;     // (optional) Pointer to 6 floats representing the limits of the positions of any vertices the template will ever be instantiated with
+    GpuVirtualAddress instantiationBoundingBoxLimit;     // Optional six-float position limit for template instantiations.
 };
 
 #undef NWB_INDIRECT_TRIANGLE_COMMON_ARGS_FIELDS
 
 struct IndirectInstantiateTemplateArgs{
-    u32                        clusterIdOffset;      // The offset added to the clusterId stored in the Cluster template to calculate the final clusterId that will be written to the instantiated CLAS
-    u32                        geometryIndexOffset;  // The offset added to the geometry index stored for each triangle in the Cluster template to calculate the final geometry index that will be written to the triangles of the instantiated CLAS, the resulting value may not exceed maxGeometryIndexValue both of this call, and the call used to construct the original cluster template referenced
-    GpuVirtualAddress          clusterTemplate;      // Address of a previously built cluster template to be instantiated
-    GpuVirtualAddressAndStride vertexBuffer;         // Vertex buffer with stride to use to fetch the vertex positions used for instantiation
+    u32                        clusterIdOffset;      // Added to each template cluster ID.
+    u32                        geometryIndexOffset;  // Added to each template geometry index; the result must fit s_MaxGeometryIndex.
+    GpuVirtualAddress          clusterTemplate;      // GPU address of the cluster template.
+    GpuVirtualAddressAndStride vertexBuffer;         // Vertex positions used for instantiation.
 };
 
 struct IndirectArgs{
-    u32                       clusterCount;     // The size of the array referenced by clusterVAs
+    u32                       clusterCount;     // Number of cluster addresses.
     u32                       reserved;         // Reserved, must be 0
-    GpuVirtualAddress         clusterAddresses; // Address of an array holding valid GPU addresses of previously constructed CLAS objects
+    GpuVirtualAddress         clusterAddresses; // GPU address array of constructed CLAS objects.
 };
 
 

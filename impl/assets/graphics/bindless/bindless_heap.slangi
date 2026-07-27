@@ -142,7 +142,7 @@ Texture3D<float4> NwbHeapSampledImage3D(const uint slot){
 }
 
 // CSG's slot cbuffer is uniform per draw/dispatch, so these array lookups remain uniform like the fullscreen image
-// helpers above. A future per-invocation storage-image user must wrap its table subscript in NonUniformResourceIndex.
+// helpers above. Per-invocation storage-image indexing requires NonUniformResourceIndex.
 RWTexture2DArray<float4> NwbHeapStorageImage2DArrayFloat4(const uint slot){
     return g_NwbHeapStorageImage2DArrayFloat4s[slot];
 }

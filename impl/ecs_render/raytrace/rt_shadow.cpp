@@ -1021,9 +1021,9 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
 }
 
 bool RendererRayTracingSystem::ensureSwShadowPipeline(){
-    // Idempotent: the shared layout + persistent Stage-2/3 buffers are created once (guarded by m_swShadowBindingLayout),
-    // and each per-pass pipeline creation below is itself idempotent (guarded by its own handle). A prior hard failure is
-    // sticky.
+    // Idempotent: the shared layout and persistent compaction buffers are created once (guarded by
+    // m_swShadowBindingLayout), and each per-pass pipeline creation below is guarded by its own handle. A hard failure
+    // is sticky.
     if(rayTracingState().m_swShadowPipelineFailed)
         return false;
 

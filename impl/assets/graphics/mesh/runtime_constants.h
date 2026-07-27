@@ -49,14 +49,13 @@
 #define NWB_MESH_INSTANCE_TRANSLATION_FLOAT_OFFSET 4u
 #define NWB_MESH_INSTANCE_MATERIAL_MUTABLE_BYTE_OFFSET_FLOAT_OFFSET 7u
 #define NWB_MESH_INSTANCE_SCALE_FLOAT_OFFSET 8u
-// Raster mesh geometry now lives in the global descriptor heap. The per-draw instance record carries the
-// heap slot for each former mesh-set source binding (including the intentional binding-6 gap), so the shared
+// Raster mesh geometry lives in the global descriptor heap. The per-draw instance record carries the
+// heap slot for each mesh-stream ABI position (including the intentional binding-6 gap), so the shared
 // mesh shader can fetch its streams without growing the already-full AVBOIT draw push constant.
 #define NWB_MESH_INSTANCE_GEOMETRY_SLOT_FLOAT_OFFSET 12u
 #define NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT 12u
-// The former direct typed-material binding (6) is no longer a geometry stream: typed words use the frame heap
-// lane.  CSG reuses that preserved per-instance word for its UniformBuffer context selector, without renumbering
-// any historical source-stream slots.
+// Binding 6 is reserved for CSG's UniformBuffer context selector; typed words use the frame heap lane. Do not
+// renumber the mesh-stream ABI positions.
 #define NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT 6u
 #define NWB_MESH_INSTANCE_FLOAT_COUNT (NWB_MESH_INSTANCE_GEOMETRY_SLOT_FLOAT_OFFSET + NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT)
 

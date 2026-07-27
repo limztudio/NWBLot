@@ -343,7 +343,7 @@ struct RtSceneBvhState{
     //    m_prevWorldToClipValid is false on frame 0 / after a resize (invalidated in createShadowVisibilityTarget) -> the
     //    merge's historyValid gate forces pure-current so it can't reproject through a stale matrix into fresh garbage.
     Float44U m_prevWorldToClip = {};
-    // Software caustic photon producer (P3) — the no-hardware-ray-tracing fallback. It reuses the same software
+    // Software caustic photon producer — the no-hardware-ray-tracing fallback. It reuses the same software
     // scene/instance + per-mesh BVH buffers the SW shadow trace builds (the shared m_swShadowMesh* table serves
     // shadow, caustic, and GI alike). The emission targets, camera view, and G-buffer depth/world position are global-
     // heap reads selected through the shared photon push constants. The two selector payloads and R32_UINT accumulator
@@ -355,7 +355,7 @@ struct RtSceneBvhState{
     bool m_hwCausticPipelineFailed = false;
     bool m_hwCausticDispatchLogged = false;
     bool m_capabilityLogged = false;
-    // Hardware ray-traced caustic photon producer (P4) -- the byte-parallel sibling of the SW producer. It uses the
+    // Hardware ray-traced caustic photon producer -- the byte-parallel sibling of the SW producer. It uses the
     // TLAS plus heap-selected instance-material, index, position, and attribute buffers; the refraction bends on the
     // interpolated shading normal from the attributes. Feeds the SAME R32_UINT accumulator + the SAME resolve the SW
     // path uses. Its emission/view/G-buffer reads, selector payloads, and accumulator use the global heap; the set-10
@@ -596,11 +596,11 @@ struct RtSoftShadowState{
 
 
 struct RtCausticState{
-    // Caustic emission targets (P1): per-frame world-space AABBs of every refractive instance, the domain the caustic
+    // Caustic emission targets: per-frame world-space AABBs of every refractive instance, the domain the caustic
     // photon producer aims at. A single global list is shared by all caustic lights. Resident structured SRV
     // ({ float4 aabbMin; float4 aabbMax; }), CPU-written each frame, grows by doubling, never shrinks; the count gates
     // caustic-light assignment together with per-light opt-in (zero refractive instances or zero opted-in lights ->
-    // zero caustic lights). m_causticTargetBoundsMin/Max hold the combined extent over all targets (for the P1 gate
+    // zero caustic lights). m_causticTargetBoundsMin/Max hold the combined extent over all targets (for the emission gate
     // log); m_causticEmissionGateLogged rate-limits that log.
     Core::BufferHandle m_causticEmissionTargetBuffer;
     // Global StorageBuffer heap descriptor for the emission-target buffer. Capacity replacement acquires a new slot
@@ -634,7 +634,7 @@ struct RtCausticState{
     bool m_causticGeometryDownsamplePipelineFailed = false;
     bool m_causticResolvePipelineFailed = false;
     bool m_causticAccumulatorInitialized = false;
-    // Caustic resolve pass (P3): an N-pass edge-avoiding a-trous wavelet denoise. The single compute pipeline is
+    // Caustic resolve pass: an N-pass edge-avoiding a-trous wavelet denoise. The single compute pipeline is
     // dispatched per pass with all inputs and outputs selected through target-generation heap slots in the dispatch
     // push constants.
     Core::BindingLayoutHandle m_causticResolveBindingLayout;
@@ -676,7 +676,7 @@ struct RtSurfelGiState{
     Core::BindingLayoutHandle m_surfelTraceBindingLayout;
     Core::ShaderHandle m_surfelSpawnShader;
     Core::ComputePipelineHandle m_surfelSpawnPipeline;
-    // Age-free (U1 recycling): one thread per pool slot; frees surfels unseen for maxAge frames + pushes their ids onto
+    // Age-free recycling: one thread per pool slot; frees surfels unseen for maxAge frames + pushes their ids onto
     // the free-list. Depends only on the persistent buffers, so it is built once (like hash-build).
     Core::ShaderHandle m_surfelAgeFreeShader;
     Core::ComputePipelineHandle m_surfelAgeFreePipeline;
@@ -691,13 +691,13 @@ struct RtSurfelGiState{
     Core::BindingLayoutHandle m_surfelResolveBindingLayout;
     Core::ShaderHandle m_surfelResolveShader;
     Core::ComputePipelineHandle m_surfelResolvePipeline;
-    // U6 half-res producer: the resolve writes surfelIrradianceHalf; this upsample pass reconstructs the full-res
+    // Half-res producer: the resolve writes surfelIrradianceHalf; this upsample pass reconstructs the full-res
     // surfelIrradiance with a surface-gated joint-bilinear filter (surfel_upsample_cs). Its heap slots select the
     // half-res irradiance + full-res G-buffer normal/world-position, with the full-res output heap-selected too.
     Core::BindingLayoutHandle m_surfelUpsampleBindingLayout;
     Core::ShaderHandle m_surfelUpsampleShader;
     Core::ComputePipelineHandle m_surfelUpsamplePipeline;
-    // U6 trace dispatchIndirect: a 1-thread build-args pass (surfel_trace_buildargs_cs) reads the live high-water
+    // Trace dispatchIndirect: a 1-thread build-args pass (surfel_trace_buildargs_cs) reads the live high-water
     // BUMP_TOP + the update divisor (surfel CB) and writes the trace's DispatchIndirectArguments into
     // m_surfelTraceIndirectArgsBuffer, so the trace dispatches one workgroup per LIVE surfel instead of the fixed
     // ceil(poolCapacity/divisor). Both SW + HW trace consume the same heap-selected args buffer.
@@ -708,7 +708,7 @@ struct RtSurfelGiState{
     bool m_surfelUseHwTrace = false;
     bool m_surfelCountReadbackPending = false;
     bool m_surfelDispatchLogged = false;
-    // U5 HW-RayQuery trace twin (surfel_trace_hw_cs / gi_hw_trace.slangi): a parallel pipeline that reads
+    // HW-RayQuery trace twin (surfel_trace_hw_cs / gi_hw_trace.slangi): a parallel pipeline that reads
     // the scene TLAS and reconstructs the authored surface through heap-selected material-record geometry slots instead
     // of the SW BVH. m_surfelUseHwTrace selects the
     // path in ensureSurfelResources / prepareSurfelResources / renderSurfelGi (set true by the HW-shadow branch, false
@@ -727,12 +727,12 @@ struct RtSurfelGiState{
     Core::BufferHandle m_surfelPoolBuffer;
     Core::BufferHandle m_surfelCellHeadBuffer;
     Core::BufferHandle m_surfelCounterBuffer;
-    // U6 trace dispatchIndirect args (3 u32 = DispatchIndirectArguments), rewritten by the build-args pass each frame.
+    // Trace dispatchIndirect args (3 u32 = DispatchIndirectArguments), rewritten by the build-args pass each frame.
     Core::BufferHandle m_surfelTraceIndirectArgsBuffer;
-    // Free-list (U1): persistent LIFO stack of recycled surfel ids (poolCapacity uints). Pushed by age-free, popped by
+    // Free-list: persistent LIFO stack of recycled surfel ids (poolCapacity uints). Pushed by age-free, popped by
     // spawn; the stack depth lives in counter[FREE_TOP]. Same barrier/state-tracking as the pool.
     Core::BufferHandle m_surfelFreeListBuffer;
-    // Snapshot of the previous frame's converged field (U4 infinite bounce): the trace's bounce gather reads these (SRV)
+    // Snapshot of the previous frame's converged field for the infinite bounce: the trace's bounce gather reads these (SRV)
     // instead of the live pool it is writing, so surfel->surfel feedback reads a stable frame-start field. Both pool +
     // cell-head are snapshotted (mutually consistent prev-frame walk); overwritten by copyBuffer at the top of each frame.
     Core::BufferHandle m_surfelPoolSnapshotBuffer;
@@ -748,9 +748,9 @@ struct RtSurfelGiState{
     Core::GpuDescriptorHandle m_surfelPoolSnapshotHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle m_surfelCellHeadSnapshotHeapHandle = Core::GpuDescriptorHandle::invalid();
     // The ray-trace material-context slot payload is shared with shadows/caustics, but surfel owns this UniformBuffer
-    // descriptor generation so this migration does not change those other pass bindings.
+    // descriptor generation so the other pass bindings remain unchanged.
     Core::GpuDescriptorHandle m_surfelMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    // CPU-readable copy of the counter (BUMP_TOP, FREE_TOP) for the periodic live-count diagnostic (U1). The copy is
+    // CPU-readable copy of the counter (BUMP_TOP, FREE_TOP) for the periodic live-count diagnostic. The copy is
     // snapshotted on a log-interval frame and mapped a few frames later (async), mirroring the SW-shadow edge-stats path.
     Core::BufferHandle m_surfelCounterReadback;
     // Feature gate + per-pipeline-failed flags (mirrors the caustic / shadow precedent).
@@ -766,7 +766,7 @@ struct RtSurfelGiState{
     // Per-frame counter seeding the ray rotation + age comparisons.
     u32 m_surfelFrameIndex = 0u;
     // m_surfelSeeded: false on the first enabled frame -> the trace's update divisor is 1 (ALL surfels traced to
-    // bootstrap in one frame), set true after the first trace. Mirrors the caustic/GI seed precedent.
+    // bootstrap in one frame), set true after the first trace.
     bool m_surfelSeeded = false;
     // m_surfelResourcesNeedClear: set when the buffers are (re)created in ensureSurfelResources (no command list) and
     // consumed once in prepareSurfelResources (which has one) to clear the pool/cell-head/counter before the first pass.

@@ -12,8 +12,8 @@
 // One surface element (surfel). Surfels are allocated ON visible surfaces (screen-space spawn) instead of on a
 // world-space probe grid, so the sample count tracks visible surface area rather than the grid's cubic volume. The
 // record is single-buffered: exactly one trace workgroup owns a surfel and read-old/writes-new its own irradiance in
-// place (no cross-workgroup contention, no float image atomics, no ping-pong). U3 stores DIRECTIONAL irradiance as
-// 2-band spherical harmonics (4 coefficients per colour: Y_00, Y_1-1, Y_10, Y_11), replacing U0's flat RGB mean: the
+// place (no cross-workgroup contention, no float image atomics, no ping-pong). Directional irradiance uses
+// 2-band spherical harmonics (4 coefficients per colour: Y_00, Y_1-1, Y_10, Y_11) rather than a flat RGB mean: the
 // trace projects the incoming radiance into SH, the gather reconstructs the cosine-weighted irradiance for the query
 // normal (surfel_sh.slangi). 96 bytes / std430 = six float4 lanes; keep it 16-byte aligned so the
 // RWStructuredBuffer<NwbSurfel> stride matches NWB_SURFEL_RECORD_SIZE on the C++ side.

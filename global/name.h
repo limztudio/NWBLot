@@ -587,7 +587,7 @@ public:
     // Non-resolving textual form for cheap breadcrumbs (arena allocation logging, crash markers): the readable debug
     // name where one exists (dbg/buildmode), else the raw hash hex -- WITHOUT consulting the runtime symbol resolver.
     // c_str() (which DOES resolve) must never run on the allocator path: resolving allocates from a GlobalArena, and
-    // that arena's allocate() logs its own name, which re-enters the resolver -- the source of the opt stack overflow.
+    // that arena's allocate() logs its own name, which re-enters the resolver.
     // Use this anywhere a Name is logged from inside the allocator.
     [[nodiscard]] const char* logText()const{
 #if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)

@@ -41,7 +41,7 @@ ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPush
 #define NWB_MESH_VIEW_BUFFER_HEAP_SLOT (g_NwbCsgIntervalDispatchPushConstants.resourceSlots[NWB_CSG_INTERVAL_DISPATCH_PUSH_RESOURCE_SLOT_VIEW])
 #include "../bindless/bindless_heap_mesh.slangi"
 
-// Historical local bindings 0..2 are now gaps. The CSG context selects target-generation Texture2DArray UAVs
+// Local bindings 0..2 are ABI gaps. The CSG context selects target-generation Texture2DArray UAVs
 // from the StorageImage heap; the device's required formatless-storage-image support permits the two float formats.
 #define g_NwbCsgBackCapNormal (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.x))
 #define g_NwbCsgIntervalDepth (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.y))

@@ -51,7 +51,7 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
 
 
 // Lambert hit shade: direct light (<=8 lights, unshadowed base + optional dominant-light shadow ray) * the authored
-// material-surface base colour. The caller adds any multi-bounce term (U4 surfel-to-surfel). The occlusion ray re-enters the traversal
+// material-surface base colour. The caller adds any surfel-to-surfel multi-bounce term. The occlusion ray re-enters the traversal
 // seam (nwbGiTraceClosest), so it uses whichever backend the producer selected.
 float3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
     float3 irradiance = float3(0.0, 0.0, 0.0);

@@ -285,8 +285,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
 
     m_shadowPrepareCommandList->open();
     // The software-shadow trace selects its G-buffer heap descriptors through the target-generation slot cbuffer. It
-    // runs before deferred lighting, which historically performed this one-time upload, so make the cbuffer resident on
-    // the ordered shadow-preparation command list first.
+    // runs before deferred lighting, so make the cbuffer resident on the ordered shadow-preparation command list first.
     const bool deferredBindlessResourcesUploaded = m_deferredSystem.uploadDeferredBindlessFrameResources(
         *m_shadowPrepareCommandList,
         deferredTargets
@@ -504,7 +503,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_raytracingSystem.clearCausticTargets(*commandList, deferredTargets);
 
         // Caustic producer -- EXACTLY ONE backend runs per frame, mirroring the shadow backend split above: the
-        // hardware ray-traced producer (P4) on the HW path, the software-BVH producer (P3) otherwise. Both emit
+        // hardware ray-traced producer on the HW path, the software-BVH producer otherwise. Both emit
         // photons into the just-cleared R32_UINT accumulators, then resolve them into the RGBA16F irradiance buffer
         // the lighting pass adds pre-tonemap. Each runs only when there is >=1 caustic light AND >=1 refractive
         // instance (has*CausticWork, checked inside); else the black-cleared buffer is the additive no-op. Runs

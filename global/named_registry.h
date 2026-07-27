@@ -55,9 +55,8 @@ template<
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared scope-resolution helpers: the Memory/Timing recorders (and any future named-scope recorder that
-// stores a vector of generation-stamped records) resolve a ScopeId the same way and project the same
-// index/name accessors. Centralizing them here keeps the lookup contract single-sourced.
+// Memory and Timing recorders use these scope-resolution helpers for generation-stamped records.
+// Centralizing them keeps the lookup contract single-sourced.
 
 template<
     typename ScopeId,

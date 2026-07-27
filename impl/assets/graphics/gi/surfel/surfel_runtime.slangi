@@ -20,8 +20,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The live field is selected by the common push block rather than a pass-local descriptor set. These macros retain
-// the readable historical names throughout the maintenance/trace kernels while expanding to global heap aliases.
+// The live field is selected by the common push block rather than a pass-local descriptor set. These aliases keep the
+// maintenance and trace kernels readable while expanding to global heap accesses.
 #define g_NwbSurfelConstants g_NwbHeapSurfelConstantBuffers[g_NwbSurfelHeapPushConstants.constantsHeapSlot]
 #define g_NwbSurfelPool g_NwbHeapSurfelWritablePools[g_NwbSurfelHeapPushConstants.poolHeapSlot]
 

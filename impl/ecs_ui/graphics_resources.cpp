@@ -100,9 +100,8 @@ bool UiSystem::ensureRenderResources(Core::Framebuffer* framebuffer){
         static_assert(sizeof(UiPushConstants) <= Core::s_MaxPushConstantSize, "Ui push constants must fit the portable push constant budget");
 
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
-        // ImGui's former set 0 mixed a sampled image with a sampler, which cannot live in one descriptor-buffer
-        // segment. Texture/sampler descriptors now reside in the global heap's pure resource/sampler sets; this
-        // leaf only carries per-draw slots in push constants and therefore uses the required descriptor-buffer path.
+        // A sampled image and sampler cannot share one descriptor-buffer segment. Texture/sampler descriptors reside
+        // in the global heap's pure resource/sampler sets; this leaf carries per-draw slots in push constants.
         bindingLayoutDesc.setVisibility(Core::ShaderType::AllGraphics);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(UiPushConstants)));
 

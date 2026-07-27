@@ -14,8 +14,8 @@
 
 // Persistent CSG inputs live in the global StorageBuffer heap. This local uint4 is deliberately only slot
 // indirection: x/y select receiver ranges and cutters, while z/w select the cap-fill typed-material and
-// mesh-instance buffers. It is shared by the clip and cap-fill paths, so the old clip SRVs (b0/b1) and cap-fill
-// material SRVs (b6/b12 in its retired set) remain ABI gaps rather than being repurposed.
+// mesh-instance buffers. It is shared by the clip and cap-fill paths, so clip SRVs b0/b1 and cap-fill material SRVs
+// b6/b12 remain ABI gaps rather than being repurposed.
 struct NwbCsgClipContextSlots{
     uint receiverRanges;
     uint cutters;
@@ -26,8 +26,8 @@ struct NwbCsgClipContextSlots{
     uint2 padding;
 };
 
-// Typed view over the global UniformBuffer table.  The descriptor slot is carried by the existing mesh/CSG
-// push data (or the receiver instance record), so the historical local CSG clip cbuffer is retired.
+// Typed view over the global UniformBuffer table. The descriptor slot is carried by the existing mesh/CSG push data
+// (or the receiver instance record), so no pass-local CSG clip cbuffer is needed.
 #pragma warning(push)
 #pragma warning(disable: 39001)
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]

@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Hardware ray-traced caustic photon producer (P4) -- the byte-parallel sibling of the software compute producer
+// Hardware ray-traced caustic photon producer -- the byte-parallel sibling of the software compute producer
 // (caustic/caustic_photon_sw_cs.slang). A raygen dispatch of GRID_SIDE x GRID_SIDE threads (one per photon, the
 // SAME 128x128 = 16384 grid the SW kernel sweeps) emits each photon in light space at the refractive-instance
 // emission AABBs, runs the SHARED iterative bounce loop (caustic_trace.slangi nwbCausticTracePhoton -- recursion

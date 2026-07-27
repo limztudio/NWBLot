@@ -12,13 +12,13 @@
 #define NWB_SHADOW_RT_SET 0
 
 #define NWB_SHADOW_RT_BINDING_TLAS 0
-// Legacy local G-buffer binding numbers retained for source compatibility. The hardware trace now selects the
-// target-generation Texture2D descriptors through heap-slot push constants, leaving local bindings 1..3 as gaps.
+// Local G-buffer binding numbers are retained as ABI gaps. The hardware trace selects the target-generation Texture2D
+// descriptors through heap-slot push constants.
 #define NWB_SHADOW_RT_BINDING_GBUFFER_WORLD_POSITION 1
 #define NWB_SHADOW_RT_BINDING_GBUFFER_NORMAL 2
 #define NWB_SHADOW_RT_BINDING_GBUFFER_DEPTH 3
-// Preserve the historical scene/light ABI positions: binding 4 now carries the target-generation resource-slot
-// cbuffer, whose avboitSlots.z/.w select the shared scene-shading + light-list heap entries; binding 5 stays an
+// Bindings 4 and 5 preserve the scene/light ABI positions: binding 4 carries the target-generation resource-slot
+// cbuffer, whose avboitSlots.z/.w select the shared scene-shading + light-list heap entries; binding 5 remains an
 // intentional gap because the light list is fetched from that heap too. Do not renumber the subsequent slots.
 #define NWB_SHADOW_RT_BINDING_SCENE_SHADING 4
 #define NWB_SHADOW_RT_BINDING_LIGHT_LIST 5

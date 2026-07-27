@@ -1050,7 +1050,7 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelUpsampleShapeBuildsAsDescriptorBuffe
     auto output = makeUavTexture(32u, 32u);
     ASSERT_TRUE(output);
 
-    // No local UAV remains after the output migrated to the storage-image heap.
+    // The local ABI carries no UAVs; the output uses the storage-image heap.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
     layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
@@ -1097,7 +1097,6 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelHashBuildShapeBuildsAsDescriptorBuff
     auto cellHead = makeStructuredUav(4u);
     ASSERT_TRUE(constants && pool && cellHead);
 
-    // Heap descriptors replace the former local CBV/UAV entries.
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
     layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
@@ -1339,7 +1338,7 @@ TEST_F(DescriptorBufferRoundTripTest, BvhSortPushOnlyHeapLayoutBuildsAsDescripto
 }
 
 
-// BVH LBVH-build parity: all five formerly-local scratch/work buffers are heap registrations. The local leaf only
+// BVH LBVH-build parity: all five scratch/work buffers are heap registrations. The local leaf only
 // carries the expanded push constants; heap writes retain each concrete buffer until deferred free retires its slot.
 TEST_F(DescriptorBufferRoundTripTest, BvhBuildPushOnlyHeapLayoutRegistersScratchBuffers){
     auto& device = DescriptorBufferRoundTripTest::device();
@@ -1843,11 +1842,9 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapWritesImmutableTlasBlo
 }
 
 
-// ImGui uses no local image/sampler set after the heap migration: its leaf set contains only the 32-byte per-draw
-// push block (scale/translate plus sampled-image and sampler slots), while the actual font atlas and every dynamic
-// ImTextureData image live in the global SampledImage/Sampler tables. This shape must remain descriptor-buffer
-// compatible with both heap layouts; otherwise the mixed historical set would silently put the UI pipeline on the
-// unsupported ordinary descriptor-set path.
+// ImGui's leaf set contains only the 32-byte per-draw push block (scale/translate plus sampled-image and sampler
+// slots). The font atlas and dynamic ImTextureData images use the global SampledImage/Sampler tables, so this shape
+// must remain descriptor-buffer compatible with both heap layouts.
 TEST_F(DescriptorBufferRoundTripTest, ImguiHeapTextureAndSamplerLayoutBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& heap = device.getDescriptorHeap();
@@ -1906,7 +1903,7 @@ TEST_F(DescriptorBufferRoundTripTest, ImguiHeapTextureAndSamplerLayoutBuildsAsDe
 
 
 // The global heap is the only resource-bearing descriptor transport. A pipeline-local BindingLayout may carry push
-// constants, but creating a local CBV/SRV leaf must fail instead of recreating the retired local descriptor path.
+// constants, but creating a local CBV/SRV leaf must fail instead of recreating a local resource descriptor path.
 TEST_F(DescriptorBufferRoundTripTest, PipelineLocalResourceLayoutsAreRejected){
     auto& device = DescriptorBufferRoundTripTest::device();
 

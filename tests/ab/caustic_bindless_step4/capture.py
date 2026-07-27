@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-"""Capture a caustic-sphere-test smoke window to a BMP for the caustic bindless step-4 A/B.
+"""Capture a caustic-sphere-test smoke window to a BMP.
 
-Caustic twin of ../shadow_bindless_step4/capture.py: the exe basename picks the HW producer
-(caustic_sphere_smoke) or the forced-software-emulation sibling (caustic_sphere_sw_smoke), so
-one script captures both sides of the caustic bindless-heap accessor migration. The refractor
-spin is pinned (NWB_TRANSPARENT_MULTI_SPIN_ANGLE) so before/after captures line up
-frame-for-frame; the caustic accumulator is left to converge across the settle window before
-the read.
+The executable basename selects the HW producer or forced-software sibling. The refractor spin
+is pinned with NWB_TRANSPARENT_MULTI_SPIN_ANGLE and the settle window lets the caustic
+accumulator converge before the read.
 
     python capture.py <exe-basename> <output.bmp>
 """

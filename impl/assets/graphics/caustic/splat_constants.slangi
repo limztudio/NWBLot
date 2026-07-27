@@ -35,7 +35,7 @@
 
 // Converts a per-channel flux value to the saturating fixed-point integer the splat InterlockedAdds into the
 // R32_UINT accumulators. Guards NaN/inf and clamps to NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX so no single deposit can
-// wrap the accumulator. Shared by the SW (P3) and HW (P4) producer splats -- both deposit into the SAME accumulator
+// wrap the accumulator. Shared by the SW and HW producer splats -- both deposit into the SAME accumulator
 // the resolve un-scales by the SAME factor, so the two paths are byte-identical at the deposit. Lives here (not in
 // the transport header) so the HW closest-hit/miss can pull the splat without the bounce-loop transport.
 uint nwbCausticFluxToFixedPoint(float fluxChannel){

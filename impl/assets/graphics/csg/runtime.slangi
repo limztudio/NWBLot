@@ -104,7 +104,7 @@ uint nwbCsgContextHeapSlot(){
 #endif
 }
 
-// Historical local CSG clip SRVs/cbuffer remain ABI gaps.  This macro resolves the one heap context selected above.
+// Local CSG clip SRVs/cbuffer remain ABI gaps. This macro resolves the selected heap context.
 #define g_NwbCsgClipContextSlots NwbHeapCsgClipContextSlots(nwbCsgContextHeapSlot())
 #define g_NwbCsgReceiverRanges NwbHeapCsgReceiverRanges(g_NwbCsgClipContextSlots.receiverRanges)
 #define g_NwbCsgCutters NwbHeapCsgCutters(g_NwbCsgClipContextSlots.cutters)

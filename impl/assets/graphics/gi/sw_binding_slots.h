@@ -16,9 +16,8 @@
 
 #define NWB_GI_SW_SET 0
 
-// Keep the historical scene/light binding numbers stable as logical ABI positions. Binding 0 now carries the resource
-// slot cbuffer instead of the scene-shading CB; binding 1 remains an intentional gap because the light list is heap
-// fetched too.
+// Bindings 0 and 1 preserve the scene/light ABI positions. Binding 0 carries the resource-slot cbuffer; binding 1
+// remains an intentional gap because the light list is heap fetched too.
 #define NWB_GI_SW_BINDING_SCENE_SHADING 0
 #define NWB_GI_SW_BINDING_LIGHT_LIST 1
 #define NWB_GI_SW_BINDING_BINDLESS_RESOURCES NWB_GI_SW_BINDING_SCENE_SHADING

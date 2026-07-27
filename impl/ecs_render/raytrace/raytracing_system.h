@@ -70,7 +70,7 @@ public:
     [[nodiscard]] bool prepareGpuBvhCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool hasCausticWork()const noexcept;
-    // Hardware ray-traced caustic photon producer (P4) -- the byte-parallel sibling of the SW producer above, run on
+    // Hardware ray-traced caustic photon producer -- the byte-parallel sibling of the SW producer above, run on
     // the HW branch (RayTracingAccelStruct supported). Reuses the TLAS, heap-selected material/geometry context, and
     // shared R32_UINT accumulator + resolve; its closest hit reconstructs the surface through material-record slots.
     [[nodiscard]] bool prepareHwCausticResources(DeferredFrameTargets& targets);
@@ -89,22 +89,22 @@ public:
     [[nodiscard]] bool ensureSurfelResources();
     // The surfel pass pipelines use only their common push range plus the global heap resource/sampler layouts.
     [[nodiscard]] bool ensureSurfelSpawnPipeline();
-    // Age-free (U1 recycling): one thread per pool slot; frees surfels unseen for maxAge frames + pushes their ids onto
+    // Age-free recycling: one thread per pool slot; frees surfels unseen for maxAge frames + pushes their ids onto
     // the free-list. Reads only the persistent buffers, so pipeline + set are built once (like hash-build).
     [[nodiscard]] bool ensureSurfelAgeFreePipeline();
     [[nodiscard]] bool ensureSurfelHashBuildPipeline();
     [[nodiscard]] bool ensureSurfelTracePipeline();
-    // U5 HW-RayQuery trace twin: the same surfel trace over the TLAS (inline RayQuery) instead of the SW BVH. Selected
+    // HW-RayQuery trace twin: the same surfel trace over the TLAS (inline RayQuery) instead of the SW BVH. Selected
     // by m_surfelUseHwTrace on the HW-shadow branch; gated on RayQuery + accel-struct support (like ensureShadowPipeline).
     [[nodiscard]] bool ensureSurfelTraceHwPipeline();
     // The resolve pass: a COMPUTE gather-once-per-pixel into the screen-space surfelIrradiance texture the deferred
     // lighting samples (keeps the RW pool off the pixel shader -> no frames-in-flight pool race). Its field/input/
     // output resources are heap-selected by the common push block.
     [[nodiscard]] bool ensureSurfelResolvePipeline();
-    // U6 half-res upsample: reconstructs the full-res surfelIrradiance from heap-selected half irradiance plus G-buffer
+    // Half-res upsample: reconstructs the full-res surfelIrradiance from heap-selected half irradiance plus G-buffer
     // normal/world-position and a heap-selected storage output.
     [[nodiscard]] bool ensureSurfelUpsamplePipeline();
-    // U6 trace dispatchIndirect: a 1-thread build-args pass writes ceil(BUMP_TOP/divisor) into the trace's indirect-args
+    // Trace dispatchIndirect: a 1-thread build-args pass writes ceil(BUMP_TOP/divisor) into the trace's indirect-args
     // buffer, so the trace dispatches per LIVE surfel. It uses the same heap slots as the other surfel passes.
     [[nodiscard]] bool ensureSurfelTraceBuildArgsPipeline();
     // True when the prepare built the hybrid transparent-shadow software resources this frame (RT hardware + the scene

@@ -15,7 +15,7 @@ NWB_IMPL_BEGIN
 
 // CPU mirror of the shader NwbSurfelConstants (5 x Float4 = 80 bytes, matches surfel_constants.slangi lane-for-lane).
 struct NwbSurfelConstantsGpu{
-    Float4 cameraPositionCellSize;  // xyz = camera world position (unused until U6 distance-scaled spawn), w = hash cell size
+    Float4 cameraPositionCellSize;  // xyz = camera world position, w = hash cell size
     Float4 hashPoolFrameDivisor;    // x = hash cell count, y = pool capacity, z = frame index, w = update divisor
     Float4 coverageRadiusBiasHyst;  // x = reserved (coverage sum dropped for one-surfel-per-cell), y = default radius, z = normal bias, w = accumulation cap
     Float4 ageRaysTileScreen;       // x = max age, y = rays/surfel, z = spawn tile (px), w = screen width
@@ -24,10 +24,10 @@ struct NwbSurfelConstantsGpu{
 static_assert(sizeof(NwbSurfelConstantsGpu) == sizeof(f32) * 4u * 5u, "NwbSurfelConstantsGpu must match the shader NwbSurfelConstants layout");
 
 // The surfel normal bias: push the trace ray origin + the gather sample point off the surface along the normal so a
-// ray/query does not self-hit the surface it belongs to. Small world-space offset; U6 scales it by camera distance.
+// ray/query does not self-hit the surface it belongs to. Small world-space offset scaled by camera distance.
 inline constexpr f32 s_SurfelNormalBias = 0.05f;
 
-// Live-count diagnostic (U1): snapshot the surfel counter every s_SurfelCountLogInterval frames and map + log it
+// Live-count diagnostic: snapshot the surfel counter every s_SurfelCountLogInterval frames and map + log it
 // s_SurfelCountLogDelay frames later (the copy is async, so the delay lets the GPU finish before the CPU maps).
 inline constexpr u32 s_SurfelCountLogInterval = 120u;
 inline constexpr u32 s_SurfelCountLogDelay = 3u;
@@ -330,7 +330,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         rayTracingState().m_surfelResourcesNeedClear = true;
     }
 
-    // Trace indirect-args buffer (U6): DispatchIndirectArguments{ceil(BUMP_TOP/divisor),1,1}, rewritten by the build-args
+    // Trace indirect-args buffer: DispatchIndirectArguments{ceil(BUMP_TOP/divisor),1,1}, rewritten by the build-args
     // pass each frame (no clear needed -- fully overwritten before the trace reads it). isDrawIndirectArgs marks it for
     // the IndirectArgument state; canHaveUAVs lets the build-args pass write it. Automatic state tracking barriers the
     // build-args UAV write -> the trace's indirect consume.
@@ -351,7 +351,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         }
     }
 
-    // Free-list (U1 recycling): poolCapacity uints, a persistent LIFO stack of recycled surfel ids (depth = counter
+    // Free-list recycling: poolCapacity uints, a persistent LIFO stack of recycled surfel ids (depth = counter
     // FREE_TOP). Age-free pushes; spawn pops. Same barrier/state-tracking as the pool so the intra-frame push->pop
     // (pass 0 -> pass 3) UAV barrier is emitted. Contents cleared to 0 once (FREE_TOP=0 is what marks it empty).
     if(!rayTracingState().m_surfelFreeListBuffer){
@@ -371,7 +371,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         rayTracingState().m_surfelResourcesNeedClear = true;
     }
 
-    // Snapshot pool (U4 infinite bounce): a copy of the previous frame's converged pool the trace's bounce gather reads
+    // Snapshot pool for the infinite bounce: a copy of the previous frame's converged pool the trace's bounce gather reads
     // as an SRV (never the live pool it is writing), so surfel->surfel feedback reads a stable frame-start field. SRV-only
     // (canHaveUAVs false -- only copyBuffer writes it), same size/stride as the live pool. No clear: fully overwritten by
     // the copyBuffer at the top of renderSurfelGi before any read (frame 0's snapshot is a copy of the freshly-cleared
@@ -392,7 +392,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         }
     }
 
-    // Snapshot cell-head (U4): the matching prev-frame cell-head, so the bounce gather's 3x3x3 walk is mutually
+    // Snapshot cell-head: the matching previous-frame cell-head, so the bounce gather's 3x3x3 walk is mutually
     // consistent with its snapshot pool (both captured at the same frame-start). SRV-only; overwritten by copyBuffer.
     if(!rayTracingState().m_surfelCellHeadSnapshotBuffer){
         Core::BufferDesc desc;
@@ -410,7 +410,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         }
     }
 
-    // CPU-readable copy of the counter for the periodic live-count diagnostic (U1). Snapshotted on a log-interval frame,
+    // CPU-readable copy of the counter for the periodic live-count diagnostic. Snapshotted on a log-interval frame,
     // mapped a few frames later (mirrors the SW-shadow edge-stats readback).
     if(!rayTracingState().m_surfelCounterReadback){
         Core::BufferDesc desc;
@@ -469,7 +469,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
     return true;
 }
 
-// U5 HW-RayQuery trace twin. Same 5 surfel passes; only the TRACE swaps its pipeline: inline RayQuery over the scene
+// HW-RayQuery trace twin. Same surfel passes; only the TRACE swaps its pipeline: inline RayQuery over the scene
 // TLAS (surfel_trace_hw_cs -> gi_hw_trace.slangi) instead of the SW BVH walk. Gated on accel-struct + ray-query support,
 // so it only builds on the HW-shadow branch (which is where surfels are enabled on real RT hardware).
 bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
@@ -769,7 +769,7 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
 
     // One-shot clear of the freshly-created buffers (ensureSurfelResources has no command list). Pool -> zero (alive ==
     // 0 everywhere), cell-head -> 0xFFFFFFFF (empty lists), counter -> 0 (bump top at slot 0). Cleared exactly once per
-    // (re)creation; the pool then accumulates surfels across frames (recycling lands in U1).
+    // (re)creation; the pool then accumulates surfels across frames through recycling.
     if(rayTracingState().m_surfelResourcesNeedClear){
         Core::Buffer* pool = rayTracingState().m_surfelPoolBuffer.get();
         Core::Buffer* cellHead = rayTracingState().m_surfelCellHeadBuffer.get();
@@ -798,7 +798,7 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
     // the unfocused smoke app renders only that frame -- then reverts to the round-robin divisor. The trace's temporal
     // accumulation is a bounded running mean capped at NWB_SURFEL_MAX_ACCUM (carried in coverageRadiusBiasHyst.w); the
     // per-surfel sampleCount drives the seed (n==0 -> first sample), so no CPU seeded/hysteresis branch is needed. The
-    // camera position rides xyz for U6's distance scaling.
+    // camera position rides xyz for distance scaling.
     const u32 updateDivisor = rayTracingState().m_surfelSeeded ? Max<u32>(NWB_SURFEL_UPDATE_DIVISOR, 1u) : 1u;
     const f32 cellSize = NWB_SURFEL_CELL_SIZE;
 
@@ -837,12 +837,12 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     if(!heap.isInitialized())
         return false;
 
-    // The trace pass runs the SELECTED backend (U5): the HW RayQuery twin on the HW-shadow branch, else the SW BVH walk.
+    // The trace pass runs the selected backend: the HW RayQuery twin on the HW-shadow branch, else the SW BVH walk.
     // Everything else (snapshot copy, age-free/clear/hash-build/spawn/resolve) is backend-agnostic.
     const bool useHwTrace = rayTracingState().m_surfelUseHwTrace;
     Core::ComputePipeline* const tracePipeline = useHwTrace ? rayTracingState().m_surfelTraceHwPipeline.get() : rayTracingState().m_surfelTracePipeline.get();
 
-    // Guard: every pass needs its pipeline (a prior ensure failure leaves the block inert this frame).
+    // Guard: every pass needs its pipeline; an ensure failure leaves the block inert this frame.
     if(
         !rayTracingState().m_surfelSpawnPipeline
         || !rayTracingState().m_surfelAgeFreePipeline
@@ -880,7 +880,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     }
 
     // The age-free / hash-build passes dispatch over the full pool (they touch every slot); the trace dispatches per
-    // LIVE surfel via (3b)'s indirect args and derives its round-robin phase from the CB divisor.
+    // LIVE surfel via its indirect args and derives its round-robin phase from the CB divisor.
     const u32 poolCapacity = rayTracingState().m_surfelPoolCapacity;
 
     SurfelHeapPushConstants surfelPush;
@@ -895,7 +895,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     surfelPush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
     surfelPush.materialContextSlotsHeapSlot = rayTracingState().m_surfelMaterialContextSlotsHeapHandle.slot();
 
-    // (U4 infinite bounce) Snapshot the previous frame's converged pool + cell-head into the SRV-only snapshot buffers
+    // Snapshot the previous frame's converged pool + cell-head for the infinite bounce into the SRV-only snapshot buffers
     // BEFORE any pass mutates them this frame, so the trace's per-ray bounce gather reads a stable frame-start field
     // (== the PREVIOUS frame's converged result -- only the trace writes SH, and it runs after this copy). Copying BOTH
     // keeps the snapshot walk mutually consistent (a slot recycled this frame must not be reachable from a stale head).
@@ -928,7 +928,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelFreeListBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelTraceIndirectArgsBuffer.get(), true);
 
-    // (0) Age-free (U1 recycling): one thread per pool slot; free surfels unseen for maxAge frames (alive = 0) and PUSH
+    // Age-free recycling: one thread per pool slot; free surfels unseen for maxAge frames (alive = 0) and PUSH
     // their ids onto the free-list for the spawn to reuse. Runs FIRST -- it reads lastSeenFrame written by the PREVIOUS
     // frame's spawn keep-alive, and frees the slots BEFORE the hash-build re-links live surfels + the spawn pops. The
     // push (here) and the spawn's pop are barrier-separated (clear + hash-build between), so the free-list stack has no
@@ -998,7 +998,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         commandList.dispatch(DivideUp(tilesX, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), DivideUp(tilesY, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), 1u);
     }
 
-    // (3b) Build the trace's indirect args (U6): 1 thread reads the POST-spawn BUMP_TOP + the divisor (surfel CB) and
+    // Build the trace's indirect args: 1 thread reads the post-spawn BUMP_TOP + the divisor (surfel CB) and
     // writes {ceil(BUMP_TOP/divisor),1,1}, so the trace dispatches one workgroup per LIVE surfel instead of the fixed
     // ceil(poolCapacity/divisor) (a ~pool/live over-dispatch of dead-slot workgroups). The spawn's counter UAV write is
     // synced to the build-args read by the counter's per-frame UAV barriers; the args UAV write is synced to the trace's
@@ -1020,9 +1020,9 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         );
     }
 
-    // (4) Trace: one workgroup per LIVE surfel (64 threads = 64 hemisphere rays), via dispatchIndirect off (3b)'s args.
+    // Trace: one workgroup per LIVE surfel (64 threads = 64 hemisphere rays), via dispatchIndirect.
     // Stage the trace's geometry inputs to
-    // ShaderResource, then dispatch the SELECTED backend (U5). HW = the driver walks the TLAS; we still stage the
+    // ShaderResource, then dispatch the selected backend. HW = the driver walks the TLAS; we still stage the
     // HW-resident per-mesh position/index/attribute buffers plus the shadow-owned material context (the shader uses all
     // of them to reconstruct the authored surface at the hit). SW = the per-mesh BVH nodes/positions/indices/attributes
     // + its scene BVH/instance tables and the same material context. Every one of these accesses is heap-addressed, so
@@ -1074,9 +1074,9 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         commandList.dispatchIndirect(0u);
     }
 
-    // (5) Resolve (HALF-res, U6): one thread per half-res pixel, gather the surfel field (pool + cell-head as COMPUTE
+    // Resolve at half resolution: one thread per half-res pixel gathers the surfel field (pool + cell-head as COMPUTE
     // SRVs) + the G-buffer into surfelIrradianceHalf. This is what keeps the pool off the pixel shader (compute-only),
-    // eliminating the frames-in-flight pool race, and running the 125-cell gather at 1/FACTOR^2 the pixels is the U6 win.
+    // eliminating the frames-in-flight pool race; the 125-cell gather runs for 1/FACTOR^2 the pixels.
     // The pool/cell-head UAV writes (trace/hash-build) are synced to SRV here; the half-res UAV write is synced to SRV
     // for the upsample after.
     const u32 halfWidth = DivideUp(targets.width, static_cast<u32>(NWB_SURFEL_RESOLVE_HALF_FACTOR));
@@ -1104,7 +1104,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         commandList.dispatch(DivideUp(halfWidth, groupSize), DivideUp(halfHeight, groupSize), 1u);
     }
 
-    // (5b) Upsample (FULL-res, U6): reconstruct the full-res surfelIrradiance from the half-res resolve with a surface-
+    // Upsample at full resolution: reconstruct the full-res surfelIrradiance from the half-res resolve with a surface-
     // gated joint-bilinear filter (no bleed across silhouettes/creases; irradiance is HDR so no clamp; coverage preserved
     // so the lighting contract is unchanged). Sync the half-res UAV write -> the upsample's SRV read first.
     commandList.setTextureState(targets.surfelIrradianceHalf.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -1133,7 +1133,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
 
-    // Live-count diagnostic (U1): map a prior snapshot (async copy done by now) and log it, else snapshot this frame.
+    // Live-count diagnostic: map the completed asynchronous snapshot and log it, else snapshot this frame.
     // live = BUMP_TOP - FREE_TOP is exact (BUMP_TOP is CAS-capped at poolCapacity). On a static fully-visible scene
     // FREE_TOP stays 0 + BUMP_TOP is stable; under camera motion FREE_TOP rises as off-screen surfels age out and falls
     // as revealed cells reuse the freed ids -> the live count stays bounded (the point of recycling).

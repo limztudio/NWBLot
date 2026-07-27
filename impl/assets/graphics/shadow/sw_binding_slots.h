@@ -15,10 +15,10 @@
 // shadow-visibility Texture2DArray the deferred lighting pass samples. The local scene/light positions remain as ABI
 // gaps; the target-generation slot cbuffer at binding 22 selects those shared buffers through the descriptor heap.
 // Per-mesh triangle traversal uses descriptor-heap slots from the material record. A compact cbuffer at slot 8 selects
-// its five shared scene/material buffers from that same heap; the former local SRV positions remain ABI gaps.
+// its five shared scene/material buffers from that same heap; the local SRV positions remain ABI gaps.
 #define NWB_SW_SHADOW_SET 0
 
-// Legacy local G-buffer and scene/light binding numbers retained as intentional gaps. Every SW trace pass selects the
+// Local G-buffer and scene/light binding numbers are retained as intentional ABI gaps. Every SW trace pass selects the
 // target-generation images and shared scene buffers through the deferred bindless-slot cbuffer at binding 22.
 #define NWB_SW_SHADOW_BINDING_GBUFFER_WORLD_POSITION 0
 #define NWB_SW_SHADOW_BINDING_GBUFFER_NORMAL 1
@@ -37,10 +37,10 @@
 //    per coarse block into and the adaptive resolve reads back to interpolate the flat interior / detect edges.
 //  - EDGE_STATS: a 2-uint UAV counter ([0] = full-res traced rays, [1] = total candidate rays) the resolve
 //    atomically tallies when stats collection is on, read back to the log as the edge fraction that decides
-//    whether the Stage-3 compaction/indirect path is worth building.
+//    whether the compacted-indirect path is worth building.
 #define NWB_SW_SHADOW_BINDING_COARSE 15
 #define NWB_SW_SHADOW_BINDING_EDGE_STATS 16
-// Stage-3 compacted-indirect adaptive transparent shadow (the soft-shadow analog of an irradiance cache, but the
+// Compacted-indirect adaptive transparent shadow (the soft-shadow analog of an irradiance cache, but the
 // re-traced edge pixels are STREAM-COMPACTED into a list and dispatched indirectly so only edge rays launch, as
 // coherent waves with no in-wave divergence). Three UAVs:
 //  - EDGE_COUNTER: a 2-uint counter ([0] = atomic append count, [1] = clamped trace count written by the build-args pass).
@@ -84,7 +84,7 @@
 
 // Soft opaque shadow downscale: the jittered opaque trace + its
 // a-trous denoise run at full-res >> SOFT_SHIFT. SHIFT=1 -> HALF resolution (1 jittered trace per 2x2 block, the
-// Stage-1 target). Independent of COARSE_SHIFT above (that is the adaptive TRANSPARENT trace's quarter-res); the soft
+// half-resolution target). Independent of COARSE_SHIFT above (that is the adaptive TRANSPARENT trace's quarter-res); the soft
 // opaque trace is a separate signal with its own half-res buffers, so its factor is kept distinct and explicit.
 #define NWB_SW_SHADOW_SOFT_SHIFT 1u
 #define NWB_SW_SHADOW_SOFT_FACTOR (1u << NWB_SW_SHADOW_SOFT_SHIFT)
@@ -117,7 +117,7 @@
 //                   (the transparent coarse / resolve / indirect re-trace / uniform half-res multiply). The opaque
 //                   shadow already came from the HW mask (hybrid) or the opaque prepass (software), so tracing opaque
 //                   here would only redundantly re-darken -- and skipping it avoids walking the opaque meshes' BVHs.
-//  - ALL         -> trace BOTH classes (no pass uses this today; reserved so a future single-pass fallback composes).
+//  - ALL         -> trace BOTH classes (reserved for a single-pass fallback).
 #define NWB_SW_SHADOW_OCCLUDER_OPAQUE 0
 #define NWB_SW_SHADOW_OCCLUDER_TRANSPARENT 1
 #define NWB_SW_SHADOW_OCCLUDER_ALL 2

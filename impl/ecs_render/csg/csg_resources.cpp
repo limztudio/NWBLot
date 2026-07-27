@@ -389,7 +389,7 @@ template<typename CutterHandler>
 ){
     Core::GpuDescriptorHandle acquired;
     if(!AcquireCsgStorageBufferHeapHandle(device, buffer, acquired)){
-        // The backing buffer was just replaced for capacity growth, so the former descriptor must not survive as a
+        // The backing buffer was replaced for capacity growth, so the existing descriptor must not survive as a
         // seemingly valid handle to retired storage. Leave the context explicitly unregistered for a later retry.
         Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
         if(inOutHandle.valid() && heap.isInitialized())
@@ -463,8 +463,7 @@ bool RendererCsgSystem::createCsgClipResources(){
     if(!csgState().m_clipBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Mesh | Core::ShaderType::Compute | Core::ShaderType::Pixel);
-        // Local CSG resource bindings are retired.  This layout remains only for the shared 64-byte mesh push ABI
-        // used by the cap-fill fullscreen path.
+        // This layout contains only the shared 64-byte mesh push ABI used by the cap-fill fullscreen path.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
         csgState().m_clipBindingLayout = device->createBindingLayout(bindingLayoutDesc);

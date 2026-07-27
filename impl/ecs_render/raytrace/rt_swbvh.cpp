@@ -319,7 +319,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             mesh
         );
         // The BLAS owns the positions it traces, while the HW GI trace needs the index buffer (3 vertex indices by
-        // PrimitiveIndex), the U2 triangle-corner attribute buffer, and the raw position buffer for geometric face
+        // PrimitiveIndex), the triangle-corner attribute buffer, and the raw position buffer for geometric face
         // normals, so require all three.
         if(!meshReady || !mesh || !mesh->blas || !mesh->triangleIndexBuffer || !mesh->attributeBuffer || !mesh->positionBuffer)
             continue;
@@ -674,7 +674,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             rayTracingState().m_swShadowMeshNodeBuffers.push_back(meshNodeBuffer);
             rayTracingState().m_swShadowMeshPositionBuffers.push_back(mesh->positionBuffer.get());
             rayTracingState().m_swShadowMeshIndexBuffers.push_back(mesh->triangleIndexBuffer.get());
-            // The U2 per-triangle-corner shadow-trace attribute buffer (normal/uv0), parallel to the triangle index
+            // The per-triangle-corner shadow-trace attribute buffer (normal/uv0), parallel to the triangle index
             // buffer so the trace interpolates the exact raster corner attributes.
             rayTracingState().m_swShadowMeshAttributeBuffers.push_back(mesh->attributeBuffer.get());
             // Node, position, and index reuse the persistent registrations the SW-BVH build needs, so each mesh
@@ -1134,9 +1134,8 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
         commandList.commitBarriers();
     };
 
-    // Phase A — LOCAL_TILE: one dispatch fully sorts every GROUP_SIZE tile in groupshared, replacing the
-    // sequenceSize 2..GROUP_SIZE portion of the merge loop (which would otherwise be one dispatch per
-    // (sequenceSize, compareDistance) sub-step). Produces a sorted (hence bitonic) run per tile.
+    // Local-tile sort: one dispatch fully sorts every GROUP_SIZE tile in groupshared, producing a sorted (hence
+    // bitonic) run per tile.
     {
         BvhSortPushConstants pushConstants;
         pushConstants.elementCount = elementCount;
@@ -1145,7 +1144,7 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
         bvhSortBarrier();
     }
 
-    // Phase B — GLOBAL merge: the standard bitonic merging steps for sequenceSize > GROUP_SIZE. Each step is
+    // Global merge: the standard bitonic merging steps for sequenceSize > GROUP_SIZE. Each step is
     // split by compareDistance relative to the tile stride GROUP_SIZE:
     //   - compareDistance >= GROUP_SIZE : the XOR partner lands in a DIFFERENT tile, so these stay plain
     //     global-memory swaps — one dispatch each (GLOBAL).
@@ -1655,8 +1654,8 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     commandList.setEnableUavBarriersForBuffer(meshParentBuffer, true);
     commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
     // Even though refit does not read the payload branch at runtime, the same fit shader declares every build
-    // scratch view. Keep every heap-selected buffer explicitly in its prior UAV state; no local descriptor state remains
-    // to do that bookkeeping implicitly.
+    // scratch view. Set every heap-selected buffer to UAV explicitly; no local descriptor state performs that
+    // bookkeeping implicitly.
     commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
     commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);
     commandList.setBufferState(meshNodeBuffer, Core::ResourceStates::UnorderedAccess);

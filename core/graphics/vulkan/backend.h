@@ -1355,10 +1355,8 @@ inline void AttachPipelineBindingState(
 //
 // Descriptor-as-memory stores descriptors as ordinary bytes in one HOST-mappable buffer per type and binds them with
 // vkCmdBindDescriptorBuffersEXT + vkCmdSetDescriptorBufferOffsetsEXT.
-// Individual descriptors are written into the mapped memory with vkGetDescriptorEXT via VkDescriptorGetInfoEXT, which
-// is also the only Vulkan write path that natively encodes an acceleration-structure handle
-// (VkDescriptorDataEXT::accelerationStructure) - the reason the TLAS migration is bound to this backend
-// (docs/design/bindless-phase1-rhi-heap.md 12.1).
+// Individual descriptors are written into mapped memory with vkGetDescriptorEXT via VkDescriptorGetInfoEXT, which
+// natively encodes acceleration-structure handles.
 //
 // Layout choice: one large descriptor buffer per type (a "global segment"), sub-allocated by byte offset through a
 // free-range suballocator (FreeRange vector + bump pointer). Resource descriptors live in the
@@ -1464,8 +1462,8 @@ public:
     // Write one descriptor into `allocation` at `dstOffsetBytes` (a byte offset into the segment's mapped buffer).
     // The exact live allocation identity is checked under the segment lock, preventing stale byte offsets from
     // writing a recycled range. Routes the DescriptorWriteItem to vkGetDescriptorEXT through VkDescriptorGetInfoEXT +
-    // VkDescriptorDataEXT; the only Vulkan write path that encodes an acceleration-structure handle, which is why
-    // the TLAS migration routes here. `descriptorType` selects the VkDescriptorDataEXT union arm and per-type size.
+    // VkDescriptorDataEXT, which encodes acceleration-structure handles. `descriptorType` selects the union arm
+    // and size.
     bool writeDescriptor(const DescriptorWriteItem& item, const DescriptorBufferSegment& allocation, u32 dstOffsetBytes, VkDescriptorType descriptorType);
 
 
@@ -1487,8 +1485,7 @@ private:
 // Global Descriptor Heap
 
 
-// Device-owned bindless descriptor heap behind the single GpuDescriptorHandle contract
-// (rhi/gpu_descriptor_heap.h; docs/design/bindless-phase1-rhi-heap.md).
+// Device-owned bindless descriptor heap behind the GpuDescriptorHandle contract.
 //
 // The global heap is descriptor-buffer-only. It stores persistent resource and sampler descriptors in the mapped
 // DescriptorBufferManager segments and hands out global slot indices. Device creation fails without
@@ -1514,7 +1511,7 @@ public:
     [[nodiscard]] GpuDescriptorHandle allocate(GpuDescriptorClass::Enum descriptorClass);
 
     // Quarantines the slot until s_MaxFramesInFlight advanceFrame() calls have passed, then returns it to the free
-    // list (deferred free, design 7). Safe to call at any time; ignores invalid handles.
+    // list. Safe to call at any time; ignores invalid handles.
     void free(GpuDescriptorHandle handle);
 
     // Registers a resource at the handle's slot. item is built with the usual DescriptorWriteItem factories; its slot

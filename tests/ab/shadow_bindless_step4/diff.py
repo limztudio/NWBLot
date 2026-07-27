@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Pixel-parity diff for the SW-shadow bindless step-4b A/B.
+"""Pixel-parity diff for deterministic soft-shadow captures.
 
-The migration is a pure descriptor-indirection swap (heap slot -> same
-underlying buffer as the bounded array), so a correct 4b is EXACTLY zero difference; any
-nonzero max flags a real divergence (a non-uniform-indexing miss reads a different mesh's
-geometry along a wave-tile boundary -> a bright band).
+The frozen caster yaw makes a nonzero max difference a real divergence; a structured bright
+band points to a non-uniform-indexing failure at a wave-tile boundary.
 
     python diff.py <before.(bmp|png)> <after.(bmp|png)> <diff-out.png>
 """

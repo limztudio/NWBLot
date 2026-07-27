@@ -9,8 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// CSG no longer exposes pipeline-local descriptor sets or binding identifiers. Its former slots are retired ABI
-// gaps; every active shader resource is selected by push constants and the global descriptor heap.
+// CSG selects every active shader resource through push constants and the global descriptor heap. The pipeline-local
+// descriptor positions remain ABI gaps.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

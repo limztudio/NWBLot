@@ -1,4 +1,4 @@
-- Targets are x64 only. ARM64 may be considered later; 32-bit targets are intentionally unsupported.
+- Targets are x64 only; 32-bit targets are intentionally unsupported.
 
 - Supported build configurations are `dbg`, `opt`, and `fin`.
   - `dbg`: no optimization and no inlining.
@@ -6,8 +6,7 @@
   - `fin`: optimized, inlined, frame pointers are omitted, and debugging is intentionally limited.
 
 - CMake is the cross-platform build entry point for this repository.
-- LLVM/Clang is now the required compiler toolchain on every platform.
-- Checked-in MSBuild project metadata is no longer part of the repository workflow.
+- LLVM/Clang is the required compiler toolchain on every platform.
 
 - Windows quick start
   - engine-only configure: `cmake --preset windows-clang-engine-x64`
@@ -15,14 +14,14 @@
   - testbed configure: `cmake --preset windows-clang-testbed-x64`
   - testbed build: `cmake --build --preset windows-clang-testbed-dbg --target testbed`
   - full configure/test preset: `cmake --preset windows-clang-x64`
-  - Visual Studio can still open the repository root as a CMake project, but the build now goes through Ninja + `clang`/`clang++` instead of MSBuild projects.
+  - Visual Studio can open the repository root as a CMake project; builds use Ninja + `clang`/`clang++`.
 
 - Windows requirements
   - Ninja must be available, or discoverable through `NWB_NINJA` / `NWB_NINJA_ROOT`.
   - Clang/LLVM must be available, or discoverable through `NWB_LLVM_ROOT` / `LLVM_ROOT`.
   - `VULKAN_SDK` must be set.
   - `slangc` must be available on `PATH`, discoverable through `VULKAN_SDK`, or provided with `NWB_SLANGC_EXECUTABLE`.
-  - the Windows toolchain now builds with `clang`/`clang++`, `lld-link`, and Ninja. It still targets the Windows/MSVC ABI, so the Windows SDK and the Microsoft C++ runtime/standard library remain part of the environment.
+  - The Windows toolchain uses `clang`/`clang++`, `lld-link`, and Ninja. It targets the Windows/MSVC ABI, so the Windows SDK and the Microsoft C++ runtime/standard library remain part of the environment.
 
 - Linux status
   - Local verification should use the repo-bundled CMake and CTest binaries under `__cmake/tool-venv/bin/` when system `cmake` / `ctest` are not on `PATH`.

@@ -37,8 +37,8 @@
 #define NWB_SKINNED_MESH_PUSH_JOINT_COUNT 2u
 #define NWB_SKINNED_MESH_PUSH_SKINNING_MODE 3u
 #define NWB_SKINNED_MESH_PUSH_ATTRIBUTE_COUNT 4u
-// The persistent per-runtime stream-slot payload is itself a UniformBuffer heap entry.  The skinning dispatch uses
-// the first free word of payload1 to select it, replacing the former local selector CBV.
+// The persistent per-runtime stream-slot payload is a UniformBuffer heap entry. The skinning dispatch uses the first
+// free word of payload1 to select it.
 #define NWB_SKINNED_MESH_PUSH_BINDLESS_RESOURCES_SLOT 5u
 #define NWB_SKINNED_MESH_PUSH_CONSTANT_BYTE_SIZE 32u
 

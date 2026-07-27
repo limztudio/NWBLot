@@ -20,7 +20,7 @@
 
 
 // This frame's hash, allocation counters, and free-list are all StorageBuffer heap entries selected by the common
-// dispatch push block. Keep the historical names below so the allocation logic stays uncluttered.
+// dispatch push block. The aliases below keep the allocation logic uncluttered.
 #define g_NwbSurfelCellHead g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.cellHeadHeapSlot]
 #define g_NwbSurfelCounter g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.counterHeapSlot]
 #define g_NwbSurfelFreeList g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.freeListHeapSlot]
@@ -83,7 +83,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(previous != NWB_SURFEL_CELL_INVALID)
         return;
 
-    // Won the claim: allocate a slot. POP a recycled id off the free-list first (U1) via a CAS loop -- pushes are
+    // Won the claim: allocate a slot. POP a recycled id off the free-list first via a CAS loop -- pushes are
     // quiescent this pass (age-free's push ran in a separate barrier-separated pass), so FREE_TOP only decreases and the
     // pop never underflows / never goes transiently negative. If the free-list is empty, BUMP-allocate via a CAS capped
     // at poolCapacity: BUMP_TOP is a monotonic high-water mark, so it must never overshoot -- decrementing it to "undo"
@@ -122,7 +122,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    // Per-surfel spatial seeding (U2, "no recycle dark-flash"): a fresh surfel is sampleCount 0 -> the gather skips it,
+    // Per-surfel spatial seeding prevents recycled surfels from flashing dark: a fresh surfel is sampleCount 0 -> the gather skips it,
     // so a newly-revealed / recycled surface with NO seeded neighbour in the gather's reach shows hemiAmbient until the
     // round-robin traces this surfel a few frames later = a pop-in. Seed the directional-irradiance SH from ESTABLISHED
     // neighbours (sampleCount >= 2, i.e. traced at least twice -> never a this-frame spawn, so no torn read + no

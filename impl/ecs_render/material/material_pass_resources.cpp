@@ -261,8 +261,8 @@ bool RendererMaterialSystem::uploadInstanceBuffer(Core::CommandList& commandList
     NWB_ASSERT(drawState().m_instanceBuffer);
     NWB_ASSERT(drawState().m_instanceBufferCapacity >= instanceData.size());
 
-    // Slot 6 was retired as a direct material binding. It now carries CSG's heap-selected UniformBuffer context
-    // for every raster instance, avoiding a second pipeline-local resource descriptor in the mesh/compute geometry stages.
+    // Slot 6 carries CSG's heap-selected UniformBuffer context for every raster instance, avoiding a second
+    // pipeline-local resource descriptor in the mesh and compute geometry stages.
     const u32 csgContextHeapSlot = csgState().m_clipContextSlotsHeapHandle.valid()
         ? csgState().m_clipContextSlotsHeapHandle.slot()
         : 0u

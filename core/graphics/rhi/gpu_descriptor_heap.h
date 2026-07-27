@@ -19,8 +19,7 @@ NWB_CORE_BEGIN
 //
 // A resource registered in the heap is addressed everywhere - C++ and shader - by a single opaque 32-bit
 // GpuDescriptorHandle. The handle bit-layout and class taxonomy are shared by C++ and shaders; the Vulkan renderer
-// resolves every handle through its required descriptor-buffer-backed global heap. See
-// docs/design/bindless-phase1-rhi-heap.md for the original design history.
+// resolves every handle through its required descriptor-buffer-backed global heap.
 
 
 // The resource classes a shader must select between. Each class maps to exactly one global-heap register space /
@@ -57,8 +56,7 @@ namespace GpuDescriptorClass{
 //   bits 27..0 (28)  : slot index - global within its namespace (resource heap or sampler heap), max 2^28
 //
 // Generation/versioning is intentionally not packed here (index bits are more valuable); a debug-only
-// side table validates handles instead. Decoding stays confined to descriptorClass()/slot() so a future widen to
-// a 64-bit handle is a localized change.
+// side table validates handles instead.
 struct GpuDescriptorHandle{
     static constexpr u32 s_Invalid = 0xFFFFFFFFu;
     static constexpr u32 s_ClassShift = 28u;
@@ -126,7 +124,7 @@ struct GpuDescriptorHeapAbi{
 // descriptor-layout limits at initialize() time and logged (no silent truncation). Zero means "use the renderer
 // default".
 struct GpuDescriptorHeapDesc{
-    u32 resourceCapacity = 0;   // slots shared by all non-sampler classes (one global namespace, see design 3.4)
+    u32 resourceCapacity = 0;   // slots shared by all non-sampler classes (one global namespace)
     u32 samplerCapacity = 0;    // samplers live in their own global namespace
     GpuDescriptorHeapAbi bindlessHeapAbi;
 

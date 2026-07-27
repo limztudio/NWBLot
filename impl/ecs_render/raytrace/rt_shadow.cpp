@@ -34,10 +34,6 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buf
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
     auto& device = *graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
@@ -52,10 +48,6 @@ bool RendererRayTracingSystem::replaceRayTraceMaterialContextHeapHandle(Core::Bu
     }
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
     if(rayTracingState().m_rayTraceMaterialContextSlotsBuffer)
@@ -75,10 +67,6 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
     }
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::uploadRayTraceMaterialContextSlots(Core::CommandList& commandList){
     if(!ensureRayTraceMaterialContextSlotsBuffer())
@@ -132,10 +120,6 @@ bool RendererRayTracingSystem::uploadRayTraceMaterialContextSlots(Core::CommandL
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
     auto& device = *graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
@@ -162,10 +146,6 @@ void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
     rayTracingState().m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::invalid();
     rayTracingState().m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::invalid();
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& targets){
     // The shadow-visibility image is the shared output of the shadow subsystem: both the hardware ray-traced
@@ -395,10 +375,6 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!targets.shadowVisibility)
         return false;
@@ -518,10 +494,6 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!targets.shadowVisibility)
         return;
@@ -534,10 +506,6 @@ void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandL
     commandList.commitBarriers();
     commandList.clearTextureFloat(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets, bool multiplyOntoOpaque){
     // Software shadow traversal. Two callers:
@@ -912,25 +880,13 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::hybridTransparentShadowReady()const noexcept{
     return rayTracingState().m_hybridTransparentShadowReady;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::softTransparentShadowReady()const noexcept{
     return rayTracingState().m_softTransparentReady;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const{
     // Full/half RayQuery trace layouts are push-only. The deferred selector, G-buffers, output StorageImage, and TLAS
@@ -938,10 +894,6 @@ void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayou
     static_assert(sizeof(ShadowRqSoftPushConstants) >= sizeof(ShadowRqPushConstants), "shadow-trace push-constant range must cover both the hard and soft trace push structs");
     layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowRqSoftPushConstants)));
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::ensureShadowPipeline(){
     if(rayTracingState().m_shadowPipeline)
@@ -1009,10 +961,6 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
     if(rayTracingState().m_shadowSoftPipeline)
         return true;
@@ -1071,10 +1019,6 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
     NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created RayQuery soft shadow compute pipeline"));
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::ensureSwShadowPipeline(){
     // Idempotent: the shared layout + persistent Stage-2/3 buffers are created once (guarded by m_swShadowBindingLayout),
@@ -1203,10 +1147,6 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const char* debugLabel){
     // Idempotent per-pass loader + compute-pipeline creator against the SHARED software-shadow binding layout (created by
     // ensureSwShadowPipeline before any pass is built). Returns true if the pipeline is already/newly resident; a failure
@@ -1246,10 +1186,6 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instanceCount){
     // The per-instance occluder material table is CPU-written each frame and read by the shadow shaders, so it
     // is a structured SRV (no UAV) that grows by doubling like the TLAS / scene-instance buffers. Shared by the
@@ -1284,10 +1220,6 @@ bool RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instance
     rayTracingState().m_shadowInstanceMaterialCapacity = capacity;
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceCount){
     // Shadow-owned combined instance buffer (g_NwbMeshInstances for the trace): InstanceGpuData per occluder,
@@ -1324,10 +1256,6 @@ bool RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceC
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureShadowMaterialTypedBuffer(usize byteCount){
     // Shadow-owned combined material-typed buffer (g_NwbMaterialTypedWords for the trace): each occluder's
     // constant + mutable typed blocks, word-strided structured SRV, grows by doubling like the draw pass's typed
@@ -1359,10 +1287,6 @@ bool RendererRayTracingSystem::ensureShadowMaterialTypedBuffer(usize byteCount){
     rayTracingState().m_shadowMaterialTypedCapacity = capacity;
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::uploadShadowMaterialContextBuffers(
     Core::CommandList& commandList,

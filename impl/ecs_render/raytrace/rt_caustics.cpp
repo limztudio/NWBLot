@@ -159,10 +159,6 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
     if(
         !rayTracingState().m_causticEmissionTargetHeapHandle.valid()
@@ -179,10 +175,6 @@ void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
     rayTracingState().m_causticEmissionTargetHeapHandle = Core::GpuDescriptorHandle::invalid();
     rayTracingState().m_causticMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::ensureCausticMaterialContextSlotsHeapHandle(){
     auto& device = *graphics().getDevice();
@@ -218,10 +210,6 @@ bool RendererRayTracingSystem::ensureCausticMaterialContextSlotsHeapHandle(){
     handle = acquired;
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& targets){
     // Additive caustic producer targets, the inverted-lifecycle sibling of the shadow visibility target. The
@@ -357,10 +345,6 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererRayTracingSystem::clearCausticTargets(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!targets.causticIrradiance || !targets.causticAccumulator)
         return;
@@ -383,10 +367,6 @@ void RendererRayTracingSystem::clearCausticTargets(Core::CommandList& commandLis
         commandList.clearTextureUInt(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, 0u);
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& commandList, DeferredFrameTargets& targets){
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticResolve, graphics().getDevice(), commandList);
@@ -518,10 +498,6 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
     runPass(halfB, irradiance, 1u, CausticResolveStage::Upsample, fullGroupsX, fullGroupsY);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererRayTracingSystem::prepareCausticAccumulatorForSplat(Core::CommandList& commandList, DeferredFrameTargets& targets, f32 decayFactor){
     // Splat-space temporal EMA step, run at the top of the SW/HW producer when temporal is enabled (decayFactor > 0).
     // clearCausticTargets left the accumulator untouched (the clear is deferred to here), so exactly ONE of two paths
@@ -567,10 +543,6 @@ void RendererRayTracingSystem::prepareCausticAccumulatorForSplat(Core::CommandLi
     commandList.commitBarriers();
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::hasCausticWork()const noexcept{
     // The software caustic producer runs only on the no-hardware-ray-tracing path, and only when the scene holds at
     // least one caustic light AND at least one refractive instance (else the black-cleared irradiance buffer is the
@@ -596,10 +568,6 @@ bool RendererRayTracingSystem::hasCausticWork()const noexcept{
         && drawState().m_meshViewBufferHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
     ;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTargets& targets){
     // Build the heap-only producer + resolve pipelines, mirroring the SW shadow prepare. Called from
@@ -651,10 +619,6 @@ bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTarget
     return producerReady && resolveReady && temporalReady;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameTargets& targets, const f32 temporalDecay)const{
     return
         rayTracingState().m_causticResolvePipeline
@@ -673,10 +637,6 @@ bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameT
         && targets.bindless.causticResolveGeometryStorage.valid()
     ;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets){
     // Software caustic photon producer + resolve — the no-hardware-ray-tracing fallback (P3). Dispatched in the
@@ -769,10 +729,6 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureSwCausticPipeline(){
     if(rayTracingState().m_swCausticPipeline)
         return true;
@@ -831,10 +787,6 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
     if(rayTracingState().m_causticResolvePipeline)
         return true;
@@ -891,10 +843,6 @@ bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
     }
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
     if(rayTracingState().m_causticGeometryDownsamplePipeline)
@@ -953,19 +901,11 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 f32 RendererRayTracingSystem::causticTemporalDecay(){
     // Splat-space temporal EMA decay factor: 0.85 = a moderate ~6-7 frame time constant that de-sparkles a spinning
     // refractor while still following its motion. The renderer-state value is clamped to [0,1), so the EMA cannot diverge.
     return rayTracingState().m_causticTemporalDecay;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
     if(rayTracingState().m_causticAccumulatorDecayPipeline)
@@ -1023,10 +963,6 @@ bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
     }
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     if(rayTracingState().m_hwCausticPipeline)
@@ -1122,10 +1058,6 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::hasHwCausticWork()const noexcept{
     // The hardware caustic producer runs only on the hardware-ray-tracing path, and only when the scene holds at
     // least one caustic light AND at least one refractive instance (else the black-cleared irradiance buffer is the
@@ -1146,10 +1078,6 @@ bool RendererRayTracingSystem::hasHwCausticWork()const noexcept{
         && drawState().m_meshViewBufferHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
     ;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& targets){
     // Build the hardware caustic producer + resolve resources, mirroring prepareGpuBvhCausticResources for the HW
@@ -1198,10 +1126,6 @@ bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& t
     ;
     return producerReady && resolveReady && temporalReady;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets){
     // Hardware ray-traced caustic photon producer + resolve (P4) -- the byte-parallel sibling of renderGpuBvhCaustics,
@@ -1318,10 +1242,6 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
     }
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCount){
     // The caustic emission-target list is CPU-written each frame and read by the caustic producer, so it is a

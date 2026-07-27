@@ -595,6 +595,164 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffTransfersFinalBuffe
 }
 
 
+// A normalized prelude transitions shared inputs once before independently recorded primary command lists begin.
+// Each branch can therefore import the same ShaderResource state without emitting another stale RenderTarget ->
+// ShaderResource barrier. The fan-in preserves their disjoint output states for the later ordered consumer.
+TEST_F(DescriptorBufferRoundTripTest, NormalizedStatePreludeFansInIndependentBranches){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto sharedInput = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInRenderTarget(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    auto firstOutput = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    auto secondOutput = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(sharedInput.get(), nullptr);
+    ASSERT_NE(firstOutput.get(), nullptr);
+    ASSERT_NE(secondOutput.get(), nullptr);
+
+    CommandListResourceStateHandoff producerState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff normalizedState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff firstBranchState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff secondBranchState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff fanInState(DescriptorBufferRoundTripTest::arena());
+    auto producer = device.createCommandList();
+    auto prelude = device.createCommandList();
+    auto firstBranch = device.createCommandList();
+    auto secondBranch = device.createCommandList();
+    auto consumer = device.createCommandList();
+    ASSERT_NE(producer.get(), nullptr);
+    ASSERT_NE(prelude.get(), nullptr);
+    ASSERT_NE(firstBranch.get(), nullptr);
+    ASSERT_NE(secondBranch.get(), nullptr);
+    ASSERT_NE(consumer.get(), nullptr);
+
+    producer->open();
+    producer->setTextureState(sharedInput.get(), s_AllSubresources, ResourceStates::RenderTarget);
+    producer->close(&producerState);
+    ASSERT_TRUE(producerState.valid());
+
+    prelude->open(&producerState);
+    prelude->setTextureState(sharedInput.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    prelude->close(&normalizedState);
+    ASSERT_TRUE(normalizedState.valid());
+
+    Latch recordingStarted(2);
+    bool firstRecorded = false;
+    bool secondRecorded = false;
+    const Graphics::JobHandle firstJob = graphics.scheduleGraphicsJob([&](){
+        recordingStarted.count_down();
+        recordingStarted.wait();
+        firstBranch->open(&normalizedState);
+        firstBranch->setTextureState(sharedInput.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        firstBranch->setBufferState(firstOutput.get(), ResourceStates::UnorderedAccess);
+        firstBranch->close(&firstBranchState);
+        firstRecorded = firstBranchState.valid() && firstBranch->hasCommandBuffer();
+    });
+    const Graphics::JobHandle secondJob = graphics.scheduleGraphicsJob([&](){
+        recordingStarted.count_down();
+        recordingStarted.wait();
+        secondBranch->open(&normalizedState);
+        secondBranch->setTextureState(sharedInput.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        secondBranch->setBufferState(secondOutput.get(), ResourceStates::UnorderedAccess);
+        secondBranch->close(&secondBranchState);
+        secondRecorded = secondBranchState.valid() && secondBranch->hasCommandBuffer();
+    });
+    ASSERT_TRUE(firstJob.valid());
+    ASSERT_TRUE(secondJob.valid());
+
+    graphics.waitJob(firstJob);
+    graphics.waitJob(secondJob);
+    ASSERT_TRUE(firstRecorded);
+    ASSERT_TRUE(secondRecorded);
+
+    const CommandListResourceStateHandoff* branchStates[] = { &firstBranchState, &secondBranchState };
+    ASSERT_TRUE(fanInState.buildFanIn(normalizedState, branchStates, 2u));
+    ASSERT_TRUE(fanInState.valid());
+
+    consumer->open(&fanInState);
+    consumer->setTextureState(sharedInput.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    EXPECT_EQ(consumer->getBufferState(firstOutput.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(consumer->getBufferState(secondOutput.get()), ResourceStates::UnorderedAccess);
+    consumer->setBufferState(firstOutput.get(), ResourceStates::ShaderResource);
+    consumer->setBufferState(secondOutput.get(), ResourceStates::ShaderResource);
+    consumer->close();
+
+    CommandList* commandLists[] = {
+        producer.get(),
+        prelude.get(),
+        firstBranch.get(),
+        secondBranch.get(),
+        consumer.get()
+    };
+    bool submitted = false;
+    EXPECT_GT(device.executeCommandLists(commandLists, 5u, CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_TRUE(submitted);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Fan-in only accepts branch deltas that agree on every shared resource. A scheduler must split or serialize
+// conflicting packets instead of selecting one final layout arbitrarily.
+TEST_F(DescriptorBufferRoundTripTest, StateFanInRejectsConflictingBranchFinalStates){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto texture = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInRenderTarget(true)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(texture.get(), nullptr);
+
+    CommandListResourceStateHandoff baseState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff firstBranchState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff secondBranchState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff fanInState(DescriptorBufferRoundTripTest::arena());
+    auto base = device.createCommandList();
+    auto firstBranch = device.createCommandList();
+    auto secondBranch = device.createCommandList();
+    ASSERT_NE(base.get(), nullptr);
+    ASSERT_NE(firstBranch.get(), nullptr);
+    ASSERT_NE(secondBranch.get(), nullptr);
+
+    base->open();
+    base->setTextureState(texture.get(), s_AllSubresources, ResourceStates::RenderTarget);
+    base->close(&baseState);
+    ASSERT_TRUE(baseState.valid());
+
+    firstBranch->open(&baseState);
+    firstBranch->setTextureState(texture.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    firstBranch->close(&firstBranchState);
+    ASSERT_TRUE(firstBranchState.valid());
+
+    secondBranch->open(&baseState);
+    secondBranch->setTextureState(texture.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    secondBranch->close(&secondBranchState);
+    ASSERT_TRUE(secondBranchState.valid());
+
+    const CommandListResourceStateHandoff* branchStates[] = { &firstBranchState, &secondBranchState };
+    EXPECT_FALSE(fanInState.buildFanIn(baseState, branchStates, 2u));
+    EXPECT_FALSE(fanInState.valid());
+}
+
+
 // Independent primary command lists use distinct Vulkan command pools. Start both recording jobs at the same latch
 // so this exercises the worker-thread path instead of merely submitting them in a fixed order on the main thread.
 TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcurrentlyOnGraphicsWorkers){

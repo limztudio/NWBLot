@@ -11,6 +11,250 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_CORE_BEGIN
+
+
+namespace __hidden_command_list_state_handoff{
+
+
+using TextureStateKey = GraphicsBackend::TextureSubresourceStateKey;
+using TextureStateIndexMap = HashMap<
+    TextureStateKey,
+    usize,
+    GraphicsBackend::TextureSubresourceStateKeyHasher,
+    GraphicsBackend::TextureSubresourceStateKeyEqualTo,
+    Alloc::GlobalArena
+>;
+using BufferStateIndexMap = HashMap<Buffer*, usize, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena>;
+using PermanentTextureStateIndexMap = HashMap<Texture*, usize, Hasher<Texture*>, EqualTo<Texture*>, Alloc::GlobalArena>;
+
+
+};
+
+
+bool CommandListResourceStateHandoff::buildFanIn(
+    const CommandListResourceStateHandoff& base,
+    const CommandListResourceStateHandoff* const* branches,
+    const usize branchCount
+){
+    if(this == &base)
+        return false;
+
+    if(!base.valid() || (branchCount != 0u && !branches)){
+        reset();
+        return false;
+    }
+
+    for(usize branchIndex = 0u; branchIndex < branchCount; ++branchIndex){
+        const CommandListResourceStateHandoff* branch = branches[branchIndex];
+        if(branch == this)
+            return false;
+
+        if(!branch || !branch->valid()){
+            reset();
+            return false;
+        }
+    }
+
+    reset();
+
+    auto& arena = m_textureStates.get_allocator().arena();
+    using namespace __hidden_command_list_state_handoff;
+
+    TextureStateIndexMap baseTextureIndices(
+        0u,
+        GraphicsBackend::TextureSubresourceStateKeyHasher(),
+        GraphicsBackend::TextureSubresourceStateKeyEqualTo(),
+        arena
+    );
+    TextureStateIndexMap resultTextureIndices(
+        0u,
+        GraphicsBackend::TextureSubresourceStateKeyHasher(),
+        GraphicsBackend::TextureSubresourceStateKeyEqualTo(),
+        arena
+    );
+    BufferStateIndexMap baseBufferIndices(0u, Hasher<Buffer*>(), EqualTo<Buffer*>(), arena);
+    BufferStateIndexMap resultBufferIndices(0u, Hasher<Buffer*>(), EqualTo<Buffer*>(), arena);
+    PermanentTextureStateIndexMap basePermanentTextureIndices(0u, Hasher<Texture*>(), EqualTo<Texture*>(), arena);
+    PermanentTextureStateIndexMap resultPermanentTextureIndices(0u, Hasher<Texture*>(), EqualTo<Texture*>(), arena);
+    BufferStateIndexMap basePermanentBufferIndices(0u, Hasher<Buffer*>(), EqualTo<Buffer*>(), arena);
+    BufferStateIndexMap resultPermanentBufferIndices(0u, Hasher<Buffer*>(), EqualTo<Buffer*>(), arena);
+
+    m_textureStates.reserve(base.m_textureStates.size());
+    baseTextureIndices.reserve(base.m_textureStates.size());
+    resultTextureIndices.reserve(base.m_textureStates.size());
+    for(const TextureState& state : base.m_textureStates){
+        const TextureStateKey key{ state.texture, state.mipLevel, state.arraySlice };
+        const usize index = m_textureStates.size();
+        m_textureStates.push_back(state);
+        baseTextureIndices.insert_or_assign(key, index);
+        resultTextureIndices.insert_or_assign(key, index);
+    }
+
+    m_bufferStates.reserve(base.m_bufferStates.size());
+    baseBufferIndices.reserve(base.m_bufferStates.size());
+    resultBufferIndices.reserve(base.m_bufferStates.size());
+    for(const BufferState& state : base.m_bufferStates){
+        const usize index = m_bufferStates.size();
+        m_bufferStates.push_back(state);
+        baseBufferIndices.insert_or_assign(state.buffer, index);
+        resultBufferIndices.insert_or_assign(state.buffer, index);
+    }
+
+    m_permanentTextureStates.reserve(base.m_permanentTextureStates.size());
+    basePermanentTextureIndices.reserve(base.m_permanentTextureStates.size());
+    resultPermanentTextureIndices.reserve(base.m_permanentTextureStates.size());
+    for(const PermanentTextureState& state : base.m_permanentTextureStates){
+        const usize index = m_permanentTextureStates.size();
+        m_permanentTextureStates.push_back(state);
+        basePermanentTextureIndices.insert_or_assign(state.texture, index);
+        resultPermanentTextureIndices.insert_or_assign(state.texture, index);
+    }
+
+    m_permanentBufferStates.reserve(base.m_permanentBufferStates.size());
+    basePermanentBufferIndices.reserve(base.m_permanentBufferStates.size());
+    resultPermanentBufferIndices.reserve(base.m_permanentBufferStates.size());
+    for(const BufferState& state : base.m_permanentBufferStates){
+        const usize index = m_permanentBufferStates.size();
+        m_permanentBufferStates.push_back(state);
+        basePermanentBufferIndices.insert_or_assign(state.buffer, index);
+        resultPermanentBufferIndices.insert_or_assign(state.buffer, index);
+    }
+
+    const auto mergeTextureState = [&](const TextureState& state){
+        const TextureStateKey key{ state.texture, state.mipLevel, state.arraySlice };
+        const auto baseIt = baseTextureIndices.find(key);
+        const ResourceStates::Mask baseState = baseIt != baseTextureIndices.end()
+            ? base.m_textureStates[baseIt.value()].state
+            : ResourceStates::Unknown
+        ;
+        if(state.state == baseState)
+            return true;
+
+        const auto resultIt = resultTextureIndices.find(key);
+        if(resultIt == resultTextureIndices.end()){
+            const usize index = m_textureStates.size();
+            m_textureStates.push_back(state);
+            resultTextureIndices.insert_or_assign(key, index);
+            return true;
+        }
+
+        TextureState& resultState = m_textureStates[resultIt.value()];
+        if(resultState.state != baseState && resultState.state != state.state)
+            return false;
+
+        resultState.state = state.state;
+        return true;
+    };
+    const auto mergeBufferState = [&](const BufferState& state){
+        const auto baseIt = baseBufferIndices.find(state.buffer);
+        const ResourceStates::Mask baseState = baseIt != baseBufferIndices.end()
+            ? base.m_bufferStates[baseIt.value()].state
+            : ResourceStates::Unknown
+        ;
+        if(state.state == baseState)
+            return true;
+
+        const auto resultIt = resultBufferIndices.find(state.buffer);
+        if(resultIt == resultBufferIndices.end()){
+            const usize index = m_bufferStates.size();
+            m_bufferStates.push_back(state);
+            resultBufferIndices.insert_or_assign(state.buffer, index);
+            return true;
+        }
+
+        BufferState& resultState = m_bufferStates[resultIt.value()];
+        if(resultState.state != baseState && resultState.state != state.state)
+            return false;
+
+        resultState.state = state.state;
+        return true;
+    };
+    const auto mergePermanentTextureState = [&](const PermanentTextureState& state){
+        const auto baseIt = basePermanentTextureIndices.find(state.texture);
+        const ResourceStates::Mask baseState = baseIt != basePermanentTextureIndices.end()
+            ? base.m_permanentTextureStates[baseIt.value()].state
+            : ResourceStates::Unknown
+        ;
+        if(state.state == baseState)
+            return true;
+
+        const auto resultIt = resultPermanentTextureIndices.find(state.texture);
+        if(resultIt == resultPermanentTextureIndices.end()){
+            const usize index = m_permanentTextureStates.size();
+            m_permanentTextureStates.push_back(state);
+            resultPermanentTextureIndices.insert_or_assign(state.texture, index);
+            return true;
+        }
+
+        PermanentTextureState& resultState = m_permanentTextureStates[resultIt.value()];
+        if(resultState.state != baseState && resultState.state != state.state)
+            return false;
+
+        resultState.state = state.state;
+        return true;
+    };
+    const auto mergePermanentBufferState = [&](const BufferState& state){
+        const auto baseIt = basePermanentBufferIndices.find(state.buffer);
+        const ResourceStates::Mask baseState = baseIt != basePermanentBufferIndices.end()
+            ? base.m_permanentBufferStates[baseIt.value()].state
+            : ResourceStates::Unknown
+        ;
+        if(state.state == baseState)
+            return true;
+
+        const auto resultIt = resultPermanentBufferIndices.find(state.buffer);
+        if(resultIt == resultPermanentBufferIndices.end()){
+            const usize index = m_permanentBufferStates.size();
+            m_permanentBufferStates.push_back(state);
+            resultPermanentBufferIndices.insert_or_assign(state.buffer, index);
+            return true;
+        }
+
+        BufferState& resultState = m_permanentBufferStates[resultIt.value()];
+        if(resultState.state != baseState && resultState.state != state.state)
+            return false;
+
+        resultState.state = state.state;
+        return true;
+    };
+
+    for(usize branchIndex = 0u; branchIndex < branchCount; ++branchIndex){
+        const CommandListResourceStateHandoff& branch = *branches[branchIndex];
+        for(const TextureState& state : branch.m_textureStates){
+            if(!mergeTextureState(state)){
+                reset();
+                return false;
+            }
+        }
+        for(const BufferState& state : branch.m_bufferStates){
+            if(!mergeBufferState(state)){
+                reset();
+                return false;
+            }
+        }
+        for(const PermanentTextureState& state : branch.m_permanentTextureStates){
+            if(!mergePermanentTextureState(state)){
+                reset();
+                return false;
+            }
+        }
+        for(const BufferState& state : branch.m_permanentBufferStates){
+            if(!mergePermanentBufferState(state)){
+                reset();
+                return false;
+            }
+        }
+    }
+
+    m_valid = true;
+    return true;
+}
+
+
+NWB_CORE_END
+
+
 NWB_VULKAN_BEGIN
 
 

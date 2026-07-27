@@ -69,6 +69,18 @@ public:
     }
     [[nodiscard]] bool valid()const{ return m_valid; }
 
+    // Builds a post-branch state snapshot from a normalized base snapshot and the final states exported by
+    // independently recorded branches. Every branch must have been opened from base, and the caller must submit
+    // the base producer before every branch and every branch before the eventual consumer. Only final resource
+    // states are merged here: callers must still keep cross-branch read/write hazards disjoint or synchronize them
+    // explicitly. Returns false if a branch is invalid or two branches leave the same resource in incompatible final
+    // states. `this` must be distinct from base and every branch.
+    [[nodiscard]] bool buildFanIn(
+        const CommandListResourceStateHandoff& base,
+        const CommandListResourceStateHandoff* const* branches,
+        usize branchCount
+    );
+
 
 private:
     GraphicsVector<TextureState> m_textureStates;
@@ -307,4 +319,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

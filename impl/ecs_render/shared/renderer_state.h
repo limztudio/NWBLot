@@ -151,18 +151,19 @@ private:
     Core::BufferHandle m_instanceBuffer;
     Core::BufferHandle m_materialTypedBuffer;
     Core::BufferHandle m_meshViewBuffer;
+    Core::ShaderHandle m_emulationVertexShader;
+    Core::InputLayoutHandle m_emulationInputLayout;
+    usize m_instanceBufferCapacity = 0;
+    usize m_materialTypedBufferCapacity = 0;
     // Raster material stages reach these through the global heap. The handles retain the backing buffers until
     // free()'s in-flight quarantine matures, so a capacity-growth replacement always gets fresh slots.
     Core::GpuDescriptorHandle m_instanceBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle m_materialTypedBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle m_meshViewBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::ShaderHandle m_emulationVertexShader;
-    Core::InputLayoutHandle m_emulationInputLayout;
     u8 m_meshViewGpuData[sizeof(f32) * NWB_MESH_VIEW_FLOAT_COUNT] = {};
-    usize m_instanceBufferCapacity = 0;
-    usize m_materialTypedBufferCapacity = 0;
     bool m_meshViewGpuDataValid = false;
 };
+static_assert(sizeof(RendererDrawState) == 368u, "RendererDrawState should keep its compact CPU-only layout");
 
 class RendererCsgState final : NoCopy{
     friend class RendererSystem;
@@ -199,17 +200,18 @@ private:
     Core::BufferHandle m_cutterBuffer;
     // CSG clip/cap-fill persistent inputs and its target-generation selectors live in UniformBuffer heap payloads.
     Core::BufferHandle m_clipContextSlotsBuffer;
-    Core::GpuDescriptorHandle m_receiverRangeBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::BufferHandle m_intervalSampleStateBuffer;
-    Core::GpuDescriptorHandle m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::invalid();
     CsgFrameStateCacheSignature m_frameStateCacheSignature;
     CsgFrameState m_frameStateCache;
     usize m_receiverRangeBufferCapacity = 0u;
     usize m_cutterBufferCapacity = 0u;
+    Core::GpuDescriptorHandle m_receiverRangeBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::invalid();
     bool m_frameStateCacheValid = false;
 };
+static_assert(sizeof(RendererCsgState) == 328u, "RendererCsgState should keep its compact CPU-only layout");
 
 class RendererDeferredState final : NoCopy{
     friend class RendererSystem;

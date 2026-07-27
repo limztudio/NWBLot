@@ -31,17 +31,6 @@ struct AvboitFrameTargets{
     Core::Format::Enum accumColorFormat = Core::Format::UNKNOWN;
     Core::Format::Enum accumExtinctionFormat = Core::Format::UNKNOWN;
     Core::Format::Enum transmittanceFormat = Core::Format::UNKNOWN;
-    Core::TextureHandle lowRasterTarget;
-    Core::TextureHandle accumColor;
-    Core::TextureHandle accumExtinction;
-    Core::TextureHandle transmittanceTexture;
-    Core::FramebufferHandle lowFramebuffer;
-    Core::FramebufferHandle accumulationFramebuffer;
-    Core::BufferHandle coverageBuffer;
-    Core::BufferHandle depthWarpBuffer;
-    Core::BufferHandle controlBuffer;
-    Core::BufferHandle extinctionBuffer;
-    Core::BufferHandle extinctionOverflowBuffer;
     // AVBOIT's five work buffers are persistent StorageBuffer entries and its writable transmittance volume is a
     // StorageImage entry in the global heap. These handles own their target-generation registrations.
     Core::GpuDescriptorHandle coverageBufferDescriptor = Core::GpuDescriptorHandle::invalid();
@@ -53,6 +42,17 @@ struct AvboitFrameTargets{
     // Borrowed from DeferredBindlessFrameResources. It selects the shared target-generation slot payload from the
     // global UniformBuffer heap; AVBOIT does not own or free this descriptor.
     Core::GpuDescriptorHandle deferredSlotsBufferDescriptor = Core::GpuDescriptorHandle::invalid();
+    Core::TextureHandle lowRasterTarget;
+    Core::TextureHandle accumColor;
+    Core::TextureHandle accumExtinction;
+    Core::TextureHandle transmittanceTexture;
+    Core::FramebufferHandle lowFramebuffer;
+    Core::FramebufferHandle accumulationFramebuffer;
+    Core::BufferHandle coverageBuffer;
+    Core::BufferHandle depthWarpBuffer;
+    Core::BufferHandle controlBuffer;
+    Core::BufferHandle extinctionBuffer;
+    Core::BufferHandle extinctionOverflowBuffer;
     [[nodiscard]] bool valid()const noexcept{
 #if defined(NWB_DEBUG)
         return
@@ -90,6 +90,7 @@ struct AvboitFrameTargets{
 #endif
     }
 };
+static_assert(sizeof(AvboitFrameTargets) == 232u, "AvboitFrameTargets should keep its compact CPU-only layout");
 
 struct MaterialPassDrawContext{
     Core::CommandList& commandList;

@@ -504,9 +504,6 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     deferredState().m_targets = DeferredFrameTargets{};
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u32 height){
     if(width == 0 || height == 0){
         resetDeferredFrameTargets();

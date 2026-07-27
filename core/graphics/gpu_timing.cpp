@@ -263,10 +263,10 @@ GpuTimingMeasure::GpuTimingMeasure(
     : m_recorder(recorder)
     , m_commandList(commandList)
 {
-    // The marker brackets the whole scope: it opens before the begin timestamp and closes after the end
-    // timestamp (see dtor), so a GPU crash anywhere inside the pass resolves to this scope. Scope identity is
-    // retained separately for timing aggregation; the marker keeps the authored text so release diagnostics
-    // never receive a Name hash in place of the original label.
+    // For a normal one-command-list scope, the marker brackets the whole timing range. A split scope closes the
+    // marker before its producer list closes and writes its ending timestamp on the ordered consumer list. Scope
+    // identity is retained separately for timing aggregation; the marker keeps the authored text so release
+    // diagnostics never receive a Name hash in place of the original label.
     if(!scopeDefinition.valid()){
         NWB_ASSERT(!scopeDefinition.identity && scopeDefinition.markerLabel.empty());
         return;
@@ -277,9 +277,23 @@ GpuTimingMeasure::GpuTimingMeasure(
     m_scope = m_recorder.beginScope(scopeDefinition.identity, device, commandList);
 }
 GpuTimingMeasure::~GpuTimingMeasure(){
-    m_recorder.endScope(m_commandList, m_scope);
+    finishTiming(m_commandList);
+    finishMarker();
+}
+
+void GpuTimingMeasure::finishMarker(){
     if(m_markerOpen)
         m_commandList.endMarker();
+    m_markerOpen = false;
+}
+
+void GpuTimingMeasure::finishTiming(CommandList& commandList){
+    m_recorder.endScope(commandList, m_scope);
+    m_scope = {};
+}
+
+void GpuTimingMeasure::discardTiming(){
+    m_scope = {};
 }
 
 

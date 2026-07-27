@@ -37,6 +37,8 @@ RendererSystem::RendererSystem(
     , m_meshState(arena)
     , m_materialState(arena)
     , m_rayTracingState(arena)
+    , m_shadowPrepareStateHandoff(arena)
+    , m_gbufferStateHandoff(arena)
     , m_shaderSystem(*this)
     , m_meshSystem(*this)
     , m_materialSystem(*this)
@@ -105,7 +107,10 @@ void RendererSystem::invalidateResources(){
     m_preparedCsgFrameStateValid = false;
     m_preparedHasTransparentRenderers = false;
     m_preparedShadowVisibilityReady = false;
-    m_renderCommandList.reset();
+    m_shadowPrepareStateHandoff.reset();
+    m_gbufferStateHandoff.reset();
+    m_gbufferCommandList.reset();
+    m_postGbufferCommandList.reset();
     m_shadowPrepareCommandList.reset();
     // The descriptor-buffer TLAS descriptor owns a retained acceleration-structure handle until its in-flight-frame
     // quarantine matures. Retire it before RendererRayTracingState releases the current TLAS so resource invalidation
@@ -148,10 +153,18 @@ void RendererSystem::update(Core::ECS::World& world, f32 delta){
 bool RendererSystem::ensureFrameCommandLists(){
     auto& device = *m_graphics.getDevice();
 
-    if(!m_renderCommandList){
-        m_renderCommandList = device.createCommandList();
-        if(!m_renderCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create render command list"));
+    if(!m_gbufferCommandList){
+        m_gbufferCommandList = device.createCommandList();
+        if(!m_gbufferCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create G-buffer command list"));
+            return false;
+        }
+    }
+
+    if(!m_postGbufferCommandList){
+        m_postGbufferCommandList = device.createCommandList();
+        if(!m_postGbufferCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create post-G-buffer command list"));
             return false;
         }
     }
@@ -278,7 +291,8 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     )
         return false;
 
-    NWB_ASSERT(m_renderCommandList);
+    NWB_ASSERT(m_gbufferCommandList);
+    NWB_ASSERT(m_postGbufferCommandList);
     NWB_ASSERT(m_shadowPrepareCommandList);
 
     auto& device = *m_graphics.getDevice();
@@ -306,12 +320,17 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     const bool traceMaterialContextUploaded = shadowResourcesPrepared
         && m_raytracingSystem.uploadRayTraceMaterialContextSlots(*m_shadowPrepareCommandList)
     ;
-    m_shadowPrepareCommandList->close();
-    if(!traceMaterialContextUploaded)
+    // This submission precedes render on Graphics. Preserve its final resource state so the first render
+    // command buffer never falls back to Unknown/UNDEFINED for preparation outputs.
+    m_shadowPrepareCommandList->close(&m_shadowPrepareStateHandoff);
+    if(!traceMaterialContextUploaded || !m_shadowPrepareStateHandoff.valid())
         return false;
 
     Core::CommandList* shadowPrepareCommandLists[] = { m_shadowPrepareCommandList.get() };
-    device.executeCommandLists(shadowPrepareCommandLists, 1);
+    if(device.executeCommandLists(shadowPrepareCommandLists, 1) == 0u){
+        m_shadowPrepareStateHandoff.reset();
+        return false;
+    }
 
     return true;
 }
@@ -325,15 +344,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
 
     NWB_ASSERT(m_preparedCsgFrameStateValid);
+    NWB_ASSERT(m_shadowPrepareStateHandoff.valid());
+    if(!m_shadowPrepareStateHandoff.valid())
+        return;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     const CsgFrameState csgFrameState = m_preparedCsgFrameState;
     const bool hasOpaqueCsgFrameWork = csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
     NWB_ASSERT(csgFrameState.empty() || deferredTargets.csgIntervalTargetsValid());
     auto* device = m_graphics.getDevice();
-    Core::CommandList* commandList = m_renderCommandList.get();
+    Core::CommandList* gbufferCommandList = m_gbufferCommandList.get();
+    Core::CommandList* postGbufferCommandList = m_postGbufferCommandList.get();
+    Core::CommandList* commandList = gbufferCommandList;
     NWB_ASSERT(commandList);
-    commandList->open();
+    NWB_ASSERT(postGbufferCommandList);
+    commandList->open(&m_shadowPrepareStateHandoff);
 
     // Reset every GPU-timing query pool on the device timeline now, while the command buffer has no render pass
     // open yet (vkCmdResetQueryPool is illegal inside a dynamic render pass). This makes every pool defined before
@@ -465,6 +490,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         commandList->endRenderPass();
 
+        // The opaque/G-buffer producer and every post-G-buffer consumer remain ordered on Graphics, but use
+        // distinct primary command buffers. Capture the actual final tracked state only after close has appended
+        // keepInitialState restores; the next list imports that snapshot before recording its first barrier.
+        // This is intentionally sequential for now: it establishes the cross-buffer state contract that worker
+        // recording will use before we move any pass to another CPU thread.
+        frameTiming.finishMarker();
+        commandList->close(&m_gbufferStateHandoff);
+        if(!m_gbufferStateHandoff.valid()){
+            frameTiming.discardTiming();
+            return;
+        }
+
+        commandList = postGbufferCommandList;
+        commandList->open(&m_gbufferStateHandoff);
+
         const bool hardwareShadowSupported =
             m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
             && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
@@ -541,14 +581,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
             commandListReady = m_deferredSystem.renderDeferredComposite(*commandList, deferredTargets, framebuffer);
         }
+
+        // Vulkan timestamps may span command buffers as long as submission order is fixed. The debug marker closed
+        // above remains local to the producer command buffer; this ending timestamp preserves the full frame metric.
+        frameTiming.finishTiming(*commandList);
     }
 
     commandList->close();
     if(!commandListReady)
         return;
 
-    Core::CommandList* commandLists[] = { commandList };
-    device->executeCommandLists(commandLists, 1);
+    Core::CommandList* commandLists[] = { gbufferCommandList, postGbufferCommandList };
+    device->executeCommandLists(commandLists, 2);
 }
 
 

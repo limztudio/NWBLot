@@ -20,6 +20,68 @@ NWB_CORE_BEGIN
 typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
 typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 
+
+// Captures the final tracked state of one primary command list so a later primary command list can begin
+// from it. The scheduler must guarantee that the producer executes before the consumer, either by preserving
+// their order in one queue submission or by using explicit queue synchronization. Resource lifetime remains
+// owned by the caller: every referenced texture and buffer must stay alive until the consumer has opened.
+//
+// It carries both transient and permanent state. UAV-barrier policy remains local to each command list, while
+// keepInitialState resources are captured after their close-time restore barriers.
+class CommandListResourceStateHandoff final : NoCopy{
+    friend class GraphicsBackend::CommandList;
+
+private:
+    struct TextureState{
+        Texture* texture = nullptr;
+        MipLevel mipLevel = 0;
+        ArraySlice arraySlice = 0;
+        ResourceStates::Mask state = ResourceStates::Unknown;
+    };
+
+    struct BufferState{
+        Buffer* buffer = nullptr;
+        ResourceStates::Mask state = ResourceStates::Unknown;
+    };
+
+    struct PermanentTextureState{
+        Texture* texture = nullptr;
+        ResourceStates::Mask state = ResourceStates::Unknown;
+    };
+
+
+public:
+    explicit CommandListResourceStateHandoff(GraphicsArena& arena)
+        : m_textureStates(arena)
+        , m_bufferStates(arena)
+        , m_permanentTextureStates(arena)
+        , m_permanentBufferStates(arena)
+    {}
+
+
+public:
+    void reset(){
+        m_textureStates.clear();
+        m_bufferStates.clear();
+        m_permanentTextureStates.clear();
+        m_permanentBufferStates.clear();
+        m_valid = false;
+    }
+    [[nodiscard]] bool valid()const{ return m_valid; }
+
+
+private:
+    GraphicsVector<TextureState> m_textureStates;
+    GraphicsVector<BufferState> m_bufferStates;
+    GraphicsVector<PermanentTextureState> m_permanentTextureStates;
+    GraphicsVector<BufferState> m_permanentBufferStates;
+    bool m_valid = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct VertexBufferBinding{
     Buffer* buffer = nullptr;
     u64 offset = 0;

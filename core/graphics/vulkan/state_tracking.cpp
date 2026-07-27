@@ -125,6 +125,91 @@ void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state
         setBufferState(state.indirectParams, ResourceStates::IndirectArgument);
 }
 
+void CommandList::importResourceStateHandoff(const CommandListResourceStateHandoff& states){
+    NWB_ASSERT(states.m_valid);
+
+    ::ContainerDetail::ReserveAdditionalCapacity(m_stateTracker.m_textureStates, states.m_textureStates.size());
+    for(const CommandListResourceStateHandoff::TextureState& state : states.m_textureStates){
+        if(!state.texture)
+            continue;
+
+        const TextureSubresourceStateKey key{ state.texture, state.mipLevel, state.arraySlice };
+        m_stateTracker.m_textureStates.insert_or_assign(key, state.state);
+    }
+
+    ::ContainerDetail::ReserveAdditionalCapacity(m_stateTracker.m_bufferStates, states.m_bufferStates.size());
+    for(const CommandListResourceStateHandoff::BufferState& state : states.m_bufferStates){
+        if(state.buffer)
+            m_stateTracker.m_bufferStates.insert_or_assign(state.buffer, state.state);
+    }
+
+    ::ContainerDetail::ReserveAdditionalCapacity(m_stateTracker.m_permanentTextureStates, states.m_permanentTextureStates.size());
+    for(const CommandListResourceStateHandoff::PermanentTextureState& state : states.m_permanentTextureStates){
+        if(!state.texture)
+            continue;
+
+        m_stateTracker.m_permanentTextureStates.insert_or_assign(state.texture, state.state);
+    }
+
+    ::ContainerDetail::ReserveAdditionalCapacity(m_stateTracker.m_permanentBufferStates, states.m_permanentBufferStates.size());
+    for(const CommandListResourceStateHandoff::BufferState& state : states.m_permanentBufferStates){
+        if(state.buffer)
+            m_stateTracker.m_permanentBufferStates.insert_or_assign(state.buffer, state.state);
+    }
+}
+
+void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& states)const{
+    states.reset();
+    states.m_textureStates.reserve(m_stateTracker.m_textureStates.size());
+    for(auto it = m_stateTracker.m_textureStates.begin(); it != m_stateTracker.m_textureStates.end(); ++it){
+        const TextureSubresourceStateKey& key = it->first;
+        if(!key.texture)
+            continue;
+
+        states.m_textureStates.push_back(CommandListResourceStateHandoff::TextureState{
+            key.texture,
+            key.mipLevel,
+            key.arraySlice,
+            it.value()
+        });
+    }
+
+    states.m_bufferStates.reserve(m_stateTracker.m_bufferStates.size());
+    for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
+        if(!it->first)
+            continue;
+
+        states.m_bufferStates.push_back(CommandListResourceStateHandoff::BufferState{
+            it->first,
+            it.value()
+        });
+    }
+
+    states.m_permanentTextureStates.reserve(m_stateTracker.m_permanentTextureStates.size());
+    for(auto it = m_stateTracker.m_permanentTextureStates.begin(); it != m_stateTracker.m_permanentTextureStates.end(); ++it){
+        if(!it->first)
+            continue;
+
+        states.m_permanentTextureStates.push_back(CommandListResourceStateHandoff::PermanentTextureState{
+            it->first,
+            it.value()
+        });
+    }
+
+    states.m_permanentBufferStates.reserve(m_stateTracker.m_permanentBufferStates.size());
+    for(auto it = m_stateTracker.m_permanentBufferStates.begin(); it != m_stateTracker.m_permanentBufferStates.end(); ++it){
+        if(!it->first)
+            continue;
+
+        states.m_permanentBufferStates.push_back(CommandListResourceStateHandoff::BufferState{
+            it->first,
+            it.value()
+        });
+    }
+
+    states.m_valid = true;
+}
+
 void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
     Framebuffer* resumeFramebuffer = nullptr;
     if(m_renderPassActive){

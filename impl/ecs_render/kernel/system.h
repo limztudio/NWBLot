@@ -133,7 +133,10 @@ private:
     RendererAvboitState m_avboitState;
     RendererRayTracingState m_rayTracingState;
     CsgFrameState m_preparedCsgFrameState;
-    Core::CommandListHandle m_renderCommandList;
+    Core::CommandListResourceStateHandoff m_shadowPrepareStateHandoff;
+    Core::CommandListResourceStateHandoff m_gbufferStateHandoff;
+    Core::CommandListHandle m_gbufferCommandList;
+    Core::CommandListHandle m_postGbufferCommandList;
     Core::CommandListHandle m_shadowPrepareCommandList;
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;

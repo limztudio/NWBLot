@@ -167,6 +167,13 @@ public:
     );
     ~GpuTimingMeasure();
 
+    // A timing scope may span ordered primary command buffers. Close its debug marker on the command list that
+    // opened it before that list is closed, then emit the ending timestamp on the later command list.
+    void finishMarker();
+    void finishTiming(CommandList& commandList);
+    // Discards a started scope when its producer command buffer cannot be finalized or submitted.
+    void discardTiming();
+
 
 private:
     GpuTimingRecorder& m_recorder;

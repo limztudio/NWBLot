@@ -188,10 +188,15 @@ concept CommandListApi = requires(
     const RayTracingOpacityMicromapDesc& opacityMicromapDesc,
     const RayTracingClusterOperationDesc& clusterOperationDesc,
     const CooperativeVectorConvertMatrixLayoutDesc* coopVecConvertDescs,
-    const AStringView markerName
+    const AStringView markerName,
+    CommandListResourceStateHandoff& resourceStateHandoff
 ){
     commandList.open();
     commandList.close();
+    commandList.open(&resourceStateHandoff);
+    commandList.close(&resourceStateHandoff);
+    resourceStateHandoff.reset();
+    { resourceStateHandoff.valid() }->SameAs<bool>;
     commandList.clearState();
     commandList.endRenderPass();
 

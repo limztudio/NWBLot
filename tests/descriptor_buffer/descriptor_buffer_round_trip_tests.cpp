@@ -93,6 +93,7 @@ public:
     }
 
     [[nodiscard]] Graphics& graphics(){ return m_graphics; }
+    [[nodiscard]] Alloc::GlobalArena& arena(){ return m_objectArena; }
 
 private:
     static inline constexpr Name s_TestArenaName{"tests/descriptor_buffer/graphics_object_arena"};
@@ -161,6 +162,7 @@ protected:
     [[nodiscard]] static GraphicsBackend::DescriptorBufferManager& manager(){
         return device().getDescriptorBufferManager();
     }
+    [[nodiscard]] static Alloc::GlobalArena& arena(){ return s_scope->arena(); }
 
 protected:
     static UniquePtr<HeadlessGraphicsScope> s_scope;
@@ -187,6 +189,60 @@ TEST_F(DescriptorBufferRoundTripTest, ManagerEnabledAndSegmentsMapped){
     EXPECT_NE(mgr.getSamplerBindingInfo().address, 0u);
     EXPECT_EQ(mgr.getResourceBufferIndex(), 0u);
     EXPECT_EQ(mgr.getSamplerBufferIndex(), 1u);
+}
+
+
+// Ordered primary command buffers must carry the producer's final state into the consumer. The consumer's
+// ShaderResource transition therefore has CopyDest as its source, rather than treating the buffer as unknown.
+TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffTransfersFinalBufferState){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+    auto restoredBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_NE(restoredBuffer.get(), nullptr);
+    auto permanentBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(permanentBuffer.get(), nullptr);
+
+    CommandListResourceStateHandoff handoff(DescriptorBufferRoundTripTest::arena());
+    auto producer = device.createCommandList();
+    auto consumer = device.createCommandList();
+    ASSERT_NE(producer.get(), nullptr);
+    ASSERT_NE(consumer.get(), nullptr);
+
+    producer->open();
+    producer->setBufferState(buffer.get(), ResourceStates::CopyDest);
+    producer->setBufferState(restoredBuffer.get(), ResourceStates::CopyDest);
+    producer->setPermanentBufferState(permanentBuffer.get(), ResourceStates::ShaderResource);
+    producer->close(&handoff);
+    ASSERT_TRUE(handoff.valid());
+
+    consumer->open(&handoff);
+    EXPECT_EQ(consumer->getBufferState(buffer.get()), ResourceStates::CopyDest);
+    EXPECT_EQ(consumer->getBufferState(restoredBuffer.get()), ResourceStates::Common);
+    EXPECT_EQ(consumer->getBufferState(permanentBuffer.get()), ResourceStates::ShaderResource);
+    consumer->setBufferState(buffer.get(), ResourceStates::ShaderResource);
+    EXPECT_EQ(consumer->getBufferState(buffer.get()), ResourceStates::ShaderResource);
+    consumer->close();
+
+    CommandList* commandLists[] = { producer.get(), consumer.get() };
+    EXPECT_GT(device.executeCommandLists(commandLists, 2u), 0u);
+    EXPECT_TRUE(device.waitForIdle());
 }
 
 

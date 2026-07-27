@@ -48,9 +48,15 @@ void CommandList::discardUnsubmittedUploadChunks(){
     m_device.m_scratchManager.discardChunks(m_desc.queueType, owner, reusableVersion);
 }
 
-void CommandList::open(){
+void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     discardUnsubmittedUploadChunks();
     m_currentCmdBuf.reset();
+
+    if(initialStates && !initialStates->valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot open command list from an invalid resource-state handoff"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot open command list from an invalid resource-state handoff"));
+        return;
+    }
 
     Queue* queue = m_device.getQueue(m_desc.queueType);
     if(!queue){
@@ -81,9 +87,14 @@ void CommandList::open(){
     }
 
     m_stateTracker.reset();
+    if(initialStates)
+        importResourceStateHandoff(*initialStates);
 }
 
-void CommandList::close(){
+void CommandList::close(CommandListResourceStateHandoff* finalStates){
+    if(finalStates)
+        finalStates->reset();
+
     if(!m_currentCmdBuf){
         clearState();
         return;
@@ -102,6 +113,9 @@ void CommandList::close(){
         clearState();
         return;
     }
+
+    if(finalStates)
+        exportResourceStateHandoff(*finalStates);
 
     clearState();
 }

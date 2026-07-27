@@ -2053,8 +2053,12 @@ public:
 
 
 public:
-    void open();
-    void close();
+    // The optional initial-state handoff seeds automatic state tracking before any commands are recorded.
+    // It is valid only when the handoff producer executes before this command list.
+    void open(const CommandListResourceStateHandoff* initialStates = nullptr);
+    // Captures states after keepInitialState resources have been restored, so a later ordered command list sees
+    // the actual final Vulkan state rather than this list's transient working state.
+    void close(CommandListResourceStateHandoff* finalStates = nullptr);
     void clearState();
     void endRenderPass();
 
@@ -2155,6 +2159,8 @@ public:
 
 private:
     void setResourceStatesForGraphicsBuffers(const GraphicsState& state);
+    void importResourceStateHandoff(const CommandListResourceStateHandoff& states);
+    void exportResourceStateHandoff(CommandListResourceStateHandoff& states)const;
     void retainResource(GraphicsResource* resource);
     void retainStagingBuffer(Buffer& buffer);
     // Every pipeline layout has an empty descriptor-buffer set at index 0. Bind its zero resource-buffer offset

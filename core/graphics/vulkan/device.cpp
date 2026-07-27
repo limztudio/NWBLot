@@ -436,9 +436,13 @@ Device::Device(const DeviceDesc& desc)
             NWB_MEMSET(m_amdBreadcrumb.mappedMemory, 0, static_cast<usize>(breadcrumbInfo.size));
         }
         else{
+            // A successful VMA allocation without a persistent mapping cannot service breadcrumbs, but it still owns
+            // a buffer/allocation pair. Release that pair before disabling the optional feature; otherwise the later
+            // destructor guard sees a null buffer and strands the allocation until VMA teardown.
+            if(breadcrumbRes == VK_SUCCESS)
+                m_allocator.destroyHostMappedBuffer(m_amdBreadcrumb.buffer, m_amdBreadcrumb.allocation, m_amdBreadcrumb.mappedMemory);
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to allocate AMD breadcrumb buffer ({}); AMD GPU breadcrumbs disabled."), ResultToString(breadcrumbRes));
             m_context.extensions.AMD_buffer_marker = false;
-            m_amdBreadcrumb.buffer = VK_NULL_HANDLE;
         }
     }
 
@@ -522,7 +526,7 @@ Device::~Device(){
 
     // Freed after the queues (and their command lists) so isAmdBreadcrumbEnabled() stays stable while command
     // lists unregister their marker trackers in their destructors.
-    if(m_amdBreadcrumb.buffer != VK_NULL_HANDLE)
+    if(m_amdBreadcrumb.allocation)
         m_allocator.destroyHostMappedBuffer(m_amdBreadcrumb.buffer, m_amdBreadcrumb.allocation, m_amdBreadcrumb.mappedMemory);
 
     if(m_context.emptyDescriptorBufferSetLayout){

@@ -33,7 +33,7 @@ NwbCsgReceiverSurfacePixelOutput main(const NwbCsgReceiverSurfacePixelInput inpu
     nwbCsgMarkReceiverSurfaceEvent(input.position, input.worldPosition.xyz, receiverIndex, input.frontFace);
 
     NwbCsgReceiverSurfacePixelOutput output;
-    output.color = half4(0.0);
+    output.color = half4(0.0h);
     return output;
 }
 

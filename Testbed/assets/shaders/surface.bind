@@ -4,13 +4,13 @@
 
 [material_constant]
 struct NwbSurfaceMaterial{
-    [default("half4(1.0, 1.0, 1.0, 1.0)")]
+    [default("half4(1.0h, 1.0h, 1.0h, 1.0h)")]
     half4 base_color;
 };
 
 [material_mutable]
 struct NwbRuntimeMaterial{
-    [default("half4(1.0, 1.0, 1.0, 1.0)")]
+    [default("half4(1.0h, 1.0h, 1.0h, 1.0h)")]
     half4 color_tint;
 };
 

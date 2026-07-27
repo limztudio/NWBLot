@@ -84,7 +84,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         // yields the smooth 0..1 coverage the value-aware resolve needs (a single binary sample would leave a dithered
         // penumbra the a-trous could not smooth without washing the umbra out). Temporal accumulation carries the sampling
         // across frames.
-        half3 accum = half3(0.0, 0.0, 0.0);
+        half3 accum = half3(0.0h, 0.0h, 0.0h);
         [loop] for(uint s = 0u; s < NWB_SW_SHADOW_SOFT_SPP; ++s){
             const float2 sampleJitter = nwbShadowLowDiscrepancy2D(halfPixel, g_NwbShadowRqSoftPushConstants.frameIndex * NWB_SW_SHADOW_SOFT_SPP + s);
             accum += nwbShadowRqLightVisible(worldPosition, normal, g_NwbSceneLights[i], sampleJitter);

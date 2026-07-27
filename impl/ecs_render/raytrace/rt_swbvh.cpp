@@ -27,17 +27,20 @@ namespace __hidden_rt_swbvh{
 
 
     // Look up the backing buffer in the cross-frame cache. A hit reuses its valid handle; a miss registers the buffer
-    // and pins it with a refcounted BufferHandle so the raw pointer key cannot be recycled. Every backing buffer uses
+    // and pins the caller's correctly-deletable BufferHandle so the raw pointer key cannot be recycled. Every backing buffer uses
     // one full-range STORAGE_BUFFER descriptor; raw and structured access are shader-side views. Failed registrations
     // are not cached so a later gather can retry.
     [[nodiscard]] bool AcquireMeshHeapHandle(
         Core::GpuDescriptorHeap& heap,
         RtMeshHeapHandleCache& cache,
-        Core::Buffer& buffer,
+        const Core::BufferHandle& bufferHandle,
         Core::GpuDescriptorHandle& outHandle
     ){
         outHandle = Core::GpuDescriptorHandle::invalid();
+        if(!bufferHandle)
+            return false;
 
+        Core::Buffer& buffer = *bufferHandle;
         const Core::Buffer* const bufferKey = &buffer;
         auto found = cache.find(bufferKey);
         if(found != cache.end()){
@@ -57,7 +60,7 @@ namespace __hidden_rt_swbvh{
             return false;
 
         RtMeshHeapHandleCacheEntry entry;
-        entry.keepAlive = Core::BufferHandle(&buffer);   // refcount-pin the key
+        entry.keepAlive = bufferHandle;                  // refcount-pin the key with its owning arena deleter
         entry.handle = outHandle;
         entry.seenThisFrame = true;
         cache.insert({bufferKey, Move(entry)});
@@ -343,19 +346,19 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
                 !AcquireMeshHeapHandle(
                     heap,
                     rayTracingState().m_hwMeshHeapHandleCache,
-                    *meshIndexBuffer,
+                    mesh->triangleIndexBuffer,
                     indexHandle
                 )
                 || !AcquireMeshHeapHandle(
                     heap,
                     rayTracingState().m_hwMeshHeapHandleCache,
-                    *mesh->attributeBuffer,
+                    mesh->attributeBuffer,
                     attributeHandle
                 )
                 || !AcquireMeshHeapHandle(
                     heap,
                     rayTracingState().m_hwMeshHeapHandleCache,
-                    *mesh->positionBuffer,
+                    mesh->positionBuffer,
                     positionHandle
                 )
             ){
@@ -665,7 +668,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
                 || !AcquireMeshHeapHandle(
                     heap,
                     rayTracingState().m_swMeshHeapHandleCache,
-                    *mesh->attributeBuffer,
+                    mesh->attributeBuffer,
                     attributeHandle
                 )
             ){

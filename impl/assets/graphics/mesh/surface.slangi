@@ -21,7 +21,7 @@
 // renderCoverage is the AVBOIT blend coverage (1 = fully opaque).
 #define NWB_SURFACE_IOR_VACUUM        half(1.0)              // no refraction / no Fresnel
 #define NWB_SURFACE_IOR_GLASS         half(1.5)              // typical glass Fresnel -- a convenience preset a material MAY author
-#define NWB_SURFACE_ABSORPTION_NONE   half3(1.0, 1.0, 1.0)   // per-unit survival = perfectly clear -> casts no shadow
+#define NWB_SURFACE_ABSORPTION_NONE   half3(1.0h, 1.0h, 1.0h) // per-unit survival = perfectly clear -> casts no shadow
 #define NWB_SURFACE_COVERAGE_OPAQUE   half(1.0)              // render coverage = fully opaque
 
 // The per-material surface contract, shared by the G-buffer pixel shader (gbuffer_ps.slangi), the shadow trace
@@ -96,7 +96,7 @@ NwbMeshSurface nwbMakeGlassSurface(half3 baseColor, float3 normal, half refracti
     NwbMeshSurface surface = nwbMakeMeshSurface(baseColor, normal);
     surface.refractionIor = refractionIor;
     surface.renderCoverage = clamp(density, half(0.0), half(1.0));
-    surface.shadowAbsorptionTint = lerp(NWB_SURFACE_ABSORPTION_NONE, clamp(tint, half3(0.0), half3(1.0)), surface.renderCoverage);
+    surface.shadowAbsorptionTint = lerp(NWB_SURFACE_ABSORPTION_NONE, clamp(tint, half3(0.0h), half3(1.0h)), surface.renderCoverage);
     return surface;
 }
 

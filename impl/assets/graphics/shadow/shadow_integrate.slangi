@@ -68,7 +68,7 @@ struct NwbShadowVisibilityAccumulator{
 // Seed a fully-lit accumulator (no occluders yet). Bins are written on first use; binCount gates every read.
 NwbShadowVisibilityAccumulator nwbShadowVisibilityBegin(){
     NwbShadowVisibilityAccumulator acc;
-    acc.transmittance = half3(1.0, 1.0, 1.0);
+    acc.transmittance = half3(1.0h, 1.0h, 1.0h);
     acc.binCount = 0u;
     return acc;
 }

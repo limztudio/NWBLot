@@ -511,10 +511,10 @@ asset.shader_variant = "default";
 
 asset.parameters = {
     "surface": {
-        "roughness": "half(0.25)",
-        "range": "half2(0.125, 0.5)",
-        "tint": "half3(1.0, 0.75, 0.5)",
-        "base_color": "half4(1.0, 0.5, 0.25, 0.0)",
+        "roughness": "half(0.25h)",
+        "range": "half2(0.125h, 0.5h)",
+        "tint": "half3(1.0h, 0.75h, 0.5h)",
+        "base_color": "half4(1.0h, 0.5h, 0.25h, 0.0h)",
     },
 };
 
@@ -855,16 +855,16 @@ NwbTestSurfaceMaterial surface;
 
 static constexpr AStringView s_HalfMaterialBindSource = R"NWB_BIND([material_constant]
 struct NwbTestSurfaceMaterial{
-    [default("half(0.5)")]
+    [default("half(0.5h)")]
     half roughness;
 
-    [default("half2(0.0, 1.0)")]
+    [default("half2(0.0h, 1.0h)")]
     half2 range;
 
-    [default("half3(0.25, 0.5, 0.75)")]
+    [default("half3(0.25h, 0.5h, 0.75h)")]
     half3 tint;
 
-    [default("half4(1.0, 1.0, 1.0, 1.0)")]
+    [default("half4(1.0h, 1.0h, 1.0h, 1.0h)")]
     half4 base_color;
 };
 

@@ -298,8 +298,13 @@ VkResult VulkanAllocator::createBuffer(Buffer& buffer, const VkBufferCreateInfo&
         buffer.m_mappedMemory,
         &buffer.m_requiresInvalidate
     );
-    if(res == VK_SUCCESS)
+    if(res == VK_SUCCESS){
         buffer.m_persistentlyMapped = buffer.m_mappedMemory != nullptr;
+#if defined(NWB_DEBUG)
+        if(buffer.m_desc.debugName)
+            vmaSetAllocationName(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), __hidden_vulkan_allocator::ToVmaAllocation(buffer.m_allocation), buffer.m_desc.debugName.logText());
+#endif
+    }
     return res;
 }
 
@@ -343,8 +348,13 @@ VkResult VulkanAllocator::createTexture(Texture& texture, const VkImageCreateInf
         &allocation,
         nullptr
     );
-    if(res == VK_SUCCESS)
+    if(res == VK_SUCCESS){
         texture.m_allocation = __hidden_vulkan_allocator::ToVulkanAllocationHandle(allocation);
+#if defined(NWB_DEBUG)
+        if(texture.m_desc.name)
+            vmaSetAllocationName(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), allocation, texture.m_desc.name.logText());
+#endif
+    }
     return res;
 }
 

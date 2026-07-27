@@ -170,8 +170,8 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     // project BXDF evaluation.
     const half3 shadedColor = clamp(
         nwbDeferredDispatchBxdf(bxdfSurface.shadingModel, bxdfSurface, int2(-1, -1)),
-        half3(0.0),
-        half3(1.0)
+        half3(0.0h),
+        half3(1.0h)
     );
 
     NwbAvboitAccumulatePixelOutput output;

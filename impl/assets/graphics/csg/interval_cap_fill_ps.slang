@@ -95,7 +95,7 @@ NwbCsgIntervalCapFillPixelOutput main(const NwbCsgIntervalCapFillPixelInput inpu
 
     NwbCsgIntervalCapFillPixelOutput output;
     // baseColor.a carries the deferred BXDF id, while the other packed fields exactly match the mesh G-buffer.
-    output.baseColor = half4(clamp(surface.baseColor, half3(0.0), half3(1.0)), half(float(receiver.rangeInfo.w)));
+    output.baseColor = half4(clamp(surface.baseColor, half3(0.0h), half3(1.0h)), half(float(receiver.rangeInfo.w)));
     output.normal = half4(nwbCsgCapFillEncodeNormal(surface.normal), surface.param0);
     output.worldPosition = float4(cap.worldPosition, surface.param1);
     output.depth = cap.depth;

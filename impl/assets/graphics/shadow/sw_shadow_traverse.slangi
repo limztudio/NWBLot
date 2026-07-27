@@ -145,7 +145,7 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
             if(triangleHit.hit){
                 if(!transparent){
                     // Opaque occluder: light is fully blocked, stop the whole traversal.
-                    acc.transmittance = half3(0.0, 0.0, 0.0);
+                    acc.transmittance = half3(0.0h, 0.0h, 0.0h);
                     return;
                 }
                 // Transparent occluder: evaluate this material's surface hook for its optical params and integrate
@@ -227,7 +227,7 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
             // fully-opaque occluder rather than being skipped, so a pathologically unbalanced BVH over-darkens
             // at worst instead of leaking light through unvisited geometry. +1 bound (one deferred far node).
             if((stackPointer + 1u) >= NWB_SW_SHADOW_MESH_STACK_SIZE){
-                acc.transmittance = half3(0.0, 0.0, 0.0);
+                acc.transmittance = half3(0.0h, 0.0h, 0.0h);
                 return;
             }
             stack[stackPointer++] = farChild; // defer; descend the near child inline next iteration
@@ -302,7 +302,7 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
             // Conservative on stack exhaustion (see nwbSwShadowInstanceOccluded): an over-deep scene tree is
             // treated as a fully-opaque occluder rather than dropping instances. Unreachable in practice. +1.
             if((stackPointer + 1u) >= NWB_SW_SHADOW_SCENE_STACK_SIZE){
-                acc.transmittance = half3(0.0, 0.0, 0.0);
+                acc.transmittance = half3(0.0h, 0.0h, 0.0h);
                 return;
             }
             stack[stackPointer++] = farChild;

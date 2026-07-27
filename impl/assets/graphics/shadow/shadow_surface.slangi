@@ -97,7 +97,7 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
 // supplied already-transformed by the trace backend that filled the hit.
 NwbMeshSurfaceInputs nwbShadowBuildSurfaceInputs(NwbShadowHit hit){
     NwbMeshSurfaceInputs inputs;
-    inputs.color = half4(1.0, 1.0, 1.0, 1.0);
+    inputs.color = half4(1.0h, 1.0h, 1.0h, 1.0h);
     inputs.normal = hit.worldNormal;
     inputs.tangent = float4(1.0, 0.0, 0.0, 1.0);
     inputs.uv0 = hit.uv0;

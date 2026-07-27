@@ -329,9 +329,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     const CsgFrameState csgFrameState = m_preparedCsgFrameState;
-    const bool hasCsgFrameWork = !csgFrameState.empty();
     const bool hasOpaqueCsgFrameWork = csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
-    NWB_ASSERT(!hasCsgFrameWork || deferredTargets.csgIntervalTargetsValid());
+    NWB_ASSERT(csgFrameState.empty() || deferredTargets.csgIntervalTargetsValid());
     auto* device = m_graphics.getDevice();
     Core::CommandList* commandList = m_renderCommandList.get();
     NWB_ASSERT(commandList);

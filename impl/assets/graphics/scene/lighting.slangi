@@ -53,16 +53,16 @@ half3 nwbBxdfLightTransmittance(int2 pixel, uint lightIndex){
     // fragments are not in the opaque G-buffer the visibility was traced from): every light is fully lit. Omitting the
     // declaration + this read keeps the pass from declaring an unused SAMPLED_IMAGE at a default slot its set-0 layout
     // fills with a StructuredBuffer (a descriptor-type mismatch). Behaviour-identical to the negative-pixel sentinel.
-    return half3(1.0, 1.0, 1.0);
+    return half3(1.0h, 1.0h, 1.0h);
 #else
     // Negative pixel = "skip screen-space shadow sampling" sentinel for the forward / AVBOIT transparent pass
     // (transparent fragments are not in the opaque G-buffer the visibility was traced from) -- treat as lit.
     if(pixel.x < 0)
-        return half3(1.0, 1.0, 1.0);
+        return half3(1.0h, 1.0h, 1.0h);
 
     const float slot = g_NwbSceneLights[lightIndex].params.z;
     if(slot < 0.0)
-        return half3(1.0, 1.0, 1.0);
+        return half3(1.0h, 1.0h, 1.0h);
 
     return half3(NWB_SCENE_SHADOW_VISIBILITY_RESOURCE.Load(int4(pixel, int(slot), 0)).rgb);
 #endif
@@ -73,14 +73,14 @@ half3 nwbBxdfLightTransmittance(int2 pixel, uint lightIndex){
 // producer splats onto) returns zero so the additive term drops out, mirroring nwbBxdfLightTransmittance.
 half3 nwbBxdfCausticIrradiance(int2 pixel){
 #if NWB_CAUSTIC_DEBUG_FORCE_GREY
-    return half3(0.15, 0.15, 0.15);
+    return half3(0.15h, 0.15h, 0.15h);
 #elif defined(NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED)
     // No caustic-irradiance buffer bound in this pass (see nwbBxdfLightTransmittance): no additive caustic (black is
     // the additive identity). Behaviour-identical to the negative-pixel sentinel below, minus the unused binding.
-    return half3(0.0, 0.0, 0.0);
+    return half3(0.0h, 0.0h, 0.0h);
 #else
     if(pixel.x < 0)
-        return half3(0.0, 0.0, 0.0);
+        return half3(0.0h, 0.0h, 0.0h);
 
     return half3(NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE.Load(int3(pixel, 0)).rgb);
 #endif
@@ -123,8 +123,8 @@ half3 nwbSceneShadeLight(NwbSceneLight light, half3 baseColor, float3 normalVect
     float3 lightVector;
     half3 lightRadiance;
     nwbSceneResolveLight(light, worldPosition, lightVector, lightRadiance);
-    if(all(lightRadiance <= half3(0.0)))
-        return half3(0.0);
+    if(all(lightRadiance <= half3(0.0h)))
+        return half3(0.0h);
 
     const float3 halfVector = nwbSafeNormalize(lightVector + viewVector, lightVector);
     const half ndotl = half(max(dot(normalVector, lightVector), 0.0));
@@ -138,15 +138,15 @@ half3 nwbSceneShadeLight(NwbSceneLight light, half3 baseColor, float3 normalVect
     const half bitangentLobe = half(pow(max(abs(dot(bitangentVector, halfVector)), 0.0), 18.0));
     const half backLight = half(max(dot(-normalVector, lightVector), 0.0));
 
-    const half3 specularTint = lerp(half3(0.78), half3(1.0, 0.9, 0.68), half(0.65));
+    const half3 specularTint = lerp(half3(0.78h), half3(1.0h, 0.9h, 0.68h), half(0.65));
     const half3 diffuse = baseColor * lightRadiance * (half(0.02) + half(0.98) * keyDiffuse);
     const half3 specularColor = lightRadiance * specularTint * (specular * (half(0.08) + half(0.92) * ndotl) + viewSpecular);
-    const half3 rimColor = lerp(half3(0.12, 0.26, 0.52), lightRadiance, half(0.25)) * (rim * (half(0.04) + half(0.96) * ndotl));
+    const half3 rimColor = lerp(half3(0.12h, 0.26h, 0.52h), lightRadiance, half(0.25)) * (rim * (half(0.04) + half(0.96) * ndotl));
     const half3 frameCue = half(0.16) * (
-        half3(1.0, 0.35, 0.2) * half(tangentLobe)
-        + half3(0.2, 0.7, 1.0) * half(bitangentLobe)
+        half3(1.0h, 0.35h, 0.2h) * half(tangentLobe)
+        + half3(0.2h, 0.7h, 1.0h) * half(bitangentLobe)
     );
-    const half3 backLightCue = half3(0.012, 0.02, 0.04) * half(backLight);
+    const half3 backLightCue = half3(0.012h, 0.02h, 0.04h) * half(backLight);
 
     return diffuse + specularColor + rimColor + frameCue + backLightCue;
 }
@@ -158,10 +158,10 @@ half3 nwbSceneShadeLight(NwbSceneLight light, half3 baseColor, float3 normalVect
 // Returned when the surface is outside the probe grid OR when NWB_SCENE_GI_SAMPLING_DISABLED is defined (the AVBOIT
 // transparent accumulate path, which does not bind the atlases).
 #ifndef NWB_GI_HEMI_AMBIENT_SKY
-#define NWB_GI_HEMI_AMBIENT_SKY half3(0.045, 0.055, 0.075)
+#define NWB_GI_HEMI_AMBIENT_SKY half3(0.045h, 0.055h, 0.075h)
 #endif
 #ifndef NWB_GI_HEMI_AMBIENT_GROUND
-#define NWB_GI_HEMI_AMBIENT_GROUND half3(0.008, 0.012, 0.02)
+#define NWB_GI_HEMI_AMBIENT_GROUND half3(0.008h, 0.012h, 0.02h)
 #endif
 half3 nwbGiHemiAmbient(float3 normalVector){
     const half skyAmount = half(normalVector.z * 0.5 + 0.5);
@@ -211,7 +211,7 @@ half3 nwbSceneApplyLighting(half3 baseColor, float3 normal, float4 tangent, floa
     // baseColor to reflect it off the receiver albedo; the glass tint already rides inside the irradiance.
     litColor += nwbBxdfCausticIrradiance(pixel) * baseColor;
 
-    return litColor / (litColor + half3(0.65));
+    return litColor / (litColor + half3(0.65h));
 }
 
 

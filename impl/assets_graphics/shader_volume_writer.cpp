@@ -234,7 +234,7 @@ static bool GetVariantBytecode(
     const ShaderCook::ShaderCompilerRequest compileRequest = {
         entry.name,
         entry.stage.view(),
-        entry.targetProfile.view(),
+        AStringView(entry.targetProfile),
         entry.entryPoint,
         variantName,
         compileDefines.data(),

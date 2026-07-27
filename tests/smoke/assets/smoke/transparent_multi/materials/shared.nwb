@@ -9,9 +9,9 @@ asset.refractive = 1;
 asset.shader_variant = "default";
 asset.parameters = {
     "surface": {
-        "base_color": "half4(1.0, 1.0, 1.0, 1.0)",
+        "base_color": "half4(1.0h, 1.0h, 1.0h, 1.0h)",
     },
     "runtime": {
-        "color_tint": "half4(1.0, 1.0, 1.0, 1.0)",
+        "color_tint": "half4(1.0h, 1.0h, 1.0h, 1.0h)",
     },
 };

@@ -46,7 +46,7 @@ void nwbSwShadowTraceSoft(const uint3 dispatchThreadID){
         if(slot < 0.0)
             continue;
 
-        half3 accum = half3(0.0, 0.0, 0.0);
+        half3 accum = half3(0.0h, 0.0h, 0.0h);
         [loop] for(uint s = 0u; s < NWB_SW_SHADOW_SOFT_TRACE_SPP; ++s){
             const float2 sampleJitter = nwbShadowLowDiscrepancy2D(
                 halfPixel,

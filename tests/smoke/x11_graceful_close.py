@@ -67,22 +67,21 @@ def send_wm_delete(disp, win):
     XLib.XSendEvent.argtypes = [DisplayP, Window, Bool, ctypes.c_long, ctypes.POINTER(XClientMessageEvent)]
     # Deliver directly to the window with NoEventMask (0): on a bare X server (no window manager, e.g. Xwayland headless
     # or a capture rig) the ClientMessage reaches the client's event queue only this way. Sending with the redirect mask
-    # instead routes it to a WM that does not exist here, so the app never sees it. Send a few times in case the loop is
-    # mid-SleepMS.
-    for _ in range(3):
-        ev = XClientMessageEvent()
-        ctypes.memset(ctypes.byref(ev), 0, ctypes.sizeof(ev))
-        ev.type = 33  # ClientMessage
-        ev.display = disp
-        ev.window = win
-        ev.message_type = protocols
-        ev.format = 32
-        ev.data_l[0] = delete_window
-        ev.data_l[1] = 0  # timestamp
-        if XLib.XSendEvent(disp, win, False, 0, ctypes.byref(ev)) == 0:
-            return False
-        XLib.XFlush(disp)
-        time.sleep(0.15)
+    # instead routes it to a WM that does not exist here, so the app never sees it. One queued WM_DELETE_WINDOW is
+    # sufficient even when the app is sleeping; retrying after it starts teardown races XDestroyWindow and makes libX11
+    # report BadWindow, which previously turned a successful graceful shutdown into an erroneous fallback to SIGTERM.
+    ev = XClientMessageEvent()
+    ctypes.memset(ctypes.byref(ev), 0, ctypes.sizeof(ev))
+    ev.type = 33  # ClientMessage
+    ev.display = disp
+    ev.window = win
+    ev.message_type = protocols
+    ev.format = 32
+    ev.data_l[0] = delete_window
+    ev.data_l[1] = 0  # timestamp
+    if XLib.XSendEvent(disp, win, False, 0, ctypes.byref(ev)) == 0:
+        return False
+    XLib.XFlush(disp)
     return True
 
 

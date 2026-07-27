@@ -10,13 +10,13 @@
 half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
     const float3 normal = nwbSafeNormalize(surface.normal, float3(0.0, 0.0, 1.0));
 
-    half3 color = surface.baseColor * half3(0.22, 0.24, 0.30); // ambient floor
+    half3 color = surface.baseColor * half3(0.22h, 0.24h, 0.30h); // ambient floor
     const uint lightCount = nwbSceneLightCount();
     for(uint i = 0u; i < lightCount; ++i){
         float3 lightVector;
         half3 radiance;
         nwbSceneResolveLight(g_NwbSceneLights[i], surface.worldPosition, lightVector, radiance);
-        if(all(radiance <= half3(0.0)))
+        if(all(radiance <= half3(0.0h)))
             continue;
 
         const half ndotl = half(max(dot(normal, lightVector), 0.0));

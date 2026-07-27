@@ -78,11 +78,19 @@ static constexpr AStringView s_AssetTypeShader = "shader";
 static constexpr AStringView s_AssetTypeInclude = "include";
 static constexpr AStringView s_SlangSourceExtension = ".slang";
 static constexpr AStringView s_SlangIncludeExtension = ".slangi";
-// Material defaults deliberately use decimal literals inside half constructors. Slang also reports profile upgrades
-// for capabilities it adds to valid emitted SPIR-V; asset metadata normalizes profile text and cannot preserve Slang's
-// case-sensitive capability names. Binding aliases are handled at their declarations so new ABI issues remain visible.
-static constexpr AStringView s_SuppressedCompilerWarnings = "30081,41012";
-static constexpr usize s_BaseCompilerArgumentCount = 17u;
+// Slang's SPIR-V 1.5 profile does not include the standard capability set used by the generated Vulkan shaders.
+// Declare it explicitly so Slang produces the same output without silently rewriting the requested profile.
+static constexpr AStringView s_SpirvBaselineCapabilities[]{
+    "SPV_KHR_non_semantic_info",
+    "SPV_GOOGLE_user_type",
+    "spvDerivativeControl",
+    "spvImageQuery",
+    "spvImageGatherExtended",
+    "spvSparseResidency",
+    "spvMinLod",
+    "spvFragmentFullyCoveredEXT",
+};
+static constexpr usize s_BaseCompilerArgumentCount = 15u + sizeof(s_SpirvBaselineCapabilities) / sizeof(s_SpirvBaselineCapabilities[0]) * 2u;
 
 struct NormalizedDependencyRootAlias{
     Path root;
@@ -444,13 +452,14 @@ public:
         PushCompilerArgument(argumentArena, arguments, "-emit-spirv-directly");
         PushCompilerArgument(argumentArena, arguments, "-profile");
         PushCompilerArgument(argumentArena, arguments, request.targetProfile);
+        for(const AStringView capability : s_SpirvBaselineCapabilities){
+            PushCompilerArgument(argumentArena, arguments, "-capability");
+            PushCompilerArgument(argumentArena, arguments, capability);
+        }
         PushCompilerArgument(argumentArena, arguments, "-entry");
         PushCompilerArgument(argumentArena, arguments, request.entryPoint);
         PushCompilerArgument(argumentArena, arguments, "-stage");
         PushCompilerArgument(argumentArena, arguments, slangStage);
-        PushCompilerArgument(argumentArena, arguments, "-warnings-disable");
-        PushCompilerArgument(argumentArena, arguments, s_SuppressedCompilerWarnings);
-
         for(const Path& includeDirectory : request.includeDirectories){
             PushCompilerArgument(argumentArena, arguments, "-I");
             ScratchString includeDirectoryText = PathToString<char>(argumentArena, includeDirectory);
@@ -1139,7 +1148,7 @@ bool ShaderCook::parseShaderMeta(
     if(!__hidden_cook::ParseCompactStringField(nwbFilePath, asset, "stage", outEntry.stage))
         return false;
     outEntry.archiveStage = outEntry.stage;
-    if(!__hidden_cook::ParseCompactStringField(nwbFilePath, asset, "target_profile", outEntry.targetProfile))
+    if(!__hidden_cook::ParseStringField(nwbFilePath, asset, "target_profile", outEntry.targetProfile))
         return false;
     if(!__hidden_cook::ParseStringField(nwbFilePath, asset, "entry_point", outEntry.entryPoint))
         return false;
@@ -1519,7 +1528,7 @@ bool ShaderCook::computeSourceChecksum(
     appendChecksumLine(AStringView(entry.name));
     appendChecksumLine(entry.stage.view());
     appendChecksumLine(entry.archiveStage.view());
-    appendChecksumLine(entry.targetProfile.view());
+    appendChecksumLine(AStringView(entry.targetProfile));
     appendChecksumLine(AStringView(entry.entryPoint));
     appendChecksumLine(variantSignature);
     if(entry.implicitDefines.size() <= 1u){

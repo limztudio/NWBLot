@@ -248,47 +248,50 @@ def launch_captured_process(command, working_directory, env, name):
 
 def terminate_process(process, name, window_title=""):
     if process is None:
-        return
+        return None, ""
 
+    exit_code = None
+    tail = ""
     try:
-        if process.poll() is not None:
-            return
+        if process.poll() is None:
+            # Prefer a graceful shutdown so the app's normal exit path runs (e.g. the NWB_BUILDMODE Name-symbol sidecar write);
+            # a hard terminate() (TerminateProcess on Windows) would skip it. The window capture has already happened by the
+            # time we tear down, so this never affects what was captured -- only how the app exits.
+            host_platform = platform.system()
+            if host_platform == "Windows":
+                try:
+                    if request_windows_graceful_exit(process.pid):
+                        try:
+                            process.wait(timeout=10.0)
+                        except subprocess.TimeoutExpired:
+                            write_status(f"{name}: did not exit after WM_CLOSE; terminating")
+                except OSError as error:
+                    write_status(f"{name}: graceful WM_CLOSE failed ({error}); terminating")
 
-        # Prefer a graceful shutdown so the app's normal exit path runs (e.g. the NWB_BUILDMODE Name-symbol sidecar write);
-        # a hard terminate() (TerminateProcess on Windows) would skip it. The window capture has already happened by the
-        # time we tear down, so this never affects what was captured -- only how the app exits.
-        host_platform = platform.system()
-        if host_platform == "Windows":
-            try:
-                if request_windows_graceful_exit(process.pid):
+            elif host_platform == "Linux" and window_title:
+                if request_linux_graceful_exit(window_title):
                     try:
                         process.wait(timeout=10.0)
-                        return
                     except subprocess.TimeoutExpired:
-                        write_status(f"{name}: did not exit after WM_CLOSE; terminating")
-            except OSError as error:
-                write_status(f"{name}: graceful WM_CLOSE failed ({error}); terminating")
+                        write_status(f"{name}: did not exit after X11 WM_DELETE_WINDOW; terminating")
 
-        elif host_platform == "Linux" and window_title:
-            if request_linux_graceful_exit(window_title):
+            if process.poll() is None:
+                process.terminate()
                 try:
-                    process.wait(timeout=10.0)
-                    return
+                    process.wait(timeout=5.0)
                 except subprocess.TimeoutExpired:
-                    write_status(f"{name}: did not exit after X11 WM_DELETE_WINDOW; terminating")
-
-        process.terminate()
-        try:
-            process.wait(timeout=5.0)
-        except subprocess.TimeoutExpired:
-            write_status(f"{name}: did not exit after terminate; killing")
-            process.kill()
-            process.wait(timeout=5.0)
+                    write_status(f"{name}: did not exit after terminate; killing")
+                    process.kill()
+                    process.wait(timeout=5.0)
     finally:
-        if process.poll() is not None:
+        exit_code = process.poll()
+        if exit_code is not None:
+            tail = read_process_tail(process)
             capture = getattr(process, "_nwb_output_capture", None)
             process._nwb_output_capture = None
             dispose_process_output_capture(capture)
+
+    return exit_code, tail
 
 
 def clamp_relative_point(width, height, relative_x, relative_y):
@@ -1463,7 +1466,10 @@ def launch_logserver(args, executable, env):
         log_pattern = standalone_log_pattern(executable)
         return None, None, log_directory, snapshot_log_files(log_directory, log_pattern), log_pattern
 
-    logserver = Path(args.logserver_executable) if args.logserver_executable else executable_sibling(executable, "logserver")
+    # The process runs from the test runtime directory, so resolve an explicitly supplied relative path before Popen
+    # changes cwd. CTest supplies an absolute path, while direct smoke-script users commonly supply a repository-relative
+    # path.
+    logserver = Path(args.logserver_executable).resolve() if args.logserver_executable else executable_sibling(executable, "logserver")
     if not logserver:
         write_status("INFO: logserver executable was not found; using standalone loader logs")
         log_directory = executable.resolve().parent
@@ -1514,6 +1520,17 @@ def ensure_process_running(process, stage):
 
     tail = read_process_tail(process)
     raise SmokeFailure(f"testbed exited {stage} (exit {process.returncode})\n{tail}")
+
+
+def require_normal_testbed_exit(exit_code, tail):
+    if exit_code == 0:
+        return
+
+    if exit_code is None:
+        raise SmokeFailure("testbed did not exit during shutdown")
+
+    detail = f"\n{tail}" if tail else ""
+    raise SmokeFailure(f"testbed exited during graceful shutdown (exit {exit_code}){detail}")
 
 
 def validate_capture_result(result):
@@ -1601,6 +1618,9 @@ def launch_and_capture(args, backend):
     env = build_launch_environment(args)
     logserver_process = None
     testbed_process = None
+    result = None
+    testbed_exit_code = None
+    testbed_exit_tail = ""
     try:
         logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(args, executable, env)
         testbed_process = launch_testbed(args, executable, env, log_port)
@@ -1618,10 +1638,12 @@ def launch_and_capture(args, backend):
         ensure_process_running(testbed_process, "before checked capture")
         result = capture_checked_window(args, backend, handle)
         validate_expected_log_messages(log_directory, log_baseline, log_pattern, args.expect_log_message, args.reject_log_message)
-        return result
     finally:
-        terminate_process(testbed_process, "testbed", args.window_title)
+        testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, "testbed", args.window_title)
         terminate_process(logserver_process, "logserver")
+
+    require_normal_testbed_exit(testbed_exit_code, testbed_exit_tail)
+    return result
 
 
 def parse_args(argv):

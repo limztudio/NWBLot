@@ -70,7 +70,7 @@ TEST(EcsGraphics, GiMaterialSurfaceDispatchSupportsHeterogeneousFrostInterface){
 
     EXPECT_TRUE(ContainsText(dispatchCodegen, "s_ShadowTransmittanceBindNamespacePrefix = \"nwbShadowBindModel\""));
     EXPECT_TRUE(ContainsText(dispatchCodegen, "NwbMeshSurface nwbShadowDispatchSurface"));
-    EXPECT_TRUE(ContainsText(dispatchCodegen, "half3(0.5, 0.5, 0.5)"));
+    EXPECT_TRUE(ContainsText(dispatchCodegen, "half3(0.5h, 0.5h, 0.5h)"));
 
     EXPECT_TRUE(ContainsText(frostBind, "struct NwbFrostSurfaceMaterial"));
     EXPECT_TRUE(ContainsText(frostBind, "frost_albedo"));

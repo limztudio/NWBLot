@@ -10,9 +10,9 @@ asset.surface = "project/shaders/smoke_surface.surface";
 asset.bxdf = "project/shaders/smoke_lambert.bxdf";
 asset.parameters = {
     "surface": {
-        "base_color": "half4(0.85, 0.85, 0.85, 1.0)",
+        "base_color": "half4(0.85h, 0.85h, 0.85h, 1.0h)",
     },
     "runtime": {
-        "color_tint": "half4(1.0, 1.0, 1.0, 1.0)",
+        "color_tint": "half4(1.0h, 1.0h, 1.0h, 1.0h)",
     },
 };

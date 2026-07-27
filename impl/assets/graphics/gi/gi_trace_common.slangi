@@ -25,7 +25,7 @@
 // Neutral albedo for an unconsumed miss result. A hit without an authored material surface gets the same fixed
 // mid-grey only through the generated dispatch's explicit no-surface fallback, never by probing a named .bind field.
 #ifndef NWB_GI_SW_TRACE_DEFAULT_ALBEDO
-#define NWB_GI_SW_TRACE_DEFAULT_ALBEDO 0.5, 0.5, 0.5
+#define NWB_GI_SW_TRACE_DEFAULT_ALBEDO 0.5h, 0.5h, 0.5h
 #endif
 
 
@@ -66,7 +66,7 @@ float3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
         float3 lightVector;
         half3 lightRadiance;
         nwbSceneResolveLight(light, hit.worldPos, lightVector, lightRadiance);
-        if(all(lightRadiance <= half3(0.0)))
+        if(all(lightRadiance <= half3(0.0h)))
             continue;
         const float ndotl = max(dot(facingNormal, lightVector), 0.0);
         irradiance += float3(lightRadiance) * ndotl;
@@ -83,7 +83,7 @@ float3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
             float3 lv;
             half3 lr;
             nwbSceneResolveLight(light, hit.worldPos, lv, lr);
-            if(all(lr <= half3(0.0)))
+            if(all(lr <= half3(0.0h)))
                 continue;
             const float ndotl = max(dot(facingNormal, lv), 0.0);
             if(ndotl > bestNdotl){

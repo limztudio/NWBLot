@@ -76,10 +76,10 @@ bool nwbSwShadowLoadCoarseLight(
         // Callers ignore this value when false, but every out path must still be initialized for Slang and for any
         // future caller that refactors its control flow.
         outLight.slot = 0u;
-        outLight.samples.t00 = half3(0.0);
-        outLight.samples.t10 = half3(0.0);
-        outLight.samples.t01 = half3(0.0);
-        outLight.samples.t11 = half3(0.0);
+        outLight.samples.t00 = half3(0.0h);
+        outLight.samples.t10 = half3(0.0h);
+        outLight.samples.t01 = half3(0.0h);
+        outLight.samples.t11 = half3(0.0h);
         outLight.isEdge = false;
         return false;
     }

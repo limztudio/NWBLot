@@ -133,7 +133,7 @@ uint nwbMeshFrameViewHeapSlot(){
 // material chooses what those two scalars mean (e.g. roughness / metallic) while its shading model is fixed
 // by its `bxdf` declaration.
 void nwbWriteMeshGBufferParams(half3 baseColor, float3 normal, float3 worldPosition, half param0, half param1){
-    outGBufferBaseColor = half4(clamp(baseColor, half3(0.0), half3(1.0)), half(float(nwbMeshShadingModelId())));
+    outGBufferBaseColor = half4(clamp(baseColor, half3(0.0h), half3(1.0h)), half(float(nwbMeshShadingModelId())));
     outGBufferNormal = half4(nwbGBufferEncodeNormal(normal), half(param0));
     outGBufferWorldPosition = float4(worldPosition, param1);
 }

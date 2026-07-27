@@ -250,7 +250,7 @@ bool EmitDeferredBxdfDispatchModuleImpl(
         source += idView;
         source += "(surface, pixel);\n";
     }
-    source += "    default: return half3(1.0, 0.0, 1.0); // no engine default BXDF: an unknown id shows magenta\n";
+    source += "    default: return half3(1.0h, 0.0h, 1.0h); // no engine default BXDF: an unknown id shows magenta\n";
     source += "    }\n";
     source += "}\n\n#endif\n";
 
@@ -475,7 +475,7 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
     // Unknown id: no material surface is available (for example, an explicit opaque-stage material). Shadow consumes
     // only the neutral optical fields; GI may consume baseColor, where the fixed mid-grey is an explicit no-surface
     // fallback rather than an inferred project-material albedo.
-    source += "    default: return nwbMakeMeshSurface(half3(0.5, 0.5, 0.5), hit.worldNormal, half(0.0), half(0.0));\n";
+    source += "    default: return nwbMakeMeshSurface(half3(0.5h, 0.5h, 0.5h), hit.worldNormal, half(0.0), half(0.0));\n";
     source += "    }\n";
     source += "}\n\n#endif\n";
 

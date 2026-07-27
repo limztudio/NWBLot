@@ -181,8 +181,7 @@ static bool BuildMeshComputeShadowEntry(const ShaderCook::ShaderEntry& sourceEnt
         return false;
     if(!outEntry.stage.assign("cs"))
         return false;
-    if(!outEntry.targetProfile.assign(sourceEntry.targetProfile))
-        return false;
+    outEntry.targetProfile = sourceEntry.targetProfile;
 
     return SetShaderImplicitDefine(
         outEntry,

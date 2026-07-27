@@ -934,7 +934,10 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     BufferDesc bufferDesc;
     bufferDesc.byteSize = accelStructSize;
     bufferDesc.isAccelStructStorage = true;
-    bufferDesc.debugName = "AccelStructBuffer";
+    // Keep the backing allocation identifiable as the owning AS.  Aside from aiding GPU debugging,
+    // this makes allocator diagnostics point to the actual TLAS/BLAS lifetime rather than a generic
+    // storage-buffer label.
+    bufferDesc.debugName = desc.debugName;
     bufferDesc.isVirtual = desc.isVirtual;
 
     as->m_buffer = createBuffer(bufferDesc);
@@ -1895,8 +1898,12 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         }
     }
 
-    if(buildFlags & RayTracingAccelStructBuildFlags::AllowCompaction)
-        m_pendingCompactions.push_back(as);
+    if(buildFlags & RayTracingAccelStructBuildFlags::AllowCompaction){
+        m_pendingCompactions.emplace_back(
+            as,
+            Handle<AccelStruct>::deleter_type(&m_context.objectArena)
+        );
+    }
 
     retainResource(accelStructResource);
 }

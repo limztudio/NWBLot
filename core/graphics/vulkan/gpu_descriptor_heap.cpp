@@ -344,7 +344,13 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         for(u32 slot = 0u; slot < s_AccelStructCapacity; ++slot)
             m_accelStructSlots.liveSlots.emplace_back(0u);
         m_accelStructBufferBlocks.resize(s_AccelStructCapacity);
-        m_accelStructResources.resize(s_AccelStructCapacity);
+        m_accelStructResources.reserve(s_AccelStructCapacity);
+        for(u32 slot = 0u; slot < s_AccelStructCapacity; ++slot){
+            m_accelStructResources.emplace_back(
+                nullptr,
+                RayTracingAccelStructHandle::deleter_type(&m_context.objectArena)
+            );
+        }
     }
 
     // Carve one persistent block per segment sized to the driver-queried set block for each layout, and cache each
@@ -595,8 +601,12 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
         }
         if(!writeDescriptorBuffer(writeItem, descriptorClass))
             return false;
-        if(!retained)
-            retained = RayTracingAccelStructHandle(static_cast<RayTracingAccelStruct*>(writeItem.resourceHandle));
+        if(!retained){
+            retained = RayTracingAccelStructHandle(
+                static_cast<RayTracingAccelStruct*>(writeItem.resourceHandle),
+                RayTracingAccelStructHandle::deleter_type(&m_context.objectArena)
+            );
+        }
         return true;
     }
 

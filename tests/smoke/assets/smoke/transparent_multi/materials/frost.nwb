@@ -15,10 +15,10 @@ asset.refractive = 0;
 asset.shader_variant = "default";
 asset.parameters = {
     "frost": {
-        "frost_albedo": "half4(0.2, 0.4, 0.9, 1.0)",
-        "roughness_value": "half(0.5)",
+        "frost_albedo": "half4(0.2h, 0.4h, 0.9h, 1.0h)",
+        "roughness_value": "half(0.5h)",
     },
     "sparkle": {
-        "sparkle_tint": "half3(1.0, 1.0, 1.0)",
+        "sparkle_tint": "half3(1.0h, 1.0h, 1.0h)",
     },
 };

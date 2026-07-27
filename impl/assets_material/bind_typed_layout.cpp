@@ -186,8 +186,13 @@ static bool ParseMaterialParameterUnsignedToken(
 
 static bool ParseMaterialParameterToken(const AStringView token, const MaterialParameterValueType::Enum type, u32& outValue){
     AStringView numericToken = token;
-    if(type == MaterialParameterValueType::Float || type == MaterialParameterValueType::Half)
+    if(type == MaterialParameterValueType::Float)
         numericToken = StripMaterialNumericSuffix(token, 'f', 'F');
+    else if(type == MaterialParameterValueType::Half){
+        numericToken = StripMaterialNumericSuffix(token, 'h', 'H');
+        if(numericToken == token)
+            numericToken = StripMaterialNumericSuffix(token, 'f', 'F');
+    }
     else if(
         type == MaterialParameterValueType::UChar
         || type == MaterialParameterValueType::UShort

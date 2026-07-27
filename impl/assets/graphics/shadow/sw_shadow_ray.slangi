@@ -37,7 +37,7 @@ half3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, c
     float tMin;
     float tEnd;
     if(!nwbShadowBuildLightRay(worldPosition, normal, light, jitter, toLight, tMin, tEnd))
-        return half3(1.0, 1.0, 1.0);
+        return half3(1.0h, 1.0h, 1.0h);
 
     const float3 origin = worldPosition + normal * tMin;
     NwbShadowVisibilityAccumulator acc = nwbShadowVisibilityBegin();

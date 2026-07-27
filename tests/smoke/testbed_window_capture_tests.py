@@ -15,21 +15,23 @@ import testbed_window_capture_smoke as window_capture_smoke  # noqa: E402
 from testbed_window_capture_smoke import (  # noqa: E402
     launch_captured_process,
     read_process_tail,
+    require_normal_testbed_exit,
     terminate_process,
 )
 
 
 class _FakeProcess:
-    def __init__(self, graceful_exit=False):
+    def __init__(self, graceful_exit=False, graceful_exit_code=0):
         self.pid = 4321
         self._alive = True
         self._graceful_exit = graceful_exit
+        self._graceful_exit_code = graceful_exit_code
         self.terminate_calls = 0
         self.kill_calls = 0
         self.wait_timeouts = []
 
     def poll(self):
-        return None if self._alive else 0
+        return None if self._alive else self._graceful_exit_code
 
     def wait(self, timeout):
         self.wait_timeouts.append(timeout)
@@ -37,7 +39,7 @@ class _FakeProcess:
             self._alive = False
         if self._alive:
             raise subprocess.TimeoutExpired("fake", timeout)
-        return 0
+        return self._graceful_exit_code
 
     def terminate(self):
         self.terminate_calls += 1
@@ -138,6 +140,21 @@ class GracefulTerminationTests(unittest.TestCase):
         windows_close.assert_called_once_with(process.pid)
         linux_close.assert_not_called()
         self.assertEqual(process.terminate_calls, 0)
+
+    def test_nonzero_graceful_exit_is_reported_to_the_smoke_runner(self):
+        process = _FakeProcess(graceful_exit=True, graceful_exit_code=-6)
+        with mock.patch.object(window_capture_smoke.platform, "system", return_value="Linux"), \
+             mock.patch.object(window_capture_smoke, "request_linux_graceful_exit", return_value=True):
+            exit_code, tail = terminate_process(process, "testbed", "NWB Testbed")
+
+        self.assertEqual(exit_code, -6)
+        self.assertEqual(tail, "")
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "exit -6"):
+            require_normal_testbed_exit(exit_code, tail)
+
+    def test_missing_shutdown_exit_code_is_reported_to_the_smoke_runner(self):
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "did not exit"):
+            require_normal_testbed_exit(None, "")
 
 
 if __name__ == "__main__":

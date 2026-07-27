@@ -163,6 +163,18 @@ public:
     [[nodiscard]] CooperativeVectorDeviceFeatures queryCoopVecFeatures()const;
     [[nodiscard]] usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const;
 
+    // Schedules CPU-side graphics work on the graphics worker pool. Callers must wait for the returned job before
+    // submitting or destroying any command lists/resources the work touches.
+    template<typename Func>
+    [[nodiscard]] JobHandle scheduleGraphicsJob(Func&& task){
+        return m_jobSystem.submit(Forward<Func>(task));
+    }
+
+    template<typename Func>
+    [[nodiscard]] JobHandle scheduleGraphicsJob(Func&& task, const JobHandle dependency){
+        return m_jobSystem.submit(Forward<Func>(task), dependency);
+    }
+
     void waitJob(JobHandle handle)const;
     void waitAllJobs()const{ m_jobSystem.waitAll(); }
 

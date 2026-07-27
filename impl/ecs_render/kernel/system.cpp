@@ -297,6 +297,29 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
 
     auto& device = *m_graphics.getDevice();
 
+    bool shadowPrepareRecorded = false;
+    const Core::Graphics::JobHandle shadowPrepareJob = m_graphics.scheduleGraphicsJob([this, &deferredTargets, &shadowPrepareRecorded](){
+        shadowPrepareRecorded = recordShadowPrepareCommandList(deferredTargets);
+    });
+    if(!shadowPrepareJob.valid())
+        return false;
+
+    m_graphics.waitJob(shadowPrepareJob);
+    if(!shadowPrepareRecorded)
+        return false;
+
+    Core::CommandList* shadowPrepareCommandLists[] = { m_shadowPrepareCommandList.get() };
+    if(device.executeCommandLists(shadowPrepareCommandLists, 1) == 0u){
+        m_shadowPrepareStateHandoff.reset();
+        return false;
+    }
+
+    return true;
+}
+
+bool RendererSystem::recordShadowPrepareCommandList(DeferredFrameTargets& deferredTargets){
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
+
     m_shadowPrepareCommandList->open();
     // The software-shadow trace selects its G-buffer heap descriptors through the target-generation slot cbuffer. It
     // runs before deferred lighting, so make the cbuffer resident on the ordered shadow-preparation command list first.
@@ -323,16 +346,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     // This submission precedes render on Graphics. Preserve its final resource state so the first render
     // command buffer never falls back to Unknown/UNDEFINED for preparation outputs.
     m_shadowPrepareCommandList->close(&m_shadowPrepareStateHandoff);
-    if(!traceMaterialContextUploaded || !m_shadowPrepareStateHandoff.valid())
-        return false;
-
-    Core::CommandList* shadowPrepareCommandLists[] = { m_shadowPrepareCommandList.get() };
-    if(device.executeCommandLists(shadowPrepareCommandLists, 1) == 0u){
-        m_shadowPrepareStateHandoff.reset();
-        return false;
-    }
-
-    return true;
+    return traceMaterialContextUploaded && m_shadowPrepareStateHandoff.valid();
 }
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
@@ -348,26 +362,37 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!m_shadowPrepareStateHandoff.valid())
         return;
 
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     const CsgFrameState csgFrameState = m_preparedCsgFrameState;
     const bool hasOpaqueCsgFrameWork = csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
     NWB_ASSERT(csgFrameState.empty() || deferredTargets.csgIntervalTargetsValid());
     auto* device = m_graphics.getDevice();
     Core::CommandList* gbufferCommandList = m_gbufferCommandList.get();
     Core::CommandList* postGbufferCommandList = m_postGbufferCommandList.get();
-    Core::CommandList* commandList = gbufferCommandList;
-    NWB_ASSERT(commandList);
+    NWB_ASSERT(gbufferCommandList);
     NWB_ASSERT(postGbufferCommandList);
-    commandList->open(&m_shadowPrepareStateHandoff);
 
-    // Reset every GPU-timing query pool on the device timeline now, while the command buffer has no render pass
-    // open yet (vkCmdResetQueryPool is illegal inside a dynamic render pass). This makes every pool defined before
-    // the timestamp writes below, so the validation layer never reports a first-use "query not reset" for the
-    // per-pass timers. collect() already read back and cleared last frame's results before this frame's render.
-    m_graphics.gpuTiming().recordFrameReset(*commandList);
+    bool commandListReady = false;
+    const Core::Graphics::JobHandle recordingJob = m_graphics.scheduleGraphicsJob([
+        this,
+        framebuffer,
+        &deferredTargets,
+        csgFrameState,
+        hasOpaqueCsgFrameWork,
+        device,
+        gbufferCommandList,
+        postGbufferCommandList,
+        &commandListReady
+    ](){
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+        Core::CommandList* commandList = gbufferCommandList;
+        commandList->open(&m_shadowPrepareStateHandoff);
 
-    bool commandListReady = true;
-    {
+        // Reset every GPU-timing query pool on the device timeline now, while the command buffer has no render pass
+        // open yet (vkCmdResetQueryPool is illegal inside a dynamic render pass). This makes every pool defined before
+        // the timestamp writes below, so the validation layer never reports a first-use "query not reset" for the
+        // per-pass timers. collect() already read back and cleared last frame's results before this frame's render.
+        m_graphics.gpuTiming().recordFrameReset(*commandList);
+
         Core::GpuTimingMeasure frameTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Frame, device, *commandList);
 
         MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
@@ -493,14 +518,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         // The opaque/G-buffer producer and every post-G-buffer consumer remain ordered on Graphics, but use
         // distinct primary command buffers. Capture the actual final tracked state only after close has appended
         // keepInitialState restores; the next list imports that snapshot before recording its first barrier.
-        // This is intentionally sequential for now: it establishes the cross-buffer state contract that worker
-        // recording will use before we move any pass to another CPU thread.
+        // The job records this producer/consumer pair serially because the consumer imports the producer's final
+        // tracked state. Independent future packets can use separate graphics jobs without changing submission order.
         frameTiming.finishMarker();
         commandList->close(&m_gbufferStateHandoff);
         if(!m_gbufferStateHandoff.valid()){
             frameTiming.discardTiming();
             return;
         }
+        commandListReady = true;
 
         commandList = postGbufferCommandList;
         commandList->open(&m_gbufferStateHandoff);
@@ -585,9 +611,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         // Vulkan timestamps may span command buffers as long as submission order is fixed. The debug marker closed
         // above remains local to the producer command buffer; this ending timestamp preserves the full frame metric.
         frameTiming.finishTiming(*commandList);
-    }
+        commandList->close();
+    });
+    if(!recordingJob.valid())
+        return;
 
-    commandList->close();
+    m_graphics.waitJob(recordingJob);
     if(!commandListReady)
         return;
 

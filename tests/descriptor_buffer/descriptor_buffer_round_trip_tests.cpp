@@ -97,7 +97,7 @@ public:
 
 private:
     static inline constexpr Name s_TestArenaName{"tests/descriptor_buffer/graphics_object_arena"};
-    static inline constexpr u32 s_TestWorkerThreadCount = 1u;
+    static inline constexpr u32 s_TestWorkerThreadCount = 2u;
 
     Alloc::GlobalArena m_objectArena;
     GraphicsAllocator m_allocator;
@@ -241,6 +241,64 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffTransfersFinalBuffe
     consumer->close();
 
     CommandList* commandLists[] = { producer.get(), consumer.get() };
+    EXPECT_GT(device.executeCommandLists(commandLists, 2u), 0u);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Independent primary command lists use distinct Vulkan command pools. Start both recording jobs at the same latch
+// so this exercises the worker-thread path instead of merely submitting them in a fixed order on the main thread.
+TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcurrentlyOnGraphicsWorkers){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto firstBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    auto secondBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(firstBuffer.get(), nullptr);
+    ASSERT_NE(secondBuffer.get(), nullptr);
+
+    auto firstCommandList = device.createCommandList();
+    auto secondCommandList = device.createCommandList();
+    ASSERT_NE(firstCommandList.get(), nullptr);
+    ASSERT_NE(secondCommandList.get(), nullptr);
+
+    Latch recordingStarted(2);
+    bool firstRecorded = false;
+    bool secondRecorded = false;
+    const Graphics::JobHandle firstJob = graphics.scheduleGraphicsJob([&](){
+        recordingStarted.count_down();
+        recordingStarted.wait();
+        firstCommandList->open();
+        firstCommandList->setBufferState(firstBuffer.get(), ResourceStates::CopyDest);
+        firstCommandList->close();
+        firstRecorded = true;
+    });
+    const Graphics::JobHandle secondJob = graphics.scheduleGraphicsJob([&](){
+        recordingStarted.count_down();
+        recordingStarted.wait();
+        secondCommandList->open();
+        secondCommandList->setBufferState(secondBuffer.get(), ResourceStates::CopyDest);
+        secondCommandList->close();
+        secondRecorded = true;
+    });
+    ASSERT_TRUE(firstJob.valid());
+    ASSERT_TRUE(secondJob.valid());
+
+    graphics.waitJob(firstJob);
+    graphics.waitJob(secondJob);
+    EXPECT_TRUE(firstRecorded);
+    EXPECT_TRUE(secondRecorded);
+
+    CommandList* commandLists[] = { firstCommandList.get(), secondCommandList.get() };
     EXPECT_GT(device.executeCommandLists(commandLists, 2u), 0u);
     EXPECT_TRUE(device.waitForIdle());
 }

@@ -18,7 +18,6 @@ target_sources(nwb_fbx_to_nwb PRIVATE
 target_link_libraries(nwb_fbx_to_nwb PRIVATE
     nwb_common
     nwb_alloc
-    nwb_mesh
     nwb_metascript
     nwb_logclient
     nwb::ufbx

@@ -39,7 +39,7 @@ static Core::BufferHandle SetupStructuredBuffer(
     const usize count,
     const tchar* label
 ){
-    if(!RuntimeMeshBufferUpload::PayloadByteCountFits<PayloadT>(count)){
+    if(MultiplyOverflows<usize>(count, sizeof(PayloadT))){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
         return {};
     }

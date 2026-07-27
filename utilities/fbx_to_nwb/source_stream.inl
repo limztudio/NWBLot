@@ -495,7 +495,7 @@ template<typename Value, typename Lookup>
     const bool usedDefaultUvs,
     SourceTangentReport& outTangentReport
 ){
-    using RebuildVertex = Core::Mesh::TangentFrameRebuildVertex;
+    using RebuildVertex = ::TangentFrameRebuildVertex;
 
     outTangentReport = SourceTangentReport{};
     NWB_ASSERT(!mesh.vertexRefs.empty());
@@ -548,8 +548,9 @@ template<typename Value, typename Lookup>
         return false;
     }
 
-    Core::Mesh::TangentFrameRebuildResult rebuildResult;
-    if(!Core::Mesh::RebuildTangentFrames(rebuildVertices, rebuildIndices, &rebuildResult)){
+    Core::Alloc::ScratchArena scratchArena(UtilityDetail::s_SourceTangentRebuildScratch);
+    TangentFrameRebuildResult rebuildResult;
+    if(!::RebuildTangentFrames(scratchArena, rebuildVertices, rebuildIndices, &rebuildResult)){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate source tangent stream"));
         return false;
     }

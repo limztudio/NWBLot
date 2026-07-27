@@ -175,7 +175,7 @@ public:
         if constexpr(requires{ Arena::s_MaxAlignSize; })
             static_assert(alignof(T) <= Arena::s_MaxAlignSize, "Arena cannot allocate types with alignment greater than s_MaxAlignSize.");
 
-        return AllocDetail::AllocateTyped<T>(static_cast<Arena&>(*this), count);
+        return ::AllocateArenaTyped<T>(static_cast<Arena&>(*this), count);
     }
 
     template<typename T>
@@ -183,7 +183,7 @@ public:
         if constexpr(requires{ Arena::s_MaxAlignSize; })
             static_assert(alignof(T) <= Arena::s_MaxAlignSize, "Arena cannot deallocate types with alignment greater than s_MaxAlignSize.");
 
-        AllocDetail::DeallocateTyped<T>(static_cast<Arena&>(*this), p, count);
+        ::DeallocateArenaTyped<T>(static_cast<Arena&>(*this), p, count);
     }
 };
 

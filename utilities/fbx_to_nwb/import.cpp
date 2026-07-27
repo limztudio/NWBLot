@@ -6,9 +6,10 @@
 
 #include "skin.h"
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <global/math/frame.h>
-#include <core/mesh/tangent_frame_rebuild.h>
+#include <global/mesh/tangent_frame_rebuild.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

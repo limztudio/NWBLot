@@ -34,11 +34,6 @@ using ViewDenseIndexTuple = Tuple<Conditional_T<true, u32, Ts>...>;
 
 using ViewEntityVector = Vector<EntityID, Alloc::GlobalArena>;
 
-template<typename... Ts>
-inline constexpr auto ForwardAsTuple(Ts&&... values){
-    return Tuple<Ts&&...>(Forward<Ts>(values)...);
-}
-
 struct ViewTupleAccess{
     template<usize I, typename... Ts>
     static const ViewEntityVector* entityVector(const Tuple<ComponentPool<Ts>*...>& pools){
@@ -145,7 +140,7 @@ struct ViewIterator{
     }
     template<usize... Is>
     ValueTuple deref(IndexSequence<Is...>)const{
-        return ForwardAsTuple(entity, ViewTupleAccess::componentAtDense<Is>(pools, Get<Is>(denseIndices))...);
+        return ::ForwardAsTuple(entity, ViewTupleAccess::componentAtDense<Is>(pools, Get<Is>(denseIndices))...);
     }
 
     ViewIterator& operator++(){

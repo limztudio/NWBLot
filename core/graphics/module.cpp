@@ -632,6 +632,46 @@ void Graphics::render(){
     m_gpuTiming.collect(*device, m_frameIndex);
     m_gpuTiming.beginFrame(m_frameIndex);
 
+    // Reset every known timer-query pool before any render pass can record a timestamp. Render passes submit in
+    // registration order, so keeping this preamble on Graphics makes the reset precede skinning, shadow preparation,
+    // and every later renderer packet on the same GPU timeline.
+    if(m_gpuTiming.queryCollectionEnabled()){
+        if(!m_gpuTiming.materializeRequestedQueries(*device))
+            NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to materialize one or more requested GPU-timing query pools"));
+
+        // Do not allow render-pass scopes to reuse a prior frame's reset if recording or submitting this preamble
+        // fails. confirmFrameReset() below reenables only the pools covered by the successful submission.
+        m_gpuTiming.discardFrameReset();
+        CommandListHandle frameTimingCommandList = device->createCommandList();
+        if(!frameTimingCommandList)
+            NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to create the frame GPU-timing reset command list"));
+        else{
+            frameTimingCommandList->open();
+            if(!frameTimingCommandList->hasCommandBuffer())
+                NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to open the frame GPU-timing reset command list"));
+            else{
+                m_gpuTiming.recordFrameReset(*frameTimingCommandList);
+                frameTimingCommandList->close();
+
+                if(!frameTimingCommandList->hasCommandBuffer()){
+                    m_gpuTiming.discardFrameReset();
+                    NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to close the frame GPU-timing reset command list"));
+                }
+                else{
+                    CommandList* commandLists[] = { frameTimingCommandList.get() };
+                    bool frameTimingResetSubmitted = false;
+                    device->executeCommandLists(commandLists, 1u, CommandQueue::Graphics, &frameTimingResetSubmitted);
+                    if(!frameTimingResetSubmitted){
+                        m_gpuTiming.discardFrameReset();
+                        NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to submit the frame GPU-timing reset command list"));
+                    }
+                    else
+                        m_gpuTiming.confirmFrameReset();
+                }
+            }
+        }
+    }
+
     for(auto* renderPass : m_renderPasses){
         if(!renderPass->prepareResources(framebuffer)){
             NWB_LOGGER_WARNING(NWB_TEXT("Graphics: render pass skipped after resource preparation failed"));

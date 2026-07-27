@@ -94,6 +94,12 @@ public:
 
     [[nodiscard]] Graphics& graphics(){ return m_graphics; }
     [[nodiscard]] Alloc::GlobalArena& arena(){ return m_objectArena; }
+    [[nodiscard]] Perf::TimingRecorder& gpuTimingSink(){ return m_gpuTiming; }
+
+    void setGpuTimingEnabled(const bool enabled){
+        m_gpuTiming.setEnabled(enabled);
+        m_graphics.gpuTiming().setQueryCollectionEnabled(enabled);
+    }
 
 private:
     static inline constexpr Name s_TestArenaName{"tests/descriptor_buffer/graphics_object_arena"};
@@ -178,6 +184,84 @@ Optional<Common::LoggerRegistrationGuard> DescriptorBufferRoundTripTest::s_logge
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr GpuTimingScopeDefinition s_FrameTimingPreambleScope("tests/frame_timing_preamble");
+inline constexpr GpuTimingScopeDefinition s_FrameTimingLateActivationScope("tests/frame_timing_late_activation");
+
+
+// Records a timing scope inside dynamic rendering, where vkCmdResetQueryPool is illegal. The scope can therefore
+// only receive a query when Graphics submitted its timer-query reset preamble before invoking this render pass.
+class FrameTimingPreambleProbePass final : public IRenderPass{
+public:
+    explicit FrameTimingPreambleProbePass(
+        Graphics& graphics,
+        const GpuTimingScopeDefinition& timingScope = s_FrameTimingPreambleScope
+    )
+        : IRenderPass(graphics)
+        , m_timingScope(timingScope)
+    {}
+
+
+public:
+    [[nodiscard]] bool initialize(){
+        auto* device = getGraphics().getDevice();
+        if(!device)
+            return false;
+
+        m_target = device->createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setFormat(Format::RGBA8_UNORM)
+                .setInRenderTarget(true)
+                .setInitialState(ResourceStates::Common)
+        );
+        if(!m_target)
+            return false;
+
+        m_framebuffer = device->createFramebuffer(FramebufferDesc().addColorAttachment(m_target.get()));
+        return m_framebuffer != nullptr;
+    }
+
+    virtual void render(Framebuffer*)override{
+        if(m_recorded || !m_framebuffer)
+            return;
+
+        auto* device = getGraphics().getDevice();
+        if(!device)
+            return;
+
+        CommandListHandle commandList = device->createCommandList();
+        if(!commandList)
+            return;
+
+        commandList->open();
+        GraphicsState graphicsState;
+        graphicsState.setFramebuffer(m_framebuffer.get());
+        commandList->setGraphicsState(graphicsState);
+        {
+            GpuTimingMeasure timing(getGraphics().gpuTiming(), m_timingScope, device, *commandList);
+        }
+        commandList->endRenderPass();
+        commandList->close();
+
+        CommandList* commandLists[] = { commandList.get() };
+        device->executeCommandLists(commandLists, 1u, CommandQueue::Graphics, &m_recorded);
+    }
+
+    [[nodiscard]] bool recorded()const{ return m_recorded; }
+
+
+private:
+    const GpuTimingScopeDefinition& m_timingScope;
+    TextureHandle m_target;
+    FramebufferHandle m_framebuffer;
+    bool m_recorded = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Manager is enabled and its two global segments report a non-zero device address after device init. The bound
 // address is what vkCmdBindDescriptorBuffersEXT hands to the command buffer; a zero address would mean the segment
 // buffer was never allocated/mapped. This is the gate every subsequent case depends on.
@@ -189,6 +273,69 @@ TEST_F(DescriptorBufferRoundTripTest, ManagerEnabledAndSegmentsMapped){
     EXPECT_NE(mgr.getSamplerBindingInfo().address, 0u);
     EXPECT_EQ(mgr.getResourceBufferIndex(), 0u);
     EXPECT_EQ(mgr.getSamplerBufferIndex(), 1u);
+}
+
+
+// The global reset must precede every render pass. This probe places its timing scope inside dynamic rendering,
+// where it cannot reset a newly reserved query itself; a valid sample on the next frame proves the Graphics preamble
+// made the query device-ready before render-pass recording began.
+TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleResetsTimerQueriesBeforeRenderPasses){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingPreambleScope.identity, &device, 1u));
+
+    FrameTimingPreambleProbePass probePass(graphics);
+    ASSERT_TRUE(probePass.initialize());
+
+    graphics.addRenderPassToBack(probePass);
+    graphics.render();
+    graphics.removeRenderPass(probePass);
+
+    ASSERT_TRUE(probePass.recorded());
+    ASSERT_TRUE(device.waitForIdle());
+
+    // collect() runs at the next frame open, before that frame's reset can overwrite the completed sample.
+    graphics.render();
+    ASSERT_TRUE(device.waitForIdle());
+    EXPECT_TRUE(timingSink.stats(s_FrameTimingPreambleScope.identity).valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
+// Renderer systems declare their timing capacities while resources validate, often before a project enables capture.
+// The next Graphics preamble must materialize those declarations before the first dynamic-rendering scope records.
+TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQueriesAfterCaptureActivation){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(false);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingLateActivationScope.identity, &device, 1u));
+    s_scope->setGpuTimingEnabled(true);
+
+    FrameTimingPreambleProbePass probePass(graphics, s_FrameTimingLateActivationScope);
+    ASSERT_TRUE(probePass.initialize());
+
+    graphics.addRenderPassToBack(probePass);
+    graphics.render();
+    graphics.removeRenderPass(probePass);
+
+    ASSERT_TRUE(probePass.recorded());
+    ASSERT_TRUE(device.waitForIdle());
+
+    graphics.render();
+    ASSERT_TRUE(device.waitForIdle());
+    EXPECT_TRUE(timingSink.stats(s_FrameTimingLateActivationScope.identity).valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
 }
 
 
@@ -241,7 +388,9 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffTransfersFinalBuffe
     consumer->close();
 
     CommandList* commandLists[] = { producer.get(), consumer.get() };
-    EXPECT_GT(device.executeCommandLists(commandLists, 2u), 0u);
+    bool submitted = false;
+    EXPECT_GT(device.executeCommandLists(commandLists, 2u, CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_TRUE(submitted);
     EXPECT_TRUE(device.waitForIdle());
 }
 
@@ -299,7 +448,9 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
     EXPECT_TRUE(secondRecorded);
 
     CommandList* commandLists[] = { firstCommandList.get(), secondCommandList.get() };
-    EXPECT_GT(device.executeCommandLists(commandLists, 2u), 0u);
+    bool submitted = false;
+    EXPECT_GT(device.executeCommandLists(commandLists, 2u, CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_TRUE(submitted);
     EXPECT_TRUE(device.waitForIdle());
 }
 

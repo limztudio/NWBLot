@@ -60,6 +60,9 @@ private:
         u64 frameIndex = 0u;
         u32 epoch = 0u;
         bool pending = false;
+        // Set while a frame-preamble command list contains a reset for this pool. It becomes deviceReady only after
+        // that command list has been submitted successfully.
+        bool frameResetRecorded = false;
         // False until this pool has been reset on the DEVICE timeline by recordFrameReset() at a frame open. Pools
         // created outside a render pass can self-reset before their first write; render-pass scopes must use prewarmed
         // pools that have already passed through recordFrameReset().
@@ -79,10 +82,16 @@ public:
 public:
     void setEnabled(const bool enabled){
         m_enabled = enabled;
+        if(!m_enabled)
+            discardFrameReset();
     }
 
     void collect(Device& device, Perf::TimingSink& timing, u32 epoch);
     void recordFrameReset(CommandList& commandList);
+    void confirmFrameReset();
+    void discardFrameReset();
+    void requestQueries(u32 queryCount);
+    [[nodiscard]] bool materializeRequestedQueries(Device& device);
     [[nodiscard]] bool reserveQueries(Device& device, u32 queryCount);
     [[nodiscard]] GpuTimingScope beginQuery(Device& device, CommandList& commandList, u64 frameIndex, u32 epoch);
     void endQuery(CommandList& commandList, const GpuTimingScope& scope);
@@ -96,6 +105,7 @@ private:
 private:
     QueryVector m_queries;
     Perf::TimingScopeId m_timingScope;
+    u32 m_requestedQueryCount = 0u;
     bool m_enabled = false;
 };
 
@@ -122,12 +132,21 @@ public:
     void collect(Device& device);
     void collect(Device& device, u64 publishFrameIndex);
     void beginFrame(u64 frameIndex);
+    // Declares the capacity a scope needs. When capture is inactive this records the request without allocating GPU
+    // query pools, so a later capture activation can materialize them before its first frame preamble.
     [[nodiscard]] bool prepareScopeQueries(const Name& scopeName, Device* device, u32 queryCount);
-    // Record a device-timeline reset of every timer query pool onto the command buffer. The renderer MUST call
-    // this at frame open, before opening any dynamic render pass (vkCmdResetQueryPool is illegal inside one), so
-    // every pool is defined before this frame's timestamp writes -- the validation-correct alternative to a
-    // host-side reset the layer cannot order against the recorded writes.
+    // Materializes every declared scope before the frame preamble. Graphics calls this after capture can be toggled
+    // on at runtime and before dynamic-rendering scopes need their query pools reset.
+    [[nodiscard]] bool materializeRequestedQueries(Device& device);
+    // Record a device-timeline reset of every available timer-query pool onto the command buffer. Graphics emits this
+    // in its frame preamble before it invokes any render pass and before any dynamic render pass opens
+    // (vkCmdResetQueryPool is illegal inside one), so every pool is defined before this frame's timestamp writes --
+    // the validation-correct alternative to a host-side reset the layer cannot order against recorded writes.
+    // Call confirmFrameReset() only after that command list submits successfully. discardFrameReset() invalidates
+    // prior-frame readiness when a new preamble cannot be submitted.
     void recordFrameReset(CommandList& commandList);
+    void confirmFrameReset();
+    void discardFrameReset();
 
 
 private:

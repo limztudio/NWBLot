@@ -684,7 +684,15 @@ CommandListHandle Device::createCommandList(const CommandListParameters& params)
     return CommandListHandle(cmdList, CommandListHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-u64 Device::executeCommandLists(CommandList* const* pCommandLists, usize numCommandLists, CommandQueue::Enum executionQueue){
+u64 Device::executeCommandLists(
+    CommandList* const* pCommandLists,
+    const usize numCommandLists,
+    const CommandQueue::Enum executionQueue,
+    bool* const outCommandListsSubmitted
+){
+    if(outCommandListsSubmitted)
+        *outCommandListsSubmitted = false;
+
     Queue* queue = getQueue(executionQueue);
     if(!queue){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: requested queue is not available"));
@@ -703,11 +711,13 @@ u64 Device::executeCommandLists(CommandList* const* pCommandLists, usize numComm
         }
     }
 
-    bool submittedWork = false;
-    const u64 submittedID = queue->submit(pCommandLists, numCommandLists, &submittedWork);
+    bool submissionAccepted = false;
+    const u64 submittedID = queue->submit(pCommandLists, numCommandLists, &submissionAccepted);
+    if(outCommandListsSubmitted)
+        *outCommandListsSubmitted = submissionAccepted && !submittedOwners.empty();
 
     if(!submittedOwners.empty()){
-        if(submittedWork){
+        if(submissionAccepted){
             m_uploadManager.submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
             m_scratchManager.submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
         }

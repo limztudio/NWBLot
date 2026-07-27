@@ -92,6 +92,7 @@ concept DeviceApi = requires(
     const RayTracingClusterOperationParams& clusterOperationParams,
     const CommandListParameters& commandListParams,
     CommandList* const* commandLists,
+    bool* outSubmitted,
     void* featureInfo,
     Object nativeObject
 ){
@@ -146,6 +147,7 @@ concept DeviceApi = requires(
 
     { device.createCommandList(commandListParams) }->SameAs<CommandListHandle>;
     { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics) }->SameAs<u64>;
+    { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics, outSubmitted) }->SameAs<u64>;
     device.queueWaitForCommandList(CommandQueue::Graphics, CommandQueue::Graphics, u64{});
     { device.waitForIdle() }->SameAs<bool>;
     device.runGarbageCollection();
@@ -193,6 +195,7 @@ concept CommandListApi = requires(
 ){
     commandList.open();
     commandList.close();
+    { commandList.hasCommandBuffer() }->SameAs<bool>;
     commandList.open(&resourceStateHandoff);
     commandList.close(&resourceStateHandoff);
     resourceStateHandoff.reset();

@@ -309,7 +309,9 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
         return false;
 
     Core::CommandList* shadowPrepareCommandLists[] = { m_shadowPrepareCommandList.get() };
-    if(device.executeCommandLists(shadowPrepareCommandLists, 1) == 0u){
+    bool shadowPrepareSubmitted = false;
+    device.executeCommandLists(shadowPrepareCommandLists, 1u, Core::CommandQueue::Graphics, &shadowPrepareSubmitted);
+    if(!shadowPrepareSubmitted){
         m_shadowPrepareStateHandoff.reset();
         return false;
     }
@@ -387,12 +389,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         Core::CommandList* commandList = gbufferCommandList;
         commandList->open(&m_shadowPrepareStateHandoff);
 
-        // Reset every GPU-timing query pool on the device timeline now, while the command buffer has no render pass
-        // open yet (vkCmdResetQueryPool is illegal inside a dynamic render pass). This makes every pool defined before
-        // the timestamp writes below, so the validation layer never reports a first-use "query not reset" for the
-        // per-pass timers. collect() already read back and cleared last frame's results before this frame's render.
-        m_graphics.gpuTiming().recordFrameReset(*commandList);
-
+        // Graphics has already reset every timer-query pool in the frame preamble, before shadow preparation and
+        // every other render pass. This list can therefore begin the renderer frame scope without invalidating an
+        // earlier pass's current-frame timestamps.
         Core::GpuTimingMeasure frameTiming(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Frame, device, *commandList);
 
         MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};

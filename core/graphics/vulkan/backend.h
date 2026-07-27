@@ -693,7 +693,7 @@ public:
     void addWaitSemaphore(VkSemaphore semaphore, u64 value);
     void addSignalSemaphore(VkSemaphore semaphore, u64 value);
 
-    u64 submit(CommandList* const* ppCmd, usize numCmd, bool* outSubmitted = nullptr);
+    u64 submit(CommandList* const* ppCmd, usize numCmd, bool* outSubmissionAccepted = nullptr);
     void updateTextureTileMappings(Texture* texture, const TextureTilesMapping* tileMappings, u32 numTileMappings);
     void updateLastFinishedID();
 
@@ -2059,6 +2059,8 @@ public:
     // Captures states after keepInitialState resources have been restored, so a later ordered command list sees
     // the actual final Vulkan state rather than this list's transient working state.
     void close(CommandListResourceStateHandoff* finalStates = nullptr);
+    // False when opening or closing failed and this list no longer owns a submit-ready Vulkan command buffer.
+    [[nodiscard]] bool hasCommandBuffer()const{ return m_currentCmdBuf != nullptr; }
     void clearState();
     void endRenderPass();
 
@@ -2361,7 +2363,15 @@ public:
     [[nodiscard]] RayTracingClusterOperationSizeInfo getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params);
     bool bindAccelStructMemory(RayTracingAccelStruct* as, Heap* heap, u64 offset);
     [[nodiscard]] CommandListHandle createCommandList(const CommandListParameters& params = CommandListParameters());
-    u64 executeCommandLists(CommandList* const* pCommandLists, usize numCommandLists, CommandQueue::Enum executionQueue = CommandQueue::Graphics);
+    // Returns the queue submission ID. outCommandListsSubmitted distinguishes command buffers accepted into a new
+    // submission from a previous ID returned after a no-op or failed submit. A semaphore-only queue submission does
+    // not set this output because it does not establish command-buffer ordering.
+    u64 executeCommandLists(
+        CommandList* const* pCommandLists,
+        usize numCommandLists,
+        CommandQueue::Enum executionQueue = CommandQueue::Graphics,
+        bool* outCommandListsSubmitted = nullptr
+    );
     void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance);
     bool waitForIdle();
     void runGarbageCollection();

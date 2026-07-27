@@ -36,16 +36,48 @@ void GpuTimingAccumulator::recordFrameReset(CommandList& commandList){
     if(!m_enabled)
         return;
 
-    // Reset every pool this accumulator owns on the device timeline. A pool with a still-pending result would be
-    // clobbered, but collect() polls and clears every pending record before this runs each frame, so only settled
-    // (or never-used) pools are reset here. Recording the reset here also marks the pool deviceReady, which gates
-    // render-pass timestamp writes to query pools that were explicitly prepared before the frame render.
+    // Retain pending pools until their result is observable instead of erasing a late GPU sample. Pools that are
+    // already available this frame are reset on the device timeline, but do not become usable by dynamic-rendering
+    // scopes until the caller confirms this command list submitted successfully.
     for(QueryRecord& record : m_queries){
-        if(record.query){
-            commandList.resetTimerQuery(record.query.get());
-            record.deviceReady = true;
-        }
+        record.frameResetRecorded = false;
+        // A render-pass scope must observe this frame's reset, not merely a reset that happened during an earlier
+        // frame. Leave the pool unavailable until confirmFrameReset() observes a successful preamble submission.
+        record.deviceReady = false;
+        if(!record.query || record.pending)
+            continue;
+
+        commandList.resetTimerQuery(record.query.get());
+        record.frameResetRecorded = true;
     }
+}
+
+void GpuTimingAccumulator::confirmFrameReset(){
+    for(QueryRecord& record : m_queries){
+        if(!record.frameResetRecorded)
+            continue;
+
+        record.frameResetRecorded = false;
+        if(m_enabled)
+            record.deviceReady = true;
+    }
+}
+
+void GpuTimingAccumulator::discardFrameReset(){
+    for(QueryRecord& record : m_queries){
+        record.frameResetRecorded = false;
+        // A failed (or not-yet-recorded) preamble must not let a dynamic-rendering scope reuse a previous frame's
+        // reset. Outside a render pass beginTimerQuery() still performs its own device-timeline reset.
+        record.deviceReady = false;
+    }
+}
+
+void GpuTimingAccumulator::requestQueries(const u32 queryCount){
+    m_requestedQueryCount = Max(m_requestedQueryCount, queryCount);
+}
+
+bool GpuTimingAccumulator::materializeRequestedQueries(Device& device){
+    return m_requestedQueryCount == 0u || reserveQueries(device, m_requestedQueryCount);
 }
 
 GpuTimingScope GpuTimingAccumulator::beginQuery(
@@ -162,8 +194,6 @@ void GpuTimingRecorder::beginFrame(const u64 frameIndex){
 
 bool GpuTimingRecorder::prepareScopeQueries(const Name& scopeName, Device* device, const u32 queryCount){
     syncActiveState();
-    if(!m_accumulatorsActive)
-        return true;
     if(!scopeName || !device)
         return false;
 
@@ -171,7 +201,20 @@ bool GpuTimingRecorder::prepareScopeQueries(const Name& scopeName, Device* devic
     if(!accumulator)
         return false;
 
-    return accumulator->reserveQueries(*device, queryCount);
+    accumulator->requestQueries(queryCount);
+    return !m_accumulatorsActive || accumulator->materializeRequestedQueries(*device);
+}
+
+bool GpuTimingRecorder::materializeRequestedQueries(Device& device){
+    syncActiveState();
+    if(!m_accumulatorsActive)
+        return true;
+
+    for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it){
+        if(!it.value()->materializeRequestedQueries(device))
+            return false;
+    }
+    return true;
 }
 
 void GpuTimingRecorder::recordFrameReset(CommandList& commandList){
@@ -181,6 +224,22 @@ void GpuTimingRecorder::recordFrameReset(CommandList& commandList){
 
     for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
         it.value()->recordFrameReset(commandList);
+}
+
+void GpuTimingRecorder::confirmFrameReset(){
+    syncActiveState();
+    if(!m_accumulatorsActive){
+        discardFrameReset();
+        return;
+    }
+
+    for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
+        it.value()->confirmFrameReset();
+}
+
+void GpuTimingRecorder::discardFrameReset(){
+    for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
+        it.value()->discardFrameReset();
 }
 
 GpuTimingScope GpuTimingRecorder::beginScope(const Name& scopeName, Device* device, CommandList& commandList){

@@ -17,102 +17,111 @@ NWB_IMPL_BEGIN
 
 
 namespace __hidden_rt_swbvh{
-    using MeshBufferSlotLookup = HashMap<
-        const Core::Buffer*,
-        u32,
-        Hasher<const Core::Buffer*>,
-        EqualTo<const Core::Buffer*>,
-        Core::Alloc::ScratchArena
-    >;
 
 
-    // Look up the backing buffer in the cross-frame cache. A hit reuses its valid handle; a miss registers the buffer
-    // and pins the caller's correctly-deletable BufferHandle so the raw pointer key cannot be recycled. Every backing buffer uses
-    // one full-range STORAGE_BUFFER descriptor; raw and structured access are shader-side views. Failed registrations
-    // are not cached so a later gather can retry.
-    [[nodiscard]] bool AcquireMeshHeapHandle(
-        Core::GpuDescriptorHeap& heap,
-        RtMeshHeapHandleCache& cache,
-        const Core::BufferHandle& bufferHandle,
-        Core::GpuDescriptorHandle& outHandle
-    ){
-        outHandle = Core::GpuDescriptorHandle::invalid();
-        if(!bufferHandle)
-            return false;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        Core::Buffer& buffer = *bufferHandle;
-        const Core::Buffer* const bufferKey = &buffer;
-        auto found = cache.find(bufferKey);
-        if(found != cache.end()){
-            NWB_ASSERT(found.value().handle.valid());
-            found.value().seenThisFrame = true;
-            outHandle = found.value().handle;
-            return true;
-        }
 
-        if(!__hidden_raytracing_system::RegisterHeapBuffer(
-            heap,
-            buffer,
-            Core::GpuDescriptorClass::StorageBuffer,
-            false,
-            outHandle
-        ))
-            return false;
+using MeshBufferSlotLookup = HashMap<
+    const Core::Buffer*,
+    u32,
+    Hasher<const Core::Buffer*>,
+    EqualTo<const Core::Buffer*>,
+    Core::Alloc::ScratchArena
+>;
 
-        RtMeshHeapHandleCacheEntry entry;
-        entry.keepAlive = bufferHandle;                  // refcount-pin the key with its owning arena deleter
-        entry.handle = outHandle;
-        entry.seenThisFrame = true;
-        cache.insert({bufferKey, Move(entry)});
+
+// Look up the backing buffer in the cross-frame cache. A hit reuses its valid handle; a miss registers the buffer
+// and pins the caller's correctly-deletable BufferHandle so the raw pointer key cannot be recycled. Every backing buffer uses
+// one full-range STORAGE_BUFFER descriptor; raw and structured access are shader-side views. Failed registrations
+// are not cached so a later gather can retry.
+[[nodiscard]] bool AcquireMeshHeapHandle(
+    Core::GpuDescriptorHeap& heap,
+    RtMeshHeapHandleCache& cache,
+    const Core::BufferHandle& bufferHandle,
+    Core::GpuDescriptorHandle& outHandle
+){
+    outHandle = Core::GpuDescriptorHandle::invalid();
+    if(!bufferHandle)
+        return false;
+
+    Core::Buffer& buffer = *bufferHandle;
+    const Core::Buffer* const bufferKey = &buffer;
+    auto found = cache.find(bufferKey);
+    if(found != cache.end()){
+        NWB_ASSERT(found.value().handle.valid());
+        found.value().seenThisFrame = true;
+        outHandle = found.value().handle;
         return true;
     }
 
-    // End-of-gather sweep: free + evict every cached buffer that did not reappear this frame (a mesh was unloaded or
-    // fell out of the visible occluder set). Seen-this-frame entries are reset to unseen for the next gather. The
-    // heap.free quarantine keeps in-flight frames referencing a freed slot valid until they retire.
-    void SweepUnseenMeshHeapHandles(
-        Core::GpuDescriptorHeap& heap,
-        RtMeshHeapHandleCache& cache
-    ){
-        for(auto it = cache.begin(); it != cache.end(); ){
-            if(it.value().seenThisFrame){
-                it.value().seenThisFrame = false;
-                ++it;
-            }
-            else{
-                heap.free(it.value().handle);
-                it = cache.erase(it);
-            }
+    if(!__hidden_raytracing_system::RegisterHeapBuffer(
+        heap,
+        buffer,
+        Core::GpuDescriptorClass::StorageBuffer,
+        false,
+        outHandle
+    ))
+        return false;
+
+    RtMeshHeapHandleCacheEntry entry;
+    entry.keepAlive = bufferHandle;  // refcount-pin the key with its owning arena deleter
+    entry.handle = outHandle;
+    entry.seenThisFrame = true;
+    cache.insert({bufferKey, Move(entry)});
+    return true;
+}
+
+// End-of-gather sweep: free + evict every cached buffer that did not reappear this frame (a mesh was unloaded or
+// fell out of the visible occluder set). Seen-this-frame entries are reset to unseen for the next gather. The
+// heap.free quarantine keeps in-flight frames referencing a freed slot valid until they retire.
+void SweepUnseenMeshHeapHandles(
+    Core::GpuDescriptorHeap& heap,
+    RtMeshHeapHandleCache& cache
+){
+    for(auto it = cache.begin(); it != cache.end(); ){
+        if(it.value().seenThisFrame){
+            it.value().seenThisFrame = false;
+            ++it;
+        }
+        else{
+            heap.free(it.value().handle);
+            it = cache.erase(it);
         }
     }
+}
 
-    // Begin a gather: mark nothing seen yet so the sweep can tell reappearances from dropouts.
-    void BeginMeshHeapHandleGather(
-        RtMeshHeapHandleCache& cache
-    ){
-        for(auto it = cache.begin(); it != cache.end(); ++it)
-            it.value().seenThisFrame = false;
-    }
+// Begin a gather: mark nothing seen yet so the sweep can tell reappearances from dropouts.
+void BeginMeshHeapHandleGather(
+    RtMeshHeapHandleCache& cache
+){
+    for(auto it = cache.begin(); it != cache.end(); ++it)
+        it.value().seenThisFrame = false;
+}
 
-    [[nodiscard]] bool IsStorageBufferHeapHandle(const Core::GpuDescriptorHandle handle){
-        return __hidden_raytracing_system::IsHeapHandle(handle, Core::GpuDescriptorClass::StorageBuffer);
-    }
+[[nodiscard]] bool IsStorageBufferHeapHandle(const Core::GpuDescriptorHandle handle){
+    return __hidden_raytracing_system::IsHeapHandle(handle, Core::GpuDescriptorClass::StorageBuffer);
+}
 
-    // Heap descriptor writes retain the backing buffer through deferred free. Keep the registration next to the
-    // explicit owner instead of relying on transient descriptor state to retain or describe writable scratch.
-    [[nodiscard]] bool RegisterWritableBvhBuffer(
-        Core::GpuDescriptorHeap& heap,
-        Core::Buffer& buffer,
-        Core::GpuDescriptorHandle& outHandle
-    ){
-        return __hidden_raytracing_system::RegisterHeapBuffer(
-            heap,
-            buffer,
-            Core::GpuDescriptorClass::StorageBuffer,
-            true,
-            outHandle
-        );
-    }
+// Heap descriptor writes retain the backing buffer through deferred free. Keep the registration next to the
+// explicit owner instead of relying on transient descriptor state to retain or describe writable scratch.
+[[nodiscard]] bool RegisterWritableBvhBuffer(
+    Core::GpuDescriptorHeap& heap,
+    Core::Buffer& buffer,
+    Core::GpuDescriptorHandle& outHandle
+){
+    return __hidden_raytracing_system::RegisterHeapBuffer(
+        heap,
+        buffer,
+        Core::GpuDescriptorClass::StorageBuffer,
+        true,
+        outHandle
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 };
 
@@ -144,10 +153,6 @@ bool RendererRayTracingSystem::buildPendingMeshBlas(Core::CommandList& commandLi
     }
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::buildPendingMeshSwBvh(Core::CommandList& commandList){
     // Builds/refits per-mesh software BVHs. Two callers gate WHEN it runs:
@@ -185,10 +190,6 @@ bool RendererRayTracingSystem::buildPendingMeshSwBvh(Core::CommandList& commandL
     }
     return allBuildsReady;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
     // Keep allocation out of updateMeshSwBvh: recording the per-frame build/refit command stream may only consume
@@ -236,10 +237,6 @@ bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
     }
     return allResourcesReady;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_rt_swbvh;
@@ -541,10 +538,6 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         return false;
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_rt_swbvh;
@@ -848,10 +841,6 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources){
     if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer)
         return false;
@@ -935,10 +924,6 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void RendererRayTracingSystem::releaseSwBvhScratchHeapHandles(){
     auto& device = *graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
@@ -952,10 +937,6 @@ void RendererRayTracingSystem::releaseSwBvhScratchHeapHandles(){
     rayTracingState().m_bvhSortPayloadHeapHandle = Core::GpuDescriptorHandle::invalid();
     rayTracingState().m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::ensureBvhSortPipeline(){
     if(rayTracingState().m_bvhSortPipeline)
@@ -1012,10 +993,6 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
     }
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
     auto* device = graphics().getDevice();
@@ -1116,10 +1093,6 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount){
     NWB_ASSERT(rayTracingState().m_bvhSortPipeline);
     NWB_ASSERT(rayTracingState().m_bvhSortKeysBuffer);
@@ -1200,10 +1173,6 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
     if(
         rayTracingState().m_bvhMortonPipeline
@@ -1271,10 +1240,6 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount){
     auto* device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
@@ -1330,10 +1295,6 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
     rayTracingState().m_bvhBuildCapacity = capacity;
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::createMeshBvhStorage(
     usize primitiveCount,
@@ -1430,7 +1391,6 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
     return true;
 }
 
-
 bool RendererRayTracingSystem::ensureMeshSwBvhResources(
     u32 primitiveCount,
     Core::BufferHandle& nodeBuffer,
@@ -1461,10 +1421,6 @@ bool RendererRayTracingSystem::ensureMeshSwBvhResources(
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::meshSwBvhResourcesReady(
     const Core::BufferHandle& nodeBuffer,
     const Core::BufferHandle& parentBuffer,
@@ -1488,10 +1444,6 @@ bool RendererRayTracingSystem::meshSwBvhResourcesReady(
         && __hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhVisitCounterHeapHandle)
     ;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::buildMeshSwBvh(
     Core::CommandList& commandList,
@@ -1523,10 +1475,6 @@ bool RendererRayTracingSystem::buildMeshSwBvh(
         parentHeapHandle
     );
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     Core::CommandList& commandList,
@@ -1632,10 +1580,6 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererRayTracingSystem::refitMeshSwBvh(
     Core::CommandList& commandList,
     const u32 positionHeapSlot,
@@ -1662,10 +1606,6 @@ bool RendererRayTracingSystem::refitMeshSwBvh(
         parentHeapHandle
     );
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     Core::CommandList& commandList,
@@ -1735,10 +1675,6 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     commandList.commitBarriers();
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, MeshResources& meshResources){
     if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer)
@@ -1828,10 +1764,6 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
     meshResources.swBvhRefitsSinceRebuild = performRefit ? (meshResources.swBvhRefitsSinceRebuild + 1u) : 0u;
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
     // A binary BVH over N instances has 2N-1 nodes. Both buffers are CPU-written each frame and read by the

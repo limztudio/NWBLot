@@ -46,14 +46,11 @@ inline Core::Alloc::GlobalArena& Arena(){
     return s_Arena;
 }
 
-template<typename T>
-using Allocator = ContainerDetail::DefaultArenaAllocatorFor_T<T, Core::Alloc::GlobalArena, Arena>;
-
 };
 
 template<typename T>
-using TestVector = std::vector<T, TestDetail::Allocator<T>>;
-using TestAString = std::basic_string<char, std::char_traits<char>, TestDetail::Allocator<char>>;
+using TestVector = DefaultVector<T, Core::Alloc::GlobalArena, TestDetail::Arena>;
+using TestAString = DefaultAString<Core::Alloc::GlobalArena, TestDetail::Arena>;
 
 [[nodiscard]] inline bool NearlyEqual(const f32 lhs, const f32 rhs, const f32 epsilon = s_DefaultNearlyEqualEpsilon){
     return Abs(lhs - rhs) <= epsilon;

@@ -116,7 +116,7 @@ private:
         OutputFileStream timingFile;
         OpenTimingFile(timingFile);
         if(timingFile.is_open()){
-            timingFile.setf(std::ios::fixed, std::ios::floatfield);
+            timingFile.setf(s_FileFormatFixed, s_FileFormatFloatField);
             timingFile.precision(s_TimingFilePrecision);
             timingFile << "=== interval: " << static_cast<unsigned>(m_intervalFrames) << " frames / " << m_intervalSeconds << "s ===\n";
         }

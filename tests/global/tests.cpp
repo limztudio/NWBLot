@@ -304,7 +304,7 @@ TEST(Global, Utf8CodePointConversionsPreserveMultibyteText){
     EXPECT_EQ(AStringView(encoded.data(), encoded.size()), expected);
 
     BasicString<wchar, NWB::Core::Alloc::GlobalArena> decoded{testArena.arena};
-    auto output = std::back_inserter(decoded);
+    auto output = BackInserter(decoded);
     BasicStringDetail::WriteUtf8AsWString(output, expected);
     EXPECT_EQ(WStringView(decoded.data(), decoded.size()), source);
 }
@@ -868,8 +868,7 @@ TEST(Global, CompressedPairSwapUsesMove){
     rhs.second().value = 4;
 
     static_assert(noexcept(lhs.swap(rhs)));
-    using std::swap;
-    static_assert(noexcept(swap(lhs, rhs)));
+    static_assert(noexcept(Swap(lhs, rhs)));
 
     lhs.swap(rhs);
     EXPECT_EQ(lhs.first().value, 3);
@@ -877,7 +876,7 @@ TEST(Global, CompressedPairSwapUsesMove){
     EXPECT_EQ(rhs.first().value, 1);
     EXPECT_EQ(rhs.second().value, 2);
 
-    swap(lhs, rhs);
+    Swap(lhs, rhs);
     EXPECT_EQ(lhs.first().value, 1);
     EXPECT_EQ(lhs.second().value, 2);
     EXPECT_EQ(rhs.first().value, 3);

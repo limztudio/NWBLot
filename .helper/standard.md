@@ -241,9 +241,9 @@ Updated: 2026-07-08
 - Const correctness is expected, though both `const T&` and `T const&` forms appear.
 - `auto` is allowed, but always spell out qualifiers and reference/pointer intent (`const`, `&`, `*`, `&&`) explicitly when applicable.
 - Example style: `for(const auto& i : table){ ... }`.
-- Prefer project wrapper/alias types over raw `std::` names (e.g., `Vector` instead of `std::vector`, traits aliases like `IsSame`).
+- Prefer project wrapper/alias types over raw `std::` names (e.g., `Vector` instead of `std::vector`, traits aliases like `IsSame`). This applies equally to project-owned tests and smoke fixtures: do not use direct `std::` names there.
 - Before introducing a new direct `std::` usage, check `global/global.h` and related global headers for an existing wrapper/alias.
-- If missing and broadly useful, add a project-level alias/wrapper rather than repeating direct `std::` usage across modules.
+- If missing, add a focused project-level feature under `global/` and use it rather than repeating direct `std::` usage across modules or tests. Do not add a test-local standard-library alias to bypass this rule.
 - For function-local containers that are only temporary working storage and do not escape the function, prefer `Core::Alloc::ScratchArena` with `Core::Alloc::ScratchAllocator` over the default heap allocator.
   - Keep default/custom owning allocators for containers that are returned, moved into persistent asset/component/runtime state, stored as members, or passed to APIs that intentionally own the result.
   - When using scratch-backed containers, reserve or size them so normal execution does not depend on interleaved reallocations.

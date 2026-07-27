@@ -12,8 +12,7 @@
 #include <logger/telemetry/report.h>
 
 #include <global/filesystem/operations.h>
-
-#include <thread>
+#include <global/thread.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -613,9 +612,9 @@ TEST(Telemetry, RecorderAcceptsConcurrentRecords){
 
     constexpr u32 threadCount = 4u;
     constexpr u32 eventsPerThread = 64u;
-    std::thread threads[threadCount];
+    Thread threads[threadCount];
     for(u32 threadIndex = 0u; threadIndex < threadCount; ++threadIndex){
-        threads[threadIndex] = std::thread([&recorder, threadIndex](){
+        threads[threadIndex] = Thread([&recorder, threadIndex](){
             for(u32 eventIndex = 0u; eventIndex < eventsPerThread; ++eventIndex){
                 if(!Telemetry::RecordTextLog(
                     recorder,
@@ -629,7 +628,7 @@ TEST(Telemetry, RecorderAcceptsConcurrentRecords){
         });
     }
 
-    for(std::thread& thread : threads)
+    for(Thread& thread : threads)
         thread.join();
 
     EXPECT_EQ(recorder.eventCount(), threadCount * eventsPerThread);

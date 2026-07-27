@@ -7,13 +7,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <tests/test_context.h>
+
 #include <nwb_rgd_decode.h>
 
-#include <gtest/gtest.h>
+#include <global/filesystem.h>
 
-#include <cstdio>
-#include <fstream>
-#include <string>
+#include <gtest/gtest.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,7 +22,7 @@
 // A path that does not exist: ParseCrashDump must fail cleanly and return false (the rdf open throws; the
 // decoder contains it).
 TEST(RgdDecode, MissingFileFailsGracefully){
-    std::string out;
+    AInteropString out;
     EXPECT_FALSE(nwb_rgd::DecodeCrashDumpToText("nwb_rgd_smoke_missing.rgd", out));
 }
 
@@ -30,12 +30,17 @@ TEST(RgdDecode, MissingFileFailsGracefully){
 TEST(RgdDecode, GarbageInputFailsGracefully){
     const char* const path = "nwb_rgd_smoke_garbage.rgd";
     {
-        std::ofstream f(path, std::ios::binary);
+        OutputFileStream f(path, s_FileOpenBinary);
+        ASSERT_TRUE(f.is_open());
         f << "not a valid radeon gpu detective capture\n";
     }
-    std::string out;
+    AInteropString out;
     EXPECT_FALSE(nwb_rgd::DecodeCrashDumpToText(path, out));
-    std::remove(path);
+
+    NWB::Tests::TestArena<> testArena;
+    Path<NWB::Core::Alloc::GlobalArena> inputPath(testArena.arena, path);
+    ErrorCode error;
+    EXPECT_TRUE(RemoveFile(inputPath, error));
 }
 
 

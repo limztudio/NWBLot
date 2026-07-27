@@ -39,6 +39,21 @@ using WString = BasicString<wchar, ArenaT>;
 template<typename ArenaT>
 using TString = BasicString<tchar, ArenaT>;
 
+template<typename T, typename ArenaT, ArenaT& (*DefaultArena)()>
+using DefaultBasicString = std::basic_string<T, std::char_traits<T>, ContainerDetail::DefaultArenaAllocatorFor_T<T, ArenaT, DefaultArena>>;
+template<typename ArenaT, ArenaT& (*DefaultArena)()>
+using DefaultAString = DefaultBasicString<char, ArenaT, DefaultArena>;
+template<typename ArenaT, ArenaT& (*DefaultArena)()>
+using DefaultWString = DefaultBasicString<wchar, ArenaT, DefaultArena>;
+template<typename ArenaT, ArenaT& (*DefaultArena)()>
+using DefaultTString = DefaultBasicString<tchar, ArenaT, DefaultArena>;
+
+template<typename T>
+using BasicInteropString = std::basic_string<T>;
+using AInteropString = BasicInteropString<char>;
+using WInteropString = BasicInteropString<wchar>;
+using TInteropString = BasicInteropString<tchar>;
+
 template<typename T, typename ArenaT>
 using BasicStringStream = std::basic_stringstream<T, std::char_traits<T>, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
 template<typename ArenaT>

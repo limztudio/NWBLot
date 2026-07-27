@@ -110,6 +110,11 @@ inline constexpr FileOpenMode s_FileOpenAppend = std::ios::app;
 inline constexpr FileOpenMode s_FileOpenBinary = std::ios::binary;
 inline constexpr FileOpenMode s_FileOpenTruncate = std::ios::trunc;
 
+using FileFormatFlags = std::ios_base::fmtflags;
+
+inline constexpr FileFormatFlags s_FileFormatFixed = std::ios::fixed;
+inline constexpr FileFormatFlags s_FileFormatFloatField = std::ios::floatfield;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

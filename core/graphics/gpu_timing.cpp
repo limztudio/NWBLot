@@ -50,7 +50,7 @@ void GpuTimingAccumulator::recordFrameReset(CommandList& commandList){
         // A render-pass scope must observe this frame's reset, not merely a reset that happened during an earlier
         // frame. Leave the pool unavailable until confirmFrameReset() observes a successful preamble submission.
         record.deviceReady = false;
-        if(!record.query || record.pending)
+        if(!record.query || record.recording || record.pending)
             continue;
 
         commandList.resetTimerQuery(record.query.get());
@@ -113,6 +113,7 @@ GpuTimingScope GpuTimingAccumulator::beginQuery(
     if(!record.deviceReady && !commandList.canResetTimerQueryHere())
         return {};
 
+    record.recording = true;
     commandList.beginTimerQuery(record.query.get());
     record.frameIndex = frameIndex;
     record.epoch = epoch;
@@ -128,10 +129,11 @@ bool GpuTimingAccumulator::endQuery(CommandList& commandList, const GpuTimingSco
         return false;
 
     QueryRecord& record = m_queries[scope.index];
-    if(record.query.get() != scope.query || record.reservation != scope.reservation)
+    if(record.query.get() != scope.query || record.reservation != scope.reservation || !record.recording)
         return false;
 
     commandList.endTimerQuery(record.query.get());
+    record.recording = false;
     record.pending = true;
     return true;
 }
@@ -146,6 +148,7 @@ void GpuTimingAccumulator::discardQuery(const GpuTimingScope& scope){
 
     // The command buffer that wrote this pair never reached the device, so its timestamp values cannot become
     // observable. Keep the preamble-established deviceReady state intact: a later scope may still use this pool.
+    record.recording = false;
     record.pending = false;
 }
 
@@ -159,7 +162,7 @@ bool GpuTimingAccumulator::reserveQueries(Device& device, const u32 queryCount){
 
 u32 GpuTimingAccumulator::findAvailableQuery()const{
     for(usize i = 0u; i < m_queries.size(); ++i){
-        if(!m_queries[i].pending)
+        if(!m_queries[i].recording && !m_queries[i].pending)
             return static_cast<u32>(i);
     }
 
@@ -187,11 +190,13 @@ GpuTimingRecorder::GpuTimingRecorder(Alloc::GlobalArena& arena, Perf::TimingSink
 {}
 
 void GpuTimingRecorder::setQueryCollectionEnabled(const bool enabled){
+    ScopedLock lock(m_mutex);
     m_enabled = enabled;
     syncActiveState();
 }
 
 void GpuTimingRecorder::resetQueries(){
+    ScopedLock lock(m_mutex);
     m_accumulators.clear();
     advanceEpoch();
     m_accumulatorsActive = false;
@@ -199,10 +204,16 @@ void GpuTimingRecorder::resetQueries(){
 }
 
 void GpuTimingRecorder::collect(Device& device){
-    collect(device, m_currentFrameIndex);
+    ScopedLock lock(m_mutex);
+    collectLocked(device, m_currentFrameIndex);
 }
 
 void GpuTimingRecorder::collect(Device& device, const u64 publishFrameIndex){
+    ScopedLock lock(m_mutex);
+    collectLocked(device, publishFrameIndex);
+}
+
+void GpuTimingRecorder::collectLocked(Device& device, const u64 publishFrameIndex){
     syncActiveState();
     if(!m_accumulatorsActive)
         return;
@@ -213,10 +224,12 @@ void GpuTimingRecorder::collect(Device& device, const u64 publishFrameIndex){
 }
 
 void GpuTimingRecorder::beginFrame(const u64 frameIndex){
+    ScopedLock lock(m_mutex);
     m_currentFrameIndex = frameIndex;
 }
 
 bool GpuTimingRecorder::prepareScopeQueries(const Name& scopeName, Device* device, const u32 queryCount){
+    ScopedLock lock(m_mutex);
     syncActiveState();
     if(!scopeName || !device)
         return false;
@@ -230,6 +243,7 @@ bool GpuTimingRecorder::prepareScopeQueries(const Name& scopeName, Device* devic
 }
 
 bool GpuTimingRecorder::materializeRequestedQueries(Device& device){
+    ScopedLock lock(m_mutex);
     syncActiveState();
     if(!m_accumulatorsActive)
         return true;
@@ -242,6 +256,7 @@ bool GpuTimingRecorder::materializeRequestedQueries(Device& device){
 }
 
 void GpuTimingRecorder::recordFrameReset(CommandList& commandList){
+    ScopedLock lock(m_mutex);
     syncActiveState();
     if(!m_accumulatorsActive)
         return;
@@ -251,9 +266,10 @@ void GpuTimingRecorder::recordFrameReset(CommandList& commandList){
 }
 
 void GpuTimingRecorder::confirmFrameReset(){
+    ScopedLock lock(m_mutex);
     syncActiveState();
     if(!m_accumulatorsActive){
-        discardFrameReset();
+        discardFrameResetLocked();
         return;
     }
 
@@ -262,11 +278,17 @@ void GpuTimingRecorder::confirmFrameReset(){
 }
 
 void GpuTimingRecorder::discardFrameReset(){
+    ScopedLock lock(m_mutex);
+    discardFrameResetLocked();
+}
+
+void GpuTimingRecorder::discardFrameResetLocked(){
     for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it)
         it.value()->discardFrameReset();
 }
 
 GpuTimingScope GpuTimingRecorder::beginScope(const Name& scopeName, Device* device, CommandList& commandList){
+    ScopedLock lock(m_mutex);
     syncActiveState();
     if(!m_accumulatorsActive || !scopeName || !device)
         return {};
@@ -298,7 +320,14 @@ void GpuTimingRecorder::endScope(CommandList& commandList, const GpuTimingScope&
     if(!scope.valid())
         return;
 
-    if(!scope.accumulator->endQuery(commandList, scope))
+    bool ended = false;
+    {
+        // Do not retain this lock while trackScope() takes the ticket lock: discard() rolls tickets back in the
+        // opposite direction (ticket first, recorder second).
+        ScopedLock lock(m_mutex);
+        ended = scope.accumulator->endQuery(commandList, scope);
+    }
+    if(!ended)
         return;
 
     if(scope.submissionTicket)
@@ -309,6 +338,7 @@ void GpuTimingRecorder::discardScope(const GpuTimingScope& scope){
     if(!scope.valid())
         return;
 
+    ScopedLock lock(m_mutex);
     scope.accumulator->discardQuery(scope);
 }
 
@@ -526,6 +556,7 @@ void GpuTimingMeasure::finishTiming(CommandList& commandList){
 }
 
 void GpuTimingMeasure::discardTiming(){
+    m_recorder.discardScope(m_scope);
     m_scope = {};
 }
 

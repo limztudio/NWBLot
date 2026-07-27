@@ -187,6 +187,7 @@ Optional<Common::LoggerRegistrationGuard> DescriptorBufferRoundTripTest::s_logge
 inline constexpr GpuTimingScopeDefinition s_FrameTimingPreambleScope("tests/frame_timing_preamble");
 inline constexpr GpuTimingScopeDefinition s_FrameTimingLateActivationScope("tests/frame_timing_late_activation");
 inline constexpr GpuTimingScopeDefinition s_SubmissionTicketScope("tests/timing_submission_ticket");
+inline constexpr GpuTimingScopeDefinition s_ConcurrentSubmissionTicketScope("tests/timing_submission_ticket_concurrent");
 
 
 // Records a timing scope inside dynamic rendering, where vkCmdResetQueryPool is illegal. The scope can therefore
@@ -347,9 +348,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQuer
 }
 
 
-// A frame metric starts on the G-buffer primary and ends on the ordered post-G-buffer primary. If that batch is
-// abandoned, the query slot must be released before the next dynamic-rendering scope records; it cannot grow a new
-// query pool there because vkCmdResetQueryPool is illegal inside the render pass.
+// A frame metric starts on the G-buffer primary and ends on the ordered post-G-buffer primary. If recording aborts
+// before its ending timestamp or that batch is rejected, the query slot must be released before the next
+// dynamic-rendering scope records; it cannot grow a new query pool there because vkCmdResetQueryPool is illegal
+// inside the render pass.
 TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedSplitScope){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
@@ -382,6 +384,25 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
     device.executeCommandLists(resetCommandLists, 1u, CommandQueue::Graphics, &resetSubmitted);
     ASSERT_TRUE(resetSubmitted);
     timing.confirmFrameReset();
+
+    auto abandonedCommandList = device.createCommandList();
+    ASSERT_NE(abandonedCommandList.get(), nullptr);
+    {
+        GpuTimingSubmissionTicket abandonedTicket(timing);
+        {
+            GpuTimingSubmissionTicket::RecordingScope timingRecording(abandonedTicket);
+            abandonedCommandList->open();
+            GraphicsState graphicsState;
+            graphicsState.setFramebuffer(framebuffer.get());
+            abandonedCommandList->setGraphicsState(graphicsState);
+            {
+                GpuTimingMeasure abandonedTiming(timing, s_SubmissionTicketScope, &device, *abandonedCommandList);
+                abandonedTiming.discardTiming();
+            }
+            abandonedCommandList->endRenderPass();
+            abandonedCommandList->close();
+        }
+    }
 
     auto producer = device.createCommandList();
     auto consumer = device.createCommandList();
@@ -435,6 +456,83 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
     ASSERT_TRUE(device.waitForIdle());
     timing.collect(device, 1u);
     EXPECT_TRUE(timingSink.stats(s_SubmissionTicketScope.identity).valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
+// Independent packet jobs can share one submission ticket. Both workers reserve the same timing scope at the same
+// latch, so the recorder must claim distinct query slots before either command list reaches its ending timestamp.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurrentWorkerScopes){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_ConcurrentSubmissionTicketScope.identity, &device, 2u));
+
+    auto resetCommandList = device.createCommandList();
+    ASSERT_NE(resetCommandList.get(), nullptr);
+    resetCommandList->open();
+    timing.recordFrameReset(*resetCommandList);
+    resetCommandList->close();
+    CommandList* resetCommandLists[] = { resetCommandList.get() };
+    bool resetSubmitted = false;
+    device.executeCommandLists(resetCommandLists, 1u, CommandQueue::Graphics, &resetSubmitted);
+    ASSERT_TRUE(resetSubmitted);
+    timing.confirmFrameReset();
+
+    auto firstCommandList = device.createCommandList();
+    auto secondCommandList = device.createCommandList();
+    ASSERT_NE(firstCommandList.get(), nullptr);
+    ASSERT_NE(secondCommandList.get(), nullptr);
+
+    GpuTimingSubmissionTicket timingTicket(timing);
+    Latch recordingStarted(2);
+    Latch queryReservationsStarted(2);
+    bool firstRecorded = false;
+    bool secondRecorded = false;
+    const Graphics::JobHandle firstJob = graphics.scheduleGraphicsJob([&](){
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
+        firstCommandList->open();
+        recordingStarted.count_down();
+        recordingStarted.wait();
+        {
+            GpuTimingMeasure measure(timing, s_ConcurrentSubmissionTicketScope, &device, *firstCommandList);
+            queryReservationsStarted.count_down();
+            queryReservationsStarted.wait();
+        }
+        firstCommandList->close();
+        firstRecorded = firstCommandList->hasCommandBuffer();
+    });
+    const Graphics::JobHandle secondJob = graphics.scheduleGraphicsJob([&](){
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
+        secondCommandList->open();
+        recordingStarted.count_down();
+        recordingStarted.wait();
+        {
+            GpuTimingMeasure measure(timing, s_ConcurrentSubmissionTicketScope, &device, *secondCommandList);
+            queryReservationsStarted.count_down();
+            queryReservationsStarted.wait();
+        }
+        secondCommandList->close();
+        secondRecorded = secondCommandList->hasCommandBuffer();
+    });
+    ASSERT_TRUE(firstJob.valid());
+    ASSERT_TRUE(secondJob.valid());
+
+    graphics.waitJob(firstJob);
+    graphics.waitJob(secondJob);
+    ASSERT_TRUE(firstRecorded);
+    ASSERT_TRUE(secondRecorded);
+
+    CommandList* commandLists[] = { firstCommandList.get(), secondCommandList.get() };
+    ASSERT_TRUE(timingTicket.submit(device, commandLists, 2u));
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 1u);
+    EXPECT_EQ(timingSink.stats(s_ConcurrentSubmissionTicketScope.identity).sampleCount, 2u);
 
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();

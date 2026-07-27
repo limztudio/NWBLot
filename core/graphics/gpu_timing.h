@@ -66,6 +66,9 @@ private:
         u64 frameIndex = 0u;
         u32 epoch = 0u;
         u64 reservation = 0u;
+        // Held from beginQuery() until the matching endQuery() or an explicit discard. A submission ticket can only
+        // roll back completed scopes, so this also keeps two concurrently recording workers from selecting one slot.
+        bool recording = false;
         bool pending = false;
         // Set while a frame-preamble command list contains a reset for this pool. It becomes deviceReady only after
         // that command list has been submitted successfully.
@@ -165,6 +168,8 @@ private:
     void discardScope(const GpuTimingScope& scope);
     [[nodiscard]] GpuTimingAccumulator* findOrCreateAccumulator(const Name& scopeName);
     [[nodiscard]] GpuTimingSubmissionTicket* activeSubmissionTicket()const;
+    void collectLocked(Device& device, u64 publishFrameIndex);
+    void discardFrameResetLocked();
     void syncActiveState();
     void advanceEpoch();
 
@@ -173,6 +178,9 @@ private:
     Alloc::GlobalArena& m_arena;
     Perf::TimingSink& m_timing;
     AccumulatorMap m_accumulators;
+    // A submission ticket protects its own rollback list, while this lock serializes every query-pool mutation and
+    // recorder-map access. Worker command-list recordings may share a ticket and begin timing scopes concurrently.
+    Futex m_mutex;
     u64 m_currentFrameIndex = 0u;
     u32 m_epoch = 1u;
     bool m_accumulatorsActive = false;

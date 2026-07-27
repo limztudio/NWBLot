@@ -26,10 +26,10 @@ static constexpr f32 s_MinClipWForWorkRegion = 0.000001f;
 static constexpr i32 s_WorkRegionPixelPadding = 2;
 
 namespace CsgClipCutterResolveResult{
-enum Enum : u8{
-    Skipped,
-    Ready
-};
+    enum Enum : u8{
+        Skipped,
+        Ready
+    };
 };
 
 struct CsgResolvedClipCutter{

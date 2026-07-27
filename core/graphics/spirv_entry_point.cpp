@@ -23,6 +23,33 @@ namespace __hidden_spirv_entry_point{
 inline constexpr u16 s_OpEntryPoint = 15u;
 inline constexpr u32 s_SpirvMagic = 0x07230203u;
 inline constexpr usize s_SpirvHeaderWords = 5u;
+inline constexpr usize s_SpirvMagicWordIndex = 0u;
+inline constexpr usize s_SpirvEntryPointExecutionModelWordIndex = 1u;
+inline constexpr usize s_SpirvEntryPointFixedWordCount = 3u;
+inline constexpr usize s_SpirvEntryPointNameWordIndex = s_SpirvEntryPointFixedWordCount;
+inline constexpr u32 s_SpirvInstructionOpcodeBitMask = 0xffffu;
+inline constexpr u32 s_SpirvInstructionWordCountBitShift = 16u;
+
+namespace SpirvExecutionModel{
+    enum Enum : u32{
+        Vertex = 0u,
+        TessellationControl = 1u,
+        TessellationEvaluation = 2u,
+        Geometry = 3u,
+        Fragment = 4u,
+        GLCompute = 5u,
+        TaskNV = 5267u,
+        MeshNV = 5268u,
+        RayGenerationKHR = 5313u,
+        IntersectionKHR = 5314u,
+        AnyHitKHR = 5315u,
+        ClosestHitKHR = 5316u,
+        MissKHR = 5317u,
+        CallableKHR = 5318u,
+        TaskEXT = 5364u,
+        MeshEXT = 5365u,
+    };
+};
 
 struct SpirvEntryPointInstruction{
     ShaderType::Mask shaderType = ShaderType::None;
@@ -32,22 +59,22 @@ struct SpirvEntryPointInstruction{
 
 inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel){
     switch(executionModel){
-    case 0u: return ShaderType::Vertex;
-    case 1u: return ShaderType::Hull;
-    case 2u: return ShaderType::Domain;
-    case 3u: return ShaderType::Geometry;
-    case 4u: return ShaderType::Pixel;
-    case 5u: return ShaderType::Compute;
-    case 5267u: return ShaderType::Amplification;
-    case 5268u: return ShaderType::Mesh;
-    case 5313u: return ShaderType::RayGeneration;
-    case 5314u: return ShaderType::Intersection;
-    case 5315u: return ShaderType::AnyHit;
-    case 5316u: return ShaderType::ClosestHit;
-    case 5317u: return ShaderType::Miss;
-    case 5318u: return ShaderType::Callable;
-    case 5364u: return ShaderType::Amplification;
-    case 5365u: return ShaderType::Mesh;
+    case SpirvExecutionModel::Vertex: return ShaderType::Vertex;
+    case SpirvExecutionModel::TessellationControl: return ShaderType::Hull;
+    case SpirvExecutionModel::TessellationEvaluation: return ShaderType::Domain;
+    case SpirvExecutionModel::Geometry: return ShaderType::Geometry;
+    case SpirvExecutionModel::Fragment: return ShaderType::Pixel;
+    case SpirvExecutionModel::GLCompute: return ShaderType::Compute;
+    case SpirvExecutionModel::TaskNV: return ShaderType::Amplification;
+    case SpirvExecutionModel::MeshNV: return ShaderType::Mesh;
+    case SpirvExecutionModel::RayGenerationKHR: return ShaderType::RayGeneration;
+    case SpirvExecutionModel::IntersectionKHR: return ShaderType::Intersection;
+    case SpirvExecutionModel::AnyHitKHR: return ShaderType::AnyHit;
+    case SpirvExecutionModel::ClosestHitKHR: return ShaderType::ClosestHit;
+    case SpirvExecutionModel::MissKHR: return ShaderType::Miss;
+    case SpirvExecutionModel::CallableKHR: return ShaderType::Callable;
+    case SpirvExecutionModel::TaskEXT: return ShaderType::Amplification;
+    case SpirvExecutionModel::MeshEXT: return ShaderType::Mesh;
     default: return ShaderType::None;
     }
 }
@@ -59,13 +86,13 @@ inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel){
 ){
     outEntryPoint = SpirvEntryPointInstruction();
 
-    if(instructionWordCount <= 3)
+    if(instructionWordCount <= s_SpirvEntryPointFixedWordCount)
         return false;
 
-    outEntryPoint.shaderType = ConvertExecutionModel(instructionWords[1]);
+    outEntryPoint.shaderType = ConvertExecutionModel(instructionWords[s_SpirvEntryPointExecutionModelWordIndex]);
 
-    const auto* entryPointBytes = reinterpret_cast<const char*>(&instructionWords[3]);
-    const usize entryPointMaxBytes = (static_cast<usize>(instructionWordCount) - 3u) * sizeof(u32);
+    const auto* entryPointBytes = reinterpret_cast<const char*>(&instructionWords[s_SpirvEntryPointNameWordIndex]);
+    const usize entryPointMaxBytes = (static_cast<usize>(instructionWordCount) - s_SpirvEntryPointFixedWordCount) * sizeof(u32);
 
     usize entryPointLength = 0;
     while(entryPointLength < entryPointMaxBytes && entryPointBytes[entryPointLength] != '\0')
@@ -87,13 +114,13 @@ template<typename EntryPointCallback>
     if(!words || wordCount < s_SpirvHeaderWords)
         return false;
 
-    if(words[0] != s_SpirvMagic)
+    if(words[s_SpirvMagicWordIndex] != s_SpirvMagic)
         return false;
 
     for(usize instructionIndex = s_SpirvHeaderWords; instructionIndex < wordCount; ){
         const u32 instruction = words[instructionIndex];
-        const u16 opcode = static_cast<u16>(instruction & 0xFFFFu);
-        const u16 instructionWordCount = static_cast<u16>(instruction >> 16u);
+        const u16 opcode = static_cast<u16>(instruction & s_SpirvInstructionOpcodeBitMask);
+        const u16 instructionWordCount = static_cast<u16>(instruction >> s_SpirvInstructionWordCountBitShift);
         if(instructionWordCount == 0)
             return false;
 

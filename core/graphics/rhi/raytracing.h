@@ -86,6 +86,7 @@ typedef GraphicsBackend::Handle<RayTracingOpacityMicromap> RayTracingOpacityMicr
 
 
 using AffineTransform = Float34;
+inline constexpr usize s_AffineTransformFloatCount = 12u;
 
 inline constexpr AffineTransform s_identityTransform = []()constexpr noexcept{
     AffineTransform value{};
@@ -94,7 +95,7 @@ inline constexpr AffineTransform s_identityTransform = []()constexpr noexcept{
     value._33 = 1.f;
     return value;
 }();
-static_assert(sizeof(AffineTransform) == sizeof(f32) * 12u, "AffineTransform GPU layout drifted");
+static_assert(sizeof(AffineTransform) == sizeof(f32) * s_AffineTransformFloatCount, "AffineTransform GPU layout drifted");
 static_assert(alignof(AffineTransform) >= alignof(Float4), "AffineTransform must stay SIMD-aligned");
 
 namespace RayTracingGeometryFlags{
@@ -299,6 +300,8 @@ namespace RayTracingInstanceFlags{
 };
 
 struct RayTracingInstanceDesc{
+    static constexpr usize s_ByteSize = 64u;
+
     AffineTransform transform{};
     u32 instanceID : 24;
     u32 instanceMask : 8;
@@ -326,7 +329,7 @@ struct RayTracingInstanceDesc{
     constexpr RayTracingInstanceDesc& setFlags(RayTracingInstanceFlags::Mask value){ flags = value; return *this; }
     constexpr RayTracingInstanceDesc& setBLAS(RayTracingAccelStruct* value){ bottomLevelAS = value; return *this; }
 };
-static_assert(sizeof(RayTracingInstanceDesc) == 64, "sizeof(InstanceDesc) is supposed to be 64 bytes");
+static_assert(sizeof(RayTracingInstanceDesc) == RayTracingInstanceDesc::s_ByteSize, "sizeof(InstanceDesc) is supposed to be 64 bytes");
 static_assert(sizeof(IndirectInstanceDesc) == sizeof(RayTracingInstanceDesc));
 
 namespace RayTracingAccelStructBuildFlags{

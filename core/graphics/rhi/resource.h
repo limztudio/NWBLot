@@ -190,6 +190,7 @@ namespace TextureSubresourceMipResolve{
 struct TextureSubresourceSet{
     static constexpr auto AllMipLevels = static_cast<MipLevel>(-1);
     static constexpr auto AllArraySlices = static_cast<ArraySlice>(-1);
+    static constexpr usize s_ByteSize = 16u;
 
     MipLevel baseMipLevel = 0;
     MipLevel numMipLevels = 1;
@@ -387,6 +388,7 @@ struct BufferDesc{
 struct BufferRange{
     // AllBytes marks an unbounded range; resolve() clamps it to the buffer's byte size.
     static constexpr u64 AllBytes = Limit<u64>::s_Max;
+    static constexpr usize s_ByteSize = 16u;
 
     u64 byteOffset = 0;
     u64 byteSize = 0;

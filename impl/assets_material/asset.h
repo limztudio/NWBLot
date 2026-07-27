@@ -98,6 +98,15 @@ namespace MaterialLayoutFieldType{
     };
 };
 
+inline constexpr u32 s_MaterialLayoutFieldComponentsPerValueType = 4u;
+inline constexpr u32 s_MaterialLayoutFieldFirstTypeId = static_cast<u32>(MaterialLayoutFieldType::Bool);
+inline constexpr u32 s_MaterialParameterFirstValueTypeId = static_cast<u32>(MaterialParameterValueType::Bool);
+static_assert(
+    static_cast<u32>(MaterialParameterValueType::Float) - s_MaterialParameterFirstValueTypeId
+        == (static_cast<u32>(MaterialLayoutFieldType::Float4) - s_MaterialLayoutFieldFirstTypeId) / s_MaterialLayoutFieldComponentsPerValueType,
+    "Material layout field/value type ordering must remain contiguous"
+);
+
 [[nodiscard]] inline bool IsValidMaterialLayoutFieldType(const MaterialLayoutFieldType::Enum fieldType){
     return fieldType >= MaterialLayoutFieldType::Bool && fieldType <= MaterialLayoutFieldType::Float4;
 }
@@ -106,7 +115,7 @@ namespace MaterialLayoutFieldType{
     if(!IsValidMaterialLayoutFieldType(fieldType))
         return 0u;
 
-    return ((static_cast<u32>(fieldType) - 1u) % 4u) + 1u;
+    return ((static_cast<u32>(fieldType) - s_MaterialLayoutFieldFirstTypeId) % s_MaterialLayoutFieldComponentsPerValueType) + 1u;
 }
 
 [[nodiscard]] inline MaterialParameterValueType::Enum MaterialLayoutFieldValueType(
@@ -115,25 +124,15 @@ namespace MaterialLayoutFieldType{
     if(!IsValidMaterialLayoutFieldType(fieldType))
         return MaterialParameterValueType::None;
 
-    switch((static_cast<u32>(fieldType) - 1u) / 4u){
-    case 0u: return MaterialParameterValueType::Bool;
-    case 1u: return MaterialParameterValueType::Char;
-    case 2u: return MaterialParameterValueType::UChar;
-    case 3u: return MaterialParameterValueType::Short;
-    case 4u: return MaterialParameterValueType::UShort;
-    case 5u: return MaterialParameterValueType::Int;
-    case 6u: return MaterialParameterValueType::UInt;
-    case 7u: return MaterialParameterValueType::Half;
-    case 8u: return MaterialParameterValueType::Float;
-    default: return MaterialParameterValueType::None;
-    }
+    const u32 valueTypeOffset = (static_cast<u32>(fieldType) - s_MaterialLayoutFieldFirstTypeId) / s_MaterialLayoutFieldComponentsPerValueType;
+    return static_cast<MaterialParameterValueType::Enum>(s_MaterialParameterFirstValueTypeId + valueTypeOffset);
 }
 
 [[nodiscard]] inline MaterialLayoutFieldType::Enum MaterialLayoutFieldTypeFromParameterType(
     const MaterialParameterValueType::Enum valueType,
     const u32 componentCount
 ){
-    if(componentCount == 0u || componentCount > 4u)
+    if(componentCount == 0u || componentCount > s_MaterialLayoutFieldComponentsPerValueType)
         return MaterialLayoutFieldType::None;
 
     u32 firstFieldType = 0u;

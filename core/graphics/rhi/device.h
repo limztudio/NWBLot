@@ -200,8 +200,11 @@ typedef GraphicsBackend::Handle<Device> DeviceHandle;
 
 
 struct AdapterInfo{
-    typedef Array<u8, 16> UUID;
-    typedef Array<u8, 8> LUID;
+    static constexpr usize s_UuidByteCount = 16u;
+    static constexpr usize s_LuidByteCount = 8u;
+
+    typedef Array<u8, s_UuidByteCount> UUID;
+    typedef Array<u8, s_LuidByteCount> LUID;
 
     GraphicsString name;
     u32 vendorID = 0;

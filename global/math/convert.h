@@ -16,66 +16,98 @@
 
 namespace HalfConvertDetail{
 
+// IEEE-754 binary32/binary16 conversion layout. Keep these explicit so the scalar fallback documents the
+// bit-level contract shared with the F16C implementation below.
+inline constexpr u32 s_F32SignBitMask = 0x80000000u;
+inline constexpr u32 s_F32AbsoluteBitMask = 0x7fffffffu;
+inline constexpr u32 s_F32InfinityBits = 0x7f800000u;
+inline constexpr u32 s_F32MantissaBitCount = 23u;
+inline constexpr u32 s_F32ImplicitMantissaBit = 0x800000u;
+inline constexpr u32 s_F32MantissaBitMask = 0x7fffffu;
+inline constexpr u32 s_F32ToF16OverflowBits = 0x47800000u;
+inline constexpr u32 s_F32ToF16UnderflowBits = 0x33000000u;
+inline constexpr u32 s_F32ToF16MinNormalBits = 0x38800000u;
+inline constexpr u32 s_F32ToF16NormalExponentAdjustment = 0xc8000000u;
+inline constexpr u32 s_F32ToF16SubnormalShiftBase = 125u;
+inline constexpr u32 s_F32ToF16SignBitShift = 16u;
+inline constexpr u32 s_F32ToF16MantissaShift = 13u;
+inline constexpr u32 s_F16SignBitMask = 0x8000u;
+inline constexpr u32 s_F16ExponentBitMask = 0x7c00u;
+inline constexpr u32 s_F16ExponentFieldMask = 0x1fu;
+inline constexpr u32 s_F16MantissaBitCount = 10u;
+inline constexpr u32 s_F16MantissaBitMask = 0x03ffu;
+inline constexpr u32 s_F16ImplicitMantissaBit = 0x0400u;
+inline constexpr u32 s_F16QuietNanBit = 0x0200u;
+inline constexpr u32 s_F16NormalRoundingBias = 0x0fffu;
+inline constexpr i32 s_F32ToF16ExponentBiasDelta = 112;
+inline constexpr i32 s_F16InfinityF32Exponent = static_cast<i32>(s_F16ExponentFieldMask) + s_F32ToF16ExponentBiasDelta;
+inline constexpr i32 s_F16ZeroF32Exponent = -s_F32ToF16ExponentBiasDelta;
+inline constexpr usize s_F16CVectorElementCount = 4u;
+inline constexpr usize s_F16CVectorElementShift = 2u;
+inline constexpr int s_F16CNearestRoundingControl = 0;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] NWB_INLINE Half FloatToHalfScalar(const f32 value)noexcept{
     u32 bits = std::bit_cast<u32>(value);
-    const u32 sign = (bits & 0x80000000u) >> 16u;
-    bits &= 0x7fffffffu;
+    const u32 sign = (bits & s_F32SignBitMask) >> s_F32ToF16SignBitShift;
+    bits &= s_F32AbsoluteBitMask;
 
     u32 result = 0u;
-    if(bits >= 0x47800000u){
-        result = 0x7c00u | ((bits > 0x7f800000u) ? (0x0200u | ((bits >> 13u) & 0x03ffu)) : 0u);
+    if(bits >= s_F32ToF16OverflowBits){
+        result = s_F16ExponentBitMask | ((bits > s_F32InfinityBits) ? (s_F16QuietNanBit | ((bits >> s_F32ToF16MantissaShift) & s_F16MantissaBitMask)) : 0u);
     }
-    else if(bits <= 0x33000000u){
+    else if(bits <= s_F32ToF16UnderflowBits){
         result = 0u;
     }
-    else if(bits < 0x38800000u){
-        const u32 shift = 125u - (bits >> 23u);
-        bits = 0x800000u | (bits & 0x7fffffu);
+    else if(bits < s_F32ToF16MinNormalBits){
+        const u32 shift = s_F32ToF16SubnormalShiftBase - (bits >> s_F32MantissaBitCount);
+        bits = s_F32ImplicitMantissaBit | (bits & s_F32MantissaBitMask);
         result = bits >> (shift + 1u);
         const u32 sticky = (bits & ((1u << shift) - 1u)) != 0u ? 1u : 0u;
         result += (result | sticky) & ((bits >> shift) & 1u);
     }
     else{
-        bits += 0xc8000000u;
-        result = ((bits + 0x0fffu + ((bits >> 13u) & 1u)) >> 13u) & 0x7fffu;
+        bits += s_F32ToF16NormalExponentAdjustment;
+        result = ((bits + s_F16NormalRoundingBias + ((bits >> s_F32ToF16MantissaShift) & 1u)) >> s_F32ToF16MantissaShift) & (s_F16SignBitMask - 1u);
     }
 
     return static_cast<Half>(result | sign);
 }
 
 [[nodiscard]] NWB_INLINE f32 HalfToFloatScalar(const Half value)noexcept{
-    u32 mantissa = static_cast<u32>(value & 0x03ffu);
-    i32 exponent = static_cast<i32>(value & 0x7c00u);
-    if(exponent == 0x7c00){
-        exponent = 0x8f;
+    u32 mantissa = static_cast<u32>(value & s_F16MantissaBitMask);
+    i32 exponent = static_cast<i32>(value & s_F16ExponentBitMask);
+    if(exponent == static_cast<i32>(s_F16ExponentBitMask)){
+        exponent = s_F16InfinityF32Exponent;
     }
     else if(exponent != 0){
-        exponent = static_cast<i32>((value >> 10u) & 0x1fu);
+        exponent = static_cast<i32>((value >> s_F16MantissaBitCount) & s_F16ExponentFieldMask);
     }
     else if(mantissa != 0u){
         exponent = 1;
         do{
             --exponent;
             mantissa <<= 1u;
-        }while((mantissa & 0x0400u) == 0u);
-        mantissa &= 0x03ffu;
+        }while((mantissa & s_F16ImplicitMantissaBit) == 0u);
+        mantissa &= s_F16MantissaBitMask;
     }
     else{
-        exponent = -112;
+        exponent = s_F16ZeroF32Exponent;
     }
 
-    const u32 result = ((static_cast<u32>(value) & 0x8000u) << 16u) | (static_cast<u32>(exponent + 112) << 23u) | (mantissa << 13u);
+    const u32 result = ((static_cast<u32>(value) & s_F16SignBitMask) << s_F32ToF16SignBitShift)
+        | (static_cast<u32>(exponent + s_F32ToF16ExponentBiasDelta) << s_F32MantissaBitCount)
+        | (mantissa << s_F32ToF16MantissaShift);
     return std::bit_cast<f32>(result);
 }
 
 #if defined(NWB_HAS_F16C)
 [[nodiscard]] NWB_INLINE Half FloatToHalfF16C(const f32 value)noexcept{
     const __m128 floatValue = _mm_set_ss(value);
-    const __m128i halfValue = _mm_cvtps_ph(floatValue, 0);
+    const __m128i halfValue = _mm_cvtps_ph(floatValue, s_F16CNearestRoundingControl);
     return static_cast<Half>(_mm_cvtsi128_si32(halfValue));
 }
 
@@ -87,12 +119,12 @@ namespace HalfConvertDetail{
 
 NWB_INLINE Half* FloatBufferToHalfF16C(Half* outHalfBuffer, const f32* floatBuffer, const usize count)noexcept{
     usize i = 0u;
-    const usize vectorCount = count >> 2u;
+    const usize vectorCount = count >> s_F16CVectorElementShift;
     for(usize vectorIndex = 0u; vectorIndex < vectorCount; ++vectorIndex){
         const __m128 floatValue = _mm_loadu_ps(floatBuffer + i);
-        const __m128i halfValue = _mm_cvtps_ph(floatValue, 0);
+        const __m128i halfValue = _mm_cvtps_ph(floatValue, s_F16CNearestRoundingControl);
         _mm_storel_epi64(reinterpret_cast<__m128i*>(outHalfBuffer + i), halfValue);
-        i += 4u;
+        i += s_F16CVectorElementCount;
     }
 
     for(; i < count; ++i)
@@ -102,12 +134,12 @@ NWB_INLINE Half* FloatBufferToHalfF16C(Half* outHalfBuffer, const f32* floatBuff
 
 NWB_INLINE f32* HalfBufferToFloatF16C(f32* outFloatBuffer, const Half* halfBuffer, const usize count)noexcept{
     usize i = 0u;
-    const usize vectorCount = count >> 2u;
+    const usize vectorCount = count >> s_F16CVectorElementShift;
     for(usize vectorIndex = 0u; vectorIndex < vectorCount; ++vectorIndex){
         const __m128i halfValue = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(halfBuffer + i));
         const __m128 floatValue = _mm_cvtph_ps(halfValue);
         _mm_storeu_ps(outFloatBuffer + i, floatValue);
-        i += 4u;
+        i += s_F16CVectorElementCount;
     }
 
     for(; i < count; ++i)
@@ -169,7 +201,7 @@ NWB_INLINE f32* ConvertHalfBufferToFloat(f32* outFloatBuffer, const Half* halfBu
 [[nodiscard]] NWB_INLINE Half4U MakeHalf4U(const f32 x, const f32 y, const f32 z, const f32 w)noexcept{
     const Float4U values(x, y, z, w);
     Half4U result;
-    ConvertFloatBufferToHalf(result.raw, values.raw, 4u);
+    ConvertFloatBufferToHalf(result.raw, values.raw, HalfConvertDetail::s_F16CVectorElementCount);
     return result;
 }
 
@@ -179,7 +211,7 @@ NWB_INLINE f32* ConvertHalfBufferToFloat(f32* outFloatBuffer, const Half* halfBu
 
 [[nodiscard]] NWB_INLINE Float4U LoadHalf4U(const Half4U& value)noexcept{
     Float4U result{};
-    ConvertHalfBufferToFloat(result.raw, value.raw, 4u);
+    ConvertHalfBufferToFloat(result.raw, value.raw, HalfConvertDetail::s_F16CVectorElementCount);
     return result;
 }
 

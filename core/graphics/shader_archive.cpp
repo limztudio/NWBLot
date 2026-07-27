@@ -25,11 +25,12 @@ namespace __hidden_shader_archive{
 inline constexpr Name s_SerializeIndexArena("core/graphics/shader_archive_serialize");
 
 
-static constexpr char s_IndexMagic[8] = { 'N', 'W', 'B', 'S', 'D', 'X', '1', '\0' };
+static constexpr char s_IndexMagic[] = "NWBSDX1";
+inline constexpr usize s_IndexMagicByteCount = sizeof(s_IndexMagic);
 
 
 struct IndexHeaderDisk{
-    char magic[8];
+    char magic[s_IndexMagicByteCount];
     u32 recordCount = 0;
 };
 
@@ -90,7 +91,7 @@ u64 UpdateFnv64NameLane(u64 hash, const NameHash& nameHash, const u32 lane){
 
     const u64 laneValue = nameHash.qwords[lane];
     for(u32 byteIndex = 0; byteIndex < sizeof(laneValue); ++byteIndex){
-        hash ^= static_cast<u8>((laneValue >> (byteIndex * 8u)) & 0xFFu);
+        hash ^= static_cast<u8>((laneValue >> (byteIndex * NameDetail::s_NameHashByteBitCount)) & NameDetail::s_NameHashByteMask);
         hash *= FNV64_PRIME;
     }
 

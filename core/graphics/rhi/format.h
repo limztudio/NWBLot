@@ -154,6 +154,8 @@ namespace FormatKind{
 };
 
 struct FormatInfo{
+    static constexpr usize s_ByteSize = 16u;
+
     const char* name;
     Format::Enum format;
     u8 bytesPerBlock;
@@ -198,7 +200,7 @@ struct FormatInfo{
         , isSRGB(isSrgbValue)
     {}
 };
-static_assert(sizeof(FormatInfo) == 16u, "FormatInfo should remain tightly packed");
+static_assert(sizeof(FormatInfo) == FormatInfo::s_ByteSize, "FormatInfo should remain tightly packed");
 
 const FormatInfo& GetFormatInfo(Format::Enum format)noexcept;
 [[nodiscard]] u32 GetFormatBlockWidth(const FormatInfo& formatInfo)noexcept;

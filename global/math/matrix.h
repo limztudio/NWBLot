@@ -20,6 +20,8 @@ namespace SIMDMatrixDetail{
 static const SIMDVectorConstF s_SIMDMatrixSign = { { { 1.0f, -1.0f, 1.0f, -1.0f } } };
 static const SIMDVectorConstF s_SIMDMatrixNegativeTwo = { { { -2.0f, -2.0f, -2.0f, 0.0f } } };
 static const SIMDVectorConstU s_SIMDMatrixSelect0001 = { { { s_SELECT_0, s_SELECT_0, s_SELECT_0, s_SELECT_1 } } };
+inline constexpr f32 s_MatrixHalf = 0.5f;
+inline constexpr f32 s_MatrixTwo = 2.0f;
 inline constexpr f32 s_MatrixDecomposeEpsilon = 0.0001f;
 
 
@@ -220,7 +222,7 @@ NWB_INLINE bool SIMDCALL MatrixIsIdentity(const SIMDMatrix& matrix)noexcept{
     SIMDVector mask3 = VectorEqual(matrix.v[3], s_SIMDIdentityR3);
     mask0 = VectorAndInt(mask0, mask1);
     mask2 = VectorAndInt(mask2, mask3);
-    return VectorMoveMask(VectorAndInt(mask0, mask2)) == 0xFu;
+    return VectorMoveMask(VectorAndInt(mask0, mask2)) == VectorComponentMask::s_XYZW;
 }
 
 
@@ -909,7 +911,7 @@ namespace SIMDMatrixDetail{
 
 
 inline constexpr f32 s_MatrixProjectionNearEqualEpsilon = 0.00001f;
-inline constexpr f32 s_MatrixPerspectiveFovNearEqualEpsilon = s_MatrixProjectionNearEqualEpsilon * 2.0f;
+inline constexpr f32 s_MatrixPerspectiveFovNearEqualEpsilon = s_MatrixProjectionNearEqualEpsilon * s_MatrixTwo;
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveImpl(
     const f32 viewWidth,
@@ -979,7 +981,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovImpl(
 
     SIMDVector sinFov{};
     SIMDVector cosFov{};
-    VectorSinCos(&sinFov, &cosFov, VectorReplicate(0.5f * fovAngleY));
+    VectorSinCos(&sinFov, &cosFov, VectorReplicate(s_MatrixHalf * fovAngleY));
     const f32 height = VectorGetX(VectorDivide(cosFov, sinFov));
     const f32 width = height / aspectRatio;
     const f32 range = farZ / rangeDenominator;
@@ -1033,8 +1035,8 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicImpl(
 
     const f32 range = 1.0f / rangeDenominator;
     return MatrixSet(
-        2.0f / viewWidth, 0.0f, 0.0f, 0.0f,
-        0.0f, 2.0f / viewHeight, 0.0f, 0.0f,
+        s_MatrixTwo / viewWidth, 0.0f, 0.0f, 0.0f,
+        0.0f, s_MatrixTwo / viewHeight, 0.0f, 0.0f,
         0.0f, 0.0f, range, rangeNearScale * range * nearZ,
         0.0f, 0.0f, 0.0f, 1.0f
     );

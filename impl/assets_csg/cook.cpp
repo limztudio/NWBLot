@@ -43,6 +43,7 @@ static constexpr AStringView s_ModuleField = "module";
 static constexpr AStringView s_ModuleIncludeField = "module_include";
 static constexpr AStringView s_EvalField = "eval";
 static constexpr AStringView s_SlangIncludeExtension = ".slangi";
+static constexpr AStringView s_GeneratedIncludePathSeparator = "/";
 static constexpr AStringView s_EvalShapeIdDefineName = "NWB_CSG_EVAL_SHAPE_ID";
 static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
 
@@ -333,11 +334,16 @@ namespace AssetsCsgCook{
     if(safeModuleName.empty())
         return false;
 
-    outInclude.reserve(s_DefaultGeneratedIncludeDirectory.size() + safeModuleName.size() + 8u);
+    outInclude.reserve(
+        s_DefaultGeneratedIncludeDirectory.size()
+        + __hidden_assets_csg_cook::s_GeneratedIncludePathSeparator.size()
+        + safeModuleName.size()
+        + __hidden_assets_csg_cook::s_SlangIncludeExtension.size()
+    );
     outInclude += s_DefaultGeneratedIncludeDirectory;
-    outInclude += '/';
+    outInclude += __hidden_assets_csg_cook::s_GeneratedIncludePathSeparator;
     outInclude += safeModuleName;
-    outInclude += ".slangi";
+    outInclude += __hidden_assets_csg_cook::s_SlangIncludeExtension;
     return true;
 }
 

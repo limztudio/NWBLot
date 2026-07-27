@@ -22,6 +22,14 @@ NWB_IMPL_BEGIN
 
 namespace __hidden_cook{
 
+static constexpr u32 s_MaterialBindGeneratedSeparatorChunkRepeatCount = 8u;
+static constexpr u32 s_MaterialBindByteBitCount = 8u;
+static constexpr u64 s_MaterialBindU64LowWordMask = static_cast<u64>(Limit<u32>::s_Max);
+static constexpr u32 s_MaterialBindU64HighWordBitShift = static_cast<u32>(sizeof(u32) * s_MaterialBindByteBitCount);
+static constexpr usize s_MaterialBindGeneratedStructReserveBytes = 32u;
+static constexpr usize s_MaterialBindGeneratedFieldReserveBytes = 8u;
+static constexpr usize s_MaterialBindGeneratedInstanceReserveBytes = 64u;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -194,7 +202,7 @@ bool ResolveMaterialBindDependencyInterface(
 
 static void AppendMaterialBindGeneratedSeparator(CookString& inOutSource, const u32 newlineCount){
     static constexpr AStringView s_SeparatorChunk = "////////////////";
-    for(u32 i = 0u; i < 8u; ++i)
+    for(u32 i = 0u; i < s_MaterialBindGeneratedSeparatorChunkRepeatCount; ++i)
         inOutSource += s_SeparatorChunk;
     for(u32 i = 0u; i < newlineCount; ++i)
         inOutSource += '\n';
@@ -240,7 +248,7 @@ static void AppendGeneratedPascalIdentifier(const AStringView text, CookString& 
 
 
 static void AppendU32Slang(const u32 value, CookString& inOutText){
-    char digits[16u];
+    char digits[TextDetail::s_DecimalTextBufferBytes] = {};
     inOutText += FormatDecimal(static_cast<usize>(value), digits);
     inOutText += 'u';
 }
@@ -251,9 +259,9 @@ static void AppendU32Slang(const u32 value, CookString& inOutText){
 
 static void AppendU64AsUint2Slang(const u64 value, CookString& inOutText){
     inOutText += "uint2(";
-    AppendHexU32UnsignedLiteral(static_cast<u32>(value & 0xffffffffull), inOutText);
+    AppendHexU32UnsignedLiteral(static_cast<u32>(value & s_MaterialBindU64LowWordMask), inOutText);
     inOutText += ", ";
-    AppendHexU32UnsignedLiteral(static_cast<u32>(value >> 32u), inOutText);
+    AppendHexU32UnsignedLiteral(static_cast<u32>(value >> s_MaterialBindU64HighWordBitShift), inOutText);
     inOutText += ")";
 }
 
@@ -627,7 +635,7 @@ static bool AppendMaterialBindLayoutConstants(
     const NameHash& interfaceHash = interfaceName.hash();
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
         CookString laneSuffix("INTERFACE_HASH_", arena);
-        char laneDigits[16u];
+        char laneDigits[TextDetail::s_DecimalTextBufferBytes] = {};
         laneSuffix += FormatDecimal(static_cast<usize>(lane), laneDigits);
         const CookString symbol = BuildMaterialBindGeneratedSymbol(arena, {}, AStringView(laneSuffix));
         if(!AppendMaterialBindU64Constant(
@@ -1071,12 +1079,12 @@ bool BuildMaterialBindIncludeSourceImpl(
     {
         usize estimatedStructBytes = 0u;
         for(const MaterialBindStruct& bindStruct : entry.structs){
-            estimatedStructBytes += bindStruct.name.size() + 32u;
+            estimatedStructBytes += bindStruct.name.size() + s_MaterialBindGeneratedStructReserveBytes;
             for(const MaterialBindField& bindField : bindStruct.fields)
-                estimatedStructBytes += bindField.type.size() + bindField.name.size() + 8u;
+                estimatedStructBytes += bindField.type.size() + bindField.name.size() + s_MaterialBindGeneratedFieldReserveBytes;
         }
         for(const MaterialBindInstance& bindInstance : entry.instances)
-            estimatedStructBytes += bindInstance.type.size() + bindInstance.name.size() + 64u;
+            estimatedStructBytes += bindInstance.type.size() + bindInstance.name.size() + s_MaterialBindGeneratedInstanceReserveBytes;
         outSource.reserve(outSource.size() + estimatedStructBytes);
     }
 

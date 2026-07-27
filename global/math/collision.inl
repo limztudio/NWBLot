@@ -18,19 +18,37 @@ namespace CollisionDetail{
 
 inline constexpr f32 s_RayEpsilon = 1.0e-20f;
 inline constexpr f32 s_PlaneEpsilon = 1.192092896e-7f;
+inline constexpr f32 s_Half = 0.5f;
 inline constexpr usize s_TriangleVertexCount = 3u;
 inline constexpr u32 s_FrustumPlaneCount = 6u;
+inline constexpr u32 s_AabbCornerCount = 8u;
+inline constexpr u32 s_BoxCornerXSelectBit = 1u;
+inline constexpr u32 s_BoxCornerYSelectBit = 2u;
+inline constexpr u32 s_BoxCornerZSelectBit = 4u;
+inline constexpr u32 s_BoxCornerYSelectShift = 1u;
+inline constexpr u32 s_BoxCornerZSelectShift = 2u;
+
+namespace FrustumPlaneIndex{
+    enum Enum : usize{
+        Near,
+        Far,
+        Right,
+        Left,
+        Top,
+        Bottom,
+    };
+};
 
 [[nodiscard]] NWB_INLINE bool Vector3AnyTrue(const SIMDVector value)noexcept{
-    return (VectorMoveMask(value) & 0x7u) != 0u;
+    return (VectorMoveMask(value) & VectorComponentMask::s_XYZ) != 0u;
 }
 
 [[nodiscard]] NWB_INLINE bool Vector4AllTrue(const SIMDVector value)noexcept{
-    return (VectorMoveMask(value) & 0xFu) == 0xFu;
+    return (VectorMoveMask(value) & VectorComponentMask::s_XYZW) == VectorComponentMask::s_XYZW;
 }
 
 [[nodiscard]] NWB_INLINE bool Vector4AnyTrue(const SIMDVector value)noexcept{
-    return (VectorMoveMask(value) & 0xFu) != 0u;
+    return (VectorMoveMask(value) & VectorComponentMask::s_XYZW) != 0u;
 }
 
 [[nodiscard]] NWB_INLINE SIMDVector Vector3MaxComponent(const SIMDVector value)noexcept{
@@ -84,9 +102,9 @@ inline constexpr u32 s_FrustumPlaneCount = 6u;
 
 [[nodiscard]] NWB_INLINE SIMDVector BoxCornerOffset(const u32 index)noexcept{
     return VectorSet(
-        (index & 1u) ? 1.0f : -1.0f,
-        (index & 2u) ? 1.0f : -1.0f,
-        (index & 4u) ? 1.0f : -1.0f,
+        (index & s_BoxCornerXSelectBit) ? 1.0f : -1.0f,
+        (index & s_BoxCornerYSelectBit) ? 1.0f : -1.0f,
+        (index & s_BoxCornerZSelectBit) ? 1.0f : -1.0f,
         0.0f
     );
 }
@@ -153,8 +171,8 @@ NWB_INLINE void CenterExtentsFromMinMax(
     SIMDVector& outCenter,
     SIMDVector& outExtents
 )noexcept{
-    outCenter = VectorSetW(VectorMultiply(VectorAdd(minBounds, maxBounds), VectorReplicate(0.5f)), 0.0f);
-    outExtents = VectorSetW(VectorMultiply(VectorSubtract(maxBounds, minBounds), VectorReplicate(0.5f)), 0.0f);
+    outCenter = VectorSetW(VectorMultiply(VectorAdd(minBounds, maxBounds), VectorReplicate(CollisionDetail::s_Half)), 0.0f);
+    outExtents = VectorSetW(VectorMultiply(VectorSubtract(maxBounds, minBounds), VectorReplicate(CollisionDetail::s_Half)), 0.0f);
 }
 
 NWB_INLINE void ExpandMinMax(const SIMDVector point, SIMDVector& inOutMinBounds, SIMDVector& inOutMaxBounds)noexcept{
@@ -253,8 +271,8 @@ inline void FastIntersectPointsPlane(
     const SIMDVector maxBounds,
     f32& outDistance
 )noexcept{
-    const SIMDVector center = VectorScale(VectorAdd(minBounds, maxBounds), 0.5f);
-    const SIMDVector extents = VectorScale(VectorSubtract(maxBounds, minBounds), 0.5f);
+    const SIMDVector center = VectorScale(VectorAdd(minBounds, maxBounds), s_Half);
+    const SIMDVector extents = VectorScale(VectorSubtract(maxBounds, minBounds), s_Half);
     const SIMDVector axisOrigin = VectorSubtract(center, origin);
     const SIMDVector isParallel = VectorLessOrEqual(VectorAbs(direction), VectorReplicate(s_RayEpsilon));
     const SIMDVector inverseDirection = VectorReciprocal(direction);
@@ -852,11 +870,11 @@ NWB_INLINE void SIMDCALL AabbTests::ExpandTriangle(
 }
 
 [[nodiscard]] NWB_INLINE SIMDVector SIMDCALL AabbTests::Center(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
-    return VectorSetW(VectorScale(VectorAdd(minBounds, maxBounds), 0.5f), 0.0f);
+    return VectorSetW(VectorScale(VectorAdd(minBounds, maxBounds), CollisionDetail::s_Half), 0.0f);
 }
 
 [[nodiscard]] NWB_INLINE SIMDVector SIMDCALL AabbTests::Extents(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
-    return VectorSetW(VectorScale(VectorSubtract(maxBounds, minBounds), 0.5f), 0.0f);
+    return VectorSetW(VectorScale(VectorSubtract(maxBounds, minBounds), CollisionDetail::s_Half), 0.0f);
 }
 
 [[nodiscard]] NWB_INLINE f32 SIMDCALL AabbTests::Radius(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
@@ -876,8 +894,13 @@ NWB_INLINE void SIMDCALL AabbTests::ExpandTriangle(
         return false;
 
     AabbTests::Reset(outMinBounds, outMaxBounds);
-    for(u32 corner = 0u; corner < 8u; ++corner){
-        const SIMDVector cornerSelect = VectorSelectControl(corner & 1u, (corner >> 1u) & 1u, (corner >> 2u) & 1u, 0u);
+    for(u32 corner = 0u; corner < CollisionDetail::s_AabbCornerCount; ++corner){
+        const SIMDVector cornerSelect = VectorSelectControl(
+            corner & CollisionDetail::s_BoxCornerXSelectBit,
+            (corner >> CollisionDetail::s_BoxCornerYSelectShift) & CollisionDetail::s_BoxCornerXSelectBit,
+            (corner >> CollisionDetail::s_BoxCornerZSelectShift) & CollisionDetail::s_BoxCornerXSelectBit,
+            0u
+        );
         const SIMDVector localPoint = VectorSelect(localMinBounds, localMaxBounds, cornerSelect);
         const SIMDVector point = Vector3Transform(localPoint, localToWorld);
         if(Vector3IsNaN(point) || Vector3IsInfinite(point))
@@ -903,7 +926,7 @@ NWB_INLINE void SIMDCALL AabbTests::ExpandTriangle(
     const SIMDVector b,
     const SIMDVector c
 )noexcept{
-    return VectorScale(TriangleTests::EdgeCross2D(a, b, c), 0.5f);
+    return VectorScale(TriangleTests::EdgeCross2D(a, b, c), CollisionDetail::s_Half);
 }
 
 [[nodiscard]] NWB_INLINE SIMDVector SIMDCALL TriangleTests::AreaNormal(
@@ -2012,17 +2035,17 @@ inline void BoundingFrustum::getPlanes(
     SIMDVector planes[CollisionDetail::s_FrustumPlaneCount];
     CollisionDetail::FrustumPlanes(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
     if(nearPlaneOut)
-        *nearPlaneOut = planes[0];
+        *nearPlaneOut = planes[CollisionDetail::FrustumPlaneIndex::Near];
     if(farPlaneOut)
-        *farPlaneOut = planes[1];
+        *farPlaneOut = planes[CollisionDetail::FrustumPlaneIndex::Far];
     if(rightPlaneOut)
-        *rightPlaneOut = planes[2];
+        *rightPlaneOut = planes[CollisionDetail::FrustumPlaneIndex::Right];
     if(leftPlaneOut)
-        *leftPlaneOut = planes[3];
+        *leftPlaneOut = planes[CollisionDetail::FrustumPlaneIndex::Left];
     if(topPlaneOut)
-        *topPlaneOut = planes[4];
+        *topPlaneOut = planes[CollisionDetail::FrustumPlaneIndex::Top];
     if(bottomPlaneOut)
-        *bottomPlaneOut = planes[5];
+        *bottomPlaneOut = planes[CollisionDetail::FrustumPlaneIndex::Bottom];
 }
 
 inline void SIMDCALL BoundingFrustum::createFromMatrix(

@@ -36,6 +36,13 @@ inline constexpr u32 s_BCSingleClearBlockBytes = 8u;
 inline constexpr u32 s_BCDoubleClearBlockBytes = 16u;
 inline constexpr u32 s_BC4EndpointByteCount = 2u;
 inline constexpr u32 s_BC2AlphaTexelCount = 16u;
+inline constexpr u32 s_RGB565RedBitCount = 5u;
+inline constexpr u32 s_RGB565GreenBitCount = 6u;
+inline constexpr u32 s_RGB565RedBitShift = 11u;
+inline constexpr u32 s_RGB565GreenBitShift = 5u;
+inline constexpr u32 s_BC1TransparencyBitCount = 1u;
+inline constexpr u32 s_BC1TransparentColorIndices = Limit<u32>::s_Max;
+inline constexpr u32 s_D24ClearValueMask = 0x00ffffffu;
 inline constexpr f32 s_ClearFloatRoundingBias = 0.5f;
 inline constexpr f32 s_SRGBClearLinearThreshold = 0.0031308f;
 inline constexpr f32 s_SRGBClearLinearScale = 12.92f;
@@ -554,9 +561,9 @@ inline f32 LinearToSRGBClearValue(const f32 value){
 
 inline u16 PackRGB565ClearValue(const f32 r, const f32 g, const f32 b){
     return static_cast<u16>(
-        (FloatToUNormClearBits(r, 5u) << 11u)
-        | (FloatToUNormClearBits(g, 6u) << 5u)
-        | FloatToUNormClearBits(b, 5u)
+        (FloatToUNormClearBits(r, s_RGB565RedBitCount) << s_RGB565RedBitShift)
+        | (FloatToUNormClearBits(g, s_RGB565GreenBitCount) << s_RGB565GreenBitShift)
+        | FloatToUNormClearBits(b, s_RGB565RedBitCount)
     );
 }
 
@@ -568,10 +575,10 @@ inline void WriteBC1ColorClearBlock(u8* outPattern, const f32 r, const f32 g, co
     u16 color0 = PackRGB565ClearValue(encodedR, encodedG, encodedB);
     u16 color1 = color0;
     u32 indices = 0u;
-    if(FloatToUNormClearBits(a, 1u) == 0u){
+    if(FloatToUNormClearBits(a, s_BC1TransparencyBitCount) == 0u){
         color0 = 0u;
         color1 = 0u;
-        indices = 0xffffffffu;
+        indices = s_BC1TransparentColorIndices;
     }
 
     WriteClearPatternValue(outPattern, sizeof(color0), &color0, sizeof(color0));
@@ -952,7 +959,7 @@ inline bool BuildTextureDepthClearPattern(const Format::Enum format, const f32 d
         return true;
     }
     case Format::D24S8:{
-        const u32 packed = FloatToUNormClearValue(depth, 0x00ffffffu);
+        const u32 packed = FloatToUNormClearValue(depth, s_D24ClearValueMask);
         WriteClearPatternValue(outPattern, sizeof(packed), &packed, sizeof(packed));
         outPatternSize = sizeof(packed);
         return true;
@@ -1006,13 +1013,13 @@ namespace VulkanDetail{
 
 bool IsSupportedSampleCount(u32 sampleCount){
     switch(sampleCount){
-    case 1:
-    case 2:
-    case 4:
-    case 8:
-    case 16:
-    case 32:
-    case 64:
+    case VK_SAMPLE_COUNT_1_BIT:
+    case VK_SAMPLE_COUNT_2_BIT:
+    case VK_SAMPLE_COUNT_4_BIT:
+    case VK_SAMPLE_COUNT_8_BIT:
+    case VK_SAMPLE_COUNT_16_BIT:
+    case VK_SAMPLE_COUNT_32_BIT:
+    case VK_SAMPLE_COUNT_64_BIT:
         return true;
     default:
         return false;

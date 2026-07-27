@@ -242,6 +242,8 @@ namespace ComparisonFunc{
 };
 
 struct DepthStencilState{
+    static constexpr u8 s_AllStencilBits = Limit<u8>::s_Max;
+
     struct StencilOpDesc{
         StencilOp::Enum failOp = StencilOp::Keep;
         StencilOp::Enum depthFailOp = StencilOp::Keep;
@@ -258,8 +260,8 @@ struct DepthStencilState{
     bool depthWriteEnable = true;
     ComparisonFunc::Enum depthFunc = ComparisonFunc::Less;
     bool stencilEnable = false;
-    u8 stencilReadMask = 0xff;
-    u8 stencilWriteMask = 0xff;
+    u8 stencilReadMask = s_AllStencilBits;
+    u8 stencilWriteMask = s_AllStencilBits;
     u8 stencilRefValue = 0;
     bool dynamicStencilRef = false;
     StencilOpDesc frontFaceStencil;

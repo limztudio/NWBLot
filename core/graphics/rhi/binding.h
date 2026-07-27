@@ -41,6 +41,8 @@ namespace ResourceType{
 };
 
 struct BindingLayoutItem{
+    static constexpr usize s_ByteSize = 8u;
+
     u32 slot;
 
     ResourceType::Enum type : 8;
@@ -90,7 +92,7 @@ inline bool operator==(const BindingLayoutItem& lhs, const BindingLayoutItem& rh
     return lhs.slot == rhs.slot && lhs.type == rhs.type && lhs.size == rhs.size;
 }
 inline bool operator!=(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs){ return !(lhs == rhs); }
-static_assert(sizeof(BindingLayoutItem) == 8, "sizeof(BindingLayoutItem) is supposed to be 8 bytes");
+static_assert(sizeof(BindingLayoutItem) == BindingLayoutItem::s_ByteSize, "sizeof(BindingLayoutItem) is supposed to be 8 bytes");
 
 struct BindingLayoutDesc{
     GraphicsVector<BindingLayoutItem> bindings;
@@ -148,6 +150,8 @@ typedef GraphicsBackend::Handle<BindingLayout> BindingLayoutHandle;
 
 
 struct DescriptorWriteItem{
+    static constexpr usize s_ByteSize = 40u;
+
     void* resourceHandle;
 
     u32 slot;
@@ -169,8 +173,8 @@ struct DescriptorWriteItem{
         BufferRange range; // valid for Buffer_SRV, Buffer_UAV, ConstantBuffer
         u64 rawData[2];
     };
-    static_assert(sizeof(TextureSubresourceSet) == 16, "sizeof(TextureSubresourceSet) is supposed to be 16 bytes");
-    static_assert(sizeof(BufferRange) == 16, "sizeof(BufferRange) is supposed to be 16 bytes");
+    static_assert(sizeof(TextureSubresourceSet) == TextureSubresourceSet::s_ByteSize, "sizeof(TextureSubresourceSet) is supposed to be 16 bytes");
+    static_assert(sizeof(BufferRange) == BufferRange::s_ByteSize, "sizeof(BufferRange) is supposed to be 16 bytes");
 
     // Default constructor that doesn't initialize anything for performance:
     // DescriptorWriteItem's are stored in large statically sized arrays.
@@ -272,7 +276,7 @@ inline bool operator==(const DescriptorWriteItem& lhs, const DescriptorWriteItem
     ;
 }
 inline bool operator!=(const DescriptorWriteItem& lhs, const DescriptorWriteItem& rhs){ return !(lhs == rhs); }
-static_assert(sizeof(DescriptorWriteItem) == 40, "sizeof(DescriptorWriteItem) is supposed to be 40 bytes");
+static_assert(sizeof(DescriptorWriteItem) == DescriptorWriteItem::s_ByteSize, "sizeof(DescriptorWriteItem) is supposed to be 40 bytes");
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

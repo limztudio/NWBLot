@@ -31,10 +31,11 @@ inline constexpr u64 s_VolumeMoveChunkBytes = 1024ull * 1024ull;
 using ::AddNoOverflow;
 using ::CanRepresentU64;
 
-inline constexpr char s_VolumeMagic[8] = { 'N', 'W', 'B', 'V', 'O', 'L', '1', '\0' };
+inline constexpr char s_VolumeMagic[] = "NWBVOL1";
+inline constexpr usize s_VolumeMagicByteCount = sizeof(s_VolumeMagic);
 
 struct VolumeHeaderDisk{
-    char magic[8];
+    char magic[s_VolumeMagicByteCount];
     u64 segmentSize;
     u64 metadataBytes;
     u64 fileCount;

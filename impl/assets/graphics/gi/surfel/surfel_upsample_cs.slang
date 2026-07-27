@@ -88,8 +88,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     [unroll] for(int j = 0; j < 2; ++j){
         [unroll] for(int i = 0; i < 2; ++i){
             const int2 tap = int2(clamp(baseTexel.x + i, 0, int(halfWidth) - 1), clamp(baseTexel.y + j, 0, int(halfHeight) - 1));
-            const float4 tapValue = nwbSurfelUpsampleHalfIrradiance().Load(int3(tap, 0));
-            if(tapValue.a < 0.5)
+            // The resolve target is RGBA16F. Keep its irradiance/coverage payload native-half while it is only
+            // transported through this filter; geometry and the weighted accumulation remain FP32 below.
+            const half4 tapValue = half4(nwbSurfelUpsampleHalfIrradiance().Load(int3(tap, 0)));
+            if(tapValue.a < half(0.5))
                 continue;   // this half texel had no surfel coverage -> nothing to upsample from
             // Recover the tap's geometry from the SAME full texel the resolve gathered at (tap * factor, top-left).
             const int2 tapFull = int2(min(uint(tap.x) * factor, fullWidth - 1u), min(uint(tap.y) * factor, fullHeight - 1u));
@@ -103,7 +105,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             const float3 d = tapWorld - centerWorld;
             const float bilinearWeight = (i == 0 ? (1.0 - lerpFrac.x) : lerpFrac.x) * (j == 0 ? (1.0 - lerpFrac.y) : lerpFrac.y);
             const float weight = bilinearWeight * exp(-dot(d, d) * invTwoSigmaWorldSq);
-            sum += weight * tapValue.rgb;
+            sum += weight * float3(tapValue.rgb);
             weightSum += weight;
         }
     }

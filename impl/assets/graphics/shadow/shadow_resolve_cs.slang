@@ -234,7 +234,9 @@ float nwbShadowResolveValueWeightVec(const NwbShadowResolveVisFVec centerVis, co
 // PREPARE/WAVELET tap read of the current INPUT_COLOR (or SOFT_HALF) at a half-res texel + slot, as the wavelet vector
 // type: .r broadcast for SCALAR (CH1), .rgb for RGB (CH3). Centralised so the LDS-load + large-step paths read identically.
 NwbShadowResolveVisVec nwbShadowResolveLoadInput(const int2 tap, const uint slot){
-    const float4 s = NwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.inputColorSlot).Load(int4(tap, (int)slot, 0));
+    // The soft-shadow ping-pong targets are RGBA16F. This helper feeds half LDS storage, so do not retain a widened
+    // float payload across the load; the filter promotes only its actual accumulation path to FP32.
+    const half4 s = half4(NwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.inputColorSlot).Load(int4(tap, (int)slot, 0)));
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
     return NwbShadowResolveVisVec(s.rgb);
 #else

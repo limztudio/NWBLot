@@ -148,7 +148,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const float bilinearWeight = (i == 0 ? (1.0 - lerpFrac.x) : lerpFrac.x) * (j == 0 ? (1.0 - lerpFrac.y) : lerpFrac.y);
                 const float3 d = nwbCausticResolveWorldAtHalf(tap) - centerWorld;
                 const float weight = bilinearWeight * exp(-dot(d, d) * invTwoSigmaWorldSq);
-                sum += weight * NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb;
+                // The resolve ping-pong targets are RGBA16F. Retain the radiance payload as half until the
+                // FP32 weighted sum, matching the LDS path below while keeping the direct path mobile-friendly.
+                const half3 tapColor = half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);
+                sum += weight * float3(tapColor);
                 weightSum += weight;
             }
         }
@@ -298,7 +301,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 continue; // background tap: no receiver -> skip so the dark surround cannot dilute the caustic edge
             const float3 d = nwbCausticResolveWorldAtHalf(tap) - centerWorld;
             const float weight = s_NwbCausticResolveKernel[kx + 2] * s_NwbCausticResolveKernel[ky + 2] * exp(-dot(d, d) * invTwoSigmaWorldSq);
-            sum += weight * NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb;
+            const half3 tapColor = half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);
+            sum += weight * float3(tapColor);
             weightSum += weight;
         }
     }

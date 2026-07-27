@@ -39,10 +39,6 @@ namespace __hidden_csg_interval_peel{
     return layout != nullptr;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] static bool CreateIntervalPeelPipeline(
     Core::Device& device,
     Core::ComputePipelineHandle& pipeline,
@@ -66,10 +62,6 @@ namespace __hidden_csg_interval_peel{
     pipeline = device.createComputePipeline(pipelineDesc);
     return pipeline != nullptr;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [[nodiscard]] static bool CreateReceiverSpanBuildPipeline(
     Core::Device& device,
@@ -95,10 +87,6 @@ namespace __hidden_csg_interval_peel{
     return pipeline != nullptr;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] static bool CreateIntervalCombinePipeline(
     Core::Device& device,
     Core::ComputePipelineHandle& pipeline,
@@ -122,10 +110,6 @@ namespace __hidden_csg_interval_peel{
     pipeline = device.createComputePipeline(pipelineDesc);
     return pipeline != nullptr;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 [[nodiscard]] static bool CreateIntervalCapFillPipeline(
     Core::Device& device,
@@ -328,10 +312,6 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& targets){
     if(!drawState().m_meshViewBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG interval sampling requires a mesh view buffer"));
@@ -356,10 +336,6 @@ bool RendererCsgSystem::createCsgIntervalSampleResources(DeferredFrameTargets& t
 
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool RendererCsgSystem::createCsgIntervalSampleStateBuffer(){
     if(csgState().m_intervalSampleStateBuffer)

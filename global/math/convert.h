@@ -16,6 +16,10 @@
 
 namespace HalfConvertDetail{
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // IEEE-754 binary32/binary16 conversion layout. Keep these explicit so the scalar fallback documents the
 // bit-level contract shared with the F16C implementation below.
 inline constexpr u32 s_F32SignBitMask = 0x80000000u;

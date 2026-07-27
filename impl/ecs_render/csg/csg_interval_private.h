@@ -22,6 +22,9 @@ NWB_IMPL_BEGIN
 namespace __hidden_csg_interval_peel{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct CsgIntervalDispatchPushConstants{
     u32 frameWidth = 0u;
     u32 frameHeight = 0u;
@@ -61,12 +64,15 @@ static_assert(sizeof(CsgIntervalSampleStateGpuData) == sizeof(u32) * 8u, "CSG in
 
 
 namespace CsgTextureAccess{
-enum Enum : u8{
-    None,
-    SRV,
-    UAV
+    enum Enum : u8{
+        None,
+        SRV,
+        UAV
+    };
 };
-};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };

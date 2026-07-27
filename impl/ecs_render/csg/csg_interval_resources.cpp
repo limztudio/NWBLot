@@ -17,6 +17,9 @@ NWB_IMPL_BEGIN
 namespace __hidden_csg_interval_peel{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static bool CreateCsgIntervalBindingLayout(
     Core::GraphicsArena& arena,
     Core::Device& device,
@@ -151,6 +154,9 @@ namespace __hidden_csg_interval_peel{
     pipeline = device.createGraphicsPipeline(pipelineDesc, framebufferInfo);
     return pipeline != nullptr;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };

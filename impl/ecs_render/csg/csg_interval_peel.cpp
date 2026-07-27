@@ -17,6 +17,9 @@ NWB_IMPL_BEGIN
 namespace __hidden_csg_interval_peel{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static Core::Rect ResolveCsgFrameWorkRect(const DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData){
     return csgFrameData.workRegion.resolveRect(targets.width, targets.height);
 }
@@ -140,6 +143,9 @@ static void DispatchCsgIntervalCompute(
         1u
     );
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };

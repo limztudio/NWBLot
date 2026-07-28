@@ -57,6 +57,7 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
     slotsBufferDesc
         .setByteSize(sizeof(RayTraceMaterialContextSlots))
         .setIsConstantBuffer(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(Name("raytrace_material_context_slots"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
@@ -835,25 +836,46 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             );
             rayTracingState().m_swShadowEdgeStatsPending = true;
             rayTracingState().m_swShadowEdgeStatsPendingTick = tick;
+            rayTracingState().m_swShadowEdgeStatsPendingSubmissionID = 0u;
+            rayTracingState().m_swShadowEdgeStatsPendingSubmissionQueue = Core::CommandQueue::kCount;
+            rayTracingState().m_swShadowEdgeStatsPendingSubmissionUnconfirmed = true;
         }
         else if(
             rayTracingState().m_swShadowEdgeStatsPending
             && (tick - rayTracingState().m_swShadowEdgeStatsPendingTick) >= s_SwShadowEdgeStatsLogDelay
         ){
-            const u32* stats = static_cast<const u32*>(graphics().getDevice().mapBuffer(rayTracingState().m_swShadowEdgeStatsReadback.get(), Core::CpuAccessMode::Read));
-            if(stats){
-                const u32 traced = stats[NWB_SW_SHADOW_EDGE_STATS_TRACED];
-                const u32 total = stats[NWB_SW_SHADOW_EDGE_STATS_TOTAL];
-                graphics().getDevice().unmapBuffer(rayTracingState().m_swShadowEdgeStatsReadback.get());
-                const f64 fraction = (total > 0u) ? (100.0 * static_cast<f64>(traced) / static_cast<f64>(total)) : 0.0;
-                NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW shadow adaptive edge fraction = {}% ({} traced / {} total rays, threshold {})")
-                    , fraction
-                    , static_cast<u64>(traced)
-                    , static_cast<u64>(total)
-                    , static_cast<f64>(rayTracingState().m_swShadowEdgeThreshold)
-                );
+            const bool submissionConfirmed = !rayTracingState().m_swShadowEdgeStatsPendingSubmissionUnconfirmed;
+            const bool submissionComplete =
+                submissionConfirmed
+                && (
+                    rayTracingState().m_swShadowEdgeStatsPendingSubmissionID == 0u
+                    || (
+                        rayTracingState().m_swShadowEdgeStatsPendingSubmissionQueue != Core::CommandQueue::kCount
+                        && graphics().getDevice().queueGetCompletedInstance(
+                            rayTracingState().m_swShadowEdgeStatsPendingSubmissionQueue
+                        ) >= rayTracingState().m_swShadowEdgeStatsPendingSubmissionID
+                    )
+                )
+            ;
+            if(submissionComplete){
+                const u32* stats = static_cast<const u32*>(graphics().getDevice().mapBuffer(rayTracingState().m_swShadowEdgeStatsReadback.get(), Core::CpuAccessMode::Read));
+                if(stats){
+                    const u32 traced = stats[NWB_SW_SHADOW_EDGE_STATS_TRACED];
+                    const u32 total = stats[NWB_SW_SHADOW_EDGE_STATS_TOTAL];
+                    graphics().getDevice().unmapBuffer(rayTracingState().m_swShadowEdgeStatsReadback.get());
+                    const f64 fraction = (total > 0u) ? (100.0 * static_cast<f64>(traced) / static_cast<f64>(total)) : 0.0;
+                    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW shadow adaptive edge fraction = {}% ({} traced / {} total rays, threshold {})")
+                        , fraction
+                        , static_cast<u64>(traced)
+                        , static_cast<u64>(total)
+                        , static_cast<f64>(rayTracingState().m_swShadowEdgeThreshold)
+                    );
+                }
+                rayTracingState().m_swShadowEdgeStatsPending = false;
+                rayTracingState().m_swShadowEdgeStatsPendingSubmissionID = 0u;
+                rayTracingState().m_swShadowEdgeStatsPendingSubmissionQueue = Core::CommandQueue::kCount;
+                rayTracingState().m_swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
             }
-            rayTracingState().m_swShadowEdgeStatsPending = false;
         }
     }
     else if(!softTransparentRan){
@@ -1207,6 +1229,7 @@ bool RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instance
     materialBufferDesc
         .setByteSize(static_cast<u64>(sizeof(NwbRtInstanceMaterialGpu) * capacity))
         .setStructStride(sizeof(NwbRtInstanceMaterialGpu))
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(Name("shadow_instance_material"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
@@ -1242,6 +1265,7 @@ bool RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceC
     instanceBufferDesc
         .setByteSize(static_cast<u64>(capacity * sizeof(InstanceGpuData)))
         .setStructStride(sizeof(InstanceGpuData))
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(Name("shadow_instance_context"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
@@ -1274,6 +1298,7 @@ bool RendererRayTracingSystem::ensureShadowMaterialTypedBuffer(usize byteCount){
     materialTypedBufferDesc
         .setByteSize(static_cast<u64>(capacity))
         .setStructStride(sizeof(u32))
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(Name("shadow_material_typed"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;

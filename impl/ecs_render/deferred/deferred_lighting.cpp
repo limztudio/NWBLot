@@ -51,6 +51,7 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
             .setByteSize(sizeof(ECSRenderDetail::SceneShadingGpuData))
             .setIsConstantBuffer(true)
             .setDebugName(ECSRenderDetail::s_SceneShadingBufferName)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
         deferredState().m_sceneShadingBuffer = graphics().createBuffer(sceneShadingBufferDesc);
@@ -66,6 +67,7 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
             .setByteSize(static_cast<u64>(sizeof(ECSRenderDetail::SceneLightGpuData) * NWB_SCENE_MAX_LIGHTS))
             .setStructStride(sizeof(ECSRenderDetail::SceneLightGpuData))
             .setDebugName(ECSRenderDetail::s_SceneLightBufferName)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
         deferredState().m_lightBuffer = graphics().createBuffer(lightBufferDesc);

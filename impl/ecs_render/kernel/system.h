@@ -141,11 +141,21 @@ private:
     Core::CommandListResourceStateHandoff m_frameSetupStateFanInHandoff;
     Core::CommandListResourceStateHandoff m_gbufferStateHandoff;
     Core::CommandListResourceStateHandoff m_postGbufferNormalizedStateHandoff;
+    Core::CommandListResourceStateHandoff m_shadowComputeBaseStateHandoff;
+    Core::CommandListResourceStateHandoff m_shadowComputeInputStateHandoff;
+    // Compute-only shadow scratch/history retains its state across frames. The exclusive visibility output follows
+    // the separate Compute -> Graphics -> Compute ownership-return handoff below.
+    Core::CommandListResourceStateHandoff m_shadowComputePersistentStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityStateHandoff;
+    Core::CommandListResourceStateHandoff m_shadowVisibilityGraphicsStateHandoff;
+    Core::CommandListResourceStateHandoff m_shadowVisibilityReturnStateHandoff;
+    Core::CommandListResourceStateHandoff m_shadowOwnershipRecoveryInputStateHandoff;
+    Core::CommandListResourceStateHandoff m_shadowOwnershipRecoveryStateHandoff;
     Core::CommandListResourceStateHandoff m_causticsStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelGiStateHandoff;
     Core::CommandListResourceStateHandoff m_postGbufferFanInStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredLightingStateHandoff;
+    Core::CommandListResourceStateHandoff m_deferredCompositeStateHandoff;
     Core::CommandListResourceStateHandoff m_avboitStateHandoff;
     Core::CommandListHandle m_meshViewSetupCommandList;
     Core::CommandListHandle m_sceneShadingSetupCommandList;
@@ -153,6 +163,7 @@ private:
     Core::CommandListHandle m_gbufferCommandList;
     Core::CommandListHandle m_postGbufferNormalizeCommandList;
     Core::CommandListHandle m_shadowVisibilityCommandList;
+    Core::CommandListHandle m_shadowOwnershipRecoveryCommandList;
     Core::CommandListHandle m_causticsCommandList;
     Core::CommandListHandle m_surfelGiCommandList;
     Core::CommandListHandle m_deferredLightingCommandList;
@@ -162,6 +173,9 @@ private:
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;
     bool m_preparedShadowVisibilityReady = false;
+    // A Compute release without a successfully accepted Graphics acquire is not recoverable by guessing. Stop
+    // recording subsequent frames until the caller tears down/recreates the device resources.
+    bool m_asyncShadowOwnershipRecoveryFailed = false;
 
 private:
     RendererShaderSystem m_shaderSystem;

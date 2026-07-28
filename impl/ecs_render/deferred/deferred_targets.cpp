@@ -357,6 +357,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         .setByteSize(sizeof(DeferredBindlessResourceSlots))
         .setIsConstantBuffer(true)
         .setDebugName("ECSRender_DeferredBindlessResourceSlots")
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     bindless.slotsBuffer = graphics().createBuffer(slotsBufferDesc);
@@ -619,6 +620,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setHeight(createdTargets.height)
         .setFormat(createdTargets.normalFormat)
         .setInRenderTarget(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/gbuffer_normal")
         .setClearValue(Core::Color(0.5f, 0.5f, 1.f, 1.f))
     ;
@@ -634,6 +636,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setHeight(createdTargets.height)
         .setFormat(createdTargets.worldPositionFormat)
         .setInRenderTarget(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/gbuffer_world_position")
         .setClearValue(Core::Color(0.f, 0.f, 0.f, 1.f))
     ;
@@ -664,6 +667,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setHeight(createdTargets.height)
         .setFormat(createdTargets.depthFormat)
         .setInRenderTarget(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/depth")
     ;
     createdTargets.depth = graphics().createTexture(depthDesc);

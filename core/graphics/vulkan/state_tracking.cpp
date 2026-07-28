@@ -288,6 +288,72 @@ bool CommandListResourceStateHandoff::buildFanIn(
     return true;
 }
 
+bool CommandListResourceStateHandoff::buildResourceSubset(
+    const CommandListResourceStateHandoff& source,
+    Texture* const* textures,
+    const usize textureCount,
+    Buffer* const* buffers,
+    const usize bufferCount
+){
+    if(
+        this == &source
+        || !source.valid()
+        || (textureCount != 0u && !textures)
+        || (bufferCount != 0u && !buffers)
+    ){
+        reset();
+        return false;
+    }
+
+    const auto containsTexture = [&](Texture* texture){
+        if(!texture)
+            return false;
+        for(usize i = 0u; i < textureCount; ++i){
+            if(textures[i] == texture)
+                return true;
+        }
+        return false;
+    };
+    const auto containsBuffer = [&](Buffer* buffer){
+        if(!buffer)
+            return false;
+        for(usize i = 0u; i < bufferCount; ++i){
+            if(buffers[i] == buffer)
+                return true;
+        }
+        return false;
+    };
+
+    reset();
+    for(const TextureState& state : source.m_textureStates){
+        if(containsTexture(state.texture))
+            m_textureStates.push_back(state);
+    }
+    for(const BufferState& state : source.m_bufferStates){
+        if(containsBuffer(state.buffer))
+            m_bufferStates.push_back(state);
+    }
+    for(const PermanentTextureState& state : source.m_permanentTextureStates){
+        if(containsTexture(state.texture))
+            m_permanentTextureStates.push_back(state);
+    }
+    for(const BufferState& state : source.m_permanentBufferStates){
+        if(containsBuffer(state.buffer))
+            m_permanentBufferStates.push_back(state);
+    }
+
+    m_valid = true;
+    return true;
+}
+
+bool CommandListResourceStateHandoff::buildTextureSubset(
+    const CommandListResourceStateHandoff& source,
+    Texture* const texture
+){
+    Texture* const textures[] = { texture };
+    return buildResourceSubset(source, textures, 1u, nullptr, 0u);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

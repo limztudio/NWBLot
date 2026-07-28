@@ -51,7 +51,12 @@ template<typename PayloadT, typename PayloadVector>
         graphics,
         bufferName,
         payload,
-        { false, canHaveRawViews, accelStructBuildInput },
+        {
+            false,
+            canHaveRawViews,
+            accelStructBuildInput,
+            Core::ResourceQueueSharing::GraphicsAndAsyncCompute
+        },
         buffer
     );
     switch(failure){

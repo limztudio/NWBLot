@@ -104,6 +104,18 @@ public:
         usize branchCount
     );
 
+    // Builds a valid handoff containing only the selected resources from `source`. This lets a cross-queue packet
+    // import exactly the resources its queue may access instead of accidentally acquiring unrelated exclusive
+    // resources from a broad producer snapshot. Null resource entries are ignored.
+    [[nodiscard]] bool buildResourceSubset(
+        const CommandListResourceStateHandoff& source,
+        Texture* const* textures,
+        usize textureCount,
+        Buffer* const* buffers,
+        usize bufferCount
+    );
+    [[nodiscard]] bool buildTextureSubset(const CommandListResourceStateHandoff& source, Texture* texture);
+
 
 private:
     GraphicsVector<TextureState> m_textureStates;

@@ -227,6 +227,15 @@ public:
         usize commandListCount,
         CommandQueue::Enum executionQueue = CommandQueue::Graphics
     );
+    // The cross-lane form confirms the ticket only when Vulkan accepts this exact submission and returns the
+    // completion token consumed by a dependent lane. A rejected submission discards its query reservations.
+    [[nodiscard]] QueueSubmissionToken submit(
+        Device& device,
+        CommandList* const* commandLists,
+        usize commandListCount,
+        RenderLane::Enum executionLane,
+        const QueueSubmissionDesc& submitDesc
+    );
     // Explicitly releases all timing scopes when a caller elects not to submit its recorded command lists.
     void discard();
 

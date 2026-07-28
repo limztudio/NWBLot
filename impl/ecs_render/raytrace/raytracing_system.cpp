@@ -18,6 +18,19 @@ RendererRayTracingSystem::RendererRayTracingSystem(RendererSystem& renderer)
     : RendererSystemSubsystemBase<RendererSystem>(renderer)
 {}
 
+void RendererRayTracingSystem::confirmShadowVisibilitySubmission(const Core::QueueSubmissionToken& submissionToken){
+    if(
+        !rayTracingState().m_swShadowEdgeStatsPending
+        || !rayTracingState().m_swShadowEdgeStatsPendingSubmissionUnconfirmed
+        || !submissionToken.valid()
+    )
+        return;
+
+    rayTracingState().m_swShadowEdgeStatsPendingSubmissionID = submissionToken.value;
+    rayTracingState().m_swShadowEdgeStatsPendingSubmissionQueue = submissionToken.queue;
+    rayTracingState().m_swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

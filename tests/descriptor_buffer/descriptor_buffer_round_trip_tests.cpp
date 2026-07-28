@@ -593,6 +593,70 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffTransfersFinalBuffe
 }
 
 
+// Cross-frame Compute scratch must not carry the preceding frame's state for resources that the current Graphics
+// prefix has already prepared. Select the private scratch state before fan-in so the current prefix remains authoritative
+// for shared inputs while the Compute-only resource retains its prior layout.
+TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffSeparatesCurrentInputsFromPersistentScratch){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto sharedInput = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    auto computeScratch = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(sharedInput.get(), nullptr);
+    ASSERT_NE(computeScratch.get(), nullptr);
+
+    CommandListResourceStateHandoff previousComputeState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff currentPrefixState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff persistentScratchState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff nextComputeState(DescriptorBufferRoundTripTest::arena());
+    auto previousCompute = device.createCommandList();
+    auto currentPrefix = device.createCommandList();
+    auto nextCompute = device.createCommandList();
+    ASSERT_NE(previousCompute.get(), nullptr);
+    ASSERT_NE(currentPrefix.get(), nullptr);
+    ASSERT_NE(nextCompute.get(), nullptr);
+
+    previousCompute->open();
+    previousCompute->setBufferState(sharedInput.get(), ResourceStates::UnorderedAccess);
+    previousCompute->setBufferState(computeScratch.get(), ResourceStates::UnorderedAccess);
+    previousCompute->close(&previousComputeState);
+    ASSERT_TRUE(previousComputeState.valid());
+
+    currentPrefix->open();
+    currentPrefix->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
+    currentPrefix->close(&currentPrefixState);
+    ASSERT_TRUE(currentPrefixState.valid());
+
+    Core::Buffer* const scratchBuffers[] = { computeScratch.get() };
+    ASSERT_TRUE(persistentScratchState.buildResourceSubset(
+        previousComputeState,
+        nullptr,
+        0u,
+        scratchBuffers,
+        1u
+    ));
+
+    const CommandListResourceStateHandoff* branches[] = { &persistentScratchState };
+    ASSERT_TRUE(nextComputeState.buildFanIn(currentPrefixState, branches, 1u));
+
+    nextCompute->open(&nextComputeState);
+    EXPECT_EQ(nextCompute->getBufferState(sharedInput.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(nextCompute->getBufferState(computeScratch.get()), ResourceStates::UnorderedAccess);
+    nextCompute->close();
+}
+
+
 // The logical AsyncCompute lane is always usable by packet code: on the default device it resolves to Graphics,
 // preserves ordered execution, and returns a Graphics timeline token rather than inventing a second queue.
 TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneFallsBackToGraphicsWhenNotEnabled){

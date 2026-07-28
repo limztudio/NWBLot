@@ -445,6 +445,45 @@ bool GpuTimingSubmissionTicket::submit(
     return submitted;
 }
 
+QueueSubmissionToken GpuTimingSubmissionTicket::submit(
+    Device& device,
+    CommandList* const* commandLists,
+    const usize commandListCount,
+    const RenderLane::Enum executionLane,
+    const QueueSubmissionDesc& submitDesc
+){
+    {
+        ScopedLock lock(m_mutex);
+        NWB_ASSERT_MSG(m_recordingScopeCount == 0u, NWB_TEXT("GPU timing submission ticket submitted while command recording is still active"));
+        if(m_resolved || m_recordingScopeCount != 0u)
+            return {};
+    }
+
+    if(!commandLists || commandListCount == 0u){
+        discard();
+        return {};
+    }
+
+    for(usize i = 0u; i < commandListCount; ++i){
+        if(!commandLists[i] || !commandLists[i]->hasCommandBuffer()){
+            discard();
+            return {};
+        }
+    }
+
+    const QueueSubmissionToken token = device.executeCommandLists(
+        commandLists,
+        commandListCount,
+        executionLane,
+        submitDesc
+    );
+    if(token.valid())
+        confirm();
+    else
+        discard();
+    return token;
+}
+
 void GpuTimingSubmissionTicket::discard(){
     ScopedLock lock(m_mutex);
     if(m_resolved)

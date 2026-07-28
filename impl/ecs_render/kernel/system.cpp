@@ -44,11 +44,19 @@ RendererSystem::RendererSystem(
     , m_frameSetupStateFanInHandoff(arena)
     , m_gbufferStateHandoff(arena)
     , m_postGbufferNormalizedStateHandoff(arena)
+    , m_shadowComputeBaseStateHandoff(arena)
+    , m_shadowComputeInputStateHandoff(arena)
+    , m_shadowComputePersistentStateHandoff(arena)
     , m_shadowVisibilityStateHandoff(arena)
+    , m_shadowVisibilityGraphicsStateHandoff(arena)
+    , m_shadowVisibilityReturnStateHandoff(arena)
+    , m_shadowOwnershipRecoveryInputStateHandoff(arena)
+    , m_shadowOwnershipRecoveryStateHandoff(arena)
     , m_causticsStateHandoff(arena)
     , m_surfelGiStateHandoff(arena)
     , m_postGbufferFanInStateHandoff(arena)
     , m_deferredLightingStateHandoff(arena)
+    , m_deferredCompositeStateHandoff(arena)
     , m_avboitStateHandoff(arena)
     , m_shaderSystem(*this)
     , m_meshSystem(*this)
@@ -86,8 +94,20 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
 
     DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
     bool targetsReady = deferredTargets.valid() && deferredTargets.width == width && deferredTargets.height == height;
-    if(!targetsReady)
+    if(!targetsReady){
+        // Target-generation replacement invalidates every retained Compute scratch state and the visibility ownership
+        // return. The new image can be claimed by its first Compute use without a stale handoff.
+        m_shadowComputeBaseStateHandoff.reset();
+        m_shadowComputeInputStateHandoff.reset();
+        m_shadowComputePersistentStateHandoff.reset();
+        m_shadowVisibilityStateHandoff.reset();
+        m_shadowVisibilityGraphicsStateHandoff.reset();
+        m_shadowVisibilityReturnStateHandoff.reset();
+        m_shadowOwnershipRecoveryInputStateHandoff.reset();
+        m_shadowOwnershipRecoveryStateHandoff.reset();
+        m_deferredCompositeStateHandoff.reset();
         targetsReady = m_deferredSystem.createDeferredFrameTargets(width, height);
+    }
     if(!targetsReady)
         return false;
 
@@ -125,11 +145,19 @@ void RendererSystem::invalidateResources(){
     m_frameSetupStateFanInHandoff.reset();
     m_gbufferStateHandoff.reset();
     m_postGbufferNormalizedStateHandoff.reset();
+    m_shadowComputeBaseStateHandoff.reset();
+    m_shadowComputeInputStateHandoff.reset();
+    m_shadowComputePersistentStateHandoff.reset();
     m_shadowVisibilityStateHandoff.reset();
+    m_shadowVisibilityGraphicsStateHandoff.reset();
+    m_shadowVisibilityReturnStateHandoff.reset();
+    m_shadowOwnershipRecoveryInputStateHandoff.reset();
+    m_shadowOwnershipRecoveryStateHandoff.reset();
     m_causticsStateHandoff.reset();
     m_surfelGiStateHandoff.reset();
     m_postGbufferFanInStateHandoff.reset();
     m_deferredLightingStateHandoff.reset();
+    m_deferredCompositeStateHandoff.reset();
     m_avboitStateHandoff.reset();
     m_meshViewSetupCommandList.reset();
     m_sceneShadingSetupCommandList.reset();
@@ -137,12 +165,14 @@ void RendererSystem::invalidateResources(){
     m_gbufferCommandList.reset();
     m_postGbufferNormalizeCommandList.reset();
     m_shadowVisibilityCommandList.reset();
+    m_shadowOwnershipRecoveryCommandList.reset();
     m_causticsCommandList.reset();
     m_surfelGiCommandList.reset();
     m_deferredLightingCommandList.reset();
     m_avboitCommandList.reset();
     m_deferredCompositeCommandList.reset();
     m_shadowPrepareCommandList.reset();
+    m_asyncShadowOwnershipRecoveryFailed = false;
     // The descriptor-buffer TLAS descriptor owns a retained acceleration-structure handle until its in-flight-frame
     // quarantine matures. Retire it before RendererRayTracingState releases the current TLAS so resource invalidation
     // cannot strand a descriptor-buffer block (or its retained AS) until device shutdown.
@@ -225,9 +255,19 @@ bool RendererSystem::ensureFrameCommandLists(){
     }
 
     if(!m_shadowVisibilityCommandList){
-        m_shadowVisibilityCommandList = device.createCommandList();
+        Core::CommandListParameters shadowVisibilityCommandListParameters;
+        shadowVisibilityCommandListParameters.setRenderLane(Core::RenderLane::AsyncCompute);
+        m_shadowVisibilityCommandList = device.createCommandList(shadowVisibilityCommandListParameters);
         if(!m_shadowVisibilityCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow-visibility command list"));
+            return false;
+        }
+    }
+
+    if(!m_shadowOwnershipRecoveryCommandList){
+        m_shadowOwnershipRecoveryCommandList = device.createCommandList();
+        if(!m_shadowOwnershipRecoveryCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow ownership-recovery command list"));
             return false;
         }
     }
@@ -506,12 +546,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const bool hasOpaqueCsgFrameWork = csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
     NWB_ASSERT(csgFrameState.empty() || deferredTargets.csgIntervalTargetsValid());
     auto& device = m_graphics.getDevice();
+    if(m_asyncShadowOwnershipRecoveryFailed){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async shadow ownership recovery failed; rendering is suspended until resources are recreated"));
+        return;
+    }
+    const bool asyncShadowSchedule = device.isRenderLaneDedicated(Core::RenderLane::AsyncCompute);
     Core::CommandList* meshViewSetupCommandList = m_meshViewSetupCommandList.get();
     Core::CommandList* sceneShadingSetupCommandList = m_sceneShadingSetupCommandList.get();
     Core::CommandList* deferredClearCommandList = m_deferredClearCommandList.get();
     Core::CommandList* gbufferCommandList = m_gbufferCommandList.get();
     Core::CommandList* postGbufferNormalizeCommandList = m_postGbufferNormalizeCommandList.get();
     Core::CommandList* shadowVisibilityCommandList = m_shadowVisibilityCommandList.get();
+    Core::CommandList* shadowOwnershipRecoveryCommandList = m_shadowOwnershipRecoveryCommandList.get();
     Core::CommandList* causticsCommandList = m_causticsCommandList.get();
     Core::CommandList* surfelGiCommandList = m_surfelGiCommandList.get();
     Core::CommandList* deferredLightingCommandList = m_deferredLightingCommandList.get();
@@ -523,6 +569,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(gbufferCommandList);
     NWB_ASSERT(postGbufferNormalizeCommandList);
     NWB_ASSERT(shadowVisibilityCommandList);
+    NWB_ASSERT(shadowOwnershipRecoveryCommandList);
     NWB_ASSERT(causticsCommandList);
     NWB_ASSERT(surfelGiCommandList);
     NWB_ASSERT(deferredLightingCommandList);
@@ -535,6 +582,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !gbufferCommandList
         || !postGbufferNormalizeCommandList
         || !shadowVisibilityCommandList
+        || !shadowOwnershipRecoveryCommandList
         || !causticsCommandList
         || !surfelGiCommandList
         || !deferredLightingCommandList
@@ -549,11 +597,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_frameSetupStateFanInHandoff.reset();
     m_gbufferStateHandoff.reset();
     m_postGbufferNormalizedStateHandoff.reset();
+    m_shadowComputeBaseStateHandoff.reset();
+    m_shadowComputeInputStateHandoff.reset();
     m_shadowVisibilityStateHandoff.reset();
+    m_shadowVisibilityGraphicsStateHandoff.reset();
+    m_shadowOwnershipRecoveryInputStateHandoff.reset();
+    m_shadowOwnershipRecoveryStateHandoff.reset();
     m_causticsStateHandoff.reset();
     m_surfelGiStateHandoff.reset();
     m_postGbufferFanInStateHandoff.reset();
     m_deferredLightingStateHandoff.reset();
+    m_deferredCompositeStateHandoff.reset();
     m_avboitStateHandoff.reset();
     m_raytracingSystem.discardSoftShadowTemporalHistory();
 
@@ -567,6 +621,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         u32 swShadowEdgeStatsTick = 0u;
         bool swShadowEdgeStatsPending = false;
         u32 swShadowEdgeStatsPendingTick = 0u;
+        u64 swShadowEdgeStatsPendingSubmissionID = 0u;
+        Core::CommandQueue::Enum swShadowEdgeStatsPendingSubmissionQueue = Core::CommandQueue::kCount;
+        bool swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
         bool swShadowDispatchLogged = false;
         bool causticAccumulatorInitialized = false;
         u32 swCausticFrameIndex = 0u;
@@ -586,6 +643,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_rayTracingState.m_swShadowEdgeStatsTick,
         m_rayTracingState.m_swShadowEdgeStatsPending,
         m_rayTracingState.m_swShadowEdgeStatsPendingTick,
+        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionID,
+        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionQueue,
+        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionUnconfirmed,
         m_rayTracingState.m_swShadowDispatchLogged,
         m_rayTracingState.m_causticAccumulatorInitialized,
         m_rayTracingState.m_swCausticFrameIndex,
@@ -598,19 +658,26 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_rayTracingState.m_surfelCountReadbackPending,
         m_rayTracingState.m_surfelCountReadbackFrame,
     };
-    const auto restorePostGbufferPacketCpuState = [&](){
-        m_avboitState.m_targetsNeedClear = postGbufferPacketCpuState.avboitTargetsNeedClear;
-        deferredTargets.bindless.slotsUploaded = postGbufferPacketCpuState.deferredBindlessSlotsUploaded;
+    const auto restorePrefixCpuState = [&](){
         // The G-buffer writer updates its CPU upload mirrors while recording. Its writes did not reach the device if
         // this packet batch is abandoned, so force both uploads on the retry rather than restoring stale byte caches.
         m_drawState.m_meshViewGpuDataValid = false;
         m_deferredState.m_sceneShadingGpuDataValid = false;
+    };
 
+    const auto restoreShadowCpuState = [&](){
         m_rayTracingState.m_softShadowFrameIndex = postGbufferPacketCpuState.softShadowFrameIndex;
         m_rayTracingState.m_swShadowEdgeStatsTick = postGbufferPacketCpuState.swShadowEdgeStatsTick;
         m_rayTracingState.m_swShadowEdgeStatsPending = postGbufferPacketCpuState.swShadowEdgeStatsPending;
         m_rayTracingState.m_swShadowEdgeStatsPendingTick = postGbufferPacketCpuState.swShadowEdgeStatsPendingTick;
+        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionID = postGbufferPacketCpuState.swShadowEdgeStatsPendingSubmissionID;
+        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionQueue = postGbufferPacketCpuState.swShadowEdgeStatsPendingSubmissionQueue;
+        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionUnconfirmed = postGbufferPacketCpuState.swShadowEdgeStatsPendingSubmissionUnconfirmed;
         m_rayTracingState.m_swShadowDispatchLogged = postGbufferPacketCpuState.swShadowDispatchLogged;
+    };
+
+    const auto restoreEffectsCpuState = [&](){
+        m_avboitState.m_targetsNeedClear = postGbufferPacketCpuState.avboitTargetsNeedClear;
         m_rayTracingState.m_causticAccumulatorInitialized = postGbufferPacketCpuState.causticAccumulatorInitialized;
         m_rayTracingState.m_swCausticFrameIndex = postGbufferPacketCpuState.swCausticFrameIndex;
         m_rayTracingState.m_hwCausticFrameIndex = postGbufferPacketCpuState.hwCausticFrameIndex;
@@ -622,18 +689,40 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_rayTracingState.m_surfelCountReadbackPending = postGbufferPacketCpuState.surfelCountReadbackPending;
         m_rayTracingState.m_surfelCountReadbackFrame = postGbufferPacketCpuState.surfelCountReadbackFrame;
     };
+    const auto restorePostGbufferPacketCpuState = [&](){
+        deferredTargets.bindless.slotsUploaded = postGbufferPacketCpuState.deferredBindlessSlotsUploaded;
+        restorePrefixCpuState();
+        restoreShadowCpuState();
+        restoreEffectsCpuState();
+    };
 
+    // The Graphics-only fallback keeps its established one-ticket, one-submission timing transaction. A dedicated
+    // AsyncCompute lane instead owns one ticket per accepted packet so no timestamp reservation can straddle queues.
     Core::GpuTimingSubmissionTicket renderTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket prefixTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket shadowTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket effectsTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket finalTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket* const prefixTimingTicketForPacket = asyncShadowSchedule ? &prefixTimingTicket : &renderTimingTicket;
+    Core::GpuTimingSubmissionTicket* const shadowTimingTicketForPacket = asyncShadowSchedule ? &shadowTimingTicket : &renderTimingTicket;
+    Core::GpuTimingSubmissionTicket* const effectsTimingTicketForPacket = asyncShadowSchedule ? &effectsTimingTicket : &renderTimingTicket;
+    Core::GpuTimingSubmissionTicket* const finalTimingTicketForPacket = asyncShadowSchedule ? &finalTimingTicket : &renderTimingTicket;
     // This scope crosses two synchronously-waited graphics jobs, so it cannot live in either worker's scratch
-    // arena. Keep its small state in the caller's frame stack instead of allocating it from the renderer's
-    // persistent object arena.
+    // arena. It remains a Graphics-only fallback metric until the async critical-path transaction is added.
     Optional<Core::GpuTimingMeasure> frameTiming;
+    const auto discardTimingTickets = [&](){
+        renderTimingTicket.discard();
+        prefixTimingTicket.discard();
+        shadowTimingTicket.discard();
+        effectsTimingTicket.discard();
+        finalTimingTicket.discard();
+    };
     const auto discardRenderPackets = [&](){
         if(frameTiming){
             frameTiming->discardTiming();
             frameTiming.reset();
         }
-        renderTimingTicket.discard();
+        discardTimingTickets();
         restorePostGbufferPacketCpuState();
         m_raytracingSystem.discardSoftShadowTemporalHistory();
         m_meshViewSetupStateHandoff.reset();
@@ -642,11 +731,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_frameSetupStateFanInHandoff.reset();
         m_gbufferStateHandoff.reset();
         m_postGbufferNormalizedStateHandoff.reset();
+        m_shadowComputeBaseStateHandoff.reset();
+        m_shadowComputeInputStateHandoff.reset();
         m_shadowVisibilityStateHandoff.reset();
+        m_shadowVisibilityGraphicsStateHandoff.reset();
+        m_shadowOwnershipRecoveryInputStateHandoff.reset();
+        m_shadowOwnershipRecoveryStateHandoff.reset();
         m_causticsStateHandoff.reset();
         m_surfelGiStateHandoff.reset();
         m_postGbufferFanInStateHandoff.reset();
         m_deferredLightingStateHandoff.reset();
+        m_deferredCompositeStateHandoff.reset();
         m_avboitStateHandoff.reset();
     };
 
@@ -666,31 +761,34 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &device,
         meshViewSetupCommandList,
         &frameTiming,
+        asyncShadowSchedule,
         &meshViewSetupReady,
         &meshViewSetupCommandListReady,
-        &renderTimingTicket
+        prefixTimingTicketForPacket
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*prefixTimingTicketForPacket);
         meshViewSetupCommandList->open(&m_shadowPrepareStateHandoff);
         if(!meshViewSetupCommandList->hasCommandBuffer())
             return;
 
-        // Graphics has already reset every timer-query pool in the frame preamble, before shadow preparation and
-        // every other render pass. Begin the whole-frame scope on the first render packet so the later ordered
-        // composite packet can close it across the split command-list sequence.
-        frameTiming.emplace(
-            m_graphics.gpuTiming(),
-            RendererGpuTimingScope::s_Frame,
-            device,
-            *meshViewSetupCommandList
-        );
-        if(!frameTiming)
-            return;
+        if(!asyncShadowSchedule){
+            // Graphics has already reset every timer-query pool in the frame preamble, before shadow preparation and
+            // every other render pass. The legacy whole-frame scope remains valid only for the one-submit fallback.
+            frameTiming.emplace(
+                m_graphics.gpuTiming(),
+                RendererGpuTimingScope::s_Frame,
+                device,
+                *meshViewSetupCommandList
+            );
+            if(!frameTiming)
+                return;
+        }
 
         const bool meshViewReady = m_meshSystem.updateMeshViewBuffer(*meshViewSetupCommandList, meshViewAspectRatio);
         // A split timing scope must close its debug marker on the same list that opened it. Its end timestamp is
         // deliberately deferred to the ordered deferred-composite packet below.
-        frameTiming->finishMarker();
+        if(frameTiming)
+            frameTiming->finishMarker();
         meshViewSetupCommandList->close(&m_meshViewSetupStateHandoff);
         meshViewSetupReady = meshViewReady;
         meshViewSetupCommandListReady =
@@ -704,9 +802,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         sceneShadingSetupCommandList,
         &sceneShadingSetupReady,
         &sceneShadingSetupCommandListReady,
-        &renderTimingTicket
+        prefixTimingTicketForPacket
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*prefixTimingTicketForPacket);
         sceneShadingSetupCommandList->open(&m_shadowPrepareStateHandoff);
         if(!sceneShadingSetupCommandList->hasCommandBuffer())
             return;
@@ -724,9 +822,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &deferredTargets,
         deferredClearCommandList,
         &deferredClearCommandListReady,
-        &renderTimingTicket
+        prefixTimingTicketForPacket
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*prefixTimingTicketForPacket);
         deferredClearCommandList->open(&m_shadowPrepareStateHandoff);
         if(!deferredClearCommandList->hasCommandBuffer())
             return;
@@ -763,7 +861,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         !meshViewSetupCommandListReady
         || !sceneShadingSetupCommandListReady
         || !deferredClearCommandListReady
-        || !frameTiming
+        || (!asyncShadowSchedule && !frameTiming)
     ){
         discardRenderPackets();
         return;
@@ -795,9 +893,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &device,
         gbufferCommandList,
         &gbufferCommandListReady,
-        &renderTimingTicket
+        prefixTimingTicketForPacket
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*prefixTimingTicketForPacket);
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
         Core::CommandList* commandList = gbufferCommandList;
         commandList->open(&m_frameSetupStateFanInHandoff);
@@ -971,6 +1069,74 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
+    // The Compute packet must not import the broad post-G-buffer snapshot: it also carries exclusive Graphics-only
+    // caustic/GI/AVBOIT resources. Select only the shader-visible shadow inputs, then merge the Compute-only scratch
+    // state and last frame's Graphics -> Compute visibility release.
+    if(asyncShadowSchedule){
+        Core::Alloc::ScratchArena shadowInputScratchArena(RendererArenaScope::s_RenderArena);
+        Vector<Core::Texture*, Core::Alloc::ScratchArena> shadowInputTextures{ shadowInputScratchArena };
+        Vector<Core::Buffer*, Core::Alloc::ScratchArena> shadowInputBuffers{ shadowInputScratchArena };
+        const auto appendTexture = [&](Core::Texture* texture){
+            if(texture)
+                shadowInputTextures.push_back(texture);
+        };
+        const auto appendBuffer = [&](Core::Buffer* buffer){
+            if(buffer)
+                shadowInputBuffers.push_back(buffer);
+        };
+
+        appendTexture(deferredTargets.worldPosition.get());
+        appendTexture(deferredTargets.normal.get());
+        appendTexture(deferredTargets.depth.get());
+        appendBuffer(m_deferredState.m_sceneShadingBuffer.get());
+        appendBuffer(m_deferredState.m_lightBuffer.get());
+        appendBuffer(deferredTargets.bindless.slotsBuffer.get());
+        appendBuffer(m_rayTracingState.m_sceneBvhNodeBuffer.get());
+        appendBuffer(m_rayTracingState.m_sceneInstanceBuffer.get());
+        appendBuffer(m_rayTracingState.m_shadowInstanceMaterialBuffer.get());
+        appendBuffer(m_rayTracingState.m_shadowInstanceBuffer.get());
+        appendBuffer(m_rayTracingState.m_shadowMaterialTypedBuffer.get());
+        appendBuffer(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get());
+        if(m_rayTracingState.m_tlas)
+            appendBuffer(m_rayTracingState.m_tlas->getBackingBuffer());
+        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshNodeBuffers)
+            appendBuffer(buffer);
+        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshPositionBuffers)
+            appendBuffer(buffer);
+        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshIndexBuffers)
+            appendBuffer(buffer);
+        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshAttributeBuffers)
+            appendBuffer(buffer);
+
+        if(!m_shadowComputeBaseStateHandoff.buildResourceSubset(
+            m_postGbufferNormalizedStateHandoff,
+            shadowInputTextures.data(),
+            shadowInputTextures.size(),
+            shadowInputBuffers.data(),
+            shadowInputBuffers.size()
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async shadow input state selection failed"));
+            discardRenderPackets();
+            return;
+        }
+
+        const Core::CommandListResourceStateHandoff* shadowInputBranches[2] = {};
+        usize shadowInputBranchCount = 0u;
+        if(m_shadowComputePersistentStateHandoff.valid())
+            shadowInputBranches[shadowInputBranchCount++] = &m_shadowComputePersistentStateHandoff;
+        if(m_shadowVisibilityReturnStateHandoff.valid())
+            shadowInputBranches[shadowInputBranchCount++] = &m_shadowVisibilityReturnStateHandoff;
+        if(!m_shadowComputeInputStateHandoff.buildFanIn(
+            m_shadowComputeBaseStateHandoff,
+            shadowInputBranches,
+            shadowInputBranchCount
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async shadow input state fan-in failed"));
+            discardRenderPackets();
+            return;
+        }
+    }
+
     const bool shadowVisibilityPrepared = m_preparedShadowVisibilityReady;
     const bool hardwareShadowSupported =
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
@@ -992,10 +1158,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         hardwareShadowSupported,
         shadowVisibilityCommandList,
         &shadowVisibilityCommandListReady,
-        &renderTimingTicket
+        asyncShadowSchedule,
+        shadowTimingTicketForPacket
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
-        shadowVisibilityCommandList->open(&m_postGbufferNormalizedStateHandoff);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*shadowTimingTicketForPacket);
+        shadowVisibilityCommandList->open(
+            asyncShadowSchedule
+                ? &m_shadowComputeInputStateHandoff
+                : &m_postGbufferNormalizedStateHandoff
+        );
         if(!shadowVisibilityCommandList->hasCommandBuffer())
             return;
 
@@ -1019,6 +1190,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!shadowVisibilityWritten)
             m_raytracingSystem.clearShadowVisibility(*shadowVisibilityCommandList, deferredTargets);
 
+        if(asyncShadowSchedule){
+            // The only exclusive cross-lane result: Compute releases after its final write, Graphics final acquires
+            // before deferred lighting samples it, then returns it to Compute after composite.
+            shadowVisibilityCommandList->releaseTextureOwnership(
+                deferredTargets.shadowVisibility.get(),
+                ECSRenderDetail::s_ShadowVisibilitySubresources,
+                Core::RenderLane::Graphics
+            );
+        }
+
         shadowVisibilityCommandList->close(&m_shadowVisibilityStateHandoff);
         shadowVisibilityCommandListReady =
             m_shadowVisibilityStateHandoff.valid()
@@ -1032,9 +1213,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         hardwareShadowSupported,
         causticsCommandList,
         &causticsCommandListReady,
-        &renderTimingTicket
+        effectsTimingTicketForPacket
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*effectsTimingTicketForPacket);
         causticsCommandList->open(&m_postGbufferNormalizedStateHandoff);
         if(!causticsCommandList->hasCommandBuffer())
             return;
@@ -1066,9 +1247,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &deferredTargets,
         surfelGiCommandList,
         &surfelGiCommandListReady,
-        &renderTimingTicket
+        effectsTimingTicketForPacket
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*effectsTimingTicketForPacket);
         surfelGiCommandList->open(&m_postGbufferNormalizedStateHandoff);
         if(!surfelGiCommandList->hasCommandBuffer())
             return;
@@ -1091,9 +1272,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         hasTransparentRenderers,
         avboitCommandList,
         &avboitCommandListReady,
-        &renderTimingTicket
+        effectsTimingTicketForPacket
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*effectsTimingTicketForPacket);
         avboitCommandList->open(&m_postGbufferNormalizedStateHandoff);
         if(!avboitCommandList->hasCommandBuffer())
             return;
@@ -1160,8 +1341,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
+    if(asyncShadowSchedule && !m_shadowVisibilityGraphicsStateHandoff.buildTextureSubset(
+        m_shadowVisibilityStateHandoff,
+        deferredTargets.shadowVisibility.get()
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the async shadow visibility handoff"));
+        discardRenderPackets();
+        return;
+    }
+
     const Core::CommandListResourceStateHandoff* postGbufferBranchStates[] = {
-        &m_shadowVisibilityStateHandoff,
+        asyncShadowSchedule ? &m_shadowVisibilityGraphicsStateHandoff : &m_shadowVisibilityStateHandoff,
         &m_causticsStateHandoff,
         &m_surfelGiStateHandoff,
         &m_avboitStateHandoff,
@@ -1184,9 +1374,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &deferredTargets,
         deferredLightingCommandList,
         &deferredLightingCommandListReady,
-        &renderTimingTicket
+        finalTimingTicketForPacket
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*finalTimingTicketForPacket);
         deferredLightingCommandList->open(&m_postGbufferFanInStateHandoff);
         if(!deferredLightingCommandList->hasCommandBuffer())
             return;
@@ -1218,9 +1408,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredCompositeCommandList,
         &frameTiming,
         &deferredCompositeCommandListReady,
-        &renderTimingTicket
+        asyncShadowSchedule,
+        finalTimingTicketForPacket
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*finalTimingTicketForPacket);
         deferredCompositeCommandList->open(&m_deferredLightingStateHandoff);
         if(!deferredCompositeCommandList->hasCommandBuffer())
             return;
@@ -1231,11 +1422,24 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             framebuffer
         );
 
-        // This endpoint completes the frame scope opened on the mesh-view setup command buffer. All eleven command buffers
-        // are submitted in the fixed Graphics-queue order below, so the timestamps remain one contiguous frame metric.
-        frameTiming->finishTiming(*deferredCompositeCommandList);
-        deferredCompositeCommandList->close();
-        deferredCompositeCommandListReady = deferredCompositeRecorded && deferredCompositeCommandList->hasCommandBuffer();
+        // This endpoint completes the frame scope opened on the mesh-view setup command buffer only in the
+        // one-submission Graphics fallback. The dedicated path exposes per-packet timings until its critical-path
+        // transaction lands.
+        if(frameTiming)
+            frameTiming->finishTiming(*deferredCompositeCommandList);
+        if(asyncShadowSchedule && deferredCompositeRecorded){
+            deferredCompositeCommandList->releaseTextureOwnership(
+                deferredTargets.shadowVisibility.get(),
+                ECSRenderDetail::s_ShadowVisibilitySubresources,
+                Core::RenderLane::AsyncCompute
+            );
+        }
+        deferredCompositeCommandList->close(&m_deferredCompositeStateHandoff);
+        deferredCompositeCommandListReady =
+            deferredCompositeRecorded
+            && m_deferredCompositeStateHandoff.valid()
+            && deferredCompositeCommandList->hasCommandBuffer()
+        ;
     });
     if(!deferredCompositeRecordingJob.valid()){
         discardRenderPackets();
@@ -1248,29 +1452,246 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // Workers only record. The GPU still receives one ordered Graphics submission: mesh-view setup -> scene shading
-    // setup -> deferred clear -> opaque producer -> normalized prelude -> shadow visibility -> caustics -> surfel
-    // GI -> AVBOIT -> deferred lighting -> composite.
-    Core::CommandList* commandLists[] = {
+    if(!asyncShadowSchedule){
+        // The unsupported/disabled-lane fallback retains the established one ordered Graphics submission exactly.
+        Core::CommandList* commandLists[] = {
+            meshViewSetupCommandList,
+            sceneShadingSetupCommandList,
+            deferredClearCommandList,
+            gbufferCommandList,
+            postGbufferNormalizeCommandList,
+            shadowVisibilityCommandList,
+            causticsCommandList,
+            surfelGiCommandList,
+            avboitCommandList,
+            deferredLightingCommandList,
+            deferredCompositeCommandList,
+        };
+        const Core::QueueSubmissionToken fallbackSubmissionToken = renderTimingTicket.submit(
+            device,
+            commandLists,
+            11u,
+            Core::RenderLane::Graphics,
+            Core::QueueSubmissionDesc{}
+        );
+        if(!fallbackSubmissionToken.valid()){
+            discardRenderPackets();
+            return;
+        }
+
+        frameTiming.reset();
+        m_raytracingSystem.confirmShadowVisibilitySubmission(fallbackSubmissionToken);
+        m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
+        return;
+    }
+
+    const auto recoverAsyncShadowOwnership = [&](const Core::QueueSubmissionToken shadowSubmissionToken) -> bool {
+        if(!shadowSubmissionToken.valid() || !deferredTargets.shadowVisibility)
+            return false;
+
+        m_shadowOwnershipRecoveryInputStateHandoff.reset();
+        m_shadowOwnershipRecoveryStateHandoff.reset();
+        if(!m_shadowOwnershipRecoveryInputStateHandoff.buildTextureSubset(
+            m_shadowVisibilityStateHandoff,
+            deferredTargets.shadowVisibility.get()
+        )){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to select async shadow ownership-recovery input"));
+            return false;
+        }
+
+        shadowOwnershipRecoveryCommandList->open(&m_shadowOwnershipRecoveryInputStateHandoff);
+        if(!shadowOwnershipRecoveryCommandList->hasCommandBuffer()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to record async shadow ownership recovery acquire"));
+            return false;
+        }
+        shadowOwnershipRecoveryCommandList->releaseTextureOwnership(
+            deferredTargets.shadowVisibility.get(),
+            ECSRenderDetail::s_ShadowVisibilitySubresources,
+            Core::RenderLane::AsyncCompute
+        );
+        shadowOwnershipRecoveryCommandList->close(&m_shadowOwnershipRecoveryStateHandoff);
+        if(
+            !m_shadowOwnershipRecoveryStateHandoff.valid()
+            || !shadowOwnershipRecoveryCommandList->hasCommandBuffer()
+        ){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to close async shadow ownership recovery"));
+            return false;
+        }
+
+        Core::CommandList* recoveryCommandLists[] = { shadowOwnershipRecoveryCommandList };
+        Core::QueueSubmissionDesc recoverySubmitDesc;
+        recoverySubmitDesc.setWaitTokens(&shadowSubmissionToken, 1u);
+        const Core::QueueSubmissionToken recoveryToken = device.executeCommandLists(
+            recoveryCommandLists,
+            1u,
+            Core::RenderLane::Graphics,
+            recoverySubmitDesc
+        );
+        if(!recoveryToken.valid()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async shadow ownership recovery submission was rejected"));
+            return false;
+        }
+        if(!m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
+            m_shadowOwnershipRecoveryStateHandoff,
+            deferredTargets.shadowVisibility.get()
+        )){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to retain async shadow ownership recovery state"));
+            return false;
+        }
+        return true;
+    };
+    const auto failAsyncShadowOwnershipRecovery = [&](){
+        m_asyncShadowOwnershipRecoveryFailed = true;
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: cannot safely continue after an unresolved async shadow ownership release"));
+    };
+
+    // Distinct queues: submit the Graphics producer first, overlap Compute shadow with the independent Graphics
+    // effects packet, and make Graphics final wait for the exclusive visibility producer.
+    Core::CommandList* prefixCommandLists[] = {
         meshViewSetupCommandList,
         sceneShadingSetupCommandList,
         deferredClearCommandList,
         gbufferCommandList,
         postGbufferNormalizeCommandList,
-        shadowVisibilityCommandList,
-        causticsCommandList,
-        surfelGiCommandList,
-        avboitCommandList,
-        deferredLightingCommandList,
-        deferredCompositeCommandList,
     };
-    if(!renderTimingTicket.submit(device, commandLists, 11u)){
+    const Core::QueueSubmissionToken prefixSubmissionToken = prefixTimingTicket.submit(
+        device,
+        prefixCommandLists,
+        5u,
+        Core::RenderLane::Graphics,
+        Core::QueueSubmissionDesc{}
+    );
+    if(!prefixSubmissionToken.valid()){
         discardRenderPackets();
         return;
     }
 
-    frameTiming.reset();
+    Core::QueueSubmissionDesc shadowSubmitDesc;
+    shadowSubmitDesc.setWaitTokens(&prefixSubmissionToken, 1u);
+    Core::CommandList* shadowCommandLists[] = { shadowVisibilityCommandList };
+    const Core::QueueSubmissionToken shadowSubmissionToken = shadowTimingTicket.submit(
+        device,
+        shadowCommandLists,
+        1u,
+        Core::RenderLane::AsyncCompute,
+        shadowSubmitDesc
+    );
+    if(!shadowSubmissionToken.valid()){
+        effectsTimingTicket.discard();
+        finalTimingTicket.discard();
+        restoreShadowCpuState();
+        restoreEffectsCpuState();
+        m_raytracingSystem.discardSoftShadowTemporalHistory();
+        m_shadowComputeBaseStateHandoff.reset();
+        m_shadowComputeInputStateHandoff.reset();
+        m_shadowVisibilityStateHandoff.reset();
+        m_shadowVisibilityGraphicsStateHandoff.reset();
+        m_causticsStateHandoff.reset();
+        m_surfelGiStateHandoff.reset();
+        m_postGbufferFanInStateHandoff.reset();
+        m_deferredLightingStateHandoff.reset();
+        m_deferredCompositeStateHandoff.reset();
+        m_avboitStateHandoff.reset();
+        return;
+    }
+
+    // The Compute command buffer is now committed. Retain only its private scratch/history state for the next
+    // Compute use: shared G-buffer and scene inputs must always come from this frame's Graphics prefix rather than
+    // allowing a prior Compute handoff to overwrite their current state during the next fan-in.
+    m_raytracingSystem.confirmShadowVisibilitySubmission(shadowSubmissionToken);
+    Core::Texture* const shadowComputeScratchTextures[] = {
+        deferredTargets.shadowCoarseTransmittance.get(),
+        deferredTargets.shadowSoftHalfA.get(),
+        deferredTargets.shadowSoftHalfB.get(),
+        deferredTargets.shadowSoftGeometry.get(),
+        deferredTargets.shadowSoftGeometryPrev.get(),
+        deferredTargets.shadowHistA.get(),
+        deferredTargets.shadowHistB.get(),
+        deferredTargets.shadowMomentsA.get(),
+        deferredTargets.shadowMomentsB.get(),
+        deferredTargets.transparentSoftHalf.get(),
+        deferredTargets.transparentHistA.get(),
+        deferredTargets.transparentHistB.get(),
+        deferredTargets.transparentMomentsA.get(),
+        deferredTargets.transparentMomentsB.get(),
+    };
+    Core::Buffer* const shadowComputeScratchBuffers[] = {
+        m_rayTracingState.m_swShadowEdgeStatsBuffer.get(),
+        m_rayTracingState.m_swShadowEdgeStatsReadback.get(),
+        m_rayTracingState.m_swShadowEdgeCounterBuffer.get(),
+        m_rayTracingState.m_swShadowEdgeListBuffer.get(),
+        m_rayTracingState.m_swShadowIndirectArgsBuffer.get(),
+    };
+    if(!m_shadowComputePersistentStateHandoff.buildResourceSubset(
+        m_shadowVisibilityStateHandoff,
+        shadowComputeScratchTextures,
+        sizeof(shadowComputeScratchTextures) / sizeof(shadowComputeScratchTextures[0]),
+        shadowComputeScratchBuffers,
+        sizeof(shadowComputeScratchBuffers) / sizeof(shadowComputeScratchBuffers[0])
+    )){
+        effectsTimingTicket.discard();
+        finalTimingTicket.discard();
+        restoreEffectsCpuState();
+        m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
+        recoverAsyncShadowOwnership(shadowSubmissionToken);
+        // Without a retained Compute-side scratch snapshot the next packet cannot safely restore its layouts, even
+        // when the visibility-only ownership recovery itself succeeds.
+        failAsyncShadowOwnershipRecovery();
+        return;
+    }
     m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
+
+    Core::CommandList* effectsCommandLists[] = {
+        causticsCommandList,
+        surfelGiCommandList,
+        avboitCommandList,
+    };
+    const Core::QueueSubmissionToken effectsSubmissionToken = effectsTimingTicket.submit(
+        device,
+        effectsCommandLists,
+        3u,
+        Core::RenderLane::Graphics,
+        Core::QueueSubmissionDesc{}
+    );
+    if(!effectsSubmissionToken.valid()){
+        finalTimingTicket.discard();
+        restoreEffectsCpuState();
+        if(!recoverAsyncShadowOwnership(shadowSubmissionToken))
+            failAsyncShadowOwnershipRecovery();
+        return;
+    }
+
+    const Core::QueueSubmissionToken finalWaitTokens[] = {
+        shadowSubmissionToken,
+        effectsSubmissionToken,
+    };
+    Core::QueueSubmissionDesc finalSubmitDesc;
+    finalSubmitDesc.setWaitTokens(finalWaitTokens, 2u);
+    Core::CommandList* finalCommandLists[] = {
+        deferredLightingCommandList,
+        deferredCompositeCommandList,
+    };
+    const Core::QueueSubmissionToken finalSubmissionToken = finalTimingTicket.submit(
+        device,
+        finalCommandLists,
+        2u,
+        Core::RenderLane::Graphics,
+        finalSubmitDesc
+    );
+    if(!finalSubmissionToken.valid()){
+        if(!recoverAsyncShadowOwnership(shadowSubmissionToken))
+            failAsyncShadowOwnershipRecovery();
+        return;
+    }
+
+    if(!m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
+        m_deferredCompositeStateHandoff,
+        deferredTargets.shadowVisibility.get()
+    )){
+        // The Graphics release has already been accepted, so do not guess a next-frame owner if retaining its state
+        // fails unexpectedly. The current device must be rebuilt before recording another shadow packet.
+        failAsyncShadowOwnershipRecovery();
+    }
 }
 
 

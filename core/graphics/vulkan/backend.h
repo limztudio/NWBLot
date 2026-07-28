@@ -1954,6 +1954,9 @@ public:
     [[nodiscard]] const RayTracingAccelStructDesc& getDescription()const{ return m_desc; }
     [[nodiscard]] bool isCompacted()const{ return m_compacted; }
     [[nodiscard]] u64 getDeviceAddress()const{ return m_deviceAddress; }
+    // The backing allocation participates in ordinary resource-state handoffs. Expose it so renderer scheduling can
+    // select the TLAS state without importing an unrelated broad handoff into another queue.
+    [[nodiscard]] Buffer* getBackingBuffer()const{ return m_buffer.get(); }
     Object getNativeHandle(ObjectType objectType);
 
 

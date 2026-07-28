@@ -472,6 +472,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         Core::RayTracingAccelStructDesc accelStructDesc(arena());
         accelStructDesc.setTopLevelMaxInstances(capacity);
         accelStructDesc.setBuildFlags(Core::RayTracingAccelStructBuildFlags::PreferFastTrace);
+        accelStructDesc.setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
         accelStructDesc.setDebugName(Name("scene_tlas"));
 
         auto& device = graphics().getDevice();
@@ -883,6 +884,7 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
         Core::RayTracingAccelStructDesc accelStructDesc(arena());
         accelStructDesc.addBottomLevelGeometry(geometry);
         accelStructDesc.setBuildFlags(buildFlags);
+        accelStructDesc.setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
         accelStructDesc.setDebugName(DeriveName(meshResources.meshName, AStringView(":blas")));
 
         auto& device = graphics().getDevice();
@@ -1348,6 +1350,7 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
         .setByteSize(static_cast<u64>(sizeof(NwbBvhNodeGpu) * nodeCount))
         .setStructStride(sizeof(NwbBvhNodeGpu))
         .setCanHaveUAVs(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(Name("bvh_mesh_nodes"))
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
@@ -1779,6 +1782,7 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
         nodeBufferDesc
             .setByteSize(static_cast<u64>(sizeof(NwbBvhNodeGpu) * capacity))
             .setStructStride(sizeof(NwbBvhNodeGpu))
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setDebugName(Name("scene_bvh_nodes"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
@@ -1807,6 +1811,7 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
         instanceBufferDesc
             .setByteSize(static_cast<u64>(sizeof(SceneSwBvhInstanceGpu) * capacity))
             .setStructStride(sizeof(SceneSwBvhInstanceGpu))
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setDebugName(Name("scene_bvh_instances"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;

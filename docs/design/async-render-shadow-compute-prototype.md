@@ -1,10 +1,12 @@
 # Async-render lane foundation and shadow-visibility prototype
 
-**Status:** Phase-zero backend foundation implemented; no renderer job has moved to Compute.
+**Status:** Phase-zero backend foundation and the M2 shadow-visibility schedule are implemented behind the
+experimental async-compute switch. Distinct-family validation, pixel parity, failure injection, and performance
+measurement remain pending.
 
-The renderer still records and submits its current Graphics-only frame topology. The implementation
-here adds the opt-in logical lane, submission, sharing, and ownership primitives that the later
-shadow-visibility migration will consume.
+When the switch resolves `AsyncCompute` to a dedicated Compute family, shadow visibility records on that lane and
+uses the four-submission topology below. Unsupported or disabled hardware retains the existing one-Graphics-submission
+topology exactly.
 
 ## 0. Decision and boundary
 
@@ -164,14 +166,28 @@ The following phase-zero pieces are now in the backend, behind the experimental
   Compute → Graphics → Compute probe covering an exclusive output, a concurrently shared input, timeline
   waits, and frame-slot reuse. It skips cleanly on adapters without a compute-only family.
 
-Still required before M2:
+The renderer now consumes these primitives as follows:
 
-- run that probe with Vulkan validation on at least one distinct-family target;
-- classify and mark the real shadow/G-buffer/scene/slot-buffer resource inventory rather than marking every
-  renderer resource concurrent;
-- connect packet scheduling so each imported exclusive handoff is paired with its producer token by construction;
-- add partial-acceptance recovery, timing transactions, and failure injection. No renderer packet currently
-  depends on the new ownership path.
+- `RendererSystem` creates the shadow command list for logical `AsyncCompute`; it becomes a Compute command list only
+  when the lane has a dedicated family. Otherwise it resolves to Graphics and follows the legacy batch unchanged.
+- The concurrent input inventory is limited to normal/world-position/depth, scene-shading and light buffers, deferred
+  slot cbuffer, trace-context buffers, software-BVH inputs, mesh geometry, and TLAS/BLAS backing allocations. The
+  descriptor-buffer segments already carry the same contract. `shadowVisibility` and soft-shadow scratch/history stay
+  exclusive.
+- A selective state handoff prevents Compute from importing unrelated Graphics-only caustic, GI, and AVBOIT state.
+  Compute scratch/history remains in a private cross-frame handoff; only `shadowVisibility` joins the Graphics fan-in.
+- Accepted submissions commit independently. A rejected packet after Compute triggers a small Graphics recovery list
+  that acquires `shadowVisibility` and releases it back to Compute. Failure to submit that recovery suspends rendering
+  until resource/device recreation rather than guessing ownership.
+- Timestamp reservations are split by submission. The software edge-stat readback records the accepted shadow timeline
+  token and maps only after its producing queue has completed.
+
+Still required before enabling the path by default:
+
+- run the backend probe and renderer schedule with Vulkan validation on at least one distinct-family target;
+- run hardware and software pixel-parity coverage, including resize and transparent/CSG cases;
+- inject failures around all four renderer submissions and the recovery list; and
+- add the cross-queue critical-path timing metric and collect overlap/performance data.
 
 ## 2. Current and target GPU schedules
 
@@ -364,7 +380,7 @@ produce the current one-Graphics-submission topology.
 Graphics fallback creates no accidental concurrent resources or duplicate queue wrapper; the probe
 completes the full ownership reuse cycle without copying its allocation.
 
-### M2 — Four-submission shadow schedule
+### M2 — Four-submission shadow schedule (implemented; validation pending)
 
 - Create the shadow command list for Compute only when M0's effective capability is true.
 - Submit prefix, Compute shadow, Graphics effects, and Graphics final with the two existing queue
@@ -376,13 +392,12 @@ completes the full ownership reuse cycle without copying its allocation.
 over cold start, steady temporal frames, scene mutation, resize, opaque/transparent shadow cases,
 and CSG paths.
 
-### M3 — Acceptance-aware timing and recovery
+### M3 — Acceptance-aware timing and recovery (partially implemented)
 
-- Split timing into accepted-submission tickets and add the whole-frame critical-path metric.
-- Commit temporal/resource state by accepted submission, including Compute completion IDs for
-  software-shadow readback.
-- Add injected failures before and after each of the four submissions, including the release/acquire
-  recovery case.
+- Implemented: one timing ticket per accepted submission; accepted prefix/shadow/effects/final CPU-state commits;
+  Graphics recovery for a stranded Compute release; and Compute completion IDs for software-shadow readback.
+- Pending: a whole-frame cross-queue critical-path metric, overlap reporting, and injected failures before/after each
+  packet plus the recovery acquire.
 
 **Gate:** every injected rejection leaves the next valid frame correct; no stale temporal history,
 descriptor retirement, query leak, or ownership validation error remains.
@@ -413,13 +428,10 @@ deserve a separate proposal.
 
 ## 9. Open decisions to settle before implementation
 
-1. **Resource inventory:** decide the exact concurrent-input set for the first shadow slice. The queue-role
-   mask is implemented; the remaining work is to classify real G-buffer, scene, TLAS/BLAS, material, and slot
-   resources rather than applying it indiscriminately.
-2. **Frame timing transaction:** extend `GpuTimingSubmissionTicket` into a segmented ticket versus
+1. **Frame timing transaction:** extend `GpuTimingSubmissionTicket` into a segmented ticket versus
    add a distinct multi-submission frame ticket. The latter keeps the existing single-submit contract
    simple and is preferred unless query ownership can be proven equally clear in an extension.
-3. **Recovery policy after device-level submit failure:** use the recovery acquire when the Graphics
+2. **Recovery policy after device-level submit failure:** use the recovery acquire when the Graphics
    queue remains usable; otherwise invalidate/recreate the device rather than continue with unknown
    ownership. The device-loss path needs an explicit renderer-facing signal.
 

@@ -128,6 +128,9 @@ public:
     // succeeds, or discard it when packet recording/submission is abandoned.
     void finalizeSoftShadowTemporalHistory(DeferredFrameTargets& targets);
     void discardSoftShadowTemporalHistory();
+    // A software-shadow edge-stat copy is recorded before the queue submission exists. Bind it to the accepted
+    // submission token afterward so a later CPU map waits for actual queue completion instead of assuming a frame delay.
+    void confirmShadowVisibilitySubmission(const Core::QueueSubmissionToken& submissionToken);
 
 
 private:

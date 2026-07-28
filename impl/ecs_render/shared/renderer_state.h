@@ -504,12 +504,15 @@ struct RtShadowState{
     bool m_shadowResolvePipelineFailed = false;
     bool m_shadowResolveRgbPipelineFailed = false;
     // Edge-fraction instrumentation: a 2-uint UAV counter the resolve tallies into ([0] traced rays, [1] total rays),
-    // snapshotted into a CPU-readable buffer on a slow cadence and logged a safe number of frames later (so the copy is
-    // GPU-complete without a stall). The tick counts transparent-shadow dispatches; pending guards the in-flight copy.
+    // snapshotted into a CPU-readable buffer on a slow cadence. The tick throttles attempts, while the accepted
+    // shadow-submission token below proves the copy completed before mapping on a dedicated Compute queue.
     Core::BufferHandle m_swShadowEdgeStatsBuffer;
     Core::GpuDescriptorHandle m_swShadowEdgeStatsHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::BufferHandle m_swShadowEdgeStatsReadback;
     u32 m_swShadowEdgeStatsTick = 0u;
+    u64 m_swShadowEdgeStatsPendingSubmissionID = 0u;
+    Core::CommandQueue::Enum m_swShadowEdgeStatsPendingSubmissionQueue = Core::CommandQueue::kCount;
+    bool m_swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
     u32 m_swShadowEdgeListCapacity = 0u; // capacity in RECORDS
     // Soft opaque shadow RESOLVE: the a-trous wavelet denoise pipeline selects ping-pong inputs and storage outputs
     // through dispatch heap slots; its layout is push-only.

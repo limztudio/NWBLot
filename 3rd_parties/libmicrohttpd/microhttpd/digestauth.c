@@ -75,7 +75,7 @@
  * Trim value to the TIMESTAMP_BIN_SIZE size
  */
 #define TRIM_TO_TIMESTAMP(value) \
-  ((value) & ((UINT64_C (1) << (TIMESTAMP_BIN_SIZE * 8)) - 1))
+        ((value) & ((UINT64_C (1) << (TIMESTAMP_BIN_SIZE * 8)) - 1))
 
 
 /**
@@ -90,7 +90,7 @@
  * @param digest_size digest size
  */
 #define NONCE_STD_LEN(digest_size) \
-  ((digest_size) * 2 + TIMESTAMP_CHARS_LEN)
+        ((digest_size) * 2 + TIMESTAMP_CHARS_LEN)
 
 
 #ifdef MHD_SHA512_256_SUPPORT
@@ -149,7 +149,7 @@
  * Check that @a n is below #MAX_DIGEST
  */
 #define VLA_CHECK_LEN_DIGEST(n) \
-  do { if ((n) > MAX_DIGEST) MHD_PANIC (_ ("VLA too big.\n")); } while (0)
+        do { if ((n) > MAX_DIGEST) MHD_PANIC (_ ("VLA too big.\n")); } while (0)
 
 /**
  * Maximum length of a username for digest authentication.
@@ -175,7 +175,7 @@
  * The minimal size of the prefix for parameter with the extended notation
  */
 #define MHD_DAUTH_EXT_PARAM_MIN_LEN \
-  MHD_STATICSTR_LEN_ (MHD_DAUTH_EXT_PARAM_PREFIX "'")
+        MHD_STATICSTR_LEN_ (MHD_DAUTH_EXT_PARAM_PREFIX "'")
 
 /**
  * The result of nonce-nc map array check.
@@ -426,8 +426,8 @@ digest_deinit (struct DigestAlgorithm *da)
 
 
 #else  /* ! MHD_DIGEST_HAS_DEINIT */
-#define digest_setup_zero(da) (void)0
-#define digest_deinit(da) (void)0
+#define digest_setup_zero(da) (void) 0
+#define digest_deinit(da) (void) 0
 #endif /* ! MHD_DIGEST_HAS_DEINIT */
 
 
@@ -1291,6 +1291,8 @@ MHD_digest_auth_get_request_info3 (struct MHD_Connection *connection)
     unif_buf_size += params->realm.value.len + 1;   /* Add one for zero-termination */
   info = (struct MHD_DigestAuthInfo *)
          MHD_calloc_ (1, (sizeof(struct MHD_DigestAuthInfo)) + unif_buf_size);
+  if (NULL == info)
+    return NULL;
   unif_buf_ptr = (uint8_t *) (info + 1);
   unif_buf_used = 0;
 
@@ -1376,6 +1378,8 @@ MHD_digest_auth_get_username3 (struct MHD_Connection *connection)
   uname_info = (struct MHD_DigestAuthUsernameInfo *)
                MHD_calloc_ (1, (sizeof(struct MHD_DigestAuthUsernameInfo))
                             + unif_buf_size);
+  if (NULL == uname_info)
+    return NULL;
   unif_buf_ptr = (uint8_t *) (uname_info + 1);
   unif_buf_used = get_rq_uname (params, uname_type, uname_info, unif_buf_ptr,
                                 unif_buf_size);
@@ -2486,11 +2490,14 @@ is_param_equal_caseless (const struct MHD_RqDAuthParam *param,
   mhd_assert (NULL != param->value.str);
   mhd_assert (0 != param->value.len);
   if (param->quoted)
-    return MHD_str_equal_quoted_bin_n (param->value.str, param->value.len,
-                                       str, str_len);
+    return MHD_str_equal_caseless_quoted_bin_n (param->value.str,
+                                                param->value.len,
+                                                str,
+                                                str_len);
   return (str_len == param->value.len) &&
-         (0 == memcmp (str, param->value.str, str_len));
-
+         (MHD_str_equal_caseless_bin_n_ (str,
+                                         param->value.str,
+                                         str_len));
 }
 
 
@@ -2582,6 +2589,8 @@ digest_auth_check_all_inner (struct MHD_Connection *connection,
   /* Check whether client's algorithm is allowed by function parameter */
   if (((unsigned int) c_algo) !=
       (((unsigned int) c_algo) & ((unsigned int) malgo3)))
+    return MHD_DAUTH_WRONG_ALGO;
+  if (MHD_DIGEST_AUTH_ALGO3_INVALID == c_algo)
     return MHD_DAUTH_WRONG_ALGO;
   /* Check whether client's algorithm is supported */
   if (0 != (((unsigned int) c_algo) & MHD_DIGEST_AUTH_ALGO3_SESSION))
@@ -2950,7 +2959,12 @@ digest_auth_check_all_inner (struct MHD_Connection *connection,
                                 &unquoted);
   if (_MHD_UNQ_OK != unq_res)
     return MHD_DAUTH_ERROR;
-  if (digest_size != MHD_hex_to_bin (unquoted.str, unquoted.len, hash1_bin))
+  if (unquoted.len > MAX_AUTH_RESPONSE_LENGTH)
+    return MHD_DAUTH_ERROR;
+  if (digest_size !=
+      MHD_hex_to_bin (unquoted.str,
+                      unquoted.len,
+                      hash1_bin))
     return MHD_DAUTH_RESPONSE_WRONG;
 
   /* Update digest with ':' */
@@ -2991,8 +3005,12 @@ digest_auth_check_all_inner (struct MHD_Connection *connection,
     digest_update_with_colon (da);
   }
   /* Update digest with H(A2) */
-  MHD_bin_to_hex (hash2_bin, digest_size, tmp1);
-  digest_update (da, (const uint8_t *) tmp1, digest_size * 2);
+  MHD_bin_to_hex (hash2_bin,
+                  digest_size,
+                  tmp1);
+  digest_update (da,
+                 (const uint8_t *) tmp1,
+                 digest_size * 2);
 
   /* H(A2) is not needed anymore, reuse the buffer.
    * Use hash2_bin for the calculated response in binary form */
@@ -3002,7 +3020,9 @@ digest_auth_check_all_inner (struct MHD_Connection *connection,
     return MHD_DAUTH_ERROR;
 #endif /* MHD_DIGEST_HAS_EXT_ERROR */
 
-  if (0 != memcmp (hash1_bin, hash2_bin, digest_size))
+  if (0 != memcmp (hash1_bin,
+                   hash2_bin,
+                   digest_size))
     return MHD_DAUTH_RESPONSE_WRONG;
 
   if (MHD_DAUTH_BIND_NONCE_NONE != daemon->dauth_bind_type)

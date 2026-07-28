@@ -532,7 +532,8 @@ post_process_urlencoded (struct MHD_PostProcessor *pp,
     mhd_assert (end_key >= start_key);
     key_len = (size_t) (end_key - start_key);
     mhd_assert (0 != key_len); /* it must be always non-zero here */
-    if (pp->buffer_pos + key_len >= pp->buffer_size)
+    if ( (pp->buffer_pos + key_len >= pp->buffer_size) ||
+         (pp->buffer_pos + key_len < pp->buffer_pos) )
     {
       pp->state = PP_Error;
       return MHD_NO;
@@ -594,16 +595,12 @@ try_match_header (const char *prefix,
 {
   if (NULL != *suffix)
     return MHD_NO;
-  while (0 != *line)
+  if (MHD_str_equal_caseless_n_ (prefix,
+                                 line,
+                                 prefix_len))
   {
-    if (MHD_str_equal_caseless_n_ (prefix,
-                                   line,
-                                   prefix_len))
-    {
-      *suffix = strdup (&line[prefix_len]);
-      return MHD_YES;
-    }
-    ++line;
+    *suffix = strdup (&line[prefix_len]);
+    return MHD_YES;
   }
   return MHD_NO;
 }

@@ -833,6 +833,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!meshViewSetupCommandList->hasCommandBuffer())
             return;
 
+        bool asyncFrameTimingStarted = true;
         if(!asyncShadowSchedule){
             // Graphics has already reset every timer-query pool in the frame preamble, before shadow preparation and
             // every other render pass. The legacy whole-frame scope remains valid only for the one-submit fallback.
@@ -853,11 +854,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 *meshViewSetupCommandList
             );
             asyncPrefixTiming->finishMarker();
-            static_cast<void>(asyncFrameTiming.begin(
+            asyncFrameTimingStarted = asyncFrameTiming.begin(
                 RendererGpuTimingScope::s_Frame,
                 device,
                 *meshViewSetupCommandList
-            ));
+            );
         }
 
         const bool meshViewReady = m_meshSystem.updateMeshViewBuffer(*meshViewSetupCommandList, meshViewAspectRatio);
@@ -868,7 +869,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         meshViewSetupCommandList->close(&m_meshViewSetupStateHandoff);
         meshViewSetupReady = meshViewReady;
         meshViewSetupCommandListReady =
-            m_meshViewSetupStateHandoff.valid()
+            asyncFrameTimingStarted
+            && m_meshViewSetupStateHandoff.valid()
             && meshViewSetupCommandList->hasCommandBuffer()
         ;
     });
@@ -1575,6 +1577,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             framebuffer
         );
 
+        bool asyncFrameTimingEnded = true;
         // This endpoint completes the legacy one-submission frame scope and records the dedicated path's deferred
         // critical-path endpoint. The latter is not published until Graphics final is accepted below.
         if(frameTiming)
@@ -1589,11 +1592,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 asyncFinalTiming->finishTiming(*deferredCompositeCommandList);
                 asyncFinalTiming.reset();
             }
-            static_cast<void>(asyncFrameTiming.recordEnd(*deferredCompositeCommandList));
+            asyncFrameTimingEnded = asyncFrameTiming.recordEnd(*deferredCompositeCommandList);
         }
         deferredCompositeCommandList->close(&m_deferredCompositeStateHandoff);
         deferredCompositeCommandListReady =
             deferredCompositeRecorded
+            && asyncFrameTimingEnded
             && m_deferredCompositeStateHandoff.valid()
             && deferredCompositeCommandList->hasCommandBuffer()
         ;
@@ -1642,27 +1646,27 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    const auto retireAsyncFrameTiming = [&]() -> bool {
+    const auto retireAsyncFrameTiming = [&](){
         if(!asyncFrameTiming.needsRetirement())
-            return true;
+            return;
 
         asyncFrameTiming.prepareForRecovery();
         shadowOwnershipRecoveryCommandList->open();
         if(!shadowOwnershipRecoveryCommandList->hasCommandBuffer()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record async frame-timing recovery endpoint"));
             asyncFrameTiming.discard();
-            return false;
+            return;
         }
         if(!asyncFrameTiming.recordEnd(*shadowOwnershipRecoveryCommandList)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to write async frame-timing recovery endpoint"));
             asyncFrameTiming.discard();
-            return false;
+            return;
         }
         shadowOwnershipRecoveryCommandList->close();
         if(!shadowOwnershipRecoveryCommandList->hasCommandBuffer()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to close async frame-timing recovery endpoint"));
             asyncFrameTiming.discard();
-            return false;
+            return;
         }
 
         Core::CommandList* recoveryCommandLists[] = { shadowOwnershipRecoveryCommandList };
@@ -1675,14 +1679,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!recoveryToken.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: async frame-timing recovery submission was rejected"));
             asyncFrameTiming.discard();
-            return false;
+            return;
         }
         if(!asyncFrameTiming.confirmEndSubmission(false)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire async frame-timing recovery query"));
             asyncFrameTiming.discard();
-            return false;
+            return;
         }
-        return true;
     };
 
     const auto recoverAsyncShadowOwnership = [&](const Core::QueueSubmissionToken shadowSubmissionToken) -> bool {
@@ -1809,7 +1812,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingStateHandoff.reset();
         m_deferredCompositeStateHandoff.reset();
         m_avboitStateHandoff.reset();
-        static_cast<void>(retireAsyncFrameTiming());
+        retireAsyncFrameTiming();
         return;
     }
 

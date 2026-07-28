@@ -959,9 +959,9 @@ urh_from_pollfd (struct MHD_UpgradeResponseHandle *urh,
   if (0 != (p[1].revents & POLLOUT))
     urh->mhd.celi |= MHD_EPOLL_STATE_WRITE_READY;
   if (0 != (p[1].revents & POLLHUP))
-    urh->mhd.celi |= MHD_EPOLL_STATE_ERROR;
-  if (0 != (p[1].revents & MHD_POLL_REVENTS_ERRROR))
     urh->mhd.celi |= MHD_EPOLL_STATE_READ_READY | MHD_EPOLL_STATE_WRITE_READY;
+  if (0 != (p[1].revents & MHD_POLL_REVENTS_ERRROR))
+    urh->mhd.celi |= MHD_EPOLL_STATE_ERROR;
 }
 
 
@@ -1145,7 +1145,7 @@ internal_get_fdset2 (struct MHD_Daemon *daemon,
               _ ("Maximum socket in select set: %d\n"),
               *max_fd);
 #endif
-#endif /* HTTPS_SUPPORT && UPGRADE_SUPPORT */
+#endif
   return result;
 }
 
@@ -2470,21 +2470,21 @@ psk_gnutls_adapter (gnutls_session_t session,
                                   &app_psk,
                                   &app_psk_size))
     return -1;
+  if (UINT_MAX < app_psk_size)
+  {
+#ifdef HAVE_MESSAGES
+    MHD_DLOG (daemon,
+              _ ("PSK authentication failed: PSK too long.\n"));
+#endif
+    free (app_psk);
+    return -1;
+  }
   if (NULL == (key->data = gnutls_malloc (app_psk_size)))
   {
 #ifdef HAVE_MESSAGES
     MHD_DLOG (daemon,
               _ ("PSK authentication failed: gnutls_malloc failed to " \
                  "allocate memory.\n"));
-#endif
-    free (app_psk);
-    return -1;
-  }
-  if (UINT_MAX < app_psk_size)
-  {
-#ifdef HAVE_MESSAGES
-    MHD_DLOG (daemon,
-              _ ("PSK authentication failed: PSK too long.\n"));
 #endif
     free (app_psk);
     return -1;
@@ -4278,13 +4278,15 @@ MHD_get_timeout64 (struct MHD_Daemon *daemon,
     earliest_deadline = pos->last_activity + pos->connection_timeout_ms;
   }
 
-  for (pos = daemon->manual_timeout_tail; NULL != pos; pos = pos->prevX)
+  for (pos = daemon->manual_timeout_tail;
+       NULL != pos;
+       pos = pos->prevX)
   {
     if (0 != pos->connection_timeout_ms)
     {
       if ( (NULL == earliest_tmot_conn) ||
-           (earliest_deadline - pos->last_activity >
-            pos->connection_timeout_ms) )
+           (earliest_deadline >
+            pos->last_activity + pos->connection_timeout_ms) )
       {
         earliest_tmot_conn = pos;
         earliest_deadline = pos->last_activity + pos->connection_timeout_ms;
@@ -8914,7 +8916,6 @@ MHD_start_daemon_va (unsigned int flags,
 #endif
           /* Free memory for this worker; cleanup below handles
            * all previously-created workers. */
-          MHD_mutex_destroy_chk_ (&d->cleanup_connection_mutex);
           if (MHD_ITC_IS_VALID_ (d->itc))
             MHD_itc_destroy_chk_ (d->itc);
           MHD_mutex_destroy_chk_ (&d->new_connections_mutex);

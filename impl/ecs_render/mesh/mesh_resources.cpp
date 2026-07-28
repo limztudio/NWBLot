@@ -356,6 +356,10 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         RuntimeMeshBufferUpload::BufferFlags indexFlags;
         indexFlags.canHaveRawViews = swShadow;
         indexFlags.accelStructBuildInput = rtSupported;
+        // The dedicated async shadow packet reads this reconstructed stream alongside the Graphics-side build
+        // and raster packets. Keep the sharing contract consistent with the other shadow trace inputs so it
+        // never needs an ownership transfer during the Graphics -> Compute overlap.
+        indexFlags.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
         const RuntimeMeshBufferUpload::BufferSetupFailure::Enum indexFailure = RuntimeMeshBufferUpload::SetupRequiredBuffer<u32>(
             graphics(),
             indexBufferName,
@@ -413,6 +417,9 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
 
         RuntimeMeshBufferUpload::BufferFlags attributeFlags;
         attributeFlags.canHaveRawViews = true;
+        // Hybrid transparent shadow tracing consumes the same corner attributes on AsyncCompute after Graphics
+        // has prepared the frame, so this trace-only stream is a shared read input too.
+        attributeFlags.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
         const RuntimeMeshBufferUpload::BufferSetupFailure::Enum attributeFailure = RuntimeMeshBufferUpload::SetupRequiredBuffer<AttribGpu>(
             graphics(),
             attributeBufferName,

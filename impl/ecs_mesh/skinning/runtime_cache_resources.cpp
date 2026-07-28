@@ -209,7 +209,8 @@ template<typename PayloadT, typename PayloadVector>
     const bool canHaveUavs,
     const tchar* label,
     const bool canHaveRawViews = false,
-    const bool accelStructBuildInput = false
+    const bool accelStructBuildInput = false,
+    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::Exclusive
 ){
     const Name bufferName = DeriveRuntimeResourceName(
         instance.sourceName,
@@ -230,7 +231,7 @@ template<typename PayloadT, typename PayloadVector>
         graphics,
         bufferName,
         payload,
-        { canHaveUavs, canHaveRawViews, accelStructBuildInput },
+        { canHaveUavs, canHaveRawViews, accelStructBuildInput, queueSharing },
         buffer
     );
     switch(failure){
@@ -262,7 +263,8 @@ template<typename PayloadT, typename PayloadVector>
     const bool canHaveUavs,
     const tchar* label,
     const bool canHaveRawViews = false,
-    const bool accelStructBuildInput = false
+    const bool accelStructBuildInput = false,
+    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::Exclusive
 ){
     outBuffer = SetupRuntimeBuffer<PayloadT>(
         graphics,
@@ -272,7 +274,8 @@ template<typename PayloadT, typename PayloadVector>
         canHaveUavs,
         label,
         canHaveRawViews,
-        accelStructBuildInput
+        accelStructBuildInput,
+        queueSharing
     );
     return outBuffer != nullptr;
 }
@@ -333,7 +336,8 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         true,
         NWB_TEXT("skinned position"),
         swShadow,
-        rtSupported
+        rtSupported,
+        Core::ResourceQueueSharing::GraphicsAndAsyncCompute
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Half4U>(
         m_graphics,
@@ -478,7 +482,8 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             false,
             NWB_TEXT("rt triangle index"),
             swShadow,
-            rtSupported
+            rtSupported,
+            Core::ResourceQueueSharing::GraphicsAndAsyncCompute
         ) && uploaded;
     }
 
@@ -515,7 +520,9 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             triangleAttributes,
             true, // canHaveUavs: the per-frame skinned-normal repack pass writes this buffer as a raw UAV in place
             NWB_TEXT("rt triangle attribute"),
-            true
+            true,
+            false,
+            Core::ResourceQueueSharing::GraphicsAndAsyncCompute
         ) && uploaded;
     }
 

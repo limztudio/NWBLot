@@ -1949,6 +1949,9 @@ void CommandList::compactBottomLevelAccelStructs(){
         compactBufferDesc.byteSize = compactedSize;
         compactBufferDesc.isAccelStructStorage = true;
         compactBufferDesc.debugName = as->m_desc.debugName;
+        // Preserve the AS's sharing contract when replacing its backing allocation. A compacted BLAS remains
+        // reachable from the TLAS consumed by the dedicated async shadow packet.
+        compactBufferDesc.queueSharing = as->m_desc.queueSharing;
 
         BufferHandle compactBuffer = m_device.createBuffer(compactBufferDesc);
         if(!compactBuffer)

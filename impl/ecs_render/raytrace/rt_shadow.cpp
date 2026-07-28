@@ -20,7 +20,7 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buf
     if(handle.valid())
         return true;
 
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
@@ -35,7 +35,7 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextHeapHandle(Core::Buf
 }
 
 bool RendererRayTracingSystem::replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle){
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material context requires the initialized global descriptor heap"));
@@ -102,7 +102,7 @@ bool RendererRayTracingSystem::uploadRayTraceMaterialContextSlots(Core::CommandL
     commandList.writeBuffer(slotsBuffer, &slots, sizeof(slots));
     commandList.setBufferState(slotsBuffer, Core::ResourceStates::ConstantBuffer);
     commandList.commitBarriers();
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(
         !heap.isInitialized()
@@ -121,7 +121,7 @@ bool RendererRayTracingSystem::uploadRayTraceMaterialContextSlots(Core::CommandL
 }
 
 void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(heap.isInitialized()){
         heap.free(rayTracingState().m_sceneBvhNodeHeapHandle);
@@ -355,7 +355,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         rayTracingState().m_swShadowEdgeListCapacity = 0u;
         return false;
     }
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(
         !heap.isInitialized()
@@ -382,7 +382,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     if(!rayTracingState().m_tlas || !rayTracingState().m_shadowPipeline)
         return false;
 
-    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     if(
         !heap.isInitialized()
         || !rayTracingState().m_tlasHeapHandle.valid()
@@ -395,7 +395,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         return false;
     }
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, *graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
     // All resources are selected by global heap slots; transition every backing object explicitly.
     commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -529,7 +529,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     if(!rayTracingState().m_swShadowOpaquePrepassPipeline || rayTracingState().m_swShadowMeshCount == 0u)
         return false;
 
-    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     if(
         !heap.isInitialized()
         || !targets.bindless.valid()
@@ -548,7 +548,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         return false;
     }
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, *graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
     // The per-mesh BVH node buffers were left in UnorderedAccess by the build pass; stage every heap-selected
     // software traversal input before dispatch.
@@ -840,11 +840,11 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             rayTracingState().m_swShadowEdgeStatsPending
             && (tick - rayTracingState().m_swShadowEdgeStatsPendingTick) >= s_SwShadowEdgeStatsLogDelay
         ){
-            const u32* stats = static_cast<const u32*>(graphics().getDevice()->mapBuffer(rayTracingState().m_swShadowEdgeStatsReadback.get(), Core::CpuAccessMode::Read));
+            const u32* stats = static_cast<const u32*>(graphics().getDevice().mapBuffer(rayTracingState().m_swShadowEdgeStatsReadback.get(), Core::CpuAccessMode::Read));
             if(stats){
                 const u32 traced = stats[NWB_SW_SHADOW_EDGE_STATS_TRACED];
                 const u32 total = stats[NWB_SW_SHADOW_EDGE_STATS_TOTAL];
-                graphics().getDevice()->unmapBuffer(rayTracingState().m_swShadowEdgeStatsReadback.get());
+                graphics().getDevice().unmapBuffer(rayTracingState().m_swShadowEdgeStatsReadback.get());
                 const f64 fraction = (total > 0u) ? (100.0 * static_cast<f64>(traced) / static_cast<f64>(total)) : 0.0;
                 NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW shadow adaptive edge fraction = {}% ({} traced / {} total rays, threshold {})")
                     , fraction
@@ -908,8 +908,8 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
         return false;
     }
 
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: RayQuery shadows require the descriptor-buffer TLAS heap layout"));
         rayTracingState().m_shadowPipelineFailed = true;
@@ -922,7 +922,7 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
         // Set 0 contains only the push range; the TLAS and every ordinary resource are heap-addressed.
         appendShadowTraceBindingLayout(layoutDesc);
 
-        rayTracingState().m_shadowBindingLayout = device->createBindingLayout(layoutDesc);
+        rayTracingState().m_shadowBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_shadowBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow binding layout"));
             rayTracingState().m_shadowPipelineFailed = true;
@@ -951,7 +951,7 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
         .addBindingLayout(heap.getSamplerLayout())
         .addBindingLayout(heap.getAccelStructLayout())
     ;
-    rayTracingState().m_shadowPipeline = device->createComputePipeline(pipelineDesc);
+    rayTracingState().m_shadowPipeline = device.createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_shadowPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery shadow compute pipeline"));
         rayTracingState().m_shadowPipelineFailed = true;
@@ -973,8 +973,8 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
         return false;
     }
 
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: soft RayQuery shadows require the descriptor-buffer TLAS heap layout"));
         rayTracingState().m_shadowSoftPipelineFailed = true;
@@ -1010,7 +1010,7 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
         .addBindingLayout(heap.getSamplerLayout())
         .addBindingLayout(heap.getAccelStructLayout())
     ;
-    rayTracingState().m_shadowSoftPipeline = device->createComputePipeline(pipelineDesc);
+    rayTracingState().m_shadowSoftPipeline = device.createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_shadowSoftPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create RayQuery soft shadow compute pipeline"));
         rayTracingState().m_shadowSoftPipelineFailed = true;
@@ -1028,7 +1028,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
     if(rayTracingState().m_swShadowPipelineFailed)
         return false;
 
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software shadows require the initialized global descriptor heap"));
@@ -1170,14 +1170,14 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
         .addBindingLayout(rayTracingState().m_swShadowBindingLayout)
     ;
     // Every SW shadow pass requires the global resource/sampler heap layouts.
-    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
     pipelineDesc
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    pipeline = graphics().getDevice()->createComputePipeline(pipelineDesc);
+    pipeline = graphics().getDevice().createComputePipeline(pipelineDesc);
     if(!pipeline){
         // debugLabel identifies the failing pass in the shader-load path already; keep the message argument-free (the
         // NWB_TEXT log string is wide, and debugLabel is a narrow const char* the wide formatter cannot consume).

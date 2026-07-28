@@ -42,8 +42,8 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
     if(rayTracingState().m_surfelSpawnPipelineFailed)
         return false;
 
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel spawn requires the initialized global descriptor heap"));
         rayTracingState().m_surfelSpawnPipelineFailed = true;
@@ -55,7 +55,7 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // All surfel resources and frame inputs are selected through the common heap-slot push block.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
-        rayTracingState().m_surfelSpawnBindingLayout = device->createBindingLayout(layoutDesc);
+        rayTracingState().m_surfelSpawnBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelSpawnBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel spawn binding layout"));
             rayTracingState().m_surfelSpawnPipelineFailed = true;
@@ -81,7 +81,7 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    rayTracingState().m_surfelSpawnPipeline = device->createComputePipeline(pipelineDesc);
+    rayTracingState().m_surfelSpawnPipeline = device.createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelSpawnPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel spawn compute pipeline"));
         rayTracingState().m_surfelSpawnPipelineFailed = true;
@@ -97,8 +97,8 @@ bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
     if(rayTracingState().m_surfelAgeFreePipelineFailed)
         return false;
 
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel age-free requires the initialized global descriptor heap"));
         rayTracingState().m_surfelAgeFreePipelineFailed = true;
@@ -110,7 +110,7 @@ bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // The maintenance field is entirely heap-selected by the common push block.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
-        rayTracingState().m_surfelAgeFreeBindingLayout = device->createBindingLayout(layoutDesc);
+        rayTracingState().m_surfelAgeFreeBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelAgeFreeBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel age-free binding layout"));
             rayTracingState().m_surfelAgeFreePipelineFailed = true;
@@ -136,7 +136,7 @@ bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    rayTracingState().m_surfelAgeFreePipeline = device->createComputePipeline(pipelineDesc);
+    rayTracingState().m_surfelAgeFreePipeline = device.createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelAgeFreePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel age-free compute pipeline"));
         rayTracingState().m_surfelAgeFreePipelineFailed = true;
@@ -152,8 +152,8 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
     if(rayTracingState().m_surfelHashBuildPipelineFailed)
         return false;
 
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel hash-build requires the initialized global descriptor heap"));
         rayTracingState().m_surfelHashBuildPipelineFailed = true;
@@ -165,7 +165,7 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // Pool and hash-head views are selected through the global descriptor heap.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
-        rayTracingState().m_surfelHashBuildBindingLayout = device->createBindingLayout(layoutDesc);
+        rayTracingState().m_surfelHashBuildBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelHashBuildBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel hash-build binding layout"));
             rayTracingState().m_surfelHashBuildPipelineFailed = true;
@@ -191,7 +191,7 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    rayTracingState().m_surfelHashBuildPipeline = device->createComputePipeline(pipelineDesc);
+    rayTracingState().m_surfelHashBuildPipeline = device.createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelHashBuildPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel hash-build compute pipeline"));
         rayTracingState().m_surfelHashBuildPipelineFailed = true;
@@ -207,8 +207,8 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
     if(rayTracingState().m_surfelTracePipelineFailed)
         return false;
 
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel trace requires the initialized global descriptor heap"));
         rayTracingState().m_surfelTracePipelineFailed = true;
@@ -220,7 +220,7 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // Deferred scene slots, material-context slots, live/snapshot surfels, and geometry all come from the heap.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
-        rayTracingState().m_surfelTraceBindingLayout = device->createBindingLayout(layoutDesc);
+        rayTracingState().m_surfelTraceBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelTraceBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace binding layout"));
             rayTracingState().m_surfelTracePipelineFailed = true;
@@ -246,7 +246,7 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    rayTracingState().m_surfelTracePipeline = device->createComputePipeline(pipelineDesc);
+    rayTracingState().m_surfelTracePipeline = device.createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelTracePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace compute pipeline"));
         rayTracingState().m_surfelTracePipelineFailed = true;
@@ -267,8 +267,8 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
     if(poolCapacity == 0u || cellCount == 0u)
         return false;
 
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel GI requires the initialized global descriptor heap"));
         return false;
@@ -483,8 +483,8 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
         return false;
     }
 
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel HW trace requires the descriptor-buffer TLAS heap layout"));
         rayTracingState().m_surfelTraceHwPipelineFailed = true;
@@ -496,7 +496,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // The fixed heap blocks provide the TLAS, trace contexts, surfels, and geometry; the local layout is push-only.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
-        rayTracingState().m_surfelTraceHwBindingLayout = device->createBindingLayout(layoutDesc);
+        rayTracingState().m_surfelTraceHwBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelTraceHwBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel HW trace binding layout"));
             rayTracingState().m_surfelTraceHwPipelineFailed = true;
@@ -529,7 +529,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
         .addBindingLayout(heap.getSamplerLayout())
         .addBindingLayout(heap.getAccelStructLayout())
     ;
-    rayTracingState().m_surfelTraceHwPipeline = device->createComputePipeline(pipelineDesc);
+    rayTracingState().m_surfelTraceHwPipeline = device.createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelTraceHwPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel HW trace compute pipeline"));
         rayTracingState().m_surfelTraceHwPipelineFailed = true;
@@ -545,8 +545,8 @@ bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
     if(rayTracingState().m_surfelResolvePipelineFailed)
         return false;
 
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel resolve requires the initialized global descriptor heap"));
         rayTracingState().m_surfelResolvePipelineFailed = true;
@@ -558,7 +558,7 @@ bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // G-buffer, surfel field, and half-resolution storage output are all selected from heap slots.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
-        rayTracingState().m_surfelResolveBindingLayout = device->createBindingLayout(layoutDesc);
+        rayTracingState().m_surfelResolveBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelResolveBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel resolve binding layout"));
             rayTracingState().m_surfelResolvePipelineFailed = true;
@@ -584,7 +584,7 @@ bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    rayTracingState().m_surfelResolvePipeline = device->createComputePipeline(pipelineDesc);
+    rayTracingState().m_surfelResolvePipeline = device.createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelResolvePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel resolve compute pipeline"));
         rayTracingState().m_surfelResolvePipelineFailed = true;
@@ -600,8 +600,8 @@ bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
     if(rayTracingState().m_surfelUpsamplePipelineFailed)
         return false;
 
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel upsample requires the initialized global descriptor heap"));
         rayTracingState().m_surfelUpsamplePipelineFailed = true;
@@ -613,7 +613,7 @@ bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // Half irradiance, G-buffer, and full-resolution storage output are heap-selected.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
-        rayTracingState().m_surfelUpsampleBindingLayout = device->createBindingLayout(layoutDesc);
+        rayTracingState().m_surfelUpsampleBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelUpsampleBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel upsample binding layout"));
             rayTracingState().m_surfelUpsamplePipelineFailed = true;
@@ -639,7 +639,7 @@ bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    rayTracingState().m_surfelUpsamplePipeline = device->createComputePipeline(pipelineDesc);
+    rayTracingState().m_surfelUpsamplePipeline = device.createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelUpsamplePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel upsample compute pipeline"));
         rayTracingState().m_surfelUpsamplePipelineFailed = true;
@@ -655,8 +655,8 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
     if(rayTracingState().m_surfelTraceBuildArgsPipelineFailed)
         return false;
 
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel trace build-args requires the initialized global descriptor heap"));
         rayTracingState().m_surfelTraceBuildArgsPipelineFailed = true;
@@ -668,7 +668,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // Constants, counter, and indirect argument output are selected by heap slots.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
-        rayTracingState().m_surfelTraceBuildArgsBindingLayout = device->createBindingLayout(layoutDesc);
+        rayTracingState().m_surfelTraceBuildArgsBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelTraceBuildArgsBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace build-args binding layout"));
             rayTracingState().m_surfelTraceBuildArgsPipelineFailed = true;
@@ -694,7 +694,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    rayTracingState().m_surfelTraceBuildArgsPipeline = device->createComputePipeline(pipelineDesc);
+    rayTracingState().m_surfelTraceBuildArgsPipeline = device.createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_surfelTraceBuildArgsPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace build-args compute pipeline"));
         rayTracingState().m_surfelTraceBuildArgsPipelineFailed = true;
@@ -705,7 +705,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
 }
 
 void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(heap.isInitialized()){
         __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_surfelConstantsHeapHandle);
@@ -749,7 +749,7 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
     // The shared deferred target-generation payload already owns a UniformBuffer heap descriptor. Register the one
     // remaining trace selector (material-context slots) in surfel state; this avoids changing shadow/caustic bindings
     // while leaving both surfel trace backends entirely heap-addressed.
-    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     if(
         !targets.bindless.valid()
         || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
@@ -849,7 +849,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         return true;
 
     NWB_ASSERT(targets.bindless.valid());
-    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
 
@@ -950,7 +950,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     // push (here) and the spawn's pop are barrier-separated (clear + hash-build between), so the free-list stack has no
     // concurrent push/pop -> no ABA. The linear workgroup width is shared with the shader.
     {
-        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelAgeFree, *graphics().getDevice(), commandList);
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelAgeFree, graphics().getDevice(), commandList);
         commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
         commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
         commandList.setBufferState(rayTracingState().m_surfelCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
@@ -975,7 +975,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
 
     // (2) Hash-build: one thread per pool slot; link each live surfel into its cell's list.
     {
-        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelHashBuild, *graphics().getDevice(), commandList);
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelHashBuild, graphics().getDevice(), commandList);
         commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
         commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::UnorderedAccess);
         commandList.setBufferState(rayTracingState().m_surfelCellHeadBuffer.get(), Core::ResourceStates::UnorderedAccess);
@@ -991,7 +991,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     // (3) Spawn: one thread per screen tile. Reads the freshly-built cell head; where a cell is still empty, atomically
     // claims it and bump-allocates one surfel (one surfel per hash bucket). [numthreads(8,8,1)] over (screen / spawnTile).
     {
-        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelSpawn, *graphics().getDevice(), commandList);
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelSpawn, graphics().getDevice(), commandList);
         commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
@@ -1044,7 +1044,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     // + its scene BVH/instance tables and the same material context. Every one of these accesses is heap-addressed, so
     // their backing resources are transitioned explicitly here.
     {
-        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelTrace, *graphics().getDevice(), commandList);
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelTrace, graphics().getDevice(), commandList);
         if(useHwTrace){
             for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot){
                 commandList.setBufferState(rayTracingState().m_shadowMeshPositionBuffers[slot], Core::ResourceStates::ShaderResource);
@@ -1098,7 +1098,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     const u32 halfWidth = DivideUp(targets.width, static_cast<u32>(NWB_SURFEL_RESOLVE_HALF_FACTOR));
     const u32 halfHeight = DivideUp(targets.height, static_cast<u32>(NWB_SURFEL_RESOLVE_HALF_FACTOR));
     {
-        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelResolve, *graphics().getDevice(), commandList);
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelResolve, graphics().getDevice(), commandList);
         commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
         commandList.setBufferState(rayTracingState().m_surfelPoolBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_surfelCellHeadBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -1125,7 +1125,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     // so the lighting contract is unchanged). Sync the half-res UAV write -> the upsample's SRV read first.
     commandList.setTextureState(targets.surfelIrradianceHalf.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     {
-        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelUpsample, *graphics().getDevice(), commandList);
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelUpsample, graphics().getDevice(), commandList);
         commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
@@ -1161,11 +1161,11 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
             rayTracingState().m_surfelCountReadbackPending
             && (frameIndex - rayTracingState().m_surfelCountReadbackFrame) >= s_SurfelCountLogDelay
         ){
-            const u32* counts = static_cast<const u32*>(graphics().getDevice()->mapBuffer(readback, Core::CpuAccessMode::Read));
+            const u32* counts = static_cast<const u32*>(graphics().getDevice().mapBuffer(readback, Core::CpuAccessMode::Read));
             if(counts){
                 const u32 bumpTop = counts[NWB_SURFEL_COUNTER_BUMP_TOP];
                 const u32 freeTop = counts[NWB_SURFEL_COUNTER_FREE_TOP];
-                graphics().getDevice()->unmapBuffer(readback);
+                graphics().getDevice().unmapBuffer(readback);
                 NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: surfel live count = {} (bump {} - free {}) of {} pool capacity")
                     , static_cast<u64>(bumpTop - freeTop)
                     , static_cast<u64>(bumpTop)

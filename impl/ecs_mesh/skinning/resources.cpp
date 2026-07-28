@@ -97,7 +97,7 @@ static bool RegisterUniformBuffer(
 
 
 void MeshSkinningSystem::releaseRuntimeResourceBindlessHeapHandles(RuntimeResources& resources){
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice()->getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(heap.isInitialized()){
         const auto release = [&](Core::GpuDescriptorHandle& handle){
             if(handle.valid())
@@ -127,7 +127,7 @@ void MeshSkinningSystem::releaseRuntimeResourceBindlessHeapHandles(RuntimeResour
 }
 
 bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources){
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' requires the initialized global descriptor heap"), instance.handle.value);

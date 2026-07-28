@@ -405,7 +405,7 @@ bool Graphics::setDebugRuntimeEnabled(bool enabled){
 }
 
 bool Graphics::setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi){
-    if(!abi.valid() || getDevice())
+    if(!abi.valid() || m_backend->getDevice())
         return false;
 
     m_deviceCreationParams.bindlessHeapAbi = abi;
@@ -448,7 +448,7 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
 
 void Graphics::destroy(){
     waitAllJobs();
-    if(auto* device = getDevice())
+    if(auto* device = m_backend->getDevice())
         device->waitForIdle();
 
     invalidateRenderPassResources();
@@ -460,8 +460,10 @@ void Graphics::destroy(){
     m_instanceCreated = false;
 }
 
-GraphicsBackend::Device* Graphics::getDevice()const noexcept{
-    return m_backend->getDevice();
+GraphicsBackend::Device& Graphics::getDevice()const noexcept{
+    GraphicsBackend::Device* const device = m_backend->getDevice();
+    NWB_ASSERT(device);
+    return *device;
 }
 
 bool Graphics::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters){
@@ -490,9 +492,8 @@ void Graphics::addRenderPassToBack(IRenderPass& pass){
 
 void Graphics::removeRenderPass(IRenderPass& pass){
     waitAllJobs();
-    auto* device = getDevice();
-    NWB_ASSERT(device);
-    device->waitForIdle();
+    auto& device = getDevice();
+    device.waitForIdle();
 
     pass.invalidateResources();
     m_renderPasses.remove(&pass);
@@ -556,18 +557,17 @@ Framebuffer* Graphics::getFramebuffer(u32 index)const{
 }
 
 BufferHandle Graphics::createBuffer(const BufferDesc& desc)const{
-    return getDevice()->createBuffer(desc);
+    return getDevice().createBuffer(desc);
 }
 
 TextureHandle Graphics::createTexture(const TextureDesc& desc)const{
-    return getDevice()->createTexture(desc);
+    return getDevice().createTexture(desc);
 }
 
 void Graphics::backBufferResizing(){
     waitAllJobs();
-    auto* device = getDevice();
-    NWB_ASSERT(device);
-    device->waitForIdle();
+    auto& device = getDevice();
+    device.waitForIdle();
 
     invalidateRenderPassResources();
     m_swapChainFramebuffers.clear();
@@ -584,7 +584,7 @@ void Graphics::backBufferResized(){
     m_swapChainFramebuffers.clear();
     m_swapChainFramebuffers.reserve(backBufferCount);
     for(u32 index = 0; index < backBufferCount; ++index)
-        m_swapChainFramebuffers.push_back(getDevice()->createFramebuffer(FramebufferDesc().addColorAttachment(getBackBuffer(index))));
+        m_swapChainFramebuffers.push_back(getDevice().createFramebuffer(FramebufferDesc().addColorAttachment(getBackBuffer(index))));
 
     if(!validateRenderPassResources())
         NWB_LOGGER_WARNING(NWB_TEXT("Graphics: one or more render passes failed to validate resources after back buffer resize"));
@@ -627,22 +627,21 @@ void Graphics::animate(f64 elapsedTime){
 
 void Graphics::render(){
     Framebuffer* framebuffer = getCurrentFramebuffer();
-    auto* device = getDevice();
-    NWB_ASSERT(device);
-    m_gpuTiming.collect(*device, m_frameIndex);
+    auto& device = getDevice();
+    m_gpuTiming.collect(device, m_frameIndex);
     m_gpuTiming.beginFrame(m_frameIndex);
 
     // Reset every known timer-query pool before any render pass can record a timestamp. Render passes submit in
     // registration order, so keeping this preamble on Graphics makes the reset precede skinning, shadow preparation,
     // and every later renderer packet on the same GPU timeline.
     if(m_gpuTiming.queryCollectionEnabled()){
-        if(!m_gpuTiming.materializeRequestedQueries(*device))
+        if(!m_gpuTiming.materializeRequestedQueries(device))
             NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to materialize one or more requested GPU-timing query pools"));
 
         // Do not allow render-pass scopes to reuse a prior frame's reset if recording or submitting this preamble
         // fails. confirmFrameReset() below reenables only the pools covered by the successful submission.
         m_gpuTiming.discardFrameReset();
-        CommandListHandle frameTimingCommandList = device->createCommandList();
+        CommandListHandle frameTimingCommandList = device.createCommandList();
         if(!frameTimingCommandList)
             NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to create the frame GPU-timing reset command list"));
         else{
@@ -660,7 +659,7 @@ void Graphics::render(){
                 else{
                     CommandList* commandLists[] = { frameTimingCommandList.get() };
                     bool frameTimingResetSubmitted = false;
-                    device->executeCommandLists(commandLists, 1u, CommandQueue::Graphics, &frameTimingResetSubmitted);
+                    device.executeCommandLists(commandLists, 1u, CommandQueue::Graphics, &frameTimingResetSubmitted);
                     if(!frameTimingResetSubmitted){
                         m_gpuTiming.discardFrameReset();
                         NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to submit the frame GPU-timing reset command list"));
@@ -744,12 +743,11 @@ bool Graphics::animateRenderPresent(){
 
     YieldThread();
 
-    auto* device = getDevice();
-    NWB_ASSERT(device);
-    device->runGarbageCollection();
+    auto& device = getDevice();
+    device.runGarbageCollection();
     // Advance the global bindless heap's deferred-free clock alongside device GC so slots return to the free list only
     // after in-flight frames can no longer reference them.
-    device->getDescriptorHeap().advanceFrame();
+    device.getDescriptorHeap().advanceFrame();
 
     updateAverageFrameTime(elapsedTime);
     m_previousFrameTimestamp = now;
@@ -759,11 +757,11 @@ bool Graphics::animateRenderPresent(){
 }
 
 BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
-    auto* device = getDevice();
+    auto& device = getDevice();
     if(!__hidden_graphics::ValidateBufferSetupUpload(desc))
         return {};
 
-    BufferHandle buffer = device->createBuffer(desc.bufferDesc);
+    BufferHandle buffer = device.createBuffer(desc.bufferDesc);
     if(!buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create setup buffer '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
         return {};
@@ -774,7 +772,7 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
 
     CommandListParameters cmdParams;
     cmdParams.setQueueType(desc.queue);
-    CommandListHandle commandList = device->createCommandList(cmdParams);
+    CommandListHandle commandList = device.createCommandList(cmdParams);
     if(!commandList){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create upload command list for buffer '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
         return {};
@@ -784,17 +782,17 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
     commandList->writeBuffer(buffer.get(), desc.data, desc.dataSize, desc.destOffsetBytes);
     commandList->close();
     CommandList* commandLists[] = { commandList.get() };
-    device->executeCommandLists(commandLists, 1, desc.queue);
+    device.executeCommandLists(commandLists, 1, desc.queue);
 
     return buffer;
 }
 
 TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
-    auto* device = getDevice();
+    auto& device = getDevice();
     if(!__hidden_graphics::ValidateTextureSetupUpload(desc))
         return {};
 
-    TextureHandle texture = device->createTexture(desc.textureDesc);
+    TextureHandle texture = device.createTexture(desc.textureDesc);
     if(!texture){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create setup texture '{}'"), StringConvert(desc.textureDesc.name.c_str()));
         return {};
@@ -805,7 +803,7 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
 
     CommandListParameters cmdParams;
     cmdParams.setQueueType(desc.queue);
-    CommandListHandle commandList = device->createCommandList(cmdParams);
+    CommandListHandle commandList = device.createCommandList(cmdParams);
     if(!commandList){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create upload command list for texture '{}'"), StringConvert(desc.textureDesc.name.c_str()));
         return {};
@@ -815,7 +813,7 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
     commandList->writeTexture(texture.get(), desc.arraySlice, desc.mipLevel, desc.data, desc.rowPitch, desc.depthPitch);
     commandList->close();
     CommandList* commandLists[] = { commandList.get() };
-    device->executeCommandLists(commandLists, 1, desc.queue);
+    device.executeCommandLists(commandLists, 1, desc.queue);
 
     return texture;
 }
@@ -939,7 +937,7 @@ Graphics::CoopVectorSupport Graphics::queryCoopVecSupport()const{
     output.inferencingSupported = queryFeatureSupport(Feature::CooperativeVectorInferencing);
     output.trainingSupported = queryFeatureSupport(Feature::CooperativeVectorTraining);
 
-    auto& device = *getDevice();
+    auto& device = getDevice();
     const CooperativeVectorDeviceFeatures features = device.queryCoopVecFeatures();
     output.fp32TrainingSupported = output.trainingSupported && features.trainingFloat32;
 
@@ -960,7 +958,7 @@ bool Graphics::queryFeatureSupport(const Feature::Enum feature, void* featureInf
         return false;
 #endif
 
-    auto& device = *getDevice();
+    auto& device = getDevice();
     return device.queryFeatureSupport(feature, featureInfo, featureInfoSize);
 }
 
@@ -1006,13 +1004,13 @@ void Graphics::clearFeatureSupportDisabledForTesting(){
 
 
 CooperativeVectorDeviceFeatures Graphics::queryCoopVecFeatures()const{
-    auto* device = getDevice();
-    return device->queryCoopVecFeatures();
+    auto& device = getDevice();
+    return device.queryCoopVecFeatures();
 }
 
 usize Graphics::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const{
-    auto* device = getDevice();
-    return device->getCoopVecMatrixSize(type, layout, rows, columns);
+    auto& device = getDevice();
+    return device.getCoopVecMatrixSize(type, layout, rows, columns);
 }
 
 void Graphics::waitJob(JobHandle handle)const{

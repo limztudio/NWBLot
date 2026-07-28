@@ -459,14 +459,14 @@ template<typename CutterHandler>
 
 
 bool RendererCsgSystem::createCsgClipResources(){
-    auto* device = graphics().getDevice();
+    auto& device = graphics().getDevice();
     if(!csgState().m_clipBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc.setVisibility(Core::ShaderType::Mesh | Core::ShaderType::Compute | Core::ShaderType::Pixel);
         // This layout contains only the shared 64-byte mesh push ABI used by the cap-fill fullscreen path.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
-        csgState().m_clipBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        csgState().m_clipBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!csgState().m_clipBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create CSG clip binding layout"));
             return false;
@@ -477,7 +477,7 @@ bool RendererCsgSystem::createCsgClipResources(){
 }
 
 void RendererCsgSystem::releaseCsgClipContextHeapHandles(){
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(heap.isInitialized()){
         heap.free(csgState().m_receiverRangeBufferHeapHandle);
@@ -506,7 +506,7 @@ bool RendererCsgSystem::reserveCsgReceiverRangeBufferCapacity(const usize rangeC
     }
 
     if(csgState().m_receiverRangeBufferCapacity != oldCapacity && !__hidden_csg_resources::ReplaceCsgStorageBufferHeapHandle(
-        *graphics().getDevice(),
+        graphics().getDevice(),
         *csgState().m_receiverRangeBuffer.get(),
         csgState().m_receiverRangeBufferHeapHandle
     )){
@@ -531,7 +531,7 @@ bool RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
     }
 
     if(csgState().m_cutterBufferCapacity != oldCapacity && !__hidden_csg_resources::ReplaceCsgStorageBufferHeapHandle(
-        *graphics().getDevice(),
+        graphics().getDevice(),
         *csgState().m_cutterBuffer.get(),
         csgState().m_cutterBufferHeapHandle
     )){
@@ -569,22 +569,22 @@ bool RendererCsgSystem::prepareCsgFrameBuffers(const CsgFrameGpuData& csgFrameDa
     }
     if(
         !__hidden_csg_resources::EnsureCsgStorageBufferHeapHandle(
-            *graphics().getDevice(),
+            graphics().getDevice(),
             *csgState().m_receiverRangeBuffer.get(),
             csgState().m_receiverRangeBufferHeapHandle
         )
         || !__hidden_csg_resources::EnsureCsgStorageBufferHeapHandle(
-            *graphics().getDevice(),
+            graphics().getDevice(),
             *csgState().m_cutterBuffer.get(),
             csgState().m_cutterBufferHeapHandle
         )
         || !__hidden_csg_resources::EnsureCsgUniformBufferHeapHandle(
-            *graphics().getDevice(),
+            graphics().getDevice(),
             *csgState().m_clipContextSlotsBuffer.get(),
             csgState().m_clipContextSlotsHeapHandle
         )
         || !__hidden_csg_resources::EnsureCsgUniformBufferHeapHandle(
-            *graphics().getDevice(),
+            graphics().getDevice(),
             *csgState().m_intervalSampleStateBuffer.get(),
             csgState().m_intervalSampleStateHeapHandle
         )
@@ -644,7 +644,7 @@ bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, co
     contextSlots.deferredBindlessResources = deferredState().m_targets.bindless.slotsBufferDescriptor.slot();
     contextSlots.intervalSampleState = csgState().m_intervalSampleStateHeapHandle.slot();
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgUpload, *graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgUpload, graphics().getDevice(), commandList);
 
     commandList.setBufferState(csgState().m_receiverRangeBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.setBufferState(csgState().m_cutterBuffer.get(), Core::ResourceStates::CopyDest);

@@ -48,7 +48,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
     NWB_ASSERT(deferredState().m_lightBuffer);
 
-    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     if(
         !heap.isInitialized()
         || !__hidden_raytracing_system::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
@@ -292,7 +292,7 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
     if(rayTracingState().m_shadowGeometryDownsamplePipelineFailed)
         return false;
 
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
@@ -337,7 +337,7 @@ bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
     if(rayTracingState().m_shadowResolvePipelineFailed)
         return false;
 
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
@@ -382,7 +382,7 @@ bool RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
     if(rayTracingState().m_shadowResolveRgbPipelineFailed || !rayTracingState().m_shadowResolveBindingLayout)
         return false;
 
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
@@ -421,7 +421,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
     const u32 fullGroupsX = DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
     const u32 fullGroupsY = DivideUp(targets.height, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
     const DeferredBindlessFrameResources& bindless = targets.bindless;
-    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
 
     const auto runPass = [&](const SoftShadowResolvePassResources& resources, const u32 stepWidth, const ShadowResolveStage::Enum stage, const u32 groupsX, const u32 groupsY){
         NWB_ASSERT(resources.softHalfTexture && resources.inputColorTexture && resources.momentsTexture && resources.outputTexture);
@@ -498,7 +498,7 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
     if(rayTracingState().m_shadowReprojectMergePipelineFailed)
         return false;
 
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;

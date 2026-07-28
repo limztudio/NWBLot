@@ -43,7 +43,7 @@ bool RendererMeshSystem::createComputeEmulationHeapHandle(MeshResources& mesh){
         }
     }
 
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute-emulation vertex buffer requires the initialized global descriptor heap"));
@@ -83,7 +83,7 @@ bool RendererMeshSystem::createMeshFrameHeapHandles(){
         return false;
     }
 
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame heap registration requires the initialized global descriptor heap"));
@@ -140,7 +140,7 @@ void RendererMeshSystem::populateMeshFrameHeapSlots(ECSRenderDetail::MeshFrameHe
 }
 
 void RendererMeshSystem::releaseMeshFrameHeapHandles(){
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(heap.isInitialized()){
         if(drawState().m_instanceBufferHeapHandle.valid())
@@ -159,7 +159,7 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
     if(meshGeometryHeapHandlesReady(mesh))
         return true;
 
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' requires the initialized global descriptor heap")
@@ -267,8 +267,8 @@ bool RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(MeshResources& mesh){
         return false;
     }
 
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' requires the initialized global descriptor heap for software-BVH inputs")
             , StringConvert(mesh.meshName.c_str())
@@ -302,7 +302,7 @@ bool RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(MeshResources& mesh){
 }
 
 void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(heap.isInitialized()){
         for(Core::GpuDescriptorHandle& handle : mesh.geometryHeapHandles){

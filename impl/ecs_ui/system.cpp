@@ -271,7 +271,7 @@ void UiSystem::invalidateResources(){
 }
 
 bool UiSystem::ensureFrameCommandLists(){
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
 
     if(!m_prepareCommandList){
         m_prepareCommandList = device.createCommandList();
@@ -319,7 +319,7 @@ bool UiSystem::prepareResources(Core::Framebuffer* framebuffer){
         return false;
 
     if(__hidden_ui::HasTextureRequests(*drawData)){
-        auto& device = *m_graphics.getDevice();
+        auto& device = m_graphics.getDevice();
 
         NWB_ASSERT(m_prepareCommandList);
 
@@ -373,7 +373,7 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
     if(!m_pipeline)
         return;
 
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
     if(drawData->TotalVtxCount <= 0 || drawData->TotalIdxCount <= 0){
         m_frameStarted = false;
         m_frameFinished = false;
@@ -439,7 +439,7 @@ bool UiSystem::uploadDrawBuffers(Core::CommandList& commandList, ImDrawData& dra
 void UiSystem::renderDrawData(Core::CommandList& commandList, Core::Framebuffer* framebuffer, ImDrawData& drawData){
     if(drawData.TotalVtxCount <= 0 || drawData.TotalIdxCount <= 0)
         return;
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
     if(!m_samplerHeapHandle.valid())
         return;
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();

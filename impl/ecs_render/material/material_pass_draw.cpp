@@ -238,11 +238,11 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
 
         context.commandList.setMeshletState(meshletState);
         // Geometry streams are heap-backed for every raster material pass (opaque and AVBOIT alike).
-        graphics().getDevice()->getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.meshletPipeline.get());
+        graphics().getDevice().getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.meshletPipeline.get());
 
         setMaterialPassDrawPushConstants(context, drawItem, mesh);
         {
-            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, *graphics().getDevice(), context.commandList);
+            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, graphics().getDevice(), context.commandList);
 
             context.commandList.dispatchMesh(mesh.meshletCount);
         }
@@ -283,7 +283,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         context.commandList.setComputeState(computeState);
         // Compute-emulation runs the same heap-backed mesh runtime before the generated vertex buffer reaches the
         // ordinary graphics raster stage.
-        graphics().getDevice()->getDescriptorHeap().bindCompute(context.commandList, *pipelineResources.computePipeline.get());
+        graphics().getDevice().getDescriptorHeap().bindCompute(context.commandList, *pipelineResources.computePipeline.get());
 
         ECSRenderDetail::MeshFrameHeapSlots frameHeapSlots;
         m_renderer.meshSystem().populateMeshFrameHeapSlots(frameHeapSlots);
@@ -298,7 +298,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
             materialPassDrawDispatchFlags(context, drawItem, mesh)
         );
         {
-            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, *graphics().getDevice(), context.commandList);
+            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, graphics().getDevice(), context.commandList);
 
             context.commandList.dispatch(mesh.meshletCount);
         }
@@ -317,14 +317,14 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         );
 
         context.commandList.setGraphicsState(graphicsState);
-        graphics().getDevice()->getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.emulationPipeline.get());
+        graphics().getDevice().getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.emulationPipeline.get());
 
         setMaterialPassDrawPushConstants(context, drawItem, mesh);
 
         Core::DrawArguments drawArgs;
         drawArgs.setVertexCount(mesh.meshletPrimitiveIndexCount);
         {
-            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_Raster, *graphics().getDevice(), context.commandList);
+            Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_Raster, graphics().getDevice(), context.commandList);
 
             context.commandList.draw(drawArgs);
         }

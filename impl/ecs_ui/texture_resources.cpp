@@ -115,7 +115,7 @@ bool UiSystem::ensureSamplerHeapHandle(){
         return false;
     }
 
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: cannot register the ImGui sampler without an initialized descriptor heap"));
@@ -142,7 +142,7 @@ bool UiSystem::registerTextureHeapHandle(UiTextureResource& resource){
         return false;
     }
 
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: cannot register an ImGui texture without an initialized descriptor heap"));
@@ -171,7 +171,7 @@ void UiSystem::releaseTextureHeapHandle(UiTextureResource& resource){
     if(!resource.sampledImageHeapHandle.valid())
         return;
 
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice()->getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(heap.isInitialized())
         heap.free(resource.sampledImageHeapHandle);
     resource.sampledImageHeapHandle = Core::GpuDescriptorHandle::invalid();
@@ -184,7 +184,7 @@ void UiSystem::releaseDescriptorHeapResources(){
     }
 
     if(m_samplerHeapHandle.valid()){
-        Core::GpuDescriptorHeap& heap = m_graphics.getDevice()->getDescriptorHeap();
+        Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
         if(heap.isInitialized())
             heap.free(m_samplerHeapHandle);
         m_samplerHeapHandle = Core::GpuDescriptorHandle::invalid();

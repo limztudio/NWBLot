@@ -38,8 +38,8 @@ static_assert(sizeof(PushConstants) == sizeof(u32));
 
 
 bool RendererDeferredSystem::createDeferredCompositeResources(){
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred compositing requires the global descriptor heap"));
         return false;
@@ -52,14 +52,14 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
         ;
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_composite::PushConstants)));
 
-        deferredState().m_compositeBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        deferredState().m_compositeBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!deferredState().m_compositeBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite binding layout"));
             return false;
         }
     }
 
-    if(!ECSRenderDetail::CreateClampSampler(*device, deferredState().m_sampler, false)){
+    if(!ECSRenderDetail::CreateClampSampler(device, deferredState().m_sampler, false)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite sampler"));
         return false;
     }
@@ -90,8 +90,8 @@ bool RendererDeferredSystem::createDeferredCompositePipeline(Core::Framebuffer* 
     if(deferredState().m_compositePipeline && deferredState().m_compositePipeline->getFramebufferInfo() == framebufferInfo)
         return true;
 
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     Core::GraphicsPipelineDesc pipelineDesc;
     pipelineDesc
         .setVertexShader(deferredState().m_compositeVertexShader)
@@ -102,7 +102,7 @@ bool RendererDeferredSystem::createDeferredCompositePipeline(Core::Framebuffer* 
         .addBindingLayout(heap.getSamplerLayout())
     ;
 
-    deferredState().m_compositePipeline = device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
+    deferredState().m_compositePipeline = device.createGraphicsPipeline(pipelineDesc, framebufferInfo);
     if(!deferredState().m_compositePipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite pipeline"));
         return false;
@@ -130,7 +130,7 @@ bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandL
     commandList.setTextureState(targets.avboit.accumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredComposite, *graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredComposite, graphics().getDevice(), commandList);
 
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(presentationFramebuffer->getFramebufferInfo().getViewport());
@@ -141,7 +141,7 @@ bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandL
     graphicsState.setViewport(viewportState);
 
     commandList.setGraphicsState(graphicsState);
-    graphics().getDevice()->getDescriptorHeap().bindGraphics(commandList, *deferredState().m_compositePipeline);
+    graphics().getDevice().getDescriptorHeap().bindGraphics(commandList, *deferredState().m_compositePipeline);
     const __hidden_deferred_composite::PushConstants pushConstants{
         targets.bindless.slotsBufferDescriptor.slot()
     };

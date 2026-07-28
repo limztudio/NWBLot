@@ -105,7 +105,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
     const Core::Format::Enum accumExtinctionFormat,
     const Core::Format::Enum transmittanceFormat
 ){
-    auto* device = graphics().getDevice();
+    auto& device = graphics().getDevice();
     AvboitFrameTargets avboitTargets;
     avboitTargets.fullWidth = createdTargets.width;
     avboitTargets.fullHeight = createdTargets.height;
@@ -172,7 +172,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
 
     Core::FramebufferDesc lowFramebufferDesc;
     lowFramebufferDesc.addColorAttachment(avboitTargets.lowRasterTarget.get(), ECSRenderDetail::s_FramebufferSubresources);
-    avboitTargets.lowFramebuffer = device->createFramebuffer(lowFramebufferDesc);
+    avboitTargets.lowFramebuffer = device.createFramebuffer(lowFramebufferDesc);
     if(!avboitTargets.lowFramebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT low-resolution framebuffer"));
         return false;
@@ -197,7 +197,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
             .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
             .setReadOnly(true)
     );
-    avboitTargets.accumulationFramebuffer = device->createFramebuffer(accumulationFramebufferDesc);
+    avboitTargets.accumulationFramebuffer = device.createFramebuffer(accumulationFramebufferDesc);
     if(!avboitTargets.accumulationFramebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation framebuffer"));
         return false;

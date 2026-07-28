@@ -282,7 +282,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     // Reset the per-frame distinct-mesh table; the gather repopulates its index, attribute, and position buffers.
     // Each backing buffer is registered in the global descriptor heap, and its slot is stored in the material record
     // for shader-side NwbHeapRawBuffer() access. The table drives host-side barriers and record population.
-    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: hardware TLAS build requires the descriptor-buffer TLAS heap layout"));
         return false;
@@ -474,8 +474,8 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         accelStructDesc.setBuildFlags(Core::RayTracingAccelStructBuildFlags::PreferFastTrace);
         accelStructDesc.setDebugName(Name("scene_tlas"));
 
-        auto* device = graphics().getDevice();
-        Core::RayTracingAccelStructHandle tlas = device->createAccelStruct(accelStructDesc);
+        auto& device = graphics().getDevice();
+        Core::RayTracingAccelStructHandle tlas = device.createAccelStruct(accelStructDesc);
         if(!tlas){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene TLAS (capacity {})")
                 , static_cast<u64>(capacity)
@@ -588,7 +588,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     meshSlotLookup.reserve(candidateCount);
 
     // Reset the per-frame distinct-mesh table; the gather repopulates its buffers and descriptor-heap handles.
-    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software scene BVH requires the initialized global descriptor heap"));
         return false;
@@ -885,8 +885,8 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
         accelStructDesc.setBuildFlags(buildFlags);
         accelStructDesc.setDebugName(DeriveName(meshResources.meshName, AStringView(":blas")));
 
-        auto* device = graphics().getDevice();
-        Core::RayTracingAccelStructHandle blas = device->createAccelStruct(accelStructDesc);
+        auto& device = graphics().getDevice();
+        Core::RayTracingAccelStructHandle blas = device.createAccelStruct(accelStructDesc);
         if(!blas){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'")
                 , StringConvert(meshResources.meshName.c_str())
@@ -925,7 +925,7 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
 }
 
 void RendererRayTracingSystem::releaseSwBvhScratchHeapHandles(){
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(heap.isInitialized()){
         __hidden_raytracing_system::RetireHeapHandle(heap, rayTracingState().m_bvhSortKeysHeapHandle);
@@ -944,8 +944,8 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
     if(rayTracingState().m_bvhSortPipelineFailed)
         return false;
 
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software BVH sort requires the initialized global descriptor heap"));
         rayTracingState().m_bvhSortPipelineFailed = true;
@@ -959,7 +959,7 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
         // only that push-constant range; heap layouts are appended to the pipeline below.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhSortPushConstants)));
 
-        rayTracingState().m_bvhSortBindingLayout = device->createBindingLayout(layoutDesc);
+        rayTracingState().m_bvhSortBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_bvhSortBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort binding layout"));
             rayTracingState().m_bvhSortPipelineFailed = true;
@@ -985,7 +985,7 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    rayTracingState().m_bvhSortPipeline = device->createComputePipeline(pipelineDesc);
+    rayTracingState().m_bvhSortPipeline = device.createComputePipeline(pipelineDesc);
     if(!rayTracingState().m_bvhSortPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort compute pipeline"));
         rayTracingState().m_bvhSortPipelineFailed = true;
@@ -995,8 +995,8 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
 }
 
 bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
 
@@ -1124,7 +1124,7 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
         Core::ComputeState computeState;
         computeState.setPipeline(rayTracingState().m_bvhSortPipeline.get());
         commandList.setComputeState(computeState);
-        graphics().getDevice()->getDescriptorHeap().bindCompute(commandList, *rayTracingState().m_bvhSortPipeline.get());
+        graphics().getDevice().getDescriptorHeap().bindCompute(commandList, *rayTracingState().m_bvhSortPipeline.get());
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         commandList.dispatch(groups, 1u, 1u);
     };
@@ -1182,8 +1182,8 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
     if(rayTracingState().m_bvhBuildPipelineFailed)
         return false;
 
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software BVH build requires the initialized global descriptor heap"));
         rayTracingState().m_bvhBuildPipelineFailed = true;
@@ -1197,7 +1197,7 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
         // push-only and append the resource/sampler heap layouts to each build pipeline below.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhBuildPushConstants)));
 
-        rayTracingState().m_bvhBuildBindingLayout = device->createBindingLayout(layoutDesc);
+        rayTracingState().m_bvhBuildBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_bvhBuildBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH build binding layout"));
             rayTracingState().m_bvhBuildPipelineFailed = true;
@@ -1205,7 +1205,7 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
         }
     }
 
-    const auto createBuildPipeline = [this, device, &heap](
+    const auto createBuildPipeline = [this, &device, &heap](
         Core::ShaderHandle& shader,
         Core::ComputePipelineHandle& pipeline,
         const Name& shaderName,
@@ -1223,7 +1223,7 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
             .addBindingLayout(heap.getResourceLayout())
             .addBindingLayout(heap.getSamplerLayout())
         ;
-        pipeline = device->createComputePipeline(pipelineDesc);
+        pipeline = device.createComputePipeline(pipelineDesc);
         return pipeline != nullptr;
     };
 
@@ -1240,8 +1240,8 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
 }
 
 bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount){
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
 
@@ -1302,8 +1302,8 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
     Core::GpuDescriptorHandle& nodeHeapHandle,
     Core::GpuDescriptorHandle& parentHeapHandle
 ){
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
 
@@ -1543,7 +1543,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
         commandList.commitBarriers();
     };
 
-    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     const auto dispatchBuildKernel = [&commandList, &pushConstants, &heap](Core::ComputePipeline* pipeline, const u32 groupCount){
         Core::ComputeState computeState;
         computeState.setPipeline(pipeline);
@@ -1563,7 +1563,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     // Per-mesh (buildMeshSwBvh runs once per rebuild), so all sort dispatches in a frame accumulate into one
     // render.sw_bvh_sort average. Scoped here, not in bvhBitonicSort(), so the one-shot self-test sort stays out.
     {
-        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SwBvhSort, *graphics().getDevice(), commandList);
+        Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SwBvhSort, graphics().getDevice(), commandList);
         if(!bvhBitonicSort(commandList, primitiveCount, paddedCount))
             return false;
     }
@@ -1666,7 +1666,7 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     Core::ComputeState computeState;
     computeState.setPipeline(rayTracingState().m_bvhFitPipeline.get());
     commandList.setComputeState(computeState);
-    graphics().getDevice()->getDescriptorHeap().bindCompute(commandList, *rayTracingState().m_bvhFitPipeline.get());
+    graphics().getDevice().getDescriptorHeap().bindCompute(commandList, *rayTracingState().m_bvhFitPipeline.get());
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)), 1u, 1u);
 

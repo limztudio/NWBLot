@@ -116,9 +116,8 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
 
     context.graphics.waitAllJobs();
 
-    auto* device = context.graphics.getDevice();
-    NWB_ASSERT(device);
-    device->waitForIdle();
+    auto& device = context.graphics.getDevice();
+    device.waitForIdle();
 
     world->clear();
     world.reset();

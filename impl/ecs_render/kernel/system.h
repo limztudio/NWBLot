@@ -140,11 +140,16 @@ private:
     Core::CommandListResourceStateHandoff m_shadowVisibilityStateHandoff;
     Core::CommandListResourceStateHandoff m_causticsSurfelGiStateHandoff;
     Core::CommandListResourceStateHandoff m_postGbufferFanInStateHandoff;
+    Core::CommandListResourceStateHandoff m_deferredLightingStateHandoff;
+    Core::CommandListResourceStateHandoff m_avboitStateHandoff;
+    Core::CommandListResourceStateHandoff m_lightingAvboitFanInStateHandoff;
     Core::CommandListHandle m_gbufferCommandList;
     Core::CommandListHandle m_postGbufferNormalizeCommandList;
     Core::CommandListHandle m_shadowVisibilityCommandList;
     Core::CommandListHandle m_causticsSurfelGiCommandList;
-    Core::CommandListHandle m_postGbufferCommandList;
+    Core::CommandListHandle m_deferredLightingCommandList;
+    Core::CommandListHandle m_avboitCommandList;
+    Core::CommandListHandle m_deferredCompositeCommandList;
     Core::CommandListHandle m_shadowPrepareCommandList;
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;

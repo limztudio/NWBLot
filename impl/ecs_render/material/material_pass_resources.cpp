@@ -27,8 +27,8 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
         // frame-slot push-constant lane.  This local layout deliberately retains only the push range.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
-        auto* device = graphics().getDevice();
-        drawState().m_computeBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        auto& device = graphics().getDevice();
+        drawState().m_computeBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!drawState().m_computeBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation binding layout"));
             return false;
@@ -85,8 +85,8 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
             "POSITION1"
         );
 
-        auto* device = graphics().getDevice();
-        drawState().m_emulationInputLayout = device->createInputLayout(
+        auto& device = graphics().getDevice();
+        drawState().m_emulationInputLayout = device.createInputLayout(
             attributes,
             NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT,
             drawState().m_emulationVertexShader.get()
@@ -316,7 +316,7 @@ bool RendererMaterialSystem::uploadMaterialPassDrawBuffers(
     ECSRenderDetail::AssertMaterialTypedUploadRanges(materialTypedRanges, materialTypedBytes);
 #endif
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MaterialUpload, *graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_MaterialUpload, graphics().getDevice(), commandList);
 
     return uploadInstanceBuffer(commandList, instanceData) && uploadMaterialTypedBuffer(commandList, materialTypedBytes);
 }

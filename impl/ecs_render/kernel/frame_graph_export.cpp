@@ -108,10 +108,6 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
         builder.addEdge(csgCapFill, deferredTargets, Edge::Writes);
     }
 
-    const Handle deferredLighting = appendPass(RendererGpuTimingScope::s_DeferredLighting, "Deferred Lighting");
-    builder.addEdge(deferredTargets, deferredLighting, Edge::Reads);
-    builder.addEdge(deferredLighting, deferredTargets, Edge::Writes);
-
     Handle avboitTargets;
     if(hasAvboitWork){
         avboitTargets = builder.addResource(Name("ecs_render/avboit_targets"), "AVBOIT Targets");
@@ -147,6 +143,10 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
         builder.addEdge(avboitTargets, avboitAccumulate, Edge::Reads);
         builder.addEdge(avboitAccumulate, deferredTargets, Edge::Writes);
     }
+
+    const Handle deferredLighting = appendPass(RendererGpuTimingScope::s_DeferredLighting, "Deferred Lighting");
+    builder.addEdge(deferredTargets, deferredLighting, Edge::Reads);
+    builder.addEdge(deferredLighting, deferredTargets, Edge::Writes);
 
     const Handle deferredComposite = appendPass(RendererGpuTimingScope::s_DeferredComposite, "Deferred Composite");
     builder.addEdge(deferredTargets, deferredComposite, Edge::Reads);

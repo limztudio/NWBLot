@@ -111,7 +111,7 @@ static void ClearCsgIntervalTargets(
 void RendererDeferredSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
     // AVBOIT owns its five transient work-buffer registrations plus the writable transmittance StorageImage. The
     // shared deferred slot-payload descriptor is borrowed, so release only owned descriptors before their targets.
-    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     if(heap.isInitialized()){
         heap.free(targets.coverageBufferDescriptor);
         heap.free(targets.depthWarpBufferDescriptor);
@@ -139,7 +139,7 @@ void RendererDeferredSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets
 }
 
 bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameTargets& targets){
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred lighting/compositor requires the global descriptor heap"));
@@ -386,7 +386,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
 }
 
 void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTargets& targets){
-    Core::GpuDescriptorHeap& heap = graphics().getDevice()->getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     if(heap.isInitialized()){
         heap.free(targets.bindless.slotsBufferDescriptor);
         heap.free(targets.bindless.gbufferBaseColor);
@@ -510,7 +510,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     }
 
-    auto& device = *graphics().getDevice();
+    auto& device = graphics().getDevice();
     const Core::Format::Enum albedoFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(device);
     const Core::Format::Enum normalFormat = ECSRenderDetail::SelectGBufferVectorFormat(device);
     const Core::Format::Enum worldPositionFormat = ECSRenderDetail::SelectGBufferVectorFormat(device);
@@ -781,7 +781,7 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     if(clearCsgTargets)
         __hidden_deferred_targets::AssertCsgIntervalTargetsAvailable(targets);
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredClear, *graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredClear, graphics().getDevice(), commandList);
 
     const __hidden_deferred_targets::CsgIntervalSubresources csgSubresources =
         __hidden_deferred_targets::MakeCsgIntervalSubresources(targets)
@@ -812,7 +812,7 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
         commandList.clearTextureFloat(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
 
     if(clearCsgTargets){
-        Core::GpuTimingMeasure csgClearTiming(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, *graphics().getDevice(), commandList);
+        Core::GpuTimingMeasure csgClearTiming(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, graphics().getDevice(), commandList);
 
         __hidden_deferred_targets::ClearCsgIntervalTargets(commandList, targets, csgSubresources, csgClearRect);
     }
@@ -832,7 +832,7 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
 void RendererDeferredSystem::clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::Rect& csgClearRect){
     __hidden_deferred_targets::AssertCsgIntervalTargetsAvailable(targets);
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, *graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, graphics().getDevice(), commandList);
 
     const __hidden_deferred_targets::CsgIntervalSubresources csgSubresources =
         __hidden_deferred_targets::MakeCsgIntervalSubresources(targets)

@@ -150,7 +150,7 @@ namespace __hidden_csg_interval_peel{
 
 
 bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& targets, const bool capFillRequired){
-    auto* device = graphics().getDevice();
+    auto& device = graphics().getDevice();
     if(!createCsgClipResources())
         return false;
     if(!csgState().m_clipBindingLayout){
@@ -187,7 +187,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
 
     if(!__hidden_csg_interval_peel::CreateCsgIntervalBindingLayout(
         arena(),
-        *device,
+        device,
         csgState().m_intervalPeelBindingLayout,
         Core::ShaderType::Compute
     )){
@@ -197,7 +197,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
 
     if(!__hidden_csg_interval_peel::CreateCsgIntervalBindingLayout(
         arena(),
-        *device,
+        device,
         csgState().m_receiverSpanBuildBindingLayout,
         Core::ShaderType::Compute
     )){
@@ -207,7 +207,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
 
     if(!__hidden_csg_interval_peel::CreateCsgIntervalBindingLayout(
         arena(),
-        *device,
+        device,
         csgState().m_intervalCombineBindingLayout,
         Core::ShaderType::Compute
     )){
@@ -265,7 +265,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     }
 
     if(!__hidden_csg_interval_peel::CreateIntervalPeelPipeline(
-        *device,
+        device,
         csgState().m_intervalPeelPipeline,
         csgState().m_intervalPeelComputeShader,
         csgState().m_intervalPeelBindingLayout
@@ -275,7 +275,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     }
 
     if(!__hidden_csg_interval_peel::CreateReceiverSpanBuildPipeline(
-        *device,
+        device,
         csgState().m_receiverSpanBuildPipeline,
         csgState().m_receiverSpanBuildComputeShader,
         csgState().m_receiverSpanBuildBindingLayout
@@ -285,7 +285,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     }
 
     if(!__hidden_csg_interval_peel::CreateIntervalCombinePipeline(
-        *device,
+        device,
         csgState().m_intervalCombinePipeline,
         csgState().m_intervalCombineComputeShader,
         csgState().m_intervalCombineBindingLayout
@@ -295,7 +295,7 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     }
 
     if(capFillRequired && !__hidden_csg_interval_peel::CreateIntervalCapFillPipeline(
-        *device,
+        device,
         csgState().m_intervalCapFillPipeline,
         deferredState().m_compositeVertexShader,
         csgState().m_intervalCapFillPixelShader,

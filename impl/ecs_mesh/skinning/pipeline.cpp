@@ -61,7 +61,7 @@ static bool LoadComputeShader(
 
 
 bool MeshSkinningSystem::ensureSkinningPipeline(){
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: skinning compute requires the initialized global descriptor heap"));
@@ -113,7 +113,7 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
 }
 
 bool MeshSkinningSystem::ensureBoundsPipeline(){
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: meshlet-bounds compute requires the initialized global descriptor heap"));
@@ -164,7 +164,7 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
 }
 
 bool MeshSkinningSystem::ensureRepackPipeline(){
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: normal-repack compute requires the initialized global descriptor heap"));

@@ -113,7 +113,7 @@ bool MeshSkinningSystem::validateResources(const u32 width, const u32 height, co
     if(!ensureFrameCommandList())
         return false;
 
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
 
     constexpr u32 s_PerRuntimeMeshTimingQueries = 128u;
     const bool timingReady =
@@ -127,7 +127,7 @@ bool MeshSkinningSystem::validateResources(const u32 width, const u32 height, co
 }
 
 bool MeshSkinningSystem::ensureFrameCommandList(){
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
 
     if(!m_renderCommandList){
         m_renderCommandList = device.createCommandList();
@@ -255,7 +255,7 @@ bool MeshSkinningSystem::containsRuntimeMesh(const Name& meshKey, const u64 vers
 void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
     static_cast<void>(framebuffer);
 
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
     Core::CommandList* commandList = m_renderCommandList.get();
     NWB_ASSERT(commandList);
 

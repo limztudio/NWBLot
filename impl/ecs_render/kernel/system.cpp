@@ -43,6 +43,9 @@ RendererSystem::RendererSystem(
     , m_shadowVisibilityStateHandoff(arena)
     , m_causticsSurfelGiStateHandoff(arena)
     , m_postGbufferFanInStateHandoff(arena)
+    , m_deferredLightingStateHandoff(arena)
+    , m_avboitStateHandoff(arena)
+    , m_lightingAvboitFanInStateHandoff(arena)
     , m_shaderSystem(*this)
     , m_meshSystem(*this)
     , m_materialSystem(*this)
@@ -117,17 +120,22 @@ void RendererSystem::invalidateResources(){
     m_shadowVisibilityStateHandoff.reset();
     m_causticsSurfelGiStateHandoff.reset();
     m_postGbufferFanInStateHandoff.reset();
+    m_deferredLightingStateHandoff.reset();
+    m_avboitStateHandoff.reset();
+    m_lightingAvboitFanInStateHandoff.reset();
     m_gbufferCommandList.reset();
     m_postGbufferNormalizeCommandList.reset();
     m_shadowVisibilityCommandList.reset();
     m_causticsSurfelGiCommandList.reset();
-    m_postGbufferCommandList.reset();
+    m_deferredLightingCommandList.reset();
+    m_avboitCommandList.reset();
+    m_deferredCompositeCommandList.reset();
     m_shadowPrepareCommandList.reset();
     // The descriptor-buffer TLAS descriptor owns a retained acceleration-structure handle until its in-flight-frame
     // quarantine matures. Retire it before RendererRayTracingState releases the current TLAS so resource invalidation
     // cannot strand a descriptor-buffer block (or its retained AS) until device shutdown.
     if(m_rayTracingState.m_tlasHeapHandle.valid()){
-        auto& device = *m_graphics.getDevice();
+        auto& device = m_graphics.getDevice();
         device.getDescriptorHeap().free(m_rayTracingState.m_tlasHeapHandle);
     }
     // The persistent caustic-emission and trace material-context heap descriptors retain their backing buffers just
@@ -162,7 +170,7 @@ void RendererSystem::update(Core::ECS::World& world, f32 delta){
 }
 
 bool RendererSystem::ensureFrameCommandLists(){
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
 
     if(!m_gbufferCommandList){
         m_gbufferCommandList = device.createCommandList();
@@ -196,10 +204,26 @@ bool RendererSystem::ensureFrameCommandLists(){
         }
     }
 
-    if(!m_postGbufferCommandList){
-        m_postGbufferCommandList = device.createCommandList();
-        if(!m_postGbufferCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create post-G-buffer command list"));
+    if(!m_deferredLightingCommandList){
+        m_deferredLightingCommandList = device.createCommandList();
+        if(!m_deferredLightingCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred-lighting command list"));
+            return false;
+        }
+    }
+
+    if(!m_avboitCommandList){
+        m_avboitCommandList = device.createCommandList();
+        if(!m_avboitCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT command list"));
+            return false;
+        }
+    }
+
+    if(!m_deferredCompositeCommandList){
+        m_deferredCompositeCommandList = device.createCommandList();
+        if(!m_deferredCompositeCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred-composite command list"));
             return false;
         }
     }
@@ -216,7 +240,7 @@ bool RendererSystem::ensureFrameCommandLists(){
 }
 
 bool RendererSystem::prepareGpuTimingScopes(){
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
 
     struct ScopeReservation{
         const Core::GpuTimingScopeDefinition* scope;
@@ -330,10 +354,12 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     NWB_ASSERT(m_postGbufferNormalizeCommandList);
     NWB_ASSERT(m_shadowVisibilityCommandList);
     NWB_ASSERT(m_causticsSurfelGiCommandList);
-    NWB_ASSERT(m_postGbufferCommandList);
+    NWB_ASSERT(m_deferredLightingCommandList);
+    NWB_ASSERT(m_avboitCommandList);
+    NWB_ASSERT(m_deferredCompositeCommandList);
     NWB_ASSERT(m_shadowPrepareCommandList);
 
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
 
     // The preparation list owns the first upload of this target generation's descriptor-slot payload and may also
     // contain the one-shot clear for a newly-created surfel pool. Neither CPU marker may commit before submission.
@@ -422,22 +448,39 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(m_shadowPrepareStateHandoff.valid());
     if(!m_shadowPrepareStateHandoff.valid())
         return;
+    // AVBOIT can record before deferred lighting, so its heap-selected resources must have been uploaded by the
+    // ordered shadow-preparation packet rather than relying on deferred lighting's otherwise-idempotent upload.
+    NWB_ASSERT(deferredTargets.bindless.slotsUploaded);
+    if(!deferredTargets.bindless.slotsUploaded)
+        return;
 
     const CsgFrameState csgFrameState = m_preparedCsgFrameState;
     const bool hasOpaqueCsgFrameWork = csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
     NWB_ASSERT(csgFrameState.empty() || deferredTargets.csgIntervalTargetsValid());
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
     Core::CommandList* gbufferCommandList = m_gbufferCommandList.get();
     Core::CommandList* postGbufferNormalizeCommandList = m_postGbufferNormalizeCommandList.get();
     Core::CommandList* shadowVisibilityCommandList = m_shadowVisibilityCommandList.get();
     Core::CommandList* causticsSurfelGiCommandList = m_causticsSurfelGiCommandList.get();
-    Core::CommandList* postGbufferCommandList = m_postGbufferCommandList.get();
+    Core::CommandList* deferredLightingCommandList = m_deferredLightingCommandList.get();
+    Core::CommandList* avboitCommandList = m_avboitCommandList.get();
+    Core::CommandList* deferredCompositeCommandList = m_deferredCompositeCommandList.get();
     NWB_ASSERT(gbufferCommandList);
     NWB_ASSERT(postGbufferNormalizeCommandList);
     NWB_ASSERT(shadowVisibilityCommandList);
     NWB_ASSERT(causticsSurfelGiCommandList);
-    NWB_ASSERT(postGbufferCommandList);
-    if(!gbufferCommandList || !postGbufferNormalizeCommandList || !shadowVisibilityCommandList || !causticsSurfelGiCommandList || !postGbufferCommandList)
+    NWB_ASSERT(deferredLightingCommandList);
+    NWB_ASSERT(avboitCommandList);
+    NWB_ASSERT(deferredCompositeCommandList);
+    if(
+        !gbufferCommandList
+        || !postGbufferNormalizeCommandList
+        || !shadowVisibilityCommandList
+        || !causticsSurfelGiCommandList
+        || !deferredLightingCommandList
+        || !avboitCommandList
+        || !deferredCompositeCommandList
+    )
         return;
 
     m_gbufferStateHandoff.reset();
@@ -445,10 +488,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_shadowVisibilityStateHandoff.reset();
     m_causticsSurfelGiStateHandoff.reset();
     m_postGbufferFanInStateHandoff.reset();
+    m_deferredLightingStateHandoff.reset();
+    m_avboitStateHandoff.reset();
+    m_lightingAvboitFanInStateHandoff.reset();
     m_raytracingSystem.discardSoftShadowTemporalHistory();
 
     // Recording a packet can advance CPU mirrors (temporal phases, readback cadence, and the AVBOIT clear latch)
-    // before the five command buffers have reached the Graphics queue. Preserve them so every rejection path below can
+    // before the seven command buffers have reached the Graphics queue. Preserve them so every rejection path below can
     // make the following frame record the same GPU work again instead of treating an abandoned packet as completed.
     struct PostGbufferPacketCpuState{
         bool avboitTargetsNeedClear = true;
@@ -531,6 +577,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_shadowVisibilityStateHandoff.reset();
         m_causticsSurfelGiStateHandoff.reset();
         m_postGbufferFanInStateHandoff.reset();
+        m_deferredLightingStateHandoff.reset();
+        m_avboitStateHandoff.reset();
+        m_lightingAvboitFanInStateHandoff.reset();
     };
 
     bool gbufferCommandListReady = false;
@@ -858,63 +907,161 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
+    // AVBOIT and deferred lighting can record from the same ray-effect snapshot, and their final output targets are
+    // disjoint. AVBOIT executes first on the Graphics queue because transparent CSG may temporarily bind G-buffer
+    // attachments; it restores the shared read inputs it changes before deferred lighting consumes them.
     const bool hasTransparentRenderers = m_preparedHasTransparentRenderers;
-    bool postGbufferCommandListReady = false;
-    const Core::Graphics::JobHandle postGbufferRecordingJob = m_graphics.scheduleGraphicsJob([
+    bool deferredLightingCommandListReady = false;
+    bool avboitCommandListReady = false;
+    const Core::Graphics::JobHandle deferredLightingRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
-        framebuffer,
         &deferredTargets,
-        csgFrameState,
-        hasTransparentRenderers,
-        postGbufferCommandList,
-        &frameTiming,
-        &postGbufferCommandListReady,
+        deferredLightingCommandList,
+        &deferredLightingCommandListReady,
         &renderTimingTicket
     ](){
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
-        postGbufferCommandList->open(&m_postGbufferFanInStateHandoff);
-        if(!postGbufferCommandList->hasCommandBuffer())
+        deferredLightingCommandList->open(&m_postGbufferFanInStateHandoff);
+        if(!deferredLightingCommandList->hasCommandBuffer())
             return;
 
-        bool commandListReady = m_deferredSystem.renderDeferredLighting(*postGbufferCommandList, deferredTargets);
-        if(commandListReady){
-            if(hasTransparentRenderers || m_avboitState.m_targetsNeedClear){
-                m_avboitSystem.clearAvboitTargets(*postGbufferCommandList, deferredTargets.avboit);
-                m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
-            }
-            if(hasTransparentRenderers)
-                m_avboitSystem.renderAvboitPasses(*postGbufferCommandList, deferredTargets, csgFrameState);
-
-            commandListReady = m_deferredSystem.renderDeferredComposite(*postGbufferCommandList, deferredTargets, framebuffer);
-        }
-
-        // This endpoint completes the frame scope opened on the G-buffer command buffer. All five command buffers are
-        // submitted in the fixed Graphics-queue order below, so the timestamps remain one contiguous frame metric.
-        frameTiming->finishTiming(*postGbufferCommandList);
-        postGbufferCommandList->close();
-        postGbufferCommandListReady = commandListReady && postGbufferCommandList->hasCommandBuffer();
+        const bool deferredLightingRecorded = m_deferredSystem.renderDeferredLighting(*deferredLightingCommandList, deferredTargets);
+        deferredLightingCommandList->close(&m_deferredLightingStateHandoff);
+        deferredLightingCommandListReady =
+            deferredLightingRecorded
+            && m_deferredLightingStateHandoff.valid()
+            && deferredLightingCommandList->hasCommandBuffer()
+        ;
     });
-    if(!postGbufferRecordingJob.valid()){
+    const Core::Graphics::JobHandle avboitRecordingJob = m_graphics.scheduleGraphicsJob([
+        this,
+        &deferredTargets,
+        csgFrameState,
+        hasTransparentRenderers,
+        avboitCommandList,
+        &avboitCommandListReady,
+        &renderTimingTicket
+    ](){
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
+        avboitCommandList->open(&m_postGbufferFanInStateHandoff);
+        if(!avboitCommandList->hasCommandBuffer())
+            return;
+
+        // A no-transparency frame can still need one clear to retire the previous frame's accumulation. Record an
+        // otherwise empty, valid packet as well so the composite always imports a two-branch fan-in snapshot.
+        if(hasTransparentRenderers || m_avboitState.m_targetsNeedClear){
+            m_avboitSystem.clearAvboitTargets(*avboitCommandList, deferredTargets.avboit);
+            m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
+        }
+        if(hasTransparentRenderers)
+            m_avboitSystem.renderAvboitPasses(*avboitCommandList, deferredTargets, csgFrameState);
+
+        // Transparent CSG interval construction uses the opaque G-buffer framebuffer, whose automatic attachment
+        // tracking temporarily makes normal/world-position render targets and depth a read-only depth attachment.
+        // Restore the post-ray-effect snapshot expected by the later deferred-lighting packet. Albedo deliberately
+        // remains a render target: that is its snapshot state until deferred lighting transitions it for sampling.
+        avboitCommandList->setTextureState(
+            deferredTargets.normal.get(),
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        );
+        avboitCommandList->setTextureState(
+            deferredTargets.worldPosition.get(),
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        );
+        avboitCommandList->setTextureState(
+            deferredTargets.depth.get(),
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        );
+
+        avboitCommandList->close(&m_avboitStateHandoff);
+        avboitCommandListReady =
+            m_avboitStateHandoff.valid()
+            && avboitCommandList->hasCommandBuffer()
+        ;
+    });
+    if(!deferredLightingRecordingJob.valid() || !avboitRecordingJob.valid()){
+        if(deferredLightingRecordingJob.valid())
+            m_graphics.waitJob(deferredLightingRecordingJob);
+        if(avboitRecordingJob.valid())
+            m_graphics.waitJob(avboitRecordingJob);
         discardRenderPackets();
         return;
     }
 
-    m_graphics.waitJob(postGbufferRecordingJob);
-    if(!postGbufferCommandListReady){
+    m_graphics.waitJob(deferredLightingRecordingJob);
+    m_graphics.waitJob(avboitRecordingJob);
+    if(!deferredLightingCommandListReady || !avboitCommandListReady){
+        discardRenderPackets();
+        return;
+    }
+
+    const Core::CommandListResourceStateHandoff* lightingAvboitBranchStates[] = {
+        &m_avboitStateHandoff,
+        &m_deferredLightingStateHandoff,
+    };
+    if(!m_lightingAvboitFanInStateHandoff.buildFanIn(
+        m_postGbufferFanInStateHandoff,
+        lightingAvboitBranchStates,
+        2u
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-lighting/AVBOIT packet state fan-in failed"));
+        discardRenderPackets();
+        return;
+    }
+
+    bool deferredCompositeCommandListReady = false;
+    const Core::Graphics::JobHandle deferredCompositeRecordingJob = m_graphics.scheduleGraphicsJob([
+        this,
+        framebuffer,
+        &deferredTargets,
+        deferredCompositeCommandList,
+        &frameTiming,
+        &deferredCompositeCommandListReady,
+        &renderTimingTicket
+    ](){
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
+        deferredCompositeCommandList->open(&m_lightingAvboitFanInStateHandoff);
+        if(!deferredCompositeCommandList->hasCommandBuffer())
+            return;
+
+        const bool deferredCompositeRecorded = m_deferredSystem.renderDeferredComposite(
+            *deferredCompositeCommandList,
+            deferredTargets,
+            framebuffer
+        );
+
+        // This endpoint completes the frame scope opened on the G-buffer command buffer. All seven command buffers
+        // are submitted in the fixed Graphics-queue order below, so the timestamps remain one contiguous frame metric.
+        frameTiming->finishTiming(*deferredCompositeCommandList);
+        deferredCompositeCommandList->close();
+        deferredCompositeCommandListReady = deferredCompositeRecorded && deferredCompositeCommandList->hasCommandBuffer();
+    });
+    if(!deferredCompositeRecordingJob.valid()){
+        discardRenderPackets();
+        return;
+    }
+
+    m_graphics.waitJob(deferredCompositeRecordingJob);
+    if(!deferredCompositeCommandListReady){
         discardRenderPackets();
         return;
     }
 
     // Workers only record. The GPU still receives one ordered Graphics submission: opaque producer -> normalized
-    // prelude -> shadow visibility -> caustics/surfel GI -> lighting/transparency/composite consumer.
+    // prelude -> shadow visibility -> caustics/surfel GI -> AVBOIT -> deferred lighting -> composite.
     Core::CommandList* commandLists[] = {
         gbufferCommandList,
         postGbufferNormalizeCommandList,
         shadowVisibilityCommandList,
         causticsSurfelGiCommandList,
-        postGbufferCommandList,
+        avboitCommandList,
+        deferredLightingCommandList,
+        deferredCompositeCommandList,
     };
-    if(!renderTimingTicket.submit(device, commandLists, 5u)){
+    if(!renderTimingTicket.submit(device, commandLists, 7u)){
         discardRenderPackets();
         return;
     }

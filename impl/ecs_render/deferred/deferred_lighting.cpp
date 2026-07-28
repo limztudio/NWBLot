@@ -38,8 +38,8 @@ static_assert(sizeof(PushConstants) == sizeof(u32));
 
 
 bool RendererDeferredSystem::createDeferredLightingResources(){
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred lighting requires the global descriptor heap"));
         return false;
@@ -84,14 +84,14 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         // slot.  That keeps both descriptor data and ordinary renderer resources on the global descriptor heap.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_lighting::PushConstants)));
 
-        deferredState().m_lightingBindingLayout = device->createBindingLayout(bindingLayoutDesc);
+        deferredState().m_lightingBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!deferredState().m_lightingBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting binding layout"));
             return false;
         }
     }
 
-    if(!ECSRenderDetail::CreateClampSampler(*device, deferredState().m_sampler, false)){
+    if(!ECSRenderDetail::CreateClampSampler(device, deferredState().m_sampler, false)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting sampler"));
         return false;
     }
@@ -124,8 +124,8 @@ bool RendererDeferredSystem::createDeferredLightingPipeline(DeferredFrameTargets
     if(deferredState().m_lightingPipeline && deferredState().m_lightingPipeline->getFramebufferInfo() == framebufferInfo)
         return true;
 
-    auto* device = graphics().getDevice();
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    auto& device = graphics().getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     Core::GraphicsPipelineDesc pipelineDesc;
     pipelineDesc
         .setVertexShader(deferredState().m_compositeVertexShader)
@@ -136,7 +136,7 @@ bool RendererDeferredSystem::createDeferredLightingPipeline(DeferredFrameTargets
         .addBindingLayout(heap.getSamplerLayout())
     ;
 
-    deferredState().m_lightingPipeline = device->createGraphicsPipeline(pipelineDesc, framebufferInfo);
+    deferredState().m_lightingPipeline = device.createGraphicsPipeline(pipelineDesc, framebufferInfo);
     if(!deferredState().m_lightingPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting pipeline"));
         return false;
@@ -235,7 +235,7 @@ bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandLi
     commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
 
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredLighting, *graphics().getDevice(), commandList);
+    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredLighting, graphics().getDevice(), commandList);
 
     Core::ViewportState viewportState;
     viewportState.addViewportAndScissorRect(targets.opaqueLightingFramebuffer->getFramebufferInfo().getViewport());
@@ -246,7 +246,7 @@ bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandLi
     graphicsState.setViewport(viewportState);
 
     commandList.setGraphicsState(graphicsState);
-    graphics().getDevice()->getDescriptorHeap().bindGraphics(commandList, *deferredState().m_lightingPipeline);
+    graphics().getDevice().getDescriptorHeap().bindGraphics(commandList, *deferredState().m_lightingPipeline);
     const __hidden_deferred_lighting::PushConstants pushConstants{
         targets.bindless.slotsBufferDescriptor.slot()
     };

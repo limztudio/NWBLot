@@ -110,7 +110,7 @@ public:
     void destroy();
 
 public:
-    [[nodiscard]] GraphicsBackend::Device* getDevice()const noexcept;
+    [[nodiscard]] GraphicsBackend::Device& getDevice()const noexcept;
     [[nodiscard]] bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters);
     [[nodiscard]] bool queryFeatureSupport(Feature::Enum feature, void* featureInfo = nullptr, usize featureInfoSize = 0)const;
     // Resolves the GPU wave/subgroup size, or returns a conservative fallback (64) when the device cannot report it.

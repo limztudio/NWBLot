@@ -89,7 +89,7 @@ bool UiSystem::ensureRenderResources(Core::Framebuffer* framebuffer){
     if(!framebuffer)
         return false;
 
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: ImGui rendering requires the initialized global descriptor heap"));
@@ -191,7 +191,7 @@ bool UiSystem::ensureInputLayout(){
     if(!m_vertexShader)
         return false;
 
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
 
     Core::VertexAttributeDesc attributes[NWB_IMGUI_VERTEX_ATTRIBUTE_COUNT];
     attributes[NWB_IMGUI_VERTEX_POSITION_LOCATION]
@@ -239,7 +239,7 @@ bool UiSystem::ensureBuffers(const usize vertexCount, const usize indexCount){
     }
 #endif
 
-    auto& device = *m_graphics.getDevice();
+    auto& device = m_graphics.getDevice();
     if(!m_vertexBuffer || m_vertexBufferCapacity < vertexCount){
         const usize capacity = ::NextGrowingCapacity(
             m_vertexBufferCapacity,

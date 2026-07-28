@@ -294,9 +294,9 @@ bool RendererMaterialSystem::createRendererPipeline(
         break;
     }
 
-    auto* device = graphics().getDevice();
+    auto& device = graphics().getDevice();
     const Core::RenderState renderState = ECSRenderDetail::BuildRenderStateForPass(pass, pipelineKey.twoSided);
-    Core::GpuDescriptorHeap& heap = device->getDescriptorHeap();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material geometry pipeline requires the global descriptor heap"));
         return failMaterialPipeline();
@@ -369,7 +369,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             .addBindingLayout(heap.getSamplerLayout())
         ;
 
-        resources.meshletPipeline = device->createMeshletPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
+        resources.meshletPipeline = device.createMeshletPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
         if(!resources.meshletPipeline){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create meshlet pipeline for material '{}'"), StringConvert(materialKey.c_str()));
             return false;
@@ -409,7 +409,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             .addBindingLayout(heap.getResourceLayout())
             .addBindingLayout(heap.getSamplerLayout())
         ;
-        resources.computePipeline = device->createComputePipeline(computeDesc);
+        resources.computePipeline = device.createComputePipeline(computeDesc);
         if(!resources.computePipeline){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute pipeline for material '{}'"), StringConvert(materialKey.c_str()));
             return false;
@@ -425,7 +425,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             .addBindingLayout(heap.getResourceLayout())
             .addBindingLayout(heap.getSamplerLayout())
         ;
-        resources.emulationPipeline = device->createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());
+        resources.emulationPipeline = device.createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());
         if(!resources.emulationPipeline){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation graphics pipeline for material '{}'"), StringConvert(materialKey.c_str()));
             resources.computePipeline.reset();

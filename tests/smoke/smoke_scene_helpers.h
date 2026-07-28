@@ -156,9 +156,8 @@ inline void FinishDestroyingSmokeWorld(
     NotNullUniquePtr<Core::ECS::World>& world
 ){
     context.graphics.waitAllJobs();
-    auto* device = context.graphics.getDevice();
-    NWB_ASSERT(device);
-    device->waitForIdle();
+    auto& device = context.graphics.getDevice();
+    device.waitForIdle();
 
     world->clear();
     world.owner().reset();

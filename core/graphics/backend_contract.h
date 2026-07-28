@@ -52,6 +52,11 @@ concept BackendApi = requires(
 };
 
 template<typename T>
+concept GraphicsApi = requires(const T& graphics){
+    { graphics.getDevice() }->SameAs<GraphicsBackend::Device&>;
+};
+
+template<typename T>
 concept DeviceApi = requires(
     T& device,
     const HeapDesc& heapDesc,

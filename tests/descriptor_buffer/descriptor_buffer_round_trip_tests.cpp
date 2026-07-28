@@ -700,10 +700,11 @@ TEST_F(DescriptorBufferRoundTripTest, NormalizedStatePreludeFansInIndependentBra
 }
 
 
-// Mirrors RendererSystem's full post-G-buffer sequence: normalize the G-buffer once, record shadow, caustics, and
-// surfel GI from the same snapshot, fan their outputs in, then record deferred lighting and AVBOIT on sibling workers
-// before fanning their disjoint outputs in for the ordered deferred composite consumer.
-TEST_F(DescriptorBufferRoundTripTest, RendererPostGbufferAndLightingAvboitPacketsFanInBeforeComposite){
+// Mirrors RendererSystem's split frame sequence: record mesh-view and scene-shading setup from the completed
+// shadow-preparation snapshot, fan their disjoint outputs in for the opaque producer, then normalize the G-buffer
+// once. Shadow, caustics, and surfel GI record from that same snapshot; deferred lighting and AVBOIT do the same
+// after their fan-in before the ordered composite consumer.
+TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFanInBeforeComposite){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto makeGbufferTarget = [&device](){
@@ -736,7 +737,17 @@ TEST_F(DescriptorBufferRoundTripTest, RendererPostGbufferAndLightingAvboitPacket
                 .setInitialState(ResourceStates::Common)
         );
     };
+    const auto makeSetupBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
 
+    auto meshViewBuffer = makeSetupBuffer();
+    auto sceneShadingBuffer = makeSetupBuffer();
     auto albedo = makeGbufferTarget();
     auto worldPosition = makeGbufferTarget();
     auto normal = makeGbufferTarget();
@@ -747,6 +758,8 @@ TEST_F(DescriptorBufferRoundTripTest, RendererPostGbufferAndLightingAvboitPacket
     auto opaqueColor = makeGbufferTarget();
     auto avboitAccumColor = makeGbufferTarget();
     auto avboitAccumExtinction = makeGbufferTarget();
+    ASSERT_NE(meshViewBuffer.get(), nullptr);
+    ASSERT_NE(sceneShadingBuffer.get(), nullptr);
     ASSERT_NE(albedo.get(), nullptr);
     ASSERT_NE(worldPosition.get(), nullptr);
     ASSERT_NE(normal.get(), nullptr);
@@ -758,6 +771,10 @@ TEST_F(DescriptorBufferRoundTripTest, RendererPostGbufferAndLightingAvboitPacket
     ASSERT_NE(avboitAccumColor.get(), nullptr);
     ASSERT_NE(avboitAccumExtinction.get(), nullptr);
 
+    CommandListResourceStateHandoff shadowPrepareState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff meshViewSetupState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff sceneShadingSetupState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff frameSetupFanInState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff gbufferState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff normalizedState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff shadowState(DescriptorBufferRoundTripTest::arena());
@@ -767,6 +784,9 @@ TEST_F(DescriptorBufferRoundTripTest, RendererPostGbufferAndLightingAvboitPacket
     CommandListResourceStateHandoff deferredLightingState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff avboitState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff lightingAvboitFanInState(DescriptorBufferRoundTripTest::arena());
+    auto shadowPrepare = device.createCommandList();
+    auto meshViewSetup = device.createCommandList();
+    auto sceneShadingSetup = device.createCommandList();
     auto gbuffer = device.createCommandList();
     auto prelude = device.createCommandList();
     auto shadow = device.createCommandList();
@@ -775,6 +795,9 @@ TEST_F(DescriptorBufferRoundTripTest, RendererPostGbufferAndLightingAvboitPacket
     auto lighting = device.createCommandList();
     auto avboit = device.createCommandList();
     auto composite = device.createCommandList();
+    ASSERT_NE(shadowPrepare.get(), nullptr);
+    ASSERT_NE(meshViewSetup.get(), nullptr);
+    ASSERT_NE(sceneShadingSetup.get(), nullptr);
     ASSERT_NE(gbuffer.get(), nullptr);
     ASSERT_NE(prelude.get(), nullptr);
     ASSERT_NE(shadow.get(), nullptr);
@@ -784,7 +807,46 @@ TEST_F(DescriptorBufferRoundTripTest, RendererPostGbufferAndLightingAvboitPacket
     ASSERT_NE(avboit.get(), nullptr);
     ASSERT_NE(composite.get(), nullptr);
 
-    gbuffer->open();
+    shadowPrepare->open();
+    shadowPrepare->close(&shadowPrepareState);
+    ASSERT_TRUE(shadowPrepareState.valid());
+
+    Latch frameSetupRecordingStarted(2);
+    bool meshViewSetupRecorded = false;
+    bool sceneShadingSetupRecorded = false;
+    const Graphics::JobHandle meshViewSetupJob = graphics.scheduleGraphicsJob([&](){
+        frameSetupRecordingStarted.count_down();
+        frameSetupRecordingStarted.wait();
+        meshViewSetup->open(&shadowPrepareState);
+        meshViewSetup->setBufferState(meshViewBuffer.get(), ResourceStates::CopyDest);
+        meshViewSetup->setBufferState(meshViewBuffer.get(), ResourceStates::ConstantBuffer);
+        meshViewSetup->close(&meshViewSetupState);
+        meshViewSetupRecorded = meshViewSetupState.valid() && meshViewSetup->hasCommandBuffer();
+    });
+    const Graphics::JobHandle sceneShadingSetupJob = graphics.scheduleGraphicsJob([&](){
+        frameSetupRecordingStarted.count_down();
+        frameSetupRecordingStarted.wait();
+        sceneShadingSetup->open(&shadowPrepareState);
+        sceneShadingSetup->setBufferState(sceneShadingBuffer.get(), ResourceStates::CopyDest);
+        sceneShadingSetup->setBufferState(sceneShadingBuffer.get(), ResourceStates::ConstantBuffer);
+        sceneShadingSetup->close(&sceneShadingSetupState);
+        sceneShadingSetupRecorded = sceneShadingSetupState.valid() && sceneShadingSetup->hasCommandBuffer();
+    });
+    ASSERT_TRUE(meshViewSetupJob.valid());
+    ASSERT_TRUE(sceneShadingSetupJob.valid());
+
+    graphics.waitJob(meshViewSetupJob);
+    graphics.waitJob(sceneShadingSetupJob);
+    ASSERT_TRUE(meshViewSetupRecorded);
+    ASSERT_TRUE(sceneShadingSetupRecorded);
+
+    const CommandListResourceStateHandoff* frameSetupBranchStates[] = { &meshViewSetupState, &sceneShadingSetupState };
+    ASSERT_TRUE(frameSetupFanInState.buildFanIn(shadowPrepareState, frameSetupBranchStates, 2u));
+    ASSERT_TRUE(frameSetupFanInState.valid());
+
+    gbuffer->open(&frameSetupFanInState);
+    EXPECT_EQ(gbuffer->getBufferState(meshViewBuffer.get()), ResourceStates::ConstantBuffer);
+    EXPECT_EQ(gbuffer->getBufferState(sceneShadingBuffer.get()), ResourceStates::ConstantBuffer);
     gbuffer->setTextureState(albedo.get(), s_AllSubresources, ResourceStates::RenderTarget);
     gbuffer->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::RenderTarget);
     gbuffer->setTextureState(normal.get(), s_AllSubresources, ResourceStates::RenderTarget);
@@ -908,6 +970,9 @@ TEST_F(DescriptorBufferRoundTripTest, RendererPostGbufferAndLightingAvboitPacket
     composite->close();
 
     CommandList* commandLists[] = {
+        shadowPrepare.get(),
+        meshViewSetup.get(),
+        sceneShadingSetup.get(),
         gbuffer.get(),
         prelude.get(),
         shadow.get(),
@@ -918,7 +983,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererPostGbufferAndLightingAvboitPacket
         composite.get(),
     };
     bool submitted = false;
-    EXPECT_GT(device.executeCommandLists(commandLists, 8u, CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_GT(device.executeCommandLists(commandLists, 11u, CommandQueue::Graphics, &submitted), 0u);
     EXPECT_TRUE(submitted);
     EXPECT_TRUE(device.waitForIdle());
 }

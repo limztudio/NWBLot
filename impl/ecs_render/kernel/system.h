@@ -135,6 +135,9 @@ private:
     RendererRayTracingState m_rayTracingState;
     CsgFrameState m_preparedCsgFrameState;
     Core::CommandListResourceStateHandoff m_shadowPrepareStateHandoff;
+    Core::CommandListResourceStateHandoff m_meshViewSetupStateHandoff;
+    Core::CommandListResourceStateHandoff m_sceneShadingSetupStateHandoff;
+    Core::CommandListResourceStateHandoff m_frameSetupStateFanInHandoff;
     Core::CommandListResourceStateHandoff m_gbufferStateHandoff;
     Core::CommandListResourceStateHandoff m_postGbufferNormalizedStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityStateHandoff;
@@ -144,6 +147,8 @@ private:
     Core::CommandListResourceStateHandoff m_deferredLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_avboitStateHandoff;
     Core::CommandListResourceStateHandoff m_lightingAvboitFanInStateHandoff;
+    Core::CommandListHandle m_meshViewSetupCommandList;
+    Core::CommandListHandle m_sceneShadingSetupCommandList;
     Core::CommandListHandle m_gbufferCommandList;
     Core::CommandListHandle m_postGbufferNormalizeCommandList;
     Core::CommandListHandle m_shadowVisibilityCommandList;

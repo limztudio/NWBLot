@@ -384,7 +384,11 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 
 const tchar* NWB::QueryProjectWindowTitle(){
+#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
+    return NWB_TEXT("NWB Async Shadow M4 Benchmark");
+#else
     return NWB_TEXT("NWB Stress Test Smoke");
+#endif
 }
 
 

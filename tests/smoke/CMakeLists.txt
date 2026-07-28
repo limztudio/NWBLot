@@ -13,6 +13,15 @@ if(Python3_Interpreter_FOUND)
             "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_LIST_DIR}/testbed_window_capture_tests.py"
     )
+    # Pure-Python parser/verdict coverage for the manual M4 runner. The actual benchmark deliberately remains an
+    # opt-in target-hardware workflow because it requires a distinct Vulkan compute family and a visible window.
+    add_test(
+        NAME nwb_async_shadow_m4_harness_unit
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_LIST_DIR}/../ab/async_shadow_m4/run.py"
+            "--self-test"
+    )
 
     function(nwb_add_window_capture_smoke TEST_NAME OUTPUT_NAME EXECUTABLE_PATH WORKING_DIRECTORY WINDOW_TITLE)
         if(TARGET nwb_logserver)
@@ -668,6 +677,41 @@ if(Python3_Interpreter_FOUND)
             nwb_ecs_mesh_skinning
         )
         add_dependencies(nwb_stress_test_sw_smoke nwb_skinning_culling_benchmark_assets)
+
+        # M4 target-hardware A/B pair. Both binaries use the same fixed-friendly stress scene and cooked runtime
+        # assets; only the async binary asks Graphics for the experimental compute lane before device creation.
+        # The runner under tests/ab/async_shadow_m4/ validates that the request resolves to a distinct queue rather
+        # than accepting the normal Graphics fallback as an async result.
+        nwb_declare_executable(nwb_async_shadow_m4_sync_benchmark)
+        target_sources(nwb_async_shadow_m4_sync_benchmark PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+        )
+        target_compile_definitions(nwb_async_shadow_m4_sync_benchmark PRIVATE
+            NWB_ASYNC_SHADOW_M4_BENCHMARK=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_async_shadow_m4_sync_benchmark
+            "${_nwb_skinning_culling_runtime_root}"
+            nwb_ecs_model
+            nwb_ecs_mesh_skinning
+        )
+        add_dependencies(nwb_async_shadow_m4_sync_benchmark nwb_skinning_culling_benchmark_assets)
+
+        nwb_declare_executable(nwb_async_shadow_m4_async_benchmark)
+        target_sources(nwb_async_shadow_m4_async_benchmark PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+        )
+        target_compile_definitions(nwb_async_shadow_m4_async_benchmark PRIVATE
+            NWB_ASYNC_SHADOW_M4_BENCHMARK=1
+            NWB_SMOKE_ENABLE_ASYNC_COMPUTE=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_async_shadow_m4_async_benchmark
+            "${_nwb_skinning_culling_runtime_root}"
+            nwb_ecs_model
+            nwb_ecs_mesh_skinning
+        )
+        add_dependencies(nwb_async_shadow_m4_async_benchmark nwb_skinning_culling_benchmark_assets)
 
         # FLICKER-REPRO scene: opaque and glass `body` characters on an opaque ground plane under directional + point
         # lights, arrow-key-spun. Reuses the benchmark's cooked assets (body model + ground material).

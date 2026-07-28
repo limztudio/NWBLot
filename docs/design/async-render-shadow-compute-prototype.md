@@ -1,8 +1,8 @@
 # Async-render lane foundation and shadow-visibility prototype
 
 **Status:** Phase-zero backend foundation, the M2 shadow-visibility schedule, and M3 acceptance-aware timing and
-failure-injection coverage are implemented behind the experimental async-compute switch. Distinct-family validation,
-pixel parity, and performance measurement remain pending.
+failure-injection coverage are implemented behind the experimental async-compute switch. The M4 target-hardware
+benchmark/validation harness is available; its distinct-family pixel-parity and performance result remains pending.
 
 When the switch resolves `AsyncCompute` to a dedicated Compute family, shadow visibility records on that lane and
 uses the four-submission topology below. Unsupported or disabled hardware retains the existing one-Graphics-submission
@@ -421,6 +421,20 @@ descriptor retirement, query leak, or ownership validation error remains.
 - Capture queue timelines/timestamps that prove effects overlap shadow on supported hardware.
 - Compare frame critical path, not a sum of queue durations, against the current path.
 - Keep the feature opt-in until the validation and failure gates pass on the target Vulkan drivers.
+
+`tests/ab/async_shadow_m4/run.py` automates this decision with a paired, fixed-yaw stress-scene A/B:
+
+- `nwb_async_shadow_m4_sync_benchmark` preserves the Graphics-only baseline and
+  `nwb_async_shadow_m4_async_benchmark` requests the experimental lane before device creation;
+- the runner skips rather than accepts a Graphics fallback when no dedicated compute-only family is available;
+- it captures the packet timestamp envelopes and requires measurable
+  `render.async_shadow_effects_overlap`, compares median `render.frame` critical path, captures fixed-scene pixels,
+  and scans Vulkan/ownership logs; and
+- it writes a JSON and Markdown report so a flat or negative result remains an auditable rollout decision.
+
+The benchmark targets and invocation details live beside the runner in
+`tests/ab/async_shadow_m4/README.md`. The harness can run with Vulkan validation; actual target-driver validation and
+the resulting default-on/off decision are still pending.
 
 **Gate:** a measurable overlap exists without a correctness or timing regression. A flat or negative
 result is a valid outcome: retain the fallback and use the data to decide whether caustics or GI

@@ -87,6 +87,7 @@ function(nwb_microhttpd_generate_config output_file)
 
         # Windows-only symbol probes.
         check_symbol_exists("_lseeki64" "io.h" HAVE___LSEEKI64)
+        check_symbol_exists("calloc" "stdlib.h" HAVE_CALLOC)
     else()
         # --- POSIX (Linux) platform flags ---------------------------------------------------
         set(LINUX 1)

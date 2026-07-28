@@ -137,6 +137,7 @@ private:
     Core::CommandListResourceStateHandoff m_shadowPrepareStateHandoff;
     Core::CommandListResourceStateHandoff m_meshViewSetupStateHandoff;
     Core::CommandListResourceStateHandoff m_sceneShadingSetupStateHandoff;
+    Core::CommandListResourceStateHandoff m_deferredClearStateHandoff;
     Core::CommandListResourceStateHandoff m_frameSetupStateFanInHandoff;
     Core::CommandListResourceStateHandoff m_gbufferStateHandoff;
     Core::CommandListResourceStateHandoff m_postGbufferNormalizedStateHandoff;
@@ -149,6 +150,7 @@ private:
     Core::CommandListResourceStateHandoff m_lightingAvboitFanInStateHandoff;
     Core::CommandListHandle m_meshViewSetupCommandList;
     Core::CommandListHandle m_sceneShadingSetupCommandList;
+    Core::CommandListHandle m_deferredClearCommandList;
     Core::CommandListHandle m_gbufferCommandList;
     Core::CommandListHandle m_postGbufferNormalizeCommandList;
     Core::CommandListHandle m_shadowVisibilityCommandList;

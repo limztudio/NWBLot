@@ -40,6 +40,7 @@ RendererSystem::RendererSystem(
     , m_shadowPrepareStateHandoff(arena)
     , m_meshViewSetupStateHandoff(arena)
     , m_sceneShadingSetupStateHandoff(arena)
+    , m_deferredClearStateHandoff(arena)
     , m_frameSetupStateFanInHandoff(arena)
     , m_gbufferStateHandoff(arena)
     , m_postGbufferNormalizedStateHandoff(arena)
@@ -121,6 +122,7 @@ void RendererSystem::invalidateResources(){
     m_shadowPrepareStateHandoff.reset();
     m_meshViewSetupStateHandoff.reset();
     m_sceneShadingSetupStateHandoff.reset();
+    m_deferredClearStateHandoff.reset();
     m_frameSetupStateFanInHandoff.reset();
     m_gbufferStateHandoff.reset();
     m_postGbufferNormalizedStateHandoff.reset();
@@ -133,6 +135,7 @@ void RendererSystem::invalidateResources(){
     m_lightingAvboitFanInStateHandoff.reset();
     m_meshViewSetupCommandList.reset();
     m_sceneShadingSetupCommandList.reset();
+    m_deferredClearCommandList.reset();
     m_gbufferCommandList.reset();
     m_postGbufferNormalizeCommandList.reset();
     m_shadowVisibilityCommandList.reset();
@@ -195,6 +198,14 @@ bool RendererSystem::ensureFrameCommandLists(){
         m_sceneShadingSetupCommandList = device.createCommandList();
         if(!m_sceneShadingSetupCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene-shading setup command list"));
+            return false;
+        }
+    }
+
+    if(!m_deferredClearCommandList){
+        m_deferredClearCommandList = device.createCommandList();
+        if(!m_deferredClearCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred-clear command list"));
             return false;
         }
     }
@@ -387,6 +398,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
 
     NWB_ASSERT(m_meshViewSetupCommandList);
     NWB_ASSERT(m_sceneShadingSetupCommandList);
+    NWB_ASSERT(m_deferredClearCommandList);
     NWB_ASSERT(m_gbufferCommandList);
     NWB_ASSERT(m_postGbufferNormalizeCommandList);
     NWB_ASSERT(m_shadowVisibilityCommandList);
@@ -498,6 +510,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     auto& device = m_graphics.getDevice();
     Core::CommandList* meshViewSetupCommandList = m_meshViewSetupCommandList.get();
     Core::CommandList* sceneShadingSetupCommandList = m_sceneShadingSetupCommandList.get();
+    Core::CommandList* deferredClearCommandList = m_deferredClearCommandList.get();
     Core::CommandList* gbufferCommandList = m_gbufferCommandList.get();
     Core::CommandList* postGbufferNormalizeCommandList = m_postGbufferNormalizeCommandList.get();
     Core::CommandList* shadowVisibilityCommandList = m_shadowVisibilityCommandList.get();
@@ -508,6 +521,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* deferredCompositeCommandList = m_deferredCompositeCommandList.get();
     NWB_ASSERT(meshViewSetupCommandList);
     NWB_ASSERT(sceneShadingSetupCommandList);
+    NWB_ASSERT(deferredClearCommandList);
     NWB_ASSERT(gbufferCommandList);
     NWB_ASSERT(postGbufferNormalizeCommandList);
     NWB_ASSERT(shadowVisibilityCommandList);
@@ -519,6 +533,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(
         !meshViewSetupCommandList
         || !sceneShadingSetupCommandList
+        || !deferredClearCommandList
         || !gbufferCommandList
         || !postGbufferNormalizeCommandList
         || !shadowVisibilityCommandList
@@ -532,6 +547,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     m_meshViewSetupStateHandoff.reset();
     m_sceneShadingSetupStateHandoff.reset();
+    m_deferredClearStateHandoff.reset();
     m_frameSetupStateFanInHandoff.reset();
     m_gbufferStateHandoff.reset();
     m_postGbufferNormalizedStateHandoff.reset();
@@ -545,7 +561,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_raytracingSystem.discardSoftShadowTemporalHistory();
 
     // Recording a packet can advance CPU mirrors (temporal phases, readback cadence, and the AVBOIT clear latch)
-    // before the ten command buffers have reached the Graphics queue. Preserve them so every rejection path below can
+    // before the eleven command buffers have reached the Graphics queue. Preserve them so every rejection path below can
     // make the following frame record the same GPU work again instead of treating an abandoned packet as completed.
     struct PostGbufferPacketCpuState{
         bool avboitTargetsNeedClear = true;
@@ -625,6 +641,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_raytracingSystem.discardSoftShadowTemporalHistory();
         m_meshViewSetupStateHandoff.reset();
         m_sceneShadingSetupStateHandoff.reset();
+        m_deferredClearStateHandoff.reset();
         m_frameSetupStateFanInHandoff.reset();
         m_gbufferStateHandoff.reset();
         m_postGbufferNormalizedStateHandoff.reset();
@@ -637,14 +654,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_lightingAvboitFanInStateHandoff.reset();
     };
 
-    // Mesh-view and scene-shading uploads have no shared CPU or GPU outputs. Record them from the completed
-    // shadow-preparation snapshot on sibling workers, then merge their disjoint final states before the opaque
-    // producer gathers its CSG work region from the freshly cached mesh-view data.
+    // Mesh-view and scene-shading uploads plus the non-CSG deferred-target clear have no shared CPU or GPU outputs.
+    // Record them from the completed shadow-preparation snapshot on sibling workers, then merge their disjoint final
+    // states before the opaque producer gathers its CSG work region from the freshly cached mesh-view data. The CSG
+    // interval clear stays with that producer because its rect is not known until after the gather.
     const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(deferredTargets.framebuffer->getFramebufferInfo());
     bool meshViewSetupReady = false;
     bool sceneShadingSetupReady = false;
     bool meshViewSetupCommandListReady = false;
     bool sceneShadingSetupCommandListReady = false;
+    bool deferredClearCommandListReady = false;
     const Core::Graphics::JobHandle meshViewSetupRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
         meshViewAspectRatio,
@@ -704,18 +723,52 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && sceneShadingSetupCommandList->hasCommandBuffer()
         ;
     });
-    if(!meshViewSetupRecordingJob.valid() || !sceneShadingSetupRecordingJob.valid()){
+    const Core::Graphics::JobHandle deferredClearRecordingJob = m_graphics.scheduleGraphicsJob([
+        this,
+        &deferredTargets,
+        deferredClearCommandList,
+        &deferredClearCommandListReady,
+        &renderTimingTicket
+    ](){
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
+        deferredClearCommandList->open(&m_shadowPrepareStateHandoff);
+        if(!deferredClearCommandList->hasCommandBuffer())
+            return;
+
+        // CSG interval clearing is intentionally deferred to the opaque packet: its work rect is calculated from
+        // the freshly gathered CSG receiver data. The remaining deferred targets are independent of both setup
+        // uploads and can record here in parallel.
+        m_deferredSystem.clearDeferredTargets(*deferredClearCommandList, deferredTargets, false, Core::Rect{});
+        deferredClearCommandList->close(&m_deferredClearStateHandoff);
+        deferredClearCommandListReady =
+            m_deferredClearStateHandoff.valid()
+            && deferredClearCommandList->hasCommandBuffer()
+        ;
+    });
+    if(
+        !meshViewSetupRecordingJob.valid()
+        || !sceneShadingSetupRecordingJob.valid()
+        || !deferredClearRecordingJob.valid()
+    ){
         if(meshViewSetupRecordingJob.valid())
             m_graphics.waitJob(meshViewSetupRecordingJob);
         if(sceneShadingSetupRecordingJob.valid())
             m_graphics.waitJob(sceneShadingSetupRecordingJob);
+        if(deferredClearRecordingJob.valid())
+            m_graphics.waitJob(deferredClearRecordingJob);
         discardRenderPackets();
         return;
     }
 
     m_graphics.waitJob(meshViewSetupRecordingJob);
     m_graphics.waitJob(sceneShadingSetupRecordingJob);
-    if(!meshViewSetupCommandListReady || !sceneShadingSetupCommandListReady || !frameTiming){
+    m_graphics.waitJob(deferredClearRecordingJob);
+    if(
+        !meshViewSetupCommandListReady
+        || !sceneShadingSetupCommandListReady
+        || !deferredClearCommandListReady
+        || !frameTiming
+    ){
         discardRenderPackets();
         return;
     }
@@ -723,11 +776,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::CommandListResourceStateHandoff* frameSetupBranchStates[] = {
         &m_meshViewSetupStateHandoff,
         &m_sceneShadingSetupStateHandoff,
+        &m_deferredClearStateHandoff,
     };
     if(!m_frameSetupStateFanInHandoff.buildFanIn(
         m_shadowPrepareStateHandoff,
         frameSetupBranchStates,
-        2u
+        3u
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame-setup packet state fan-in failed"));
         discardRenderPackets();
@@ -783,7 +837,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
 
         const Core::Rect opaqueCsgClearRect = csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height);
-        m_deferredSystem.clearDeferredTargets(*commandList, deferredTargets, hasOpaqueCsgFrameWork, opaqueCsgClearRect);
+        if(hasOpaqueCsgFrameWork)
+            m_deferredSystem.clearCsgIntervalTargets(*commandList, deferredTargets, opaqueCsgClearRect);
 
         const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
         const bool deferredResourcesReady =
@@ -1194,7 +1249,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             framebuffer
         );
 
-        // This endpoint completes the frame scope opened on the mesh-view setup command buffer. All ten command buffers
+        // This endpoint completes the frame scope opened on the mesh-view setup command buffer. All eleven command buffers
         // are submitted in the fixed Graphics-queue order below, so the timestamps remain one contiguous frame metric.
         frameTiming->finishTiming(*deferredCompositeCommandList);
         deferredCompositeCommandList->close();
@@ -1212,11 +1267,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
 
     // Workers only record. The GPU still receives one ordered Graphics submission: mesh-view setup -> scene shading
-    // setup -> opaque producer -> normalized prelude -> shadow visibility -> caustics -> surfel GI -> AVBOIT ->
-    // deferred lighting -> composite.
+    // setup -> deferred clear -> opaque producer -> normalized prelude -> shadow visibility -> caustics -> surfel
+    // GI -> AVBOIT -> deferred lighting -> composite.
     Core::CommandList* commandLists[] = {
         meshViewSetupCommandList,
         sceneShadingSetupCommandList,
+        deferredClearCommandList,
         gbufferCommandList,
         postGbufferNormalizeCommandList,
         shadowVisibilityCommandList,
@@ -1226,7 +1282,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredLightingCommandList,
         deferredCompositeCommandList,
     };
-    if(!renderTimingTicket.submit(device, commandLists, 10u)){
+    if(!renderTimingTicket.submit(device, commandLists, 11u)){
         discardRenderPackets();
         return;
     }

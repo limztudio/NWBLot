@@ -61,8 +61,8 @@ public:
     void releaseSwBvhScratchHeapHandles();
     // Retire the persistent surfel descriptor generations before resource invalidation releases their backing buffers.
     void releaseSurfelGiHeapHandles();
-    // Normalizes the G-buffer and trace inputs shared by the independent shadow, caustics, and surfel-GI packets.
-    // The prelude records these transitions once before all three packets import the resulting state snapshot.
+    // Normalizes the G-buffer and trace inputs shared by the independent shadow, caustics, surfel-GI, and AVBOIT
+    // packets. The prelude records these transitions once before all four packets import the resulting state snapshot.
     void normalizePostGbufferPacketResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);

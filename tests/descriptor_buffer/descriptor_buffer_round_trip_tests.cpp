@@ -702,8 +702,8 @@ TEST_F(DescriptorBufferRoundTripTest, NormalizedStatePreludeFansInIndependentBra
 
 // Mirrors RendererSystem's split frame sequence: record mesh-view and scene-shading setup plus the non-CSG deferred
 // clear from the completed shadow-preparation snapshot, fan their disjoint outputs in for the opaque producer, then
-// normalize the G-buffer once. Shadow, caustics, and surfel GI record from that same snapshot; deferred lighting and
-// AVBOIT do the same after their fan-in before the ordered composite consumer.
+// normalize the G-buffer once. Shadow, caustics, surfel GI, and AVBOIT record from that same snapshot; their
+// four-way fan-in feeds deferred lighting before the ordered composite consumer.
 TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFanInBeforeComposite){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
@@ -781,10 +781,9 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
     CommandListResourceStateHandoff shadowState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff causticsState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff surfelGiState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff avboitState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff fanInState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff deferredLightingState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff avboitState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff lightingAvboitFanInState(DescriptorBufferRoundTripTest::arena());
     auto shadowPrepare = device.createCommandList();
     auto meshViewSetup = device.createCommandList();
     auto sceneShadingSetup = device.createCommandList();
@@ -893,6 +892,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
     bool shadowRecorded = false;
     bool causticsRecorded = false;
     bool surfelGiRecorded = false;
+    bool avboitRecorded = false;
     const Graphics::JobHandle shadowJob = graphics.scheduleGraphicsJob([&](){
         recordingStarted.count_down();
         recordingStarted.wait();
@@ -922,42 +922,10 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
         surfelGi->close(&surfelGiState);
         surfelGiRecorded = surfelGiState.valid() && surfelGi->hasCommandBuffer();
     });
-    ASSERT_TRUE(shadowJob.valid());
-    ASSERT_TRUE(causticsJob.valid());
-    ASSERT_TRUE(surfelGiJob.valid());
-
-    graphics.waitJob(shadowJob);
-    graphics.waitJob(causticsJob);
-    graphics.waitJob(surfelGiJob);
-    ASSERT_TRUE(shadowRecorded);
-    ASSERT_TRUE(causticsRecorded);
-    ASSERT_TRUE(surfelGiRecorded);
-
-    const CommandListResourceStateHandoff* branchStates[] = { &shadowState, &causticsState, &surfelGiState };
-    ASSERT_TRUE(fanInState.buildFanIn(normalizedState, branchStates, 3u));
-    ASSERT_TRUE(fanInState.valid());
-
-    Latch lightingAvboitRecordingStarted(2);
-    bool lightingRecorded = false;
-    bool avboitRecorded = false;
-    const Graphics::JobHandle lightingJob = graphics.scheduleGraphicsJob([&](){
-        lightingAvboitRecordingStarted.count_down();
-        lightingAvboitRecordingStarted.wait();
-        lighting->open(&fanInState);
-        lighting->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        lighting->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        lighting->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        lighting->setTextureState(albedo.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        lighting->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::RenderTarget);
-        lighting->close(&deferredLightingState);
-        lightingRecorded = deferredLightingState.valid() && lighting->hasCommandBuffer();
-    });
     const Graphics::JobHandle avboitJob = graphics.scheduleGraphicsJob([&](){
-        lightingAvboitRecordingStarted.count_down();
-        lightingAvboitRecordingStarted.wait();
-        avboit->open(&fanInState);
+        avboit->open(&normalizedState);
         // Transparent CSG temporarily binds the opaque G-buffer, then AVBOIT's accumulation path leaves depth in
-        // a depth-read layout. Restore the shared inputs before the later deferred-lighting packet is submitted.
+        // a depth-read layout. Restore the shared inputs before deferred lighting consumes the four-way fan-in.
         avboit->setTextureState(normal.get(), s_AllSubresources, ResourceStates::RenderTarget);
         avboit->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::RenderTarget);
         avboit->setTextureState(depth.get(), s_AllSubresources, ResourceStates::DepthRead);
@@ -969,19 +937,46 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
         avboit->close(&avboitState);
         avboitRecorded = avboitState.valid() && avboit->hasCommandBuffer();
     });
-    ASSERT_TRUE(lightingJob.valid());
+    ASSERT_TRUE(shadowJob.valid());
+    ASSERT_TRUE(causticsJob.valid());
+    ASSERT_TRUE(surfelGiJob.valid());
     ASSERT_TRUE(avboitJob.valid());
 
-    graphics.waitJob(lightingJob);
+    graphics.waitJob(shadowJob);
+    graphics.waitJob(causticsJob);
+    graphics.waitJob(surfelGiJob);
     graphics.waitJob(avboitJob);
-    ASSERT_TRUE(lightingRecorded);
+    ASSERT_TRUE(shadowRecorded);
+    ASSERT_TRUE(causticsRecorded);
+    ASSERT_TRUE(surfelGiRecorded);
     ASSERT_TRUE(avboitRecorded);
 
-    const CommandListResourceStateHandoff* lightingAvboitBranchStates[] = { &avboitState, &deferredLightingState };
-    ASSERT_TRUE(lightingAvboitFanInState.buildFanIn(fanInState, lightingAvboitBranchStates, 2u));
-    ASSERT_TRUE(lightingAvboitFanInState.valid());
+    const CommandListResourceStateHandoff* branchStates[] = {
+        &shadowState,
+        &causticsState,
+        &surfelGiState,
+        &avboitState,
+    };
+    ASSERT_TRUE(fanInState.buildFanIn(normalizedState, branchStates, 4u));
+    ASSERT_TRUE(fanInState.valid());
 
-    composite->open(&lightingAvboitFanInState);
+    bool lightingRecorded = false;
+    const Graphics::JobHandle lightingJob = graphics.scheduleGraphicsJob([&](){
+        lighting->open(&fanInState);
+        lighting->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        lighting->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        lighting->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        lighting->setTextureState(albedo.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        lighting->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::RenderTarget);
+        lighting->close(&deferredLightingState);
+        lightingRecorded = deferredLightingState.valid() && lighting->hasCommandBuffer();
+    });
+    ASSERT_TRUE(lightingJob.valid());
+
+    graphics.waitJob(lightingJob);
+    ASSERT_TRUE(lightingRecorded);
+
+    composite->open(&deferredLightingState);
     EXPECT_EQ(composite->getTextureSubresourceState(albedo.get(), 0u, 0u), ResourceStates::ShaderResource);
     EXPECT_EQ(composite->getTextureSubresourceState(worldPosition.get(), 0u, 0u), ResourceStates::ShaderResource);
     EXPECT_EQ(composite->getTextureSubresourceState(normal.get(), 0u, 0u), ResourceStates::ShaderResource);

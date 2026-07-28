@@ -147,7 +147,6 @@ private:
     Core::CommandListResourceStateHandoff m_postGbufferFanInStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_avboitStateHandoff;
-    Core::CommandListResourceStateHandoff m_lightingAvboitFanInStateHandoff;
     Core::CommandListHandle m_meshViewSetupCommandList;
     Core::CommandListHandle m_sceneShadingSetupCommandList;
     Core::CommandListHandle m_deferredClearCommandList;

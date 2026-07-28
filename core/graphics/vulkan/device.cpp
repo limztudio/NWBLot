@@ -184,6 +184,9 @@ Device::Device(const DeviceDesc& desc)
     VkResult res = VK_SUCCESS;
 
     m_context.descriptorBufferManager = &m_descriptorBufferManager;
+    m_context.graphicsQueueFamilyIndex = desc.graphicsQueueIndex;
+    m_context.asyncComputeQueueFamilyIndex = desc.asyncComputeLaneEnabled ? desc.computeQueueIndex : s_InvalidQueueFamilyIndex;
+    m_context.asyncComputeLaneEnabled = desc.asyncComputeLaneEnabled;
 
     vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);
     vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);
@@ -680,7 +683,13 @@ Queue* Device::getQueue(CommandQueue::Enum queueType){
 
 
 CommandListHandle Device::createCommandList(const CommandListParameters& params){
-    auto* cmdList = NewArenaObject<CommandList>(m_context.objectArena, *this, params);
+    CommandListParameters resolvedParams = params;
+    if(resolvedParams.resolveRenderLane){
+        resolvedParams.queueType = resolveRenderLane(resolvedParams.renderLane);
+        resolvedParams.resolveRenderLane = false;
+    }
+
+    auto* cmdList = NewArenaObject<CommandList>(m_context.objectArena, *this, resolvedParams);
     return CommandListHandle(cmdList, CommandListHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
@@ -712,7 +721,7 @@ u64 Device::executeCommandLists(
     }
 
     bool submissionAccepted = false;
-    const u64 submittedID = queue->submit(pCommandLists, numCommandLists, &submissionAccepted);
+    const u64 submittedID = queue->submit(pCommandLists, numCommandLists, nullptr, 0u, &submissionAccepted);
     if(outCommandListsSubmitted)
         *outCommandListsSubmitted = submissionAccepted && !submittedOwners.empty();
 
@@ -744,6 +753,160 @@ u64 Device::executeCommandLists(
     }
 
     return submittedID;
+}
+
+QueueSubmissionToken Device::executeCommandLists(
+    CommandList* const* pCommandLists,
+    const usize numCommandLists,
+    const CommandQueue::Enum executionQueue,
+    const QueueSubmissionDesc& submitDesc
+){
+    if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: submission wait token array is null"));
+        return {};
+    }
+
+    Queue* const queue = getQueue(executionQueue);
+    if(!queue){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: requested queue is not available"));
+        return {};
+    }
+
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CommandListExecuteArena);
+    Vector<Queue::SubmissionWait, Alloc::ScratchArena> localWaits{scratchArena};
+    if(submitDesc.waitTokenCount > 0u){
+        localWaits.reserve(submitDesc.waitTokenCount);
+        for(usize i = 0u; i < submitDesc.waitTokenCount; ++i){
+            const QueueSubmissionToken& token = submitDesc.waitTokens[i];
+            if(!token.valid()){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: dependency token is not accepted"));
+                return {};
+            }
+
+            Queue* const producerQueue = getQueue(token.queue);
+            if(!producerQueue || producerQueue->m_trackingSemaphore == VK_NULL_HANDLE){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: dependency producer queue is unavailable"));
+                return {};
+            }
+
+            // Tokens are public value objects, so reject a fabricated or future timeline value before it reaches
+            // vkQueueSubmit2. Waiting for a value this queue has never signalled would otherwise deadlock the
+            // consumer indefinitely. The queue lock also pairs this validation with submit's monotonic update.
+            {
+                ScopedLock producerLock(producerQueue->m_mutex);
+                if(token.value > producerQueue->m_lastSubmittedID){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: dependency token refers to an unsignalled timeline value"));
+                    return {};
+                }
+            }
+
+            // Queue order already establishes the edge when both logical lanes collapsed to Graphics (or when an
+            // explicit caller chains work on one physical queue). Avoid a self-timeline wait in that case.
+            if(token.queue == executionQueue)
+                continue;
+
+            // Vulkan requires each semaphore to occur at most once in a submission's wait list. Multiple tokens
+            // from one producer queue collapse to the largest timeline value, which also covers every earlier token.
+            bool merged = false;
+            for(Queue::SubmissionWait& wait : localWaits){
+                if(wait.semaphore != producerQueue->m_trackingSemaphore)
+                    continue;
+
+                wait.value = Max(wait.value, token.value);
+                merged = true;
+                break;
+            }
+            if(!merged)
+                localWaits.push_back(Queue::SubmissionWait{ producerQueue->m_trackingSemaphore, token.value });
+        }
+    }
+
+    Vector<TrackedCommandBuffer*, Alloc::ScratchArena> submittedOwners{scratchArena};
+    if(pCommandLists && numCommandLists > 0u){
+        submittedOwners.reserve(numCommandLists);
+        for(usize i = 0u; i < numCommandLists; ++i){
+            if(pCommandLists[i] && pCommandLists[i]->m_currentCmdBuf)
+                submittedOwners.push_back(pCommandLists[i]->m_currentCmdBuf.get());
+        }
+    }
+
+    bool submissionAccepted = false;
+    const u64 submittedID = queue->submit(
+        pCommandLists,
+        numCommandLists,
+        localWaits.empty() ? nullptr : localWaits.data(),
+        localWaits.size(),
+        &submissionAccepted
+    );
+
+    if(!submittedOwners.empty()){
+        if(submissionAccepted){
+            m_uploadManager.submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
+            m_scratchManager.submitChunks(executionQueue, submittedID, submittedOwners.data(), submittedOwners.size());
+        }
+        else{
+            const auto ownerStillRecorded = [&](TrackedCommandBuffer* owner) -> bool {
+                if(!owner || !pCommandLists)
+                    return false;
+                for(usize i = 0u; i < numCommandLists; ++i){
+                    CommandList* const cmdList = pCommandLists[i];
+                    if(cmdList && cmdList->m_currentCmdBuf.get() == owner)
+                        return true;
+                }
+                return false;
+            };
+
+            const u64 reusableVersion = queueGetCompletedInstance(executionQueue);
+            for(TrackedCommandBuffer* owner : submittedOwners){
+                if(ownerStillRecorded(owner))
+                    continue;
+                m_uploadManager.discardChunks(executionQueue, owner, reusableVersion);
+                m_scratchManager.discardChunks(executionQueue, owner, reusableVersion);
+            }
+        }
+    }
+
+    if(!submissionAccepted)
+        return {};
+
+    return QueueSubmissionToken{ executionQueue, submittedID };
+}
+
+QueueSubmissionToken Device::executeCommandLists(
+    CommandList* const* pCommandLists,
+    const usize numCommandLists,
+    const RenderLane::Enum executionLane,
+    const QueueSubmissionDesc& submitDesc
+){
+    return executeCommandLists(pCommandLists, numCommandLists, resolveRenderLane(executionLane), submitDesc);
+}
+
+CommandQueue::Enum Device::resolveRenderLane(const RenderLane::Enum lane)const{
+    switch(lane){
+    case RenderLane::Graphics:
+        return CommandQueue::Graphics;
+    case RenderLane::AsyncCompute:
+        return isRenderLaneDedicated(lane) ? CommandQueue::Compute : CommandQueue::Graphics;
+    default:
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: invalid render lane"));
+        return CommandQueue::Graphics;
+    }
+}
+
+bool Device::isRenderLaneDedicated(const RenderLane::Enum lane)const{
+    return
+        lane == RenderLane::AsyncCompute
+        && m_context.asyncComputeLaneEnabled
+        && m_queues[static_cast<u32>(CommandQueue::Compute)].has_value()
+    ;
+}
+
+u32 Device::getQueueFamilyIndex(const CommandQueue::Enum queueType)const{
+    const u32 index = static_cast<u32>(queueType);
+    if(index >= static_cast<u32>(CommandQueue::kCount) || !m_queues[index])
+        return VK_QUEUE_FAMILY_IGNORED;
+
+    return m_queues[index]->m_queueFamilyIndex;
 }
 
 bool Device::waitForIdle(){

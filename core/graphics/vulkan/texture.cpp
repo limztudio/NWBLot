@@ -1389,6 +1389,10 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     texture->m_aspectMask = metadata.aspectMask;
 
     texture->m_imageInfo = __hidden_vulkan_texture::BuildTextureImageCreateInfo(d, metadata);
+    const QueueFamilySharingInfo sharingInfo = ResolveQueueFamilySharing(d.queueSharing, m_context);
+    texture->m_imageInfo.sharingMode = sharingInfo.mode;
+    texture->m_imageInfo.queueFamilyIndexCount = sharingInfo.familyIndexCount;
+    texture->m_imageInfo.pQueueFamilyIndices = sharingInfo.data();
 
     VkResult res;
     if(d.isVirtual)
@@ -1401,6 +1405,11 @@ TextureHandle Device::createTexture(const TextureDesc& d){
         DestroyArenaObject(m_context.objectArena, texture);
         return nullptr;
     }
+
+    // Texture retains m_imageInfo for sparse-format queries, but Vulkan consumed its queue-family pointer during
+    // creation. Clear the transient pointer so the retained metadata cannot dangle into this stack frame.
+    texture->m_imageInfo.queueFamilyIndexCount = 0u;
+    texture->m_imageInfo.pQueueFamilyIndices = nullptr;
 
     return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }

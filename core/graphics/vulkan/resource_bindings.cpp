@@ -1207,7 +1207,10 @@ bool DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const A
     bufferInfo.usage =
         (&segment == &m_resourceSegment ? VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT : VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT)
         | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    const QueueFamilySharingInfo sharingInfo = ResolveQueueFamilySharing(ResourceQueueSharing::GraphicsAndAsyncCompute, m_context);
+    bufferInfo.sharingMode = sharingInfo.mode;
+    bufferInfo.queueFamilyIndexCount = sharingInfo.familyIndexCount;
+    bufferInfo.pQueueFamilyIndices = sharingInfo.data();
 
     res = m_allocator.createHostMappedBuffer(
         segment.buffer,

@@ -17,6 +17,18 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Command lists and state handoffs need this queue identity without pulling in device.h (which itself includes
+// command.h through the public graphics API).
+namespace CommandQueue{
+    enum Enum : u8{
+        Graphics = 0,
+        Compute,
+        Copy,
+
+        kCount
+    };
+};
+
 typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
 typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 
@@ -37,16 +49,27 @@ private:
         MipLevel mipLevel = 0;
         ArraySlice arraySlice = 0;
         ResourceStates::Mask state = ResourceStates::Unknown;
+        ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+        // kCount means concurrently shared (or not yet claimed). Otherwise this is the physical queue that last
+        // owned the exclusive resource. A non-kCount releaseDestination requires a paired acquire on that queue.
+        CommandQueue::Enum ownerQueue = CommandQueue::kCount;
+        CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
     };
 
     struct BufferState{
         Buffer* buffer = nullptr;
         ResourceStates::Mask state = ResourceStates::Unknown;
+        ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+        CommandQueue::Enum ownerQueue = CommandQueue::kCount;
+        CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
     };
 
     struct PermanentTextureState{
         Texture* texture = nullptr;
         ResourceStates::Mask state = ResourceStates::Unknown;
+        ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+        CommandQueue::Enum ownerQueue = CommandQueue::kCount;
+        CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
     };
 
 

@@ -52,6 +52,8 @@ struct DeviceDesc{
     i32 graphicsQueueIndex = s_InvalidQueueFamilyIndex;
     i32 transferQueueIndex = s_InvalidQueueFamilyIndex;
     i32 computeQueueIndex = s_InvalidQueueFamilyIndex;
+    // True only when the renderer requested AsyncCompute and a distinct dedicated Compute family was created.
+    bool asyncComputeLaneEnabled = false;
 
     GraphicsAllocator& allocator;
     Alloc::ThreadPool& threadPool;

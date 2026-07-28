@@ -66,6 +66,20 @@ namespace CpuAccessMode{
     };
 };
 
+// Engine-level sharing intent for resources that may be read or written by both render lanes. This never exposes
+// Vulkan queue-family indices to callers. `GraphicsAndAsyncCompute` becomes concurrent Vulkan sharing only when the
+// device has resolved AsyncCompute to a distinct family; all other resources remain exclusive by default.
+namespace ResourceQueueSharing{
+    enum Mask : u8{
+        Exclusive = 0,
+        Graphics = 1 << 0,
+        AsyncCompute = 1 << 1,
+        GraphicsAndAsyncCompute = Graphics | AsyncCompute,
+    };
+
+    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
+};
+
 namespace ResourceStates{
     enum Mask : u32{
         Unknown = 0,
@@ -115,6 +129,7 @@ struct TextureDesc{
     ResourceStates::Mask initialState = ResourceStates::Unknown;
     Format::Enum format = Format::UNKNOWN;
     TextureDimension::Enum dimension = TextureDimension::Enum::Texture2D;
+    ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
 
     bool isShaderResource = true;
     bool isRenderTarget = false;
@@ -150,6 +165,7 @@ struct TextureDesc{
     constexpr TextureDesc& setUseClearValue(bool v)noexcept{ useClearValue = v; return *this; }
     constexpr TextureDesc& setInitialState(ResourceStates::Mask v)noexcept{ initialState = v; return *this; }
     constexpr TextureDesc& setKeepInitialState(bool v)noexcept{ keepInitialState = v; return *this; }
+    constexpr TextureDesc& setQueueSharing(ResourceQueueSharing::Mask v)noexcept{ queueSharing = v; return *this; }
 };
 
 struct TextureSlice{
@@ -333,6 +349,7 @@ struct BufferDesc{
     u32 maxVersions = 0; // only valid and required to be nonzero for volatile buffers on backends that keep per-version state
     ResourceStates::Mask initialState = ResourceStates::Common;
     Format::Enum format = Format::UNKNOWN; // for typed buffer views
+    ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     bool canHaveUAVs = false;
     bool canHaveTypedViews = false;
     bool canHaveRawViews = false;
@@ -375,6 +392,7 @@ struct BufferDesc{
     constexpr BufferDesc& setIsVirtual(bool value){ isVirtual = value; return *this; }
     constexpr BufferDesc& setInitialState(ResourceStates::Mask value){ initialState = value; return *this; }
     constexpr BufferDesc& setKeepInitialState(bool value){ keepInitialState = value; return *this; }
+    constexpr BufferDesc& setQueueSharing(ResourceQueueSharing::Mask value){ queueSharing = value; return *this; }
     constexpr BufferDesc& setCpuAccess(CpuAccessMode::Enum value){ cpuAccess = value; return *this; }
 
     // Equivalent to .setInitialState(initialStateValue).setKeepInitialState(true)

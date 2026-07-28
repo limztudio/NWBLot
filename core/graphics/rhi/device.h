@@ -50,14 +50,40 @@ namespace Feature{
     };
 };
 
-namespace CommandQueue{
+// Renderer-facing execution policy. A lane resolves to one physical backend queue for the lifetime of a device.
+// AsyncCompute deliberately resolves to Graphics when a dedicated Compute queue is unavailable or disabled; callers
+// should use the resolved queue carried by QueueSubmissionToken rather than assuming a second VkQueue exists.
+namespace RenderLane{
     enum Enum : u8{
         Graphics = 0,
-        Compute,
-        Copy,
+        AsyncCompute,
 
-        kCount
+        kCount,
     };
+};
+
+// A completion edge produced only by an accepted queue submission. `valid()` is intentionally false for rejected or
+// empty work, while an accepted synchronization-only submission may still produce a token for dependency forwarding.
+struct QueueSubmissionToken{
+    CommandQueue::Enum queue = CommandQueue::kCount;
+    u64 value = 0;
+
+    [[nodiscard]] constexpr bool valid()const{
+        return static_cast<u32>(queue) < static_cast<u32>(CommandQueue::kCount) && value != 0u;
+    }
+};
+
+// Submission-local cross-queue dependencies. Same-queue tokens collapse to normal queue order; distinct queue
+// tokens become timeline waits on the consuming submission. The caller owns the token array until submit returns.
+struct QueueSubmissionDesc{
+    const QueueSubmissionToken* waitTokens = nullptr;
+    usize waitTokenCount = 0;
+
+    constexpr QueueSubmissionDesc& setWaitTokens(const QueueSubmissionToken* value, usize count){
+        waitTokens = value;
+        waitTokenCount = count;
+        return *this;
+    }
 };
 
 struct VariableRateShadingFeatureInfo{
@@ -73,8 +99,21 @@ struct CommandListParameters{
     // Type of the queue that this command list is to be executed on.
     // COPY and COMPUTE queues have limited subsets of methods available.
     CommandQueue::Enum queueType = CommandQueue::Graphics;
+    // Logical lane selection is resolved by Device::createCommandList. Keep the resolved physical queue type in this
+    // structure so existing command-list validation and upload lifetime tracking remain queue-based.
+    RenderLane::Enum renderLane = RenderLane::Graphics;
+    bool resolveRenderLane = false;
 
-    CommandListParameters& setQueueType(CommandQueue::Enum value){ queueType = value; return *this; }
+    constexpr CommandListParameters& setQueueType(CommandQueue::Enum value){
+        queueType = value;
+        resolveRenderLane = false;
+        return *this;
+    }
+    constexpr CommandListParameters& setRenderLane(RenderLane::Enum value){
+        renderLane = value;
+        resolveRenderLane = true;
+        return *this;
+    }
 };
 
 
@@ -265,6 +304,9 @@ struct DeviceCreationParameters : public InstanceParameters{
     bool enableNvrhiValidationLayer = false;
     bool enableRayTracingExtensions = false;
     bool enableComputeQueue = false;
+    // Best-effort experimental lane. A dedicated compute-only family is used when present; otherwise AsyncCompute
+    // resolves to Graphics without failing device creation or fabricating an alias queue.
+    bool enableAsyncComputeLane = false;
     bool enableCopyQueue = false;
     i32 adapterIndex = -1;
     bool supportExplicitDisplayScaling = false;

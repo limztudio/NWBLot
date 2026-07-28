@@ -775,7 +775,13 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
     m_presentQueueFamily = s_InvalidQueueFamilyIndex;
 
     const bool requirePresentQueue = !m_deviceParams.headlessDevice;
+    // The legacy Compute queue remains a hard device requirement when explicitly requested. The renderer's
+    // AsyncCompute lane is deliberately best-effort: no dedicated family simply maps that logical lane to Graphics.
     const bool requireComputeQueue = m_deviceParams.enableComputeQueue;
+    // Even though AsyncCompute is optional, keep scanning after Graphics/Present are found so a dedicated family
+    // later in the driver-reported list is discovered. The old early-out is valid only when no caller is looking
+    // for the best-effort lane.
+    const bool searchAsyncComputeQueue = m_deviceParams.enableAsyncComputeLane;
     const bool requireTransferQueue = m_deviceParams.enableCopyQueue;
 
     for(i32 i = 0; i < static_cast<i32>(props.size()); ++i){
@@ -832,6 +838,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
             m_graphicsQueueFamily != s_InvalidQueueFamilyIndex
             && (!requirePresentQueue || m_presentQueueFamily != s_InvalidQueueFamilyIndex)
             && (!requireComputeQueue || m_computeQueueFamily != s_InvalidQueueFamilyIndex)
+            && (!searchAsyncComputeQueue || m_computeQueueFamily != s_InvalidQueueFamilyIndex)
             && (!requireTransferQueue || m_transferQueueFamily != s_InvalidQueueFamilyIndex)
         )
             break;
@@ -1315,7 +1322,11 @@ bool BackendContext::createVulkanDevice(){
 
     if(!m_deviceParams.headlessDevice)
         uniqueQueueFamilies.insert(m_presentQueueFamily);
-    if(m_deviceParams.enableComputeQueue)
+    const bool createComputeQueue =
+        m_deviceParams.enableComputeQueue
+        || (m_deviceParams.enableAsyncComputeLane && m_computeQueueFamily != s_InvalidQueueFamilyIndex)
+    ;
+    if(createComputeQueue)
         uniqueQueueFamilies.insert(m_computeQueueFamily);
     if(m_deviceParams.enableCopyQueue)
         uniqueQueueFamilies.insert(m_transferQueueFamily);
@@ -1437,7 +1448,7 @@ bool BackendContext::createVulkanDevice(){
     volkLoadDevice(m_vulkanDevice);
 
     vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_graphicsQueueFamily), s_GraphicsQueueIndex, &m_graphicsQueue);
-    if(m_deviceParams.enableComputeQueue)
+    if(createComputeQueue)
         vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_computeQueueFamily), s_ComputeQueueIndex, &m_computeQueue);
     if(m_deviceParams.enableCopyQueue)
         vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_transferQueueFamily), s_TransferQueueIndex, &m_transferQueue);
@@ -1465,7 +1476,7 @@ bool BackendContext::createVulkanDevice(){
         else
             ss << " present=" << m_presentQueueFamily;
 
-        if(m_deviceParams.enableComputeQueue)
+        if(createComputeQueue)
             ss << " compute=" << m_computeQueueFamily;
         else
             ss << " compute=not-requested";
@@ -1496,6 +1507,27 @@ bool BackendContext::createVulkanDevice(){
         ;
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(ss.str()));
     }
+
+    m_asyncComputeLaneEnabled =
+        m_deviceParams.enableAsyncComputeLane
+        && m_computeQueue != VK_NULL_HANDLE
+        && m_computeQueueFamily != s_InvalidQueueFamilyIndex
+        && m_computeQueueFamily != m_graphicsQueueFamily
+    ;
+    const bool asyncComputeLaneEffective = m_asyncComputeLaneEnabled;
+    const char* const asyncComputeLaneReason = !m_deviceParams.enableAsyncComputeLane
+        ? "disabled"
+        : asyncComputeLaneEffective
+            ? "dedicated compute family selected"
+            : "no dedicated compute-only family"
+    ;
+    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: async compute lane requested={} effective={} graphicsFamily={} computeFamily={} ({})")
+        , VulkanDetail::BoolToString(m_deviceParams.enableAsyncComputeLane)
+        , VulkanDetail::BoolToString(asyncComputeLaneEffective)
+        , m_graphicsQueueFamily
+        , m_computeQueueFamily
+        , asyncComputeLaneReason
+    );
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: created device '{}'"), m_rendererString);
 
@@ -1899,10 +1931,11 @@ bool BackendContext::createDevice(){
     deviceDesc.device = m_vulkanDevice;
     deviceDesc.graphicsQueue = m_graphicsQueue;
     deviceDesc.graphicsQueueIndex = m_graphicsQueueFamily;
-    if(m_deviceParams.enableComputeQueue){
+    if(m_deviceParams.enableComputeQueue || m_asyncComputeLaneEnabled){
         deviceDesc.computeQueue = m_computeQueue;
         deviceDesc.computeQueueIndex = m_computeQueueFamily;
     }
+    deviceDesc.asyncComputeLaneEnabled = m_asyncComputeLaneEnabled;
     if(m_deviceParams.enableCopyQueue){
         deviceDesc.transferQueue = m_transferQueue;
         deviceDesc.transferQueueIndex = m_transferQueueFamily;

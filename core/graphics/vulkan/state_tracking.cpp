@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "arena_names.h"
 
 #include <core/common/log.h>
 #include <global/containers.h>
@@ -72,6 +73,30 @@ bool CommandListResourceStateHandoff::buildFanIn(
 
     auto& arena = m_textureStates.get_allocator().arena();
     using namespace __hidden_command_list_state_handoff;
+    const auto sameTextureState = [](const TextureState& lhs, const TextureState& rhs){
+        return
+            lhs.state == rhs.state
+            && lhs.queueSharing == rhs.queueSharing
+            && lhs.ownerQueue == rhs.ownerQueue
+            && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
+        ;
+    };
+    const auto sameBufferState = [](const BufferState& lhs, const BufferState& rhs){
+        return
+            lhs.state == rhs.state
+            && lhs.queueSharing == rhs.queueSharing
+            && lhs.ownerQueue == rhs.ownerQueue
+            && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
+        ;
+    };
+    const auto samePermanentTextureState = [](const PermanentTextureState& lhs, const PermanentTextureState& rhs){
+        return
+            lhs.state == rhs.state
+            && lhs.queueSharing == rhs.queueSharing
+            && lhs.ownerQueue == rhs.ownerQueue
+            && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
+        ;
+    };
 
     TextureStateIndexMap baseTextureIndices(
         0u,
@@ -136,11 +161,11 @@ bool CommandListResourceStateHandoff::buildFanIn(
     const auto mergeTextureState = [&](const TextureState& state){
         const TextureStateKey key{ state.texture, state.mipLevel, state.arraySlice };
         const auto baseIt = baseTextureIndices.find(key);
-        const ResourceStates::Mask baseState = baseIt != baseTextureIndices.end()
-            ? base.m_textureStates[baseIt.value()].state
-            : ResourceStates::Unknown
+        const TextureState* const baseState = baseIt != baseTextureIndices.end()
+            ? &base.m_textureStates[baseIt.value()]
+            : nullptr
         ;
-        if(state.state == baseState)
+        if(baseState && sameTextureState(state, *baseState))
             return true;
 
         const auto resultIt = resultTextureIndices.find(key);
@@ -152,19 +177,19 @@ bool CommandListResourceStateHandoff::buildFanIn(
         }
 
         TextureState& resultState = m_textureStates[resultIt.value()];
-        if(resultState.state != baseState && resultState.state != state.state)
+        if((!baseState || !sameTextureState(resultState, *baseState)) && !sameTextureState(resultState, state))
             return false;
 
-        resultState.state = state.state;
+        resultState = state;
         return true;
     };
     const auto mergeBufferState = [&](const BufferState& state){
         const auto baseIt = baseBufferIndices.find(state.buffer);
-        const ResourceStates::Mask baseState = baseIt != baseBufferIndices.end()
-            ? base.m_bufferStates[baseIt.value()].state
-            : ResourceStates::Unknown
+        const BufferState* const baseState = baseIt != baseBufferIndices.end()
+            ? &base.m_bufferStates[baseIt.value()]
+            : nullptr
         ;
-        if(state.state == baseState)
+        if(baseState && sameBufferState(state, *baseState))
             return true;
 
         const auto resultIt = resultBufferIndices.find(state.buffer);
@@ -176,19 +201,19 @@ bool CommandListResourceStateHandoff::buildFanIn(
         }
 
         BufferState& resultState = m_bufferStates[resultIt.value()];
-        if(resultState.state != baseState && resultState.state != state.state)
+        if((!baseState || !sameBufferState(resultState, *baseState)) && !sameBufferState(resultState, state))
             return false;
 
-        resultState.state = state.state;
+        resultState = state;
         return true;
     };
     const auto mergePermanentTextureState = [&](const PermanentTextureState& state){
         const auto baseIt = basePermanentTextureIndices.find(state.texture);
-        const ResourceStates::Mask baseState = baseIt != basePermanentTextureIndices.end()
-            ? base.m_permanentTextureStates[baseIt.value()].state
-            : ResourceStates::Unknown
+        const PermanentTextureState* const baseState = baseIt != basePermanentTextureIndices.end()
+            ? &base.m_permanentTextureStates[baseIt.value()]
+            : nullptr
         ;
-        if(state.state == baseState)
+        if(baseState && samePermanentTextureState(state, *baseState))
             return true;
 
         const auto resultIt = resultPermanentTextureIndices.find(state.texture);
@@ -200,19 +225,19 @@ bool CommandListResourceStateHandoff::buildFanIn(
         }
 
         PermanentTextureState& resultState = m_permanentTextureStates[resultIt.value()];
-        if(resultState.state != baseState && resultState.state != state.state)
+        if((!baseState || !samePermanentTextureState(resultState, *baseState)) && !samePermanentTextureState(resultState, state))
             return false;
 
-        resultState.state = state.state;
+        resultState = state;
         return true;
     };
     const auto mergePermanentBufferState = [&](const BufferState& state){
         const auto baseIt = basePermanentBufferIndices.find(state.buffer);
-        const ResourceStates::Mask baseState = baseIt != basePermanentBufferIndices.end()
-            ? base.m_permanentBufferStates[baseIt.value()].state
-            : ResourceStates::Unknown
+        const BufferState* const baseState = baseIt != basePermanentBufferIndices.end()
+            ? &base.m_permanentBufferStates[baseIt.value()]
+            : nullptr
         ;
-        if(state.state == baseState)
+        if(baseState && sameBufferState(state, *baseState))
             return true;
 
         const auto resultIt = resultPermanentBufferIndices.find(state.buffer);
@@ -224,10 +249,10 @@ bool CommandListResourceStateHandoff::buildFanIn(
         }
 
         BufferState& resultState = m_permanentBufferStates[resultIt.value()];
-        if(resultState.state != baseState && resultState.state != state.state)
+        if((!baseState || !sameBufferState(resultState, *baseState)) && !sameBufferState(resultState, state))
             return false;
 
-        resultState.state = state.state;
+        resultState = state;
         return true;
     };
 
@@ -301,11 +326,101 @@ VkImageMemoryBarrier2 BuildTextureStateBarrier(
     barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(stateBits);
     barrier.oldLayout = oldState != ResourceStates::Unknown ? VulkanDetail::GetVkImageLayout(oldState) : VK_IMAGE_LAYOUT_UNDEFINED;
     barrier.newLayout = VulkanDetail::GetVkImageLayout(stateBits);
+    // Ordinary state transitions never imply a queue-family transfer. Vulkan zero-initializes these fields to
+    // family 0, so set the required ignored sentinel explicitly before using the barrier on a nonzero family.
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.image = image;
 
     barrier.subresourceRange = VulkanDetail::BuildImageSubresourceRange(subresources, aspectMask);
 
     return barrier;
+}
+
+ResourceStates::Mask NormalizeOwnershipState(const ResourceStates::Mask state){
+    return state != ResourceStates::Unknown ? state : ResourceStates::Common;
+}
+
+VkImageMemoryBarrier2 BuildTextureOwnershipReleaseBarrier(
+    const VkImage image,
+    const VkImageAspectFlags aspectMask,
+    const TextureSubresourceSet& subresources,
+    const ResourceStates::Mask state,
+    const u32 sourceQueueFamily,
+    const u32 destinationQueueFamily,
+    const bool rayTracingStageAvailable
+){
+    const ResourceStates::Mask resolvedState = NormalizeOwnershipState(state);
+    auto barrier = BuildTextureStateBarrier(image, aspectMask, subresources, resolvedState, resolvedState, rayTracingStageAvailable);
+    barrier.srcQueueFamilyIndex = sourceQueueFamily;
+    barrier.dstQueueFamilyIndex = destinationQueueFamily;
+    barrier.dstStageMask = VK_PIPELINE_STAGE_2_NONE;
+    barrier.dstAccessMask = 0u;
+    return barrier;
+}
+
+VkImageMemoryBarrier2 BuildTextureOwnershipAcquireBarrier(
+    const VkImage image,
+    const VkImageAspectFlags aspectMask,
+    const TextureSubresourceSet& subresources,
+    const ResourceStates::Mask state,
+    const u32 sourceQueueFamily,
+    const u32 destinationQueueFamily,
+    const bool rayTracingStageAvailable
+){
+    const ResourceStates::Mask resolvedState = NormalizeOwnershipState(state);
+    auto barrier = BuildTextureStateBarrier(image, aspectMask, subresources, resolvedState, resolvedState, rayTracingStageAvailable);
+    barrier.srcQueueFamilyIndex = sourceQueueFamily;
+    barrier.dstQueueFamilyIndex = destinationQueueFamily;
+    barrier.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
+    barrier.srcAccessMask = 0u;
+    return barrier;
+}
+
+VkBufferMemoryBarrier2 BuildBufferOwnershipReleaseBarrier(
+    const VkBuffer buffer,
+    const ResourceStates::Mask state,
+    const u32 sourceQueueFamily,
+    const u32 destinationQueueFamily,
+    const bool rayTracingStageAvailable
+){
+    const ResourceStates::Mask resolvedState = NormalizeOwnershipState(state);
+    auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
+    barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(resolvedState, rayTracingStageAvailable);
+    barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(resolvedState);
+    barrier.dstStageMask = VK_PIPELINE_STAGE_2_NONE;
+    barrier.dstAccessMask = 0u;
+    barrier.srcQueueFamilyIndex = sourceQueueFamily;
+    barrier.dstQueueFamilyIndex = destinationQueueFamily;
+    barrier.buffer = buffer;
+    barrier.offset = 0u;
+    barrier.size = VK_WHOLE_SIZE;
+    return barrier;
+}
+
+VkBufferMemoryBarrier2 BuildBufferOwnershipAcquireBarrier(
+    const VkBuffer buffer,
+    const ResourceStates::Mask state,
+    const u32 sourceQueueFamily,
+    const u32 destinationQueueFamily,
+    const bool rayTracingStageAvailable
+){
+    const ResourceStates::Mask resolvedState = NormalizeOwnershipState(state);
+    auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
+    barrier.srcStageMask = VK_PIPELINE_STAGE_2_NONE;
+    barrier.srcAccessMask = 0u;
+    barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(resolvedState, rayTracingStageAvailable);
+    barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(resolvedState);
+    barrier.srcQueueFamilyIndex = sourceQueueFamily;
+    barrier.dstQueueFamilyIndex = destinationQueueFamily;
+    barrier.buffer = buffer;
+    barrier.offset = 0u;
+    barrier.size = VK_WHOLE_SIZE;
+    return barrier;
+}
+
+bool IsKnownQueue(const CommandQueue::Enum queue){
+    return static_cast<u32>(queue) < static_cast<u32>(CommandQueue::kCount);
 }
 
 bool NeedsTextureStateBarrier(const ResourceStates::Mask oldState, const ResourceStates::Mask stateBits, const bool uavBarrierEnabled){
@@ -387,13 +502,136 @@ void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state
         setBufferState(state.indirectParams, ResourceStates::IndirectArgument);
 }
 
-void CommandList::importResourceStateHandoff(const CommandListResourceStateHandoff& states){
+bool CommandList::importResourceStateHandoff(const CommandListResourceStateHandoff& states){
     NWB_ASSERT(states.m_valid);
+
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_StateHandoffArena);
+    Vector<VkImageMemoryBarrier2, Alloc::ScratchArena> acquireImageBarriers{scratchArena};
+    Vector<VkBufferMemoryBarrier2, Alloc::ScratchArena> acquireBufferBarriers{scratchArena};
+
+    const auto appendTextureAcquire = [&](Texture& texture, const TextureSubresourceSet& subresources, const ResourceStates::Mask state, const ResourceQueueSharing::Mask sharing, const CommandQueue::Enum ownerQueue, const CommandQueue::Enum releaseDestinationQueue) -> bool {
+        if(sharing != texture.m_desc.queueSharing){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff texture sharing contract does not match the resource description"));
+            return false;
+        }
+
+        if(m_device.usesConcurrentQueueSharing(sharing)){
+            if(ownerQueue != CommandQueue::kCount || releaseDestinationQueue != CommandQueue::kCount){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Concurrent texture state handoff unexpectedly carries exclusive ownership"));
+                return false;
+            }
+            return true;
+        }
+
+        if(!__hidden_vulkan_state_tracking::IsKnownQueue(ownerQueue) && ownerQueue != CommandQueue::kCount){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Texture state handoff has an invalid owner queue"));
+            return false;
+        }
+        if(!__hidden_vulkan_state_tracking::IsKnownQueue(releaseDestinationQueue) && releaseDestinationQueue != CommandQueue::kCount){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Texture state handoff has an invalid ownership destination"));
+            return false;
+        }
+
+        if(releaseDestinationQueue == CommandQueue::kCount){
+            if(ownerQueue != CommandQueue::kCount && ownerQueue != m_desc.queueType){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff changes queue without a release/acquire transfer"));
+                return false;
+            }
+            return true;
+        }
+
+        if(ownerQueue == CommandQueue::kCount || releaseDestinationQueue != m_desc.queueType){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff is not imported by its declared destination queue"));
+            return false;
+        }
+
+        const u32 sourceQueueFamily = m_device.getQueueFamilyIndex(ownerQueue);
+        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_desc.queueType);
+        if(sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff references an unavailable queue family"));
+            return false;
+        }
+        if(sourceQueueFamily != destinationQueueFamily){
+            acquireImageBarriers.push_back(__hidden_vulkan_state_tracking::BuildTextureOwnershipAcquireBarrier(
+                texture.m_image,
+                texture.m_aspectMask,
+                subresources,
+                state,
+                sourceQueueFamily,
+                destinationQueueFamily,
+                m_context.extensions.KHR_ray_tracing_pipeline
+            ));
+        }
+        return true;
+    };
+    const auto appendBufferAcquire = [&](Buffer& buffer, const ResourceStates::Mask state, const ResourceQueueSharing::Mask sharing, const CommandQueue::Enum ownerQueue, const CommandQueue::Enum releaseDestinationQueue) -> bool {
+        if(sharing != buffer.m_desc.queueSharing){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff buffer sharing contract does not match the resource description"));
+            return false;
+        }
+
+        if(m_device.usesConcurrentQueueSharing(sharing)){
+            if(ownerQueue != CommandQueue::kCount || releaseDestinationQueue != CommandQueue::kCount){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Concurrent buffer state handoff unexpectedly carries exclusive ownership"));
+                return false;
+            }
+            return true;
+        }
+
+        if(!__hidden_vulkan_state_tracking::IsKnownQueue(ownerQueue) && ownerQueue != CommandQueue::kCount){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Buffer state handoff has an invalid owner queue"));
+            return false;
+        }
+        if(!__hidden_vulkan_state_tracking::IsKnownQueue(releaseDestinationQueue) && releaseDestinationQueue != CommandQueue::kCount){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Buffer state handoff has an invalid ownership destination"));
+            return false;
+        }
+
+        if(releaseDestinationQueue == CommandQueue::kCount){
+            if(ownerQueue != CommandQueue::kCount && ownerQueue != m_desc.queueType){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff changes queue without a release/acquire transfer"));
+                return false;
+            }
+            return true;
+        }
+
+        if(ownerQueue == CommandQueue::kCount || releaseDestinationQueue != m_desc.queueType){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff is not imported by its declared destination queue"));
+            return false;
+        }
+
+        const u32 sourceQueueFamily = m_device.getQueueFamilyIndex(ownerQueue);
+        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_desc.queueType);
+        if(sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff references an unavailable queue family"));
+            return false;
+        }
+        if(sourceQueueFamily != destinationQueueFamily){
+            acquireBufferBarriers.push_back(__hidden_vulkan_state_tracking::BuildBufferOwnershipAcquireBarrier(
+                buffer.m_buffer,
+                state,
+                sourceQueueFamily,
+                destinationQueueFamily,
+                m_context.extensions.KHR_ray_tracing_pipeline
+            ));
+        }
+        return true;
+    };
 
     ::ContainerDetail::ReserveAdditionalCapacity(m_stateTracker.m_textureStates, states.m_textureStates.size());
     for(const CommandListResourceStateHandoff::TextureState& state : states.m_textureStates){
         if(!state.texture)
             continue;
+
+        if(!appendTextureAcquire(
+            *state.texture,
+            TextureSubresourceSet(state.mipLevel, 1u, state.arraySlice, 1u),
+            state.state,
+            state.queueSharing,
+            state.ownerQueue,
+            state.releaseDestinationQueue
+        ))
+            return false;
 
         const TextureSubresourceStateKey key{ state.texture, state.mipLevel, state.arraySlice };
         m_stateTracker.m_textureStates.insert_or_assign(key, state.state);
@@ -401,8 +639,13 @@ void CommandList::importResourceStateHandoff(const CommandListResourceStateHando
 
     ::ContainerDetail::ReserveAdditionalCapacity(m_stateTracker.m_bufferStates, states.m_bufferStates.size());
     for(const CommandListResourceStateHandoff::BufferState& state : states.m_bufferStates){
-        if(state.buffer)
-            m_stateTracker.m_bufferStates.insert_or_assign(state.buffer, state.state);
+        if(!state.buffer)
+            continue;
+
+        if(!appendBufferAcquire(*state.buffer, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
+            return false;
+
+        m_stateTracker.m_bufferStates.insert_or_assign(state.buffer, state.state);
     }
 
     ::ContainerDetail::ReserveAdditionalCapacity(m_stateTracker.m_permanentTextureStates, states.m_permanentTextureStates.size());
@@ -410,29 +653,77 @@ void CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         if(!state.texture)
             continue;
 
+        if(!appendTextureAcquire(*state.texture, s_AllSubresources, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
+            return false;
+
         m_stateTracker.m_permanentTextureStates.insert_or_assign(state.texture, state.state);
     }
 
     ::ContainerDetail::ReserveAdditionalCapacity(m_stateTracker.m_permanentBufferStates, states.m_permanentBufferStates.size());
     for(const CommandListResourceStateHandoff::BufferState& state : states.m_permanentBufferStates){
-        if(state.buffer)
-            m_stateTracker.m_permanentBufferStates.insert_or_assign(state.buffer, state.state);
+        if(!state.buffer)
+            continue;
+
+        if(!appendBufferAcquire(*state.buffer, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
+            return false;
+
+        m_stateTracker.m_permanentBufferStates.insert_or_assign(state.buffer, state.state);
     }
+
+    if(!acquireImageBarriers.empty() || !acquireBufferBarriers.empty()){
+        auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+        depInfo.imageMemoryBarrierCount = static_cast<u32>(acquireImageBarriers.size());
+        depInfo.pImageMemoryBarriers = acquireImageBarriers.data();
+        depInfo.bufferMemoryBarrierCount = static_cast<u32>(acquireBufferBarriers.size());
+        depInfo.pBufferMemoryBarriers = acquireBufferBarriers.data();
+        executePipelineBarrier(depInfo);
+    }
+
+    return true;
 }
 
 void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& states)const{
     states.reset();
+    const auto getTextureOwnership = [&](const TextureSubresourceStateKey& key, const ResourceQueueSharing::Mask sharing, CommandQueue::Enum& outOwner, CommandQueue::Enum& outReleaseDestination){
+        outOwner = CommandQueue::kCount;
+        outReleaseDestination = CommandQueue::kCount;
+        if(m_device.usesConcurrentQueueSharing(sharing))
+            return;
+
+        outOwner = m_desc.queueType;
+        const auto releaseIt = m_textureOwnershipReleaseDestinations.find(key);
+        if(releaseIt != m_textureOwnershipReleaseDestinations.end())
+            outReleaseDestination = releaseIt.value();
+    };
+    const auto getBufferOwnership = [&](Buffer* buffer, const ResourceQueueSharing::Mask sharing, CommandQueue::Enum& outOwner, CommandQueue::Enum& outReleaseDestination){
+        outOwner = CommandQueue::kCount;
+        outReleaseDestination = CommandQueue::kCount;
+        if(m_device.usesConcurrentQueueSharing(sharing))
+            return;
+
+        outOwner = m_desc.queueType;
+        const auto releaseIt = m_bufferOwnershipReleaseDestinations.find(buffer);
+        if(releaseIt != m_bufferOwnershipReleaseDestinations.end())
+            outReleaseDestination = releaseIt.value();
+    };
+
     states.m_textureStates.reserve(m_stateTracker.m_textureStates.size());
     for(auto it = m_stateTracker.m_textureStates.begin(); it != m_stateTracker.m_textureStates.end(); ++it){
         const TextureSubresourceStateKey& key = it->first;
         if(!key.texture)
             continue;
 
+        CommandQueue::Enum ownerQueue = CommandQueue::kCount;
+        CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
+        getTextureOwnership(key, key.texture->m_desc.queueSharing, ownerQueue, releaseDestinationQueue);
         states.m_textureStates.push_back(CommandListResourceStateHandoff::TextureState{
             key.texture,
             key.mipLevel,
             key.arraySlice,
-            it.value()
+            it.value(),
+            key.texture->m_desc.queueSharing,
+            ownerQueue,
+            releaseDestinationQueue
         });
     }
 
@@ -441,9 +732,15 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         if(!it->first)
             continue;
 
+        CommandQueue::Enum ownerQueue = CommandQueue::kCount;
+        CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
+        getBufferOwnership(it->first, it->first->m_desc.queueSharing, ownerQueue, releaseDestinationQueue);
         states.m_bufferStates.push_back(CommandListResourceStateHandoff::BufferState{
             it->first,
-            it.value()
+            it.value(),
+            it->first->m_desc.queueSharing,
+            ownerQueue,
+            releaseDestinationQueue
         });
     }
 
@@ -452,9 +749,16 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         if(!it->first)
             continue;
 
+        CommandQueue::Enum ownerQueue = CommandQueue::kCount;
+        CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
+        const TextureSubresourceStateKey key{ it->first, 0u, 0u };
+        getTextureOwnership(key, it->first->m_desc.queueSharing, ownerQueue, releaseDestinationQueue);
         states.m_permanentTextureStates.push_back(CommandListResourceStateHandoff::PermanentTextureState{
             it->first,
-            it.value()
+            it.value(),
+            it->first->m_desc.queueSharing,
+            ownerQueue,
+            releaseDestinationQueue
         });
     }
 
@@ -463,13 +767,91 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         if(!it->first)
             continue;
 
+        CommandQueue::Enum ownerQueue = CommandQueue::kCount;
+        CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
+        getBufferOwnership(it->first, it->first->m_desc.queueSharing, ownerQueue, releaseDestinationQueue);
         states.m_permanentBufferStates.push_back(CommandListResourceStateHandoff::BufferState{
             it->first,
-            it.value()
+            it.value(),
+            it->first->m_desc.queueSharing,
+            ownerQueue,
+            releaseDestinationQueue
         });
     }
 
     states.m_valid = true;
+}
+
+void CommandList::appendPendingOwnershipReleaseBarriers(){
+    if(m_textureOwnershipReleaseDestinations.empty() && m_bufferOwnershipReleaseDestinations.empty())
+        return;
+
+    const u32 sourceQueueFamily = m_device.getQueueFamilyIndex(m_desc.queueType);
+    if(sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release resource ownership from an unavailable source queue family"));
+        return;
+    }
+
+    for(auto it = m_textureOwnershipReleaseDestinations.begin(); it != m_textureOwnershipReleaseDestinations.end(); ++it){
+        const TextureSubresourceStateKey& key = it->first;
+        Texture* const texture = key.texture;
+        if(!texture)
+            continue;
+        if(m_device.usesConcurrentQueueSharing(texture->m_desc.queueSharing)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Concurrent texture unexpectedly has a pending ownership release"));
+            continue;
+        }
+
+        const CommandQueue::Enum destinationQueue = it.value();
+        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(destinationQueue);
+        if(destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release texture ownership to an unavailable destination queue family"));
+            continue;
+        }
+        if(destinationQueueFamily == sourceQueueFamily)
+            continue;
+
+        const ResourceStates::Mask state = m_stateTracker.getTextureState(texture, key.arraySlice, key.mipLevel);
+        m_pendingImageBarriers.push_back(__hidden_vulkan_state_tracking::BuildTextureOwnershipReleaseBarrier(
+            texture->m_image,
+            texture->m_aspectMask,
+            TextureSubresourceSet(key.mipLevel, 1u, key.arraySlice, 1u),
+            state,
+            sourceQueueFamily,
+            destinationQueueFamily,
+            m_context.extensions.KHR_ray_tracing_pipeline
+        ));
+    }
+
+    for(auto it = m_bufferOwnershipReleaseDestinations.begin(); it != m_bufferOwnershipReleaseDestinations.end(); ++it){
+        Buffer* const buffer = it->first;
+        if(!buffer)
+            continue;
+        if(m_device.usesConcurrentQueueSharing(buffer->m_desc.queueSharing)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Concurrent buffer unexpectedly has a pending ownership release"));
+            continue;
+        }
+
+        const CommandQueue::Enum destinationQueue = it.value();
+        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(destinationQueue);
+        if(destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release buffer ownership to an unavailable destination queue family"));
+            continue;
+        }
+        if(destinationQueueFamily == sourceQueueFamily)
+            continue;
+
+        const ResourceStates::Mask state = m_stateTracker.getBufferState(buffer);
+        m_pendingBufferBarriers.push_back(__hidden_vulkan_state_tracking::BuildBufferOwnershipReleaseBarrier(
+            buffer->m_buffer,
+            state,
+            sourceQueueFamily,
+            destinationQueueFamily,
+            m_context.extensions.KHR_ray_tracing_pipeline
+        ));
+    }
+
+    commitBarriers();
 }
 
 void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
@@ -654,6 +1036,8 @@ void CommandList::setBufferState(Buffer* bufferResource, ResourceStates::Mask st
     barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
     barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(stateBits, m_context.extensions.KHR_ray_tracing_pipeline);
     barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(stateBits);
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.buffer = buffer.m_buffer;
     barrier.offset = 0;
     barrier.size = VK_WHOLE_SIZE;
@@ -679,6 +1063,118 @@ void CommandList::setAccelStructState(RayTracingAccelStruct* accelStructResource
     auto* as = accelStructResource;
     if(as->m_buffer)
         setBufferState(as->m_buffer.get(), stateBits);
+}
+
+void CommandList::releaseTextureOwnership(
+    Texture* textureResource,
+    TextureSubresourceSet subresources,
+    const RenderLane::Enum destinationLane
+){
+    if(!textureResource || !m_currentCmdBuf)
+        return;
+
+    Texture& texture = *textureResource;
+    if(m_stateTracker.isPermanentTexture(texture)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release ownership of a permanently tracked texture"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot release ownership of a permanently tracked texture"));
+        return;
+    }
+    if(m_device.usesConcurrentQueueSharing(texture.m_desc.queueSharing)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release ownership of a concurrently shared texture"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot release ownership of a concurrently shared texture"));
+        return;
+    }
+
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Range);
+    if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSubresources, NWB_TEXT("release texture ownership")))
+        return;
+
+    const CommandQueue::Enum destinationQueue = m_device.resolveRenderLane(destinationLane);
+    if(!m_device.getQueue(destinationQueue)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release texture ownership to an unavailable destination queue"));
+        return;
+    }
+
+    const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
+    const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
+
+    // A release must also be exported in the handoff. Every image subresource therefore needs a concrete tracked
+    // layout first: unlike a buffer, an untouched image may still be VK_IMAGE_LAYOUT_UNDEFINED even when its RHI
+    // descriptor names a preferred initial state. Do not invent a layout here; make the producer transition it
+    // explicitly before releasing ownership.
+    for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+            const ResourceStates::Mask state = m_stateTracker.getTextureState(&texture, arraySlice, mipLevel);
+            if(state == ResourceStates::Unknown){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release texture ownership without a known final resource state"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot release texture ownership without a known final resource state"));
+                return;
+            }
+            m_stateTracker.beginTrackingTexture(&texture, TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u), state);
+        }
+    }
+
+    for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
+            const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
+            const auto existing = m_textureOwnershipReleaseDestinations.find(key);
+            if(existing != m_textureOwnershipReleaseDestinations.end() && existing.value() != destinationQueue){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Texture ownership was released to conflicting destination queues"));
+                NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Texture ownership was released to conflicting destination queues"));
+                return;
+            }
+        }
+    }
+
+    for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
+        for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel)
+            m_textureOwnershipReleaseDestinations.insert_or_assign(TextureSubresourceStateKey{ &texture, mipLevel, arraySlice }, destinationQueue);
+    }
+}
+
+void CommandList::releaseBufferOwnership(Buffer* bufferResource, const RenderLane::Enum destinationLane){
+    if(!bufferResource || !m_currentCmdBuf)
+        return;
+
+    Buffer& buffer = *bufferResource;
+    if(m_stateTracker.isPermanentBuffer(buffer)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release ownership of a permanently tracked buffer"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot release ownership of a permanently tracked buffer"));
+        return;
+    }
+    if(m_device.usesConcurrentQueueSharing(buffer.m_desc.queueSharing)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release ownership of a concurrently shared buffer"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot release ownership of a concurrently shared buffer"));
+        return;
+    }
+
+    const CommandQueue::Enum destinationQueue = m_device.resolveRenderLane(destinationLane);
+    if(!m_device.getQueue(destinationQueue)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release buffer ownership to an unavailable destination queue"));
+        return;
+    }
+
+    // Match the texture path above: even an untouched buffer must have an exported concrete state so the matching
+    // acquire can be emitted by the consumer. Existing state tracking has precedence; the descriptor initial state
+    // only seeds a resource that this command list has not otherwise touched.
+    ResourceStates::Mask state = m_stateTracker.getBufferState(&buffer);
+    if(state == ResourceStates::Unknown)
+        state = buffer.m_desc.initialState;
+    if(state == ResourceStates::Unknown){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release buffer ownership without a known final resource state"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot release buffer ownership without a known final resource state"));
+        return;
+    }
+    m_stateTracker.beginTrackingBuffer(&buffer, state);
+
+    const auto existing = m_bufferOwnershipReleaseDestinations.find(&buffer);
+    if(existing != m_bufferOwnershipReleaseDestinations.end() && existing.value() != destinationQueue){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Buffer ownership was released to conflicting destination queues"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Buffer ownership was released to conflicting destination queues"));
+        return;
+    }
+
+    m_bufferOwnershipReleaseDestinations.insert_or_assign(&buffer, destinationQueue);
 }
 
 void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mask stateBits){
@@ -867,6 +1363,8 @@ void StateTracker::appendKeepInitialStateBarriers(
         barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(currentState != ResourceStates::Unknown ? currentState : ResourceStates::Common);
         barrier.dstStageMask = VulkanDetail::GetVkPipelineStageFlags(desc.initialState, m_context.extensions.KHR_ray_tracing_pipeline);
         barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(desc.initialState);
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.buffer = buffer->m_buffer;
         barrier.offset = 0;
         barrier.size = VK_WHOLE_SIZE;

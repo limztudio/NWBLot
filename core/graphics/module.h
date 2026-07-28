@@ -103,6 +103,8 @@ public:
     bool createHeadlessDevice();
     bool createInstance(const InstanceParameters& params);
     bool setDebugRuntimeEnabled(bool enabled);
+    // Must be configured before device creation. Unsupported adapters retain the Graphics-only path.
+    bool setAsyncComputeLaneEnabled(bool enabled);
     bool setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi);
     void setPipelineCacheDirectory(const Path& directory);
     bool runFrame(){ return animateRenderPresent(); }

@@ -939,6 +939,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     // storage-buffer label.
     bufferDesc.debugName = desc.debugName;
     bufferDesc.isVirtual = desc.isVirtual;
+    bufferDesc.queueSharing = desc.queueSharing;
 
     as->m_buffer = createBuffer(bufferDesc);
     if(!as->m_buffer){

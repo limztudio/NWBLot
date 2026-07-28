@@ -224,6 +224,7 @@ private:
     bool m_bufferDeviceAddressSupported = false;
     bool m_dynamicRenderingSupported = false;
     bool m_synchronization2Supported = false;
+    bool m_asyncComputeLaneEnabled = false;
     bool m_meshTaskShaderSupported = false;
     bool m_rayTracingSpheresSupported = false;
     bool m_rayTracingLinearSweptSpheresSupported = false;

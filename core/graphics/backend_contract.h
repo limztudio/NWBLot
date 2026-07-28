@@ -98,6 +98,7 @@ concept DeviceApi = requires(
     const CommandListParameters& commandListParams,
     CommandList* const* commandLists,
     bool* outSubmitted,
+    const QueueSubmissionDesc& submissionDesc,
     void* featureInfo,
     Object nativeObject
 ){
@@ -153,7 +154,11 @@ concept DeviceApi = requires(
     { device.createCommandList(commandListParams) }->SameAs<CommandListHandle>;
     { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics) }->SameAs<u64>;
     { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics, outSubmitted) }->SameAs<u64>;
+    { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics, submissionDesc) }->SameAs<QueueSubmissionToken>;
+    { device.executeCommandLists(commandLists, usize{}, RenderLane::AsyncCompute, submissionDesc) }->SameAs<QueueSubmissionToken>;
     device.queueWaitForCommandList(CommandQueue::Graphics, CommandQueue::Graphics, u64{});
+    { device.resolveRenderLane(RenderLane::AsyncCompute) }->SameAs<CommandQueue::Enum>;
+    { device.isRenderLaneDedicated(RenderLane::AsyncCompute) }->SameAs<bool>;
     { device.waitForIdle() }->SameAs<bool>;
     device.runGarbageCollection();
     { device.queryFeatureSupport(Feature::Meshlets, featureInfo, usize{}) }->SameAs<bool>;
@@ -273,6 +278,8 @@ concept CommandListApi = requires(
     commandList.setTextureState(texture, subresources, ResourceStates::ShaderResource);
     commandList.setBufferState(buffer, ResourceStates::ShaderResource);
     commandList.setAccelStructState(accelStruct, ResourceStates::AccelStructRead);
+    commandList.releaseTextureOwnership(texture, subresources, RenderLane::AsyncCompute);
+    commandList.releaseBufferOwnership(buffer, RenderLane::AsyncCompute);
     commandList.setPermanentTextureState(texture, ResourceStates::ShaderResource);
     commandList.setPermanentBufferState(buffer, ResourceStates::ShaderResource);
     commandList.commitBarriers();

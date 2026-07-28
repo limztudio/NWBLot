@@ -92,6 +92,10 @@ public:
         return m_graphics.createHeadlessDevice();
     }
 
+    [[nodiscard]] bool setAsyncComputeLaneEnabled(const bool enabled){
+        return m_graphics.setAsyncComputeLaneEnabled(enabled);
+    }
+
     [[nodiscard]] Graphics& graphics(){ return m_graphics; }
     [[nodiscard]] Alloc::GlobalArena& arena(){ return m_objectArena; }
     [[nodiscard]] Perf::TimingRecorder& gpuTimingSink(){ return m_gpuTiming; }
@@ -585,6 +589,137 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffTransfersFinalBuffe
     bool submitted = false;
     EXPECT_GT(device.executeCommandLists(commandLists, 2u, CommandQueue::Graphics, &submitted), 0u);
     EXPECT_TRUE(submitted);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// The logical AsyncCompute lane is always usable by packet code: on the default device it resolves to Graphics,
+// preserves ordered execution, and returns a Graphics timeline token rather than inventing a second queue.
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneFallsBackToGraphicsWhenNotEnabled){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    EXPECT_EQ(device.resolveRenderLane(RenderLane::AsyncCompute), CommandQueue::Graphics);
+    EXPECT_FALSE(device.isRenderLaneDedicated(RenderLane::AsyncCompute));
+
+    CommandListParameters asyncParams;
+    asyncParams.setRenderLane(RenderLane::AsyncCompute);
+    auto commandList = device.createCommandList(asyncParams);
+    ASSERT_NE(commandList.get(), nullptr);
+
+    commandList->open();
+    commandList->close();
+
+    CommandList* commandLists[] = { commandList.get() };
+    const QueueSubmissionToken token = device.executeCommandLists(
+        commandLists,
+        1u,
+        RenderLane::AsyncCompute,
+        QueueSubmissionDesc{}
+    );
+    EXPECT_TRUE(token.valid());
+    EXPECT_EQ(token.queue, CommandQueue::Graphics);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// A dedicated compute family is optional in CI, but when one exists this is the phase-zero ownership proof:
+// exclusive storage moves Compute -> Graphics -> Compute with paired release/acquire barriers and submission-local
+// timeline tokens. No rendering job has moved yet; this specifically validates the resource-lifecycle round trip
+// that a reused shadow-visibility frame slot will need.
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneTransfersExclusiveBufferOwnershipRoundTrip){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+
+    auto buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveUAVs(true)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+    auto sharedInput = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveUAVs(true)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    ASSERT_NE(sharedInput.get(), nullptr);
+
+    CommandListParameters computeParams;
+    computeParams.setRenderLane(RenderLane::AsyncCompute);
+
+    CommandListResourceStateHandoff computeToGraphics(asyncScope.arena());
+    auto computeProducer = device.createCommandList(computeParams);
+    ASSERT_NE(computeProducer.get(), nullptr);
+    computeProducer->open();
+    computeProducer->setBufferState(buffer.get(), ResourceStates::UnorderedAccess);
+    computeProducer->setBufferState(sharedInput.get(), ResourceStates::UnorderedAccess);
+    computeProducer->releaseBufferOwnership(buffer.get(), RenderLane::Graphics);
+    computeProducer->close(&computeToGraphics);
+    ASSERT_TRUE(computeToGraphics.valid());
+
+    CommandList* computeProducerLists[] = { computeProducer.get() };
+    const QueueSubmissionToken computeToken = device.executeCommandLists(
+        computeProducerLists,
+        1u,
+        RenderLane::AsyncCompute,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(computeToken.valid());
+    ASSERT_EQ(computeToken.queue, CommandQueue::Compute);
+
+    CommandListResourceStateHandoff graphicsToCompute(asyncScope.arena());
+    auto graphicsConsumer = device.createCommandList();
+    ASSERT_NE(graphicsConsumer.get(), nullptr);
+    graphicsConsumer->open(&computeToGraphics);
+    EXPECT_EQ(graphicsConsumer->getBufferState(buffer.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(graphicsConsumer->getBufferState(sharedInput.get()), ResourceStates::UnorderedAccess);
+    graphicsConsumer->setBufferState(buffer.get(), ResourceStates::ShaderResource);
+    graphicsConsumer->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
+    graphicsConsumer->releaseBufferOwnership(buffer.get(), RenderLane::AsyncCompute);
+    graphicsConsumer->close(&graphicsToCompute);
+    ASSERT_TRUE(graphicsToCompute.valid());
+
+    // Passing both producer tokens from one physical queue is legal API use. The submission folds them into the
+    // single greatest timeline wait Vulkan permits for that semaphore.
+    const QueueSubmissionToken computeWaits[] = { computeToken, computeToken };
+    const QueueSubmissionDesc graphicsSubmissionDesc = QueueSubmissionDesc().setWaitTokens(computeWaits, 2u);
+    CommandList* graphicsConsumerLists[] = { graphicsConsumer.get() };
+    const QueueSubmissionToken graphicsToken = device.executeCommandLists(
+        graphicsConsumerLists,
+        1u,
+        RenderLane::Graphics,
+        graphicsSubmissionDesc
+    );
+    ASSERT_TRUE(graphicsToken.valid());
+    ASSERT_EQ(graphicsToken.queue, CommandQueue::Graphics);
+
+    auto computeReuse = device.createCommandList(computeParams);
+    ASSERT_NE(computeReuse.get(), nullptr);
+    computeReuse->open(&graphicsToCompute);
+    EXPECT_EQ(computeReuse->getBufferState(buffer.get()), ResourceStates::ShaderResource);
+    computeReuse->setBufferState(buffer.get(), ResourceStates::UnorderedAccess);
+    computeReuse->close();
+
+    const QueueSubmissionToken graphicsWaits[] = { graphicsToken };
+    const QueueSubmissionDesc computeSubmissionDesc = QueueSubmissionDesc().setWaitTokens(graphicsWaits, 1u);
+    CommandList* computeReuseLists[] = { computeReuse.get() };
+    const QueueSubmissionToken reuseToken = device.executeCommandLists(
+        computeReuseLists,
+        1u,
+        RenderLane::AsyncCompute,
+        computeSubmissionDesc
+    );
+    EXPECT_TRUE(reuseToken.valid());
+    EXPECT_EQ(reuseToken.queue, CommandQueue::Compute);
     EXPECT_TRUE(device.waitForIdle());
 }
 

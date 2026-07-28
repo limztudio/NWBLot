@@ -35,6 +35,7 @@ inline constexpr Name s_ComputePipelineArena("core/graphics/compute_pipeline");
 
 inline constexpr Name s_PipelineCacheSaveArena("core/graphics/device_pipeline_cache_save");
 inline constexpr Name s_CommandListExecuteArena("core/graphics/device_command_list_execute");
+inline constexpr Name s_StateHandoffArena("core/graphics/command_list_state_handoff");
 inline constexpr Name s_CooperativeVectorQueryArena("core/graphics/device_cooperative_vector_query");
 
 inline constexpr Name s_CooperativeVectorConvertArena("core/graphics/extensions_cooperative_vector_convert");

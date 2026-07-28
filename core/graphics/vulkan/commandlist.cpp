@@ -25,6 +25,8 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
     , m_gpuCrashMarkerTracker(device.m_context.objectArena)
     , m_pendingImageBarriers(device.m_context.objectArena)
     , m_pendingBufferBarriers(device.m_context.objectArena)
+    , m_textureOwnershipReleaseDestinations(0u, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo(), device.m_context.objectArena)
+    , m_bufferOwnershipReleaseDestinations(0u, Hasher<Buffer*>(), EqualTo<Buffer*>(), device.m_context.objectArena)
     , m_pendingCompactions(device.m_context.objectArena)
 {
     if(m_device.isAnyGpuMarkerEnabled())
@@ -87,8 +89,15 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     }
 
     m_stateTracker.reset();
-    if(initialStates)
-        importResourceStateHandoff(*initialStates);
+    m_textureOwnershipReleaseDestinations.clear();
+    m_bufferOwnershipReleaseDestinations.clear();
+    if(initialStates && !importResourceStateHandoff(*initialStates)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot open command list from an incompatible cross-queue resource-state handoff"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot open command list from an incompatible cross-queue resource-state handoff"));
+        discardUnsubmittedUploadChunks();
+        m_currentCmdBuf.reset();
+        clearState();
+    }
 }
 
 void CommandList::close(CommandListResourceStateHandoff* finalStates){
@@ -100,9 +109,23 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
         return;
     }
 
+    // An ownership release has no useful consumer without the state handoff that names its destination and final
+    // layout. Refuse to record an orphaned release rather than leaving an exclusive resource owned by another
+    // family while later code has no way to acquire it.
+    if(
+        !finalStates
+        && (!m_textureOwnershipReleaseDestinations.empty() || !m_bufferOwnershipReleaseDestinations.empty())
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Closing a command list with an ownership release requires a final resource-state handoff"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Closing a command list with an ownership release requires a final resource-state handoff"));
+        m_textureOwnershipReleaseDestinations.clear();
+        m_bufferOwnershipReleaseDestinations.clear();
+    }
+
     endActiveRenderPass();
     m_stateTracker.appendKeepInitialStateBarriers(m_pendingImageBarriers, m_pendingBufferBarriers);
     commitBarriers();
+    appendPendingOwnershipReleaseBarriers();
 
     const VkResult res = vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
     if(res != VK_SUCCESS){
@@ -135,6 +158,8 @@ void CommandList::clearState(){
 
     m_pendingImageBarriers.clear();
     m_pendingBufferBarriers.clear();
+    m_textureOwnershipReleaseDestinations.clear();
+    m_bufferOwnershipReleaseDestinations.clear();
 }
 
 void CommandList::retainResource(GraphicsResource* resource){

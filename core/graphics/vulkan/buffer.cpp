@@ -228,7 +228,10 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size = size;
     bufferInfo.usage = usageFlags;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    const QueueFamilySharingInfo sharingInfo = ResolveQueueFamilySharing(d.queueSharing, m_context);
+    bufferInfo.sharingMode = sharingInfo.mode;
+    bufferInfo.queueFamilyIndexCount = sharingInfo.familyIndexCount;
+    bufferInfo.pQueueFamilyIndices = sharingInfo.data();
 
     if(d.isVirtual)
         res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer->m_buffer);

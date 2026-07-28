@@ -356,6 +356,7 @@ struct RayTracingAccelStructDesc{
     GraphicsVector<RayTracingGeometryDesc> bottomLevelGeometries; // only applies when isTopLevel = false
     Name debugName;
     RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None;
+    ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     bool trackLiveness = true;
     bool isTopLevel = false;
     bool isVirtual = false;
@@ -368,6 +369,7 @@ struct RayTracingAccelStructDesc{
     RayTracingAccelStructDesc& addBottomLevelGeometry(const RayTracingGeometryDesc& value){ bottomLevelGeometries.push_back(value); isTopLevel = false; return *this; }
     constexpr RayTracingAccelStructDesc& setBuildFlags(RayTracingAccelStructBuildFlags::Mask value){ buildFlags = value; return *this; }
     constexpr RayTracingAccelStructDesc& setDebugName(const Name& value){ debugName = value; return *this; }
+    constexpr RayTracingAccelStructDesc& setQueueSharing(ResourceQueueSharing::Mask value){ queueSharing = value; return *this; }
     constexpr RayTracingAccelStructDesc& setTrackLiveness(bool value){ trackLiveness = value; return *this; }
     constexpr RayTracingAccelStructDesc& setIsTopLevel(bool value){ isTopLevel = value; return *this; }
     constexpr RayTracingAccelStructDesc& setIsVirtual(bool value){ isVirtual = value; return *this; }

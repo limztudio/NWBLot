@@ -193,15 +193,27 @@ void Queue::addSignalSemaphore(VkSemaphore semaphore, u64 value){
     m_signalSemaphoreValues.push_back(value);
 }
 
-u64 Queue::submit(CommandList* const* ppCmd, usize numCmd, bool* outSubmissionAccepted){
+u64 Queue::submit(
+    CommandList* const* ppCmd,
+    const usize numCmd,
+    const SubmissionWait* const localWaits,
+    const usize localWaitCount,
+    bool* const outSubmissionAccepted
+){
     ScopedLock lock(m_mutex);
     if(outSubmissionAccepted)
         *outSubmissionAccepted = false;
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_QueueSubmitArena);
 
-    bool hasCommands = ppCmd && numCmd > 0;
-    bool hasPendingSemaphores = !m_waitSemaphores.empty() || !m_signalSemaphores.empty();
+    const bool hasCommands = ppCmd && numCmd > 0;
+    if(localWaitCount > 0u && !localWaits){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait array is null"));
+        clearPendingSemaphores();
+        return m_lastSubmittedID;
+    }
+
+    const bool hasPendingSemaphores = localWaitCount > 0u || !m_waitSemaphores.empty() || !m_signalSemaphores.empty();
 
     if(hasCommands && numCmd > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list count exceeds Vulkan limit"));
@@ -209,7 +221,8 @@ u64 Queue::submit(CommandList* const* ppCmd, usize numCmd, bool* outSubmissionAc
         return m_lastSubmittedID;
     }
     if(
-        m_waitSemaphores.size() > static_cast<usize>(Limit<u32>::s_Max)
+        localWaitCount > static_cast<usize>(Limit<u32>::s_Max)
+        || m_waitSemaphores.size() > static_cast<usize>(Limit<u32>::s_Max) - localWaitCount
         || m_signalSemaphores.size() >= static_cast<usize>(Limit<u32>::s_Max)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queued semaphore count exceeds Vulkan limit"));
@@ -273,7 +286,23 @@ u64 Queue::submit(CommandList* const* ppCmd, usize numCmd, bool* outSubmissionAc
     timelineSignal.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
     Vector<VkSemaphoreSubmitInfo, Alloc::ScratchArena> waitInfos{scratchArena};
-    waitInfos.reserve(m_waitSemaphores.size());
+    waitInfos.reserve(localWaitCount + m_waitSemaphores.size());
+    for(usize i = 0; i < localWaitCount; ++i){
+        if(localWaits[i].semaphore == VK_NULL_HANDLE){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait semaphore is null"));
+            m_lastSubmittedID = submissionID - 1;
+            clearPendingSemaphores();
+            for(auto& tracked : trackedBuffers)
+                recycleCommandBuffer(Move(tracked));
+            return m_lastSubmittedID;
+        }
+
+        VkSemaphoreSubmitInfo waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
+        waitInfo.semaphore = localWaits[i].semaphore;
+        waitInfo.value = localWaits[i].value;
+        waitInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+        waitInfos.push_back(waitInfo);
+    }
     for(usize i = 0; i < m_waitSemaphores.size(); ++i){
         VkSemaphoreSubmitInfo waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
         waitInfo.semaphore = m_waitSemaphores[i];

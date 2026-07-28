@@ -564,6 +564,12 @@ struct VulkanContext{
     VkAllocationCallbacks* allocationCallbacks = nullptr;
     VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 
+    // Device-lifetime lane resolution. Resource descriptors remain backend-neutral; these physical family indices
+    // are used only when mapping an explicit Graphics+AsyncCompute sharing intent to Vulkan create info.
+    i32 graphicsQueueFamilyIndex = s_InvalidQueueFamilyIndex;
+    i32 asyncComputeQueueFamilyIndex = s_InvalidQueueFamilyIndex;
+    bool asyncComputeLaneEnabled = false;
+
     Alloc::GlobalArena& objectArena;
     GraphicsAllocator& allocator;
     Alloc::ThreadPool& threadPool;
@@ -638,6 +644,46 @@ struct VulkanContext{
     {}
 };
 
+// Local Vulkan representation of the engine-level ResourceQueueSharing contract. Do not persist this object: its
+// family-index pointer is valid only while the caller's local QueueFamilySharingInfo remains alive for vkCreate*.
+struct QueueFamilySharingInfo{
+    VkSharingMode mode = VK_SHARING_MODE_EXCLUSIVE;
+    Array<u32, 2u> familyIndices = {};
+    u32 familyIndexCount = 0u;
+
+    [[nodiscard]] const u32* data()const{ return familyIndexCount > 0u ? familyIndices.data() : nullptr; }
+};
+
+inline bool UsesConcurrentGraphicsAsyncComputeSharing(
+    const ResourceQueueSharing::Mask sharing,
+    const VulkanContext& context
+){
+    const u32 sharingBits = static_cast<u32>(sharing);
+    const u32 requiredBits = static_cast<u32>(ResourceQueueSharing::GraphicsAndAsyncCompute);
+    return
+        context.asyncComputeLaneEnabled
+        && context.graphicsQueueFamilyIndex != s_InvalidQueueFamilyIndex
+        && context.asyncComputeQueueFamilyIndex != s_InvalidQueueFamilyIndex
+        && context.graphicsQueueFamilyIndex != context.asyncComputeQueueFamilyIndex
+        && (sharingBits & requiredBits) == requiredBits
+    ;
+}
+
+inline QueueFamilySharingInfo ResolveQueueFamilySharing(
+    const ResourceQueueSharing::Mask sharing,
+    const VulkanContext& context
+){
+    QueueFamilySharingInfo result;
+    if(!UsesConcurrentGraphicsAsyncComputeSharing(sharing, context))
+        return result;
+
+    result.mode = VK_SHARING_MODE_CONCURRENT;
+    result.familyIndices[0] = static_cast<u32>(context.graphicsQueueFamilyIndex);
+    result.familyIndices[1] = static_cast<u32>(context.asyncComputeQueueFamilyIndex);
+    result.familyIndexCount = 2u;
+    return result;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Command buffer with resource tracking
@@ -693,7 +739,18 @@ public:
     void addWaitSemaphore(VkSemaphore semaphore, u64 value);
     void addSignalSemaphore(VkSemaphore semaphore, u64 value);
 
-    u64 submit(CommandList* const* ppCmd, usize numCmd, bool* outSubmissionAccepted = nullptr);
+    struct SubmissionWait{
+        VkSemaphore semaphore = VK_NULL_HANDLE;
+        u64 value = 0u;
+    };
+
+    u64 submit(
+        CommandList* const* ppCmd,
+        usize numCmd,
+        const SubmissionWait* localWaits = nullptr,
+        usize localWaitCount = 0u,
+        bool* outSubmissionAccepted = nullptr
+    );
     void updateTextureTileMappings(Texture* texture, const TextureTilesMapping* tileMappings, u32 numTileMappings);
     void updateLastFinishedID();
 
@@ -2070,6 +2127,10 @@ public:
     void setTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits);
     void setBufferState(Buffer* buffer, ResourceStates::Mask stateBits);
     void setAccelStructState(RayTracingAccelStruct* as, ResourceStates::Mask stateBits);
+    // Releases an exclusive resource after this command list's final use. The matching consumer must import the
+    // exported handoff on `destinationLane` and submit with the producer's accepted token.
+    void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, RenderLane::Enum destinationLane);
+    void releaseBufferOwnership(Buffer* buffer, RenderLane::Enum destinationLane);
 
     void setPermanentTextureState(Texture* texture, ResourceStates::Mask stateBits);
     void setPermanentBufferState(Buffer* buffer, ResourceStates::Mask stateBits);
@@ -2161,8 +2222,9 @@ public:
 
 private:
     void setResourceStatesForGraphicsBuffers(const GraphicsState& state);
-    void importResourceStateHandoff(const CommandListResourceStateHandoff& states);
+    [[nodiscard]] bool importResourceStateHandoff(const CommandListResourceStateHandoff& states);
     void exportResourceStateHandoff(CommandListResourceStateHandoff& states)const;
+    void appendPendingOwnershipReleaseBarriers();
     void retainResource(GraphicsResource* resource);
     void retainStagingBuffer(Buffer& buffer);
     // Every pipeline layout has an empty descriptor-buffer set at index 0. Bind its zero resource-buffer offset
@@ -2222,6 +2284,8 @@ private:
 
     Vector<VkImageMemoryBarrier2, Alloc::GlobalArena> m_pendingImageBarriers;
     Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena> m_pendingBufferBarriers;
+    HashMap<TextureSubresourceStateKey, CommandQueue::Enum, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureOwnershipReleaseDestinations;
+    HashMap<Buffer*, CommandQueue::Enum, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferOwnershipReleaseDestinations;
 
     Vector<Handle<AccelStruct>, Alloc::GlobalArena> m_pendingCompactions;
 };
@@ -2372,7 +2436,27 @@ public:
         CommandQueue::Enum executionQueue = CommandQueue::Graphics,
         bool* outCommandListsSubmitted = nullptr
     );
+    // New cross-lane path: dependencies are immutable submission-local token edges rather than mutable queue-wide
+    // pending waits. A rejected submission returns an invalid token.
+    [[nodiscard]] QueueSubmissionToken executeCommandLists(
+        CommandList* const* pCommandLists,
+        usize numCommandLists,
+        CommandQueue::Enum executionQueue,
+        const QueueSubmissionDesc& submitDesc
+    );
+    [[nodiscard]] QueueSubmissionToken executeCommandLists(
+        CommandList* const* pCommandLists,
+        usize numCommandLists,
+        RenderLane::Enum executionLane,
+        const QueueSubmissionDesc& submitDesc
+    );
     void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance);
+    [[nodiscard]] CommandQueue::Enum resolveRenderLane(RenderLane::Enum lane)const;
+    [[nodiscard]] bool isRenderLaneDedicated(RenderLane::Enum lane)const;
+    [[nodiscard]] u32 getQueueFamilyIndex(CommandQueue::Enum queue)const;
+    [[nodiscard]] bool usesConcurrentQueueSharing(ResourceQueueSharing::Mask sharing)const{
+        return UsesConcurrentGraphicsAsyncComputeSharing(sharing, m_context);
+    }
     bool waitForIdle();
     void runGarbageCollection();
     bool queryFeatureSupport(Feature::Enum feature, void* = nullptr, usize = 0);

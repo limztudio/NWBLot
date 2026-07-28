@@ -404,6 +404,14 @@ bool Graphics::setDebugRuntimeEnabled(bool enabled){
     return true;
 }
 
+bool Graphics::setAsyncComputeLaneEnabled(const bool enabled){
+    if(m_backend->getDevice())
+        return false;
+
+    m_deviceCreationParams.enableAsyncComputeLane = enabled;
+    return true;
+}
+
 bool Graphics::setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi){
     if(!abi.valid() || m_backend->getDevice())
         return false;

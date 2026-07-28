@@ -61,8 +61,8 @@ public:
     void releaseSwBvhScratchHeapHandles();
     // Retire the persistent surfel descriptor generations before resource invalidation releases their backing buffers.
     void releaseSurfelGiHeapHandles();
-    // Normalizes the G-buffer and trace inputs shared by the independent shadow and caustics/surfel-GI packets.
-    // The prelude records these transitions once before both packets import the resulting state snapshot.
+    // Normalizes the G-buffer and trace inputs shared by the independent shadow, caustics, and surfel-GI packets.
+    // The prelude records these transitions once before all three packets import the resulting state snapshot.
     void normalizePostGbufferPacketResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
@@ -123,8 +123,8 @@ public:
     // ready AND the transparent SW scene BVH + RGB resolve/merge sets built). When true, the colored TRANSPARENT shadow
     // is traced + denoised + multiplied onto the soft-opaque visibility inside renderShadowVisibility's soft chain.
     [[nodiscard]] bool softTransparentShadowReady()const noexcept;
-    // Soft-shadow recording cannot swap the target-generation handles while the sibling caustics/surfel-GI packet
-    // validates the shared bindless bundle. Finalize the deferred temporal swap only after the ordered submission
+    // Soft-shadow recording cannot swap the target-generation handles while the sibling caustics and surfel-GI packets
+    // validate the shared bindless bundle. Finalize the deferred temporal swap only after the ordered submission
     // succeeds, or discard it when packet recording/submission is abandoned.
     void finalizeSoftShadowTemporalHistory(DeferredFrameTargets& targets);
     void discardSoftShadowTemporalHistory();

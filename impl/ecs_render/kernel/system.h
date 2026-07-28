@@ -138,7 +138,8 @@ private:
     Core::CommandListResourceStateHandoff m_gbufferStateHandoff;
     Core::CommandListResourceStateHandoff m_postGbufferNormalizedStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityStateHandoff;
-    Core::CommandListResourceStateHandoff m_causticsSurfelGiStateHandoff;
+    Core::CommandListResourceStateHandoff m_causticsStateHandoff;
+    Core::CommandListResourceStateHandoff m_surfelGiStateHandoff;
     Core::CommandListResourceStateHandoff m_postGbufferFanInStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_avboitStateHandoff;
@@ -146,7 +147,8 @@ private:
     Core::CommandListHandle m_gbufferCommandList;
     Core::CommandListHandle m_postGbufferNormalizeCommandList;
     Core::CommandListHandle m_shadowVisibilityCommandList;
-    Core::CommandListHandle m_causticsSurfelGiCommandList;
+    Core::CommandListHandle m_causticsCommandList;
+    Core::CommandListHandle m_surfelGiCommandList;
     Core::CommandListHandle m_deferredLightingCommandList;
     Core::CommandListHandle m_avboitCommandList;
     Core::CommandListHandle m_deferredCompositeCommandList;

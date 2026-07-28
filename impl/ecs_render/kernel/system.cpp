@@ -41,7 +41,8 @@ RendererSystem::RendererSystem(
     , m_gbufferStateHandoff(arena)
     , m_postGbufferNormalizedStateHandoff(arena)
     , m_shadowVisibilityStateHandoff(arena)
-    , m_causticsSurfelGiStateHandoff(arena)
+    , m_causticsStateHandoff(arena)
+    , m_surfelGiStateHandoff(arena)
     , m_postGbufferFanInStateHandoff(arena)
     , m_deferredLightingStateHandoff(arena)
     , m_avboitStateHandoff(arena)
@@ -118,7 +119,8 @@ void RendererSystem::invalidateResources(){
     m_gbufferStateHandoff.reset();
     m_postGbufferNormalizedStateHandoff.reset();
     m_shadowVisibilityStateHandoff.reset();
-    m_causticsSurfelGiStateHandoff.reset();
+    m_causticsStateHandoff.reset();
+    m_surfelGiStateHandoff.reset();
     m_postGbufferFanInStateHandoff.reset();
     m_deferredLightingStateHandoff.reset();
     m_avboitStateHandoff.reset();
@@ -126,7 +128,8 @@ void RendererSystem::invalidateResources(){
     m_gbufferCommandList.reset();
     m_postGbufferNormalizeCommandList.reset();
     m_shadowVisibilityCommandList.reset();
-    m_causticsSurfelGiCommandList.reset();
+    m_causticsCommandList.reset();
+    m_surfelGiCommandList.reset();
     m_deferredLightingCommandList.reset();
     m_avboitCommandList.reset();
     m_deferredCompositeCommandList.reset();
@@ -196,10 +199,18 @@ bool RendererSystem::ensureFrameCommandLists(){
         }
     }
 
-    if(!m_causticsSurfelGiCommandList){
-        m_causticsSurfelGiCommandList = device.createCommandList();
-        if(!m_causticsSurfelGiCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustics/surfel-GI command list"));
+    if(!m_causticsCommandList){
+        m_causticsCommandList = device.createCommandList();
+        if(!m_causticsCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustics command list"));
+            return false;
+        }
+    }
+
+    if(!m_surfelGiCommandList){
+        m_surfelGiCommandList = device.createCommandList();
+        if(!m_surfelGiCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel-GI command list"));
             return false;
         }
     }
@@ -353,7 +364,8 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     NWB_ASSERT(m_gbufferCommandList);
     NWB_ASSERT(m_postGbufferNormalizeCommandList);
     NWB_ASSERT(m_shadowVisibilityCommandList);
-    NWB_ASSERT(m_causticsSurfelGiCommandList);
+    NWB_ASSERT(m_causticsCommandList);
+    NWB_ASSERT(m_surfelGiCommandList);
     NWB_ASSERT(m_deferredLightingCommandList);
     NWB_ASSERT(m_avboitCommandList);
     NWB_ASSERT(m_deferredCompositeCommandList);
@@ -461,14 +473,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* gbufferCommandList = m_gbufferCommandList.get();
     Core::CommandList* postGbufferNormalizeCommandList = m_postGbufferNormalizeCommandList.get();
     Core::CommandList* shadowVisibilityCommandList = m_shadowVisibilityCommandList.get();
-    Core::CommandList* causticsSurfelGiCommandList = m_causticsSurfelGiCommandList.get();
+    Core::CommandList* causticsCommandList = m_causticsCommandList.get();
+    Core::CommandList* surfelGiCommandList = m_surfelGiCommandList.get();
     Core::CommandList* deferredLightingCommandList = m_deferredLightingCommandList.get();
     Core::CommandList* avboitCommandList = m_avboitCommandList.get();
     Core::CommandList* deferredCompositeCommandList = m_deferredCompositeCommandList.get();
     NWB_ASSERT(gbufferCommandList);
     NWB_ASSERT(postGbufferNormalizeCommandList);
     NWB_ASSERT(shadowVisibilityCommandList);
-    NWB_ASSERT(causticsSurfelGiCommandList);
+    NWB_ASSERT(causticsCommandList);
+    NWB_ASSERT(surfelGiCommandList);
     NWB_ASSERT(deferredLightingCommandList);
     NWB_ASSERT(avboitCommandList);
     NWB_ASSERT(deferredCompositeCommandList);
@@ -476,7 +490,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         !gbufferCommandList
         || !postGbufferNormalizeCommandList
         || !shadowVisibilityCommandList
-        || !causticsSurfelGiCommandList
+        || !causticsCommandList
+        || !surfelGiCommandList
         || !deferredLightingCommandList
         || !avboitCommandList
         || !deferredCompositeCommandList
@@ -486,7 +501,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_gbufferStateHandoff.reset();
     m_postGbufferNormalizedStateHandoff.reset();
     m_shadowVisibilityStateHandoff.reset();
-    m_causticsSurfelGiStateHandoff.reset();
+    m_causticsStateHandoff.reset();
+    m_surfelGiStateHandoff.reset();
     m_postGbufferFanInStateHandoff.reset();
     m_deferredLightingStateHandoff.reset();
     m_avboitStateHandoff.reset();
@@ -494,7 +510,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_raytracingSystem.discardSoftShadowTemporalHistory();
 
     // Recording a packet can advance CPU mirrors (temporal phases, readback cadence, and the AVBOIT clear latch)
-    // before the seven command buffers have reached the Graphics queue. Preserve them so every rejection path below can
+    // before the eight command buffers have reached the Graphics queue. Preserve them so every rejection path below can
     // make the following frame record the same GPU work again instead of treating an abandoned packet as completed.
     struct PostGbufferPacketCpuState{
         bool avboitTargetsNeedClear = true;
@@ -575,7 +591,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_gbufferStateHandoff.reset();
         m_postGbufferNormalizedStateHandoff.reset();
         m_shadowVisibilityStateHandoff.reset();
-        m_causticsSurfelGiStateHandoff.reset();
+        m_causticsStateHandoff.reset();
+        m_surfelGiStateHandoff.reset();
         m_postGbufferFanInStateHandoff.reset();
         m_deferredLightingStateHandoff.reset();
         m_avboitStateHandoff.reset();
@@ -734,7 +751,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         commandList->endRenderPass();
 
         // The opaque producer exports its final tracked state after close-time keepInitialState restores. The next
-        // packet is a normalization prelude; it imports this snapshot before the two independent workers record.
+        // packet is a normalization prelude; it imports this snapshot before the three independent workers record.
         frameTiming->finishMarker();
         commandList->close(&m_gbufferStateHandoff);
         if(!m_gbufferStateHandoff.valid()){
@@ -755,8 +772,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // Normalize every G-buffer/trace input shared by the sibling packets once. The two workers import the exact
-    // same snapshot below, so neither can record a stale transition from the opaque producer's final state.
+    // Normalize every G-buffer/trace input shared by the sibling packets once. The three workers import the exact
+    // same snapshot below, so none can record a stale transition from the opaque producer's final state.
     bool postGbufferNormalizeCommandListReady = false;
     const Core::Graphics::JobHandle postGbufferNormalizeRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
@@ -792,10 +809,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
     ;
 
-    // The shadow packet owns only visibility/soft-shadow outputs. The caustics+GI packet owns only its irradiance
-    // and persistent surfel outputs; all shared inputs already have their common read state in the prelude.
+    // The shadow, caustics, and surfel-GI packets own distinct outputs. Every shared input already has its common
+    // read state in the prelude, so the workers can record independently from the same snapshot.
     bool shadowVisibilityCommandListReady = false;
-    bool causticsSurfelGiCommandListReady = false;
+    bool causticsCommandListReady = false;
+    bool surfelGiCommandListReady = false;
     const Core::Graphics::JobHandle shadowVisibilityRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
         &deferredTargets,
@@ -836,71 +854,97 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && shadowVisibilityCommandList->hasCommandBuffer()
         ;
     });
-    const Core::Graphics::JobHandle causticsSurfelGiRecordingJob = m_graphics.scheduleGraphicsJob([
+    const Core::Graphics::JobHandle causticsRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
         &deferredTargets,
         shadowVisibilityPrepared,
         hardwareShadowSupported,
-        causticsSurfelGiCommandList,
-        &causticsSurfelGiCommandListReady,
+        causticsCommandList,
+        &causticsCommandListReady,
         &renderTimingTicket
     ](){
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
-        causticsSurfelGiCommandList->open(&m_postGbufferNormalizedStateHandoff);
-        if(!causticsSurfelGiCommandList->hasCommandBuffer())
+        causticsCommandList->open(&m_postGbufferNormalizedStateHandoff);
+        if(!causticsCommandList->hasCommandBuffer())
             return;
 
         // Black is the additive identity for caustics. Keep that valid no-op input even when no refractive scene
         // work was prepared or the selected producer fails to record.
-        m_raytracingSystem.clearCausticTargets(*causticsSurfelGiCommandList, deferredTargets);
+        m_raytracingSystem.clearCausticTargets(*causticsCommandList, deferredTargets);
         if(shadowVisibilityPrepared){
             if(hardwareShadowSupported){
-                const bool causticsDispatched = m_raytracingSystem.renderHwCaustics(*causticsSurfelGiCommandList, deferredTargets);
+                const bool causticsDispatched = m_raytracingSystem.renderHwCaustics(*causticsCommandList, deferredTargets);
                 if(!causticsDispatched && m_raytracingSystem.hasHwCausticWork())
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic render pass failed"));
             }
             else{
-                const bool causticsDispatched = m_raytracingSystem.renderGpuBvhCaustics(*causticsSurfelGiCommandList, deferredTargets);
+                const bool causticsDispatched = m_raytracingSystem.renderGpuBvhCaustics(*causticsCommandList, deferredTargets);
                 if(!causticsDispatched && m_raytracingSystem.hasCausticWork())
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software caustic render pass failed"));
             }
         }
 
-        // Spawn -> hash build -> trace -> resolve remains one ordered packet, so its persistent surfel buffers never
-        // become visible to another worker halfway through their per-frame update.
-        if(!m_raytracingSystem.renderSurfelGi(*causticsSurfelGiCommandList, deferredTargets))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel GI render pass failed"));
-
-        causticsSurfelGiCommandList->close(&m_causticsSurfelGiStateHandoff);
-        causticsSurfelGiCommandListReady =
-            m_causticsSurfelGiStateHandoff.valid()
-            && causticsSurfelGiCommandList->hasCommandBuffer()
+        causticsCommandList->close(&m_causticsStateHandoff);
+        causticsCommandListReady =
+            m_causticsStateHandoff.valid()
+            && causticsCommandList->hasCommandBuffer()
         ;
     });
-    if(!shadowVisibilityRecordingJob.valid() || !causticsSurfelGiRecordingJob.valid()){
+    const Core::Graphics::JobHandle surfelGiRecordingJob = m_graphics.scheduleGraphicsJob([
+        this,
+        &deferredTargets,
+        surfelGiCommandList,
+        &surfelGiCommandListReady,
+        &renderTimingTicket
+    ](){
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(renderTimingTicket);
+        surfelGiCommandList->open(&m_postGbufferNormalizedStateHandoff);
+        if(!surfelGiCommandList->hasCommandBuffer())
+            return;
+
+        // Spawn -> hash build -> trace -> resolve remains one ordered packet, so its persistent surfel buffers never
+        // become visible to another worker halfway through their per-frame update.
+        if(!m_raytracingSystem.renderSurfelGi(*surfelGiCommandList, deferredTargets))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel GI render pass failed"));
+
+        surfelGiCommandList->close(&m_surfelGiStateHandoff);
+        surfelGiCommandListReady =
+            m_surfelGiStateHandoff.valid()
+            && surfelGiCommandList->hasCommandBuffer()
+        ;
+    });
+    if(
+        !shadowVisibilityRecordingJob.valid()
+        || !causticsRecordingJob.valid()
+        || !surfelGiRecordingJob.valid()
+    ){
         if(shadowVisibilityRecordingJob.valid())
             m_graphics.waitJob(shadowVisibilityRecordingJob);
-        if(causticsSurfelGiRecordingJob.valid())
-            m_graphics.waitJob(causticsSurfelGiRecordingJob);
+        if(causticsRecordingJob.valid())
+            m_graphics.waitJob(causticsRecordingJob);
+        if(surfelGiRecordingJob.valid())
+            m_graphics.waitJob(surfelGiRecordingJob);
         discardRenderPackets();
         return;
     }
 
     m_graphics.waitJob(shadowVisibilityRecordingJob);
-    m_graphics.waitJob(causticsSurfelGiRecordingJob);
-    if(!shadowVisibilityCommandListReady || !causticsSurfelGiCommandListReady){
+    m_graphics.waitJob(causticsRecordingJob);
+    m_graphics.waitJob(surfelGiRecordingJob);
+    if(!shadowVisibilityCommandListReady || !causticsCommandListReady || !surfelGiCommandListReady){
         discardRenderPackets();
         return;
     }
 
     const Core::CommandListResourceStateHandoff* postGbufferBranchStates[] = {
         &m_shadowVisibilityStateHandoff,
-        &m_causticsSurfelGiStateHandoff,
+        &m_causticsStateHandoff,
+        &m_surfelGiStateHandoff,
     };
     if(!m_postGbufferFanInStateHandoff.buildFanIn(
         m_postGbufferNormalizedStateHandoff,
         postGbufferBranchStates,
-        2u
+        3u
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: post-G-buffer packet state fan-in failed"));
         discardRenderPackets();
@@ -1033,7 +1077,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             framebuffer
         );
 
-        // This endpoint completes the frame scope opened on the G-buffer command buffer. All seven command buffers
+        // This endpoint completes the frame scope opened on the G-buffer command buffer. All eight command buffers
         // are submitted in the fixed Graphics-queue order below, so the timestamps remain one contiguous frame metric.
         frameTiming->finishTiming(*deferredCompositeCommandList);
         deferredCompositeCommandList->close();
@@ -1051,17 +1095,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
 
     // Workers only record. The GPU still receives one ordered Graphics submission: opaque producer -> normalized
-    // prelude -> shadow visibility -> caustics/surfel GI -> AVBOIT -> deferred lighting -> composite.
+    // prelude -> shadow visibility -> caustics -> surfel GI -> AVBOIT -> deferred lighting -> composite.
     Core::CommandList* commandLists[] = {
         gbufferCommandList,
         postGbufferNormalizeCommandList,
         shadowVisibilityCommandList,
-        causticsSurfelGiCommandList,
+        causticsCommandList,
+        surfelGiCommandList,
         avboitCommandList,
         deferredLightingCommandList,
         deferredCompositeCommandList,
     };
-    if(!renderTimingTicket.submit(device, commandLists, 7u)){
+    if(!renderTimingTicket.submit(device, commandLists, 8u)){
         discardRenderPackets();
         return;
     }

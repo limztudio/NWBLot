@@ -279,7 +279,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
         dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, transparentDispatch);
     }
 
-    // Do not mutate the target-generation handles while the sibling caustics/surfel-GI worker can still validate
+    // Do not mutate the target-generation handles while the sibling caustics and surfel-GI workers can still validate
     // targets.bindless. RendererSystem finalizes this pending CPU-side swap only after its complete ordered Graphics
     // submission succeeds.
     if(rayTracingState().m_softShadowTemporalReady)

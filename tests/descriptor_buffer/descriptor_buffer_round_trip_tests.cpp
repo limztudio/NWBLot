@@ -700,9 +700,9 @@ TEST_F(DescriptorBufferRoundTripTest, NormalizedStatePreludeFansInIndependentBra
 }
 
 
-// Mirrors RendererSystem's full post-G-buffer sequence: normalize the G-buffer once, record shadow and
-// caustics/surfel-GI on separate workers, fan their outputs in, then record deferred lighting and AVBOIT on sibling
-// workers before fanning their disjoint outputs in for the ordered deferred composite consumer.
+// Mirrors RendererSystem's full post-G-buffer sequence: normalize the G-buffer once, record shadow, caustics, and
+// surfel GI from the same snapshot, fan their outputs in, then record deferred lighting and AVBOIT on sibling workers
+// before fanning their disjoint outputs in for the ordered deferred composite consumer.
 TEST_F(DescriptorBufferRoundTripTest, RendererPostGbufferAndLightingAvboitPacketsFanInBeforeComposite){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
@@ -761,7 +761,8 @@ TEST_F(DescriptorBufferRoundTripTest, RendererPostGbufferAndLightingAvboitPacket
     CommandListResourceStateHandoff gbufferState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff normalizedState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff shadowState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff causticsSurfelGiState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff causticsState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff surfelGiState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff fanInState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff deferredLightingState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff avboitState(DescriptorBufferRoundTripTest::arena());
@@ -769,14 +770,16 @@ TEST_F(DescriptorBufferRoundTripTest, RendererPostGbufferAndLightingAvboitPacket
     auto gbuffer = device.createCommandList();
     auto prelude = device.createCommandList();
     auto shadow = device.createCommandList();
-    auto causticsSurfelGi = device.createCommandList();
+    auto caustics = device.createCommandList();
+    auto surfelGi = device.createCommandList();
     auto lighting = device.createCommandList();
     auto avboit = device.createCommandList();
     auto composite = device.createCommandList();
     ASSERT_NE(gbuffer.get(), nullptr);
     ASSERT_NE(prelude.get(), nullptr);
     ASSERT_NE(shadow.get(), nullptr);
-    ASSERT_NE(causticsSurfelGi.get(), nullptr);
+    ASSERT_NE(caustics.get(), nullptr);
+    ASSERT_NE(surfelGi.get(), nullptr);
     ASSERT_NE(lighting.get(), nullptr);
     ASSERT_NE(avboit.get(), nullptr);
     ASSERT_NE(composite.get(), nullptr);
@@ -798,7 +801,8 @@ TEST_F(DescriptorBufferRoundTripTest, RendererPostGbufferAndLightingAvboitPacket
 
     Latch recordingStarted(2);
     bool shadowRecorded = false;
-    bool causticsSurfelGiRecorded = false;
+    bool causticsRecorded = false;
+    bool surfelGiRecorded = false;
     const Graphics::JobHandle shadowJob = graphics.scheduleGraphicsJob([&](){
         recordingStarted.count_down();
         recordingStarted.wait();
@@ -810,28 +814,37 @@ TEST_F(DescriptorBufferRoundTripTest, RendererPostGbufferAndLightingAvboitPacket
         shadow->close(&shadowState);
         shadowRecorded = shadowState.valid() && shadow->hasCommandBuffer();
     });
-    const Graphics::JobHandle causticsSurfelGiJob = graphics.scheduleGraphicsJob([&](){
+    const Graphics::JobHandle causticsJob = graphics.scheduleGraphicsJob([&](){
         recordingStarted.count_down();
         recordingStarted.wait();
-        causticsSurfelGi->open(&normalizedState);
-        causticsSurfelGi->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        causticsSurfelGi->setTextureState(normal.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        causticsSurfelGi->setTextureState(depth.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        causticsSurfelGi->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
-        causticsSurfelGi->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
-        causticsSurfelGi->close(&causticsSurfelGiState);
-        causticsSurfelGiRecorded = causticsSurfelGiState.valid() && causticsSurfelGi->hasCommandBuffer();
+        caustics->open(&normalizedState);
+        caustics->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        caustics->setTextureState(depth.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        caustics->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+        caustics->close(&causticsState);
+        causticsRecorded = causticsState.valid() && caustics->hasCommandBuffer();
+    });
+    const Graphics::JobHandle surfelGiJob = graphics.scheduleGraphicsJob([&](){
+        surfelGi->open(&normalizedState);
+        surfelGi->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        surfelGi->setTextureState(normal.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        surfelGi->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+        surfelGi->close(&surfelGiState);
+        surfelGiRecorded = surfelGiState.valid() && surfelGi->hasCommandBuffer();
     });
     ASSERT_TRUE(shadowJob.valid());
-    ASSERT_TRUE(causticsSurfelGiJob.valid());
+    ASSERT_TRUE(causticsJob.valid());
+    ASSERT_TRUE(surfelGiJob.valid());
 
     graphics.waitJob(shadowJob);
-    graphics.waitJob(causticsSurfelGiJob);
+    graphics.waitJob(causticsJob);
+    graphics.waitJob(surfelGiJob);
     ASSERT_TRUE(shadowRecorded);
-    ASSERT_TRUE(causticsSurfelGiRecorded);
+    ASSERT_TRUE(causticsRecorded);
+    ASSERT_TRUE(surfelGiRecorded);
 
-    const CommandListResourceStateHandoff* branchStates[] = { &shadowState, &causticsSurfelGiState };
-    ASSERT_TRUE(fanInState.buildFanIn(normalizedState, branchStates, 2u));
+    const CommandListResourceStateHandoff* branchStates[] = { &shadowState, &causticsState, &surfelGiState };
+    ASSERT_TRUE(fanInState.buildFanIn(normalizedState, branchStates, 3u));
     ASSERT_TRUE(fanInState.valid());
 
     Latch lightingAvboitRecordingStarted(2);
@@ -898,13 +911,14 @@ TEST_F(DescriptorBufferRoundTripTest, RendererPostGbufferAndLightingAvboitPacket
         gbuffer.get(),
         prelude.get(),
         shadow.get(),
-        causticsSurfelGi.get(),
+        caustics.get(),
+        surfelGi.get(),
         avboit.get(),
         lighting.get(),
         composite.get(),
     };
     bool submitted = false;
-    EXPECT_GT(device.executeCommandLists(commandLists, 7u, CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_GT(device.executeCommandLists(commandLists, 8u, CommandQueue::Graphics, &submitted), 0u);
     EXPECT_TRUE(submitted);
     EXPECT_TRUE(device.waitForIdle());
 }

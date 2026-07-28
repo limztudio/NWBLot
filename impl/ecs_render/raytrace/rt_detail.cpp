@@ -386,8 +386,8 @@ void RendererRayTracingSystem::transitionSwShadowTraversalResources(Core::Comman
 }
 
 void RendererRayTracingSystem::normalizePostGbufferPacketResources(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    // The two post-G-buffer packets record from the same handoff. Move every input they can share to its common
-    // read state here, before either worker records a transition from the G-buffer/prepare producer's state. This
+    // The post-G-buffer packets record from the same handoff. Move every input they can share to its common read
+    // state here, before any worker records a transition from the G-buffer/prepare producer's state. This
     // keeps the ordered Graphics submission free of duplicate stale-layout barriers while still leaving each packet's
     // writable output resources exclusively owned by that packet.
     commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);

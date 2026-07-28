@@ -1522,11 +1522,11 @@ bool BackendContext::createVulkanDevice(){
             : "no dedicated compute-only family"
     ;
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: async compute lane requested={} effective={} graphicsFamily={} computeFamily={} ({})")
-        , VulkanDetail::BoolToString(m_deviceParams.enableAsyncComputeLane)
-        , VulkanDetail::BoolToString(asyncComputeLaneEffective)
+        , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableAsyncComputeLane))
+        , StringConvert(VulkanDetail::BoolToString(asyncComputeLaneEffective))
         , m_graphicsQueueFamily
         , m_computeQueueFamily
-        , asyncComputeLaneReason
+        , StringConvert(asyncComputeLaneReason)
     );
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: created device '{}'"), m_rendererString);

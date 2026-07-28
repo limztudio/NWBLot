@@ -392,7 +392,7 @@ bool RendererSystem::prepareGpuTimingScopes(){
 
     for(const ScopeReservation& reservation : scopeReservations){
         if(!m_graphics.gpuTiming().prepareScopeQueries(reservation.scope->identity, device, reservation.queryCount)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to prepare GPU timing scope '{}'"), reservation.scope->identity.c_str());
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to prepare GPU timing scope '{}'"), StringConvert(reservation.scope->identity.c_str()));
             return false;
         }
     }

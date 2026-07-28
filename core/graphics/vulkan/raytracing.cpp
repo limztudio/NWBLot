@@ -1634,7 +1634,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
         auto reuseDepInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
         reuseDepInfo.memoryBarrierCount = 1;
         reuseDepInfo.pMemoryBarriers = &reuseBarrier;
-        vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &reuseDepInfo);
+        executePipelineBarrier(reuseDepInfo);
     }
 
     VkAccelerationStructureBuildRangeInfoKHR rangeInfo = {};
@@ -1852,7 +1852,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         auto reuseDepInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
         reuseDepInfo.memoryBarrierCount = 1;
         reuseDepInfo.pMemoryBarriers = &reuseBarrier;
-        vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &reuseDepInfo);
+        executePipelineBarrier(reuseDepInfo);
     }
 
     const VkAccelerationStructureBuildRangeInfoKHR* pRangeInfos = blasScratch.rangeInfos.data();
@@ -2004,7 +2004,7 @@ void CommandList::compactBottomLevelAccelStructs(){
         auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
         depInfo.memoryBarrierCount = 1;
         depInfo.pMemoryBarriers = &barrier;
-        vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
+        executePipelineBarrier(depInfo);
     }
 
     for(auto& as : m_pendingCompactions){

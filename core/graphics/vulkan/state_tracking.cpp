@@ -929,7 +929,54 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
         m_renderPassFramebuffer = nullptr;
     }
 
-    vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
+    // ResourceStates intentionally describe shader visibility without committing to a graphics, compute, or ray
+    // pipeline. The normal stage mapping therefore includes ALL_GRAPHICS alongside compute/ray stages. That is valid
+    // for the Graphics command pool, but not for a compute-only (or copy-only) pool. ALL_COMMANDS is valid on every
+    // queue family and scopes only the commands supported by that queue, so use it for each non-empty side when the
+    // generic barrier is emitted outside the Graphics lane. Preserve NONE for the ignored side of a queue-ownership
+    // release/acquire pair.
+    VkDependencyInfo queueCompatibleDepInfo = depInfo;
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_StateHandoffArena);
+    Vector<VkMemoryBarrier2, Alloc::ScratchArena> queueCompatibleMemoryBarriers{scratchArena};
+    Vector<VkImageMemoryBarrier2, Alloc::ScratchArena> queueCompatibleImageBarriers{scratchArena};
+    Vector<VkBufferMemoryBarrier2, Alloc::ScratchArena> queueCompatibleBufferBarriers{scratchArena};
+    if(m_desc.queueType != CommandQueue::Graphics){
+        const auto queueCompatibleStageMask = [](const VkPipelineStageFlags2 stageMask){
+            return stageMask == VK_PIPELINE_STAGE_2_NONE
+                ? VK_PIPELINE_STAGE_2_NONE
+                : VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
+            ;
+        };
+
+        queueCompatibleMemoryBarriers.reserve(depInfo.memoryBarrierCount);
+        for(u32 index = 0u; index < depInfo.memoryBarrierCount; ++index){
+            VkMemoryBarrier2 barrier = depInfo.pMemoryBarriers[index];
+            barrier.srcStageMask = queueCompatibleStageMask(barrier.srcStageMask);
+            barrier.dstStageMask = queueCompatibleStageMask(barrier.dstStageMask);
+            queueCompatibleMemoryBarriers.push_back(barrier);
+        }
+        queueCompatibleDepInfo.pMemoryBarriers = queueCompatibleMemoryBarriers.data();
+
+        queueCompatibleImageBarriers.reserve(depInfo.imageMemoryBarrierCount);
+        for(u32 index = 0u; index < depInfo.imageMemoryBarrierCount; ++index){
+            VkImageMemoryBarrier2 barrier = depInfo.pImageMemoryBarriers[index];
+            barrier.srcStageMask = queueCompatibleStageMask(barrier.srcStageMask);
+            barrier.dstStageMask = queueCompatibleStageMask(barrier.dstStageMask);
+            queueCompatibleImageBarriers.push_back(barrier);
+        }
+        queueCompatibleDepInfo.pImageMemoryBarriers = queueCompatibleImageBarriers.data();
+
+        queueCompatibleBufferBarriers.reserve(depInfo.bufferMemoryBarrierCount);
+        for(u32 index = 0u; index < depInfo.bufferMemoryBarrierCount; ++index){
+            VkBufferMemoryBarrier2 barrier = depInfo.pBufferMemoryBarriers[index];
+            barrier.srcStageMask = queueCompatibleStageMask(barrier.srcStageMask);
+            barrier.dstStageMask = queueCompatibleStageMask(barrier.dstStageMask);
+            queueCompatibleBufferBarriers.push_back(barrier);
+        }
+        queueCompatibleDepInfo.pBufferMemoryBarriers = queueCompatibleBufferBarriers.data();
+    }
+
+    vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &queueCompatibleDepInfo);
 
     if(resumeFramebuffer){
         RenderPassParameters params = {};

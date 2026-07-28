@@ -42,7 +42,11 @@ static bool AssignCompactString(
     if(outValue.assign(source))
         return true;
 
-    NWB_LOGGER_WARNING(NWB_TEXT("Resource cooker: {} exceeds ACompactString capacity ({})"), label, ACompactString::s_MaxLength);
+    NWB_LOGGER_WARNING(
+        NWB_TEXT("Resource cooker: {} exceeds ACompactString capacity ({})"),
+        StringConvert(label),
+        ACompactString::s_MaxLength
+    );
     return false;
 }
 
@@ -53,7 +57,7 @@ static bool AssignString(
 ){
     if(HasEmbeddedNull(AStringView(source.data(), source.size()))){
         outValue.clear();
-        NWB_LOGGER_WARNING(NWB_TEXT("Resource cooker: {} must not contain embedded nulls"), label);
+        NWB_LOGGER_WARNING(NWB_TEXT("Resource cooker: {} must not contain embedded nulls"), StringConvert(label));
         return false;
     }
 
@@ -82,7 +86,7 @@ static bool AssignAssetRootVirtualRoot(
         return true;
 
     NWB_LOGGER_WARNING(NWB_TEXT("Resource cooker: asset root virtual root '{}' exceeds ACompactString capacity ({})")
-        , virtualRoot
+        , StringConvert(virtualRoot)
         , ACompactString::s_MaxLength
     );
     return false;

@@ -681,6 +681,37 @@ Queue* Device::getQueue(CommandQueue::Enum queueType){
     return nullptr;
 }
 
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+
+void Device::rejectNextSubmissionForTesting(const CommandQueue::Enum queue){
+    const u32 index = static_cast<u32>(queue);
+    if(index >= static_cast<u32>(CommandQueue::kCount))
+        return;
+
+    m_submissionRejectionsForTesting[index].fetch_add(1u, MemoryOrder::relaxed);
+}
+
+void Device::clearSubmissionRejectionsForTesting(){
+    for(Atomic<u32>& count : m_submissionRejectionsForTesting)
+        count.store(0u, MemoryOrder::relaxed);
+}
+
+bool Device::consumeSubmissionRejectionForTesting(const CommandQueue::Enum queue){
+    const u32 index = static_cast<u32>(queue);
+    if(index >= static_cast<u32>(CommandQueue::kCount))
+        return false;
+
+    Atomic<u32>& count = m_submissionRejectionsForTesting[index];
+    u32 pending = count.load(MemoryOrder::relaxed);
+    while(pending > 0u){
+        if(count.compare_exchange_weak(pending, pending - 1u, MemoryOrder::relaxed))
+            return true;
+    }
+    return false;
+}
+
+#endif
+
 
 CommandListHandle Device::createCommandList(const CommandListParameters& params){
     CommandListParameters resolvedParams = params;

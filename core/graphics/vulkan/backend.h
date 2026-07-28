@@ -2343,6 +2343,7 @@ private:
 class Device final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Buffer;
     friend class CommandList;
+    friend class Queue;
     friend class Texture;
     friend class UploadManager;
     friend class GpuDescriptorHeap;
@@ -2415,6 +2416,7 @@ public:
     void waitEventQuery(EventQuery* query);
     [[nodiscard]] TimerQueryHandle createTimerQuery();
     bool pollTimerQuery(TimerQuery* query);
+    [[nodiscard]] bool getTimerQueryResult(TimerQuery* query, TimerQueryResult& outResult);
     f32 getTimerQueryTime(TimerQuery* query);
     void resetTimerQuery(TimerQuery* query);
     [[nodiscard]] FramebufferHandle createFramebuffer(const FramebufferDesc& desc);
@@ -2456,6 +2458,11 @@ public:
     void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance);
     [[nodiscard]] CommandQueue::Enum resolveRenderLane(RenderLane::Enum lane)const;
     [[nodiscard]] bool isRenderLaneDedicated(RenderLane::Enum lane)const;
+    // Absolute timestamp correlation is meaningful only when Vulkan reports timestamp support for both Graphics and
+    // Compute. Renderer overlap telemetry remains absent rather than fabricating a cross-queue interval otherwise.
+    [[nodiscard]] bool supportsGraphicsAndComputeTimestamps()const{
+        return m_context.physicalDeviceProperties.limits.timestampComputeAndGraphics == VK_TRUE;
+    }
     [[nodiscard]] u32 getQueueFamilyIndex(CommandQueue::Enum queue)const;
     [[nodiscard]] bool usesConcurrentQueueSharing(ResourceQueueSharing::Mask sharing)const{
         return UsesConcurrentGraphicsAsyncComputeSharing(sharing, m_context);
@@ -2487,6 +2494,13 @@ public:
 
 public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType);
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+    // Deterministically rejects a fully validated queue submit immediately before vkQueueSubmit2. This test-only
+    // seam follows the real rejection cleanup path, including returned command-buffer ownership and upload/scratch
+    // retirement, so packet-recovery tests never need to manufacture malformed Vulkan work.
+    void rejectNextSubmissionForTesting(CommandQueue::Enum queue);
+    void clearSubmissionRejectionsForTesting();
+#endif
     // Global descriptor heap. It is initialized only when VK_EXT_descriptor_buffer and its mapped manager are ready.
     [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap(){ return m_gpuDescriptorHeap; }
     // Descriptor-buffer manager (VK_EXT_descriptor_buffer). Disabled (returns isEnabled()==false) when the extension
@@ -2497,6 +2511,9 @@ public:
 
 
 private:
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+    [[nodiscard]] bool consumeSubmissionRejectionForTesting(CommandQueue::Enum queue);
+#endif
     [[nodiscard]] bool loadPipelineCacheData(GraphicsBytes& outData);
     void savePipelineCacheData();
     [[nodiscard]] bool createPipelineLayoutForBindingLayouts(
@@ -2620,6 +2637,10 @@ private:
     Path m_pipelineCacheDirectory;
     GraphicsString m_pipelineCacheVolumeName;
     Optional<Queue> m_queues[static_cast<u32>(CommandQueue::kCount)];
+
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+    Array<Atomic<u32>, static_cast<u32>(CommandQueue::kCount)> m_submissionRejectionsForTesting = {};
+#endif
 
     UploadManager m_uploadManager;
     UploadManager m_scratchManager;

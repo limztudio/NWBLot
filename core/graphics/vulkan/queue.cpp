@@ -331,6 +331,19 @@ u64 Queue::submit(
     submitInfo.signalSemaphoreInfoCount = static_cast<uint32_t>(signalInfos.size());
     submitInfo.pSignalSemaphoreInfos = signalInfos.data();
 
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+    if(m_device.consumeSubmissionRejectionForTesting(m_queueID)){
+        // Match the real vkQueueSubmit2 rejection path exactly: the detached command buffers return to this queue's
+        // pool, the tentative timeline value is rolled back, and Device::executeCommandLists performs its normal
+        // upload/scratch cleanup after observing outSubmissionAccepted=false.
+        clearPendingSemaphores();
+        m_lastSubmittedID = submissionID - 1;
+        for(auto& tracked : trackedBuffers)
+            recycleCommandBuffer(Move(tracked));
+        return m_lastSubmittedID;
+    }
+#endif
+
     const VkResult res = vkQueueSubmit2(m_queue, 1, &submitInfo, VK_NULL_HANDLE);
 
     clearPendingSemaphores();

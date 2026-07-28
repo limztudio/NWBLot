@@ -164,6 +164,10 @@ private:
     Core::CommandListHandle m_postGbufferNormalizeCommandList;
     Core::CommandListHandle m_shadowVisibilityCommandList;
     Core::CommandListHandle m_shadowOwnershipRecoveryCommandList;
+    // Empty Graphics packets that bracket the independently recorded effects submission for an aggregate queue-time
+    // envelope. They are submitted only on the dedicated async-shadow schedule.
+    Core::CommandListHandle m_asyncEffectsTimingBeginCommandList;
+    Core::CommandListHandle m_asyncEffectsTimingEndCommandList;
     Core::CommandListHandle m_causticsCommandList;
     Core::CommandListHandle m_surfelGiCommandList;
     Core::CommandListHandle m_deferredLightingCommandList;

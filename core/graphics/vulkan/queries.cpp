@@ -182,22 +182,34 @@ bool Device::pollTimerQuery(TimerQuery* queryResource){
     return res == VK_SUCCESS;
 }
 
-f32 Device::getTimerQueryTime(TimerQuery* queryResource){
+bool Device::getTimerQueryResult(TimerQuery* queryResource, TimerQueryResult& outResult){
+    outResult = TimerQueryResult{};
+
     auto* query = queryResource;
     if(!query || query->m_queryPool == VK_NULL_HANDLE)
-        return 0.f;
+        return false;
 
     u64 timestamps[s_TimerQueryTimestampCount] = {};
     const VkResult res = __hidden_vulkan_queries::GetTimerQueryResults(m_context, query->m_queryPool, timestamps);
-    if(res == VK_SUCCESS){
-        u64 diff = timestamps[s_TimerQueryEndIndex] - timestamps[s_TimerQueryBeginIndex];
-        f32 timestampPeriod = m_context.physicalDeviceProperties.limits.timestampPeriod;
-        return static_cast<f32>(diff) * timestampPeriod * __hidden_vulkan_queries::s_TimestampNanosecondsToSeconds;
+    if(res != VK_SUCCESS){
+        if(res != VK_NOT_READY)
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to retrieve timer query results: {}"), ResultToString(res));
+        return false;
     }
 
-    if(res != VK_NOT_READY)
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to retrieve timer query results: {}"), ResultToString(res));
-    return 0.f;
+    const f64 timestampSeconds = static_cast<f64>(m_context.physicalDeviceProperties.limits.timestampPeriod)
+        * static_cast<f64>(__hidden_vulkan_queries::s_TimestampNanosecondsToSeconds)
+    ;
+    outResult.beginSeconds = static_cast<f64>(timestamps[s_TimerQueryBeginIndex]) * timestampSeconds;
+    outResult.endSeconds = static_cast<f64>(timestamps[s_TimerQueryEndIndex]) * timestampSeconds;
+    return true;
+}
+
+f32 Device::getTimerQueryTime(TimerQuery* queryResource){
+    TimerQueryResult result;
+    if(!getTimerQueryResult(queryResource, result))
+        return 0.f;
+    return static_cast<f32>(result.durationSeconds());
 }
 
 void Device::resetTimerQuery(TimerQuery* queryResource){

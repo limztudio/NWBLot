@@ -83,6 +83,7 @@ concept DeviceApi = requires(
     Shader* shader,
     EventQuery* eventQuery,
     TimerQuery* timerQuery,
+    TimerQueryResult& timerQueryResult,
     const FramebufferDesc& framebufferDesc,
     const GraphicsPipelineDesc& graphicsPipelineDesc,
     const FramebufferInfo& framebufferInfo,
@@ -134,6 +135,7 @@ concept DeviceApi = requires(
     device.waitEventQuery(eventQuery);
     { device.createTimerQuery() }->SameAs<TimerQueryHandle>;
     { device.pollTimerQuery(timerQuery) }->SameAs<bool>;
+    { device.getTimerQueryResult(timerQuery, timerQueryResult) }->SameAs<bool>;
     { device.getTimerQueryTime(timerQuery) }->SameAs<f32>;
     device.resetTimerQuery(timerQuery);
 

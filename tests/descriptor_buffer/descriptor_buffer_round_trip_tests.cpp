@@ -190,6 +190,7 @@ inline constexpr GpuTimingScopeDefinition s_FrameTimingPreambleScope("tests/fram
 inline constexpr GpuTimingScopeDefinition s_FrameTimingLateActivationScope("tests/frame_timing_late_activation");
 inline constexpr GpuTimingScopeDefinition s_SubmissionTicketScope("tests/timing_submission_ticket");
 inline constexpr GpuTimingScopeDefinition s_ConcurrentSubmissionTicketScope("tests/timing_submission_ticket_concurrent");
+inline constexpr GpuTimingScopeDefinition s_FrameTransactionScope("tests/timing_frame_transaction");
 
 
 // Records a timing scope inside dynamic rendering, where vkCmdResetQueryPool is illegal. The scope can therefore
@@ -537,6 +538,134 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
 }
 
 
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+
+// The async renderer records its Graphics-prefix timestamp before it knows whether the pre-recorded final packet will
+// submit. Reject that final submit after the prefix is accepted, then use a tiny Graphics recovery packet to complete
+// the query without publishing a misleading partial render.frame sample. A following valid transaction proves the
+// one reserved query slot was released rather than leaked.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPrefixAfterRejectedFinal){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTransactionScope.identity, device, 1u));
+    timing.beginFrame(90u);
+
+    auto prefix = device.createCommandList();
+    auto rejectedFinal = device.createCommandList();
+    auto recovery = device.createCommandList();
+    ASSERT_NE(prefix.get(), nullptr);
+    ASSERT_NE(rejectedFinal.get(), nullptr);
+    ASSERT_NE(recovery.get(), nullptr);
+
+    GpuTimingFrameTransaction rejectedTransaction(timing);
+    GpuTimingSubmissionTicket prefixTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(prefixTicket);
+        prefix->open();
+        ASSERT_TRUE(rejectedTransaction.begin(s_FrameTransactionScope, device, *prefix));
+        prefix->close();
+    }
+    GpuTimingSubmissionTicket finalTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(finalTicket);
+        rejectedFinal->open();
+        ASSERT_TRUE(rejectedTransaction.recordEnd(*rejectedFinal));
+        rejectedFinal->close();
+    }
+
+    CommandList* prefixCommandLists[] = { prefix.get() };
+    const QueueSubmissionToken prefixToken = prefixTicket.submit(
+        device,
+        prefixCommandLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(prefixToken.valid());
+    rejectedTransaction.confirmBeginSubmission();
+
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    CommandList* rejectedFinalCommandLists[] = { rejectedFinal.get() };
+    EXPECT_FALSE(finalTicket.submit(
+        device,
+        rejectedFinalCommandLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
+
+    rejectedTransaction.prepareForRecovery();
+    recovery->open();
+    ASSERT_TRUE(rejectedTransaction.recordEnd(*recovery));
+    recovery->close();
+    CommandList* recoveryCommandLists[] = { recovery.get() };
+    const QueueSubmissionToken recoveryToken = device.executeCommandLists(
+        recoveryCommandLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(recoveryToken.valid());
+    ASSERT_TRUE(rejectedTransaction.confirmEndSubmission(false));
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 91u);
+    EXPECT_FALSE(timingSink.stats(s_FrameTransactionScope.identity).valid());
+
+    timing.beginFrame(91u);
+    auto acceptedPrefix = device.createCommandList();
+    auto acceptedFinal = device.createCommandList();
+    ASSERT_NE(acceptedPrefix.get(), nullptr);
+    ASSERT_NE(acceptedFinal.get(), nullptr);
+
+    GpuTimingFrameTransaction acceptedTransaction(timing);
+    GpuTimingSubmissionTicket acceptedPrefixTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(acceptedPrefixTicket);
+        acceptedPrefix->open();
+        ASSERT_TRUE(acceptedTransaction.begin(s_FrameTransactionScope, device, *acceptedPrefix));
+        acceptedPrefix->close();
+    }
+    GpuTimingSubmissionTicket acceptedFinalTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(acceptedFinalTicket);
+        acceptedFinal->open();
+        ASSERT_TRUE(acceptedTransaction.recordEnd(*acceptedFinal));
+        acceptedFinal->close();
+    }
+
+    CommandList* acceptedPrefixCommandLists[] = { acceptedPrefix.get() };
+    ASSERT_TRUE(acceptedPrefixTicket.submit(
+        device,
+        acceptedPrefixCommandLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
+    acceptedTransaction.confirmBeginSubmission();
+    CommandList* acceptedFinalCommandLists[] = { acceptedFinal.get() };
+    ASSERT_TRUE(acceptedFinalTicket.submit(
+        device,
+        acceptedFinalCommandLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
+    ASSERT_TRUE(acceptedTransaction.confirmEndSubmission(true));
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 92u);
+    EXPECT_TRUE(timingSink.stats(s_FrameTransactionScope.identity).valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+#endif
+
+
 // Ordered primary command buffers must carry the producer's final state into the consumer. The consumer's
 // ShaderResource transition therefore has CopyDest as its source, rather than treating the buffer as unknown.
 TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffTransfersFinalBufferState){
@@ -786,6 +915,275 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneTransfersExclusiveBufferOw
     EXPECT_EQ(reuseToken.queue, CommandQueue::Compute);
     EXPECT_TRUE(device.waitForIdle());
 }
+
+
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+
+// Exercise the four-submission shadow topology's rejection boundaries with the same pre-Vulkan injection seam used
+// by RendererSystem. Prefix and shadow rejections leave no ownership handoff; effects/final rejections repair the
+// accepted Compute release through a Graphics acquire/release; a rejected recovery deliberately stops before reuse,
+// matching the renderer's device-recreation/suspension policy.
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreservesOrSuspendsExclusiveOwnership){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+
+    enum class FailurePoint : u8{
+        Prefix,
+        Shadow,
+        Effects,
+        Final,
+        Recovery,
+    };
+
+    const auto makeExclusiveBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveUAVs(true)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const auto makeSharedBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveUAVs(true)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+                .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        );
+    };
+
+    CommandListParameters computeParams;
+    computeParams.setRenderLane(RenderLane::AsyncCompute);
+
+    // Executes the next valid Compute -> Graphics -> Compute cycle. `initialState` is present only after the
+    // ownership-recovery acquire/release; `initialWait` makes that handoff's accepted token explicit.
+    const auto executeNextValidCycle = [&](
+        Buffer* output,
+        Buffer* sharedInput,
+        const CommandListResourceStateHandoff* initialState,
+        const QueueSubmissionToken initialWait
+    ){
+        CommandListResourceStateHandoff computeToGraphics(asyncScope.arena());
+        CommandListResourceStateHandoff graphicsToCompute(asyncScope.arena());
+        auto compute = device.createCommandList(computeParams);
+        auto graphics = device.createCommandList();
+        auto computeReuse = device.createCommandList(computeParams);
+        ASSERT_NE(compute.get(), nullptr);
+        ASSERT_NE(graphics.get(), nullptr);
+        ASSERT_NE(computeReuse.get(), nullptr);
+
+        compute->open(initialState);
+        if(initialState)
+            EXPECT_EQ(compute->getBufferState(output), ResourceStates::ShaderResource);
+        compute->setBufferState(sharedInput, ResourceStates::ShaderResource);
+        compute->setBufferState(output, ResourceStates::UnorderedAccess);
+        compute->releaseBufferOwnership(output, RenderLane::Graphics);
+        compute->close(&computeToGraphics);
+        ASSERT_TRUE(computeToGraphics.valid());
+
+        QueueSubmissionDesc computeSubmitDesc;
+        if(initialWait.valid())
+            computeSubmitDesc.setWaitTokens(&initialWait, 1u);
+        CommandList* computeCommandLists[] = { compute.get() };
+        const QueueSubmissionToken computeToken = device.executeCommandLists(
+            computeCommandLists,
+            1u,
+            RenderLane::AsyncCompute,
+            computeSubmitDesc
+        );
+        ASSERT_TRUE(computeToken.valid());
+
+        graphics->open(&computeToGraphics);
+        EXPECT_EQ(graphics->getBufferState(output), ResourceStates::UnorderedAccess);
+        graphics->setBufferState(output, ResourceStates::ShaderResource);
+        graphics->releaseBufferOwnership(output, RenderLane::AsyncCompute);
+        graphics->close(&graphicsToCompute);
+        ASSERT_TRUE(graphicsToCompute.valid());
+
+        const QueueSubmissionDesc graphicsSubmitDesc = QueueSubmissionDesc().setWaitTokens(&computeToken, 1u);
+        CommandList* graphicsCommandLists[] = { graphics.get() };
+        const QueueSubmissionToken graphicsToken = device.executeCommandLists(
+            graphicsCommandLists,
+            1u,
+            RenderLane::Graphics,
+            graphicsSubmitDesc
+        );
+        ASSERT_TRUE(graphicsToken.valid());
+
+        computeReuse->open(&graphicsToCompute);
+        EXPECT_EQ(computeReuse->getBufferState(output), ResourceStates::ShaderResource);
+        computeReuse->setBufferState(output, ResourceStates::UnorderedAccess);
+        computeReuse->close();
+        const QueueSubmissionDesc reuseSubmitDesc = QueueSubmissionDesc().setWaitTokens(&graphicsToken, 1u);
+        CommandList* reuseCommandLists[] = { computeReuse.get() };
+        const QueueSubmissionToken reuseToken = device.executeCommandLists(
+            reuseCommandLists,
+            1u,
+            RenderLane::AsyncCompute,
+            reuseSubmitDesc
+        );
+        ASSERT_TRUE(reuseToken.valid());
+        ASSERT_TRUE(device.waitForIdle());
+    };
+
+    const FailurePoint failurePoints[] = {
+        FailurePoint::Prefix,
+        FailurePoint::Shadow,
+        FailurePoint::Effects,
+        FailurePoint::Final,
+        FailurePoint::Recovery,
+    };
+    for(const FailurePoint failurePoint : failurePoints){
+        SCOPED_TRACE(static_cast<u32>(failurePoint));
+        device.clearSubmissionRejectionsForTesting();
+
+        auto output = makeExclusiveBuffer();
+        auto sharedInput = makeSharedBuffer();
+        ASSERT_NE(output.get(), nullptr);
+        ASSERT_NE(sharedInput.get(), nullptr);
+
+        CommandListResourceStateHandoff computeToGraphics(asyncScope.arena());
+        CommandListResourceStateHandoff graphicsToCompute(asyncScope.arena());
+        auto prefix = device.createCommandList();
+        auto shadow = device.createCommandList(computeParams);
+        auto effects = device.createCommandList();
+        auto final = device.createCommandList();
+        ASSERT_NE(prefix.get(), nullptr);
+        ASSERT_NE(shadow.get(), nullptr);
+        ASSERT_NE(effects.get(), nullptr);
+        ASSERT_NE(final.get(), nullptr);
+
+        prefix->open();
+        prefix->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
+        prefix->close();
+        if(failurePoint == FailurePoint::Prefix)
+            device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+        CommandList* prefixCommandLists[] = { prefix.get() };
+        const QueueSubmissionToken prefixToken = device.executeCommandLists(
+            prefixCommandLists,
+            1u,
+            RenderLane::Graphics,
+            QueueSubmissionDesc{}
+        );
+        if(failurePoint == FailurePoint::Prefix){
+            EXPECT_FALSE(prefixToken.valid());
+            executeNextValidCycle(output.get(), sharedInput.get(), nullptr, {});
+            continue;
+        }
+        ASSERT_TRUE(prefixToken.valid());
+
+        shadow->open();
+        shadow->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
+        shadow->setBufferState(output.get(), ResourceStates::UnorderedAccess);
+        shadow->releaseBufferOwnership(output.get(), RenderLane::Graphics);
+        shadow->close(&computeToGraphics);
+        ASSERT_TRUE(computeToGraphics.valid());
+        if(failurePoint == FailurePoint::Shadow)
+            device.rejectNextSubmissionForTesting(CommandQueue::Compute);
+        const QueueSubmissionDesc shadowSubmitDesc = QueueSubmissionDesc().setWaitTokens(&prefixToken, 1u);
+        CommandList* shadowCommandLists[] = { shadow.get() };
+        const QueueSubmissionToken shadowToken = device.executeCommandLists(
+            shadowCommandLists,
+            1u,
+            RenderLane::AsyncCompute,
+            shadowSubmitDesc
+        );
+        if(failurePoint == FailurePoint::Shadow){
+            EXPECT_FALSE(shadowToken.valid());
+            executeNextValidCycle(output.get(), sharedInput.get(), nullptr, prefixToken);
+            continue;
+        }
+        ASSERT_TRUE(shadowToken.valid());
+
+        effects->open();
+        effects->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
+        effects->close();
+        if(failurePoint == FailurePoint::Effects || failurePoint == FailurePoint::Recovery)
+            device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+        if(failurePoint == FailurePoint::Recovery)
+            device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+        CommandList* effectsCommandLists[] = { effects.get() };
+        const QueueSubmissionToken effectsToken = device.executeCommandLists(
+            effectsCommandLists,
+            1u,
+            RenderLane::Graphics,
+            QueueSubmissionDesc{}
+        );
+        if(failurePoint == FailurePoint::Effects || failurePoint == FailurePoint::Recovery){
+            EXPECT_FALSE(effectsToken.valid());
+        }
+        else
+            ASSERT_TRUE(effectsToken.valid());
+
+        bool finalRejected = false;
+        if(failurePoint != FailurePoint::Effects && failurePoint != FailurePoint::Recovery){
+            final->open(&computeToGraphics);
+            EXPECT_EQ(final->getBufferState(output.get()), ResourceStates::UnorderedAccess);
+            final->setBufferState(output.get(), ResourceStates::ShaderResource);
+            final->releaseBufferOwnership(output.get(), RenderLane::AsyncCompute);
+            final->close(&graphicsToCompute);
+            ASSERT_TRUE(graphicsToCompute.valid());
+            if(failurePoint == FailurePoint::Final)
+                device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+            const QueueSubmissionToken finalWaitTokens[] = { shadowToken, effectsToken };
+            const QueueSubmissionDesc finalSubmitDesc = QueueSubmissionDesc().setWaitTokens(finalWaitTokens, 2u);
+            CommandList* finalCommandLists[] = { final.get() };
+            const QueueSubmissionToken finalToken = device.executeCommandLists(
+                finalCommandLists,
+                1u,
+                RenderLane::Graphics,
+                finalSubmitDesc
+            );
+            finalRejected = failurePoint == FailurePoint::Final;
+            if(finalRejected)
+                EXPECT_FALSE(finalToken.valid());
+            else
+                ASSERT_TRUE(finalToken.valid());
+
+            if(!finalRejected){
+                executeNextValidCycle(output.get(), sharedInput.get(), &graphicsToCompute, finalToken);
+                continue;
+            }
+        }
+
+        // Effects/final did not leave an accepted Graphics acquire, so return the accepted Compute release to its
+        // documented Compute owner. The second injected rejection covers the renderer's terminal recovery failure.
+        auto recovery = device.createCommandList();
+        ASSERT_NE(recovery.get(), nullptr);
+        recovery->open(&computeToGraphics);
+        EXPECT_EQ(recovery->getBufferState(output.get()), ResourceStates::UnorderedAccess);
+        recovery->setBufferState(output.get(), ResourceStates::ShaderResource);
+        recovery->releaseBufferOwnership(output.get(), RenderLane::AsyncCompute);
+        recovery->close(&graphicsToCompute);
+        ASSERT_TRUE(graphicsToCompute.valid());
+        const QueueSubmissionDesc recoverySubmitDesc = QueueSubmissionDesc().setWaitTokens(&shadowToken, 1u);
+        CommandList* recoveryCommandLists[] = { recovery.get() };
+        const QueueSubmissionToken recoveryToken = device.executeCommandLists(
+            recoveryCommandLists,
+            1u,
+            RenderLane::Graphics,
+            recoverySubmitDesc
+        );
+        if(failurePoint == FailurePoint::Recovery){
+            EXPECT_FALSE(recoveryToken.valid());
+            EXPECT_TRUE(device.waitForIdle());
+            continue;
+        }
+        ASSERT_TRUE(recoveryToken.valid());
+        executeNextValidCycle(output.get(), sharedInput.get(), &graphicsToCompute, recoveryToken);
+    }
+}
+
+#endif
 
 
 // A normalized prelude transitions shared inputs once before independently recorded primary command lists begin.

@@ -20,6 +20,7 @@ NWB_CORE_BEGIN
 
 
 class GpuTimingAccumulator;
+class GpuTimingFrameTransaction;
 class GpuTimingMeasure;
 class GpuTimingRecorder;
 class GpuTimingSubmissionTicket;
@@ -70,6 +71,9 @@ private:
         // roll back completed scopes, so this also keeps two concurrently recording workers from selecting one slot.
         bool recording = false;
         bool pending = false;
+        // A recovery endpoint completes an accepted begin after a later frame packet was rejected. The query must
+        // still retire on the device timeline, but it must not publish a partial frame sample as a valid frame time.
+        bool publishSample = true;
         // Set while a frame-preamble command list contains a reset for this pool. It becomes deviceReady only after
         // that command list has been submitted successfully.
         bool frameResetRecorded = false;
@@ -83,8 +87,13 @@ private:
 
 
 public:
-    explicit GpuTimingAccumulator(Alloc::GlobalArena& arena, const Perf::TimingScopeId timingScope)
+    explicit GpuTimingAccumulator(
+        Alloc::GlobalArena& arena,
+        const Name& scopeName,
+        const Perf::TimingScopeId timingScope
+    )
         : m_queries(arena)
+        , m_scopeName(scopeName)
         , m_timingScope(timingScope)
     {}
 
@@ -96,7 +105,7 @@ public:
             discardFrameReset();
     }
 
-    void collect(Device& device, Perf::TimingSink& timing, u32 epoch);
+    void collect(Device& device, GpuTimingRecorder& recorder, u32 epoch);
     void recordFrameReset(CommandList& commandList);
     void confirmFrameReset();
     void discardFrameReset();
@@ -105,6 +114,8 @@ public:
     [[nodiscard]] bool reserveQueries(Device& device, u32 queryCount);
     [[nodiscard]] GpuTimingScope beginQuery(Device& device, CommandList& commandList, u64 frameIndex, u32 epoch);
     [[nodiscard]] bool endQuery(CommandList& commandList, const GpuTimingScope& scope);
+    [[nodiscard]] bool recordQueryEnd(CommandList& commandList, const GpuTimingScope& scope);
+    [[nodiscard]] bool confirmQuery(const GpuTimingScope& scope, bool publishSample);
     void discardQuery(const GpuTimingScope& scope);
 
 
@@ -115,6 +126,7 @@ private:
 
 private:
     QueryVector m_queries;
+    Name m_scopeName = NAME_NONE;
     Perf::TimingScopeId m_timingScope;
     u32 m_requestedQueryCount = 0u;
     u64 m_nextReservation = 0u;
@@ -126,12 +138,40 @@ private:
 
 
 class GpuTimingRecorder final : NoCopy{
+    friend class GpuTimingAccumulator;
+    friend class GpuTimingFrameTransaction;
     friend class GpuTimingMeasure;
     friend class GpuTimingSubmissionTicket;
 
 private:
     using AccumulatorPtr = GlobalUniquePtr<GpuTimingAccumulator>;
     using AccumulatorMap = HashMap<Name, AccumulatorPtr, Hasher<Name>, EqualTo<Name>, Alloc::GlobalArena>;
+
+    struct TimestampRange{
+        f64 beginSeconds = 0.0;
+        f64 endSeconds = 0.0;
+    };
+
+    struct PendingOverlapFrame{
+        u64 frameIndex = 0u;
+        TimestampRange first;
+        TimestampRange second;
+        bool hasFirst = false;
+        bool hasSecond = false;
+    };
+
+    struct OverlapRecord{
+        Name firstScope = NAME_NONE;
+        Name secondScope = NAME_NONE;
+        Perf::TimingScopeId outputScope;
+        Vector<PendingOverlapFrame, Alloc::GlobalArena> pendingFrames;
+
+        explicit OverlapRecord(Alloc::GlobalArena& arena)
+            : pendingFrames(arena)
+        {}
+    };
+
+    using OverlapVector = Vector<OverlapRecord, Alloc::GlobalArena>;
 
 
 public:
@@ -148,6 +188,13 @@ public:
     // Declares the capacity a scope needs. When capture is inactive this records the request without allocating GPU
     // query pools, so a later capture activation can materialize them before its first frame preamble.
     [[nodiscard]] bool prepareScopeQueries(const Name& scopeName, Device& device, u32 queryCount);
+    // Publishes the positive timestamp intersection of two packet envelopes. A zero-valued sample means both
+    // packets completed but did not overlap; no sample is published when either packet was rejected.
+    [[nodiscard]] bool prepareOverlapMetric(
+        const Name& firstScope,
+        const Name& secondScope,
+        const Name& outputScope
+    );
     // Materializes every declared scope before the frame preamble. Graphics calls this after capture can be toggled
     // on at runtime and before dynamic-rendering scopes need their query pools reset.
     [[nodiscard]] bool materializeRequestedQueries(Device& device);
@@ -164,11 +211,15 @@ public:
 
 private:
     [[nodiscard]] GpuTimingScope beginScope(const Name& scopeName, Device& device, CommandList& commandList);
+    [[nodiscard]] GpuTimingScope beginDeferredScope(const Name& scopeName, Device& device, CommandList& commandList);
     void endScope(CommandList& commandList, const GpuTimingScope& scope);
+    [[nodiscard]] bool recordDeferredScopeEnd(CommandList& commandList, const GpuTimingScope& scope);
+    [[nodiscard]] bool confirmDeferredScope(const GpuTimingScope& scope, bool publishSample);
     void discardScope(const GpuTimingScope& scope);
     [[nodiscard]] GpuTimingAccumulator* findOrCreateAccumulator(const Name& scopeName);
     [[nodiscard]] GpuTimingSubmissionTicket* activeSubmissionTicket()const;
     void collectLocked(Device& device, u64 publishFrameIndex);
+    void recordTimestampRange(const Name& scopeName, u64 frameIndex, const TimestampRange& range);
     void discardFrameResetLocked();
     void syncActiveState();
     void advanceEpoch();
@@ -178,6 +229,7 @@ private:
     Alloc::GlobalArena& m_arena;
     Perf::TimingSink& m_timing;
     AccumulatorMap m_accumulators;
+    OverlapVector m_overlapRecords;
     // A submission ticket protects its own rollback list, while this lock serializes every query-pool mutation and
     // recorder-map access. Worker command-list recordings may share a ticket and begin timing scopes concurrently.
     Futex m_mutex;
@@ -255,6 +307,58 @@ private:
     Futex m_mutex;
     u32 m_recordingScopeCount = 0u;
     bool m_resolved = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Owns a whole-frame timestamp whose endpoints live in different accepted submissions. Unlike a normal submission
+// ticket, it does not mark its query pending until the packet containing the ending timestamp has actually been
+// accepted. If a later packet is rejected after the producer was accepted, record a recovery end and confirm it with
+// publishSample=false so the query retires without reporting a misleading partial frame duration.
+class GpuTimingFrameTransaction final : NoCopy{
+public:
+    explicit GpuTimingFrameTransaction(GpuTimingRecorder& recorder);
+    ~GpuTimingFrameTransaction();
+
+
+public:
+    // Must run inside a GpuTimingSubmissionTicket::RecordingScope for the submission that records the begin
+    // timestamp. A disabled or under-reserved timing recorder is a valid no-op transaction.
+    [[nodiscard]] bool begin(
+        const GpuTimingScopeDefinition& scopeDefinition,
+        Device& device,
+        CommandList& commandList
+    );
+    // Records the end timestamp but deliberately keeps the query reservation private until the containing submission
+    // is accepted. This permits a replacement recovery endpoint when a pre-recorded final packet is rejected.
+    [[nodiscard]] bool recordEnd(CommandList& commandList);
+    void confirmBeginSubmission();
+    [[nodiscard]] bool confirmEndSubmission(bool publishSample);
+    [[nodiscard]] bool needsRetirement()const;
+    // Discards the endpoint recorded in a packet that will not be submitted, allowing a recovery command list to
+    // write the replacement endpoint after the accepted begin.
+    void prepareForRecovery();
+    void discard();
+
+
+private:
+    enum class State : u8{
+        Idle,
+        Inactive,
+        BeginRecorded,
+        BeginAccepted,
+        EndRecorded,
+        Resolved,
+    };
+
+
+private:
+    GpuTimingRecorder& m_recorder;
+    GpuTimingScope m_scope;
+    State m_state = State::Idle;
+    bool m_beginAccepted = false;
 };
 
 

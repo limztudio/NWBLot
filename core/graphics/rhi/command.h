@@ -32,6 +32,15 @@ namespace CommandQueue{
 typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
 typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 
+// Absolute device-timestamp values for one timer query. GPU timing uses the duration for ordinary scopes and the
+// endpoints to derive cross-queue packet overlap without summing concurrent work.
+struct TimerQueryResult{
+    f64 beginSeconds = 0.0;
+    f64 endSeconds = 0.0;
+
+    [[nodiscard]] f64 durationSeconds()const{ return endSeconds - beginSeconds; }
+};
+
 
 // Captures the final tracked state of one primary command list so a later primary command list can begin
 // from it. The scheduler must guarantee that the producer executes before the consumer, either by preserving

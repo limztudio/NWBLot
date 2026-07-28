@@ -166,6 +166,8 @@ void RendererSystem::invalidateResources(){
     m_postGbufferNormalizeCommandList.reset();
     m_shadowVisibilityCommandList.reset();
     m_shadowOwnershipRecoveryCommandList.reset();
+    m_asyncEffectsTimingBeginCommandList.reset();
+    m_asyncEffectsTimingEndCommandList.reset();
     m_causticsCommandList.reset();
     m_surfelGiCommandList.reset();
     m_deferredLightingCommandList.reset();
@@ -272,6 +274,23 @@ bool RendererSystem::ensureFrameCommandLists(){
         }
     }
 
+    if(device.isRenderLaneDedicated(Core::RenderLane::AsyncCompute)){
+        if(!m_asyncEffectsTimingBeginCommandList){
+            m_asyncEffectsTimingBeginCommandList = device.createCommandList();
+            if(!m_asyncEffectsTimingBeginCommandList){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async effects timing-begin command list"));
+                return false;
+            }
+        }
+        if(!m_asyncEffectsTimingEndCommandList){
+            m_asyncEffectsTimingEndCommandList = device.createCommandList();
+            if(!m_asyncEffectsTimingEndCommandList){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async effects timing-end command list"));
+                return false;
+            }
+        }
+    }
+
     if(!m_causticsCommandList){
         m_causticsCommandList = device.createCommandList();
         if(!m_causticsCommandList){
@@ -334,6 +353,10 @@ bool RendererSystem::prepareGpuTimingScopes(){
         { &RendererGpuTimingScope::s_MeshDispatch, 128u },
         { &RendererGpuTimingScope::s_Raster, 128u },
         { &RendererGpuTimingScope::s_Frame, 2u },
+        { &RendererGpuTimingScope::s_AsyncPrefix, 2u },
+        { &RendererGpuTimingScope::s_AsyncShadow, 2u },
+        { &RendererGpuTimingScope::s_AsyncEffects, 2u },
+        { &RendererGpuTimingScope::s_AsyncFinal, 2u },
         { &RendererGpuTimingScope::s_DeferredClear, 2u },
         { &RendererGpuTimingScope::s_ShadowVisibility, 2u },
         { &RendererGpuTimingScope::s_SwBvhSort, 4u },
@@ -372,6 +395,17 @@ bool RendererSystem::prepareGpuTimingScopes(){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to prepare GPU timing scope '{}'"), reservation.scope->identity.c_str());
             return false;
         }
+    }
+
+    if(
+        device.supportsGraphicsAndComputeTimestamps()
+        && !m_graphics.gpuTiming().prepareOverlapMetric(
+            RendererGpuTimingScope::s_AsyncShadow.identity,
+            RendererGpuTimingScope::s_AsyncEffects.identity,
+            RendererGpuTimingScope::s_AsyncShadowEffectsOverlap.identity
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to prepare async shadow/effects overlap metric"));
     }
 
     return true;
@@ -558,6 +592,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* postGbufferNormalizeCommandList = m_postGbufferNormalizeCommandList.get();
     Core::CommandList* shadowVisibilityCommandList = m_shadowVisibilityCommandList.get();
     Core::CommandList* shadowOwnershipRecoveryCommandList = m_shadowOwnershipRecoveryCommandList.get();
+    Core::CommandList* asyncEffectsTimingBeginCommandList = m_asyncEffectsTimingBeginCommandList.get();
+    Core::CommandList* asyncEffectsTimingEndCommandList = m_asyncEffectsTimingEndCommandList.get();
     Core::CommandList* causticsCommandList = m_causticsCommandList.get();
     Core::CommandList* surfelGiCommandList = m_surfelGiCommandList.get();
     Core::CommandList* deferredLightingCommandList = m_deferredLightingCommandList.get();
@@ -570,6 +606,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(postGbufferNormalizeCommandList);
     NWB_ASSERT(shadowVisibilityCommandList);
     NWB_ASSERT(shadowOwnershipRecoveryCommandList);
+    NWB_ASSERT(!asyncShadowSchedule || asyncEffectsTimingBeginCommandList);
+    NWB_ASSERT(!asyncShadowSchedule || asyncEffectsTimingEndCommandList);
     NWB_ASSERT(causticsCommandList);
     NWB_ASSERT(surfelGiCommandList);
     NWB_ASSERT(deferredLightingCommandList);
@@ -583,6 +621,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !postGbufferNormalizeCommandList
         || !shadowVisibilityCommandList
         || !shadowOwnershipRecoveryCommandList
+        || (asyncShadowSchedule && !asyncEffectsTimingBeginCommandList)
+        || (asyncShadowSchedule && !asyncEffectsTimingEndCommandList)
         || !causticsCommandList
         || !surfelGiCommandList
         || !deferredLightingCommandList
@@ -707,9 +747,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingSubmissionTicket* const shadowTimingTicketForPacket = asyncShadowSchedule ? &shadowTimingTicket : &renderTimingTicket;
     Core::GpuTimingSubmissionTicket* const effectsTimingTicketForPacket = asyncShadowSchedule ? &effectsTimingTicket : &renderTimingTicket;
     Core::GpuTimingSubmissionTicket* const finalTimingTicketForPacket = asyncShadowSchedule ? &finalTimingTicket : &renderTimingTicket;
-    // This scope crosses two synchronously-waited graphics jobs, so it cannot live in either worker's scratch
-    // arena. It remains a Graphics-only fallback metric until the async critical-path transaction is added.
+    // This scope crosses two synchronously-waited Graphics jobs, so it cannot live in either worker's scratch
+    // arena. The fallback owns it directly; the dedicated schedule uses the acceptance-aware transaction below.
     Optional<Core::GpuTimingMeasure> frameTiming;
+    // The dedicated schedule keeps render.frame as an end-to-end Graphics-timeline critical path. Its endpoint is
+    // committed only after Graphics final accepts; a rejected later packet records a non-publishing recovery end so
+    // the accepted prefix timestamp never leaks into a later frame's query pool.
+    Core::GpuTimingFrameTransaction asyncFrameTiming(m_graphics.gpuTiming());
+    Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
+    Optional<Core::GpuTimingMeasure> asyncEffectsTiming;
+    Optional<Core::GpuTimingMeasure> asyncFinalTiming;
     const auto discardTimingTickets = [&](){
         renderTimingTicket.discard();
         prefixTimingTicket.discard();
@@ -722,6 +769,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             frameTiming->discardTiming();
             frameTiming.reset();
         }
+        if(asyncPrefixTiming){
+            asyncPrefixTiming->discardTiming();
+            asyncPrefixTiming.reset();
+        }
+        if(asyncEffectsTiming){
+            asyncEffectsTiming->discardTiming();
+            asyncEffectsTiming.reset();
+        }
+        if(asyncFinalTiming){
+            asyncFinalTiming->discardTiming();
+            asyncFinalTiming.reset();
+        }
+        asyncFrameTiming.discard();
         discardTimingTickets();
         restorePostGbufferPacketCpuState();
         m_raytracingSystem.discardSoftShadowTemporalHistory();
@@ -761,6 +821,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &device,
         meshViewSetupCommandList,
         &frameTiming,
+        &asyncFrameTiming,
+        &asyncPrefixTiming,
         asyncShadowSchedule,
         &meshViewSetupReady,
         &meshViewSetupCommandListReady,
@@ -782,6 +844,20 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             );
             if(!frameTiming)
                 return;
+        }
+        else{
+            asyncPrefixTiming.emplace(
+                m_graphics.gpuTiming(),
+                RendererGpuTimingScope::s_AsyncPrefix,
+                device,
+                *meshViewSetupCommandList
+            );
+            asyncPrefixTiming->finishMarker();
+            static_cast<void>(asyncFrameTiming.begin(
+                RendererGpuTimingScope::s_Frame,
+                device,
+                *meshViewSetupCommandList
+            ));
         }
 
         const bool meshViewReady = m_meshSystem.updateMeshViewBuffer(*meshViewSetupCommandList, meshViewAspectRatio);
@@ -1045,13 +1121,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         this,
         &deferredTargets,
         postGbufferNormalizeCommandList,
-        &postGbufferNormalizeCommandListReady
+        &postGbufferNormalizeCommandListReady,
+        &asyncPrefixTiming,
+        asyncShadowSchedule,
+        prefixTimingTicketForPacket
     ](){
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*prefixTimingTicketForPacket);
         postGbufferNormalizeCommandList->open(&m_gbufferStateHandoff);
         if(!postGbufferNormalizeCommandList->hasCommandBuffer())
             return;
 
         m_raytracingSystem.normalizePostGbufferPacketResources(*postGbufferNormalizeCommandList, deferredTargets);
+        if(asyncShadowSchedule && asyncPrefixTiming){
+            asyncPrefixTiming->finishTiming(*postGbufferNormalizeCommandList);
+            asyncPrefixTiming.reset();
+        }
         postGbufferNormalizeCommandList->close(&m_postGbufferNormalizedStateHandoff);
         postGbufferNormalizeCommandListReady =
             m_postGbufferNormalizedStateHandoff.valid()
@@ -1151,6 +1235,26 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     bool causticsCommandListReady = false;
     bool surfelGiCommandListReady = false;
     bool avboitCommandListReady = false;
+    bool asyncEffectsTimingBeginCommandListReady = !asyncShadowSchedule;
+    if(asyncShadowSchedule){
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*effectsTimingTicketForPacket);
+        asyncEffectsTimingBeginCommandList->open();
+        if(asyncEffectsTimingBeginCommandList->hasCommandBuffer()){
+            asyncEffectsTiming.emplace(
+                m_graphics.gpuTiming(),
+                RendererGpuTimingScope::s_AsyncEffects,
+                device,
+                *asyncEffectsTimingBeginCommandList
+            );
+            asyncEffectsTiming->finishMarker();
+            asyncEffectsTimingBeginCommandList->close();
+            asyncEffectsTimingBeginCommandListReady = asyncEffectsTimingBeginCommandList->hasCommandBuffer();
+        }
+    }
+    if(!asyncEffectsTimingBeginCommandListReady){
+        discardRenderPackets();
+        return;
+    }
     const Core::Graphics::JobHandle shadowVisibilityRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
         &deferredTargets,
@@ -1169,6 +1273,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         );
         if(!shadowVisibilityCommandList->hasCommandBuffer())
             return;
+
+        Optional<Core::GpuTimingMeasure> asyncShadowTiming;
+        if(asyncShadowSchedule){
+            asyncShadowTiming.emplace(
+                m_graphics.gpuTiming(),
+                RendererGpuTimingScope::s_AsyncShadow,
+                m_graphics.getDevice(),
+                *shadowVisibilityCommandList
+            );
+        }
 
         bool shadowVisibilityWritten = false;
         if(shadowVisibilityPrepared && hardwareShadowSupported){
@@ -1198,6 +1312,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 ECSRenderDetail::s_ShadowVisibilitySubresources,
                 Core::RenderLane::Graphics
             );
+        }
+
+        if(asyncShadowTiming){
+            asyncShadowTiming->finishTiming(*shadowVisibilityCommandList);
+            asyncShadowTiming.reset();
         }
 
         shadowVisibilityCommandList->close(&m_shadowVisibilityStateHandoff);
@@ -1341,6 +1460,26 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
+    if(asyncShadowSchedule){
+        bool asyncEffectsTimingEndCommandListReady = false;
+        {
+            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*effectsTimingTicketForPacket);
+            asyncEffectsTimingEndCommandList->open();
+            if(asyncEffectsTimingEndCommandList->hasCommandBuffer()){
+                if(asyncEffectsTiming){
+                    asyncEffectsTiming->finishTiming(*asyncEffectsTimingEndCommandList);
+                    asyncEffectsTiming.reset();
+                }
+                asyncEffectsTimingEndCommandList->close();
+                asyncEffectsTimingEndCommandListReady = asyncEffectsTimingEndCommandList->hasCommandBuffer();
+            }
+        }
+        if(!asyncEffectsTimingEndCommandListReady){
+            discardRenderPackets();
+            return;
+        }
+    }
+
     if(asyncShadowSchedule && !m_shadowVisibilityGraphicsStateHandoff.buildTextureSubset(
         m_shadowVisibilityStateHandoff,
         deferredTargets.shadowVisibility.get()
@@ -1374,12 +1513,24 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &deferredTargets,
         deferredLightingCommandList,
         &deferredLightingCommandListReady,
+        &asyncFinalTiming,
+        asyncShadowSchedule,
         finalTimingTicketForPacket
     ](){
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*finalTimingTicketForPacket);
         deferredLightingCommandList->open(&m_postGbufferFanInStateHandoff);
         if(!deferredLightingCommandList->hasCommandBuffer())
             return;
+
+        if(asyncShadowSchedule){
+            asyncFinalTiming.emplace(
+                m_graphics.gpuTiming(),
+                RendererGpuTimingScope::s_AsyncFinal,
+                m_graphics.getDevice(),
+                *deferredLightingCommandList
+            );
+            asyncFinalTiming->finishMarker();
+        }
 
         const bool deferredLightingRecorded = m_deferredSystem.renderDeferredLighting(*deferredLightingCommandList, deferredTargets);
         deferredLightingCommandList->close(&m_deferredLightingStateHandoff);
@@ -1407,6 +1558,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &deferredTargets,
         deferredCompositeCommandList,
         &frameTiming,
+        &asyncFrameTiming,
+        &asyncFinalTiming,
         &deferredCompositeCommandListReady,
         asyncShadowSchedule,
         finalTimingTicketForPacket
@@ -1422,9 +1575,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             framebuffer
         );
 
-        // This endpoint completes the frame scope opened on the mesh-view setup command buffer only in the
-        // one-submission Graphics fallback. The dedicated path exposes per-packet timings until its critical-path
-        // transaction lands.
+        // This endpoint completes the legacy one-submission frame scope and records the dedicated path's deferred
+        // critical-path endpoint. The latter is not published until Graphics final is accepted below.
         if(frameTiming)
             frameTiming->finishTiming(*deferredCompositeCommandList);
         if(asyncShadowSchedule && deferredCompositeRecorded){
@@ -1433,6 +1585,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 ECSRenderDetail::s_ShadowVisibilitySubresources,
                 Core::RenderLane::AsyncCompute
             );
+            if(asyncFinalTiming){
+                asyncFinalTiming->finishTiming(*deferredCompositeCommandList);
+                asyncFinalTiming.reset();
+            }
+            static_cast<void>(asyncFrameTiming.recordEnd(*deferredCompositeCommandList));
         }
         deferredCompositeCommandList->close(&m_deferredCompositeStateHandoff);
         deferredCompositeCommandListReady =
@@ -1485,9 +1642,54 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    const auto recoverAsyncShadowOwnership = [&](const Core::QueueSubmissionToken shadowSubmissionToken) -> bool {
-        if(!shadowSubmissionToken.valid() || !deferredTargets.shadowVisibility)
+    const auto retireAsyncFrameTiming = [&]() -> bool {
+        if(!asyncFrameTiming.needsRetirement())
+            return true;
+
+        asyncFrameTiming.prepareForRecovery();
+        shadowOwnershipRecoveryCommandList->open();
+        if(!shadowOwnershipRecoveryCommandList->hasCommandBuffer()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record async frame-timing recovery endpoint"));
+            asyncFrameTiming.discard();
             return false;
+        }
+        if(!asyncFrameTiming.recordEnd(*shadowOwnershipRecoveryCommandList)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to write async frame-timing recovery endpoint"));
+            asyncFrameTiming.discard();
+            return false;
+        }
+        shadowOwnershipRecoveryCommandList->close();
+        if(!shadowOwnershipRecoveryCommandList->hasCommandBuffer()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to close async frame-timing recovery endpoint"));
+            asyncFrameTiming.discard();
+            return false;
+        }
+
+        Core::CommandList* recoveryCommandLists[] = { shadowOwnershipRecoveryCommandList };
+        const Core::QueueSubmissionToken recoveryToken = device.executeCommandLists(
+            recoveryCommandLists,
+            1u,
+            Core::RenderLane::Graphics,
+            Core::QueueSubmissionDesc{}
+        );
+        if(!recoveryToken.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: async frame-timing recovery submission was rejected"));
+            asyncFrameTiming.discard();
+            return false;
+        }
+        if(!asyncFrameTiming.confirmEndSubmission(false)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire async frame-timing recovery query"));
+            asyncFrameTiming.discard();
+            return false;
+        }
+        return true;
+    };
+
+    const auto recoverAsyncShadowOwnership = [&](const Core::QueueSubmissionToken shadowSubmissionToken) -> bool {
+        if(!shadowSubmissionToken.valid() || !deferredTargets.shadowVisibility){
+            asyncFrameTiming.discard();
+            return false;
+        }
 
         m_shadowOwnershipRecoveryInputStateHandoff.reset();
         m_shadowOwnershipRecoveryStateHandoff.reset();
@@ -1496,12 +1698,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             deferredTargets.shadowVisibility.get()
         )){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to select async shadow ownership-recovery input"));
+            asyncFrameTiming.discard();
             return false;
         }
 
         shadowOwnershipRecoveryCommandList->open(&m_shadowOwnershipRecoveryInputStateHandoff);
         if(!shadowOwnershipRecoveryCommandList->hasCommandBuffer()){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to record async shadow ownership recovery acquire"));
+            asyncFrameTiming.discard();
             return false;
         }
         shadowOwnershipRecoveryCommandList->releaseTextureOwnership(
@@ -1509,12 +1713,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ECSRenderDetail::s_ShadowVisibilitySubresources,
             Core::RenderLane::AsyncCompute
         );
+        asyncFrameTiming.prepareForRecovery();
+        if(!asyncFrameTiming.recordEnd(*shadowOwnershipRecoveryCommandList)){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to write async shadow ownership-recovery timing endpoint"));
+            asyncFrameTiming.discard();
+            return false;
+        }
         shadowOwnershipRecoveryCommandList->close(&m_shadowOwnershipRecoveryStateHandoff);
         if(
             !m_shadowOwnershipRecoveryStateHandoff.valid()
             || !shadowOwnershipRecoveryCommandList->hasCommandBuffer()
         ){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to close async shadow ownership recovery"));
+            asyncFrameTiming.discard();
             return false;
         }
 
@@ -1529,7 +1740,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         );
         if(!recoveryToken.valid()){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async shadow ownership recovery submission was rejected"));
+            asyncFrameTiming.discard();
             return false;
+        }
+        if(!asyncFrameTiming.confirmEndSubmission(false)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire async shadow ownership-recovery timing query"));
+            asyncFrameTiming.discard();
         }
         if(!m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
             m_shadowOwnershipRecoveryStateHandoff,
@@ -1565,6 +1781,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         discardRenderPackets();
         return;
     }
+    asyncFrameTiming.confirmBeginSubmission();
 
     Core::QueueSubmissionDesc shadowSubmitDesc;
     shadowSubmitDesc.setWaitTokens(&prefixSubmissionToken, 1u);
@@ -1592,6 +1809,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingStateHandoff.reset();
         m_deferredCompositeStateHandoff.reset();
         m_avboitStateHandoff.reset();
+        static_cast<void>(retireAsyncFrameTiming());
         return;
     }
 
@@ -1642,14 +1860,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
 
     Core::CommandList* effectsCommandLists[] = {
+        asyncEffectsTimingBeginCommandList,
         causticsCommandList,
         surfelGiCommandList,
         avboitCommandList,
+        asyncEffectsTimingEndCommandList,
     };
     const Core::QueueSubmissionToken effectsSubmissionToken = effectsTimingTicket.submit(
         device,
         effectsCommandLists,
-        3u,
+        5u,
         Core::RenderLane::Graphics,
         Core::QueueSubmissionDesc{}
     );
@@ -1682,6 +1902,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!recoverAsyncShadowOwnership(shadowSubmissionToken))
             failAsyncShadowOwnershipRecovery();
         return;
+    }
+    if(!asyncFrameTiming.confirmEndSubmission(true)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm async frame critical-path timing"));
+        asyncFrameTiming.discard();
     }
 
     if(!m_shadowVisibilityReturnStateHandoff.buildTextureSubset(

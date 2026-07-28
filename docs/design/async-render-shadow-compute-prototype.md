@@ -1,8 +1,8 @@
 # Async-render lane foundation and shadow-visibility prototype
 
-**Status:** Phase-zero backend foundation and the M2 shadow-visibility schedule are implemented behind the
-experimental async-compute switch. Distinct-family validation, pixel parity, failure injection, and performance
-measurement remain pending.
+**Status:** Phase-zero backend foundation, the M2 shadow-visibility schedule, and M3 acceptance-aware timing and
+failure-injection coverage are implemented behind the experimental async-compute switch. Distinct-family validation,
+pixel parity, and performance measurement remain pending.
 
 When the switch resolves `AsyncCompute` to a dedicated Compute family, shadow visibility records on that lane and
 uses the four-submission topology below. Unsupported or disabled hardware retains the existing one-Graphics-submission
@@ -179,15 +179,23 @@ The renderer now consumes these primitives as follows:
 - Accepted submissions commit independently. A rejected packet after Compute triggers a small Graphics recovery list
   that acquires `shadowVisibility` and releases it back to Compute. Failure to submit that recovery suspends rendering
   until resource/device recreation rather than guessing ownership.
-- Timestamp reservations are split by submission. The software edge-stat readback records the accepted shadow timeline
-  token and maps only after its producing queue has completed.
+- Timestamp reservations are split by submission. `render.frame` is an acceptance-aware Graphics critical-path
+  transaction: it begins in prefix, completes in accepted final, and records a non-publishing recovery endpoint if a
+  later packet is rejected. Packet envelopes report prefix/shadow/effects/final duration; when Vulkan supports
+  Graphics+Compute timestamps, `render.async_shadow_effects_overlap` reports their measured intersection (zero means
+  both packets completed without overlap).
+- The software edge-stat readback records the accepted shadow timeline token and maps only after its producing queue
+  has completed.
+- A DEBUG/TEST-only pre-submit rejection seam exercises prefix, shadow, effects, final, and recovery rejection
+  boundaries without manufacturing invalid Vulkan command buffers. The dedicated-family suite verifies recovery
+  returns exclusive ownership to Compute before next reuse; a rejected recovery stops before reuse, matching the
+  renderer's suspension/recreation policy.
 
 Still required before enabling the path by default:
 
 - run the backend probe and renderer schedule with Vulkan validation on at least one distinct-family target;
 - run hardware and software pixel-parity coverage, including resize and transparent/CSG cases;
-- inject failures around all four renderer submissions and the recovery list; and
-- add the cross-queue critical-path timing metric and collect overlap/performance data.
+- collect critical-path and overlap/performance data on a distinct-family target.
 
 ## 2. Current and target GPU schedules
 
@@ -392,12 +400,18 @@ completes the full ownership reuse cycle without copying its allocation.
 over cold start, steady temporal frames, scene mutation, resize, opaque/transparent shadow cases,
 and CSG paths.
 
-### M3 — Acceptance-aware timing and recovery (partially implemented)
+### M3 — Acceptance-aware timing and recovery (implemented; hardware validation pending)
 
-- Implemented: one timing ticket per accepted submission; accepted prefix/shadow/effects/final CPU-state commits;
-  Graphics recovery for a stranded Compute release; and Compute completion IDs for software-shadow readback.
-- Pending: a whole-frame cross-queue critical-path metric, overlap reporting, and injected failures before/after each
-  packet plus the recovery acquire.
+- One timing ticket per accepted submission; accepted prefix/shadow/effects/final CPU-state commits; Graphics
+  recovery for a stranded Compute release; and Compute completion IDs for software-shadow readback.
+- `GpuTimingFrameTransaction` preserves the end-to-end `render.frame` measurement without summing concurrent work.
+  An accepted prefix whose final packet is rejected receives a non-publishing Graphics recovery endpoint, so its timer
+  query retires safely rather than leaking or masquerading as a complete frame.
+- Packet envelopes report prefix, shadow, effects, and final duration. On timestamp-capable dedicated-queue devices,
+  the shadow/effects timestamp intersection reports actual overlap rather than merely schedule eligibility.
+- Deterministic pre-submit failure injection covers prefix, shadow, effects, final, and ownership-recovery submission
+  boundaries. Successful recovery proves the next Compute reuse sees the returned owner; failed recovery deliberately
+  prevents reuse until device/resource recreation.
 
 **Gate:** every injected rejection leaves the next valid frame correct; no stale temporal history,
 descriptor retirement, query leak, or ownership validation error remains.

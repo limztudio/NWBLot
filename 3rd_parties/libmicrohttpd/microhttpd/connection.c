@@ -972,7 +972,7 @@ MHD_set_connection_value_n_nocheck_ (struct MHD_Connection *connection,
   struct MHD_HTTP_Req_Header *pos;
 
   pos = MHD_connection_alloc_memory_ (connection,
-                                      sizeof (struct MHD_HTTP_Res_Header));
+                                      sizeof (struct MHD_HTTP_Req_Header));
   if (NULL == pos)
     return MHD_NO;
   pos->header = key;
@@ -981,6 +981,7 @@ MHD_set_connection_value_n_nocheck_ (struct MHD_Connection *connection,
   pos->value_size = value_size;
   pos->kind = kind;
   pos->next = NULL;
+  pos->prev = NULL;
   /* append 'pos' to the linked list of headers */
   if (NULL == connection->rq.headers_received_tail)
   {
@@ -1593,7 +1594,7 @@ try_ready_chunked_body (struct MHD_Connection *connection,
   ssize_t ret;
   struct MHD_Response *response;
   static const size_t max_chunk = 0xFFFFFF;
-  char chunk_hdr[6];            /* 6: max strlen of "FFFFFF" */
+  char chunk_hdr[7];            /* 6: max strlen of "FFFFFF" */
   /* "FFFFFF" + "\r\n" */
   static const size_t max_chunk_hdr_len = sizeof(chunk_hdr) + 2;
   /* "FFFFFF" + "\r\n" + "\r\n" (chunk termination) */
@@ -1730,7 +1731,8 @@ try_ready_chunked_body (struct MHD_Connection *connection,
                                "more data than requested)."));
     return MHD_NO;
   }
-  chunk_hdr_len = MHD_uint32_to_strx ((uint32_t) ret, chunk_hdr,
+  chunk_hdr_len = MHD_uint32_to_strx ((uint32_t) ret,
+                                      chunk_hdr,
                                       sizeof(chunk_hdr));
   mhd_assert (chunk_hdr_len != 0);
   mhd_assert (chunk_hdr_len < sizeof(chunk_hdr));
@@ -2495,9 +2497,13 @@ add_user_headers (char *buf,
     }
 
     /* Add user header */
-    el_size = hdr->header_size + 2 + hdr->value_size + 2;
-    if (buf_size < *ppos + el_size)
+    /* Check available space using subtractions to avoid integer overflow.
+       '4' is two colons/space plus the final CRLF. */
+    if ( (buf_size - *ppos < 4) ||
+         (buf_size - *ppos - 4 < hdr->header_size) ||
+         (buf_size - *ppos - 4 - hdr->header_size < hdr->value_size) )
       return false;
+    el_size = hdr->header_size + 2 + hdr->value_size + 2;
     memcpy (buf + *ppos, hdr->header, hdr->header_size);
     (*ppos) += hdr->header_size;
     buf[(*ppos)++] = ':';
@@ -2814,9 +2820,12 @@ build_connection_chunked_response_footer (struct MHD_Connection *connection)
     {
       size_t new_used_size; /* resulting size with this header */
       /* '4' is colon, space, linefeeds */
-      new_used_size = used_size + pos->header_size + pos->value_size + 4;
-      if (new_used_size > buf_size)
+      /* Check available space using subtractions to avoid integer overflow. */
+      if ( (buf_size - used_size < 4) ||
+           (buf_size - used_size - 4 < pos->header_size) ||
+           (buf_size - used_size - 4 - pos->header_size < pos->value_size) )
         return MHD_NO;
+      new_used_size = used_size + pos->header_size + pos->value_size + 4;
       memcpy (buf + used_size, pos->header, pos->header_size);
       used_size += pos->header_size;
       buf[used_size++] = ':';
@@ -4642,13 +4651,13 @@ process_request_body (struct MHD_Connection *connection)
                 if (i + 1 == available)
                   break; /* need more data */
                 if ('\n' == buffer_head[i + 1])
-                  chunk_size_line_len = i; /* Valid chunk header */
+                  chunk_size_line_len = i + 2; /* Valid chunk header */
               }
               else
               {
                 mhd_assert ('\n' == buffer_head[i]);
                 if (bare_lf_as_crlf)
-                  chunk_size_line_len = i; /* Valid chunk header */
+                  chunk_size_line_len = i + 1; /* Valid chunk header */
               }
               /* The chunk header is broken
                  if chunk_size_line_len is zero here. */
@@ -6648,12 +6657,28 @@ get_req_headers (struct MHD_Connection *c, bool process_footers)
        */
       const char *last_elmnt_end;
       size_t shift_back_size;
+
       if (NULL != c->rq.headers_received_tail)
-        last_elmnt_end =
-          c->rq.headers_received_tail->value
-          + c->rq.headers_received_tail->value_size;
+      {
+        if (NULL == c->rq.headers_received_tail->value)
+        {
+          /* Tailing query argument without '=', we only have the header */
+          last_elmnt_end =
+            c->rq.headers_received_tail->header
+            + c->rq.headers_received_tail->header_size;
+        }
+        else
+        {
+          last_elmnt_end =
+            c->rq.headers_received_tail->value
+            + c->rq.headers_received_tail->value_size;
+        }
+      }
       else
+      {
         last_elmnt_end = c->rq.version + HTTP_VER_LEN;
+      }
+      mhd_assert (NULL != last_elmnt_end);
       mhd_assert ((last_elmnt_end + 1) < c->read_buffer);
       shift_back_size = (size_t) (c->read_buffer - (last_elmnt_end + 1));
       if (0 != c->read_buffer_offset)

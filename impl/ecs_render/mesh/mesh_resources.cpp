@@ -107,13 +107,75 @@ template<typename PayloadT, typename PayloadVector>
     return outBuffer != nullptr;
 }
 
-[[nodiscard]] static bool ResolveBufferElementCount(
+template<typename PayloadVector>
+[[nodiscard]] static bool AssignPaddedRawMeshBuffer(
+    Core::Graphics& graphics,
+    Core::Alloc::GlobalArena& arena,
+    const Name& meshName,
+    Core::BufferHandle& outBuffer,
+    const AStringView suffix,
+    const PayloadVector& payload,
+    const tchar* label
+){
+    outBuffer = nullptr;
+
+    const Name bufferName = DeriveName(meshName, suffix);
+    if(!bufferName){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive {} buffer name for mesh '{}'")
+            , label
+            , StringConvert(meshName.c_str())
+        );
+        return false;
+    }
+
+    const RuntimeMeshBufferUpload::BufferSetupFailure::Enum failure =
+        RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(
+            graphics,
+            arena,
+            bufferName,
+            payload,
+            {
+                false,
+                true,
+                false,
+                Core::ResourceQueueSharing::GraphicsAndAsyncCompute
+            },
+            outBuffer
+        )
+    ;
+    switch(failure){
+    case RuntimeMeshBufferUpload::BufferSetupFailure::None:
+        return true;
+    case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has empty {} payload")
+            , StringConvert(meshName.c_str())
+            , label
+        );
+        return false;
+    case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} payload byte size overflows")
+            , StringConvert(meshName.c_str())
+            , label
+        );
+        return false;
+    case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create {} buffer for mesh '{}'")
+            , label
+            , StringConvert(meshName.c_str())
+        );
+        return false;
+    }
+
+    NWB_ASSERT(false);
+    return false;
+}
+
+[[nodiscard]] static bool ValidateRawBufferLogicalByteCount(
     const Core::BufferHandle& buffer,
-    u32& outCount,
+    const u32 logicalByteCount,
     const Name& meshName,
     const tchar* label
 ){
-    outCount = 0u;
     if(!buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has no {} buffer")
             , StringConvert(meshName.c_str())
@@ -123,24 +185,17 @@ template<typename PayloadT, typename PayloadVector>
     }
 
     const Core::BufferDesc& desc = buffer->getDescription();
-    if(desc.structStride == 0u || desc.byteSize == 0u || (desc.byteSize % desc.structStride) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} buffer has invalid structured layout")
+    if(
+        desc.structStride != sizeof(u8)
+        || desc.byteSize < static_cast<u64>(logicalByteCount)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} buffer cannot cover {} logical bytes")
             , StringConvert(meshName.c_str())
             , label
+            , logicalByteCount
         );
         return false;
     }
-
-    const u64 count = desc.byteSize / desc.structStride;
-    if(count > static_cast<u64>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} buffer element count exceeds u32 limits")
-            , StringConvert(meshName.c_str())
-            , label
-        );
-        return false;
-    }
-
-    outCount = static_cast<u32>(count);
     return true;
 }
 
@@ -289,23 +344,23 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         NWB_TEXT("meshlet bounds"),
         true
     ) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<u8>(
+    uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
         graphics(),
+        arena(),
         meshPath,
         createdMesh.meshletPositionRefDeltaBuffer,
         AStringView(":meshlet_position_ref_deltas"),
         mesh.meshletPositionRefDeltas(),
-        NWB_TEXT("meshlet position ref delta"),
-        true
+        NWB_TEXT("meshlet position ref delta")
     ) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<u8>(
+    uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
         graphics(),
+        arena(),
         meshPath,
         createdMesh.meshletAttributeRefDeltaBuffer,
         AStringView(":meshlet_attribute_ref_deltas"),
         mesh.meshletAttributeRefDeltas(),
-        NWB_TEXT("meshlet attribute ref delta"),
-        true
+        NWB_TEXT("meshlet attribute ref delta")
     ) && uploaded;
     uploaded = __hidden_mesh::AssignMeshBuffer<MeshletLocalVertexRef>(
         graphics(),
@@ -315,14 +370,14 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         mesh.meshletLocalVertexRefs(),
         NWB_TEXT("meshlet local vertex ref")
     ) && uploaded;
-    uploaded = __hidden_mesh::AssignMeshBuffer<u8>(
+    uploaded = __hidden_mesh::AssignPaddedRawMeshBuffer(
         graphics(),
+        arena(),
         meshPath,
         createdMesh.meshletPrimitiveIndexBuffer,
         AStringView(":meshlet_primitive_indices"),
         mesh.meshletPrimitiveIndices(),
-        NWB_TEXT("meshlet primitive index"),
-        true
+        NWB_TEXT("meshlet primitive index")
     ) && uploaded;
     if(!uploaded)
         return false;
@@ -502,6 +557,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
     createdMesh.attributeBuffer = desc.attributeBuffer;
     createdMesh.blasBuildPending = (desc.triangleIndexBuffer != nullptr);
     createdMesh.meshletCount = desc.meshletCount;
+    createdMesh.meshletPrimitiveIndexCount = desc.meshletPrimitiveIndexCount;
     createdMesh.runtimeMesh = true;
     createdMesh.dynamicMeshletBoundsFresh = desc.dynamicMeshletBoundsFresh;
     createdMesh.dynamicMeshletConesFresh = desc.dynamicMeshletConesFresh;
@@ -511,7 +567,14 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
     createdMesh.csgLocalBounds.maxBounds = desc.localBounds.maxBounds;
     createdMesh.csgLocalBounds.minBounds.w = s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag;
     createdMesh.csgLocalBounds.maxBounds.w = 0;
-    if(!__hidden_mesh::ResolveBufferElementCount(
+    if((createdMesh.meshletPrimitiveIndexCount % s_MeshletTriangleIndexCount) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' has {} primitive-index bytes, which cannot form triangles")
+            , StringConvert(createdMesh.meshName.c_str())
+            , createdMesh.meshletPrimitiveIndexCount
+        );
+        return false;
+    }
+    if(!__hidden_mesh::ValidateRawBufferLogicalByteCount(
         createdMesh.meshletPrimitiveIndexBuffer,
         createdMesh.meshletPrimitiveIndexCount,
         createdMesh.meshName,

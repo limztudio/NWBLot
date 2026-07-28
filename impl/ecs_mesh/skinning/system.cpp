@@ -197,6 +197,7 @@ bool MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Ru
         return false;
     NWB_ASSERT(instance->valid());
     NWB_ASSERT(instance->meshlets.size() <= static_cast<usize>(Limit<u32>::s_Max));
+    NWB_ASSERT(instance->meshletPrimitiveIndices.size() <= static_cast<usize>(Limit<u32>::s_Max));
 
     outMesh.entity = entity;
     outMesh.meshKey = DeriveRuntimeResourceName(
@@ -220,6 +221,7 @@ bool MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Ru
     outMesh.attributeBuffer = instance->attributeBuffer;
     outMesh.localBounds = instance->localBounds;
     outMesh.meshletCount = static_cast<u32>(instance->meshlets.size());
+    outMesh.meshletPrimitiveIndexCount = static_cast<u32>(instance->meshletPrimitiveIndices.size());
     outMesh.version = instance->editRevision;
     outMesh.dynamicMeshletBoundsFresh = __hidden_system::s_RuntimeSkinningMeshletFrustumCullingEnabled;
     outMesh.dynamicMeshletConesFresh = __hidden_system::s_RuntimeSkinningMeshletConeCullingEnabled;

@@ -280,6 +280,65 @@ template<typename PayloadT, typename PayloadVector>
     return outBuffer != nullptr;
 }
 
+template<typename PayloadVector>
+[[nodiscard]] bool AssignPaddedRawRuntimeBuffer(
+    Core::Graphics& graphics,
+    Core::Alloc::GlobalArena& arena,
+    MeshSkinningRuntimeInstance& instance,
+    Core::BufferHandle& outBuffer,
+    const AStringView suffix,
+    const PayloadVector& payload,
+    const bool canHaveUavs,
+    const tchar* label,
+    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::Exclusive
+){
+    outBuffer = nullptr;
+
+    const Name bufferName = DeriveRuntimeResourceName(
+        instance.sourceName,
+        instance.entity.id,
+        instance.editRevision,
+        suffix
+    );
+    if(!bufferName){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to derive {} buffer name for runtime mesh '{}'")
+            , label
+            , instance.handle.value
+        );
+        return false;
+    }
+
+    const RuntimeMeshBufferUpload::BufferSetupFailure::Enum failure =
+        RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(
+            graphics,
+            arena,
+            bufferName,
+            payload,
+            { canHaveUavs, true, false, queueSharing },
+            outBuffer
+        )
+    ;
+    switch(failure){
+    case RuntimeMeshBufferUpload::BufferSetupFailure::None:
+        return true;
+    case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload is empty"), label);
+        return false;
+    case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: {} payload byte size overflows"), label);
+        return false;
+    case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to create {} buffer for runtime mesh '{}'"),
+            label,
+            instance.handle.value
+        );
+        return false;
+    }
+
+    NWB_ASSERT(false);
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -394,25 +453,25 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         NWB_TEXT("meshlet bounds"),
         true
     ) && uploaded;
-    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<u8>(
+    uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
         m_graphics,
+        m_arena,
         instance,
         instance.meshletPositionRefDeltaBuffer,
         AStringView("meshlet_position_ref_deltas"),
         instance.meshletPositionRefDeltas,
         false,
-        NWB_TEXT("meshlet position ref delta"),
-        true
+        NWB_TEXT("meshlet position ref delta")
     ) && uploaded;
-    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<u8>(
+    uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
         m_graphics,
+        m_arena,
         instance,
         instance.meshletAttributeRefDeltaBuffer,
         AStringView("meshlet_attribute_ref_deltas"),
         instance.meshletAttributeRefDeltas,
         false,
-        NWB_TEXT("meshlet attribute ref delta"),
-        true
+        NWB_TEXT("meshlet attribute ref delta")
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<MeshletLocalVertexRef>(
         m_graphics,
@@ -423,15 +482,15 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         false,
         NWB_TEXT("meshlet local vertex ref")
     ) && uploaded;
-    uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<u8>(
+    uploaded = __hidden_runtime_cache_resources::AssignPaddedRawRuntimeBuffer(
         m_graphics,
+        m_arena,
         instance,
         instance.meshletPrimitiveIndexBuffer,
         AStringView("meshlet_primitive_indices"),
         instance.meshletPrimitiveIndices,
         false,
-        NWB_TEXT("meshlet primitive index"),
-        true
+        NWB_TEXT("meshlet primitive index")
     ) && uploaded;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<u32>(
         m_graphics,

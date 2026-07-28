@@ -106,6 +106,9 @@ static_assert(IsTriviallyCopyable_V<RuntimeMeshLocalBounds>, "RuntimeMeshLocalBo
 struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     u32 meshletCount = 0u;
+    // Logical triangle-corner count. The backing raw u8 buffer is physically word-padded for ByteAddressBuffer
+    // decoding, so its byte size must not be used as this count.
+    u32 meshletPrimitiveIndexCount = 0u;
     Name meshKey = NAME_NONE;
     Core::BufferHandle triangleIndexBuffer;   // RT-only; null when ray tracing is unsupported
     Core::BufferHandle attributeBuffer;       // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
@@ -120,6 +123,7 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
             && meshKey != NAME_NONE
             && buffersValid()
             && meshletCount > 0u
+            && meshletPrimitiveIndexCount > 0u
             && localBounds.valid()
         ;
     }

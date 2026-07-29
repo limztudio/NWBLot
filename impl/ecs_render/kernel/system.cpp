@@ -332,7 +332,7 @@ bool RendererSystem::ensureFrameCommandLists(){
             asyncCausticsCommandListParameters.setRenderLane(Core::RenderLane::AsyncCompute);
             m_asyncCausticsCommandList = device.createCommandList(asyncCausticsCommandListParameters);
             if(!m_asyncCausticsCommandList){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async software-caustics command list"));
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async caustics command list"));
                 return false;
             }
         }
@@ -652,9 +652,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
         && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
     ;
-    // A dedicated compute family is not assumed to expose ray-tracing commands. Keep the HW caustic producer on
-    // Graphics, while every surfel GI variant remains eligible: its HW path uses RayQuery from a normal compute dispatch.
-    const bool asyncSoftwareCausticsSchedule = asyncShadowSchedule && !hardwareShadowSupported;
+    // vkCmdTraceRaysKHR is valid from a command pool supporting VK_QUEUE_COMPUTE_BIT. The dedicated AsyncCompute lane
+    // is selected from such a family, so both the software and hardware caustic producers can share its packet.
+    const bool asyncCausticsSchedule = asyncShadowSchedule;
     const bool asyncSurfelGiSchedule = asyncShadowSchedule;
     Core::CommandList* meshViewSetupCommandList = m_meshViewSetupCommandList.get();
     Core::CommandList* sceneShadingSetupCommandList = m_sceneShadingSetupCommandList.get();
@@ -667,7 +667,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* asyncEffectsTimingEndCommandList = m_asyncEffectsTimingEndCommandList.get();
     Core::CommandList* graphicsCausticsCommandList = m_causticsCommandList.get();
     Core::CommandList* asyncCausticsCommandList = m_asyncCausticsCommandList.get();
-    Core::CommandList* causticsCommandList = asyncSoftwareCausticsSchedule
+    Core::CommandList* causticsCommandList = asyncCausticsSchedule
         ? asyncCausticsCommandList
         : graphicsCausticsCommandList
     ;
@@ -690,7 +690,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(!asyncShadowSchedule || asyncEffectsTimingBeginCommandList);
     NWB_ASSERT(!asyncShadowSchedule || asyncEffectsTimingEndCommandList);
     NWB_ASSERT(graphicsCausticsCommandList);
-    NWB_ASSERT(!asyncSoftwareCausticsSchedule || asyncCausticsCommandList);
+    NWB_ASSERT(!asyncCausticsSchedule || asyncCausticsCommandList);
     NWB_ASSERT(causticsCommandList);
     NWB_ASSERT(graphicsSurfelGiCommandList);
     NWB_ASSERT(!asyncSurfelGiSchedule || asyncSurfelGiCommandList);
@@ -709,7 +709,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || (asyncShadowSchedule && !asyncEffectsTimingBeginCommandList)
         || (asyncShadowSchedule && !asyncEffectsTimingEndCommandList)
         || !graphicsCausticsCommandList
-        || (asyncSoftwareCausticsSchedule && !asyncCausticsCommandList)
+        || (asyncCausticsSchedule && !asyncCausticsCommandList)
         || !causticsCommandList
         || !graphicsSurfelGiCommandList
         || (asyncSurfelGiSchedule && !asyncSurfelGiCommandList)
@@ -845,7 +845,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // Any producer that joined the accepted Compute packet owns its temporal/readback state. A later Graphics-effects
     // rejection must restore only work that has not crossed that acceptance boundary.
     const auto restoreUnacceptedGraphicsEffectsCpuState = [&](){
-        if(!asyncSoftwareCausticsSchedule)
+        if(!asyncCausticsSchedule)
             restoreCausticsCpuState();
         if(!asyncSurfelGiSchedule)
             restoreSurfelGiCpuState();
@@ -868,9 +868,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingSubmissionTicket* const prefixTimingTicketForPacket = asyncShadowSchedule ? &prefixTimingTicket : &renderTimingTicket;
     Core::GpuTimingSubmissionTicket* const shadowTimingTicketForPacket = asyncShadowSchedule ? &shadowTimingTicket : &renderTimingTicket;
     Core::GpuTimingSubmissionTicket* const effectsTimingTicketForPacket = asyncShadowSchedule ? &effectsTimingTicket : &renderTimingTicket;
-    // On a dedicated lane, software caustics share the accepted Compute submission with shadow visibility. Hardware
-    // caustics remain in the Graphics effects submission because a compute-only family need not support dispatchRays.
-    Core::GpuTimingSubmissionTicket* const causticsTimingTicketForPacket = asyncSoftwareCausticsSchedule
+    // On a dedicated lane, either caustic producer shares the accepted Compute submission with shadow visibility.
+    Core::GpuTimingSubmissionTicket* const causticsTimingTicketForPacket = asyncCausticsSchedule
         ? shadowTimingTicketForPacket
         : effectsTimingTicketForPacket
     ;
@@ -1366,10 +1365,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    // Software caustics use the same cross-lane read-only trace inputs as the software shadow, plus their emission
-    // target list and camera view. Their accumulator/resolve scratch is private to Compute and their lighting-facing
-    // irradiance is deliberately excluded here: it comes from the prior Graphics -> Compute ownership return.
-    if(asyncSoftwareCausticsSchedule){
+    // Both caustic producers use cross-lane read-only trace inputs plus their emission target list and camera view.
+    // The software producer reads its software-BVH mesh tables; the hardware producer reads the TLAS and corner
+    // attributes through its descriptor-buffer material context. Their accumulator/resolve scratch is private to
+    // Compute and the lighting-facing irradiance is deliberately excluded here: it comes from the prior Graphics ->
+    // Compute ownership return.
+    if(asyncCausticsSchedule){
         Core::Alloc::ScratchArena causticsInputScratchArena(RendererArenaScope::s_RenderArena);
         Vector<Core::Texture*, Core::Alloc::ScratchArena> causticsInputTextures{ causticsInputScratchArena };
         Vector<Core::Buffer*, Core::Alloc::ScratchArena> causticsInputBuffers{ causticsInputScratchArena };
@@ -1395,14 +1396,24 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         appendBuffer(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get());
         appendBuffer(m_rayTracingState.m_causticEmissionTargetBuffer.get());
         appendBuffer(m_drawState.m_meshViewBuffer.get());
-        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshNodeBuffers)
-            appendBuffer(buffer);
-        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshPositionBuffers)
-            appendBuffer(buffer);
-        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshIndexBuffers)
-            appendBuffer(buffer);
-        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshAttributeBuffers)
-            appendBuffer(buffer);
+        if(hardwareShadowSupported){
+            // setAccelStructState tracks the TLAS through this backing allocation. The hardware photon closest-hit
+            // shader also fetches the flat corner attributes by heap slot.
+            if(m_rayTracingState.m_tlas)
+                appendBuffer(m_rayTracingState.m_tlas->getBackingBuffer());
+            for(Core::Buffer* buffer : m_rayTracingState.m_shadowMeshAttributeBuffers)
+                appendBuffer(buffer);
+        }
+        else{
+            for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshNodeBuffers)
+                appendBuffer(buffer);
+            for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshPositionBuffers)
+                appendBuffer(buffer);
+            for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshIndexBuffers)
+                appendBuffer(buffer);
+            for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshAttributeBuffers)
+                appendBuffer(buffer);
+        }
 
         if(!m_causticsComputeBaseStateHandoff.buildResourceSubset(
             m_postGbufferNormalizedStateHandoff,
@@ -1411,7 +1422,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             causticsInputBuffers.data(),
             causticsInputBuffers.size()
         )){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async software-caustics input state selection failed"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async caustics input state selection failed"));
             discardRenderPackets();
             return;
         }
@@ -1427,7 +1438,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             causticsInputBranches,
             causticsInputBranchCount
         )){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async software-caustics input state fan-in failed"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async caustics input state fan-in failed"));
             discardRenderPackets();
             return;
         }
@@ -1609,12 +1620,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         hardwareShadowSupported,
         causticsCommandList,
         &causticsCommandListReady,
-        asyncSoftwareCausticsSchedule,
+        asyncCausticsSchedule,
         causticsTimingTicketForPacket
     ](){
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*causticsTimingTicketForPacket);
         causticsCommandList->open(
-            asyncSoftwareCausticsSchedule
+            asyncCausticsSchedule
                 ? &m_causticsComputeInputStateHandoff
                 : &m_postGbufferNormalizedStateHandoff
         );
@@ -1637,9 +1648,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             }
         }
 
-        if(asyncSoftwareCausticsSchedule){
-            // This is the sole software-caustic result that Graphics consumes. The temporal accumulator and resolve
-            // scratch remain private to Compute; deferred lighting acquires only the resolved irradiance below.
+        if(asyncCausticsSchedule){
+            // This is the sole caustic result that Graphics consumes. The temporal accumulator and resolve scratch
+            // remain private to Compute; deferred lighting acquires only the resolved irradiance below.
             causticsCommandList->releaseTextureOwnership(
                 deferredTargets.causticIrradiance.get(),
                 ECSRenderDetail::s_FramebufferSubresources,
@@ -1813,11 +1824,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         discardRenderPackets();
         return;
     }
-    if(asyncSoftwareCausticsSchedule && !m_causticIrradianceGraphicsStateHandoff.buildTextureSubset(
+    if(asyncCausticsSchedule && !m_causticIrradianceGraphicsStateHandoff.buildTextureSubset(
         m_causticsStateHandoff,
         deferredTargets.causticIrradiance.get()
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the async software-caustic irradiance handoff"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the async caustic irradiance handoff"));
         discardRenderPackets();
         return;
     }
@@ -1832,7 +1843,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     const Core::CommandListResourceStateHandoff* postGbufferBranchStates[] = {
         asyncShadowSchedule ? &m_shadowVisibilityGraphicsStateHandoff : &m_shadowVisibilityStateHandoff,
-        asyncSoftwareCausticsSchedule ? &m_causticIrradianceGraphicsStateHandoff : &m_causticsStateHandoff,
+        asyncCausticsSchedule ? &m_causticIrradianceGraphicsStateHandoff : &m_causticsStateHandoff,
         asyncSurfelGiSchedule ? &m_surfelIrradianceGraphicsStateHandoff : &m_surfelGiStateHandoff,
         &m_avboitStateHandoff,
     };
@@ -1903,7 +1914,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &asyncFinalTiming,
         &deferredCompositeCommandListReady,
         asyncShadowSchedule,
-        asyncSoftwareCausticsSchedule,
+        asyncCausticsSchedule,
         asyncSurfelGiSchedule,
         finalTimingTicketForPacket
     ](){
@@ -1929,9 +1940,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 ECSRenderDetail::s_ShadowVisibilitySubresources,
                 Core::RenderLane::AsyncCompute
             );
-            if(asyncSoftwareCausticsSchedule){
-                // Deferred lighting has completed the only Graphics read of the software caustic result. Return the
-                // reusable irradiance target to Compute together with its final Graphics submission.
+            if(asyncCausticsSchedule){
+                // Deferred lighting has completed the only Graphics read of the caustic result. Return the reusable
+                // irradiance target to Compute together with its final Graphics submission.
                 deferredCompositeCommandList->releaseTextureOwnership(
                     deferredTargets.causticIrradiance.get(),
                     ECSRenderDetail::s_FramebufferSubresources,
@@ -2176,7 +2187,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 deferredTargets.causticIrradiance.get()
             )
         ){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to retain async software-caustic ownership recovery state"));
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to retain async caustic ownership recovery state"));
             return false;
         }
         if(
@@ -2201,9 +2212,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_graphics.requestDeviceRecreation();
     };
 
-    // Distinct queues: submit the Graphics producer first, then run shadow, software caustics when available, and
-    // compute-only surfel GI in one accepted Compute packet. Graphics effects remain independent, and Graphics final
-    // waits for both packets.
+    // Distinct queues: submit the Graphics producer first, then run shadow, either caustic producer, and compute-only
+    // surfel GI in one accepted Compute packet. Graphics effects remain independent, and Graphics final waits for both
+    // packets.
     Core::CommandList* prefixCommandLists[] = {
         meshViewSetupCommandList,
         sceneShadingSetupCommandList,
@@ -2229,7 +2240,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* asyncComputeCommandLists[3] = {};
     usize asyncComputeCommandListCount = 0u;
     asyncComputeCommandLists[asyncComputeCommandListCount++] = shadowVisibilityCommandList;
-    if(asyncSoftwareCausticsSchedule)
+    if(asyncCausticsSchedule)
         asyncComputeCommandLists[asyncComputeCommandListCount++] = causticsCommandList;
     if(asyncSurfelGiSchedule)
         asyncComputeCommandLists[asyncComputeCommandListCount++] = surfelGiCommandList;
@@ -2309,7 +2320,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
         static_cast<void>(recoverAsyncShadowOwnership(
             shadowSubmissionToken,
-            asyncSoftwareCausticsSchedule,
+            asyncCausticsSchedule,
             asyncSurfelGiSchedule
         ));
         // Without a retained Compute-side scratch snapshot the next packet cannot safely restore its layouts, even
@@ -2319,7 +2330,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
     m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
 
-    if(asyncSoftwareCausticsSchedule){
+    if(asyncCausticsSchedule){
         Core::Texture* const causticsComputeScratchTextures[] = {
             deferredTargets.causticAccumulator.get(),
             deferredTargets.causticHistory.get(),
@@ -2370,7 +2381,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             restoreUnacceptedGraphicsEffectsCpuState();
             // The combined packet has released every result. Return all of them before suspending so teardown does not
             // inherit an indeterminate queue-family owner.
-            static_cast<void>(recoverAsyncShadowOwnership(shadowSubmissionToken, asyncSoftwareCausticsSchedule, true));
+            static_cast<void>(recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, true));
             failAsyncShadowOwnershipRecovery();
             return;
         }
@@ -2379,7 +2390,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* effectsCommandLists[5] = {};
     usize effectsCommandListCount = 0u;
     effectsCommandLists[effectsCommandListCount++] = asyncEffectsTimingBeginCommandList;
-    if(!asyncSoftwareCausticsSchedule)
+    if(!asyncCausticsSchedule)
         effectsCommandLists[effectsCommandListCount++] = causticsCommandList;
     if(!asyncSurfelGiSchedule)
         effectsCommandLists[effectsCommandListCount++] = surfelGiCommandList;
@@ -2395,7 +2406,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!effectsSubmissionToken.valid()){
         finalTimingTicket.discard();
         restoreUnacceptedGraphicsEffectsCpuState();
-        if(!recoverAsyncShadowOwnership(shadowSubmissionToken, asyncSoftwareCausticsSchedule, asyncSurfelGiSchedule))
+        if(!recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, asyncSurfelGiSchedule))
             failAsyncShadowOwnershipRecovery();
         return;
     }
@@ -2418,7 +2429,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         finalSubmitDesc
     );
     if(!finalSubmissionToken.valid()){
-        if(!recoverAsyncShadowOwnership(shadowSubmissionToken, asyncSoftwareCausticsSchedule, asyncSurfelGiSchedule))
+        if(!recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, asyncSurfelGiSchedule))
             failAsyncShadowOwnershipRecovery();
         return;
     }
@@ -2432,7 +2443,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredTargets.shadowVisibility.get()
     );
     const bool causticIrradianceReturnStateReady =
-        !asyncSoftwareCausticsSchedule
+        !asyncCausticsSchedule
         || m_causticIrradianceReturnStateHandoff.buildTextureSubset(
             m_deferredCompositeStateHandoff,
             deferredTargets.causticIrradiance.get()

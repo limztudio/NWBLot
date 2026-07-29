@@ -151,7 +151,7 @@ private:
     Core::CommandListResourceStateHandoff m_shadowVisibilityReturnStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowOwnershipRecoveryInputStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowOwnershipRecoveryStateHandoff;
-    // Software caustics can join the dedicated Compute lane. Their temporal scratch remains private to Compute,
+    // Both caustic producers can join the dedicated Compute lane. Their temporal scratch remains private to Compute,
     // while the resolved irradiance follows the same explicit Compute -> Graphics -> Compute ownership cycle as
     // shadowVisibility.
     Core::CommandListResourceStateHandoff m_causticsComputeBaseStateHandoff;
@@ -183,8 +183,8 @@ private:
     // envelope. They are submitted only on the dedicated async-shadow schedule.
     Core::CommandListHandle m_asyncEffectsTimingBeginCommandList;
     Core::CommandListHandle m_asyncEffectsTimingEndCommandList;
-    // Hardware caustics retain the Graphics command list below because dispatchRays is not guaranteed on the dedicated
-    // compute family. This sibling list is used only by the software producer on a dedicated AsyncCompute lane.
+    // Vulkan permits dispatchRays from a command pool with VK_QUEUE_COMPUTE_BIT support, so this sibling list serves
+    // both caustic producers on the dedicated AsyncCompute lane.
     Core::CommandListHandle m_asyncCausticsCommandList;
     Core::CommandListHandle m_causticsCommandList;
     // Surfel GI uses only compute dispatches on both its SW-BVH and HW-RayQuery branches, so a dedicated compute

@@ -934,10 +934,11 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneTransfersExclusiveBufferOw
 }
 
 
-// Software caustics and surfel GI add two exclusive Compute results beside shadowVisibility. If Graphics effects/final
-// cannot consume them, the recovery packet must acquire and return all three outputs together; the next Compute packet
+// Caustics (including the hardware dispatch-rays producer) and surfel GI add two exclusive Compute results beside
+// shadowVisibility. If Graphics effects/final cannot consume them, the recovery packet must acquire and return all
+// three outputs together; the next Compute packet
 // then imports their shared return handoff alongside its ordinary concurrent prefix input.
-TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversSoftwareCausticSurfelAndShadowTextureOwnershipTogether){
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversCausticSurfelAndShadowTextureOwnershipTogether){
     HeadlessGraphicsScope asyncScope;
     ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
     if(!asyncScope.initialize())

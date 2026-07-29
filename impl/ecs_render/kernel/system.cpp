@@ -231,6 +231,10 @@ void RendererSystem::invalidateResources(){
     m_meshSystem.releaseAllMeshGeometryHeapHandles();
     m_meshSystem.releaseMeshFrameHeapHandles();
     m_meshState.invalidateResources();
+    // Material fixture descriptors retain their tiny checker image and sampler just like other heap residents.
+    // Retire them while the heap is live, then leave cached CPU material info with its unpatched constant bytes so
+    // the next device generation can resolve fresh slots.
+    m_materialSystem.releaseMaterialResourceFixtures();
     m_materialState.invalidateResources();
     m_drawState.invalidateResources();
     // CSG's persistent clip descriptors retain their receiver/cutter buffers, so retire them before the CSG state

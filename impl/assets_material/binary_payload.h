@@ -25,7 +25,7 @@ namespace MaterialBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_MaterialMagic = 0x4D544C35u; // MTL5 (added per-material AVBOIT occupancy + extinction PS refs)
+inline constexpr u32 s_MaterialMagic = 0x4D544C36u; // MTL6 (added static material resource fixture references)
 inline constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
 // Material render-property flags packed into the serialized materialFlags word (decoded in Material::loadBinary),
 // mirroring the authored `transparent`/`two_sided`/`refractive` booleans. `Refractive` is the dedicated
@@ -83,8 +83,31 @@ static_assert(
     "MaterialTypedLayoutFieldBinary must stay binary-serializable"
 );
 
+// Static material resource identity. The renderer resolves fixtureName to a device-lifetime global-heap handle and
+// writes that handle's slot into constantByteOffset; no device-specific descriptor value is serialized here.
+struct MaterialResourceReferenceBinary{
+    NameHash blockNameHash = {};
+    NameHash fieldNameHash = {};
+    NameHash fixtureNameHash = {};
+    u32 resourceKind = MaterialResourceKind::None;
+    u32 constantByteOffset = 0u;
+};
+static_assert(
+    sizeof(MaterialResourceReferenceBinary) == sizeof(NameHash) * 3u + sizeof(u32) * 2u,
+    "MaterialResourceReferenceBinary layout drifted"
+);
+static_assert(
+    IsStandardLayout_V<MaterialResourceReferenceBinary>,
+    "MaterialResourceReferenceBinary must stay binary-serializable"
+);
+static_assert(
+    IsTriviallyCopyable_V<MaterialResourceReferenceBinary>,
+    "MaterialResourceReferenceBinary must stay binary-serializable"
+);
+
 inline constexpr usize s_TypedLayoutBlockBytes = sizeof(MaterialTypedLayoutBlockBinary);
 inline constexpr usize s_TypedLayoutFieldBytes = sizeof(MaterialTypedLayoutFieldBinary);
+inline constexpr usize s_ResourceReferenceBytes = sizeof(MaterialResourceReferenceBinary);
 
 template<typename BlockVector>
 [[nodiscard]] inline bool ComputeMaterialTypedBlockByteSize(const BlockVector& blocks, usize& outByteSize){
@@ -96,6 +119,67 @@ template<typename BlockVector>
         outByteSize += block.byteSize;
     }
     return true;
+}
+
+template<typename BlockVector, typename FieldVector, typename ResourceReferenceVector>
+[[nodiscard]] inline bool ValidateMaterialResourceReferences(
+    const BlockVector& blocks,
+    const FieldVector& fields,
+    const ResourceReferenceVector& resourceReferences
+){
+    usize resourceFieldCount = 0u;
+    u32 constantByteBegin = 0u;
+    for(const MaterialTypedLayoutBlock& block : blocks){
+        if(!IsValidMaterialBlockClass(block.blockClass))
+            return false;
+        if(block.fieldBegin > fields.size() || block.fieldCount > fields.size() - block.fieldBegin)
+            return false;
+
+        for(u32 fieldOffset = 0u; fieldOffset < block.fieldCount; ++fieldOffset){
+            const MaterialTypedLayoutField& field = fields[static_cast<usize>(block.fieldBegin) + fieldOffset];
+            if(!IsMaterialLayoutResourceFieldType(field.fieldType))
+                continue;
+
+            // Opaque handles are intentionally static constants. A resource in mutable storage would make the
+            // cooked fixture contract ambiguous and permit instance data to become a descriptor slot.
+            if(block.blockClass != MaterialBlockClass::MaterialConstant)
+                return false;
+            if(field.offset > Limit<u32>::s_Max - constantByteBegin)
+                return false;
+
+            ++resourceFieldCount;
+            const MaterialResourceKind::Enum expectedKind = MaterialLayoutFieldResourceKind(field.fieldType);
+            const u32 expectedByteOffset = constantByteBegin + field.offset;
+            bool foundReference = false;
+            for(const MaterialResourceReference& resourceReference : resourceReferences){
+                if(resourceReference.blockName != block.blockName || resourceReference.fieldName != field.fieldName)
+                    continue;
+                if(foundReference)
+                    return false;
+                if(
+                    !resourceReference.fixtureName
+                    || resourceReference.resourceKind != expectedKind
+                    || !IsKnownMaterialResourceFixture(resourceReference.resourceKind, resourceReference.fixtureName)
+                    || resourceReference.constantByteOffset != expectedByteOffset
+                )
+                    return false;
+
+                foundReference = true;
+            }
+            if(!foundReference)
+                return false;
+        }
+
+        if(block.blockClass == MaterialBlockClass::MaterialConstant){
+            if(block.byteSize > Limit<u32>::s_Max - constantByteBegin)
+                return false;
+            constantByteBegin += block.byteSize;
+        }
+    }
+
+    // Every cooked record must correspond to exactly one resource field. Since duplicate matching records above
+    // are rejected, this also excludes stray references to numeric or mutable fields.
+    return resourceFieldCount == resourceReferences.size();
 }
 
 [[nodiscard]] inline u64 UpdateMaterialTypedLayoutHashName(u64 hash, const Name& name){

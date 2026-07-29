@@ -371,6 +371,9 @@ static bool ParseMaterialLayoutFieldType(
 ){
     outFieldType = MaterialLayoutFieldType::None;
 
+    if(ParseMaterialBindResourceFieldTypeText(typeText, outFieldType))
+        return true;
+
     MaterialParameterValueType::Enum valueType = MaterialParameterValueType::None;
     u32 componentCount = 0u;
     if(!ParseMaterialParameterTypeText(typeText, valueType, componentCount))
@@ -428,6 +431,11 @@ static bool BuildMaterialTypedLayoutDefaultValue(
     UInt4U& outDefaultValue
 ){
     outDefaultValue = {};
+
+    // Resource fields store an initially-zero global-heap slot word.  Their static fixture identity is carried by
+    // MaterialResourceReference and patched only after the renderer owns a live descriptor heap.
+    if(IsMaterialLayoutResourceFieldType(fieldType))
+        return true;
 
     ACompactString key;
     if(!BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(bindField.name), key)){
@@ -588,6 +596,7 @@ static bool ReserveMaterialBindTypedLayoutVectors(
     outLayout.typedLayoutBlocks.reserve(sortedInstances.size());
     outLayout.typedLayoutFields.reserve(fieldReserveCount);
     outLayout.typedBlockBytes.reserve(byteReserveCount);
+    outLayout.resourceReferences.reserve(fieldReserveCount);
     return true;
 }
 
@@ -735,6 +744,10 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(
                 );
                 return false;
             }
+            // Static resource slots are fixed by the cooked fixture reference and are never material .nwb
+            // parameters.  Excluding them here prevents an authored uint value from being mistaken for a heap slot.
+            if(IsMaterialLayoutResourceFieldType(field.fieldType))
+                continue;
             if(field.offset > Limit<u32>::s_Max - blockEntry.byteBegin){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' field '{}.{}' "
                     "byte offset exceeds u32 for '{}'")
@@ -903,6 +916,7 @@ bool BuildMaterialBindTypedLayoutImpl(
     if(!ReserveMaterialBindTypedLayoutVectors(bindEntry, contextName, sortedInstances, outLayout))
         return false;
 
+    u32 constantTypedByteSize = 0u;
     for(const MaterialBindInstance* instance : sortedInstances){
         const MaterialBindStruct* bindStruct = bindEntry.findStruct(AStringView(instance->type));
         if(!bindStruct){
@@ -938,6 +952,7 @@ bool BuildMaterialBindTypedLayoutImpl(
         }
 
         const usize blockByteBegin = outLayout.typedBlockBytes.size();
+        const u32 blockConstantByteBegin = constantTypedByteSize;
 
         MaterialTypedLayoutBlock block;
         block.blockName = Name(AStringView(instance->name));
@@ -964,6 +979,14 @@ bool BuildMaterialBindTypedLayoutImpl(
                     , StringConvert(instance->name)
                     , StringConvert(bindField.name)
                     , StringConvert(bindField.type)
+                    , StringConvert(contextName.c_str())
+                );
+                return false;
+            }
+            if(IsMaterialLayoutResourceFieldType(fieldType) && blockClass != MaterialBlockClass::MaterialConstant){
+                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource field '{}.{}' must use material-constant storage for '{}'")
+                    , StringConvert(instance->name)
+                    , StringConvert(bindField.name)
                     , StringConvert(contextName.c_str())
                 );
                 return false;
@@ -1025,6 +1048,35 @@ bool BuildMaterialBindTypedLayoutImpl(
             }
 
             outLayout.typedLayoutFields.push_back(field);
+            if(IsMaterialLayoutResourceFieldType(fieldType)){
+                const MaterialResourceKind::Enum resourceKind = MaterialLayoutFieldResourceKind(fieldType);
+                const AStringView fixtureArgument = bindField.fixtureArgument();
+                const Name fixtureName(fixtureArgument);
+                if(!IsValidMaterialResourceKind(resourceKind) || !fixtureName || !IsKnownMaterialResourceFixture(resourceKind, fixtureArgument)){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource field '{}.{}' has an invalid fixture for '{}'")
+                        , StringConvert(instance->name)
+                        , StringConvert(bindField.name)
+                        , StringConvert(contextName.c_str())
+                    );
+                    return false;
+                }
+                if(field.offset > Limit<u32>::s_Max - blockConstantByteBegin){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource field '{}.{}' byte offset exceeds u32 for '{}'")
+                        , StringConvert(instance->name)
+                        , StringConvert(bindField.name)
+                        , StringConvert(contextName.c_str())
+                    );
+                    return false;
+                }
+
+                MaterialResourceReference resourceReference;
+                resourceReference.blockName = block.blockName;
+                resourceReference.fieldName = field.fieldName;
+                resourceReference.fixtureName = fixtureName;
+                resourceReference.resourceKind = resourceKind;
+                resourceReference.constantByteOffset = blockConstantByteBegin + field.offset;
+                outLayout.resourceReferences.push_back(resourceReference);
+            }
             block.byteSize = fieldOffset + fieldByteSize;
         }
 
@@ -1053,6 +1105,16 @@ bool BuildMaterialBindTypedLayoutImpl(
         }
 
         outLayout.typedLayoutBlocks.push_back(block);
+        if(blockClass == MaterialBlockClass::MaterialConstant){
+            if(block.byteSize > Limit<u32>::s_Max - constantTypedByteSize){
+                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' constant storage exceeds u32 byte size for '{}'")
+                    , StringConvert(bindEntry.virtualPath)
+                    , StringConvert(contextName.c_str())
+                );
+                return false;
+            }
+            constantTypedByteSize += block.byteSize;
+        }
     }
 
     outLayout.layoutHash = MaterialBinaryPayload::ComputeMaterialTypedLayoutHash(

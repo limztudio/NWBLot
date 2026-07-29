@@ -53,6 +53,15 @@ AStringView MaterialBindField::defaultArgument()const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+AStringView MaterialBindField::fixtureArgument()const{
+    const MaterialBindAttribute* attribute = findAttribute(__hidden_bind::s_FixtureAttribute);
+    return (attribute && attribute->arguments.size() == 1u) ? AStringView(attribute->arguments[0u]) : AStringView();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 const MaterialBindField* MaterialBindStruct::findField(const AStringView fieldName)const{
     for(const MaterialBindField& field : fields){
         if(AStringView(field.name) == fieldName)
@@ -95,6 +104,7 @@ void MaterialBindTypedLayout::reset(){
     typedLayoutBlocks.clear();
     typedLayoutFields.clear();
     typedBlockBytes.clear();
+    resourceReferences.clear();
     blockLookup.clear();
     parameterLookup.clear();
 }
@@ -190,12 +200,14 @@ void CopyMaterialBindTypedLayoutDefaults(
     u64& outLayoutHash,
     Material::TypedLayoutBlockVector& outBlocks,
     Material::TypedLayoutFieldVector& outFields,
-    Material::TypedBlockByteVector& outBlockBytes
+    Material::TypedBlockByteVector& outBlockBytes,
+    Material::ResourceReferenceVector& outResourceReferences
 ){
     outLayoutHash = layout.layoutHash;
     outBlocks.assign(layout.typedLayoutBlocks.begin(), layout.typedLayoutBlocks.end());
     outFields.assign(layout.typedLayoutFields.begin(), layout.typedLayoutFields.end());
     outBlockBytes.assign(layout.typedBlockBytes.begin(), layout.typedBlockBytes.end());
+    outResourceReferences.assign(layout.resourceReferences.begin(), layout.resourceReferences.end());
 }
 
 

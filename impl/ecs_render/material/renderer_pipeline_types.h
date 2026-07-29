@@ -102,6 +102,7 @@ namespace MaterialPipelineCsgMode{
 using MaterialTypedByteVector = Vector<u8, Core::Alloc::GlobalArena>;
 using MaterialTypedLayoutBlockVector = Vector<MaterialTypedLayoutBlock, Core::Alloc::GlobalArena>;
 using MaterialTypedLayoutFieldVector = Vector<MaterialTypedLayoutField, Core::Alloc::GlobalArena>;
+using MaterialResourceReferenceVector = Vector<MaterialResourceReference, Core::Alloc::GlobalArena>;
 using MaterialTypedByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
 
 
@@ -172,6 +173,10 @@ struct MaterialSurfaceInfo{
     u64 typedLayoutHash = 0u;
     MaterialTypedLayoutBlockVector typedLayoutBlocks;
     MaterialTypedLayoutFieldVector typedLayoutFields;
+    MaterialResourceReferenceVector resourceReferences;
+    // The cooked constants have zero-filled resource words. The renderer patches a working copy with current heap
+    // slots and restores from this immutable copy when descriptor resources are invalidated.
+    MaterialTypedByteVector unpatchedConstantTypedBytes;
     MaterialTypedByteVector constantTypedBytes;
     MaterialTypedByteVector mutableDefaultTypedBytes;
     u32 shadingModelId = 0u;
@@ -180,6 +185,7 @@ struct MaterialSurfaceInfo{
     // storage. Explicit opaque stage shaders have no hook, so clipping is deliberately disabled for them.
     bool csgCapSurfaceDispatchAvailable = false;
     bool csgCapSurfaceDispatchUnavailableLogged = false;
+    bool resourceFixturesResolved = false;
     // The dedicated refractive-caster classification flag, copied from the cooked Material. The RT instance
     // occluder record reads it. The refraction VALUES (refractionIor / shadowAbsorptionTint) are shader-side
     // (NwbMeshSurface), not here. Default false (not a refractive caster) -- a material declaring none is unchanged.
@@ -191,6 +197,8 @@ struct MaterialSurfaceInfo{
         : shaderVariant(arena)
         , typedLayoutBlocks(arena)
         , typedLayoutFields(arena)
+        , resourceReferences(arena)
+        , unpatchedConstantTypedBytes(arena)
         , constantTypedBytes(arena)
         , mutableDefaultTypedBytes(arena)
     {}

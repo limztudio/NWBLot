@@ -133,6 +133,12 @@ Texture2D<float4> NwbHeapSampledImage2D(const uint slot){
     return g_NwbHeapSampledImages[slot];
 }
 
+// Per-material texture fixture slots are read from material typed bytes and can differ between adjacent pixel/ray
+// invocations. Keep the non-uniform decoration at the heap boundary so authored material accessors cannot omit it.
+Texture2D<float4> NwbHeapSampledImage2DNonUniform(const uint slot){
+    return g_NwbHeapSampledImages[NonUniformResourceIndex(slot)];
+}
+
 Texture2DArray<float4> NwbHeapSampledImage2DArray(const uint slot){
     return g_NwbHeapSampledImage2DArrays[slot];
 }
@@ -173,6 +179,10 @@ RWTexture3D<float> NwbHeapStorageImage3DFloat(const uint slot){
 
 SamplerState NwbHeapSampler(const uint slot){
     return g_NwbHeapSamplers[slot];
+}
+
+SamplerState NwbHeapSamplerNonUniform(const uint slot){
+    return g_NwbHeapSamplers[NonUniformResourceIndex(slot)];
 }
 
 

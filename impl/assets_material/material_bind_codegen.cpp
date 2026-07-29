@@ -20,6 +20,19 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_bind{
+
+bool ParseMaterialBindResourceFieldTypeText(
+    const AStringView typeText,
+    MaterialLayoutFieldType::Enum& outFieldType
+);
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_cook{
 
 static constexpr u32 s_MaterialBindGeneratedSeparatorChunkRepeatCount = 8u;
@@ -393,10 +406,30 @@ static AStringView MaterialBindFieldLookupFunctionTypeName(const MaterialLayoutF
         )
     );
 
-    if(!IsValidMaterialLayoutFieldType(fieldType))
+    if(!IsMaterialLayoutNumericFieldType(fieldType))
         return AStringView();
 
     return s_TypeNames[static_cast<u32>(fieldType) - static_cast<u32>(MaterialLayoutFieldType::Bool)];
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static AStringView MaterialBindResourceSlangTypeName(const MaterialLayoutFieldType::Enum fieldType){
+    switch(fieldType){
+    case MaterialLayoutFieldType::SampledImage2D: return "Texture2D<float4>";
+    case MaterialLayoutFieldType::Sampler: return "SamplerState";
+    default: return AStringView();
+    }
+}
+
+static AStringView MaterialBindResourceHeapAccessorName(const MaterialLayoutFieldType::Enum fieldType){
+    switch(fieldType){
+    case MaterialLayoutFieldType::SampledImage2D: return "NwbHeapSampledImage2DNonUniform";
+    case MaterialLayoutFieldType::Sampler: return "NwbHeapSamplerNonUniform";
+    default: return AStringView();
+    }
 }
 
 
@@ -845,6 +878,43 @@ static void AppendMaterialBindFieldAccessor(
 }
 
 
+// Resource fields are not emitted into the aggregate material struct: opaque Slang resource handles are loaded
+// directly from their patched constant slot so a generated block loader never attempts to copy an opaque value.
+static bool AppendMaterialBindResourceFieldAccessor(
+    const AStringView includePath,
+    const MaterialLayoutFieldType::Enum fieldType,
+    const MaterialBlockClass::Enum blockClass,
+    const CookString& byteOffsetSymbol,
+    const CookString& functionName,
+    CookString& inOutSource
+){
+    if(blockClass != MaterialBlockClass::MaterialConstant){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': resource accessor '{}' must use constant storage")
+            , StringConvert(includePath)
+            , StringConvert(functionName)
+        );
+        return false;
+    }
+
+    const AStringView slangTypeName = MaterialBindResourceSlangTypeName(fieldType);
+    const AStringView heapAccessorName = MaterialBindResourceHeapAccessorName(fieldType);
+    if(slangTypeName.empty() || heapAccessorName.empty())
+        return false;
+
+    inOutSource += slangTypeName;
+    inOutSource += ' ';
+    inOutSource += functionName;
+    inOutSource += "(const NwbMeshInstanceData instance){\n";
+    inOutSource += "    return ";
+    inOutSource += heapAccessorName;
+    inOutSource += "(nwbMaterialLoadConstantUInt(instance, ";
+    inOutSource += byteOffsetSymbol;
+    inOutSource += "));\n";
+    inOutSource += "}\n\n";
+    return true;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -918,6 +988,51 @@ static bool AppendMaterialBindGeneratedInstance(
             return false;
         }
 
+        const bool isResourceField = IsMaterialLayoutResourceFieldType(layoutField.fieldType);
+        const CookString byteOffsetSymbol =
+            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name), AStringView(field.name) }, "_BYTE_OFFSET");
+        const CookString functionName =
+            BuildMaterialBindAccessorName(arena, { AStringView(instance.name), AStringView(field.name) });
+        if(!RegisterGeneratedMaterialBindSymbol(
+            includePath,
+            AStringView(functionName),
+            inOutSymbols,
+            scratchArena
+        ))
+            return false;
+
+        const u32 fieldByteOffset = layoutBlockStorageByteBegin + layoutField.offset;
+        if(!AppendMaterialBindU32Constant(
+            includePath,
+            byteOffsetSymbol,
+            fieldByteOffset,
+            inOutSymbols,
+            scratchArena,
+            inOutSource
+        ))
+            return false;
+        inOutSource += '\n';
+        if(isResourceField){
+            if(!AppendMaterialBindResourceFieldAccessor(
+                includePath,
+                layoutField.fieldType,
+                layoutBlock->blockClass,
+                byteOffsetSymbol,
+                functionName,
+                inOutSource
+            )){
+                NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' has unsupported resource type '{}'")
+                    , StringConvert(includePath)
+                    , StringConvert(bindStruct.name)
+                    , StringConvert(field.name)
+                    , StringConvert(field.type)
+                );
+                return false;
+            }
+            inOutSource += '\n';
+            continue;
+        }
+
         const CookString loadFunctionName = BuildMaterialBindFieldLookupFunctionName(
             arena,
             layoutField.fieldType,
@@ -932,23 +1047,10 @@ static bool AppendMaterialBindGeneratedInstance(
             );
             return false;
         }
-
         const CookString keySymbol =
             BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name), AStringView(field.name) }, "_KEY");
         const CookString defaultSymbol =
             BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name), AStringView(field.name) }, "_DEFAULT");
-        const CookString byteOffsetSymbol =
-            BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name), AStringView(field.name) }, "_BYTE_OFFSET");
-        const CookString functionName =
-            BuildMaterialBindAccessorName(arena, { AStringView(instance.name), AStringView(field.name) });
-        if(!RegisterGeneratedMaterialBindSymbol(
-            includePath,
-            AStringView(functionName),
-            inOutSymbols,
-            scratchArena
-        ))
-            return false;
-
         if(!AppendMaterialBindFieldConstants(
             includePath,
             bindStruct,
@@ -961,17 +1063,6 @@ static bool AppendMaterialBindGeneratedInstance(
             inOutSource
         ))
             return false;
-        const u32 fieldByteOffset = layoutBlockStorageByteBegin + layoutField.offset;
-        if(!AppendMaterialBindU32Constant(
-            includePath,
-            byteOffsetSymbol,
-            fieldByteOffset,
-            inOutSymbols,
-            scratchArena,
-            inOutSource
-        ))
-            return false;
-        inOutSource += '\n';
         AppendMaterialBindFieldAccessor(field, byteOffsetSymbol, functionName, AStringView(loadFunctionName), inOutSource);
         inOutSource += '\n';
     }
@@ -993,6 +1084,10 @@ static bool AppendMaterialBindGeneratedInstance(
     inOutSource += bindStruct.name;
     inOutSource += " value;\n";
     for(const MaterialBindField& field : bindStruct.fields){
+        MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
+        if(__hidden_bind::ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
+            continue;
+
         const CookString functionName =
             BuildMaterialBindAccessorName(arena, { AStringView(instance.name), AStringView(field.name) });
         inOutSource += "    value.";
@@ -1101,6 +1196,10 @@ bool BuildMaterialBindIncludeSourceImpl(
         outSource += bindStruct.name;
         outSource += "{\n";
         for(const MaterialBindField& field : bindStruct.fields){
+            MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
+            if(__hidden_bind::ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
+                continue;
+
             outSource += "    ";
             outSource += field.type;
             outSource += ' ';

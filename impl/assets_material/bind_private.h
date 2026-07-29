@@ -100,6 +100,12 @@ static constexpr AStringView s_DefaultAttribute = "default";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr AStringView s_FixtureAttribute = "fixture";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Cross-TU helper declarations (definitions de-static'd in their domain .cpp).
 
 bool ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena, Metascript::Document& outDoc);
@@ -108,6 +114,11 @@ bool ParseMaterialParameterTypeText(
     const AStringView typeText,
     MaterialParameterValueType::Enum& outType,
     u32& outComponentCount
+);
+
+bool ParseMaterialBindResourceFieldTypeText(
+    const AStringView typeText,
+    MaterialLayoutFieldType::Enum& outFieldType
 );
 
 bool ParseMaterialBindSource(

@@ -182,6 +182,26 @@ bool ParseMaterialParameterTypeText(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool ParseMaterialBindResourceFieldTypeText(
+    const AStringView typeText,
+    MaterialLayoutFieldType::Enum& outFieldType
+){
+    outFieldType = MaterialLayoutFieldType::None;
+    if(typeText == AStringView("texture2d")){
+        outFieldType = MaterialLayoutFieldType::SampledImage2D;
+        return true;
+    }
+    if(typeText == AStringView("sampler")){
+        outFieldType = MaterialLayoutFieldType::Sampler;
+        return true;
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static bool ParseMaterialBindStringField(
     const Path& bindFilePath,
     const Metascript::Value& map,
@@ -337,10 +357,14 @@ static bool ValidateMaterialBindStructAttributes(
 
 
 static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const MaterialBindStruct& bindStruct, const MaterialBindField& field){
-    bool foundDefault = false;
+    MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
+    const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType);
+    const MaterialResourceKind::Enum resourceKind = MaterialLayoutFieldResourceKind(resourceFieldType);
+    const AStringView requiredAttribute = isResourceField ? s_FixtureAttribute : s_DefaultAttribute;
+    bool foundRequiredAttribute = false;
 
     for(const MaterialBindAttribute& attribute : field.attributes){
-        if(attribute.name != s_DefaultAttribute){
+        if(attribute.name != requiredAttribute){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported attribute '{}'")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
@@ -349,33 +373,51 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
             );
             return false;
         }
-        if(foundDefault){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' declares default more than once")
+        if(foundRequiredAttribute){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' declares {} more than once")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
                 , StringConvert(field.name)
+                , StringConvert(requiredAttribute)
             );
             return false;
         }
         if(attribute.arguments.size() != 1u || attribute.arguments[0].empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' default attribute requires one non-empty string argument")
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' {} attribute requires one non-empty string argument")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
                 , StringConvert(field.name)
+                , StringConvert(requiredAttribute)
             );
             return false;
         }
 
-        foundDefault = true;
+        foundRequiredAttribute = true;
     }
 
-    if(foundDefault)
+    if(!foundRequiredAttribute){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare a {} attribute")
+            , PathToString<tchar>(bindFilePath)
+            , StringConvert(bindStruct.name)
+            , StringConvert(field.name)
+            , StringConvert(requiredAttribute)
+        );
+        return false;
+    }
+
+    if(!isResourceField)
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare a default attribute")
+    const AStringView fixtureName = field.fixtureArgument();
+    if(IsKnownMaterialResourceFixture(resourceKind, fixtureName))
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' fixture '{}' is not supported for resource type '{}'")
         , PathToString<tchar>(bindFilePath)
         , StringConvert(bindStruct.name)
         , StringConvert(field.name)
+        , StringConvert(fixtureName)
+        , StringConvert(field.type)
     );
     return false;
 }
@@ -405,14 +447,24 @@ static bool ParseMaterialBindField(
         return false;
     MaterialParameterValueType::Enum fieldType = MaterialParameterValueType::None;
     u32 fieldComponentCount = 0u;
+    MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
+    const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(outField.type), resourceFieldType);
     if(!IsMaterialBindIdentifier(outField.type)
-        || !ParseMaterialParameterTypeText(AStringView(outField.type), fieldType, fieldComponentCount)
+        || (!isResourceField && !ParseMaterialParameterTypeText(AStringView(outField.type), fieldType, fieldComponentCount))
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported type '{}'")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(bindStruct.name)
             , StringConvert(outField.name)
             , StringConvert(outField.type)
+        );
+        return false;
+    }
+    if(isResourceField && bindStruct.findAttribute(s_MaterialMutableAttribute)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': resource field '{}.{}' must use material_constant storage")
+            , PathToString<tchar>(bindFilePath)
+            , StringConvert(bindStruct.name)
+            , StringConvert(outField.name)
         );
         return false;
     }

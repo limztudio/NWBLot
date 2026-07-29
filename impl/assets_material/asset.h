@@ -56,6 +56,56 @@ namespace MaterialBlockClass{
 }
 
 
+namespace MaterialResourceKind{
+    enum Enum : u32{
+        None = 0,
+        SampledImage2D = 1,
+        Sampler = 2,
+    };
+};
+
+[[nodiscard]] inline bool IsValidMaterialResourceKind(const MaterialResourceKind::Enum resourceKind){
+    return resourceKind == MaterialResourceKind::SampledImage2D || resourceKind == MaterialResourceKind::Sampler;
+}
+
+
+// The first material-authored resource slice deliberately exposes a tiny fixed fixture catalog instead of a general
+// image-asset pipeline.  These names are cooked into MaterialResourceReference records and resolved by the renderer
+// to stable global-heap descriptors.  Keep the contract here so cook, runtime loading, and renderer resolution agree.
+namespace MaterialResourceFixture{
+    inline constexpr AStringView s_CheckerRgba8 = "builtin/material_fixture/checker_rgba8";
+    inline constexpr AStringView s_LinearClamp = "builtin/material_fixture/linear_clamp";
+};
+
+[[nodiscard]] inline bool IsKnownMaterialResourceFixture(
+    const MaterialResourceKind::Enum resourceKind,
+    const AStringView fixtureName
+){
+    switch(resourceKind){
+    case MaterialResourceKind::SampledImage2D:
+        return fixtureName == MaterialResourceFixture::s_CheckerRgba8;
+    case MaterialResourceKind::Sampler:
+        return fixtureName == MaterialResourceFixture::s_LinearClamp;
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] inline bool IsKnownMaterialResourceFixture(
+    const MaterialResourceKind::Enum resourceKind,
+    const Name& fixtureName
+){
+    switch(resourceKind){
+    case MaterialResourceKind::SampledImage2D:
+        return fixtureName == Name(MaterialResourceFixture::s_CheckerRgba8);
+    case MaterialResourceKind::Sampler:
+        return fixtureName == Name(MaterialResourceFixture::s_LinearClamp);
+    default:
+        return false;
+    }
+}
+
+
 namespace MaterialLayoutFieldType{
     enum Enum : u32{
         None = 0,
@@ -95,6 +145,10 @@ namespace MaterialLayoutFieldType{
         Float2 = 34,
         Float3 = 35,
         Float4 = 36,
+        // Resource fields occupy one patched uint heap slot in the typed-byte payload. They intentionally live
+        // after the contiguous numeric range so a resource can never be mistaken for an authored uint parameter.
+        SampledImage2D = 37,
+        Sampler = 38,
     };
 };
 
@@ -108,11 +162,37 @@ static_assert(
 );
 
 [[nodiscard]] inline bool IsValidMaterialLayoutFieldType(const MaterialLayoutFieldType::Enum fieldType){
+    return fieldType >= MaterialLayoutFieldType::Bool && fieldType <= MaterialLayoutFieldType::Sampler;
+}
+
+[[nodiscard]] inline bool IsMaterialLayoutNumericFieldType(const MaterialLayoutFieldType::Enum fieldType){
     return fieldType >= MaterialLayoutFieldType::Bool && fieldType <= MaterialLayoutFieldType::Float4;
 }
 
+[[nodiscard]] inline bool IsMaterialLayoutResourceFieldType(const MaterialLayoutFieldType::Enum fieldType){
+    return fieldType == MaterialLayoutFieldType::SampledImage2D || fieldType == MaterialLayoutFieldType::Sampler;
+}
+
+[[nodiscard]] inline MaterialResourceKind::Enum MaterialLayoutFieldResourceKind(const MaterialLayoutFieldType::Enum fieldType){
+    switch(fieldType){
+    case MaterialLayoutFieldType::SampledImage2D: return MaterialResourceKind::SampledImage2D;
+    case MaterialLayoutFieldType::Sampler: return MaterialResourceKind::Sampler;
+    default: return MaterialResourceKind::None;
+    }
+}
+
+[[nodiscard]] inline MaterialLayoutFieldType::Enum MaterialLayoutFieldTypeFromResourceKind(
+    const MaterialResourceKind::Enum resourceKind
+){
+    switch(resourceKind){
+    case MaterialResourceKind::SampledImage2D: return MaterialLayoutFieldType::SampledImage2D;
+    case MaterialResourceKind::Sampler: return MaterialLayoutFieldType::Sampler;
+    default: return MaterialLayoutFieldType::None;
+    }
+}
+
 [[nodiscard]] inline u32 MaterialLayoutFieldComponentCount(const MaterialLayoutFieldType::Enum fieldType){
-    if(!IsValidMaterialLayoutFieldType(fieldType))
+    if(!IsMaterialLayoutNumericFieldType(fieldType))
         return 0u;
 
     return ((static_cast<u32>(fieldType) - s_MaterialLayoutFieldFirstTypeId) % s_MaterialLayoutFieldComponentsPerValueType) + 1u;
@@ -121,7 +201,7 @@ static_assert(
 [[nodiscard]] inline MaterialParameterValueType::Enum MaterialLayoutFieldValueType(
     const MaterialLayoutFieldType::Enum fieldType
 ){
-    if(!IsValidMaterialLayoutFieldType(fieldType))
+    if(!IsMaterialLayoutNumericFieldType(fieldType))
         return MaterialParameterValueType::None;
 
     const u32 valueTypeOffset = (static_cast<u32>(fieldType) - s_MaterialLayoutFieldFirstTypeId) / s_MaterialLayoutFieldComponentsPerValueType;
@@ -172,6 +252,9 @@ static_assert(
 }
 
 [[nodiscard]] inline u32 MaterialLayoutFieldByteSize(const MaterialLayoutFieldType::Enum fieldType){
+    if(IsMaterialLayoutResourceFieldType(fieldType))
+        return sizeof(u32);
+
     return
         MaterialLayoutFieldComponentCount(fieldType)
         * MaterialParameterValueTypeByteSize(MaterialLayoutFieldValueType(fieldType))
@@ -179,6 +262,9 @@ static_assert(
 }
 
 [[nodiscard]] inline u32 MaterialLayoutFieldAlignment(const MaterialLayoutFieldType::Enum fieldType){
+    if(IsMaterialLayoutResourceFieldType(fieldType))
+        return sizeof(u32);
+
     return MaterialParameterValueTypeByteSize(MaterialLayoutFieldValueType(fieldType));
 }
 
@@ -213,6 +299,16 @@ struct MaterialTypedLayoutField{
     UInt4U defaultValue = {};
 };
 
+// A cooked material keeps resource identity separate from its numeric/default typed payload. `constantByteOffset`
+// points at the four-byte slot word the renderer patches after it has resolved the device-lifetime descriptor handle.
+struct MaterialResourceReference{
+    Name blockName = NAME_NONE;
+    Name fieldName = NAME_NONE;
+    Name fixtureName = NAME_NONE;
+    MaterialResourceKind::Enum resourceKind = MaterialResourceKind::None;
+    u32 constantByteOffset = 0u;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -229,6 +325,7 @@ public:
     using TypedLayoutBlockVector = Core::Assets::AssetVector<MaterialTypedLayoutBlock>;
     using TypedLayoutFieldVector = Core::Assets::AssetVector<MaterialTypedLayoutField>;
     using TypedBlockByteVector = Core::Assets::AssetVector<u8>;
+    using ResourceReferenceVector = Core::Assets::AssetVector<MaterialResourceReference>;
 
 
 public:
@@ -237,6 +334,7 @@ public:
         , m_typedLayoutBlocks(arena)
         , m_typedLayoutFields(arena)
         , m_typedBlockBytes(arena)
+        , m_resourceReferences(arena)
     {}
     Material(Core::Assets::AssetArena& arena, const Name& virtualPath)
         : Core::Assets::TypedAsset<Material>(virtualPath)
@@ -244,6 +342,7 @@ public:
         , m_typedLayoutBlocks(arena)
         , m_typedLayoutFields(arena)
         , m_typedBlockBytes(arena)
+        , m_resourceReferences(arena)
     {}
 
 
@@ -267,6 +366,7 @@ public:
         const TypedLayoutFieldVector& fields,
         const TypedBlockByteVector& blockBytes
     );
+    void setResourceReferences(const ResourceReferenceVector& resourceReferences);
     bool setShaderForStage(Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<Shader>& shaderAsset);
 
     bool findShaderForStage(Core::ShaderType::Enum shaderType, Core::Assets::AssetRef<Shader>& outShaderAsset)const;
@@ -280,6 +380,7 @@ public:
     [[nodiscard]] const TypedLayoutBlockVector& typedLayoutBlocks()const{ return m_typedLayoutBlocks; }
     [[nodiscard]] const TypedLayoutFieldVector& typedLayoutFields()const{ return m_typedLayoutFields; }
     [[nodiscard]] const TypedBlockByteVector& typedBlockBytes()const{ return m_typedBlockBytes; }
+    [[nodiscard]] const ResourceReferenceVector& resourceReferences()const{ return m_resourceReferences; }
     [[nodiscard]] const StageShaderArray& stageShaders()const{ return m_stageShaders; }
     [[nodiscard]] u32 stageShaderCount()const{ return m_stageShaderCount; }
     // The cook-generated per-material AVBOIT accumulate pixel shader bound for this material's transparent draw
@@ -315,6 +416,7 @@ private:
     TypedLayoutBlockVector m_typedLayoutBlocks;
     TypedLayoutFieldVector m_typedLayoutFields;
     TypedBlockByteVector m_typedBlockBytes;
+    ResourceReferenceVector m_resourceReferences;
     StageShaderArray m_stageShaders;
     u32 m_stageShaderCount = 0;
     bool m_transparent = false;

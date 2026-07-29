@@ -170,12 +170,14 @@ static bool ReadMaterialTypedLayout(
     u64& outLayoutHash,
     Material::TypedLayoutBlockVector& outBlocks,
     Material::TypedLayoutFieldVector& outFields,
-    Material::TypedBlockByteVector& outBlockBytes
+    Material::TypedBlockByteVector& outBlockBytes,
+    Material::ResourceReferenceVector& outResourceReferences
 ){
     outLayoutHash = 0u;
     outBlocks.clear();
     outFields.clear();
     outBlockBytes.clear();
+    outResourceReferences.clear();
 
     u32 blockCount = 0u;
     u32 fieldCount = 0u;
@@ -251,7 +253,43 @@ static bool ReadMaterialTypedLayout(
         return false;
     }
 
-    return ValidateMaterialTypedLayout(outLayoutHash, outBlocks, outFields, outBlockBytes, NWB_TEXT("Material::loadBinary"));
+    u32 resourceReferenceCount = 0u;
+    if(!ReadPOD(binary, inOutCursor, resourceReferenceCount)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing material resource reference count"));
+        return false;
+    }
+    if(
+        inOutCursor > binary.size()
+        || resourceReferenceCount > (binary.size() - inOutCursor) / MaterialBinaryPayload::s_ResourceReferenceBytes
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource reference count exceeds available data"));
+        return false;
+    }
+    outResourceReferences.reserve(resourceReferenceCount);
+    for(u32 i = 0u; i < resourceReferenceCount; ++i){
+        MaterialBinaryPayload::MaterialResourceReferenceBinary resourceReferenceBinary;
+        if(!ReadPOD(binary, inOutCursor, resourceReferenceBinary)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed material resource reference at index {}"), i);
+            return false;
+        }
+
+        MaterialResourceReference resourceReference;
+        resourceReference.blockName = Name(resourceReferenceBinary.blockNameHash);
+        resourceReference.fieldName = Name(resourceReferenceBinary.fieldNameHash);
+        resourceReference.fixtureName = Name(resourceReferenceBinary.fixtureNameHash);
+        resourceReference.resourceKind = static_cast<MaterialResourceKind::Enum>(resourceReferenceBinary.resourceKind);
+        resourceReference.constantByteOffset = resourceReferenceBinary.constantByteOffset;
+        outResourceReferences.push_back(resourceReference);
+    }
+
+    if(!ValidateMaterialTypedLayout(outLayoutHash, outBlocks, outFields, outBlockBytes, NWB_TEXT("Material::loadBinary")))
+        return false;
+    if(!MaterialBinaryPayload::ValidateMaterialResourceReferences(outBlocks, outFields, outResourceReferences)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource references do not match typed layout"));
+        return false;
+    }
+
+    return true;
 }
 
 
@@ -278,6 +316,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     m_typedLayoutBlocks.clear();
     m_typedLayoutFields.clear();
     m_typedBlockBytes.clear();
+    m_resourceReferences.clear();
     clearStageShaders();
     m_avboitAccumulatePixelShader.reset();
     m_avboitOccupancyPixelShader.reset();
@@ -323,7 +362,8 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         m_typedLayoutHash,
         m_typedLayoutBlocks,
         m_typedLayoutFields,
-        m_typedBlockBytes
+        m_typedBlockBytes,
+        m_resourceReferences
     ))
         return false;
     if(m_typedLayoutHash == 0u){
@@ -458,6 +498,10 @@ void Material::setTypedLayout(
     m_typedLayoutBlocks.assign(blocks.begin(), blocks.end());
     m_typedLayoutFields.assign(fields.begin(), fields.end());
     m_typedBlockBytes.assign(blockBytes.begin(), blockBytes.end());
+}
+
+void Material::setResourceReferences(const ResourceReferenceVector& resourceReferences){
+    m_resourceReferences.assign(resourceReferences.begin(), resourceReferences.end());
 }
 
 bool Material::setShaderForStage(const Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<Shader>& shaderAsset){

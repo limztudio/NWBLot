@@ -321,6 +321,29 @@ NwbTestRuntimeMaterial runtime;
 
 )NWB_BIND";
 
+static constexpr AStringView s_StaticResourceFixtureMaterialBindSource = R"NWB_BIND([material_constant]
+struct NwbFixtureSurfaceMaterial{
+    [default("float4(1.0, 1.0, 1.0, 1.0)")]
+    float4 base_color;
+
+    [fixture("builtin/material_fixture/checker_rgba8")]
+    texture2d base_color_map;
+
+    [fixture("builtin/material_fixture/linear_clamp")]
+    sampler base_color_sampler;
+};
+
+[material_mutable]
+struct NwbFixtureRuntimeMaterial{
+    [default("float(1.0)")]
+    float fade_alpha;
+};
+
+NwbFixtureSurfaceMaterial surface;
+NwbFixtureRuntimeMaterial runtime;
+
+)NWB_BIND";
+
 static constexpr AStringView s_MaterialBindMeshSource = R"NWB_SLANG(#include "mesh/authoring.slangi"
 
 NwbMeshGeneratedVertex nwbMeshBuildVertex(

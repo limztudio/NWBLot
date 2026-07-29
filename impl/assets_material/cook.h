@@ -43,6 +43,7 @@ struct MaterialCookEntry{
     Material::TypedLayoutBlockVector typedLayoutBlocks;
     Material::TypedLayoutFieldVector typedLayoutFields;
     Material::TypedBlockByteVector typedBlockBytes;
+    Material::ResourceReferenceVector resourceReferences;
     MaterialCookString shaderVariant;
     // This material's deferred lighting BXDF source. Parse stores the `project/`-rooted virtual
     // path (with the dedicated `.bxdf` extension) from the required `bxdf` field; the cross-asset phase resolves
@@ -89,6 +90,7 @@ struct MaterialCookEntry{
         , typedLayoutBlocks(arena)
         , typedLayoutFields(arena)
         , typedBlockBytes(arena)
+        , resourceReferences(arena)
         , shaderVariant(arena)
         , bxdfSource(arena)
         , surfaceSource(arena)
@@ -106,6 +108,7 @@ struct MaterialCookEntry{
         typedLayoutBlocks.clear();
         typedLayoutFields.clear();
         typedBlockBytes.clear();
+        resourceReferences.clear();
         shaderVariant.clear();
         bxdfSource.clear();
         surfaceSource.clear();

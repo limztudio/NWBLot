@@ -149,8 +149,8 @@ struct MaterialInstanceValueTraits<Half4U>{
     const MaterialLayoutFieldType::Enum fieldType,
     const UInt4U value
 ){
-    if(!IsValidMaterialLayoutFieldType(fieldType)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' uses invalid field type")
+    if(!IsMaterialLayoutNumericFieldType(fieldType)){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use a numeric mutable field type")
             , StringConvert(parameterNameText)
         );
         return false;

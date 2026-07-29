@@ -73,6 +73,7 @@ bool ValidateMaterialCookInterfaces(
         materialEntry.typedLayoutBlocks.clear();
         materialEntry.typedLayoutFields.clear();
         materialEntry.typedBlockBytes.clear();
+        materialEntry.resourceReferences.clear();
 
         if(materialEntry.materialInterface.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' is missing required material interface")
@@ -115,7 +116,8 @@ bool ValidateMaterialCookInterfaces(
             materialEntry.typedLayoutHash,
             materialEntry.typedLayoutBlocks,
             materialEntry.typedLayoutFields,
-            materialEntry.typedBlockBytes
+            materialEntry.typedBlockBytes,
+            materialEntry.resourceReferences
         );
         if(!ApplyMaterialBindTypedLayoutParameters(
             *layout,

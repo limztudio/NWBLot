@@ -203,6 +203,7 @@ bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMat
         materialEntry.typedLayoutFields,
         materialEntry.typedBlockBytes
     );
+    outMaterial.setResourceReferences(materialEntry.resourceReferences);
 
     for(const auto& [shaderType, shaderAsset] : materialEntry.stageShaders){
         if(!outMaterial.setShaderForStage(shaderType, shaderAsset)){
@@ -401,6 +402,10 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: typed block byte count exceeds u32 range"));
         return false;
     }
+    if(material.resourceReferences().size() > Limit<u32>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material resource reference count exceeds u32 range"));
+        return false;
+    }
     if(MaterialBinaryPayload::ComputeMaterialTypedLayoutHash(
         material.typedLayoutBlocks(),
         material.typedLayoutFields()
@@ -418,6 +423,14 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     }
     if(expectedTypedBlockByteSize != material.typedBlockBytes().size()){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: typed block bytes do not match typed layout"));
+        return false;
+    }
+    if(!MaterialBinaryPayload::ValidateMaterialResourceReferences(
+        material.typedLayoutBlocks(),
+        material.typedLayoutFields(),
+        material.resourceReferences()
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material resource references do not match typed layout"));
         return false;
     }
     usize reserveBytes = sizeof(u32); // magic
@@ -438,6 +451,12 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         )
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
         && AddBinaryReserveBytes(reserveBytes, material.typedBlockBytes().size())
+        && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
+        && AddBinaryRepeatedReserveBytes(
+            reserveBytes,
+            material.resourceReferences().size(),
+            MaterialBinaryPayload::s_ResourceReferenceBytes
+        )
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32))
         && AddBinaryRepeatedReserveBytes(reserveBytes, material.stageShaderCount(), MaterialBinaryPayload::s_ShaderEntryBytes)
         && AddBinaryReserveBytes(reserveBytes, sizeof(u32)) // material flags
@@ -487,6 +506,16 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         material.typedBlockBytes().data(),
         material.typedBlockBytes().size()
     );
+    AppendPOD(outBinary, static_cast<u32>(material.resourceReferences().size()));
+    for(const MaterialResourceReference& resourceReference : material.resourceReferences()){
+        MaterialBinaryPayload::MaterialResourceReferenceBinary resourceReferenceBinary;
+        resourceReferenceBinary.blockNameHash = resourceReference.blockName.hash();
+        resourceReferenceBinary.fieldNameHash = resourceReference.fieldName.hash();
+        resourceReferenceBinary.fixtureNameHash = resourceReference.fixtureName.hash();
+        resourceReferenceBinary.resourceKind = static_cast<u32>(resourceReference.resourceKind);
+        resourceReferenceBinary.constantByteOffset = resourceReference.constantByteOffset;
+        AppendPOD(outBinary, resourceReferenceBinary);
+    }
     AppendPOD(outBinary, material.stageShaderCount());
 
     const Material::StageShaderArray& stageShaders = material.stageShaders();

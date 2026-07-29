@@ -1575,5 +1575,107 @@ TEST(AssetsGraphics, MaterialBindGeneratedSlangText){
 }
 
 
+TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
+    NWB::Impl::Material material(testArena.arena);
+    const bool built = BuildMaterialFromBindAndMeta(
+        s_StaticResourceFixtureMaterialBindSource,
+        s_BlockScopedMaterialMeta,
+        "material_bind_static_resource_fixture",
+        testArena,
+        material,
+        scratchArena
+    );
+    EXPECT_TRUE(built);
+    if(built){
+        const NWB::Impl::MaterialTypedLayoutBlock* surfaceBlock = FindMaterialTypedLayoutBlock(material, "surface");
+        ASSERT_NE(surfaceBlock, nullptr);
+        EXPECT_EQ(surfaceBlock->blockClass, NWB::Impl::MaterialBlockClass::MaterialConstant);
+        EXPECT_EQ(surfaceBlock->byteSize, 24u);
+        CheckMaterialTypedLayoutField(
+            material,
+            *surfaceBlock,
+            "base_color_map",
+            NWB::Impl::MaterialLayoutFieldType::SampledImage2D,
+            16u
+        );
+        CheckMaterialTypedLayoutField(
+            material,
+            *surfaceBlock,
+            "base_color_sampler",
+            NWB::Impl::MaterialLayoutFieldType::Sampler,
+            20u
+        );
+
+        ASSERT_EQ(material.resourceReferences().size(), 2u);
+        const NWB::Impl::MaterialResourceReference& imageReference = material.resourceReferences()[0u];
+        const NWB::Impl::MaterialResourceReference& samplerReference = material.resourceReferences()[1u];
+        EXPECT_EQ(imageReference.blockName, Name("surface"));
+        EXPECT_EQ(imageReference.fieldName, Name("base_color_map"));
+        EXPECT_EQ(imageReference.fixtureName, Name(NWB::Impl::MaterialResourceFixture::s_CheckerRgba8));
+        EXPECT_EQ(imageReference.resourceKind, NWB::Impl::MaterialResourceKind::SampledImage2D);
+        EXPECT_EQ(imageReference.constantByteOffset, 16u);
+        EXPECT_EQ(samplerReference.blockName, Name("surface"));
+        EXPECT_EQ(samplerReference.fieldName, Name("base_color_sampler"));
+        EXPECT_EQ(samplerReference.fixtureName, Name(NWB::Impl::MaterialResourceFixture::s_LinearClamp));
+        EXPECT_EQ(samplerReference.resourceKind, NWB::Impl::MaterialResourceKind::Sampler);
+        EXPECT_EQ(samplerReference.constantByteOffset, 20u);
+
+        NWB::Impl::MaterialAssetCodec codec;
+        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+        if(RoundTripMaterialAssetCodec(testArena, codec, material, loadedAsset)){
+            const NWB::Impl::Material& loadedMaterial = static_cast<const NWB::Impl::Material&>(*loadedAsset);
+            ASSERT_EQ(loadedMaterial.resourceReferences().size(), 2u);
+            EXPECT_EQ(loadedMaterial.resourceReferences()[0u].fixtureName, imageReference.fixtureName);
+            EXPECT_EQ(loadedMaterial.resourceReferences()[0u].constantByteOffset, imageReference.constantByteOffset);
+            EXPECT_EQ(loadedMaterial.resourceReferences()[1u].fixtureName, samplerReference.fixtureName);
+            EXPECT_EQ(loadedMaterial.resourceReferences()[1u].constantByteOffset, samplerReference.constantByteOffset);
+        }
+    }
+
+    Path bindRoot(testArena.arena);
+    NWB::Impl::MaterialBindEntry bindEntry(testArena.arena);
+    const bool parsed = ParseMaterialBindFromText(
+        testArena,
+        s_StaticResourceFixtureMaterialBindSource,
+        "material_bind_static_resource_fixture_generated",
+        bindEntry,
+        bindRoot,
+        scratchArena
+    );
+    EXPECT_TRUE(parsed);
+    if(parsed){
+        bindEntry.virtualPath = "project/material_interfaces/test_surface";
+        NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
+        EXPECT_TRUE(NWB::Impl::BuildMaterialBindIncludeSource(
+            testArena.arena,
+            bindEntry,
+            generatedSource,
+            scratchArena
+        ));
+        const AStringView generatedSourceView(generatedSource.data(), generatedSource.size());
+        const AStringView expectedSnippets[] = {
+            "Texture2D<float4> nwbMaterialBindLoadSurfaceBaseColorMap",
+            "SamplerState nwbMaterialBindLoadSurfaceBaseColorSampler",
+            "NwbHeapSampledImage2DNonUniform(nwbMaterialLoadConstantUInt(instance, NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_MAP_BYTE_OFFSET))",
+            "NwbHeapSamplerNonUniform(nwbMaterialLoadConstantUInt(instance, NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_SAMPLER_BYTE_OFFSET))",
+            "float4 base_color;",
+        };
+        CheckGeneratedSourceContainsAll(generatedSourceView, expectedSnippets);
+        EXPECT_FALSE(ContainsText(generatedSourceView, "texture2d base_color_map"));
+        EXPECT_FALSE(ContainsText(generatedSourceView, "value.base_color_map"));
+        EXPECT_FALSE(ContainsText(generatedSourceView, "value.base_color_sampler"));
+    }
+
+    EXPECT_EQ(logger.errorCount(), 0u);
+    ErrorCode errorCode;
+    EXPECT_TRUE(RemoveAllIfExists(bindRoot, errorCode));
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

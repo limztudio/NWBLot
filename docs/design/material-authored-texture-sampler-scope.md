@@ -1,13 +1,15 @@
-# Material-authored texture and sampler support — proposed scope
+# Material-authored texture and sampler support — fixture delivery and follow-up scope
 
-**Status:** scoped; implementation has not started.
+**Status:** the fixture-backed static-resource slice is implemented. General texture/sampler
+asset import and arbitrary material asset references remain scoped follow-up work.
 
 ## 1. Goal
 
 Allow a surface-authored material to declare and use a sampled 2D texture and a sampler without
-adding any pipeline-local descriptors. A material must carry asset references at cook time, resolve
-them to the existing global descriptor heap at runtime, and expose the resulting resources to every
-consumer of its surface hook.
+adding any pipeline-local descriptors. The delivered first slice carries fixture identities at cook
+time, resolves them to the existing global descriptor heap at runtime, and exposes the resulting
+resources to every consumer of its surface hook. A later asset-import slice will replace those fixed
+identities with general material asset references.
 
 The first slice should support only immutable, per-material `Texture2D<float4>` and `SamplerState`
 parameters. Numeric `material_mutable` fields remain as they are; per-instance texture/sampler
@@ -32,14 +34,34 @@ The gaps are deliberately above the descriptor heap:
 - There is no texture or sampler asset type, image importer, runtime image upload path, or material
   resource cache. Existing textures are renderer/UI-owned RHI allocations.
 
-## 3. Recommended first milestone
+## 3. Delivered fixture milestone
+
+The initial implementation deliberately has a tiny static catalog:
+
+- `[fixture("builtin/material_fixture/checker_rgba8")] texture2d` resolves to a shared 2x2 RGBA8
+  checker texture.
+- `[fixture("builtin/material_fixture/linear_clamp")] sampler` resolves to a shared linear-clamp
+  sampler.
+- Both resource kinds are valid only in `[material_constant]` blocks. Their cooked resource records
+  store block/field identity, fixture identity, kind, and the four-byte constant-byte offset.
+- The renderer registers the shared RHI resources in the global sampled-image and sampler heaps,
+  patches a working copy of each material's constants with the resulting slots, and restores the
+  unpatched copy when descriptors are invalidated.
+- Generated Slang keeps opaque resources out of aggregate structs/loaders and emits standalone
+  `Texture2D<float4>` / `SamplerState` accessors instead.
+
+This validates the complete material ABI, including the normal raster, AVBOIT, CSG, and trace
+surface paths, without pretending that a general image-asset pipeline already exists.
+
+## 4. Follow-up general-resource scope
 
 ### In scope
 
 - `texture2d` fields in a `[material_constant]` block, emitted as `Texture2D<float4>` in generated
   Slang.
 - `sampler` fields in a `[material_constant]` block, emitted as `SamplerState`.
-- One texture asset reference and one sampler asset reference per declared field.
+- One texture asset reference and one sampler asset reference per declared field, replacing the
+  fixture-only identities above.
 - Static 2D sampled textures only; an authored resource is shared by all instances of the material.
 - Generated accessor functions usable from the normal G-buffer surface, AVBOIT, CSG cap/receiver
   paths, transparent shadow dispatch, surfel GI, and caustics.
@@ -59,7 +81,7 @@ allows the current typed-byte deduplication to continue unchanged. Per-instance 
 separate cache key, change tracking, and trace-context update path, so it should not be hidden inside
 the initial feature.
 
-## 4. Proposed data path
+## 5. Proposed general-resource data path
 
 ```text
 .bind resource field + material .nwb resource reference
@@ -88,23 +110,25 @@ Reusing the typed-word payload avoids new push constants, an `InstanceGpuData` l
 four-byte constant word, but has its own field kind so it cannot be confused with an author-supplied
 `uint`.
 
-## 5. Authoring and cook contract
+## 6. Authoring and cook contract
 
-The precise metadata spelling can remain small, but the intended contract is:
+The delivered fixture spelling is intentionally small:
 
 ```text
 [material_constant]
 struct NwbSurfaceMaterial {
+    [fixture("builtin/material_fixture/checker_rgba8")]
     texture2d base_color_map;
+    [fixture("builtin/material_fixture/linear_clamp")]
     sampler base_color_sampler;
     half4 base_color;
 };
 ```
 
-The material metadata supplies a typed reference for each resource field, for example a texture asset
-path for `surface.base_color_map` and a sampler asset path for `surface.base_color_sampler`. The cooker
-must reject missing, duplicate, mismatched, mutable, or unsupported resource fields; it must also
-reject numeric parameter syntax for a resource field.
+The general-resource follow-up would replace each fixture name with a typed material asset reference,
+for example a texture asset path for `surface.base_color_map` and a sampler asset path for
+`surface.base_color_sampler`. The cooker must reject missing, duplicate, mismatched, mutable, or
+unsupported resource fields; it must also reject numeric parameter syntax for a resource field.
 
 Add resource-layout metadata beside the current typed layout rather than extending the numeric
 `MaterialParameterValueType` enum. Each record needs at least:
@@ -123,11 +147,12 @@ resource-valued generated accessors and the desired block-loader behavior. If op
 cannot safely be struct members in the current compiler path, preserve the scalar numeric block loader
 and generate standalone texture/sampler accessors instead.
 
-## 6. Runtime and shader contract
+## 7. Runtime and shader contract
 
 `RendererMaterialSystem::createMaterialSurfaceInfo()` is the natural ownership point:
 
-1. load or find each referenced texture/sampler asset;
+1. load or find each referenced texture/sampler asset (or, in the delivered slice, resolve its fixed
+   fixture);
 2. obtain or create a cached RHI texture/sampler and its global heap descriptor;
 3. retain the RHI object and descriptor handle in a renderer-owned resource cache;
 4. copy the material's constant typed bytes and patch the resource-word offsets with heap slots; and
@@ -139,11 +164,11 @@ continue to use the heap's existing in-flight retirement rules.
 
 Generated resource accessors should load the patched `uint` word and use dedicated non-uniform heap
 helpers, even when a raster draw happens to be uniform. Trace invocations can hit different materials
-in one wave. `shaderSampledImageArrayNonUniformIndexing` is already required and enabled; the feature
-must additionally require and enable `shaderSamplerArrayNonUniformIndexing` before a dynamically
-selected material sampler is legal.
+in one wave. Vulkan's existing `shaderSampledImageArrayNonUniformIndexing` feature covers sampled
+images, samplers, and combined image samplers, and is already required and enabled by the renderer;
+there is no separate sampler-only non-uniform-indexing feature.
 
-## 7. Texture/sampler asset prerequisite
+## 8. Texture/sampler asset prerequisite
 
 There is currently no texture asset pipeline. The material work therefore needs two bounded layers:
 
@@ -156,7 +181,7 @@ Layer 1 can prove the material ABI with a cooked deterministic RGBA8 fixture. It
 for general image import. Layer 2 must choose an image input format and color/mip policy explicitly;
 the repository currently contains no image decoder or source image assets to reuse.
 
-## 8. Verification gates
+## 9. Verification gates
 
 1. Unit tests parse valid resource fields and reject invalid field class/type/reference combinations.
 2. Cook/runtime tests round-trip resource metadata, reject corrupt payloads, and prove resource kinds
@@ -168,12 +193,11 @@ the repository currently contains no image decoder or source image assets to reu
 5. A shader-cook probe compiles a surface that samples an authored 2D texture.
 6. A smoke scene verifies the sampled result in G-buffer/deferred output and exercises a transparent
    material so AVBOIT and the shared trace surface path consume the same resource contract.
-7. Vulkan capability coverage verifies the required non-uniform sampler feature is enabled or device
-   creation fails with a clear diagnostic.
+7. Vulkan capability coverage verifies the existing sampled-image non-uniform-indexing feature (which
+   also covers sampler arrays) is enabled or device creation fails with a clear diagnostic.
 
-## 9. Decision needed before implementation
+## 10. Next decision
 
-The recommended first implementation is static per-material `texture2d` + `sampler` resources and a
-minimal cooked texture fixture, followed by a separately scoped external image-import feature. If the
-first delivery must let artists reference PNG/DDS/KTX source images immediately, that importer and its
-format/color/mip policy become part of this feature rather than a follow-up.
+The implemented fixture is a stable vertical slice, not artist-facing texture import. The next decision
+is whether the follow-up should begin with PNG, DDS, or KTX input; that choice determines the importer,
+format/color-space, and mip policy that must be designed with it.

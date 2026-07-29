@@ -67,6 +67,14 @@ RendererSystem::RendererSystem(
     , m_postGbufferFanInStateHandoff(arena)
     , m_deferredLightingStateHandoff(arena)
     , m_deferredCompositeStateHandoff(arena)
+    , m_avboitPreStateHandoff(arena)
+    , m_avboitDepthWarpInputStateHandoff(arena)
+    , m_avboitDepthWarpStateHandoff(arena)
+    , m_avboitExtinctionInputStateHandoff(arena)
+    , m_avboitExtinctionStateHandoff(arena)
+    , m_avboitIntegrationInputStateHandoff(arena)
+    , m_avboitIntegrationStateHandoff(arena)
+    , m_avboitAccumulationInputStateHandoff(arena)
     , m_avboitStateHandoff(arena)
     , m_shaderSystem(*this)
     , m_meshSystem(*this)
@@ -127,6 +135,15 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
         m_surfelGiStateHandoff.reset();
         m_surfelIrradianceGraphicsStateHandoff.reset();
         m_surfelIrradianceReturnStateHandoff.reset();
+        m_avboitPreStateHandoff.reset();
+        m_avboitDepthWarpInputStateHandoff.reset();
+        m_avboitDepthWarpStateHandoff.reset();
+        m_avboitExtinctionInputStateHandoff.reset();
+        m_avboitExtinctionStateHandoff.reset();
+        m_avboitIntegrationInputStateHandoff.reset();
+        m_avboitIntegrationStateHandoff.reset();
+        m_avboitAccumulationInputStateHandoff.reset();
+        m_avboitStateHandoff.reset();
         m_deferredCompositeStateHandoff.reset();
         targetsReady = m_deferredSystem.createDeferredFrameTargets(width, height);
     }
@@ -190,6 +207,14 @@ void RendererSystem::invalidateResources(){
     m_postGbufferFanInStateHandoff.reset();
     m_deferredLightingStateHandoff.reset();
     m_deferredCompositeStateHandoff.reset();
+    m_avboitPreStateHandoff.reset();
+    m_avboitDepthWarpInputStateHandoff.reset();
+    m_avboitDepthWarpStateHandoff.reset();
+    m_avboitExtinctionInputStateHandoff.reset();
+    m_avboitExtinctionStateHandoff.reset();
+    m_avboitIntegrationInputStateHandoff.reset();
+    m_avboitIntegrationStateHandoff.reset();
+    m_avboitAccumulationInputStateHandoff.reset();
     m_avboitStateHandoff.reset();
     m_meshViewSetupCommandList.reset();
     m_sceneShadingSetupCommandList.reset();
@@ -206,6 +231,10 @@ void RendererSystem::invalidateResources(){
     m_surfelGiCommandList.reset();
     m_deferredLightingCommandList.reset();
     m_avboitCommandList.reset();
+    m_asyncAvboitDepthWarpCommandList.reset();
+    m_avboitExtinctionCommandList.reset();
+    m_asyncAvboitIntegrationCommandList.reset();
+    m_avboitAccumulateCommandList.reset();
     m_deferredCompositeCommandList.reset();
     m_shadowPrepareCommandList.reset();
     m_asyncShadowOwnershipRecoveryFailed = false;
@@ -342,6 +371,38 @@ bool RendererSystem::ensureFrameCommandLists(){
             m_asyncSurfelGiCommandList = device.createCommandList(asyncSurfelGiCommandListParameters);
             if(!m_asyncSurfelGiCommandList){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async surfel-GI command list"));
+                return false;
+            }
+        }
+        if(!m_asyncAvboitDepthWarpCommandList){
+            Core::CommandListParameters asyncAvboitDepthWarpCommandListParameters;
+            asyncAvboitDepthWarpCommandListParameters.setRenderLane(Core::RenderLane::AsyncCompute);
+            m_asyncAvboitDepthWarpCommandList = device.createCommandList(asyncAvboitDepthWarpCommandListParameters);
+            if(!m_asyncAvboitDepthWarpCommandList){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async AVBOIT depth-warp command list"));
+                return false;
+            }
+        }
+        if(!m_avboitExtinctionCommandList){
+            m_avboitExtinctionCommandList = device.createCommandList();
+            if(!m_avboitExtinctionCommandList){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT extinction command list"));
+                return false;
+            }
+        }
+        if(!m_asyncAvboitIntegrationCommandList){
+            Core::CommandListParameters asyncAvboitIntegrationCommandListParameters;
+            asyncAvboitIntegrationCommandListParameters.setRenderLane(Core::RenderLane::AsyncCompute);
+            m_asyncAvboitIntegrationCommandList = device.createCommandList(asyncAvboitIntegrationCommandListParameters);
+            if(!m_asyncAvboitIntegrationCommandList){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async AVBOIT integration command list"));
+                return false;
+            }
+        }
+        if(!m_avboitAccumulateCommandList){
+            m_avboitAccumulateCommandList = device.createCommandList();
+            if(!m_avboitAccumulateCommandList){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulation command list"));
                 return false;
             }
         }
@@ -636,6 +697,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     const CsgFrameState csgFrameState = m_preparedCsgFrameState;
     const bool hasOpaqueCsgFrameWork = csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
+    const bool hasTransparentRenderers = m_preparedHasTransparentRenderers;
     NWB_ASSERT(csgFrameState.empty() || deferredTargets.csgIntervalTargetsValid());
     auto& device = m_graphics.getDevice();
     if(m_graphics.isDeviceRecreationRequested() || device.isDeviceLost()){
@@ -656,6 +718,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // is selected from such a family, so both the software and hardware caustic producers can share its packet.
     const bool asyncCausticsSchedule = asyncShadowSchedule;
     const bool asyncSurfelGiSchedule = asyncShadowSchedule;
+    // AVBOIT alternates Graphics raster passes with two pure dispatches. Only split it when transparent work exists;
+    // a clear-only frame remains one Graphics packet and avoids needless cross-lane submissions.
+    const bool asyncAvboitSchedule = asyncShadowSchedule && hasTransparentRenderers;
     Core::CommandList* meshViewSetupCommandList = m_meshViewSetupCommandList.get();
     Core::CommandList* sceneShadingSetupCommandList = m_sceneShadingSetupCommandList.get();
     Core::CommandList* deferredClearCommandList = m_deferredClearCommandList.get();
@@ -679,6 +744,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     ;
     Core::CommandList* deferredLightingCommandList = m_deferredLightingCommandList.get();
     Core::CommandList* avboitCommandList = m_avboitCommandList.get();
+    Core::CommandList* asyncAvboitDepthWarpCommandList = m_asyncAvboitDepthWarpCommandList.get();
+    Core::CommandList* avboitExtinctionCommandList = m_avboitExtinctionCommandList.get();
+    Core::CommandList* asyncAvboitIntegrationCommandList = m_asyncAvboitIntegrationCommandList.get();
+    Core::CommandList* avboitAccumulateCommandList = m_avboitAccumulateCommandList.get();
     Core::CommandList* deferredCompositeCommandList = m_deferredCompositeCommandList.get();
     NWB_ASSERT(meshViewSetupCommandList);
     NWB_ASSERT(sceneShadingSetupCommandList);
@@ -697,6 +766,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(surfelGiCommandList);
     NWB_ASSERT(deferredLightingCommandList);
     NWB_ASSERT(avboitCommandList);
+    NWB_ASSERT(!asyncAvboitSchedule || asyncAvboitDepthWarpCommandList);
+    NWB_ASSERT(!asyncAvboitSchedule || avboitExtinctionCommandList);
+    NWB_ASSERT(!asyncAvboitSchedule || asyncAvboitIntegrationCommandList);
+    NWB_ASSERT(!asyncAvboitSchedule || avboitAccumulateCommandList);
     NWB_ASSERT(deferredCompositeCommandList);
     if(
         !meshViewSetupCommandList
@@ -716,6 +789,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !surfelGiCommandList
         || !deferredLightingCommandList
         || !avboitCommandList
+        || (asyncAvboitSchedule && !asyncAvboitDepthWarpCommandList)
+        || (asyncAvboitSchedule && !avboitExtinctionCommandList)
+        || (asyncAvboitSchedule && !asyncAvboitIntegrationCommandList)
+        || (asyncAvboitSchedule && !avboitAccumulateCommandList)
         || !deferredCompositeCommandList
     )
         return;
@@ -743,11 +820,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_postGbufferFanInStateHandoff.reset();
     m_deferredLightingStateHandoff.reset();
     m_deferredCompositeStateHandoff.reset();
+    m_avboitPreStateHandoff.reset();
+    m_avboitDepthWarpInputStateHandoff.reset();
+    m_avboitDepthWarpStateHandoff.reset();
+    m_avboitExtinctionInputStateHandoff.reset();
+    m_avboitExtinctionStateHandoff.reset();
+    m_avboitIntegrationInputStateHandoff.reset();
+    m_avboitIntegrationStateHandoff.reset();
+    m_avboitAccumulationInputStateHandoff.reset();
     m_avboitStateHandoff.reset();
     m_raytracingSystem.discardSoftShadowTemporalHistory();
 
     // Recording a packet can advance CPU mirrors (temporal phases, readback cadence, and the AVBOIT clear latch)
-    // before the eleven command buffers have reached the Graphics queue. Preserve them so every rejection path below can
+    // before the recorded command buffers have reached their owning queues. Preserve them so every rejection path below can
     // make the following frame record the same GPU work again instead of treating an abandoned packet as completed.
     struct PostGbufferPacketCpuState{
         bool avboitTargetsNeedClear = true;
@@ -864,6 +949,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingSubmissionTicket prefixTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket shadowTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket effectsTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket avboitPreTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket avboitDepthWarpTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket avboitExtinctionTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket avboitIntegrationTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket avboitAccumulateTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket finalTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket* const prefixTimingTicketForPacket = asyncShadowSchedule ? &prefixTimingTicket : &renderTimingTicket;
     Core::GpuTimingSubmissionTicket* const shadowTimingTicketForPacket = asyncShadowSchedule ? &shadowTimingTicket : &renderTimingTicket;
@@ -875,6 +965,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     ;
     Core::GpuTimingSubmissionTicket* const surfelGiTimingTicketForPacket = asyncSurfelGiSchedule
         ? shadowTimingTicketForPacket
+        : effectsTimingTicketForPacket
+    ;
+    Core::GpuTimingSubmissionTicket* const avboitPreTimingTicketForPacket = asyncAvboitSchedule
+        ? &avboitPreTimingTicket
         : effectsTimingTicketForPacket
     ;
     Core::GpuTimingSubmissionTicket* const finalTimingTicketForPacket = asyncShadowSchedule ? &finalTimingTicket : &renderTimingTicket;
@@ -893,6 +987,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         prefixTimingTicket.discard();
         shadowTimingTicket.discard();
         effectsTimingTicket.discard();
+        avboitPreTimingTicket.discard();
+        avboitDepthWarpTimingTicket.discard();
+        avboitExtinctionTimingTicket.discard();
+        avboitIntegrationTimingTicket.discard();
+        avboitAccumulateTimingTicket.discard();
         finalTimingTicket.discard();
     };
     const auto discardRenderPackets = [&](){
@@ -937,6 +1036,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_postGbufferFanInStateHandoff.reset();
         m_deferredLightingStateHandoff.reset();
         m_deferredCompositeStateHandoff.reset();
+        m_avboitPreStateHandoff.reset();
+        m_avboitDepthWarpInputStateHandoff.reset();
+        m_avboitDepthWarpStateHandoff.reset();
+        m_avboitExtinctionInputStateHandoff.reset();
+        m_avboitExtinctionStateHandoff.reset();
+        m_avboitIntegrationInputStateHandoff.reset();
+        m_avboitIntegrationStateHandoff.reset();
+        m_avboitAccumulationInputStateHandoff.reset();
         m_avboitStateHandoff.reset();
     };
 
@@ -1514,7 +1621,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
 
     const bool shadowVisibilityPrepared = m_preparedShadowVisibilityReady;
-    const bool hasTransparentRenderers = m_preparedHasTransparentRenderers;
 
     // The shadow, caustics, surfel-GI, and AVBOIT packets own distinct outputs. Every shared input already has its
     // common read state in the prelude, so the workers can record independently from the same snapshot. AVBOIT still
@@ -1525,7 +1631,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     bool avboitCommandListReady = false;
     bool asyncEffectsTimingBeginCommandListReady = !asyncShadowSchedule;
     if(asyncShadowSchedule){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*effectsTimingTicketForPacket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*avboitPreTimingTicketForPacket);
         asyncEffectsTimingBeginCommandList->open();
         if(asyncEffectsTimingBeginCommandList->hasCommandBuffer()){
             asyncEffectsTiming.emplace(
@@ -1720,16 +1826,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && surfelGiCommandList->hasCommandBuffer()
         ;
     });
-    const Core::Graphics::JobHandle avboitRecordingJob = m_graphics.scheduleGraphicsJob([
+    const Core::Graphics::JobHandle avboitPreRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
         &deferredTargets,
         csgFrameState,
         hasTransparentRenderers,
+        asyncAvboitSchedule,
         avboitCommandList,
         &avboitCommandListReady,
-        effectsTimingTicketForPacket
+        avboitPreTimingTicketForPacket
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*effectsTimingTicketForPacket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*avboitPreTimingTicketForPacket);
         avboitCommandList->open(&m_postGbufferNormalizedStateHandoff);
         if(!avboitCommandList->hasCommandBuffer())
             return;
@@ -1740,8 +1847,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_avboitSystem.clearAvboitTargets(*avboitCommandList, deferredTargets.avboit);
             m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
         }
-        if(hasTransparentRenderers)
-            m_avboitSystem.renderAvboitPasses(*avboitCommandList, deferredTargets, csgFrameState);
+        if(hasTransparentRenderers){
+            if(asyncAvboitSchedule)
+                m_avboitSystem.renderAvboitPreDepthWarpPasses(*avboitCommandList, deferredTargets, csgFrameState);
+            else
+                m_avboitSystem.renderAvboitPasses(*avboitCommandList, deferredTargets, csgFrameState);
+        }
 
         // Transparent CSG interval construction uses the opaque G-buffer framebuffer, whose automatic attachment
         // tracking temporarily makes normal/world-position render targets and depth a read-only depth attachment.
@@ -1763,9 +1874,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             Core::ResourceStates::ShaderResource
         );
 
-        avboitCommandList->close(&m_avboitStateHandoff);
+        avboitCommandList->close(
+            asyncAvboitSchedule
+                ? &m_avboitPreStateHandoff
+                : &m_avboitStateHandoff
+        );
         avboitCommandListReady =
-            m_avboitStateHandoff.valid()
+            (asyncAvboitSchedule ? m_avboitPreStateHandoff.valid() : m_avboitStateHandoff.valid())
             && avboitCommandList->hasCommandBuffer()
         ;
     });
@@ -1773,7 +1888,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         !shadowVisibilityRecordingJob.valid()
         || !causticsRecordingJob.valid()
         || !surfelGiRecordingJob.valid()
-        || !avboitRecordingJob.valid()
+        || !avboitPreRecordingJob.valid()
     ){
         if(shadowVisibilityRecordingJob.valid())
             m_graphics.waitJob(shadowVisibilityRecordingJob);
@@ -1781,8 +1896,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_graphics.waitJob(causticsRecordingJob);
         if(surfelGiRecordingJob.valid())
             m_graphics.waitJob(surfelGiRecordingJob);
-        if(avboitRecordingJob.valid())
-            m_graphics.waitJob(avboitRecordingJob);
+        if(avboitPreRecordingJob.valid())
+            m_graphics.waitJob(avboitPreRecordingJob);
         discardRenderPackets();
         return;
     }
@@ -1790,7 +1905,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_graphics.waitJob(shadowVisibilityRecordingJob);
     m_graphics.waitJob(causticsRecordingJob);
     m_graphics.waitJob(surfelGiRecordingJob);
-    m_graphics.waitJob(avboitRecordingJob);
+    m_graphics.waitJob(avboitPreRecordingJob);
     if(!shadowVisibilityCommandListReady || !causticsCommandListReady || !surfelGiCommandListReady || !avboitCommandListReady){
         discardRenderPackets();
         return;
@@ -1799,7 +1914,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(asyncShadowSchedule){
         bool asyncEffectsTimingEndCommandListReady = false;
         {
-            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*effectsTimingTicketForPacket);
+            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*avboitPreTimingTicketForPacket);
             asyncEffectsTimingEndCommandList->open();
             if(asyncEffectsTimingEndCommandList->hasCommandBuffer()){
                 if(asyncEffectsTiming){
@@ -1811,6 +1926,206 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             }
         }
         if(!asyncEffectsTimingEndCommandListReady){
+            discardRenderPackets();
+            return;
+        }
+    }
+
+    if(asyncAvboitSchedule){
+        // The depth-warp dispatch imports only resources it can legally access from a compute-only queue. The
+        // AVBOIT work buffers and selector cbuffer are concurrent; the full Graphics snapshot remains available to
+        // the raster extinction stage through the subsequent fan-in.
+        Core::Buffer* const avboitDepthWarpInputBuffers[] = {
+            deferredTargets.avboit.coverageBuffer.get(),
+            deferredTargets.avboit.depthWarpBuffer.get(),
+            deferredTargets.avboit.controlBuffer.get(),
+            deferredTargets.bindless.slotsBuffer.get(),
+        };
+        if(!m_avboitDepthWarpInputStateHandoff.buildResourceSubset(
+            m_avboitPreStateHandoff,
+            nullptr,
+            0u,
+            avboitDepthWarpInputBuffers,
+            sizeof(avboitDepthWarpInputBuffers) / sizeof(avboitDepthWarpInputBuffers[0])
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async AVBOIT depth-warp input state selection failed"));
+            discardRenderPackets();
+            return;
+        }
+
+        bool avboitDepthWarpCommandListReady = false;
+        const Core::Graphics::JobHandle avboitDepthWarpRecordingJob = m_graphics.scheduleGraphicsJob([
+            this,
+            &deferredTargets,
+            asyncAvboitDepthWarpCommandList,
+            &avboitDepthWarpCommandListReady,
+            &avboitDepthWarpTimingTicket
+        ](){
+            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(avboitDepthWarpTimingTicket);
+            asyncAvboitDepthWarpCommandList->open(&m_avboitDepthWarpInputStateHandoff);
+            if(!asyncAvboitDepthWarpCommandList->hasCommandBuffer())
+                return;
+
+            m_avboitSystem.dispatchAvboitDepthWarp(*asyncAvboitDepthWarpCommandList, deferredTargets.avboit);
+            asyncAvboitDepthWarpCommandList->close(&m_avboitDepthWarpStateHandoff);
+            avboitDepthWarpCommandListReady =
+                m_avboitDepthWarpStateHandoff.valid()
+                && asyncAvboitDepthWarpCommandList->hasCommandBuffer()
+            ;
+        });
+        if(!avboitDepthWarpRecordingJob.valid()){
+            discardRenderPackets();
+            return;
+        }
+        m_graphics.waitJob(avboitDepthWarpRecordingJob);
+        if(!avboitDepthWarpCommandListReady){
+            discardRenderPackets();
+            return;
+        }
+
+        const Core::CommandListResourceStateHandoff* avboitExtinctionBranches[] = {
+            &m_avboitDepthWarpStateHandoff,
+        };
+        if(!m_avboitExtinctionInputStateHandoff.buildFanIn(
+            m_avboitPreStateHandoff,
+            avboitExtinctionBranches,
+            1u
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async AVBOIT extinction state fan-in failed"));
+            discardRenderPackets();
+            return;
+        }
+
+        bool avboitExtinctionCommandListReady = false;
+        const Core::Graphics::JobHandle avboitExtinctionRecordingJob = m_graphics.scheduleGraphicsJob([
+            this,
+            &deferredTargets,
+            csgFrameState,
+            avboitExtinctionCommandList,
+            &avboitExtinctionCommandListReady,
+            &avboitExtinctionTimingTicket
+        ](){
+            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(avboitExtinctionTimingTicket);
+            avboitExtinctionCommandList->open(&m_avboitExtinctionInputStateHandoff);
+            if(!avboitExtinctionCommandList->hasCommandBuffer())
+                return;
+
+            m_avboitSystem.renderAvboitExtinctionPass(
+                *avboitExtinctionCommandList,
+                deferredTargets.avboit,
+                csgFrameState
+            );
+            avboitExtinctionCommandList->close(&m_avboitExtinctionStateHandoff);
+            avboitExtinctionCommandListReady =
+                m_avboitExtinctionStateHandoff.valid()
+                && avboitExtinctionCommandList->hasCommandBuffer()
+            ;
+        });
+        if(!avboitExtinctionRecordingJob.valid()){
+            discardRenderPackets();
+            return;
+        }
+        m_graphics.waitJob(avboitExtinctionRecordingJob);
+        if(!avboitExtinctionCommandListReady){
+            discardRenderPackets();
+            return;
+        }
+
+        Core::Texture* const avboitIntegrationInputTextures[] = {
+            deferredTargets.avboit.transmittanceTexture.get(),
+        };
+        Core::Buffer* const avboitIntegrationInputBuffers[] = {
+            deferredTargets.avboit.extinctionBuffer.get(),
+            deferredTargets.avboit.controlBuffer.get(),
+            deferredTargets.avboit.extinctionOverflowBuffer.get(),
+            deferredTargets.bindless.slotsBuffer.get(),
+        };
+        if(!m_avboitIntegrationInputStateHandoff.buildResourceSubset(
+            m_avboitExtinctionStateHandoff,
+            avboitIntegrationInputTextures,
+            sizeof(avboitIntegrationInputTextures) / sizeof(avboitIntegrationInputTextures[0]),
+            avboitIntegrationInputBuffers,
+            sizeof(avboitIntegrationInputBuffers) / sizeof(avboitIntegrationInputBuffers[0])
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async AVBOIT integration input state selection failed"));
+            discardRenderPackets();
+            return;
+        }
+
+        bool avboitIntegrationCommandListReady = false;
+        const Core::Graphics::JobHandle avboitIntegrationRecordingJob = m_graphics.scheduleGraphicsJob([
+            this,
+            &deferredTargets,
+            asyncAvboitIntegrationCommandList,
+            &avboitIntegrationCommandListReady,
+            &avboitIntegrationTimingTicket
+        ](){
+            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(avboitIntegrationTimingTicket);
+            asyncAvboitIntegrationCommandList->open(&m_avboitIntegrationInputStateHandoff);
+            if(!asyncAvboitIntegrationCommandList->hasCommandBuffer())
+                return;
+
+            m_avboitSystem.dispatchAvboitIntegration(*asyncAvboitIntegrationCommandList, deferredTargets.avboit);
+            asyncAvboitIntegrationCommandList->close(&m_avboitIntegrationStateHandoff);
+            avboitIntegrationCommandListReady =
+                m_avboitIntegrationStateHandoff.valid()
+                && asyncAvboitIntegrationCommandList->hasCommandBuffer()
+            ;
+        });
+        if(!avboitIntegrationRecordingJob.valid()){
+            discardRenderPackets();
+            return;
+        }
+        m_graphics.waitJob(avboitIntegrationRecordingJob);
+        if(!avboitIntegrationCommandListReady){
+            discardRenderPackets();
+            return;
+        }
+
+        const Core::CommandListResourceStateHandoff* avboitAccumulationBranches[] = {
+            &m_avboitIntegrationStateHandoff,
+        };
+        if(!m_avboitAccumulationInputStateHandoff.buildFanIn(
+            m_avboitExtinctionStateHandoff,
+            avboitAccumulationBranches,
+            1u
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async AVBOIT accumulation state fan-in failed"));
+            discardRenderPackets();
+            return;
+        }
+
+        bool avboitAccumulateCommandListReady = false;
+        const Core::Graphics::JobHandle avboitAccumulateRecordingJob = m_graphics.scheduleGraphicsJob([
+            this,
+            &deferredTargets,
+            csgFrameState,
+            avboitAccumulateCommandList,
+            &avboitAccumulateCommandListReady,
+            &avboitAccumulateTimingTicket
+        ](){
+            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(avboitAccumulateTimingTicket);
+            avboitAccumulateCommandList->open(&m_avboitAccumulationInputStateHandoff);
+            if(!avboitAccumulateCommandList->hasCommandBuffer())
+                return;
+
+            m_avboitSystem.renderAvboitAccumulatePass(
+                *avboitAccumulateCommandList,
+                deferredTargets.avboit,
+                csgFrameState
+            );
+            avboitAccumulateCommandList->close(&m_avboitStateHandoff);
+            avboitAccumulateCommandListReady =
+                m_avboitStateHandoff.valid()
+                && avboitAccumulateCommandList->hasCommandBuffer()
+            ;
+        });
+        if(!avboitAccumulateRecordingJob.valid()){
+            discardRenderPackets();
+            return;
+        }
+        m_graphics.waitJob(avboitAccumulateRecordingJob);
+        if(!avboitAccumulateCommandListReady){
             discardRenderPackets();
             return;
         }
@@ -2202,6 +2517,41 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         return true;
     };
+    const auto waitForAsyncAvboitCompute = [&](const Core::QueueSubmissionToken avboitComputeSubmissionToken) -> bool {
+        // AVBOIT's cross-lane resources are concurrent, so no ownership repair is necessary. A rejected Graphics
+        // consumer can nevertheless leave an accepted Compute dispatch in flight; establish a Graphics timeline
+        // point after that token before another frame's Graphics prelude is allowed to reuse the work resources.
+        if(device.isDeviceLost() || !avboitComputeSubmissionToken.valid()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async AVBOIT compute recovery cannot wait for an invalid or lost-device submission"));
+            return false;
+        }
+
+        shadowOwnershipRecoveryCommandList->open();
+        if(!shadowOwnershipRecoveryCommandList->hasCommandBuffer()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to record async AVBOIT compute recovery join"));
+            return false;
+        }
+        shadowOwnershipRecoveryCommandList->close();
+        if(!shadowOwnershipRecoveryCommandList->hasCommandBuffer()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to close async AVBOIT compute recovery join"));
+            return false;
+        }
+
+        Core::QueueSubmissionDesc recoverySubmitDesc;
+        recoverySubmitDesc.setWaitTokens(&avboitComputeSubmissionToken, 1u);
+        Core::CommandList* recoveryCommandLists[] = { shadowOwnershipRecoveryCommandList };
+        const Core::QueueSubmissionToken recoveryToken = device.executeCommandLists(
+            recoveryCommandLists,
+            1u,
+            Core::RenderLane::Graphics,
+            recoverySubmitDesc
+        );
+        if(!recoveryToken.valid()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async AVBOIT compute recovery join was rejected"));
+            return false;
+        }
+        return true;
+    };
     const auto failAsyncShadowOwnershipRecovery = [&](){
         if(m_asyncShadowOwnershipRecoveryFailed)
             return;
@@ -2252,8 +2602,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         shadowSubmitDesc
     );
     if(!shadowSubmissionToken.valid()){
-        effectsTimingTicket.discard();
-        finalTimingTicket.discard();
+        discardTimingTickets();
         restoreShadowCpuState();
         restoreEffectsCpuState();
         m_raytracingSystem.discardSoftShadowTemporalHistory();
@@ -2273,6 +2622,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_postGbufferFanInStateHandoff.reset();
         m_deferredLightingStateHandoff.reset();
         m_deferredCompositeStateHandoff.reset();
+        m_avboitPreStateHandoff.reset();
+        m_avboitDepthWarpInputStateHandoff.reset();
+        m_avboitDepthWarpStateHandoff.reset();
+        m_avboitExtinctionInputStateHandoff.reset();
+        m_avboitExtinctionStateHandoff.reset();
+        m_avboitIntegrationInputStateHandoff.reset();
+        m_avboitIntegrationStateHandoff.reset();
+        m_avboitAccumulationInputStateHandoff.reset();
         m_avboitStateHandoff.reset();
         retireAsyncFrameTiming();
         return;
@@ -2387,33 +2744,145 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    Core::CommandList* effectsCommandLists[5] = {};
-    usize effectsCommandListCount = 0u;
-    effectsCommandLists[effectsCommandListCount++] = asyncEffectsTimingBeginCommandList;
-    if(!asyncCausticsSchedule)
-        effectsCommandLists[effectsCommandListCount++] = causticsCommandList;
-    if(!asyncSurfelGiSchedule)
-        effectsCommandLists[effectsCommandListCount++] = surfelGiCommandList;
-    effectsCommandLists[effectsCommandListCount++] = avboitCommandList;
-    effectsCommandLists[effectsCommandListCount++] = asyncEffectsTimingEndCommandList;
-    const Core::QueueSubmissionToken effectsSubmissionToken = effectsTimingTicket.submit(
-        device,
-        effectsCommandLists,
-        effectsCommandListCount,
-        Core::RenderLane::Graphics,
-        Core::QueueSubmissionDesc{}
-    );
-    if(!effectsSubmissionToken.valid()){
-        finalTimingTicket.discard();
-        restoreUnacceptedGraphicsEffectsCpuState();
-        if(!recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, asyncSurfelGiSchedule))
-            failAsyncShadowOwnershipRecovery();
-        return;
+    // The initial AVBOIT raster packet is independent of the shadow packet after prefix. Its two compute kernels are
+    // then serialized only with their adjacent raster consumers: Graphics pre -> Compute warp -> Graphics extinction
+    // -> Compute integration -> Graphics accumulation. This preserves every AVBOIT data dependency while leaving the
+    // initial raster work free to overlap the longer shadow/caustic/surfel packet.
+    Core::QueueSubmissionToken avboitFinalSubmissionToken;
+    if(asyncAvboitSchedule){
+        Core::CommandList* avboitPreCommandLists[] = {
+            asyncEffectsTimingBeginCommandList,
+            avboitCommandList,
+            asyncEffectsTimingEndCommandList,
+        };
+        const Core::QueueSubmissionToken avboitPreSubmissionToken = avboitPreTimingTicket.submit(
+            device,
+            avboitPreCommandLists,
+            3u,
+            Core::RenderLane::Graphics,
+            Core::QueueSubmissionDesc{}
+        );
+        if(!avboitPreSubmissionToken.valid()){
+            finalTimingTicket.discard();
+            avboitDepthWarpTimingTicket.discard();
+            avboitExtinctionTimingTicket.discard();
+            avboitIntegrationTimingTicket.discard();
+            avboitAccumulateTimingTicket.discard();
+            restoreUnacceptedGraphicsEffectsCpuState();
+            if(!recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, asyncSurfelGiSchedule))
+                failAsyncShadowOwnershipRecovery();
+            return;
+        }
+
+        Core::QueueSubmissionDesc avboitDepthWarpSubmitDesc;
+        avboitDepthWarpSubmitDesc.setWaitTokens(&avboitPreSubmissionToken, 1u);
+        Core::CommandList* avboitDepthWarpCommandLists[] = { asyncAvboitDepthWarpCommandList };
+        const Core::QueueSubmissionToken avboitDepthWarpSubmissionToken = avboitDepthWarpTimingTicket.submit(
+            device,
+            avboitDepthWarpCommandLists,
+            1u,
+            Core::RenderLane::AsyncCompute,
+            avboitDepthWarpSubmitDesc
+        );
+        if(!avboitDepthWarpSubmissionToken.valid()){
+            finalTimingTicket.discard();
+            avboitExtinctionTimingTicket.discard();
+            avboitIntegrationTimingTicket.discard();
+            avboitAccumulateTimingTicket.discard();
+            if(!recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, asyncSurfelGiSchedule))
+                failAsyncShadowOwnershipRecovery();
+            return;
+        }
+
+        Core::QueueSubmissionDesc avboitExtinctionSubmitDesc;
+        avboitExtinctionSubmitDesc.setWaitTokens(&avboitDepthWarpSubmissionToken, 1u);
+        Core::CommandList* avboitExtinctionCommandLists[] = { avboitExtinctionCommandList };
+        const Core::QueueSubmissionToken avboitExtinctionSubmissionToken = avboitExtinctionTimingTicket.submit(
+            device,
+            avboitExtinctionCommandLists,
+            1u,
+            Core::RenderLane::Graphics,
+            avboitExtinctionSubmitDesc
+        );
+        if(!avboitExtinctionSubmissionToken.valid()){
+            finalTimingTicket.discard();
+            avboitIntegrationTimingTicket.discard();
+            avboitAccumulateTimingTicket.discard();
+            if(
+                !recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, asyncSurfelGiSchedule)
+                || !waitForAsyncAvboitCompute(avboitDepthWarpSubmissionToken)
+            )
+                failAsyncShadowOwnershipRecovery();
+            return;
+        }
+
+        Core::QueueSubmissionDesc avboitIntegrationSubmitDesc;
+        avboitIntegrationSubmitDesc.setWaitTokens(&avboitExtinctionSubmissionToken, 1u);
+        Core::CommandList* avboitIntegrationCommandLists[] = { asyncAvboitIntegrationCommandList };
+        const Core::QueueSubmissionToken avboitIntegrationSubmissionToken = avboitIntegrationTimingTicket.submit(
+            device,
+            avboitIntegrationCommandLists,
+            1u,
+            Core::RenderLane::AsyncCompute,
+            avboitIntegrationSubmitDesc
+        );
+        if(!avboitIntegrationSubmissionToken.valid()){
+            finalTimingTicket.discard();
+            avboitAccumulateTimingTicket.discard();
+            if(!recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, asyncSurfelGiSchedule))
+                failAsyncShadowOwnershipRecovery();
+            return;
+        }
+
+        Core::QueueSubmissionDesc avboitAccumulateSubmitDesc;
+        avboitAccumulateSubmitDesc.setWaitTokens(&avboitIntegrationSubmissionToken, 1u);
+        Core::CommandList* avboitAccumulateCommandLists[] = { avboitAccumulateCommandList };
+        avboitFinalSubmissionToken = avboitAccumulateTimingTicket.submit(
+            device,
+            avboitAccumulateCommandLists,
+            1u,
+            Core::RenderLane::Graphics,
+            avboitAccumulateSubmitDesc
+        );
+        if(!avboitFinalSubmissionToken.valid()){
+            finalTimingTicket.discard();
+            if(
+                !recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, asyncSurfelGiSchedule)
+                || !waitForAsyncAvboitCompute(avboitIntegrationSubmissionToken)
+            )
+                failAsyncShadowOwnershipRecovery();
+            return;
+        }
+    }
+    else{
+        Core::CommandList* effectsCommandLists[5] = {};
+        usize effectsCommandListCount = 0u;
+        effectsCommandLists[effectsCommandListCount++] = asyncEffectsTimingBeginCommandList;
+        if(!asyncCausticsSchedule)
+            effectsCommandLists[effectsCommandListCount++] = causticsCommandList;
+        if(!asyncSurfelGiSchedule)
+            effectsCommandLists[effectsCommandListCount++] = surfelGiCommandList;
+        effectsCommandLists[effectsCommandListCount++] = avboitCommandList;
+        effectsCommandLists[effectsCommandListCount++] = asyncEffectsTimingEndCommandList;
+        avboitFinalSubmissionToken = effectsTimingTicket.submit(
+            device,
+            effectsCommandLists,
+            effectsCommandListCount,
+            Core::RenderLane::Graphics,
+            Core::QueueSubmissionDesc{}
+        );
+        if(!avboitFinalSubmissionToken.valid()){
+            finalTimingTicket.discard();
+            restoreUnacceptedGraphicsEffectsCpuState();
+            if(!recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, asyncSurfelGiSchedule))
+                failAsyncShadowOwnershipRecovery();
+            return;
+        }
     }
 
     const Core::QueueSubmissionToken finalWaitTokens[] = {
         shadowSubmissionToken,
-        effectsSubmissionToken,
+        avboitFinalSubmissionToken,
     };
     Core::QueueSubmissionDesc finalSubmitDesc;
     finalSubmitDesc.setWaitTokens(finalWaitTokens, 2u);

@@ -328,7 +328,7 @@ void RendererAvboitSystem::buildTransparentCsgIntervals(
     m_renderer.csgSystem().dispatchCsgIntervalCombine(commandList, targets, csgFrameData);
 }
 
-void RendererAvboitSystem::renderAvboitPasses(
+void RendererAvboitSystem::renderAvboitPreDepthWarpPasses(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const CsgFrameState& csgFrameState
@@ -355,8 +355,14 @@ void RendererAvboitSystem::renderAvboitPasses(
         &avboitTargets
     );
     commandList.endRenderPass();
+}
 
-    dispatchAvboitDepthWarp(commandList, avboitTargets);
+void RendererAvboitSystem::renderAvboitExtinctionPass(
+    Core::CommandList& commandList,
+    AvboitFrameTargets& avboitTargets,
+    const CsgFrameState& csgFrameState
+){
+    NWB_ASSERT(avboitTargets.valid());
 
     // Extinction reads the warp/control outputs and writes both packed-extinction buffers through the heap.
     commandList.setBufferState(avboitTargets.depthWarpBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -374,8 +380,14 @@ void RendererAvboitSystem::renderAvboitPasses(
         &avboitTargets
     );
     commandList.endRenderPass();
+}
 
-    dispatchAvboitIntegration(commandList, avboitTargets);
+void RendererAvboitSystem::renderAvboitAccumulatePass(
+    Core::CommandList& commandList,
+    AvboitFrameTargets& avboitTargets,
+    const CsgFrameState& csgFrameState
+){
+    NWB_ASSERT(avboitTargets.valid());
 
     // All accumulation variants sample the integrated Texture3D and both work buffers through the heap, so transition
     // them explicitly instead of relying on a now-removed local descriptor state tracker.
@@ -397,6 +409,23 @@ void RendererAvboitSystem::renderAvboitPasses(
         &avboitTargets
     );
     commandList.endRenderPass();
+}
+
+void RendererAvboitSystem::renderAvboitPasses(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const CsgFrameState& csgFrameState
+){
+    AvboitFrameTargets& avboitTargets = targets.avboit;
+    NWB_ASSERT(avboitTargets.valid());
+    NWB_ASSERT(avboitState().m_depthWarpPipeline);
+    NWB_ASSERT(avboitState().m_integratePipeline);
+
+    renderAvboitPreDepthWarpPasses(commandList, targets, csgFrameState);
+    dispatchAvboitDepthWarp(commandList, avboitTargets);
+    renderAvboitExtinctionPass(commandList, avboitTargets, csgFrameState);
+    dispatchAvboitIntegration(commandList, avboitTargets);
+    renderAvboitAccumulatePass(commandList, avboitTargets, csgFrameState);
 }
 
 void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets){

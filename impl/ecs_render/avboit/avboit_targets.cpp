@@ -59,6 +59,9 @@ static Core::TextureHandle CreateTransmittanceVolume(
         .setFormat(format)
         .setDimension(Core::TextureDimension::Texture3D)
         .setInUAV(true)
+        // Integration writes this volume on AsyncCompute and accumulation samples it on Graphics. The ordered
+        // cross-lane submissions provide execution and memory dependencies without a queue-family ownership ping-pong.
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/avboit/transmittance_volume")
         .setClearValue(Core::Color(1.f, 1.f, 1.f, 1.f))
     ;
@@ -79,6 +82,8 @@ static Core::BufferHandle CreateU32Buffer(
         .setByteSize(byteSize)
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
+        // Occupancy/extinction raster passes and the interleaved compute kernels exchange these work buffers.
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(debugName)
     ;
     Core::BufferHandle buffer = graphics.createBuffer(desc);

@@ -934,6 +934,187 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneTransfersExclusiveBufferOw
 }
 
 
+// AVBOIT alternates raster and compute phases. Its shared work resources use concurrent queue sharing, while timeline
+// waits order the exact Graphics pre -> Compute warp -> Graphics extinction -> Compute integration -> Graphics
+// accumulation chain. Exercise the state subsets/fan-ins and every lane crossing on a real dedicated family.
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneChainsConcurrentAvboitWorkStates){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+
+    const auto makeSharedWorkBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveUAVs(true)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+                .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        );
+    };
+    auto coverage = makeSharedWorkBuffer();
+    auto depthWarp = makeSharedWorkBuffer();
+    auto control = makeSharedWorkBuffer();
+    auto extinction = makeSharedWorkBuffer();
+    auto extinctionOverflow = makeSharedWorkBuffer();
+    auto transmittance = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setDepth(4u)
+            .setDimension(TextureDimension::Texture3D)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    ASSERT_NE(coverage.get(), nullptr);
+    ASSERT_NE(depthWarp.get(), nullptr);
+    ASSERT_NE(control.get(), nullptr);
+    ASSERT_NE(extinction.get(), nullptr);
+    ASSERT_NE(extinctionOverflow.get(), nullptr);
+    ASSERT_NE(transmittance.get(), nullptr);
+
+    CommandListParameters computeParams;
+    computeParams.setRenderLane(RenderLane::AsyncCompute);
+    auto graphicsPre = device.createCommandList();
+    auto computeWarp = device.createCommandList(computeParams);
+    auto graphicsExtinction = device.createCommandList();
+    auto computeIntegration = device.createCommandList(computeParams);
+    auto graphicsAccumulate = device.createCommandList();
+    ASSERT_NE(graphicsPre.get(), nullptr);
+    ASSERT_NE(computeWarp.get(), nullptr);
+    ASSERT_NE(graphicsExtinction.get(), nullptr);
+    ASSERT_NE(computeIntegration.get(), nullptr);
+    ASSERT_NE(graphicsAccumulate.get(), nullptr);
+
+    CommandListResourceStateHandoff preState(asyncScope.arena());
+    CommandListResourceStateHandoff warpInputState(asyncScope.arena());
+    CommandListResourceStateHandoff warpState(asyncScope.arena());
+    CommandListResourceStateHandoff extinctionInputState(asyncScope.arena());
+    CommandListResourceStateHandoff extinctionState(asyncScope.arena());
+    CommandListResourceStateHandoff integrationInputState(asyncScope.arena());
+    CommandListResourceStateHandoff integrationState(asyncScope.arena());
+    CommandListResourceStateHandoff accumulateInputState(asyncScope.arena());
+    CommandListResourceStateHandoff finalState(asyncScope.arena());
+
+    graphicsPre->open();
+    graphicsPre->setBufferState(coverage.get(), ResourceStates::UnorderedAccess);
+    graphicsPre->setBufferState(depthWarp.get(), ResourceStates::CopyDest);
+    graphicsPre->setBufferState(control.get(), ResourceStates::CopyDest);
+    graphicsPre->setBufferState(extinction.get(), ResourceStates::CopyDest);
+    graphicsPre->setBufferState(extinctionOverflow.get(), ResourceStates::CopyDest);
+    graphicsPre->setTextureState(transmittance.get(), s_AllSubresources, ResourceStates::CopyDest);
+    graphicsPre->close(&preState);
+    ASSERT_TRUE(preState.valid());
+
+    Core::Buffer* const warpBuffers[] = { coverage.get(), depthWarp.get(), control.get() };
+    ASSERT_TRUE(warpInputState.buildResourceSubset(preState, nullptr, 0u, warpBuffers, 3u));
+    computeWarp->open(&warpInputState);
+    EXPECT_EQ(computeWarp->getBufferState(coverage.get()), ResourceStates::UnorderedAccess);
+    computeWarp->setBufferState(coverage.get(), ResourceStates::ShaderResource);
+    computeWarp->setBufferState(depthWarp.get(), ResourceStates::UnorderedAccess);
+    computeWarp->setBufferState(control.get(), ResourceStates::UnorderedAccess);
+    computeWarp->close(&warpState);
+    ASSERT_TRUE(warpState.valid());
+
+    const CommandListResourceStateHandoff* const extinctionBranches[] = { &warpState };
+    ASSERT_TRUE(extinctionInputState.buildFanIn(preState, extinctionBranches, 1u));
+    graphicsExtinction->open(&extinctionInputState);
+    EXPECT_EQ(graphicsExtinction->getBufferState(depthWarp.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(graphicsExtinction->getBufferState(control.get()), ResourceStates::UnorderedAccess);
+    graphicsExtinction->setBufferState(depthWarp.get(), ResourceStates::ShaderResource);
+    graphicsExtinction->setBufferState(control.get(), ResourceStates::ShaderResource);
+    graphicsExtinction->setBufferState(extinction.get(), ResourceStates::UnorderedAccess);
+    graphicsExtinction->setBufferState(extinctionOverflow.get(), ResourceStates::UnorderedAccess);
+    graphicsExtinction->close(&extinctionState);
+    ASSERT_TRUE(extinctionState.valid());
+
+    Core::Texture* const integrationTextures[] = { transmittance.get() };
+    Core::Buffer* const integrationBuffers[] = { extinction.get(), control.get(), extinctionOverflow.get() };
+    ASSERT_TRUE(integrationInputState.buildResourceSubset(
+        extinctionState,
+        integrationTextures,
+        1u,
+        integrationBuffers,
+        3u
+    ));
+    computeIntegration->open(&integrationInputState);
+    EXPECT_EQ(computeIntegration->getBufferState(extinction.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(computeIntegration->getTextureSubresourceState(transmittance.get(), 0u, 0u), ResourceStates::CopyDest);
+    computeIntegration->setBufferState(extinction.get(), ResourceStates::ShaderResource);
+    computeIntegration->setBufferState(control.get(), ResourceStates::ShaderResource);
+    computeIntegration->setBufferState(extinctionOverflow.get(), ResourceStates::ShaderResource);
+    computeIntegration->setTextureState(transmittance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    computeIntegration->close(&integrationState);
+    ASSERT_TRUE(integrationState.valid());
+
+    const CommandListResourceStateHandoff* const accumulateBranches[] = { &integrationState };
+    ASSERT_TRUE(accumulateInputState.buildFanIn(extinctionState, accumulateBranches, 1u));
+    graphicsAccumulate->open(&accumulateInputState);
+    EXPECT_EQ(graphicsAccumulate->getBufferState(depthWarp.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(graphicsAccumulate->getTextureSubresourceState(transmittance.get(), 0u, 0u), ResourceStates::UnorderedAccess);
+    graphicsAccumulate->setTextureState(transmittance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    graphicsAccumulate->close(&finalState);
+    ASSERT_TRUE(finalState.valid());
+
+    CommandList* graphicsPreLists[] = { graphicsPre.get() };
+    const QueueSubmissionToken graphicsPreToken = device.executeCommandLists(
+        graphicsPreLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(graphicsPreToken.valid());
+
+    const QueueSubmissionDesc warpSubmitDesc = QueueSubmissionDesc().setWaitTokens(&graphicsPreToken, 1u);
+    CommandList* computeWarpLists[] = { computeWarp.get() };
+    const QueueSubmissionToken warpToken = device.executeCommandLists(
+        computeWarpLists,
+        1u,
+        RenderLane::AsyncCompute,
+        warpSubmitDesc
+    );
+    ASSERT_TRUE(warpToken.valid());
+
+    const QueueSubmissionDesc extinctionSubmitDesc = QueueSubmissionDesc().setWaitTokens(&warpToken, 1u);
+    CommandList* graphicsExtinctionLists[] = { graphicsExtinction.get() };
+    const QueueSubmissionToken extinctionToken = device.executeCommandLists(
+        graphicsExtinctionLists,
+        1u,
+        RenderLane::Graphics,
+        extinctionSubmitDesc
+    );
+    ASSERT_TRUE(extinctionToken.valid());
+
+    const QueueSubmissionDesc integrationSubmitDesc = QueueSubmissionDesc().setWaitTokens(&extinctionToken, 1u);
+    CommandList* computeIntegrationLists[] = { computeIntegration.get() };
+    const QueueSubmissionToken integrationToken = device.executeCommandLists(
+        computeIntegrationLists,
+        1u,
+        RenderLane::AsyncCompute,
+        integrationSubmitDesc
+    );
+    ASSERT_TRUE(integrationToken.valid());
+
+    const QueueSubmissionDesc accumulationSubmitDesc = QueueSubmissionDesc().setWaitTokens(&integrationToken, 1u);
+    CommandList* graphicsAccumulateLists[] = { graphicsAccumulate.get() };
+    const QueueSubmissionToken accumulationToken = device.executeCommandLists(
+        graphicsAccumulateLists,
+        1u,
+        RenderLane::Graphics,
+        accumulationSubmitDesc
+    );
+    EXPECT_TRUE(accumulationToken.valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Caustics (including the hardware dispatch-rays producer) and surfel GI add two exclusive Compute results beside
 // shadowVisibility. If Graphics effects/final cannot consume them, the recovery packet must acquire and return all
 // three outputs together; the next Compute packet

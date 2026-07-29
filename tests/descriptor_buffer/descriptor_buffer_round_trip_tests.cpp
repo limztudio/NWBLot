@@ -917,6 +917,143 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneTransfersExclusiveBufferOw
 }
 
 
+// Software caustics add a second exclusive Compute result beside shadowVisibility. If Graphics effects/final cannot
+// consume them, the recovery packet must acquire and return BOTH outputs together; the next Compute packet then imports
+// their shared return handoff alongside its ordinary concurrent prefix input.
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversSoftwareCausticAndShadowTextureOwnershipTogether){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+
+    const auto makeExclusiveOutput = [&device](){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setFormat(Format::RGBA8_UNORM)
+                .setInUAV(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    auto shadowVisibility = makeExclusiveOutput();
+    auto causticIrradiance = makeExclusiveOutput();
+    auto sharedInput = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    ASSERT_NE(shadowVisibility.get(), nullptr);
+    ASSERT_NE(causticIrradiance.get(), nullptr);
+    ASSERT_NE(sharedInput.get(), nullptr);
+
+    CommandListParameters computeParams;
+    computeParams.setRenderLane(RenderLane::AsyncCompute);
+
+    CommandListResourceStateHandoff prefixState(asyncScope.arena());
+    CommandListResourceStateHandoff computeState(asyncScope.arena());
+    CommandListResourceStateHandoff shadowGraphicsState(asyncScope.arena());
+    CommandListResourceStateHandoff causticGraphicsState(asyncScope.arena());
+    CommandListResourceStateHandoff recoveryInputState(asyncScope.arena());
+    CommandListResourceStateHandoff recoveryState(asyncScope.arena());
+    CommandListResourceStateHandoff nextComputeInputState(asyncScope.arena());
+
+    auto prefix = device.createCommandList();
+    auto compute = device.createCommandList(computeParams);
+    auto recovery = device.createCommandList();
+    auto computeReuse = device.createCommandList(computeParams);
+    ASSERT_NE(prefix.get(), nullptr);
+    ASSERT_NE(compute.get(), nullptr);
+    ASSERT_NE(recovery.get(), nullptr);
+    ASSERT_NE(computeReuse.get(), nullptr);
+
+    prefix->open();
+    prefix->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
+    prefix->close(&prefixState);
+    ASSERT_TRUE(prefixState.valid());
+
+    compute->open(&prefixState);
+    compute->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
+    compute->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    compute->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    compute->releaseTextureOwnership(shadowVisibility.get(), s_AllSubresources, RenderLane::Graphics);
+    compute->releaseTextureOwnership(causticIrradiance.get(), s_AllSubresources, RenderLane::Graphics);
+    compute->close(&computeState);
+    ASSERT_TRUE(computeState.valid());
+    ASSERT_TRUE(shadowGraphicsState.buildTextureSubset(computeState, shadowVisibility.get()));
+    ASSERT_TRUE(causticGraphicsState.buildTextureSubset(computeState, causticIrradiance.get()));
+
+    const CommandListResourceStateHandoff* recoveryBranches[] = { &causticGraphicsState };
+    ASSERT_TRUE(recoveryInputState.buildFanIn(shadowGraphicsState, recoveryBranches, 1u));
+
+    CommandList* prefixLists[] = { prefix.get() };
+    const QueueSubmissionToken prefixToken = device.executeCommandLists(
+        prefixLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(prefixToken.valid());
+
+    const QueueSubmissionDesc computeSubmitDesc = QueueSubmissionDesc().setWaitTokens(&prefixToken, 1u);
+    CommandList* computeLists[] = { compute.get() };
+    const QueueSubmissionToken computeToken = device.executeCommandLists(
+        computeLists,
+        1u,
+        RenderLane::AsyncCompute,
+        computeSubmitDesc
+    );
+    ASSERT_TRUE(computeToken.valid());
+
+    recovery->open(&recoveryInputState);
+    EXPECT_EQ(recovery->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(recovery->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::UnorderedAccess);
+    recovery->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    recovery->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    recovery->releaseTextureOwnership(shadowVisibility.get(), s_AllSubresources, RenderLane::AsyncCompute);
+    recovery->releaseTextureOwnership(causticIrradiance.get(), s_AllSubresources, RenderLane::AsyncCompute);
+    recovery->close(&recoveryState);
+    ASSERT_TRUE(recoveryState.valid());
+
+    const QueueSubmissionDesc recoverySubmitDesc = QueueSubmissionDesc().setWaitTokens(&computeToken, 1u);
+    CommandList* recoveryLists[] = { recovery.get() };
+    const QueueSubmissionToken recoveryToken = device.executeCommandLists(
+        recoveryLists,
+        1u,
+        RenderLane::Graphics,
+        recoverySubmitDesc
+    );
+    ASSERT_TRUE(recoveryToken.valid());
+
+    const CommandListResourceStateHandoff* nextComputeBranches[] = { &recoveryState };
+    ASSERT_TRUE(nextComputeInputState.buildFanIn(prefixState, nextComputeBranches, 1u));
+    computeReuse->open(&nextComputeInputState);
+    EXPECT_EQ(computeReuse->getBufferState(sharedInput.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(computeReuse->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(computeReuse->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
+    computeReuse->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    computeReuse->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    computeReuse->close();
+
+    const QueueSubmissionDesc reuseSubmitDesc = QueueSubmissionDesc().setWaitTokens(&recoveryToken, 1u);
+    CommandList* reuseLists[] = { computeReuse.get() };
+    const QueueSubmissionToken reuseToken = device.executeCommandLists(
+        reuseLists,
+        1u,
+        RenderLane::AsyncCompute,
+        reuseSubmitDesc
+    );
+    EXPECT_TRUE(reuseToken.valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 #if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
 
 // Exercise the four-submission shadow topology's rejection boundaries with the same pre-Vulkan injection seam used

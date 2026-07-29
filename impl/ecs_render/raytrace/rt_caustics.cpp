@@ -1291,6 +1291,9 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
         .setByteSize(static_cast<u64>(sizeof(NwbCausticEmissionTargetGpu) * capacity))
         .setStructStride(sizeof(NwbCausticEmissionTargetGpu))
         .setDebugName(Name("caustic_emission_targets"))
+        // Graphics uploads this per-frame list during preparation; dedicated AsyncCompute reads it for the software
+        // photon producer. It is a shared read-only input after the upload, never an ownership-transfer result.
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;
     Core::BufferHandle targetBuffer = graphics().createBuffer(targetBufferDesc);

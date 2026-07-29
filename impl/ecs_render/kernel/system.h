@@ -151,7 +151,15 @@ private:
     Core::CommandListResourceStateHandoff m_shadowVisibilityReturnStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowOwnershipRecoveryInputStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowOwnershipRecoveryStateHandoff;
+    // Software caustics can join the dedicated Compute lane. Their temporal scratch remains private to Compute,
+    // while the resolved irradiance follows the same explicit Compute -> Graphics -> Compute ownership cycle as
+    // shadowVisibility.
+    Core::CommandListResourceStateHandoff m_causticsComputeBaseStateHandoff;
+    Core::CommandListResourceStateHandoff m_causticsComputeInputStateHandoff;
+    Core::CommandListResourceStateHandoff m_causticsComputePersistentStateHandoff;
     Core::CommandListResourceStateHandoff m_causticsStateHandoff;
+    Core::CommandListResourceStateHandoff m_causticIrradianceGraphicsStateHandoff;
+    Core::CommandListResourceStateHandoff m_causticIrradianceReturnStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelGiStateHandoff;
     Core::CommandListResourceStateHandoff m_postGbufferFanInStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredLightingStateHandoff;
@@ -168,6 +176,9 @@ private:
     // envelope. They are submitted only on the dedicated async-shadow schedule.
     Core::CommandListHandle m_asyncEffectsTimingBeginCommandList;
     Core::CommandListHandle m_asyncEffectsTimingEndCommandList;
+    // Hardware caustics retain the Graphics command list below because dispatchRays is not guaranteed on the dedicated
+    // compute family. This sibling list is used only by the software producer on a dedicated AsyncCompute lane.
+    Core::CommandListHandle m_asyncCausticsCommandList;
     Core::CommandListHandle m_causticsCommandList;
     Core::CommandListHandle m_surfelGiCommandList;
     Core::CommandListHandle m_deferredLightingCommandList;

@@ -23,7 +23,6 @@ namespace CommandQueue{
     enum Enum : u8{
         Graphics = 0,
         Compute,
-        Copy,
 
         kCount
     };

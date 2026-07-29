@@ -75,7 +75,6 @@ UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLi
     , m_chunkPool(m_device.m_context.objectArena)
     , m_activeChunks{
         BufferChunkList(m_device.m_context.objectArena),
-        BufferChunkList(m_device.m_context.objectArena),
         BufferChunkList(m_device.m_context.objectArena)
     }
 {}

@@ -20,10 +20,8 @@ NWB_CORE_BEGIN
 
 namespace Feature{
     enum Enum : u8{
-        ComputeQueue,
         ConservativeRasterization,
         ConstantBufferRanges,
-        CopyQueue,
         DeferredCommandLists,
         FastGeometryShader,
         HeapDirectlyIndexed,
@@ -97,7 +95,7 @@ struct WaveLaneCountMinMaxFeatureInfo{
 
 struct CommandListParameters{
     // Type of the queue that this command list is to be executed on.
-    // COPY and COMPUTE queues have limited subsets of methods available.
+    // The dedicated Compute queue has a limited subset of methods available.
     CommandQueue::Enum queueType = CommandQueue::Graphics;
     // Logical lane selection is resolved by Device::createCommandList. Keep the resolved physical queue type in this
     // structure so existing command-list validation and upload lifetime tracking remain queue-based.
@@ -303,11 +301,9 @@ struct DeviceCreationParameters : public InstanceParameters{
     u32 maxFramesInFlight = s_MaxFramesInFlight;
     bool enableNvrhiValidationLayer = false;
     bool enableRayTracingExtensions = false;
-    bool enableComputeQueue = false;
     // Best-effort experimental lane. A dedicated compute-only family is used when present; otherwise AsyncCompute
     // resolves to Graphics without failing device creation or fabricating an alias queue.
     bool enableAsyncComputeLane = false;
-    bool enableCopyQueue = false;
     i32 adapterIndex = -1;
     bool supportExplicitDisplayScaling = false;
     bool resizeWindowWithDisplayScale = false;

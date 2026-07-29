@@ -499,9 +499,6 @@ Device::Device(const DeviceDesc& desc)
     if(desc.computeQueue && desc.computeQueueIndex >= 0){
         m_queues[static_cast<u32>(CommandQueue::Compute)].emplace(m_context, *this, CommandQueue::Compute, desc.computeQueue, desc.computeQueueIndex);
     }
-    if(desc.transferQueue && desc.transferQueueIndex >= 0){
-        m_queues[static_cast<u32>(CommandQueue::Copy)].emplace(m_context, *this, CommandQueue::Copy, desc.transferQueue, desc.transferQueueIndex);
-    }
 }
 Device::~Device(){
     waitForIdle();
@@ -1241,10 +1238,6 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
         return false;
     case Feature::VirtualResources:
         return false;
-    case Feature::ComputeQueue:
-        return m_queues[static_cast<u32>(CommandQueue::Compute)].has_value();
-    case Feature::CopyQueue:
-        return m_queues[static_cast<u32>(CommandQueue::Copy)].has_value();
     case Feature::ConstantBufferRanges:
         return true;
     default:

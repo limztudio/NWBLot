@@ -190,13 +190,11 @@ private:
     VkPhysicalDevice m_vulkanPhysicalDevice = VK_NULL_HANDLE;
     i32 m_graphicsQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_computeQueueFamily = s_InvalidQueueFamilyIndex;
-    i32 m_transferQueueFamily = s_InvalidQueueFamilyIndex;
     i32 m_presentQueueFamily = s_InvalidQueueFamilyIndex;
 
     VkDevice m_vulkanDevice = VK_NULL_HANDLE;
     VkQueue m_graphicsQueue = VK_NULL_HANDLE;
     VkQueue m_computeQueue = VK_NULL_HANDLE;
-    VkQueue m_transferQueue = VK_NULL_HANDLE;
     VkQueue m_presentQueue = VK_NULL_HANDLE;
 
     VkSurfaceKHR m_windowSurface = VK_NULL_HANDLE;

@@ -47,10 +47,8 @@ struct DeviceDesc{
     // Queue handles grouped together, then their integer indices packed back-to-back, to avoid the
     // 4-byte padding that an interleaved handle/index layout would otherwise introduce between each pair.
     VkQueue graphicsQueue = VK_NULL_HANDLE;
-    VkQueue transferQueue = VK_NULL_HANDLE;
     VkQueue computeQueue = VK_NULL_HANDLE;
     i32 graphicsQueueIndex = s_InvalidQueueFamilyIndex;
-    i32 transferQueueIndex = s_InvalidQueueFamilyIndex;
     i32 computeQueueIndex = s_InvalidQueueFamilyIndex;
     // True only when the renderer requested AsyncCompute and a distinct dedicated Compute family was created.
     bool asyncComputeLaneEnabled = false;

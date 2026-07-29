@@ -250,8 +250,8 @@ submission/commit order — not in CPU work ownership.
 
 ## 3. Capability and fallback contract
 
-`DeviceCreationParameters::enableComputeQueue` currently requires a compute-only family. The
-prototype changes that from a device-selection failure into a best-effort capability:
+`DeviceCreationParameters::enableAsyncComputeLane` requests a best-effort capability: a missing
+compute-only family does not fail device selection and instead maps the lane to Graphics.
 
 | Hardware condition | Renderer behavior |
 |---|---|

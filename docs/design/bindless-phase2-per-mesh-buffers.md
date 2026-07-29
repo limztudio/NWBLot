@@ -322,11 +322,19 @@ Per-step commit log:
 
 ---
 
-## 7. What Phase 2 handed to Phase 3
+## 7. Phase 3 outcome and next scope
 
-- A **live** heap with a real production consumer and a **frozen set-8/9 contract**.
-- Proven **non-uniform SSBO bindless fetch** through the heap (Phase 1 only proved uniform-index).
-- The reusable pattern — *register at create → slot in record → heap fetch → delete bounded path* —
-  ready for the next domain: ordinary renderer **textures/samplers**, which will finally exercise
-  Phase 1's deferred image/sampler shader path; and eventually **TLAS** via the descriptor-buffer
-  backend (Backend C), the one class Backend A cannot host.
+- Phase 2 left a **live** heap with a real production consumer, a **frozen set-8/9 contract**,
+  and proven **non-uniform SSBO bindless fetch** (Phase 1 only proved uniform-index).
+- The anticipated Phase 3 migration of ordinary renderer **textures/samplers** is now complete in
+  the descendant renderer: deferred targets, CSG, ray paths, AVBOIT, and ImGui register sampled
+  images and samplers in the global heap and pass heap slots to shader code. No production
+  pipeline-local `Texture_SRV` or `Sampler` layout/write site remains.
+- This also exercised Phase 1's deferred sampled-image/sampler shader path. Focused
+  descriptor-buffer coverage for sampled images, samplers, global-heap access, and ImGui passed
+  (4/4) during the migration audit.
+- The next texture/sampler feature is therefore **material-authored resource parameters**: carry
+  authored texture and sampler references through cooking and runtime lifetime management, record
+  their global-heap slots alongside material data, and expose typed shader accessors without
+  reintroducing pipeline-local descriptor bindings. **TLAS** remains a separate future domain via
+  the descriptor-buffer backend (Backend C), the one class Backend A cannot host.

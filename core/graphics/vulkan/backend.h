@@ -592,7 +592,6 @@ struct VulkanContext{
         bool buffer_device_address = false;
         bool EXT_descriptor_buffer = false;
         bool EXT_debug_utils = false;
-        bool EXT_debug_marker = false;
         bool KHR_swapchain = false;
         bool KHR_dynamic_rendering = false;
         bool EXT_opacity_micromap = false;

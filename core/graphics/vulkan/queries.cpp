@@ -264,11 +264,10 @@ void CommandList::endTimerQuery(TimerQuery* queryResource){
 
 void CommandList::beginMarker(const AStringView name){
     const bool useDebugUtils = m_context.extensions.EXT_debug_utils;
-    const bool useDebugMarker = m_context.extensions.EXT_debug_marker;
     const bool useNvCheckpoint = m_device.isGpuCrashDiagnosticsEnabled();
     const bool useAmdBreadcrumb = m_device.isAmdBreadcrumbEnabled();
     const bool useGpuMarkers = useNvCheckpoint || useAmdBreadcrumb;
-    if(!useDebugUtils && !useDebugMarker && !useGpuMarkers)
+    if(!useDebugUtils && !useGpuMarkers)
         return;
 
     const GraphicsString markerName(name, m_context.objectArena);
@@ -277,11 +276,6 @@ void CommandList::beginMarker(const AStringView name){
         auto label = VulkanDetail::MakeVkStruct<VkDebugUtilsLabelEXT>(VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT);
         label.pLabelName = markerName.c_str();
         vkCmdBeginDebugUtilsLabelEXT(m_currentCmdBuf->m_cmdBuf, &label);
-    }
-    else if(useDebugMarker){
-        auto markerInfo = VulkanDetail::MakeVkStruct<VkDebugMarkerMarkerInfoEXT>(VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT);
-        markerInfo.pMarkerName = markerName.c_str();
-        vkCmdDebugMarkerBeginEXT(m_currentCmdBuf->m_cmdBuf, &markerInfo);
     }
 
     // Both vendors share one nested-marker hash so resolveMarker works regardless of which (or both) is active.
@@ -300,8 +294,6 @@ void CommandList::beginMarker(const AStringView name){
 void CommandList::endMarker(){
     if(m_context.extensions.EXT_debug_utils)
         vkCmdEndDebugUtilsLabelEXT(m_currentCmdBuf->m_cmdBuf);
-    else if(m_context.extensions.EXT_debug_marker)
-        vkCmdDebugMarkerEndEXT(m_currentCmdBuf->m_cmdBuf);
 
     if(m_device.isAnyGpuMarkerEnabled())
         m_gpuCrashMarkerTracker.popEvent();

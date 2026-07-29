@@ -73,7 +73,7 @@ private:
     static constexpr const char* s_EnabledInstanceExts[] = {
         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
     };
-    static constexpr const char* s_DebugInstanceExts[] = {
+    static constexpr const char* s_DebugRequiredInstanceExts[] = {
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
     };
 
@@ -96,9 +96,6 @@ private:
         { VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_EXT_DEVICE_FAULT_EXTENSION_NAME, DeviceExtensionFeature::DeviceFault },
         { VK_AMD_BUFFER_MARKER_EXTENSION_NAME, DeviceExtensionFeature::None },
-    };
-    static constexpr ExtEntry s_DebugDeviceExts[] = {
-        { VK_EXT_DEBUG_MARKER_EXTENSION_NAME, DeviceExtensionFeature::None },
     };
     static constexpr ExtEntry s_RayTracingExts[] = {
         { VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME, DeviceExtensionFeature::AccelerationStructure },
@@ -127,7 +124,7 @@ public:
     [[nodiscard]] Device* getDevice()const{ return m_rhiDevice.get(); }
     [[nodiscard]] const tchar* getRendererString()const{ return m_rendererString.c_str(); }
     bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters);
-    [[nodiscard]] bool isValidationMessageLocationIgnored(usize location)const;
+    [[nodiscard]] bool isValidationMessageIdIgnored(i32 messageId)const;
 
     [[nodiscard]] bool isInstanceExtensionEnabled(const char* extensionName)const{
         const GraphicsString lookup(extensionName, m_arena);
@@ -161,7 +158,7 @@ private:
     void initDefaultExtensions();
     bool createVulkanInstance();
     bool createWindowSurface();
-    void installDebugCallback();
+    void installDebugMessenger();
     bool pickPhysicalDevice();
     bool findQueueFamilies(VkPhysicalDevice physicalDevice);
     bool createVulkanDevice();
@@ -188,7 +185,7 @@ private:
     GraphicsTString m_rendererString;
 
     VkInstance m_vulkanInstance = VK_NULL_HANDLE;
-    VkDebugReportCallbackEXT m_debugReportCallback = VK_NULL_HANDLE;
+    VkDebugUtilsMessengerEXT m_debugUtilsMessenger = VK_NULL_HANDLE;
 
     VkPhysicalDevice m_vulkanPhysicalDevice = VK_NULL_HANDLE;
     i32 m_graphicsQueueFamily = s_InvalidQueueFamilyIndex;

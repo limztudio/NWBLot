@@ -340,25 +340,37 @@ static void AppendOptionalDeviceFeature(void*& pNext, OptionalDeviceFeatureSet& 
     }
 }
 
+static const char* DebugUtilsSeverityToString(const VkDebugUtilsMessageSeverityFlagBitsEXT severity){
+    switch(severity){
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT: return "verbose";
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT: return "info";
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT: return "warning";
+    case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT: return "error";
+    default: return "unknown";
+    }
+}
+
 static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
-    VkDebugReportFlagsEXT flags,
-    VkDebugReportObjectTypeEXT objType,
-    uint64_t obj,
-    size_t location,
-    int32_t code,
-    const char* layerPrefix,
-    const char* msg,
+    VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+    VkDebugUtilsMessageTypeFlagsEXT types,
+    const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
     void* userData
 ){
-    static_cast<void>(flags);
-    static_cast<void>(objType);
-    static_cast<void>(obj);
-
+    const i32 messageId = callbackData ? callbackData->messageIdNumber : 0;
     const auto* backend = static_cast<const BackendContext*>(userData);
-    if(backend && backend->isValidationMessageLocationIgnored(static_cast<usize>(location)))
+    if(backend && backend->isValidationMessageIdIgnored(messageId))
         return VK_FALSE;
 
-    NWB_LOGGER_WARNING(NWB_TEXT("Vulkan validation: [location=0x{:x} code={} layer='{}'] {}"), location, code, StringConvert(layerPrefix), StringConvert(msg));
+    const char* messageIdName = callbackData && callbackData->pMessageIdName ? callbackData->pMessageIdName : "";
+    const char* message = callbackData && callbackData->pMessage ? callbackData->pMessage : "";
+    NWB_LOGGER_WARNING(
+        NWB_TEXT("Vulkan debug: [severity={} types=0x{:x} id={} name='{}'] {}"),
+        DebugUtilsSeverityToString(severity),
+        static_cast<u32>(types),
+        messageId,
+        StringConvert(messageIdName),
+        StringConvert(message)
+    );
 
     return VK_FALSE;
 }
@@ -401,9 +413,9 @@ BackendContext::BackendContext(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BackendContext::isValidationMessageLocationIgnored(usize location)const{
-    for(const auto& ignored : m_deviceParams.ignoredValidationMessageLocations){
-        if(ignored == location)
+bool BackendContext::isValidationMessageIdIgnored(i32 messageId)const{
+    for(const auto& ignored : m_deviceParams.ignoredValidationMessageIds){
+        if(ignored == messageId)
             return true;
     }
     return false;
@@ -520,10 +532,8 @@ void BackendContext::initDefaultExtensions(){
         m_optionalExtensions.device.emplace(GraphicsString(e.name, m_arena), e.feature);
 
     if(m_deviceParams.enableDebugRuntime){
-        for(const auto* name : s_DebugInstanceExts)
-            m_optionalExtensions.instance.emplace(name, m_arena);
-        for(const auto& e : s_DebugDeviceExts)
-            m_optionalExtensions.device.emplace(GraphicsString(e.name, m_arena), e.feature);
+        for(const auto* name : s_DebugRequiredInstanceExts)
+            m_enabledExtensions.instance.emplace(name, m_arena);
     }
 
     for(const auto& e : s_RayTracingExts)
@@ -700,7 +710,6 @@ bool BackendContext::createVulkanInstance(){
         ss << "Vulkan GPU debug: instance setup"
            << "\n    Vulkan API: " << VulkanDetail::VulkanVersionToString(scratchArena, applicationInfo.apiVersion)
            << "\n    validation layer enabled: " << VulkanDetail::BoolToString(isLayerEnabled("VK_LAYER_KHRONOS_validation"))
-           << "\n    debug report extension enabled: " << VulkanDetail::BoolToString(isInstanceExtensionEnabled(VK_EXT_DEBUG_REPORT_EXTENSION_NAME))
            << "\n    debug utils extension enabled: " << VulkanDetail::BoolToString(isInstanceExtensionEnabled(VK_EXT_DEBUG_UTILS_EXTENSION_NAME))
            << "\n    enabled instance extensions: " << m_enabledExtensions.instance.size()
            << "\n    enabled layers: " << m_enabledExtensions.layers.size()
@@ -731,28 +740,28 @@ bool BackendContext::createVulkanInstance(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void BackendContext::installDebugCallback(){
+void BackendContext::installDebugMessenger(){
     VkResult res = VK_SUCCESS;
 
-    auto* createFunc = reinterpret_cast<PFN_vkCreateDebugReportCallbackEXT>(vkGetInstanceProcAddr(m_vulkanInstance, "vkCreateDebugReportCallbackEXT"));
-    if(!createFunc){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan GPU debug: vkCreateDebugReportCallbackEXT is unavailable; validation messages will not be routed to the logger."));
+    if(!vkCreateDebugUtilsMessengerEXT){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan GPU debug: vkCreateDebugUtilsMessengerEXT is unavailable; validation messages will not be routed to the logger."));
         return;
     }
 
-    VkDebugReportCallbackCreateInfoEXT createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-    createInfo.flags = VK_DEBUG_REPORT_ERROR_BIT_EXT | VK_DEBUG_REPORT_WARNING_BIT_EXT | VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
-    createInfo.pfnCallback = VulkanDetail::VulkanDebugCallback;
+    VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+    createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+    createInfo.pfnUserCallback = VulkanDetail::VulkanDebugCallback;
     createInfo.pUserData = this;
 
-    res = createFunc(m_vulkanInstance, &createInfo, nullptr, &m_debugReportCallback);
+    res = vkCreateDebugUtilsMessengerEXT(m_vulkanInstance, &createInfo, nullptr, &m_debugUtilsMessenger);
     if(res != VK_SUCCESS){
-        m_debugReportCallback = VK_NULL_HANDLE;
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to install debug callback. {}"), ResultToString(res));
+        m_debugUtilsMessenger = VK_NULL_HANDLE;
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to install debug messenger. {}"), ResultToString(res));
     }
     else
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan GPU debug: debug report callback installed."));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan GPU debug: debug utils messenger installed."));
 }
 
 
@@ -1492,8 +1501,7 @@ bool BackendContext::createVulkanDevice(){
            << " descriptorBuffer=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME))
            << " meshTaskShader=" << VulkanDetail::BoolToString(m_meshTaskShaderSupported)
            << " maintenance4=" << VulkanDetail::BoolToString(maintenance4Enabled && maintenance4Features.maintenance4 == VK_TRUE)
-           << "\n    optional paths: debugMarker=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_DEBUG_MARKER_EXTENSION_NAME))
-           << " meshShader=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME))
+           << "\n    optional paths: meshShader=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME))
            << " rayTracingPipeline=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME))
            << " rayQuery=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_KHR_RAY_QUERY_EXTENSION_NAME))
            << " shaderExecutionReordering=" << VulkanDetail::BoolToString(
@@ -1860,7 +1868,6 @@ bool BackendContext::createInstance(){
     initDefaultExtensions();
 
     if(m_deviceParams.enableDebugRuntime){
-        m_enabledExtensions.instance.emplace(VK_EXT_DEBUG_REPORT_EXTENSION_NAME, m_arena);
         m_enabledExtensions.layers.emplace("VK_LAYER_KHRONOS_validation", m_arena);
     }
 
@@ -1869,7 +1876,7 @@ bool BackendContext::createInstance(){
 
 bool BackendContext::createDevice(){
     if(m_deviceParams.enableDebugRuntime)
-        installDebugCallback();
+        installDebugMessenger();
 
     m_maxFramesInFlight = m_deviceParams.maxFramesInFlight;
     if(m_maxFramesInFlight == 0){
@@ -2027,11 +2034,10 @@ void BackendContext::destroy(){
         m_windowSurface = VK_NULL_HANDLE;
     }
 
-    if(m_debugReportCallback){
-        auto* destroyFunc = reinterpret_cast<PFN_vkDestroyDebugReportCallbackEXT>(vkGetInstanceProcAddr(m_vulkanInstance, "vkDestroyDebugReportCallbackEXT"));
-        if(destroyFunc)
-            destroyFunc(m_vulkanInstance, m_debugReportCallback, nullptr);
-        m_debugReportCallback = VK_NULL_HANDLE;
+    if(m_debugUtilsMessenger){
+        if(vkDestroyDebugUtilsMessengerEXT)
+            vkDestroyDebugUtilsMessengerEXT(m_vulkanInstance, m_debugUtilsMessenger, nullptr);
+        m_debugUtilsMessenger = VK_NULL_HANDLE;
     }
 
     if(m_vulkanInstance){

@@ -212,8 +212,6 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.KHR_ray_query = true;
         else if(NWB_STRCMP(ext, VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0)
             m_context.extensions.KHR_acceleration_structure = true;
-        else if(NWB_STRCMP(ext, VK_EXT_DEBUG_MARKER_EXTENSION_NAME) == 0)
-            m_context.extensions.EXT_debug_marker = true;
         else if(NWB_STRCMP(ext, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0)
             m_context.extensions.KHR_swapchain = true;
         else if(NWB_STRCMP(ext, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME) == 0)
@@ -259,11 +257,6 @@ Device::Device(const DeviceDesc& desc)
     if(m_context.extensions.EXT_debug_utils && (!vkCmdBeginDebugUtilsLabelEXT || !vkCmdEndDebugUtilsLabelEXT)){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Debug utils marker entry points are unavailable."));
         m_context.extensions.EXT_debug_utils = false;
-    }
-
-    if(m_context.extensions.EXT_debug_marker && (!vkCmdDebugMarkerBeginEXT || !vkCmdDebugMarkerEndEXT)){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Debug marker entry points are unavailable."));
-        m_context.extensions.EXT_debug_marker = false;
     }
 
     if(m_context.extensions.NV_device_diagnostic_checkpoints && (!vkCmdSetCheckpointNV || !vkGetQueueCheckpointDataNV)){

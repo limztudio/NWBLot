@@ -314,7 +314,10 @@ struct DeviceCreationParameters : public InstanceParameters{
 
     GraphicsVector<GraphicsString> requiredBackendDeviceExtensions;
     GraphicsVector<GraphicsString> optionalBackendDeviceExtensions;
-    GraphicsVector<usize> ignoredValidationMessageLocations;
+    // VK_EXT_debug_utils identifies validation messages with a signed message ID. Keep the
+    // suppression list in that native representation instead of the retired debug-report
+    // callback location token.
+    GraphicsVector<i32> ignoredValidationMessageIds;
 
     GpuDescriptorHeapAbi bindlessHeapAbi;
     Path pipelineCacheDirectory;
@@ -323,7 +326,7 @@ struct DeviceCreationParameters : public InstanceParameters{
         : InstanceParameters(arena)
         , requiredBackendDeviceExtensions(arena)
         , optionalBackendDeviceExtensions(arena)
-        , ignoredValidationMessageLocations(arena)
+        , ignoredValidationMessageIds(arena)
         , pipelineCacheDirectory(arena)
     {}
 };

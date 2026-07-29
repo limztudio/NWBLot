@@ -1,8 +1,13 @@
-# Phase 2 — Migrate the per-mesh RT/GI/shadow/caustic buffer arrays to the global heap
+# Phase 2 — Migrate the per-mesh RT/GI/shadow/caustic buffer arrays to the global heap (archived design record)
 
-**Status:** ✅ **SHIPPED** — designed, implemented, validated, and pushed to both remotes. Built on
-Phase 1 (`docs/design/bindless-phase1-rhi-heap.md`), which stood up `GpuDescriptorHeap` (Backend A,
-descriptor indexing) and proved the `GpuDescriptorHandle` round-trip for the buffer classes.
+> **Current runtime (2026-07-29):** This is a historical migration record. The original
+> descriptor-indexing implementation it describes has been superseded; the live
+> `GpuDescriptorHeap` is descriptor-buffer-only and device creation rejects systems without
+> `VK_EXT_descriptor_buffer`.
+
+**Historical status:** ✅ **SHIPPED** — designed, implemented, validated, and pushed to both remotes. Built on
+Phase 1 (`docs/design/bindless-phase1-rhi-heap.md`), which introduced `GpuDescriptorHeap` and
+proved the `GpuDescriptorHandle` round-trip for the buffer classes.
 **What shipped:** the heap was made *live* and gained its first real consumer — the 20 bounded
 per-mesh descriptor arrays shared by the six RT/GI/shadow/caustic passes were migrated onto it and
 their classic binding paths deleted. This was the first phase to **delete** a classic binding path

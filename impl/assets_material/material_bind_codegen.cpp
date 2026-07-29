@@ -22,18 +22,30 @@ NWB_IMPL_BEGIN
 
 namespace __hidden_bind{
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool ParseMaterialBindResourceFieldTypeText(
     const AStringView typeText,
     MaterialLayoutFieldType::Enum& outFieldType
 );
 
-}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 namespace __hidden_cook{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 static constexpr u32 s_MaterialBindGeneratedSeparatorChunkRepeatCount = 8u;
 static constexpr u32 s_MaterialBindByteBitCount = 8u;
@@ -208,8 +220,6 @@ bool ResolveMaterialBindDependencyInterface(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // material bind generated Slang include helpers
 
 
@@ -221,10 +231,6 @@ static void AppendMaterialBindGeneratedSeparator(CookString& inOutSource, const 
         inOutSource += '\n';
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static void AppendGeneratedUpperIdentifier(const AStringView text, CookString& inOutText){
     const usize beginSize = inOutText.size();
     for(const char ch : text)
@@ -232,10 +238,6 @@ static void AppendGeneratedUpperIdentifier(const AStringView text, CookString& i
     if(inOutText.size() == beginSize)
         inOutText += "VALUE";
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 static void AppendGeneratedPascalIdentifier(const AStringView text, CookString& inOutText){
     const usize beginSize = inOutText.size();
@@ -256,19 +258,11 @@ static void AppendGeneratedPascalIdentifier(const AStringView text, CookString& 
         inOutText += "Value";
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static void AppendU32Slang(const u32 value, CookString& inOutText){
     char digits[TextDetail::s_DecimalTextBufferBytes] = {};
     inOutText += FormatDecimal(static_cast<usize>(value), digits);
     inOutText += 'u';
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 static void AppendU64AsUint2Slang(const u64 value, CookString& inOutText){
     inOutText += "uint2(";
@@ -279,18 +273,11 @@ static void AppendU64AsUint2Slang(const u64 value, CookString& inOutText){
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static CookString BuildMaterialBindIncludeGuard(CookArena& arena, const AStringView includePath){
     CookString guard("NWB_GENERATED_MATERIAL_BIND_", arena);
     AppendGeneratedUpperIdentifier(AStringView(includePath), guard);
     return guard;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 static CookString BuildMaterialBindGeneratedSymbol(
     CookArena& arena,
@@ -309,10 +296,6 @@ static CookString BuildMaterialBindGeneratedSymbol(
     return symbol;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static CookString BuildMaterialBindAccessorName(
     CookArena& arena,
     const InitializerList<AStringView> nameSegments
@@ -322,10 +305,6 @@ static CookString BuildMaterialBindAccessorName(
         AppendGeneratedPascalIdentifier(nameSegment, functionName);
     return functionName;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 static bool RegisterGeneratedMaterialBindSymbol(
     const AStringView includePath,
@@ -345,9 +324,6 @@ static bool RegisterGeneratedMaterialBindSymbol(
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static AStringView MaterialBindFieldLookupFunctionStorageName(const MaterialBlockClass::Enum blockClass){
     switch(blockClass){
     case MaterialBlockClass::MaterialConstant: return "Constant";
@@ -355,10 +331,6 @@ static AStringView MaterialBindFieldLookupFunctionStorageName(const MaterialBloc
     default: return AStringView();
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 static AStringView MaterialBindFieldLookupFunctionTypeName(const MaterialLayoutFieldType::Enum fieldType){
     static constexpr AStringView s_TypeNames[] = {
@@ -412,10 +384,6 @@ static AStringView MaterialBindFieldLookupFunctionTypeName(const MaterialLayoutF
     return s_TypeNames[static_cast<u32>(fieldType) - static_cast<u32>(MaterialLayoutFieldType::Bool)];
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static AStringView MaterialBindResourceSlangTypeName(const MaterialLayoutFieldType::Enum fieldType){
     switch(fieldType){
     case MaterialLayoutFieldType::SampledImage2D: return "Texture2D<float4>";
@@ -431,9 +399,6 @@ static AStringView MaterialBindResourceHeapAccessorName(const MaterialLayoutFiel
     default: return AStringView();
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static CookString BuildMaterialBindFieldLookupFunctionName(
@@ -452,9 +417,6 @@ static CookString BuildMaterialBindFieldLookupFunctionName(
     functionName += typeName;
     return functionName;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static bool AppendMaterialBindConstantPrefix(
@@ -476,17 +438,9 @@ static bool AppendMaterialBindConstantPrefix(
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static void AppendMaterialBindConstantSuffix(CookString& inOutSource){
     inOutSource += ";\n";
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 static bool AppendMaterialBindU32Constant(
     const AStringView includePath,
@@ -504,10 +458,6 @@ static bool AppendMaterialBindU32Constant(
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static bool AppendMaterialBindU64Constant(
     const AStringView includePath,
     const CookString& symbol,
@@ -523,9 +473,6 @@ static bool AppendMaterialBindU64Constant(
     AppendMaterialBindConstantSuffix(inOutSource);
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static bool ResolveMaterialBindGeneratedLayoutBlock(
@@ -561,9 +508,6 @@ static bool ResolveMaterialBindGeneratedLayoutBlock(
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static u32* MaterialBindStorageByteSizePointer(
     const MaterialBlockClass::Enum blockClass,
     u32& inOutConstantByteSize,
@@ -575,9 +519,6 @@ static u32* MaterialBindStorageByteSizePointer(
     default: return nullptr;
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static bool ComputeMaterialBindStorageByteSizes(
@@ -610,10 +551,6 @@ static bool ComputeMaterialBindStorageByteSizes(
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static bool ComputeMaterialBindBlockStorageByteBegin(
     const AStringView includePath,
     const MaterialBindTypedLayout& layout,
@@ -645,9 +582,6 @@ static bool ComputeMaterialBindBlockStorageByteBegin(
 
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static bool AppendMaterialBindLayoutConstants(
@@ -793,10 +727,6 @@ static bool AppendMaterialBindLayoutConstants(
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static bool AppendMaterialBindFieldConstants(
     const AStringView includePath,
     const MaterialBindStruct& bindStruct,
@@ -854,10 +784,6 @@ static bool AppendMaterialBindFieldConstants(
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static void AppendMaterialBindFieldAccessor(
     const MaterialBindField& field,
     const CookString& byteOffsetSymbol,
@@ -913,10 +839,6 @@ static bool AppendMaterialBindResourceFieldAccessor(
     inOutSource += "}\n\n";
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 static bool AppendMaterialBindGeneratedInstance(
     CookArena& arena,
@@ -1103,9 +1025,6 @@ static bool AppendMaterialBindGeneratedInstance(
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool BuildMaterialBindIncludeSourceImpl(
     CookArena& arena,
     const MaterialBindEntry& entry,
@@ -1241,9 +1160,6 @@ bool BuildMaterialBindIncludeSourceImpl(
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static bool PrepareMaterialBindIncludeRoot(const Path& includeRoot){
     ErrorCode errorCode;
     if(!RemoveAllIfExists(includeRoot, errorCode)){
@@ -1265,9 +1181,6 @@ static bool PrepareMaterialBindIncludeRoot(const Path& includeRoot){
 
     return true;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool EmitMaterialBindIncludes(

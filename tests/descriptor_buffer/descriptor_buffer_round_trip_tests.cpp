@@ -183,6 +183,23 @@ Optional<CapturingLogger> DescriptorBufferRoundTripTest::s_logger;
 Optional<Common::LoggerRegistrationGuard> DescriptorBufferRoundTripTest::s_loggerGuard;
 
 
+// RendererSystem requests this terminal policy only when accepted cross-queue ownership cannot be recovered. The
+// Graphics owner must stop the current generation before it records another frame, leaving orderly teardown and
+// recreation to the caller that owns the device lifetime.
+TEST_F(DescriptorBufferRoundTripTest, DeviceRecreationRequestStopsTheCurrentGraphicsGeneration){
+    HeadlessGraphicsScope recoveryScope;
+    ASSERT_TRUE(recoveryScope.initialize());
+
+    auto& graphics = recoveryScope.graphics();
+    EXPECT_FALSE(graphics.isDeviceRecreationRequested());
+
+    graphics.requestDeviceRecreation();
+
+    EXPECT_TRUE(graphics.isDeviceRecreationRequested());
+    EXPECT_FALSE(graphics.runFrame());
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

@@ -384,16 +384,22 @@ void Queue::updateLastFinishedID(){
     const VkResult res = vkGetSemaphoreCounterValue(m_context.device, m_trackingSemaphore, &completedValue);
     if(res == VK_SUCCESS)
         m_lastFinishedID = completedValue;
-    else
+    else{
+        if(res == VK_ERROR_DEVICE_LOST)
+            m_device.captureGpuCrash("queue timeline query");
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(res));
+    }
 }
 
 void Queue::waitForIdle(){
     ScopedLock lock(m_mutex);
 
     const VkResult res = vkQueueWaitIdle(m_queue);
-    if(res != VK_SUCCESS)
+    if(res != VK_SUCCESS){
+        if(res == VK_ERROR_DEVICE_LOST)
+            m_device.captureGpuCrash("queue wait idle");
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue wait-for-idle failed: {}"), ResultToString(res));
+    }
     if(res == VK_SUCCESS){
         m_lastFinishedID = m_lastSubmittedID;
 
@@ -435,6 +441,12 @@ void Device::queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore
 }
 
 u64 Device::queueGetCompletedInstance(CommandQueue::Enum queue){
+    // executeCommandLists() uses this on a rejected submit to retire CPU-side upload/scratch bookkeeping. A
+    // VK_ERROR_DEVICE_LOST rejection has already marked the device terminal, so do not issue a second timeline query
+    // while performing that cleanup.
+    if(isDeviceLost())
+        return 0;
+
     Queue* q = getQueue(queue);
     if(q){
         ScopedLock lock(q->m_mutex);

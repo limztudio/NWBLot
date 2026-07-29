@@ -198,8 +198,8 @@ private:
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;
     bool m_preparedShadowVisibilityReady = false;
-    // A Compute release without a successfully accepted Graphics acquire is not recoverable by guessing. Stop
-    // recording subsequent frames until the caller tears down/recreates the device resources.
+    // A Compute release without a successfully accepted Graphics acquire is not recoverable by guessing. The
+    // Graphics owner is asked to end this device generation, then resources are rebuilt before rendering resumes.
     bool m_asyncShadowOwnershipRecoveryFailed = false;
 
 private:

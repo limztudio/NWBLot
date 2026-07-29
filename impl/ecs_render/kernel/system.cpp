@@ -638,6 +638,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const bool hasOpaqueCsgFrameWork = csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
     NWB_ASSERT(csgFrameState.empty() || deferredTargets.csgIntervalTargetsValid());
     auto& device = m_graphics.getDevice();
+    if(m_graphics.isDeviceRecreationRequested() || device.isDeviceLost()){
+        if(device.isDeviceLost())
+            m_graphics.requestDeviceRecreation();
+        return;
+    }
     if(m_asyncShadowOwnershipRecoveryFailed){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async shadow ownership recovery failed; rendering is suspended until resources are recreated"));
         return;
@@ -2005,6 +2010,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!asyncFrameTiming.needsRetirement())
             return;
 
+        // A device-lost submit has no usable Graphics queue for the non-publishing timestamp endpoint. The outer
+        // Graphics policy will end this device generation, so discard the reservation rather than submit again.
+        if(device.isDeviceLost()){
+            asyncFrameTiming.discard();
+            return;
+        }
+
         asyncFrameTiming.prepareForRecovery();
         shadowOwnershipRecoveryCommandList->open();
         if(!shadowOwnershipRecoveryCommandList->hasCommandBuffer()){
@@ -2048,6 +2060,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const bool recoverCausticIrradiance,
         const bool recoverSurfelIrradiance
     ) -> bool {
+        // A rejected Graphics packet is normally recoverable with a Graphics acquire/release. VK_ERROR_DEVICE_LOST
+        // is different: no submission can establish ownership, so escalate to device recreation without probing the
+        // dead queue a second time.
+        if(device.isDeviceLost()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async Compute ownership recovery skipped because the graphics device is lost"));
+            asyncFrameTiming.discard();
+            return false;
+        }
         if(
             !shadowSubmissionToken.valid()
             || !deferredTargets.shadowVisibility
@@ -2172,8 +2192,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return true;
     };
     const auto failAsyncShadowOwnershipRecovery = [&](){
+        if(m_asyncShadowOwnershipRecoveryFailed)
+            return;
         m_asyncShadowOwnershipRecoveryFailed = true;
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: cannot safely continue after an unresolved async Compute ownership release"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: cannot safely continue after an unresolved async Compute ownership release; requesting device recreation"));
+        // This remains intentionally narrow: the Graphics owner performs orderly teardown/recreation after this
+        // frame returns, rather than invalidating resources while accepted Compute work may still be in flight.
+        m_graphics.requestDeviceRecreation();
     };
 
     // Distinct queues: submit the Graphics producer first, then run shadow, software caustics when available, and

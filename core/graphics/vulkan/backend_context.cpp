@@ -2090,6 +2090,8 @@ bool BackendContext::beginFrame(const BackBufferResizeCallbacks& callbacks){
         return true;
     }
 
+    if(res == VK_ERROR_DEVICE_LOST && m_rhiDevice)
+        m_rhiDevice->captureGpuCrash("acquire next image");
     NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to acquire next swap chain image. {}"), ResultToString(res));
     return false;
 }

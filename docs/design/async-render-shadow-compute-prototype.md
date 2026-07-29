@@ -187,7 +187,11 @@ The renderer now consumes these primitives as follows:
   Graphics fan-in.
 - Accepted submissions commit independently. A rejected packet after the combined Compute submission triggers a small
   Graphics recovery list that acquires every released result and returns it to Compute. Failure to submit that recovery
-  suspends rendering until resource/device recreation rather than guessing ownership.
+  requests termination of the current graphics-device generation. Its owner must then tear down and recreate device
+  resources rather than allowing another pass or presentation to observe indeterminate ownership.
+- `Device::isDeviceLost()` is a sticky renderer-facing signal set for queue submit, queue/timeline wait, swap-chain
+  acquire, present, and device-idle loss. Recovery acquires run only while that signal is clear; a lost device skips
+  the extra submit and immediately requests device recreation.
 - Timestamp reservations are split by submission. `render.frame` is an acceptance-aware Graphics critical-path
   transaction: it begins in prefix, completes in accepted final, and records a non-publishing recovery endpoint if a
   later packet is rejected. Packet envelopes report prefix/shadow/effects/final duration; when Vulkan supports
@@ -527,9 +531,9 @@ first-use/reseed frames. Collect a separate critical-path/overlap analysis befor
 1. **Frame timing transaction:** extend `GpuTimingSubmissionTicket` into a segmented ticket versus
    add a distinct multi-submission frame ticket. The latter keeps the existing single-submit contract
    simple and is preferred unless query ownership can be proven equally clear in an extension.
-2. **Recovery policy after device-level submit failure:** use the recovery acquire when the Graphics
-   queue remains usable; otherwise invalidate/recreate the device rather than continue with unknown
-   ownership. The device-loss path needs an explicit renderer-facing signal.
+2. **Recovery policy after device-level submit failure:** implemented. Use the recovery acquire only while the
+   Graphics queue remains usable; `Device::isDeviceLost()` skips that submit and `Graphics::requestDeviceRecreation()`
+   marks the current device generation terminal before later passes or presentation can continue.
 
 These decisions are intentionally limited to the current shadow/software-caustics/surfel-GI prototype. They do not
 authorize moving AVBOIT, lighting, composite, or hardware `dispatchRays` work to Compute.

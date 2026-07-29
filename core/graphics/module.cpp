@@ -347,6 +347,8 @@ bool Graphics::init(const Common::FrameData& data){
     if(!m_backend->createDevice())
         return false;
 
+    m_deviceRecreationRequested = false;
+
     if(!m_backend->createSwapChain())
         return false;
 
@@ -374,6 +376,8 @@ bool Graphics::createHeadlessDevice(){
 
     if(!m_backend->createDevice())
         return false;
+
+    m_deviceRecreationRequested = false;
 
     m_previousFrameTimestamp = TimerNow();
 
@@ -424,7 +428,22 @@ void Graphics::setPipelineCacheDirectory(const Path& directory){
     m_deviceCreationParams.pipelineCacheDirectory = directory;
 }
 
+void Graphics::requestDeviceRecreation(){
+    if(m_deviceRecreationRequested)
+        return;
+
+    m_deviceRecreationRequested = true;
+    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Graphics: device recreation requested; ending the current graphics session before another submission."));
+}
+
 void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
+    if(m_deviceRecreationRequested)
+        return;
+    if(auto* device = m_backend->getDevice(); device && device->isDeviceLost()){
+        requestDeviceRecreation();
+        return;
+    }
+
     m_windowVisible = windowVisible;
     m_windowIsInFocus = windowIsInFocus;
 
@@ -466,6 +485,7 @@ void Graphics::destroy(){
     m_swapChainFramebuffers.clear();
     m_backend->destroy();
     m_instanceCreated = false;
+    m_deviceRecreationRequested = false;
 }
 
 GraphicsBackend::Device& Graphics::getDevice()const noexcept{
@@ -636,6 +656,10 @@ void Graphics::animate(f64 elapsedTime){
 void Graphics::render(){
     Framebuffer* framebuffer = getCurrentFramebuffer();
     auto& device = getDevice();
+    if(device.isDeviceLost()){
+        requestDeviceRecreation();
+        return;
+    }
     m_gpuTiming.collect(device, m_frameIndex);
     m_gpuTiming.beginFrame(m_frameIndex);
 
@@ -680,12 +704,25 @@ void Graphics::render(){
     }
 
     for(auto* renderPass : m_renderPasses){
+        if(m_deviceRecreationRequested || device.isDeviceLost()){
+            if(device.isDeviceLost())
+                requestDeviceRecreation();
+            return;
+        }
         if(!renderPass->prepareResources(framebuffer)){
             NWB_LOGGER_WARNING(NWB_TEXT("Graphics: render pass skipped after resource preparation failed"));
             continue;
         }
 
         renderPass->render(framebuffer);
+
+        // A render pass can request recreation after an unrecoverable cross-queue ownership failure. Do not let a
+        // later pass record or submit against this device generation in the same frame.
+        if(m_deviceRecreationRequested || device.isDeviceLost()){
+            if(device.isDeviceLost())
+                requestDeviceRecreation();
+            return;
+        }
     }
 }
 
@@ -719,6 +756,15 @@ bool Graphics::shouldRenderUnfocused()const{
 }
 
 bool Graphics::animateRenderPresent(){
+    if(m_deviceRecreationRequested)
+        return false;
+
+    auto& device = getDevice();
+    if(device.isDeviceLost()){
+        requestDeviceRecreation();
+        return false;
+    }
+
     Timer now = TimerNow();
     const f64 elapsedTime = DurationInSeconds<f64>(now, m_previousFrameTimestamp);
     const bool shouldBootstrapWindowPresentation = !m_hasPresentedFrame;
@@ -741,8 +787,22 @@ bool Graphics::animateRenderPresent(){
             if(m_backend->beginFrame(resizeCallbacks)){
                 render();
 
-                if(!m_backend->present())
+                if(m_deviceRecreationRequested || device.isDeviceLost()){
+                    if(device.isDeviceLost())
+                        requestDeviceRecreation();
                     return false;
+                }
+
+                if(!m_backend->present()){
+                    if(device.isDeviceLost())
+                        requestDeviceRecreation();
+                    return false;
+                }
+
+                if(device.isDeviceLost()){
+                    requestDeviceRecreation();
+                    return false;
+                }
 
                 m_hasPresentedFrame = true;
             }
@@ -751,8 +811,11 @@ bool Graphics::animateRenderPresent(){
 
     YieldThread();
 
-    auto& device = getDevice();
     device.runGarbageCollection();
+    if(device.isDeviceLost()){
+        requestDeviceRecreation();
+        return false;
+    }
     // Advance the global bindless heap's deferred-free clock alongside device GC so slots return to the free list only
     // after in-flight frames can no longer reference them.
     device.getDescriptorHeap().advanceFrame();

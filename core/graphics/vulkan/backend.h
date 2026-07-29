@@ -2457,6 +2457,9 @@ public:
     void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance);
     [[nodiscard]] CommandQueue::Enum resolveRenderLane(RenderLane::Enum lane)const;
     [[nodiscard]] bool isRenderLaneDedicated(RenderLane::Enum lane)const;
+    // Device loss is terminal for this Device instance. Callers that own higher-level resource lifetimes must
+    // request a full graphics/device recreation instead of submitting recovery work against a lost VkDevice.
+    [[nodiscard]] bool isDeviceLost()const noexcept{ return m_deviceLost.load(MemoryOrder::acquire); }
     // Absolute timestamp correlation is meaningful only when Vulkan reports timestamp support for both Graphics and
     // Compute. Renderer overlap telemetry remains absent rather than fabricating a cross-queue interval otherwise.
     [[nodiscard]] bool supportsGraphicsAndComputeTimestamps()const{
@@ -2621,6 +2624,9 @@ private:
     // GPU crash tracker must be first due to reverse destruction order
     // Queues will destroy CommandLists which will unregister from m_gpuCrashTracker in their destructors
     bool m_gpuCrashDiagnosticsEnabled = false;
+    // Set before crash capture so the renderer can distinguish a recoverable submit rejection from VK_ERROR_DEVICE_LOST
+    // even when optional crash diagnostics are disabled.
+    Atomic<bool> m_deviceLost = false;
     Atomic<bool> m_gpuCrashCaptured = false;
     GpuCrashTracker m_gpuCrashTracker;
     // Fixed-size, pre-reserved arena the device-lost capture formats into (no growable-heap touch at crash time).

@@ -723,6 +723,12 @@ u64 Device::executeCommandLists(
     if(outCommandListsSubmitted)
         *outCommandListsSubmitted = false;
 
+    // Once Vulkan has reported device loss, no subsequent submit can make an ownership-recovery packet safe.
+    // Leave command-list ownership with its caller; the Graphics layer will terminate this device generation and
+    // destroy those lists during recreation.
+    if(isDeviceLost())
+        return 0u;
+
     Queue* queue = getQueue(executionQueue);
     if(!queue){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: requested queue is not available"));
@@ -782,6 +788,11 @@ QueueSubmissionToken Device::executeCommandLists(
     const CommandQueue::Enum executionQueue,
     const QueueSubmissionDesc& submitDesc
 ){
+    // Do not feed new work or timeline waits to a VkDevice after a terminal loss. This also gives renderer packet
+    // recovery a reliable invalid token without issuing another Vulkan call.
+    if(isDeviceLost())
+        return {};
+
     if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: submission wait token array is null"));
         return {};
@@ -931,6 +942,9 @@ u32 Device::getQueueFamilyIndex(const CommandQueue::Enum queueType)const{
 }
 
 bool Device::waitForIdle(){
+    if(isDeviceLost())
+        return false;
+
     VkResult res = VK_SUCCESS;
 
     res = vkDeviceWaitIdle(m_context.device);
@@ -953,6 +967,9 @@ bool Device::waitForIdle(){
 }
 
 void Device::captureGpuCrash(const AStringView context)noexcept{
+    // This method is invoked only from Vulkan's device-lost paths. Keep the state independent of optional crash
+    // diagnostics: a renderer must still stop recovery submissions when capture support is disabled.
+    m_deviceLost.store(true, MemoryOrder::release);
     if(!m_gpuCrashDiagnosticsEnabled)
         return;
 
@@ -1188,6 +1205,11 @@ Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const usize markerHash){
 }
 
 void Device::runGarbageCollection(){
+    // Timeline queries can themselves return VK_ERROR_DEVICE_LOST. Teardown owns retirement after the terminal
+    // signal, so avoid issuing extra queue queries while the higher level is arranging device recreation.
+    if(isDeviceLost())
+        return;
+
     for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i){
         if(m_queues[i]){
             ScopedLock lock(m_queues[i]->m_mutex);

@@ -344,6 +344,31 @@ NwbFixtureRuntimeMaterial runtime;
 
 )NWB_BIND";
 
+static constexpr AStringView s_StaticResourceFixtureMaterialMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
+
+asset.shaders = {
+    "mesh": "project/shaders/material_mesh",
+    "ps": "project/shaders/material_ps",
+};
+asset.shader_variant = "default";
+
+asset.parameters = {
+    "surface": {
+        "base_color": "float4(0.25, 0.5, 0.75, 1.0)",
+    },
+    "runtime": {
+        "fade_alpha": "float(0.75)",
+    },
+};
+
+)NWB_META";
+
 static constexpr AStringView s_MaterialBindMeshSource = R"NWB_SLANG(#include "mesh/authoring.slangi"
 
 NwbMeshGeneratedVertex nwbMeshBuildVertex(
@@ -388,6 +413,22 @@ NwbMeshSurface nwbMaterialSurface(){
         materialBindConstantsValid ? surface.base_color.rgb : float3(1.0, 0.0, 1.0),
         inNormal
     );
+}
+
+)NWB_SLANG";
+
+static constexpr AStringView s_StaticResourceFixtureShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
+#include "project/material_interfaces/test_surface.bind"
+
+NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbFixtureSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    const float4 fixtureColor = nwbMaterialBindLoadSurfaceBaseColorMap(instance).SampleLevel(
+        nwbMaterialBindLoadSurfaceBaseColorSampler(instance),
+        inUv0,
+        0.0
+    );
+    return nwbMakeMeshSurface(surface.base_color.rgb * fixtureColor.rgb, inNormal);
 }
 
 )NWB_SLANG";

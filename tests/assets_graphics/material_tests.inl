@@ -1584,7 +1584,7 @@ TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
     NWB::Impl::Material material(testArena.arena);
     const bool built = BuildMaterialFromBindAndMeta(
         s_StaticResourceFixtureMaterialBindSource,
-        s_BlockScopedMaterialMeta,
+        s_StaticResourceFixtureMaterialMeta,
         "material_bind_static_resource_fixture",
         testArena,
         material,

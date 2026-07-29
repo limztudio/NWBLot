@@ -67,6 +67,9 @@ public:
     [[nodiscard]] bool renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearCausticTargets(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    // The dedicated surfel packet owns this no-op clear before its compute producer, so the exclusive irradiance output
+    // can begin and remain on AsyncCompute until deferred lighting acquires it.
+    void clearSurfelIrradiance(Core::CommandList& commandList, DeferredFrameTargets& targets);
     // Software-BVH shadow traversal. multiplyOntoOpaque=false: standalone no-RT path (opaque + transparent, overwrite).
     // multiplyOntoOpaque=true: hybrid path on RT hardware -- traces the TRANSPARENT-only scene BVH and multiplies its colored transmittance onto the HW opaque binary mask already in the visibility buffer.
     [[nodiscard]] bool renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets, bool multiplyOntoOpaque = false);
@@ -86,9 +89,8 @@ public:
     // (the SW trace reuses the SW scene BVH).
     [[nodiscard]] bool hasSurfelWork()const noexcept;
     [[nodiscard]] bool prepareSurfelResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    // The first surfel-pool clear is recorded into the shadow-preparation list. Keep the pool marked dirty until that
-    // list is actually submitted, so a rejected preparation packet retries the initialization rather than tracing
-    // uninitialized persistent buffers.
+    // Keep the first surfel-pool clear marked dirty until its actual producer packet is accepted. The Graphics fallback
+    // records it during shadow preparation; a dedicated lane records it immediately before the surfel compute work.
     void finalizeSurfelResourceInitialization();
     void discardSurfelResourceInitialization();
     [[nodiscard]] bool renderSurfelGi(Core::CommandList& commandList, DeferredFrameTargets& targets);
@@ -131,9 +133,13 @@ public:
     // A software-shadow edge-stat copy is recorded before the queue submission exists. Bind it to the accepted
     // submission token afterward so a later CPU map waits for actual queue completion instead of assuming a frame delay.
     void confirmShadowVisibilitySubmission(const Core::QueueSubmissionToken& submissionToken);
+    // The surfel live-count readback follows the same acceptance-aware completion rule when the packet runs on
+    // AsyncCompute.
+    void confirmSurfelGiSubmission(const Core::QueueSubmissionToken& submissionToken);
 
 
 private:
+    [[nodiscard]] bool initializeSurfelResources(Core::CommandList& commandList);
     [[nodiscard]] bool buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources);
     // Allocates the software-BVH pipelines, shared scratch, and per-mesh storage before the per-frame command-list
     // update records its build/refit dispatches. Runtime meshes are prepared every frame because their resource set

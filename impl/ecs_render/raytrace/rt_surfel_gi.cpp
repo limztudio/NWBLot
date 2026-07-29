@@ -436,6 +436,9 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         cbDesc
             .setByteSize(sizeof(NwbSurfelConstantsGpu))
             .setIsConstantBuffer(true)
+            // Graphics uploads this per-frame selector before the AsyncCompute surfel packet consumes it. The remaining
+            // persistent surfel field stays exclusive to Compute once its one-shot initialization has moved there.
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setDebugName(Name("surfel_constants"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
@@ -737,6 +740,37 @@ bool RendererRayTracingSystem::hasSurfelWork()const noexcept{
     return rayTracingState().m_surfelEnabled;
 }
 
+bool RendererRayTracingSystem::initializeSurfelResources(Core::CommandList& commandList){
+    if(!rayTracingState().m_surfelResourcesNeedClear)
+        return true;
+
+    Core::Buffer* pool = rayTracingState().m_surfelPoolBuffer.get();
+    Core::Buffer* cellHead = rayTracingState().m_surfelCellHeadBuffer.get();
+    Core::Buffer* counter = rayTracingState().m_surfelCounterBuffer.get();
+    Core::Buffer* freeList = rayTracingState().m_surfelFreeListBuffer.get();
+    if(!pool || !cellHead || !counter || !freeList)
+        return false;
+
+    // One-shot clear of newly-created field storage. Keeping this work beside the first AsyncCompute packet means the
+    // persistent UAV field never needs a Graphics -> Compute ownership transfer on a dedicated queue family.
+    commandList.setBufferState(pool, Core::ResourceStates::CopyDest);
+    commandList.setBufferState(cellHead, Core::ResourceStates::CopyDest);
+    commandList.setBufferState(counter, Core::ResourceStates::CopyDest);
+    commandList.setBufferState(freeList, Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.clearBufferUInt(pool, 0u);
+    commandList.clearBufferUInt(cellHead, NWB_SURFEL_CELL_INVALID);
+    commandList.clearBufferUInt(counter, 0u);
+    commandList.clearBufferUInt(freeList, 0u);   // contents cosmetic; counter FREE_TOP=0 is what marks it empty
+    commandList.setBufferState(pool, Core::ResourceStates::UnorderedAccess);
+    commandList.setBufferState(cellHead, Core::ResourceStates::ShaderResource);
+    commandList.setBufferState(counter, Core::ResourceStates::UnorderedAccess);
+    commandList.setBufferState(freeList, Core::ResourceStates::UnorderedAccess);
+    commandList.commitBarriers();
+    rayTracingState().m_surfelResourcesClearPending = true;
+    return true;
+}
+
 bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!hasSurfelWork())
         return true;
@@ -767,33 +801,13 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
         return false;
     }
 
-    // One-shot clear of the freshly-created buffers (ensureSurfelResources has no command list). Pool -> zero (alive ==
-    // 0 everywhere), cell-head -> 0xFFFFFFFF (empty lists), counter -> 0 (bump top at slot 0). Cleared exactly once per
-    // (re)creation; the pool then accumulates surfels across frames through recycling.
-    if(rayTracingState().m_surfelResourcesNeedClear){
-        Core::Buffer* pool = rayTracingState().m_surfelPoolBuffer.get();
-        Core::Buffer* cellHead = rayTracingState().m_surfelCellHeadBuffer.get();
-        Core::Buffer* counter = rayTracingState().m_surfelCounterBuffer.get();
-        Core::Buffer* freeList = rayTracingState().m_surfelFreeListBuffer.get();
-        commandList.setBufferState(pool, Core::ResourceStates::CopyDest);
-        commandList.setBufferState(cellHead, Core::ResourceStates::CopyDest);
-        commandList.setBufferState(counter, Core::ResourceStates::CopyDest);
-        commandList.setBufferState(freeList, Core::ResourceStates::CopyDest);
-        commandList.commitBarriers();
-        commandList.clearBufferUInt(pool, 0u);
-        commandList.clearBufferUInt(cellHead, NWB_SURFEL_CELL_INVALID);
-        commandList.clearBufferUInt(counter, 0u);
-        commandList.clearBufferUInt(freeList, 0u);   // contents cosmetic; counter FREE_TOP=0 is what marks it empty
-        commandList.setBufferState(pool, Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(cellHead, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(counter, Core::ResourceStates::UnorderedAccess);
-        commandList.setBufferState(freeList, Core::ResourceStates::UnorderedAccess);
-        commandList.commitBarriers();
-        // The clear belongs to the preparation command list. Do not mark the persistent buffers initialized until
-        // RendererSystem has successfully submitted that list; otherwise a rejected preparation would let the next
-        // frame trace uninitialized pool/cell-head/counter contents.
-        rayTracingState().m_surfelResourcesClearPending = true;
-    }
+    // The Graphics fallback retains the historical initialization point. On a dedicated lane the first surfel packet
+    // records this clear itself, preserving Compute ownership of the persistent UAV field from its first use onward.
+    if(
+        !graphics().getDevice().isRenderLaneDedicated(Core::RenderLane::AsyncCompute)
+        && !initializeSurfelResources(commandList)
+    )
+        return false;
 
     // Upload the params CB. The cell size sets the surfel spacing (one surfel per hash cell); the gather radius is a bit
     // larger (NWB_SURFEL_DEFAULT_RADIUS) so the 3x3x3 neighbour blend overlaps smoothly.
@@ -840,8 +854,21 @@ void RendererRayTracingSystem::finalizeSurfelResourceInitialization(){
 }
 
 void RendererRayTracingSystem::discardSurfelResourceInitialization(){
-    // NeedClear deliberately remains set so the next successful preparation list re-records the one-shot clear.
+    // NeedClear deliberately remains set so the next successful Graphics/AsyncCompute producer retries the one-shot clear.
     rayTracingState().m_surfelResourcesClearPending = false;
+}
+
+void RendererRayTracingSystem::clearSurfelIrradiance(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    if(!targets.surfelIrradiance)
+        return;
+
+    // Alpha 0 means no surfel coverage, so this is the deferred lighting no-op when the GI producer is unavailable or
+    // chooses not to dispatch. Keep the result ShaderResource-ready before its later Compute -> Graphics release.
+    commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    commandList.clearTextureFloat(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+    commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+    commandList.commitBarriers();
 }
 
 bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, DeferredFrameTargets& targets){
@@ -894,6 +921,9 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel GI heap registration is incomplete"));
         return false;
     }
+
+    if(!initializeSurfelResources(commandList))
+        return false;
 
     // The age-free / hash-build passes dispatch over the full pool (they touch every slot); the trace dispatches per
     // LIVE surfel via its indirect args and derives its round-robin phase from the CB divisor.
@@ -1157,9 +1187,23 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         const u32 frameIndex = rayTracingState().m_surfelFrameIndex;
         Core::Buffer* counter = rayTracingState().m_surfelCounterBuffer.get();
         Core::Buffer* readback = rayTracingState().m_surfelCounterReadback.get();
+        const bool submissionConfirmed = !rayTracingState().m_surfelCountReadbackPendingSubmissionUnconfirmed;
+        const bool submissionComplete =
+            submissionConfirmed
+            && (
+                rayTracingState().m_surfelCountReadbackPendingSubmissionID == 0u
+                || (
+                    rayTracingState().m_surfelCountReadbackPendingSubmissionQueue != Core::CommandQueue::kCount
+                    && graphics().getDevice().queueGetCompletedInstance(
+                        rayTracingState().m_surfelCountReadbackPendingSubmissionQueue
+                    ) >= rayTracingState().m_surfelCountReadbackPendingSubmissionID
+                )
+            )
+        ;
         if(
             rayTracingState().m_surfelCountReadbackPending
             && (frameIndex - rayTracingState().m_surfelCountReadbackFrame) >= s_SurfelCountLogDelay
+            && submissionComplete
         ){
             const u32* counts = static_cast<const u32*>(graphics().getDevice().mapBuffer(readback, Core::CpuAccessMode::Read));
             if(counts){
@@ -1174,6 +1218,9 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
                 );
             }
             rayTracingState().m_surfelCountReadbackPending = false;
+            rayTracingState().m_surfelCountReadbackPendingSubmissionID = 0u;
+            rayTracingState().m_surfelCountReadbackPendingSubmissionQueue = Core::CommandQueue::kCount;
+            rayTracingState().m_surfelCountReadbackPendingSubmissionUnconfirmed = false;
         }
         else if(!rayTracingState().m_surfelCountReadbackPending && (frameIndex % s_SurfelCountLogInterval) == 0u){
             commandList.setBufferState(counter, Core::ResourceStates::CopySource);
@@ -1181,6 +1228,9 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
             commandList.copyBuffer(readback, 0u, counter, 0u, static_cast<u64>(sizeof(u32)) * NWB_SURFEL_COUNTER_SIZE);
             rayTracingState().m_surfelCountReadbackPending = true;
             rayTracingState().m_surfelCountReadbackFrame = frameIndex;
+            rayTracingState().m_surfelCountReadbackPendingSubmissionID = 0u;
+            rayTracingState().m_surfelCountReadbackPendingSubmissionQueue = Core::CommandQueue::kCount;
+            rayTracingState().m_surfelCountReadbackPendingSubmissionUnconfirmed = true;
         }
     }
 

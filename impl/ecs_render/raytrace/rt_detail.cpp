@@ -396,6 +396,9 @@ void RendererRayTracingSystem::normalizePostGbufferPacketResources(Core::Command
     commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
     commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+    // The surfel parameter block is uploaded by Graphics preparation and then read by the optional dedicated Compute
+    // packet. It is concurrently shared, but still needs this normalized state/visibility handoff.
+    commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
 
     // The software traversal table is common to SW shadow, SW caustics, and SW surfel GI. The hardware path shares
     // its per-mesh geometry/material records with caustics and surfel GI; stage the superset so either packet can

@@ -757,8 +757,8 @@ struct RtSurfelGiState{
     // The ray-trace material-context slot payload is shared with shadows/caustics, but surfel owns this UniformBuffer
     // descriptor generation so the other pass bindings remain unchanged.
     Core::GpuDescriptorHandle m_surfelMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    // CPU-readable copy of the counter (BUMP_TOP, FREE_TOP) for the periodic live-count diagnostic. The copy is
-    // snapshotted on a log-interval frame and mapped a few frames later (async), mirroring the SW-shadow edge-stats path.
+    // CPU-readable copy of the counter (BUMP_TOP, FREE_TOP) for the periodic live-count diagnostic. Its accepted
+    // producer token proves completion before mapping when the surfel packet records on AsyncCompute.
     Core::BufferHandle m_surfelCounterReadback;
     // Feature gate + per-pipeline-failed flags (mirrors the caustic / shadow precedent).
     bool m_surfelHashBuildPipelineFailed = false;
@@ -766,6 +766,9 @@ struct RtSurfelGiState{
     bool m_surfelSpawnPipelineFailed = false;
     bool m_surfelEnabled = false;
     u32 m_surfelCountReadbackFrame = 0u;
+    u64 m_surfelCountReadbackPendingSubmissionID = 0u;
+    Core::CommandQueue::Enum m_surfelCountReadbackPendingSubmissionQueue = Core::CommandQueue::kCount;
+    bool m_surfelCountReadbackPendingSubmissionUnconfirmed = false;
     // Params CB (NwbSurfelConstants: 5 x Float4). Uploaded each rendered frame.
     Core::BufferHandle m_surfelConstants;
     u32 m_surfelPoolCapacity = NWB_SURFEL_POOL_CAPACITY;
@@ -776,8 +779,8 @@ struct RtSurfelGiState{
     // bootstrap in one frame), set true after the first trace.
     bool m_surfelSeeded = false;
     // m_surfelResourcesNeedClear: set when the buffers are (re)created in ensureSurfelResources (no command list) and
-    // retained until the preparation submission that records their clear succeeds. m_surfelResourcesClearPending marks
-    // that clear in the currently-recorded preparation list; a rejected list leaves NeedClear set for the retry.
+    // retained until the packet that records their clear succeeds. On Graphics fallback this is shadow preparation;
+    // on a dedicated lane it is the AsyncCompute surfel packet. A rejected packet leaves NeedClear set for retry.
     bool m_surfelResourcesNeedClear = false;
     bool m_surfelResourcesClearPending = false;
 };

@@ -776,7 +776,13 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     return true;
 }
 
-void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const bool clearCsgTargets, const Core::Rect& csgClearRect){
+void RendererDeferredSystem::clearDeferredTargets(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const bool clearCsgTargets,
+    const Core::Rect& csgClearRect,
+    const bool clearSurfelIrradiance
+){
     NWB_ASSERT(targets.albedo);
     NWB_ASSERT(targets.normal);
     NWB_ASSERT(targets.worldPosition);
@@ -801,10 +807,9 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
 
-    // Surfel-GI resolved irradiance: cleared to 0 (alpha 0 = "no surfel covered this pixel") each frame. When the surfel
-    // resolve pass runs (SW GI enabled) it overwrites every pixel; when it does NOT (GI off / HW path), the cleared 0
-    // makes the lighting fall back to hemiAmbient -- a correct no-op. Same per-frame reset as the caustic irradiance.
-    if(targets.surfelIrradiance)
+    // On the Graphics fallback this is reset here. A dedicated AsyncCompute surfel packet owns the same clear so its
+    // exclusive result never has to make a Graphics -> Compute ownership trip before the producer can write it.
+    if(clearSurfelIrradiance && targets.surfelIrradiance)
         commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
 
     commandList.commitBarriers();
@@ -812,7 +817,7 @@ void RendererDeferredSystem::clearDeferredTargets(Core::CommandList& commandList
     commandList.clearTextureFloat(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
     commandList.clearTextureFloat(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.5f, 0.5f, 1.f, 1.f));
     commandList.clearTextureFloat(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 1.f));
-    if(targets.surfelIrradiance)
+    if(clearSurfelIrradiance && targets.surfelIrradiance)
         commandList.clearTextureFloat(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
 
     if(clearCsgTargets){

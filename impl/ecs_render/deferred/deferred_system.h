@@ -39,7 +39,7 @@ public:
     [[nodiscard]] bool createDeferredCompositePipeline(Core::Framebuffer* presentationFramebuffer);
     void resetAvboitFrameTargets(AvboitFrameTargets& targets);
     void resetDeferredFrameTargets();
-    void clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, bool clearCsgTargets, const Core::Rect& csgClearRect);
+    void clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, bool clearCsgTargets, const Core::Rect& csgClearRect, bool clearSurfelIrradiance);
     void clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::Rect& csgClearRect);
     [[nodiscard]] bool renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Framebuffer* presentationFramebuffer);
     // One-time target-generation upload shared by every consumer of DeferredBindlessResourceSlots. Shadow tracing runs

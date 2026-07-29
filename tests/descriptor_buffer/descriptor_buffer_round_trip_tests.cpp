@@ -917,10 +917,10 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneTransfersExclusiveBufferOw
 }
 
 
-// Software caustics add a second exclusive Compute result beside shadowVisibility. If Graphics effects/final cannot
-// consume them, the recovery packet must acquire and return BOTH outputs together; the next Compute packet then imports
-// their shared return handoff alongside its ordinary concurrent prefix input.
-TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversSoftwareCausticAndShadowTextureOwnershipTogether){
+// Software caustics and surfel GI add two exclusive Compute results beside shadowVisibility. If Graphics effects/final
+// cannot consume them, the recovery packet must acquire and return all three outputs together; the next Compute packet
+// then imports their shared return handoff alongside its ordinary concurrent prefix input.
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversSoftwareCausticSurfelAndShadowTextureOwnershipTogether){
     HeadlessGraphicsScope asyncScope;
     ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
     if(!asyncScope.initialize())
@@ -942,6 +942,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversSoftwareCausticAnd
     };
     auto shadowVisibility = makeExclusiveOutput();
     auto causticIrradiance = makeExclusiveOutput();
+    auto surfelIrradiance = makeExclusiveOutput();
     auto sharedInput = device.createBuffer(
         BufferDesc()
             .setByteSize(256u)
@@ -951,6 +952,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversSoftwareCausticAnd
     );
     ASSERT_NE(shadowVisibility.get(), nullptr);
     ASSERT_NE(causticIrradiance.get(), nullptr);
+    ASSERT_NE(surfelIrradiance.get(), nullptr);
     ASSERT_NE(sharedInput.get(), nullptr);
 
     CommandListParameters computeParams;
@@ -960,6 +962,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversSoftwareCausticAnd
     CommandListResourceStateHandoff computeState(asyncScope.arena());
     CommandListResourceStateHandoff shadowGraphicsState(asyncScope.arena());
     CommandListResourceStateHandoff causticGraphicsState(asyncScope.arena());
+    CommandListResourceStateHandoff surfelGraphicsState(asyncScope.arena());
     CommandListResourceStateHandoff recoveryInputState(asyncScope.arena());
     CommandListResourceStateHandoff recoveryState(asyncScope.arena());
     CommandListResourceStateHandoff nextComputeInputState(asyncScope.arena());
@@ -982,15 +985,18 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversSoftwareCausticAnd
     compute->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
     compute->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
     compute->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    compute->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
     compute->releaseTextureOwnership(shadowVisibility.get(), s_AllSubresources, RenderLane::Graphics);
     compute->releaseTextureOwnership(causticIrradiance.get(), s_AllSubresources, RenderLane::Graphics);
+    compute->releaseTextureOwnership(surfelIrradiance.get(), s_AllSubresources, RenderLane::Graphics);
     compute->close(&computeState);
     ASSERT_TRUE(computeState.valid());
     ASSERT_TRUE(shadowGraphicsState.buildTextureSubset(computeState, shadowVisibility.get()));
     ASSERT_TRUE(causticGraphicsState.buildTextureSubset(computeState, causticIrradiance.get()));
+    ASSERT_TRUE(surfelGraphicsState.buildTextureSubset(computeState, surfelIrradiance.get()));
 
-    const CommandListResourceStateHandoff* recoveryBranches[] = { &causticGraphicsState };
-    ASSERT_TRUE(recoveryInputState.buildFanIn(shadowGraphicsState, recoveryBranches, 1u));
+    const CommandListResourceStateHandoff* recoveryBranches[] = { &causticGraphicsState, &surfelGraphicsState };
+    ASSERT_TRUE(recoveryInputState.buildFanIn(shadowGraphicsState, recoveryBranches, 2u));
 
     CommandList* prefixLists[] = { prefix.get() };
     const QueueSubmissionToken prefixToken = device.executeCommandLists(
@@ -1014,10 +1020,13 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversSoftwareCausticAnd
     recovery->open(&recoveryInputState);
     EXPECT_EQ(recovery->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::UnorderedAccess);
     EXPECT_EQ(recovery->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(recovery->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::UnorderedAccess);
     recovery->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
     recovery->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    recovery->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
     recovery->releaseTextureOwnership(shadowVisibility.get(), s_AllSubresources, RenderLane::AsyncCompute);
     recovery->releaseTextureOwnership(causticIrradiance.get(), s_AllSubresources, RenderLane::AsyncCompute);
+    recovery->releaseTextureOwnership(surfelIrradiance.get(), s_AllSubresources, RenderLane::AsyncCompute);
     recovery->close(&recoveryState);
     ASSERT_TRUE(recoveryState.valid());
 
@@ -1037,8 +1046,10 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversSoftwareCausticAnd
     EXPECT_EQ(computeReuse->getBufferState(sharedInput.get()), ResourceStates::ShaderResource);
     EXPECT_EQ(computeReuse->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::ShaderResource);
     EXPECT_EQ(computeReuse->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(computeReuse->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
     computeReuse->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
     computeReuse->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    computeReuse->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
     computeReuse->close();
 
     const QueueSubmissionDesc reuseSubmitDesc = QueueSubmissionDesc().setWaitTokens(&recoveryToken, 1u);

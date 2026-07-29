@@ -160,7 +160,14 @@ private:
     Core::CommandListResourceStateHandoff m_causticsStateHandoff;
     Core::CommandListResourceStateHandoff m_causticIrradianceGraphicsStateHandoff;
     Core::CommandListResourceStateHandoff m_causticIrradianceReturnStateHandoff;
+    // Surfel GI is also entirely compute-dispatched, including its RayQuery trace variant. Its field/history stays
+    // private to AsyncCompute; only the resolved full-resolution irradiance crosses to deferred lighting.
+    Core::CommandListResourceStateHandoff m_surfelGiComputeBaseStateHandoff;
+    Core::CommandListResourceStateHandoff m_surfelGiComputeInputStateHandoff;
+    Core::CommandListResourceStateHandoff m_surfelGiComputePersistentStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelGiStateHandoff;
+    Core::CommandListResourceStateHandoff m_surfelIrradianceGraphicsStateHandoff;
+    Core::CommandListResourceStateHandoff m_surfelIrradianceReturnStateHandoff;
     Core::CommandListResourceStateHandoff m_postGbufferFanInStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredCompositeStateHandoff;
@@ -180,6 +187,9 @@ private:
     // compute family. This sibling list is used only by the software producer on a dedicated AsyncCompute lane.
     Core::CommandListHandle m_asyncCausticsCommandList;
     Core::CommandListHandle m_causticsCommandList;
+    // Surfel GI uses only compute dispatches on both its SW-BVH and HW-RayQuery branches, so a dedicated compute
+    // family can record it independently of the Graphics fallback list.
+    Core::CommandListHandle m_asyncSurfelGiCommandList;
     Core::CommandListHandle m_surfelGiCommandList;
     Core::CommandListHandle m_deferredLightingCommandList;
     Core::CommandListHandle m_avboitCommandList;

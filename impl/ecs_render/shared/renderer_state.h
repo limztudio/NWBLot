@@ -687,8 +687,8 @@ struct RtSurfelGiState{
     // counter / params CB) live HERE (beside the caustic block), NOT on DeferredFrameTargets, which is torn down on
     // every window resize and would silently reset surfel convergence. Lifetime = device reset only. Each frame
     // snapshots the previous pool/hash, age-frees stale surfels, spawns and hash-links new surfels, derives indirect
-    // trace arguments, traces one workgroup per surfel (64 SW rays -> EMA irradiance), then resolves and upsamples the
-    // screen-space irradiance sampled by deferred lighting.
+    // trace arguments, traces one workgroup per surfel (64 rays while a surfel seeds, then 32 current rays reusing its
+    // accumulated SH history), then resolves and upsamples the screen-space irradiance sampled by deferred lighting.
     // Every surfel pass is descriptor-heap-only. The separate layouts retain their independent pipeline lifetimes but
     // carry the same push-constant selector ABI; all CBV/SRV/UAV resources live in the global heap.
     Core::BindingLayoutHandle m_surfelSpawnBindingLayout;

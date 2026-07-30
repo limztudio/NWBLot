@@ -18,7 +18,7 @@ struct NwbSurfelConstantsGpu{
     Float4 cameraPositionCellSize;  // xyz = camera world position, w = hash cell size
     Float4 hashPoolFrameDivisor;    // x = hash cell count, y = pool capacity, z = frame index, w = update divisor
     Float4 coverageRadiusBiasHyst;  // x = reserved (coverage sum dropped for one-surfel-per-cell), y = default radius, z = normal bias, w = accumulation cap
-    Float4 ageRaysTileScreen;       // x = max age, y = rays/surfel, z = spawn tile (px), w = screen width
+    Float4 ageRaysTileScreen;       // x = max age, y = maximum rays/surfel, z = spawn tile (px), w = screen width
     Float4 screenHeightPad;         // x = screen height, yzw = pad
 };
 static_assert(sizeof(NwbSurfelConstantsGpu) == sizeof(f32) * 4u * 5u, "NwbSurfelConstantsGpu must match the shader NwbSurfelConstants layout");
@@ -813,9 +813,10 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
     // larger (NWB_SURFEL_DEFAULT_RADIUS) so the 3x3x3 neighbour blend overlaps smoothly.
     // The update divisor is 1 on the first (not-yet-seeded) frame so EVERY surfel traces to bootstrap in ONE frame --
     // the unfocused smoke app renders only that frame -- then reverts to the round-robin divisor. The trace's temporal
-    // accumulation is a bounded running mean capped at NWB_SURFEL_MAX_ACCUM (carried in coverageRadiusBiasHyst.w); the
-    // per-surfel sampleCount drives the seed (n==0 -> first sample), so no CPU seeded/hysteresis branch is needed. The
-    // camera position rides xyz for distance scaling.
+    // accumulation is a bounded running mean capped at NWB_SURFEL_MAX_ACCUM (carried in coverageRadiusBiasHyst.w). The
+    // trace retains the full 64-ray budget until an individual surfel's sampleCount reaches the shader-side confidence
+    // threshold, then safely reuses its accumulated SH with the reduced current-ray budget. The camera position rides
+    // xyz for distance scaling.
     const u32 updateDivisor = rayTracingState().m_surfelSeeded ? Max<u32>(NWB_SURFEL_UPDATE_DIVISOR, 1u) : 1u;
     const f32 cellSize = NWB_SURFEL_CELL_SIZE;
 
@@ -1066,7 +1067,8 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         );
     }
 
-    // Trace: one workgroup per LIVE surfel (64 threads = 64 hemisphere rays), via dispatchIndirect.
+    // Trace: one workgroup per LIVE surfel (64 lanes, with 64 current hemisphere rays for new/low-confidence surfels
+    // and 32 rays once accumulated SH history is mature), via dispatchIndirect.
     // Stage the trace's geometry inputs to
     // ShaderResource, then dispatch the selected backend. HW = the driver walks the TLAS; we still stage the
     // HW-resident per-mesh position/index/attribute buffers plus the shadow-owned material context (the shader uses all

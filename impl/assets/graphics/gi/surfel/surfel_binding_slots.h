@@ -93,7 +93,12 @@
 // One-dimensional workgroup width shared by the maintenance passes. Keep the CPU dispatches and the
 // age-free/hash-build [numthreads] declarations on this symbol so a tuning change cannot under-dispatch either pass.
 #define NWB_SURFEL_LINEAR_GROUP_SIZE 64u
-#define NWB_SURFEL_RAYS_PER_SURFEL 64u         // one workgroup (64 threads) per surfel
+#define NWB_SURFEL_RAYS_PER_SURFEL 64u         // maximum ray budget and one workgroup (64 threads) per surfel
+// Temporal trace reuse: a new or low-confidence surfel traces the full ray set. Once its SH has accumulated several
+// independent estimates, retain that history and trace only this many current rays. The group still has 64 lanes so its
+// reduction ABI is unchanged; inactive lanes contribute zero, cutting only the expensive ray traversal work.
+#define NWB_SURFEL_CONVERGED_SAMPLE_COUNT 8u
+#define NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL 32u
 // A/B switch for the per-surfel SH reduction. The group == wave size on AMD BC-250/RADV (subgroup 64), so the wave
 // path replaces the 6-stride barriered groupshared tree reduce with a single WaveActiveSum (no barriers, no shared
 // memory). `active` is uniform across the wave (it depends only on surfelIndex, which is per-group, not per-lane), so
@@ -101,7 +106,7 @@
 // groupshared baseline; set to 1 to enable the wave-intrinsic path.
 #define NWB_SURFEL_USE_WAVE_REDUCE 0u
 #define NWB_SURFEL_UPDATE_DIVISOR 4u           // steady-state: trace 1/Nth of surfels per frame (all on the bootstrap frame)
-// Bounded running-mean window for the trace's temporal accumulation. The trace blends each new 64-ray estimate as a
+// Bounded running-mean window for the trace's temporal accumulation. The trace blends each new full- or reduced-ray estimate as a
 // true incremental average (weight 1/(n+1)) until n reaches this cap, then holds a bounded EMA (weight 1/(cap+1)). A
 // TRUE average is required (not a fixed-alpha EMA): each frame rotates the Fibonacci ray set, so successive estimates
 // are decorrelated Monte-Carlo samples -- a fixed-alpha EMA over them never converges (holds a permanent ~sqrt(alpha)

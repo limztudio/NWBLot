@@ -479,6 +479,8 @@ struct SurfelHeapPushConstants{
     u32 halfIrradianceSlot = 0u;                // SampledImage: half-resolution surfel resolve output
 };
 static_assert(sizeof(SurfelHeapPushConstants) == sizeof(u32) * 14u, "SurfelHeapPushConstants must match NwbSurfelHeapPushConstants");
+static_assert(NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL >= 1u && NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL <= NWB_SURFEL_RAYS_PER_SURFEL);
+static_assert(NWB_SURFEL_CONVERGED_SAMPLE_COUNT >= 1u && NWB_SURFEL_CONVERGED_SAMPLE_COUNT <= NWB_SURFEL_MAX_ACCUM);
 
 // Caustic resolve stages, kept in lockstep with caustic_resolve_cs.slang's pushConstants.stage switch.
 namespace CausticResolveStage{

@@ -84,6 +84,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     const uint poolCapacity = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.y);
     const uint frameIndex = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.z);
     const uint updateDivisor = max(uint(g_NwbSurfelConstants.hashPoolFrameDivisor.w), 1u);
+    const uint maximumRayCount = min(max(uint(g_NwbSurfelConstants.ageRaysTileScreen.y), 1u), NWB_SURFEL_RAYS_PER_SURFEL);
 
     const uint cursor = frameIndex % updateDivisor;
     const uint surfelIndex = cursor + groupID.x * updateDivisor;
@@ -99,7 +100,15 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         active = surfel.alive != 0u;
     }
 
-    if(active){
+    // Preserve the full current-frame estimate while a surfel seeds. Once it has a stable temporal SH history, trace
+    // only half as many fresh rays: the prior estimates remain in the running mean, while every selected surfel still
+    // updates on the existing round-robin cadence. Ray count is group-uniform because sampleCount belongs to the one
+    // surfel selected by this workgroup.
+    uint rayCount = maximumRayCount;
+    if(active && surfel.sampleCount >= NWB_SURFEL_CONVERGED_SAMPLE_COUNT)
+        rayCount = min(rayCount, NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL);
+
+    if(active && rayIndex < rayCount){
         const float normalBias = g_NwbSurfelConstants.coverageRadiusBiasHyst.z;
         const float2 rotation = nwbGiFrameRotation(frameIndex);
 
@@ -107,7 +116,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         const float3 up = abs(n.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
         const float3 tangent = normalize(cross(up, n));
         const float3 bitangent = cross(n, tangent);
-        float3 dirLocal = nwbGiFibonacciDirection(rayIndex, NWB_SURFEL_RAYS_PER_SURFEL, rotation);
+        float3 dirLocal = nwbGiFibonacciDirection(rayIndex, rayCount, rotation);
         dirLocal.z = abs(dirLocal.z);
         const float3 rayDir = normalize(dirLocal.x * tangent + dirLocal.y * bitangent + dirLocal.z * n);
 
@@ -130,8 +139,8 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
 #if NWB_SURFEL_USE_WAVE_REDUCE
     // Wave-intrinsic reduction: the workgroup == the wave on this device (subgroup 64 == NWB_SURFEL_RAYS_PER_SURFEL),
     // so the entire barriered groupshared tree reduce collapses to one subgroup op with no barriers and no shared
-    // memory. `active` is uniform across the wave (per-group, not per-lane), so inactive waves sum zeros and the lane-0
-    // broadcast below yields the correct per-surfel SH sum.
+    // memory. `active` and rayCount are uniform across the wave (per-group, not per-lane), so inactive rays sum zeros
+    // and the lane-0 broadcast below yields the correct per-surfel SH sum.
     const float4 waveR = WaveActiveSum(s_surfelShR[rayIndex]);
     const float4 waveG = WaveActiveSum(s_surfelShG[rayIndex]);
     const float4 waveB = WaveActiveSum(s_surfelShB[rayIndex]);
@@ -157,7 +166,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
 #endif
 
     if(rayIndex == 0u && active){
-        const float projectionScale = nwbSurfelShProjectionScale(NWB_SURFEL_RAYS_PER_SURFEL);
+        const float projectionScale = nwbSurfelShProjectionScale(rayCount);
         const float4 frameShR = sumR * projectionScale;
         const float4 frameShG = sumG * projectionScale;
         const float4 frameShB = sumB * projectionScale;

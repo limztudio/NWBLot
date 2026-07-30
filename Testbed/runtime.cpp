@@ -152,17 +152,18 @@ static void ResolveFlyCameraInput(
 
     const SIMDVector moveAxis = VectorSet(safeRightAxis, safeForwardAxis, 0.0f, 0.0f);
     const SIMDVector moveLengthSqVector = Vector2LengthSq(moveAxis);
-    const f32 moveLengthSq = VectorGetX(moveLengthSqVector);
-    if(moveLengthSq > s_CameraMoveEpsilon){
-        const f32 invMoveLength = VectorGetX(VectorReciprocalSqrt(moveLengthSqVector));
+    if(Vector4Greater(moveLengthSqVector, VectorReplicate(s_CameraMoveEpsilon))){
         const f32 speed = s_FlyCameraMoveSpeed * (boosted ? s_FlyCameraBoostMultiplier : 1.0f);
-        const f32 moveScale = speed * safeDelta * invMoveLength;
-        if(!IsFinite(moveScale))
+        const SIMDVector moveScale = VectorMultiply(
+            VectorReplicate(speed * safeDelta),
+            VectorReciprocalSqrt(moveLengthSqVector)
+        );
+        if(!VectorIsFinite(moveScale, VectorComponentMask::s_XYZW))
             return;
 
         const SIMDVector localMove = VectorMultiply(
             VectorSet(safeRightAxis, 0.0f, safeForwardAxis, 0.0f),
-            VectorReplicate(moveScale)
+            moveScale
         );
         const SIMDVector worldMove = Vector3Rotate(localMove, outRotation);
         if(!Vector3IsFinite(worldMove))

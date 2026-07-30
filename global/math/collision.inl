@@ -111,7 +111,7 @@ namespace FrustumPlaneIndex{
 
 [[nodiscard]] NWB_INLINE SIMDVector PlaneNormalizeSafe(const SIMDVector plane)noexcept{
     const SIMDVector length = Vector3Length(plane);
-    if(VectorGetX(length) <= s_PlaneEpsilon)
+    if(Vector4LessOrEqual(length, VectorReplicate(s_PlaneEpsilon)))
         return plane;
     return VectorDivide(plane, length);
 }
@@ -310,42 +310,45 @@ inline void FastIntersectPointsPlane(
     const SIMDVector ab = VectorSubtract(b, a);
     const SIMDVector ac = VectorSubtract(c, a);
     const SIMDVector ap = VectorSubtract(point, a);
-    const f32 d1 = VectorGetX(Vector3Dot(ab, ap));
-    const f32 d2 = VectorGetX(Vector3Dot(ac, ap));
-    if(d1 <= 0.0f && d2 <= 0.0f)
+    const SIMDVector zero = VectorZero();
+    const SIMDVector d1 = Vector3Dot(ab, ap);
+    const SIMDVector d2 = Vector3Dot(ac, ap);
+    if(Vector4LessOrEqual(d1, zero) && Vector4LessOrEqual(d2, zero))
         return a;
 
     const SIMDVector bp = VectorSubtract(point, b);
-    const f32 d3 = VectorGetX(Vector3Dot(ab, bp));
-    const f32 d4 = VectorGetX(Vector3Dot(ac, bp));
-    if(d3 >= 0.0f && d4 <= d3)
+    const SIMDVector d3 = Vector3Dot(ab, bp);
+    const SIMDVector d4 = Vector3Dot(ac, bp);
+    if(Vector4GreaterOrEqual(d3, zero) && Vector4LessOrEqual(d4, d3))
         return b;
 
-    const f32 vc = d1 * d4 - d3 * d2;
-    if(vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f)
-        return VectorMultiplyAdd(ab, VectorReplicate(d1 / (d1 - d3)), a);
+    const SIMDVector vc = VectorSubtract(VectorMultiply(d1, d4), VectorMultiply(d3, d2));
+    if(Vector4LessOrEqual(vc, zero) && Vector4GreaterOrEqual(d1, zero) && Vector4LessOrEqual(d3, zero))
+        return VectorMultiplyAdd(ab, VectorDivide(d1, VectorSubtract(d1, d3)), a);
 
     const SIMDVector cp = VectorSubtract(point, c);
-    const f32 d5 = VectorGetX(Vector3Dot(ab, cp));
-    const f32 d6 = VectorGetX(Vector3Dot(ac, cp));
-    if(d6 >= 0.0f && d5 <= d6)
+    const SIMDVector d5 = Vector3Dot(ab, cp);
+    const SIMDVector d6 = Vector3Dot(ac, cp);
+    if(Vector4GreaterOrEqual(d6, zero) && Vector4LessOrEqual(d5, d6))
         return c;
 
-    const f32 vb = d5 * d2 - d1 * d6;
-    if(vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f)
-        return VectorMultiplyAdd(ac, VectorReplicate(d2 / (d2 - d6)), a);
+    const SIMDVector vb = VectorSubtract(VectorMultiply(d5, d2), VectorMultiply(d1, d6));
+    if(Vector4LessOrEqual(vb, zero) && Vector4GreaterOrEqual(d2, zero) && Vector4LessOrEqual(d6, zero))
+        return VectorMultiplyAdd(ac, VectorDivide(d2, VectorSubtract(d2, d6)), a);
 
-    const f32 va = d3 * d6 - d5 * d4;
-    if(va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f){
+    const SIMDVector va = VectorSubtract(VectorMultiply(d3, d6), VectorMultiply(d5, d4));
+    const SIMDVector d43 = VectorSubtract(d4, d3);
+    const SIMDVector d56 = VectorSubtract(d5, d6);
+    if(Vector4LessOrEqual(va, zero) && Vector4GreaterOrEqual(d43, zero) && Vector4GreaterOrEqual(d56, zero)){
         const SIMDVector bc = VectorSubtract(c, b);
-        return VectorMultiplyAdd(bc, VectorReplicate((d4 - d3) / ((d4 - d3) + (d5 - d6))), b);
+        return VectorMultiplyAdd(bc, VectorDivide(d43, VectorAdd(d43, d56)), b);
     }
 
-    const f32 denom = 1.0f / (va + vb + vc);
+    const SIMDVector denom = VectorReciprocal(VectorAdd(va, VectorAdd(vb, vc)));
     return VectorMultiplyAdd(
         ac,
-        VectorReplicate(vc * denom),
-        VectorMultiplyAdd(ab, VectorReplicate(vb * denom), a)
+        VectorMultiply(vc, denom),
+        VectorMultiplyAdd(ab, VectorMultiply(vb, denom), a)
     );
 }
 
@@ -360,26 +363,27 @@ inline void FastIntersectPointsPlane(
     const SIMDVector edge1 = VectorSubtract(v1, v0);
     const SIMDVector edge2 = VectorSubtract(v2, v0);
     const SIMDVector p = Vector3Cross(direction, edge2);
-    const f32 determinant = VectorGetX(Vector3Dot(edge1, p));
-    if(Abs(determinant) <= s_RayEpsilon)
+    const SIMDVector determinant = Vector3Dot(edge1, p);
+    const SIMDVector zero = VectorZero();
+    if(Vector4LessOrEqual(VectorAbs(determinant), VectorReplicate(s_RayEpsilon)))
         return false;
 
-    const f32 inverseDeterminant = 1.0f / determinant;
+    const SIMDVector inverseDeterminant = VectorReciprocal(determinant);
     const SIMDVector s = VectorSubtract(origin, v0);
-    const f32 u = VectorGetX(Vector3Dot(s, p)) * inverseDeterminant;
-    if(u < 0.0f || u > 1.0f)
+    const SIMDVector u = VectorMultiply(Vector3Dot(s, p), inverseDeterminant);
+    if(Vector4Less(u, zero) || Vector4Greater(u, s_SIMDOne))
         return false;
 
     const SIMDVector q = Vector3Cross(s, edge1);
-    const f32 v = VectorGetX(Vector3Dot(direction, q)) * inverseDeterminant;
-    if(v < 0.0f || (u + v) > 1.0f)
+    const SIMDVector v = VectorMultiply(Vector3Dot(direction, q), inverseDeterminant);
+    if(Vector4Less(v, zero) || Vector4Greater(VectorAdd(u, v), s_SIMDOne))
         return false;
 
-    const f32 t = VectorGetX(Vector3Dot(edge2, q)) * inverseDeterminant;
-    if(t < 0.0f)
+    const SIMDVector t = VectorMultiply(Vector3Dot(edge2, q), inverseDeterminant);
+    if(Vector4Less(t, zero))
         return false;
 
-    outDistance = t;
+    outDistance = VectorGetX(t);
     return true;
 }
 
@@ -719,11 +723,13 @@ inline void FrustumPlanes(
     const SIMDVector fallbackNormal
 )noexcept{
     const SIMDVector lengthSquared = Vector3LengthSq(normal);
-    const f32 scalarLengthSquared = VectorGetX(lengthSquared);
     SIMDVector unitNormal = VectorSetW(fallbackNormal, 0.0f);
-    if(IsFinite(scalarLengthSquared) && scalarLengthSquared > 0.0f)
+    if(
+        VectorIsFinite(lengthSquared, VectorComponentMask::s_XYZW)
+        && Vector4Greater(lengthSquared, VectorZero())
+    )
         unitNormal = VectorSetW(VectorMultiply(normal, VectorReciprocalSqrt(lengthSquared)), 0.0f);
-    return VectorSetW(unitNormal, -VectorGetX(Vector3Dot(unitNormal, point)));
+    return VectorSelect(unitNormal, VectorNegate(Vector3Dot(unitNormal, point)), s_SIMDMaskW);
 }
 
 
@@ -948,11 +954,10 @@ NWB_INLINE void SIMDCALL AabbTests::ExpandTriangle(
     const SIMDVector ab = TriangleTests::EdgeCross2D(a, b, point);
     const SIMDVector bc = TriangleTests::EdgeCross2D(b, c, point);
     const SIMDVector ca = TriangleTests::EdgeCross2D(c, a, point);
-    return
-        VectorGetX(VectorGreaterOrEqual(ab, negativeTolerance)) != 0.0f
-        && VectorGetX(VectorGreaterOrEqual(bc, negativeTolerance)) != 0.0f
-        && VectorGetX(VectorGreaterOrEqual(ca, negativeTolerance)) != 0.0f
-    ;
+    SIMDVector inside = VectorGreaterOrEqual(ab, negativeTolerance);
+    inside = VectorAndInt(inside, VectorGreaterOrEqual(bc, negativeTolerance));
+    inside = VectorAndInt(inside, VectorGreaterOrEqual(ca, negativeTolerance));
+    return CollisionDetail::Vector4AllTrue(inside);
 }
 
 
@@ -1011,18 +1016,18 @@ inline void SIMDCALL BoundingSphere::transform(
 [[nodiscard]] inline ContainmentType::Enum BoundingSphere::contains(const BoundingSphere& sphere)const noexcept{
     const SIMDVector sphereValue = LoadFloat(centerRadius);
     const SIMDVector otherSphereValue = LoadFloat(sphere.centerRadius);
-    const f32 sphereRadius = CollisionDetail::SphereRadius(sphereValue);
-    const f32 otherRadius = CollisionDetail::SphereRadius(otherSphereValue);
+    const SIMDVector sphereRadius = VectorSplatW(sphereValue);
+    const SIMDVector otherRadius = VectorSplatW(otherSphereValue);
     const SIMDVector delta = VectorSubtract(CollisionDetail::SphereCenter(otherSphereValue), CollisionDetail::SphereCenter(sphereValue));
-    const f32 distanceSq = VectorGetX(Vector3LengthSq(delta));
-    if(sphereRadius >= otherRadius){
-        const f32 radiusDelta = sphereRadius - otherRadius;
-        if(distanceSq <= radiusDelta * radiusDelta)
+    const SIMDVector distanceSq = Vector3LengthSq(delta);
+    if(Vector4GreaterOrEqual(sphereRadius, otherRadius)){
+        const SIMDVector radiusDelta = VectorSubtract(sphereRadius, otherRadius);
+        if(Vector4LessOrEqual(distanceSq, VectorMultiply(radiusDelta, radiusDelta)))
             return ContainmentType::Contains;
     }
 
-    const f32 radiusSum = sphereRadius + otherRadius;
-    if(distanceSq >= radiusSum * radiusSum)
+    const SIMDVector radiusSum = VectorAdd(sphereRadius, otherRadius);
+    if(Vector4GreaterOrEqual(distanceSq, VectorMultiply(radiusSum, radiusSum)))
         return ContainmentType::Disjoint;
     return ContainmentType::Intersects;
 }
@@ -1139,14 +1144,11 @@ inline void SIMDCALL BoundingSphere::transform(
     const SIMDVector localOrigin = VectorSubtract(origin, CollisionDetail::SphereCenter(sphereValue));
     const SIMDVector bVector = Vector3Dot(localOrigin, direction);
     const SIMDVector cVector = VectorSubtract(Vector3LengthSq(localOrigin), VectorMultiply(sphereRadius, sphereRadius));
-    const f32 b = VectorGetX(bVector);
-    const f32 c = VectorGetX(cVector);
-    if(c > 0.0f && b > 0.0f)
+    if(Vector4Greater(cVector, VectorZero()) && Vector4Greater(bVector, VectorZero()))
         return false;
 
     const SIMDVector discriminantVector = VectorSubtract(VectorMultiply(bVector, bVector), cVector);
-    const f32 discriminant = VectorGetX(discriminantVector);
-    if(discriminant < 0.0f)
+    if(Vector4Less(discriminantVector, VectorZero()))
         return false;
 
     const SIMDVector distance = VectorSubtract(VectorNegate(bVector), VectorSqrt(discriminantVector));
@@ -1986,27 +1988,29 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{
 )const noexcept{
     SIMDVector planes[CollisionDetail::s_FrustumPlaneCount];
     CollisionDetail::FrustumPlanes(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
-    f32 tMin = 0.0f;
-    f32 tMax = s_MaxF32;
+    const SIMDVector zero = VectorZero();
+    const SIMDVector rayEpsilon = VectorReplicate(CollisionDetail::s_RayEpsilon);
+    SIMDVector tMin = zero;
+    SIMDVector tMax = VectorReplicate(s_MaxF32);
     for(const SIMDVector plane : planes){
-        const f32 distance = VectorGetX(CollisionDetail::PlaneDistance(plane, rayOrigin));
-        const f32 denominator = VectorGetX(Vector3Dot(plane, direction));
-        if(Abs(denominator) <= CollisionDetail::s_RayEpsilon){
-            if(distance < 0.0f)
+        const SIMDVector distance = CollisionDetail::PlaneDistance(plane, rayOrigin);
+        const SIMDVector denominator = Vector3Dot(plane, direction);
+        if(Vector4LessOrEqual(VectorAbs(denominator), rayEpsilon)){
+            if(Vector4Less(distance, zero))
                 return false;
             continue;
         }
 
-        const f32 t = -distance / denominator;
-        if(denominator > 0.0f)
-            tMin = Max(tMin, t);
+        const SIMDVector t = VectorDivide(VectorNegate(distance), denominator);
+        if(Vector4Greater(denominator, zero))
+            tMin = VectorMax(tMin, t);
         else
-            tMax = Min(tMax, t);
-        if(tMin > tMax)
+            tMax = VectorMin(tMax, t);
+        if(Vector4Greater(tMin, tMax))
             return false;
     }
 
-    outDistance = tMin;
+    outDistance = VectorGetX(tMin);
     return true;
 }
 

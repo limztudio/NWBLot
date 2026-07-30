@@ -220,15 +220,24 @@ template<typename ScratchArenaT>
         }
 
         const SIMDVector tangent = FrameResolveTangent(normal, tangentSource, previousTangent);
-        if(!FrameValidDirection(tangent) || Abs(VectorGetX(Vector3Dot(normal, tangent))) > TangentFrameRebuildDetail::s_TangentOrthogonalityTolerance)
+        if(
+            !FrameValidDirection(tangent)
+            || Vector4Greater(
+                VectorAbs(Vector3Dot(normal, tangent)),
+                VectorReplicate(TangentFrameRebuildDetail::s_TangentOrthogonalityTolerance)
+            )
+        )
             return false;
 
         f32 handedness = TangentFrameRebuildDetail::ResolveTangentHandedness(vertex.tangent.w);
         const SIMDVector bitangent = LoadFloat(accumulator.bitangent);
         if(FrameValidDirection(bitangent)){
-            const f32 bitangentSign = VectorGetX(Vector3Dot(Vector3Cross(normal, tangent), bitangent));
-            if(IsFinite(bitangentSign) && Abs(bitangentSign) > TangentFrameRebuildDetail::s_Epsilon)
-                handedness = bitangentSign < 0.0f ? -1.0f : 1.0f;
+            const SIMDVector bitangentSign = Vector3Dot(Vector3Cross(normal, tangent), bitangent);
+            if(
+                VectorIsFinite(bitangentSign, VectorComponentMask::s_XYZW)
+                && Vector4Greater(VectorAbs(bitangentSign), VectorReplicate(TangentFrameRebuildDetail::s_Epsilon))
+            )
+                handedness = Vector4Less(bitangentSign, VectorZero()) ? -1.0f : 1.0f;
         }
 
         StreamFloat(VectorSetW(normal, 0.0f), &vertex.normal);

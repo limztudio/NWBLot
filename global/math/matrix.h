@@ -978,15 +978,21 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovImpl(
     SIMDVector sinFov{};
     SIMDVector cosFov{};
     VectorSinCos(&sinFov, &cosFov, VectorReplicate(s_MatrixHalf * fovAngleY));
-    const f32 height = VectorGetX(VectorDivide(cosFov, sinFov));
-    const f32 width = height / aspectRatio;
-    const f32 range = farZ / rangeDenominator;
-    return MatrixSet(
-        width, 0.0f, 0.0f, 0.0f,
-        0.0f, height, 0.0f, 0.0f,
-        0.0f, 0.0f, range, rangeNearScale * range * nearZ,
-        0.0f, 0.0f, forwardZ, 0.0f
+    const SIMDVector zero = VectorZero();
+    const SIMDVector height = VectorDivide(cosFov, sinFov);
+    const SIMDVector width = VectorDivide(height, VectorReplicate(aspectRatio));
+    const SIMDVector range = VectorDivide(VectorReplicate(farZ), VectorReplicate(rangeDenominator));
+    const SIMDVector rangeNear = VectorMultiply(
+        VectorMultiply(VectorReplicate(rangeNearScale), range),
+        VectorReplicate(nearZ)
     );
+
+    SIMDMatrix matrix{};
+    matrix.v[0] = VectorMergeX(width, zero, zero, zero);
+    matrix.v[1] = VectorMergeX(zero, height, zero, zero);
+    matrix.v[2] = VectorMergeX(zero, zero, range, rangeNear);
+    matrix.v[3] = VectorMergeX(zero, zero, VectorReplicate(forwardZ), zero);
+    return matrix;
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveOffCenterImpl(

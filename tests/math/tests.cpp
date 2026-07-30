@@ -63,6 +63,15 @@ TEST(Math, Vector3RotateQuarterTurn){
     EXPECT_TRUE(NearlyEqual3(rotated, 0.0f, 1.0f, 0.0f));
 }
 
+TEST(Math, PerspectiveFovKeepsProjectionTermsSimd){
+    const SIMDMatrix projection = MatrixPerspectiveFovLH(s_PI * 0.5f, 2.0f, 1.0f, 11.0f);
+
+    EXPECT_TRUE(NearlyEqual4(projection.v[0], 0.5f, 0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(projection.v[1], 0.0f, 1.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(projection.v[2], 0.0f, 0.0f, 1.1f, -1.1f));
+    EXPECT_TRUE(NearlyEqual4(projection.v[3], 0.0f, 0.0f, 1.0f, 0.0f));
+}
+
 TEST(Math, Vector4CrossBasisOrientation){
     const SIMDVector xAxis = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector yAxis = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
@@ -261,6 +270,76 @@ TEST(Math, SdfHelpers){
     EXPECT_TRUE(NearlyEqual(VectorGetX(SdfTests::CapsuleY(VectorSet(0.25f, 0.0f, 0.0f, 0.0f), capsuleRadiusHalfHeight)), -0.25f));
     EXPECT_TRUE(NearlyEqual3(SdfTests::CapsuleYNormal(VectorSet(0.0f, 2.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight, 0.000001f), 0.0f, 1.0f, 0.0f));
     EXPECT_TRUE(NearlyEqual3(SdfTests::CapsuleYNormal(VectorSet(1.0f, 0.5f, 0.0f, 0.0f), capsuleRadiusHalfHeight, 0.000001f), 1.0f, 0.0f, 0.0f));
+}
+
+TEST(Math, CollisionPredicatesUseSimdReductions){
+    const SIMDVector point = VectorSet(1.0f, 2.0f, 3.0f, 0.0f);
+    EXPECT_TRUE(NearlyEqual4(
+        PlaneTests::FromPointNormal(
+            VectorSet(0.0f, 2.0f, 0.0f, 0.0f),
+            point,
+            VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
+        ),
+        0.0f,
+        1.0f,
+        0.0f,
+        -2.0f
+    ));
+    EXPECT_TRUE(NearlyEqual4(
+        PlaneTests::FromPointNormal(
+            VectorZero(),
+            point,
+            VectorSet(0.0f, 0.0f, 1.0f, 0.0f)
+        ),
+        0.0f,
+        0.0f,
+        1.0f,
+        -3.0f
+    ));
+
+    const SIMDVector a = VectorSet(0.0f, 0.0f, 0.0f, 0.0f);
+    const SIMDVector b = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
+    const SIMDVector c = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    EXPECT_TRUE(TriangleTests::ContainsPoint2D(VectorSet(0.25f, 0.25f, 0.0f, 0.0f), a, b, c, VectorZero()));
+    EXPECT_FALSE(TriangleTests::ContainsPoint2D(VectorSet(0.75f, 0.75f, 0.0f, 0.0f), a, b, c, VectorZero()));
+
+    f32 triangleDistance = 0.0f;
+    EXPECT_TRUE(TriangleTests::Intersects(
+        VectorSet(0.25f, 0.25f, -1.0f, 0.0f),
+        VectorSet(0.0f, 0.0f, 1.0f, 0.0f),
+        a,
+        b,
+        c,
+        triangleDistance
+    ));
+    EXPECT_TRUE(NearlyEqual(triangleDistance, 1.0f));
+    EXPECT_FALSE(TriangleTests::Intersects(
+        VectorSet(1.25f, 0.25f, -1.0f, 0.0f),
+        VectorSet(0.0f, 0.0f, 1.0f, 0.0f),
+        a,
+        b,
+        c,
+        triangleDistance
+    ));
+
+    const BoundingSphere sphere(Float3U(0.0f, 0.0f, 0.0f), 1.0f);
+    f32 distance = 0.0f;
+    EXPECT_TRUE(sphere.intersects(
+        VectorSet(-2.0f, 0.0f, 0.0f, 0.0f),
+        VectorSet(1.0f, 0.0f, 0.0f, 0.0f),
+        distance
+    ));
+    EXPECT_TRUE(NearlyEqual(distance, 1.0f));
+    EXPECT_FALSE(sphere.intersects(
+        VectorSet(2.0f, 0.0f, 0.0f, 0.0f),
+        VectorSet(1.0f, 0.0f, 0.0f, 0.0f),
+        distance
+    ));
+
+    EXPECT_TRUE(BoundingSphere(Float3U(0.25f, 0.25f, 0.25f), 0.3f).intersects(a, b, c));
+    EXPECT_FALSE(BoundingSphere(Float3U(0.25f, 0.25f, 0.5f), 0.1f).intersects(a, b, c));
+    EXPECT_EQ(BoundingSphere(Float3U(0.0f, 0.0f, 0.0f), 2.0f).contains(sphere), ContainmentType::Contains);
+    EXPECT_EQ(BoundingSphere(Float3U(4.0f, 0.0f, 0.0f), 1.0f).contains(sphere), ContainmentType::Disjoint);
 }
 
 TEST(Math, HalfFloatScalarConversion){

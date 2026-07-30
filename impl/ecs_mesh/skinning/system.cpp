@@ -299,7 +299,8 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
 
     if(submittedWork){
         Core::CommandList* commandLists[] = { commandList };
-        timingTicket.submit(device, commandLists, 1u);
+        if(!timingTicket.submit(device, commandLists, 1u))
+            NWB_LOGGER_WARNING(NWB_TEXT("MeshSkinningSystem: skinning command submission was rejected"));
     }
 }
 

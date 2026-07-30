@@ -61,6 +61,13 @@ if(Python3_Interpreter_FOUND)
             WIN32_EXECUTABLE ON
             VS_DEBUGGER_WORKING_DIRECTORY "${RUNTIME_ROOT}"
         )
+        nwb_target_link_libraries_whole_archive("${TARGET_NAME}"
+            nwb_assets_mesh
+            nwb_assets_skeleton
+            nwb_assets_model
+            nwb_assets_material
+            nwb_assets_shader
+        )
         target_link_libraries("${TARGET_NAME}" PRIVATE
             nwb_common
             nwb_alloc
@@ -71,11 +78,6 @@ if(Python3_Interpreter_FOUND)
             nwb_ecs_model_renderer
             nwb_assets_graphics
             ${ARGN}
-            "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_mesh>"
-            "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_skeleton>"
-            "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_model>"
-            "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_material>"
-            "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_shader>"
         )
         if(TARGET nwb_logserver)
             add_dependencies("${TARGET_NAME}" nwb_logserver)

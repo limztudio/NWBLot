@@ -9,6 +9,13 @@ set_target_properties(testbed PROPERTIES
     WIN32_EXECUTABLE ON
     VS_DEBUGGER_WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
 )
+nwb_target_link_libraries_whole_archive(testbed
+    nwb_assets_mesh
+    nwb_assets_skeleton
+    nwb_assets_model
+    nwb_assets_material
+    nwb_assets_shader
+)
 target_link_libraries(testbed PRIVATE
     nwb_common
     nwb_alloc
@@ -22,11 +29,6 @@ target_link_libraries(testbed PRIVATE
     nwb_ecs_model_renderer
     nwb_ecs_ui
     nwb_assets_graphics
-    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_mesh>"
-    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_skeleton>"
-    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_model>"
-    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_material>"
-    "$<LINK_LIBRARY:WHOLE_ARCHIVE,nwb_assets_shader>"
 )
 
 # Place the NVIDIA Aftermath runtime next to testbed so the device-side dynamic load resolves it.

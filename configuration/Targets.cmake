@@ -52,6 +52,27 @@ function(nwb_declare_executable target)
     endif()
 endfunction()
 
+function(nwb_target_link_libraries_whole_archive target)
+    foreach(library IN LISTS ARGN)
+        if(MSVC)
+            target_link_libraries(${target} PRIVATE ${library})
+            target_link_options(${target} PRIVATE "/WHOLEARCHIVE:$<TARGET_FILE:${library}>")
+        elseif(APPLE)
+            target_link_libraries(${target} PRIVATE
+                "-Wl,-force_load,$<TARGET_FILE:${library}>"
+                ${library}
+            )
+        else()
+            target_link_libraries(${target} PRIVATE
+                "-Wl,--whole-archive"
+                "$<TARGET_FILE:${library}>"
+                "-Wl,--no-whole-archive"
+                ${library}
+            )
+        endif()
+    endforeach()
+endfunction()
+
 function(nwb_target_sources_standalone_runtime target)
     target_sources(${target} PRIVATE
         "${PROJECT_SOURCE_DIR}/core/alloc/standalone_runtime.cpp"

@@ -2693,7 +2693,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     };
     const auto retireAsyncFrameTiming = [&](){
         if(asyncFrameTiming.needsRetirement())
-            static_cast<void>(submitAsyncRecoveryJoin(nullptr));
+            submitAsyncRecoveryJoin(nullptr);
     };
     const auto recoverAcceptedAsyncComputeSubmission = [&](const Core::QueueSubmissionToken submissionToken) -> bool {
         return submitAsyncRecoveryJoin(&submissionToken);
@@ -2874,7 +2874,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         finalTimingTicket.discard();
         restoreUnacceptedGraphicsEffectsCpuState();
         m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-        static_cast<void>(recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken));
+        recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken);
         // Without a retained Compute-side scratch snapshot the next packet cannot safely restore its layouts, even
         // after the accepted Compute work has been joined.
         failAsyncRenderRecovery();
@@ -2906,7 +2906,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             compositeTimingTicket.discard();
             finalTimingTicket.discard();
             restoreGraphicsEffectsCpuState();
-            static_cast<void>(recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken));
+            recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken);
             failAsyncRenderRecovery();
             return;
         }
@@ -2943,7 +2943,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             compositeTimingTicket.discard();
             finalTimingTicket.discard();
             restoreUnacceptedGraphicsEffectsCpuState();
-            static_cast<void>(recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken));
+            recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken);
             failAsyncRenderRecovery();
             return;
         }

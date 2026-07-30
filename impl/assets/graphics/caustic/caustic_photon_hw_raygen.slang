@@ -1,5 +1,4 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "caustic_hw_common.slangi"
@@ -7,9 +6,6 @@
 // the backend hook nwbCausticTraceClosest, defined below over a single TraceRay per segment. Pulled in ONLY here
 // (not the closest-hit/miss) so the hook + TraceRay live solely in the raygen, keeping recursion at 1.
 #include "caustic_trace.slangi"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // The HARDWARE backend closest-hit hook the shared bounce loop calls per segment. One TraceRay finds the nearest
@@ -45,9 +41,6 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     hit.transmission = half3(p.transmission);
     return hit;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // One thread per photon over a GRID_SIDE x (GRID_SIDE/2) DispatchRays grid (the 2x temporal-reuse half budget). The
@@ -105,6 +98,4 @@ void main(){
     nwbCausticSplat(splat.worldPos, splat.flux);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

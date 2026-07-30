@@ -1,12 +1,8 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #ifndef NWB_GRAPHICS_SCENE_LIGHTING_SLANGI
 #define NWB_GRAPHICS_SCENE_LIGHTING_SLANGI
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "../common/math.slangi"
@@ -14,9 +10,6 @@
 
 // Surfel GI gather (world-hashed surfel lookup) is included below, inside the NWB_SCENE_GI_SAMPLING_DISABLED
 // guard, so the surfel pool/hash/params bindings are only declared where the deferred pass binds them.
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Debug toggle for the visual gate: when 1, nwbBxdfCausticIrradiance returns a small constant grey instead of
@@ -85,9 +78,6 @@ half3 nwbBxdfCausticIrradiance(int2 pixel){
     return half3(NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE.Load(int3(pixel, 0)).rgb);
 #endif
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 void nwbSceneResolveLight(NwbSceneLight light, float3 worldPosition, out float3 lightVector, out half3 radiance){
@@ -177,9 +167,6 @@ half3 nwbBxdfIndirectIrradiance(float3 worldPosition, float3 normalVector){
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // indirectIrradiance is the surface's precomputed indirect term (the opaque deferred path resolves it once per pixel
 // from the surfel-irradiance texture in nwbBxdfLoadSurface; the AVBOIT transparent path passes the hemiAmbient
 // fallback). It is threaded IN rather than recomputed here, so the whole-surface model reads the same value the BXDF
@@ -215,11 +202,6 @@ half3 nwbSceneApplyLighting(half3 baseColor, float3 normal, float4 tangent, floa
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #endif
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

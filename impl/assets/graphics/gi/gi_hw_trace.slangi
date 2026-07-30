@@ -1,12 +1,8 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #ifndef NWB_GRAPHICS_GI_HW_TRACE_SLANGI
 #define NWB_GRAPHICS_GI_HW_TRACE_SLANGI
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // The HARDWARE backend of the GI trace seam: inline RayQuery over the scene TLAS. Defines nwbGiTraceClosest to return
@@ -60,14 +56,8 @@ uint nwbMeshFrameViewHeapSlot(){
 // attributes carried by the heap-selected instance-material record; inline RayQuery itself walks the TLAS.
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Per-mesh positions, indices, and attributes are read through descriptor-heap slots carried by the material record.
 // The shared backing buffers remain transitioned for those heap reads.
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Per-triangle-corner normal + uv0, in the shared 16-byte ray-trace attribute layout. GI needs these inputs to
@@ -90,9 +80,6 @@ NwbGiHwVertexAttrib nwbGiHwLoadVertexAttrib(const uint attributeSlot, const uint
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // worldToObject^T * objectNormal -- byte-matches nwbGiSwTransformNormal (gi_sw_trace.slangi), but fed the driver's
 // TLAS-baked world->object rows instead of the CPU-uploaded instance record (both derive from the same world matrix).
 float3 nwbGiHwTransformNormal(const float3x4 worldToObject, const float3 objectNormal){
@@ -102,9 +89,6 @@ float3 nwbGiHwTransformNormal(const float3x4 worldToObject, const float3 objectN
         dot(float3(worldToObject[0].z, worldToObject[1].z, worldToObject[2].z), objectNormal)
     );
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // The seam definition: closest hit via inline RayQuery. RAY_FLAG_FORCE_OPAQUE makes Proceed() commit the geometric
@@ -173,11 +157,6 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #endif
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

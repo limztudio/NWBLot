@@ -1,12 +1,8 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "binding_slots.h"
 #include "constants.h"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct NwbCsgRemovedIntervalEntry{
@@ -40,9 +36,6 @@ ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPush
 #define g_NwbCsgRemovedIntervalCapNormal (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgRemovedSlots.x))
 #define g_NwbCsgRemovedIntervalData (NwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgRemovedSlots.y))
 #define g_NwbCsgRemovedIntervalCount (NwbHeapStorageImage2DArrayUint2(g_NwbCsgBindlessResources.csgRemovedSlots.z))
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NwbCsgRemovedIntervalEntry nwbCsgInvalidRemovedIntervalEntry(){
@@ -225,9 +218,6 @@ void nwbCsgIntervalCombineWriteEntries(
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [numthreads(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X, NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint2 frameExtent = nwbCsgIntervalCombineFrameExtent();
@@ -283,6 +273,4 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     nwbCsgIntervalCombineWriteEntries(pixel, entries, removedIntervalLayerCount, removedIntervalCount, flags);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -1,12 +1,8 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "binding_slots.h"
 #include "constants.h"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct NwbCsgIntervalDispatchPushConstants{
@@ -46,9 +42,6 @@ ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPush
 #define g_NwbCsgBackCapNormal (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.x))
 #define g_NwbCsgIntervalDepth (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.y))
 #define g_NwbCsgIntervalId (NwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgPeelSlots.z))
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 uint nwbCsgIntervalPeelFrameWidth(){
@@ -322,9 +315,6 @@ void nwbCsgWriteIntervalPeelEntries(
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [numthreads(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X, NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint frameWidth = nwbCsgIntervalPeelFrameWidth();
@@ -362,6 +352,4 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     nwbCsgWriteIntervalPeelEntries(pixel, entries);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

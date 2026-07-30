@@ -1,5 +1,4 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Software-shadow OPAQUE pre-pass (full resolution). One thread per full-res pixel: trace one OPAQUE-only occlusion ray
@@ -19,9 +18,6 @@
 // The full-res visibility array the deferred lighting samples: this pass writes the binary opaque mask (later
 // multiplied by the transparent pass), one layer per shadow slot.
 #define g_NwbSwShadowVisibility NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [numthreads(NWB_SW_SHADOW_GROUP_SIZE, NWB_SW_SHADOW_GROUP_SIZE, 1)]
@@ -53,6 +49,4 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

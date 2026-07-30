@@ -1,5 +1,4 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Surfel spawn: one thread per screen tile (spawnTile x spawnTile px). Reads the tile-centre G-buffer world position +
@@ -16,17 +15,11 @@
 #include "surfel_hash.slangi"
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // This frame's hash, allocation counters, and free-list are all StorageBuffer heap entries selected by the common
 // dispatch push block. The aliases below keep the allocation logic uncluttered.
 #define g_NwbSurfelCellHead g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.cellHeadHeapSlot]
 #define g_NwbSurfelCounter g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.counterHeapSlot]
 #define g_NwbSurfelFreeList g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.freeListHeapSlot]
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [numthreads(NWB_SURFEL_GROUP_SIZE, NWB_SURFEL_GROUP_SIZE, 1)]
@@ -176,6 +169,4 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     g_NwbSurfelCellHead[bucket] = slot;   // publish the real slot (replaces the PENDING sentinel), linking it into the cell
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -1,21 +1,14 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #ifndef NWB_GRAPHICS_CAUSTIC_TRACE_SLANGI
 #define NWB_GRAPHICS_CAUSTIC_TRACE_SLANGI
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #include "../common/math.slangi"
 #include "../mesh/surface.slangi"
 #include "refract.slangi"
 #include "splat_constants.slangi"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Shared caustic photon-transport layer. ALL per-bounce physics (Snell refraction, Fresnel transmitted fraction,
@@ -39,9 +32,6 @@
 // Below this max-channel flux a photon carries too little energy to matter; the loop drops it early. Shared so
 // both backends terminate identically.
 #define NWB_CAUSTIC_FLUX_EPSILON 1e-6
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // The single shared closest-hit hook contract. Each backend fills this for a ray segment (origin + normalized
@@ -74,9 +64,6 @@ struct NwbCausticHit{
 NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin, float tMax);
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // One photon in flight: a world-space ray carrying per-channel flux (radiant power / photonCount) and the medium
 // state. `eta` is the relative IOR for the NEXT refractive crossing (air->glass = 1/ior, glass->air = ior); photons
 // start in air, so it begins at the air-side value and flips on each crossing. `inside` tracks whether the photon is
@@ -97,9 +84,6 @@ struct NwbCausticSplat{
     float3 worldPos;
     float3 flux;
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Re-orients a surface normal to point AGAINST the incident ray (the convention nwbCausticRefract / RefractV expect:
@@ -220,9 +204,6 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
     // Bounce budget exhausted before reaching an opaque receiver -> dropped.
     return splat;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // A single emitter ray for one photon, aimed by projecting the refractive-instance emission AABBs onto the plane
@@ -364,12 +345,6 @@ NwbCausticPhoton nwbCausticCreatePhoton(
 }
 
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #endif
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

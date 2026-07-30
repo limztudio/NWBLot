@@ -1,14 +1,10 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "shadow_resolve_binding_slots.h"
 #include "sw_binding_slots.h" // NWB_SW_SHADOW_SOFT_FACTOR -- the half-res downscale, shared with the trace + resolve.
 #include "shadow_heap_resources.slangi"
 #include "../common/math.slangi"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Geometry downsample pre-pass for the half-res soft shadow resolve. The resolve's a-trous wavelet + its
@@ -46,9 +42,6 @@ ConstantBuffer<NwbShadowGeometryDownsamplePushConstants> g_NwbShadowGeometryDown
 #define g_NwbShadowGeometryOutput NwbHeapStorageImage2DFloat4(g_NwbShadowGeometryDownsamplePushConstants.outputStorageSlot)
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [numthreads(NWB_SHADOW_RESOLVE_GROUP_SIZE, NWB_SHADOW_RESOLVE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint2 halfTexel = dispatchThreadID.xy;
@@ -78,6 +71,4 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     g_NwbShadowGeometryOutput[halfTexel] = float4(octNormal.x, octNormal.y, cameraDistance, 1.0);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

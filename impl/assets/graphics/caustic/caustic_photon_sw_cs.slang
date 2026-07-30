@@ -1,5 +1,4 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "sw_binding_slots.h"
@@ -77,9 +76,6 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "light_pick.slangi"
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Per-instance record: the affine world->object transform (3 rows), an ABI-reserved word, and CPU-only leaf-cost
 // data. Mirrors the C++ SceneSwBvhInstanceGpu (64 bytes) / the SW shadow NwbSwShadowInstance.
 struct NwbCausticSwInstance{
@@ -149,9 +145,6 @@ StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> nwbCausticSwEmissio
 ConstantBuffer<NwbCausticSwView, Std140DataLayout> nwbCausticSwView(){
     return g_NwbHeapCausticSwViews[g_NwbCausticSwPushConstants.viewSlot];
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 float3 nwbCausticSwTransformPoint(const NwbCausticSwInstance instance, const float3 point){
@@ -231,9 +224,6 @@ NwbCausticSwVertexAttrib nwbCausticSwLoadVertexAttrib(const uint attributeSlot, 
     attrib.uv0 = asfloat(packed.zw);
     return attrib;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Per-instance closest-hit refinement: push the world ray into the instance's object space, walk that mesh's
@@ -424,9 +414,6 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #define NWB_CAUSTIC_SPLAT_VIEW nwbCausticSwView()
 #define NWB_CAUSTIC_SPLAT_PUSH g_NwbCausticSwPushConstants
 #define NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH nwbCausticSwGbufferDepth()
@@ -438,9 +425,6 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 #undef NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH
 #undef NWB_CAUSTIC_SPLAT_PUSH
 #undef NWB_CAUSTIC_SPLAT_VIEW
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [numthreads(NWB_CAUSTIC_SW_GROUP_SIZE, 1, 1)]
@@ -498,6 +482,4 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     nwbCausticSplat(splat.worldPos, splat.flux);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -1,5 +1,4 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // HARDWARE (RayQuery) SOFT OPAQUE half-res trace. The HW analog of sw_shadow_soft_opaque_cs: one thread per HALF-res
@@ -17,9 +16,6 @@
 // Pure #defines (no binding/resource declarations) shared with the SW trace: the half-res SHIFT/FACTOR and the per-frame
 // SPP, so the HW soft trace's half-res grid + sample count match the SW trace's exactly (no magic numbers).
 #include "sw_binding_slots.h"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Explicit half-res grid dims + the frame counter seeding the per-pixel low-discrepancy cone-jitter sample (so the
@@ -94,6 +90,4 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

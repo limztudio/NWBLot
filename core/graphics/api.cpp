@@ -1,5 +1,4 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "api.h"
@@ -7,21 +6,12 @@
 #include "backend_selection.h"
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_CORE_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 GraphicsAllocator::GraphicsAllocator(Alloc::GlobalArena& objectArena)
     : m_objectArena(objectArena)
 {}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 GraphicsPipelineDesc::~GraphicsPipelineDesc() = default;
@@ -68,9 +58,6 @@ RayTracingPipelineDesc::~RayTracingPipelineDesc() = default;
 RayTracingPipelineDesc& RayTracingPipelineDesc::addShader(const RayTracingPipelineShaderDesc& value){ shaders.push_back(value); return *this; }
 RayTracingPipelineDesc& RayTracingPipelineDesc::addHitGroup(const RayTracingPipelineHitGroupDesc& value){ hitGroups.push_back(value); return *this; }
 RayTracingPipelineDesc& RayTracingPipelineDesc::addBindingLayout(const BindingLayoutHandle& value){ globalBindingLayouts.push_back(value); return *this; }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static constexpr FormatInfo s_FormatInfo[Format::kCount] = {
@@ -384,9 +371,6 @@ bool BlendState::usesConstantColor(u32 numTargets)const{
 namespace __hidden_graphics_api{
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool ResolveFramebufferAttachmentExtent(const FramebufferAttachment& attachment, u32& outWidth, u32& outHeight, u32& outArraySize){
     const TextureDesc& textureDesc = attachment.texture->getDescription();
     const TextureSubresourceSet subresources = attachment.subresources.resolve(textureDesc, TextureSubresourceMipResolve::Single);
@@ -404,13 +388,7 @@ bool ResolveFramebufferAttachmentExtent(const FramebufferAttachment& attachment,
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 FramebufferInfo::FramebufferInfo(const FramebufferDesc& desc){
@@ -445,9 +423,6 @@ FramebufferInfoEx::FramebufferInfoEx(const FramebufferDesc& desc)
             return;
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type){
@@ -496,9 +471,6 @@ usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum ty
     }
     return 0;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static constexpr AStringView s_NotFoundMarkerString = "ERROR: could not resolve marker";
@@ -572,14 +544,12 @@ void GpuCrashTracker::unRegisterGpuCrashMarkerTracker(GpuCrashMarkerTracker& tra
 
 ResolvedMarker GpuCrashTracker::resolveMarker(usize markerHash){
     ScopedLock lock(m_mutex);
-    // Search in active marker trackers
     for(auto* markerTracker : m_markerTrackers){
         auto result = markerTracker->getEventString(markerHash);
         if(result.first())
             return result;
     }
 
-    // Search in recently destroyed marker trackers
     for(auto& markerTracker : m_destroyedMarkerTrackers){
         auto result = markerTracker.getEventString(markerHash);
         if(result.first())
@@ -588,9 +558,6 @@ ResolvedMarker GpuCrashTracker::resolveMarker(usize markerHash){
 
     return MakePair(false, s_NotFoundMarkerString);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static GpuCrashSink s_GpuCrashSink = nullptr;
@@ -607,11 +574,6 @@ void DispatchGpuCrash(const GpuCrashReport& report){
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_CORE_END
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -1,5 +1,4 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "shadow_reproject_merge_binding_slots.h"
@@ -8,9 +7,6 @@
 #include "shadow_heap_resources.slangi"
 #include "../scene/binding_slots.h"
 #include "../common/math.slangi"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Soft OPAQUE shadow TEMPORAL reproject-merge. Runs at HALF resolution, one thread per half-res pixel, per shadow
@@ -69,9 +65,6 @@ ConstantBuffer<NwbShadowReprojectMergePushConstants> g_NwbShadowMergePush;
 
 #define g_NwbShadowMergeHistoryOut NwbHeapStorageImage2DArrayFloat4(g_NwbShadowMergePush.historyOutputStorageSlot)
 #define g_NwbShadowMergeMomentsOut NwbHeapStorageImage2DArrayFloat4(g_NwbShadowMergePush.momentsOutputStorageSlot)
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Rec.709 luma of a (possibly colored transmittance) visibility triple -- the scalar the moments + gates B/C operate on.
@@ -243,6 +236,4 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     }
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

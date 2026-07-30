@@ -1,5 +1,4 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #pragma once
@@ -12,9 +11,6 @@
 #include "convert.h"
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Active component masks for vector helpers that consume only a subset of SIMD lanes.
 namespace VectorComponentMask{
 inline constexpr u32 s_XY = 0x3u;
@@ -23,13 +19,7 @@ inline constexpr u32 s_XYZW = 0xFu;
 };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace SIMDVectorDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<typename T>
@@ -293,10 +283,6 @@ NWB_INLINE SIMDVector SIMDCALL SplatLane(SIMDVector value)noexcept{
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// column-vector transforms over row-stored matrices
-
-
 #if defined(NWB_HAS_AVX2)
 NWB_INLINE SIMDMatrix SIMDCALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept;
 #endif
@@ -476,13 +462,7 @@ NWB_INLINE SIMDVector SIMDCALL MatrixDotPack(const SIMDMatrix& matrix, SIMDVecto
 #endif
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_INLINE u32 SIMDCALL VectorMoveMask(SIMDVector value)noexcept{
@@ -1306,10 +1286,6 @@ NWB_INLINE SIMDVector SIMDCALL VectorInsert(SIMDVector vd, SIMDVector vs, u32 vs
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// comparisons
-
-
 NWB_INLINE SIMDVector SIMDCALL VectorEqual(SIMDVector v0, SIMDVector v1)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSetInt(VectorGetX(v0) == VectorGetX(v1) ? 0xFFFFFFFFu : 0u, VectorGetY(v0) == VectorGetY(v1) ? 0xFFFFFFFFu : 0u, VectorGetZ(v0) == VectorGetZ(v1) ? 0xFFFFFFFFu : 0u, VectorGetW(v0) == VectorGetW(v1) ? 0xFFFFFFFFu : 0u);
@@ -1493,10 +1469,6 @@ NWB_INLINE SIMDVector SIMDCALL VectorIsInfinite(SIMDVector value)noexcept{
     const SIMDVector invalid = VectorOrInt(VectorIsNaN(value), VectorIsInfinite(value));
     return (VectorMoveMask(invalid) & activeMask) == 0u;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// arithmetic
 
 
 NWB_INLINE SIMDVector SIMDCALL VectorNegate(SIMDVector value)noexcept{
@@ -1871,10 +1843,6 @@ NWB_INLINE SIMDVector SIMDCALL VectorSubtractAngles(SIMDVector v0, SIMDVector v1
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// transcendental helpers
-
-
 NWB_INLINE SIMDVector SIMDCALL VectorExp2(SIMDVector value)noexcept{
 #if defined(NWB_HAS_SSE4)
     __m128i iTrunc = _mm_cvttps_epi32(value);
@@ -2146,13 +2114,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorPow(SIMDVector v0, SIMDVector v1)noexcept{
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace SIMDVectorDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_INLINE SIMDVector SIMDCALL VectorTrigCanonicalAngle(SIMDVector value, SIMDVector& outCosSignSelect)noexcept{
@@ -2206,13 +2168,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorArcEstPolynomial(SIMDVector x, SIMDVector r
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_INLINE SIMDVector SIMDCALL VectorSin(SIMDVector value)noexcept{
@@ -2336,13 +2292,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorTanH(SIMDVector value)noexcept{
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace SIMDVectorDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_INLINE SIMDVector SIMDCALL VectorArcCoefficientApproximation(SIMDVector value)noexcept{
@@ -2394,13 +2344,7 @@ NWB_INLINE SIMDVector SIMDCALL VectorATan2SelectResult(SIMDVector y, SIMDVector 
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_INLINE SIMDVector SIMDCALL VectorASin(SIMDVector value)noexcept{
@@ -2548,10 +2492,6 @@ NWB_INLINE SIMDVector SIMDCALL VectorATan2Est(SIMDVector y, SIMDVector x)noexcep
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// interpolation
-
-
 NWB_INLINE SIMDVector SIMDCALL VectorLerp(SIMDVector v0, SIMDVector v1, f32 t)noexcept{
     return VectorMultiplyAdd(VectorSubtract(v1, v0), VectorReplicate(t), v0);
 }
@@ -2634,10 +2574,6 @@ NWB_INLINE SIMDVector SIMDCALL VectorBaryCentricV(SIMDVector p0, SIMDVector p1, 
     SIMDVector result = VectorMultiplyAdd(p10, f, p0);
     return VectorMultiplyAdd(p20, g, result);
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 2D helpers
 
 
 NWB_INLINE bool SIMDCALL Vector2Equal(SIMDVector v0, SIMDVector v1)noexcept{ return (VectorMoveMask(VectorEqual(v0, v1)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY; }
@@ -2756,9 +2692,6 @@ NWB_INLINE SIMDVector SIMDCALL Vector2Normalize(SIMDVector value)noexcept{
 namespace SIMDVectorDetail{
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_INLINE SIMDVector SIMDCALL NormalizeOrV(
     SIMDVector value,
     SIMDVector fallback,
@@ -2780,13 +2713,7 @@ NWB_INLINE SIMDVector SIMDCALL NormalizeOrV(
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] NWB_INLINE SIMDVector SIMDCALL Vector2NormalizeOr(SIMDVector value, SIMDVector fallback, const f32 minLengthSquared)noexcept{
@@ -2804,13 +2731,7 @@ NWB_INLINE SIMDVector SIMDCALL Vector2NormalizeEst(SIMDVector value)noexcept{
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace SIMDVectorDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_INLINE SIMDVector SIMDCALL ClampLengthV(SIMDVector value, SIMDVector lengthSq, SIMDVector lengthMin, SIMDVector lengthMax)noexcept{
@@ -2847,13 +2768,7 @@ NWB_INLINE SIMDVector SIMDCALL RefractV(
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_INLINE SIMDVector SIMDCALL Vector2ClampLengthV(SIMDVector value, SIMDVector lengthMin, SIMDVector lengthMax)noexcept{
@@ -2926,10 +2841,6 @@ NWB_INLINE SIMDVector SIMDCALL Vector2IntersectLine(SIMDVector line1Point1, SIMD
 NWB_INLINE SIMDVector SIMDCALL Vector2Transform(SIMDVector value, const SIMDMatrix& matrix)noexcept;
 NWB_INLINE SIMDVector SIMDCALL Vector2TransformCoord(SIMDVector value, const SIMDMatrix& matrix)noexcept;
 NWB_INLINE SIMDVector SIMDCALL Vector2TransformNormal(SIMDVector value, const SIMDMatrix& matrix)noexcept;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 3D helpers
 
 
 NWB_INLINE bool SIMDCALL Vector3Equal(SIMDVector v0, SIMDVector v1)noexcept{ return (VectorMoveMask(VectorEqual(v0, v1)) & VectorComponentMask::s_XYZ) == VectorComponentMask::s_XYZ; }
@@ -3131,10 +3042,6 @@ NWB_INLINE SIMDVector SIMDCALL Vector3TransformCoord(SIMDVector value, const SIM
 NWB_INLINE SIMDVector SIMDCALL Vector3TransformNormal(SIMDVector value, const SIMDMatrix& matrix)noexcept;
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// 4D helpers
-
-
 NWB_INLINE bool SIMDCALL Vector4Equal(SIMDVector v0, SIMDVector v1)noexcept{ return (VectorMoveMask(VectorEqual(v0, v1)) & VectorComponentMask::s_XYZW) == VectorComponentMask::s_XYZW; }
 NWB_INLINE bool SIMDCALL Vector4EqualInt(SIMDVector v0, SIMDVector v1)noexcept{ return (VectorMoveMask(VectorEqualInt(v0, v1)) & VectorComponentMask::s_XYZW) == VectorComponentMask::s_XYZW; }
 NWB_INLINE bool SIMDCALL Vector4NearEqual(SIMDVector v0, SIMDVector v1, SIMDVector epsilon)noexcept{ return (VectorMoveMask(VectorNearEqual(v0, v1, epsilon)) & VectorComponentMask::s_XYZW) == VectorComponentMask::s_XYZW; }
@@ -3305,10 +3212,6 @@ NWB_INLINE SIMDVector SIMDCALL Vector4Cross(SIMDVector v1, SIMDVector v2, SIMDVe
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// column-vector transforms over row-stored matrices
-
-
 NWB_INLINE SIMDVector SIMDCALL Vector4Transform(SIMDVector value, const SIMDMatrix& matrix)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return VectorSet(
@@ -3451,6 +3354,4 @@ NWB_INLINE Float4U* SIMDCALL Vector4TransformStream(Float4U* outputStream, usize
     );
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

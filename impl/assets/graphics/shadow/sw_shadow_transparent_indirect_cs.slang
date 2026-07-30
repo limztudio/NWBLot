@@ -1,5 +1,4 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Stage-3 INDIRECT TRACE + SCATTER (compacted transparent resolve). DispatchIndirect, one compacted edge record per
@@ -29,9 +28,6 @@
 #define g_NwbSwShadowVisibility NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void nwbSwShadowIndirectTrace(const uint linearId){
     if(linearId >= g_NwbSwShadowEdgeCounter[NWB_SW_SHADOW_EDGE_COUNTER_TRACE])
         return;
@@ -56,6 +52,4 @@ void main(uint3 groupID : SV_GroupID, uint groupIndex : SV_GroupIndex){
     nwbSwShadowIndirectTrace(groupID.x * g_NwbSwShadowPush.traceGroupSize + groupIndex);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

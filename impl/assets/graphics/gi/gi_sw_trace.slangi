@@ -1,12 +1,8 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #ifndef NWB_GRAPHICS_GI_SW_TRACE_SLANGI
 #define NWB_GRAPHICS_GI_SW_TRACE_SLANGI
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // The SOFTWARE backend of the GI trace seam: walks the SW scene/instance/per-mesh BVH the SW shadow/caustic path
@@ -72,9 +68,6 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "../bindless/bindless_heap_bvh.slangi"
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // --- Heap-selected SW scene records ---
 
 struct NwbGiSwInstance{
@@ -103,9 +96,6 @@ StructuredBuffer<NwbGiSwInstance, Std430DataLayout> NwbHeapGiSwInstances(const u
 // record. The shared C++ backing buffers, including the scene tables selected above, remain transitioned for heap reads.
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Per-triangle-corner inputs for the material surface evaluator. This is the same 16-byte ray-trace attribute layout
 // the shadow and caustic paths use: Half4 normal at +0 and Float2 uv0 at +8.
 struct NwbGiSwVertexAttrib{
@@ -123,9 +113,6 @@ NwbGiSwVertexAttrib nwbGiSwLoadVertexAttrib(const uint attributeSlot, const uint
     attrib.uv0 = asfloat(packed.zw);
     return attrib;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 float3 nwbGiSwTransformPoint(const NwbGiSwInstance instance, const float3 point){
@@ -151,9 +138,6 @@ float3 nwbGiSwTransformNormal(const NwbGiSwInstance instance, const float3 objec
         dot(float3(instance.worldToObjectRow0.z, instance.worldToObjectRow1.z, instance.worldToObjectRow2.z), objectNormal)
     );
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct NwbGiSwTriangleHit{
@@ -183,9 +167,6 @@ NwbGiSwTriangleHit nwbGiSwRayTriangle(const float3 origin, const float3 directio
     result.normal = hit.normal;
     return result;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Per-instance closest-hit refinement: push the world ray into object space, walk the mesh BVH front-to-back, keep the
@@ -328,11 +309,6 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 #endif
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

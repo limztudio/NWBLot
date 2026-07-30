@@ -1,14 +1,10 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Transparent smoke surface hook fragment. Demonstrates a per-material color transform expressed as a hook (not
 // a compile-time variant): the base color is square-root transformed and warm-tinted. The cook wraps it with the
 // engine pixel-shader authoring + this material's typed .bind to generate the G-buffer pixel shader.
 #include "smoke_material_color.slangi"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NwbMeshSurface nwbMaterialSurface(){
@@ -30,6 +26,4 @@ NwbMeshSurface nwbMaterialSurface(){
     return nwbMakeGlassSurface(baseColor, inNormal, NWB_SURFACE_IOR_GLASS, tinted.rgb, tinted.a);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

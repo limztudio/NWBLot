@@ -1,5 +1,4 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #pragma once
@@ -8,13 +7,7 @@
 #include "vector.h"
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace SIMDQuaternionDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static const SIMDVectorConstF s_SIMDQuaternionControlWZYX = { { { 1.0f, -1.0f, 1.0f, -1.0f } } };
@@ -34,14 +27,7 @@ inline constexpr f32 s_QuaternionSquadControlScale = -0.25f;
 inline constexpr f32 s_QuaternionHalfAngleScale = 0.5f;
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// comparison operations
 
 
 NWB_INLINE bool SIMDCALL QuaternionEqual(SIMDVector q0, SIMDVector q1)noexcept{ return Vector4Equal(q0, q1); }
@@ -49,10 +35,6 @@ NWB_INLINE bool SIMDCALL QuaternionNotEqual(SIMDVector q0, SIMDVector q1)noexcep
 NWB_INLINE bool SIMDCALL QuaternionIsNaN(SIMDVector q)noexcept{ return Vector4IsNaN(q); }
 NWB_INLINE bool SIMDCALL QuaternionIsInfinite(SIMDVector q)noexcept{ return Vector4IsInfinite(q); }
 NWB_INLINE bool SIMDCALL QuaternionIsIdentity(SIMDVector q)noexcept{ return Vector4Equal(q, s_SIMDIdentityR3); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// computation operations
 
 
 NWB_INLINE SIMDVector SIMDCALL QuaternionDot(SIMDVector q0, SIMDVector q1)noexcept{ return Vector4Dot(q0, q1); }
@@ -341,10 +323,6 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionBaryCentricV(SIMDVector q0, SIMDVector 
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// transformation operations
-
-
 NWB_INLINE SIMDVector SIMDCALL QuaternionIdentity()noexcept{ return s_SIMDIdentityR3; }
 
 NWB_INLINE SIMDVector SIMDCALL QuaternionRotationNormal(SIMDVector normalAxis, f32 angle)noexcept{
@@ -602,6 +580,4 @@ NWB_INLINE void SIMDCALL QuaternionToAxisAngle(SIMDVector* outAxis, f32* outAngl
     *outAngle = VectorGetX(angle);
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

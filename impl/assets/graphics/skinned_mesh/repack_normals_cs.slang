@@ -1,13 +1,9 @@
 // limztudio@gmail.com
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "binding_slots.h"
 #include "bindless_resources.slangi"
 #include "constants.h"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Per-frame skinned-normal repack. The RT attribute buffer (AttribGpu: Half4 normal @ +0, Float2 uv0 @ +8, 16-byte
@@ -31,9 +27,6 @@ ConstantBuffer<NwbSkinnedMeshRepackPushConstants> g_NwbSkinnedMeshRepackPushCons
 )
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 uint nwbSkinnedMeshRepackMeshletCount(){
     return g_NwbSkinnedMeshRepackPushConstants.payload0[NWB_SKINNED_MESH_REPACK_PUSH_MESHLET_COUNT];
 }
@@ -42,9 +35,6 @@ uint nwbSkinnedMeshRepackLoadPrimitiveIndex(const uint primitiveIndex){
     const uint word = NwbHeapRawBuffer(g_NwbSkinnedMeshRepackBindlessResources.streamSlots3.y).Load(primitiveIndex & ~NWB_MESHLET_PACKED_WORD_BYTE_MASK);
     return (word >> ((primitiveIndex & NWB_MESHLET_PACKED_WORD_BYTE_MASK) * NWB_MESHLET_PACKED_BYTE_BITS)) & NWB_MESHLET_PACKED_BYTE_MASK;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // One thread group per meshlet; threads stride over the meshlet's primitive-corner refs, exactly like the CPU
@@ -81,6 +71,4 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 
 #undef g_NwbSkinnedMeshRepackBindlessResources
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -13,7 +13,9 @@ NwbMeshSurface nwbMaterialSurface(){
         inUv0,
         0.0
     ));
-    const half3 baseColor = clamp((surface.base_color * runtime.color_tint * fixtureColor).rgb, half3(0.0h), half3(1.0h));
+    const half fixtureWeight = clamp(surface.fixture_color_weight, half(0.0h), half(1.0h));
+    const half4 baseColorFactor = lerp(half4(1.0h, 1.0h, 1.0h, 1.0h), fixtureColor, fixtureWeight);
+    const half3 baseColor = clamp((surface.base_color * runtime.color_tint * baseColorFactor).rgb, half3(0.0h), half3(1.0h));
     return nwbMakeMeshSurface(baseColor, inNormal);
 }
 

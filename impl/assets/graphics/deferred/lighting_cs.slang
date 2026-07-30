@@ -18,8 +18,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Deferred lighting is now a screen-space compute dispatch. The target dimensions define the exact pixel domain;
-// deriving uv from texel centres preserves the old fullscreen pixel shader's point-sampled G-buffer coordinates.
+// Deferred lighting is now a screen-space compute dispatch. The target dimensions define the exact pixel domain; the
+// full-resolution G-buffer is point sampled, so use its texel coordinate directly. This avoids implicit texture
+// sampling in Compute, which would otherwise require compute-derivative Vulkan features.
 [numthreads(NWB_DEFERRED_LIGHTING_GROUP_SIZE, NWB_DEFERRED_LIGHTING_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     uint width;
@@ -30,8 +31,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(pixel.x >= width || pixel.y >= height)
         return;
 
-    const float2 uv = (float2(pixel) + float2(0.5, 0.5)) / float2(width, height);
-    const NwbBxdfSurface surface = nwbBxdfLoadSurface(uv);
+    const NwbBxdfSurface surface = nwbBxdfLoadSurface(int2(pixel));
     const half3 shadedColor = surface.isBackground
         ? surface.baseColor
         : clamp(

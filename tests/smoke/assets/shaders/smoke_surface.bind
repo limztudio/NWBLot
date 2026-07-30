@@ -10,6 +10,10 @@ struct NwbSmokeSurfaceMaterial{
     texture2d base_color_map;
     [fixture("builtin/material_fixture/linear_clamp")]
     sampler base_color_sampler;
+    // The shared smoke surface backs visual baselines as well as the fixture test. Keep the texture contribution
+    // opt-in so ordinary opaque materials retain their authored colour while the fixture remains sampled in shader.
+    [default("half(0.0h)")]
+    half fixture_color_weight;
 };
 
 [material_mutable]

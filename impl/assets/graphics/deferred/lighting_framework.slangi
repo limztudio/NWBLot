@@ -65,11 +65,7 @@ ConstantBuffer<NwbDeferredLightingPushConstants> g_NwbDeferredLightingPushConsta
 // Indirect irradiance for the OPAQUE deferred path: read the resolved surfel texture at THIS pixel; where no surfel
 // covered it (a < 0.5) fall back to the hemiAmbient ambient term. The resolve texture is 1:1 with the screen, so use a
 // point Load; a bilinear tap would blend the coverage flag + irradiance across the covered/uncovered boundary.
-half3 nwbBxdfResolvedIndirect(float2 uv, float3 normalVector){
-    uint width;
-    uint height;
-    NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.z).GetDimensions(width, height);
-    const int2 pixel = int2(uv * float2(width, height));
+half3 nwbBxdfResolvedIndirect(const int2 pixel, float3 normalVector){
     const half4 resolved = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.z).Load(int3(pixel, 0)));
     return resolved.a > 0.5 ? half3(resolved.rgb) : nwbGiHemiAmbient(normalVector);
 }
@@ -85,13 +81,15 @@ float3 nwbDeferredDecodeNormal(half3 value){
     return nwbSafeNormalize(float3(value) * 2.0 - 1.0, float3(0.0, 0.0, 1.0));
 }
 
-// Unpack the G-buffer at a fullscreen UV into the surface a BXDF reads.
-NwbBxdfSurface nwbBxdfLoadSurface(float2 uv){
-    const SamplerState sampler = NwbHeapSampler(g_NwbDeferredBindlessResources.lightingSlots.w);
-    const half4 baseColorSample = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.x).Sample(sampler, uv));
-    const half4 normalSample = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.y).Sample(sampler, uv));
-    const float4 worldSample = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.z).Sample(sampler, uv);
-    const float depth = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w).Sample(sampler, uv).r;
+// Unpack the G-buffer at an exact screen texel into the surface a BXDF reads. The full-resolution G-buffer uses the
+// shared point sampler in the Graphics path; mip-0 Loads preserve that result without emitting implicit derivative
+// operations in this Compute shader.
+NwbBxdfSurface nwbBxdfLoadSurface(const int2 pixel){
+    const int3 texel = int3(pixel, 0);
+    const half4 baseColorSample = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.x).Load(texel));
+    const half4 normalSample = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.y).Load(texel));
+    const float4 worldSample = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.z).Load(texel);
+    const float depth = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w).Load(texel).r;
 
     NwbBxdfSurface surface;
     surface.baseColor = baseColorSample.rgb;
@@ -102,7 +100,7 @@ NwbBxdfSurface nwbBxdfLoadSurface(float2 uv){
     surface.param1 = half(worldSample.a);
     surface.viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - surface.worldPosition, float3(0.0, 0.0, 1.0));
     surface.isBackground = depth >= 0.999999;
-    surface.indirectIrradiance = nwbBxdfResolvedIndirect(uv, surface.normal);
+    surface.indirectIrradiance = nwbBxdfResolvedIndirect(pixel, surface.normal);
     return surface;
 }
 

@@ -50,12 +50,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One thread per photon over a GRID_SIDE x (GRID_SIDE/2) DispatchRays grid (the 2x temporal-reuse half budget). The
-// photon index decompose + light pick + per-target emission + stratified hash jitter + flux + the shared bounce loop +
-// the splat are BYTE-IDENTICAL to the SW kernel main() -- the only differences are the 2D->1D photon index
-// (DispatchRaysIndex) and the HW splat handle. The grid side == the SW grid side, so photonIndex = y*W + x equals the
-// SW SV_DispatchThreadID index per photon (same column/row, same light, same target); the row count is halved so the
-// dispatch launches exactly the half-budget photonCount (no wasted early-out threads).
+// The hardware raygen mirrors the SW photon sequence over a half-budget 2D grid.
 [shader("raygeneration")]
 void main(){
     const uint photonIndex = DispatchRaysIndex().y * DispatchRaysDimensions().x + DispatchRaysIndex().x;
@@ -68,14 +63,10 @@ void main(){
     if(!nwbCausticPickLight(photonIndex, light))
         return;
 
-    // The light's principal travel direction (FROM the light); photons travel along the emission axis.
+    // Photons travel along the light's emission axis.
     const float3 lightDir = nwbSafeNormalize(-light.direction.xyz, float3(0.0, 0.0, -1.0));
 
-    // Per-target emission (the make-or-break aim): assign each photon to ONE refractive target, aim it at that
-    // target's world AABB. The target is picked by a HASH of photonIndex (not photonIndex % count) to decorrelate it
-    // from the photonIndex-derived cell below -- a plain modulo gives each target a diagonal-striped grid subset that
-    // images into diagonal caustic streaks shooting far across the receiver (see caustic_photon_sw_cs.slang). Shared
-    // with the SW path so the two stay byte-parallel per photon.
+    // Hash target selection to decorrelate it from the photon grid.
     const uint targetIndex = nwbCausticHashU32(photonIndex) % g_NwbCausticHwPushConstants.emissionTargetCount;
     const NwbCausticEmissionTarget target = nwbCausticHwEmissionTargets()[targetIndex];
     const float3 targetAabbMin = target.aabbMin.xyz;

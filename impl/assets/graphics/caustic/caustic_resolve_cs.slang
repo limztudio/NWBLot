@@ -10,40 +10,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Caustic resolve = an EDGE-AVOIDING A-TROUS WAVELET denoise (Dammertz et al.), run at HALF RESOLUTION as N ping-pong
-// compute passes, bracketed by a 2x2 downsample (the prepare pass) and an edge-aware upsample. A refractor's caustic
-// moves NON-RIGIDLY (a spinning prism MORPHS its caustic), so the resolve stays purely spatial with no history. The
-// producer's per-photon emission is a deterministic stratified distribution (no per-frame jitter), and the wavelet's
-// geometry edge-stop keeps the smoothing bounded to the receiver surface.
-//
-// HALF-RES PIPELINE (3 stages, selected by pushConstants.stage):
-//   stage 0 PREPARE+DOWNSAMPLE (half-res dispatch): each half-res pixel sums the 2x2 full-res R32_UINT splat-accumulator
-//     block it covers, un-scales the fixed point, AREA-NORMALIZES by the half-res pixel's receiver area (flux density ->
-//     irradiance) and applies the causticIntensity exposure ONCE, writing the half-res prepared buffer (half-A). Summing
-//     2x2 flux / (4x larger half-res area) == the full-res average irradiance, so brightness is preserved.
-//   stage 1 WAVELET (half-res dispatch): edge-avoiding a-trous step at dilation stepWidth (1,2,4 half-res texels). Reads
-//     the previous half-res color (half-A/half-B ping-pong) + the FULL-res G-buffer sampled at the half pixel's 2x
-//     location for the world-distance edge-stop. Each half-res dilation reaches 2x the world extent of a full-res
-//     dilation, keeping wide support at a quarter the per-pass pixel count.
-//   stage 2 UPSAMPLE (full-res dispatch): bilinearly samples the final half-res caustic into the full-res irradiance
-//     buffer the deferred lighting adds; background pixels (no receiver) write zero (the additive no-op).
-
-// The pass output is a StorageImage heap entry selected per dispatch. For PREPARE + WAVELET this is a HALF-res
-// ping-pong buffer (half-A / half-B); for UPSAMPLE it is the FULL-res caustic irradiance buffer the deferred lighting
-// adds.
+// Spatial-only filtering avoids reprojection ghosts from non-rigid caustic motion.
+// Half-resolution a-trous resolve: prepare, wavelet, then edge-aware upsample.
 
 struct NwbCausticResolvePushConstants{
-    // All-scalar -> 14 x 4 = 56 bytes; matches the C++ mirror CausticResolvePushConstants.
-    uint width;             // FULL-res width (G-buffer dim; UPSAMPLE dispatch/output dim)
-    uint height;            // FULL-res height
-    uint halfWidth;         // HALF-res width (the resolve buffers; PREPARE/WAVELET dispatch dim)
-    uint halfHeight;        // HALF-res height
-    float causticIntensity; // exposure, applied once during the area-normalize on the PREPARE pass
-    uint stepWidth;         // a-trous dilation for this wavelet pass (1,2,4), in HALF-res texels
-    uint stage;             // 0 = PREPARE+DOWNSAMPLE, 1 = WAVELET (half-res), 2 = UPSAMPLE (-> full-res irradiance)
-    uint pad;               // preserves the original first 32-byte scalar block
-    // Global heap SampledImage slots. accumulatorSlot selects the dedicated typed uint Texture2DArray table; the other four
-    // select ordinary floating-point Texture2D resources.
+    // Must match CausticResolvePushConstants in C++; heap slots select every stage resource.
+    uint width;
+    uint height;
+    uint halfWidth;
+    uint halfHeight;
+    float causticIntensity;
+    uint stepWidth;
+    uint stage;
+    uint pad;
     uint worldPositionSlot;
     uint depthSlot;
     uint inputColorSlot;
@@ -57,20 +36,16 @@ ConstantBuffer<NwbCausticResolvePushConstants> g_NwbCausticResolvePushConstants;
 
 #define g_NwbCausticResolveOutput NwbHeapStorageImage2DFloat4(g_NwbCausticResolvePushConstants.outputStorageSlot)
 
-// Groupshared (LDS) tile for the small-dilation wavelet passes: the group cooperatively loads its half-res tile + halo
-// here once, then every thread taps from LDS instead of re-Loading the G-buffer + color textures per tap. Sized for the
-// largest LDS-tiled step (24x24 = 576 texels).
+// Groupshared tile for small-dilation wavelet passes.
 groupshared half3  s_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared float3 s_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   s_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
-groupshared uint   s_NwbCausticResolveTileActive; // 1 iff the loaded tile+halo holds ANY caustic -> empty-tile early-out
+groupshared uint   s_NwbCausticResolveTileActive;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Half-res receiver geometry, read from the precomputed cache. xyz = world position (the 2x point sample of the
-// full-res G-buffer), w = receiver validity (1/0).
 float3 nwbCausticResolveWorldAtHalf(const int2 halfTexel){
     return NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.geometrySlot).Load(int3(halfTexel, 0)).xyz;
 }
@@ -79,10 +54,7 @@ bool nwbCausticResolveValidAtHalf(const int2 halfTexel){
     return NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.geometrySlot).Load(int3(halfTexel, 0)).w > 0.5;
 }
 
-// The world-space receiver area subtended by one HALF-res pixel, from the screen-space spacing of the half-res world
-// position to the +x / +y half-res neighbours (the area Jacobian of the screen->receiver map at half resolution). This
-// converts photon DENSITY into physical BRIGHTNESS; since a half-res pixel subtends ~4x a full-res pixel's area and the
-// prepare pass sums the 2x2 (~4x) flux, the resulting irradiance matches the full-res average. Clamped away from zero.
+// World-space area subtended by one half-resolution pixel.
 float nwbCausticResolveHalfPixelArea(const int2 halfTexel){
     const float3 center = nwbCausticResolveWorldAtHalf(halfTexel);
     const int2 right = int2(min(halfTexel.x + 1, (int)g_NwbCausticResolvePushConstants.halfWidth - 1), halfTexel.y);
@@ -92,22 +64,15 @@ float nwbCausticResolveHalfPixelArea(const int2 halfTexel){
     return max(length(cross(dx, dy)), 1e-4);
 }
 
-// 5x5 B-spline a-trous kernel (separable [1,4,6,4,1]/16), sampled at +-{1,2}*step. Edge-AVOIDING: each tap is weighted
-// by the spatial kernel AND a world-distance edge-stop so the caustic never bleeds across a depth/silhouette
-// discontinuity, while the sparse inter-photon gaps fill into a smooth caustic. No luminance edge-stop: the sparse
-// splat's bright deposits ARE the noise to remove.
+// 5x5 B-spline a-trous kernel.
+// Geometry-only edge stop: luminance is sparse-splat noise and must not gate filtering.
 static const float s_NwbCausticResolveKernel[5] = { 1.0 / 16.0, 4.0 / 16.0, 6.0 / 16.0, 4.0 / 16.0, 1.0 / 16.0 };
 
 [numthreads(NWB_CAUSTIC_RESOLVE_GROUP_SIZE, NWB_CAUSTIC_RESOLVE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     const uint stage = g_NwbCausticResolvePushConstants.stage;
 
-    // UPSAMPLE (stage 2, FULL-res dispatch): EDGE-AWARE (joint-bilateral) resample of the final half-res caustic into the
-    // full-res irradiance buffer. A plain bilinear upsample would blend the 4 surrounding half-res taps regardless of what
-    // surface they sit on, smearing the caustic ~1 full pixel PAST a silhouette onto the wrong receiver (or into a
-    // shadowed neighbour) -- the caustic "exceeds" its region. Instead each tap is weighted by the bilinear weight AND a
-    // world-distance edge-stop to THIS full-res pixel's receiver, and background taps are dropped, so the caustic stays
-    // confined to the surface it belongs to. On a flat receiver all taps pass -> it degrades to plain bilinear.
+    // Edge-aware upsample to the full-resolution irradiance buffer.
     if(stage == 2u){
         const uint2 pixel = dispatchThreadID.xy;
         if(pixel.x >= g_NwbCausticResolvePushConstants.width || pixel.y >= g_NwbCausticResolvePushConstants.height)
@@ -117,12 +82,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const int fh = (int)g_NwbCausticResolvePushConstants.height;
         const int2 fullTexel = int2(pixel);
         if(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.depthSlot).Load(int3(fullTexel, 0)).r >= 0.999999){
-            g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0); // background: additive no-op
+            g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
             return;
         }
 
-        // Edge-stop sigma from the full-res pixel's own world spacing (max of +x / +y to handle foreshortening on a
-        // grazing receiver); a few pixels of tolerance keeps same-surface taps while rejecting a silhouette jump.
         const float3 centerWorld = NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.worldPositionSlot).Load(int3(fullTexel, 0)).xyz;
         const int2 rightFull = int2(min(fullTexel.x + 1, fw - 1), fullTexel.y);
         const int2 downFull = int2(fullTexel.x, min(fullTexel.y + 1, fh - 1));
@@ -134,7 +97,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
         const int hw = (int)g_NwbCausticResolvePushConstants.halfWidth;
         const int hh = (int)g_NwbCausticResolvePushConstants.halfHeight;
-        const float2 src = (float2(pixel) + 0.5) * 0.5 - 0.5; // full pixel centre -> half-res texel-centre space
+        // Center-aligned full-to-half texel mapping; changing it shifts the upsample.
+        const float2 src = (float2(pixel) + 0.5) * 0.5 - 0.5;
         const int2 baseTexel = int2(floor(src));
         const float2 lerpFrac = src - float2(baseTexel);
 
@@ -144,36 +108,30 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             [unroll] for(int i = 0; i < 2; ++i){
                 const int2 tap = int2(clamp(baseTexel.x + i, 0, hw - 1), clamp(baseTexel.y + j, 0, hh - 1));
                 if(!nwbCausticResolveValidAtHalf(tap))
-                    continue; // tap sits on background -> no receiver, would bleed the dark surround
+                    continue;
                 const float bilinearWeight = (i == 0 ? (1.0 - lerpFrac.x) : lerpFrac.x) * (j == 0 ? (1.0 - lerpFrac.y) : lerpFrac.y);
                 const float3 d = nwbCausticResolveWorldAtHalf(tap) - centerWorld;
                 const float weight = bilinearWeight * exp(-dot(d, d) * invTwoSigmaWorldSq);
-                // The resolve ping-pong targets are RGBA16F. Retain the radiance payload as half until the
-                // FP32 weighted sum, matching the LDS path below while keeping the direct path mobile-friendly.
                 const half3 tapColor = half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);
                 sum += weight * float3(tapColor);
                 weightSum += weight;
             }
         }
-        // All four taps rejected (an isolated full-res receiver sliver between half-res background taps): no caustic.
         g_NwbCausticResolveOutput[pixel] = (weightSum > 0.0) ? float4(sum / weightSum, 1.0) : float4(0.0, 0.0, 0.0, 1.0);
         return;
     }
 
-    // PREPARE + WAVELET both run at HALF resolution.
     const uint2 pixel = dispatchThreadID.xy;
     const int hw = (int)g_NwbCausticResolvePushConstants.halfWidth;
     const int hh = (int)g_NwbCausticResolvePushConstants.halfHeight;
     const int2 texel = int2(pixel);
     const bool inBounds = (pixel.x < g_NwbCausticResolvePushConstants.halfWidth && pixel.y < g_NwbCausticResolvePushConstants.halfHeight);
 
-    // PREPARE+DOWNSAMPLE (stage 0): sum the 2x2 full-res accumulator block, un-scale, area-normalize (flux density ->
-    // irradiance via the half-res screen->receiver area Jacobian) and apply the exposure -- ONCE per half-res pixel into
-    // the buffer the wavelet passes read. No LDS / no wavelet here; all threads return.
+    // Sum 2x2 flux and divide by the corresponding half-res receiver area to preserve average irradiance.
     if(stage == 0u){
         if(inBounds){
             if(!nwbCausticResolveValidAtHalf(texel)){
-                g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0); // background: additive no-op
+                g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
             }
             else{
                 const int fw = (int)g_NwbCausticResolvePushConstants.width;
@@ -198,18 +156,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         return;
     }
 
-    // WAVELET (stage 1), at HALF resolution. step is in half-res texels.
     const int step = (int)max(g_NwbCausticResolvePushConstants.stepWidth, 1u);
 
-    // SMALL-dilation passes (uniform branch): cooperatively load the group's half-res tile + 2*step halo into LDS once,
-    // then tap from LDS. ALL threads must reach the cooperative load + barrier before any per-pixel early-out.
+    // All threads must complete the cooperative load and barriers before any bounds-dependent return.
     if(step <= NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP){
-        const int tileW = NWB_CAUSTIC_RESOLVE_GROUP_SIZE + 4 * step; // group + 2*step halo each side
+        const int tileW = NWB_CAUSTIC_RESOLVE_GROUP_SIZE + 4 * step;
         const int2 tileOrigin = int2(groupID.xy) * NWB_CAUSTIC_RESOLVE_GROUP_SIZE - int2(2 * step, 2 * step);
         const uint threadCount = NWB_CAUSTIC_RESOLVE_GROUP_SIZE * NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
         const uint threadIndex = groupThreadID.y * NWB_CAUSTIC_RESOLVE_GROUP_SIZE + groupThreadID.x;
         const uint tileTexels = (uint)(tileW * tileW);
-        // Empty-tile early-out flag: OR-set below iff any loaded tile+halo texel carries caustic. Init before the load.
         if(threadIndex == 0u)
             s_NwbCausticResolveTileActive = 0u;
         GroupMemoryBarrierWithGroupSync();
@@ -219,7 +174,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             half3 tapColor = half3(0.0h, 0.0h, 0.0h);
             float3 tapWorld = float3(0.0, 0.0, 0.0);
             uint tapValid = 0u;
-            // Only receiver texels inside the half-res image contribute (matches the texture path's OOB + background skips).
             if(t.x >= 0 && t.y >= 0 && t.x < hw && t.y < hh){
                 if(nwbCausticResolveValidAtHalf(t)){
                     tapColor = half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(t, 0)).rgb);
@@ -235,9 +189,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         }
         GroupMemoryBarrierWithGroupSync();
 
-        // EMPTY-TILE EARLY-OUT (EXACT): the caustic is sparse, so most tiles have zero caustic across the whole tile+halo;
-        // their 25-tap bilateral would sum to exactly zero anyway. Skip it and write the zero directly -- bit-identical
-        // output, but the expensive wavelet math only runs on tiles that actually carry (or border) caustic.
+        // Skip all-zero tiles.
         if(s_NwbCausticResolveTileActive == 0u){
             if(inBounds)
                 g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
@@ -261,7 +213,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         float weightSum = 0.0;
         [unroll] for(int ky = -2; ky <= 2; ++ky){
             [unroll] for(int kx = -2; kx <= 2; ++kx){
-                // Tap LDS coord = local thread + (k+2)*step (tile is offset by the 2*step halo). Always in [0, tileW).
                 const uint idx = (uint)((int(groupThreadID.y) + (ky + 2) * step) * tileW + (int(groupThreadID.x) + (kx + 2) * step));
                 if(s_NwbCausticResolveTileValid[idx] == 0u)
                     continue;
@@ -275,8 +226,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         return;
     }
 
-    // LARGE-dilation passes (step > LDS max): taps far apart -> no LDS reuse, tap the half-res textures directly. Dead
-    // for the 3-pass (1,2,4) config but kept general. Identical math to the LDS path.
+    // Large dilations access textures directly.
     if(!inBounds)
         return;
     if(!nwbCausticResolveValidAtHalf(texel)){
@@ -298,7 +248,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             if(tap.x < 0 || tap.y < 0 || tap.x >= hw || tap.y >= hh)
                 continue;
             if(!nwbCausticResolveValidAtHalf(tap))
-                continue; // background tap: no receiver -> skip so the dark surround cannot dilute the caustic edge
+                continue;
             const float3 d = nwbCausticResolveWorldAtHalf(tap) - centerWorld;
             const float weight = s_NwbCausticResolveKernel[kx + 2] * s_NwbCausticResolveKernel[ky + 2] * exp(-dot(d, d) * invTwoSigmaWorldSq);
             const half3 tapColor = half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);

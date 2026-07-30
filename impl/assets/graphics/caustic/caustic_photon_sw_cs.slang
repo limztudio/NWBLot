@@ -374,10 +374,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 
     const float3 invDir = nwbBvhSafeInvDir(direction);
 
-    // FRONT-TO-BACK ordered descent (same scheme as the per-mesh traversal). Here a "leaf" is an INSTANCE whose whole
-    // mesh traversal (+ surface dispatches) is expensive, and the demo's refractors OVERLAP, so processing the nearer
-    // instance first shrinks closest.t and culls the farther instances' AABBs -> skips entire mesh traversals. Output-
-    // identical (closest-hit is order-independent).
+    // Near-first traversal avoids unnecessary mesh work without changing closest-hit results.
     uint stack[NWB_CAUSTIC_SW_SCENE_STACK_SIZE];
     uint stackPointer = 0u;
     NwbBvhNode node = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[0u]; // root
@@ -455,20 +452,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(!nwbCausticPickLight(photonIndex, light))
         return;
 
-    // The light's principal travel direction (FROM the light). NwbSceneLight.direction is the toward-light /
-    // emission axis; the photon travels along the emission axis. For a directional/spot caustic light params.y is
-    // 0 (directional) or 2 (spot); point lights are excluded upstream (no caustic slot assigned).
+    // Photons travel along the light's emission axis.
     const float3 lightDir = nwbSafeNormalize(-light.direction.xyz, float3(0.0, 0.0, -1.0));
 
-    // Per-target emission (the make-or-break aim): assign each photon to ONE refractive target and aim it at that
-    // target's world AABB. Aiming at the COMBINED box over the spread tetrahedra centres the domain in the GAP between
-    // them and wastes most photons on empty space; per-target keeps the domain tight on actual glass so a photon is
-    // guaranteed to pass through (or graze) its target. The target is picked by a HASH of photonIndex, NOT
-    // photonIndex % count: the cell (column,row) below is also photonIndex-derived, so a plain modulo correlates the
-    // target with the grid -- e.g. with 3 targets on a 512-wide grid (512 == 2 mod 3) each target gets the cells where
-    // col == row + k (mod 3), a DIAGONAL-STRIPED 1/3 subset that the refractor images into diagonal caustic streaks
-    // shooting far across the receiver (invisible when sparse, glaring once dense). The hash decorrelates target from
-    // cell, so each target gets a uniformly-scattered subset of the stratified grid -> no stripes, caustic stays put.
+    // Hash target selection to decorrelate it from the photon grid.
     const uint targetIndex = nwbCausticHashU32(photonIndex) % g_NwbCausticSwPushConstants.emissionTargetCount;
     const NwbCausticEmissionTarget target = nwbCausticSwEmissionTargets()[targetIndex];
     const float3 targetAabbMin = target.aabbMin.xyz;

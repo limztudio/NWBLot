@@ -12,20 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Fixed-point conversion shared by the splat (producer) and the resolve. Photon flux is deposited as
-// uint(flux.channel * NWB_CAUSTIC_FIXED_POINT_SCALE) via InterlockedAdd into the R32_UINT accumulators (no float
-// image atomics exist on the backend); the resolve divides the same scale back out. Kept in its own tiny header so
-// the resolve pass can read the scale WITHOUT pulling in the full transport layer (caustic_trace.slangi declares
-// the backend closest-hit hook nwbCausticTraceClosest, which only a producer defines).
-//
-// The scale must be large enough that the SMALLEST per-photon deposit still registers as a non-zero integer: a deposit
-// is uint(fluxChannel * SCALE), and fluxChannel = (domainArea*targetCount/photonCount) * lightColor * Fresnel * Beer. At the
-// HW full density (262144 photons) that per-photon flux is ~4e-5, so SCALE must keep flux*SCALE >> 1 or the deposit
-// TRUNCATES TO ZERO and the caustic energy is silently lost (a sparse splat would just vanish, a focus would go dim).
-// 2^20 gives ~40 units/photon at the full density (and ~600 at the dbg 16384 count). The resolve divides the SAME
-// scale back out, so this is precision-only: brightness is unchanged. Overflow-safe: even all 262144 photons in one
-// pixel is ~1e7, far under the 2^32 accumulator wrap.
-// NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX saturates one deposit so a degenerate (NaN/inf) flux can never inject a wrap.
+// Precision-only scale: keep smallest deposits nonzero and total R32_UINT accumulation below wrap; resolve divides it out.
 #define NWB_CAUSTIC_FIXED_POINT_SCALE 1048576.0
 #define NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX 0x10000000u
 
@@ -33,11 +20,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Converts a per-channel flux value to the saturating fixed-point integer the splat InterlockedAdds into the
-// R32_UINT accumulators. Guards NaN/inf and clamps to NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX so no single deposit can
-// wrap the accumulator. Shared by the SW and HW producer splats -- both deposit into the SAME accumulator
-// the resolve un-scales by the SAME factor, so the two paths are byte-identical at the deposit. Lives here (not in
-// the transport header) so the HW closest-hit/miss can pull the splat without the bounce-loop transport.
+// Converts finite positive flux to a saturating fixed-point deposit.
 uint nwbCausticFluxToFixedPoint(float fluxChannel){
     if(!nwbFiniteFloat(fluxChannel) || fluxChannel <= 0.0)
         return 0u;

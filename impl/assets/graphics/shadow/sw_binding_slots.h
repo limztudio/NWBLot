@@ -126,28 +126,13 @@
 // lit and casts no candidate ray. The gbuffer concern's nwbSwShadowIsBackground and every pass share this definition.
 #define NWB_SW_SHADOW_BACKGROUND_DEPTH 0.999999
 
-// Per-frame samples-per-pixel for the soft opaque trace. Temporal accumulation (the reproject-merge pass) supplies the
-// source-area samples over frames, but in a freshly-disoccluded / gate-B-clamped region (a spinning occluder's leading edge)
-// the effective history collapses to ~0 and the pixel falls back to this frame's binary rays whose dithered penumbra the
-// a-trous cannot fully smooth in ONE frame, so 1 spp shows visible moving-region shimmer there. 2 spp halves that shimmer
-// for a measured whole-frame cost of +0.36 ms / +3.9% over SPP1 (stress_test_smoke, AMD BC-250); 4 spp is +1.05 ms / +11.6%
-// for diminishing quality return -- so 2 is the price/quality sweet spot (~1/3 of the SPP4 overhead for most of the gain).
-// Contract-shared with the soft opaque pass.
+// Two opaque samples reduce shimmer when temporal history resets.
 #define NWB_SW_SHADOW_SOFT_SPP 2u
 
-// Per-frame samples-per-pixel for the soft TRANSPARENT (colored Beer-Lambert/Fresnel) trace. Kept at 1 -- HALF the opaque
-// count -- on purpose: the colored transparent signal is a SMOOTH low-frequency tint (not the opaque path's sharp binary
-// blocker edge), it is temporally accumulated (reproject-merge history) AND denoised by the RGB a-trous, so a single jittered
-// sample per frame converges cleanly. The opaque binary edge keeps 2 (its dithered penumbra needs the extra sample to stay
-// clean in freshly-disoccluded moving regions where the temporal history collapses). Contract-shared with the transparent pass.
+// One transparent sample converges after temporal RGB denoising.
 #define NWB_SW_SHADOW_TRANSPARENT_SPP 1u
 
-// Decorrelation salt for the soft TRANSPARENT trace's cone-jitter low-discrepancy stream, so its colored
-// penumbra estimator samples the source at points INDEPENDENT of the soft OPAQUE trace's. The two soft signals are
-// SEPARATELY temporally denoised (opaque binary Bernoulli vs colored chord-variance RGB product -- their per-frame noise
-// must not be correlated) and folded only at the final full-res upsample, so the transparent trace adds this odd offset
-// into its sample index alongside frameIndex*SPP+s. A large odd constant (the golden-ratio hash multiplier's high word)
-// so it is far from any small frameIndex*SPP+s value and shares no small factor with SPP. Contract-shared with the pass.
+// Decorrelation salt for the transparent cone-jitter sequence.
 #define NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT 2654435761u
 
 // Per-thread traversal stack depths. The scene/instance BVH is shallow (a few-to-hundreds of instances);

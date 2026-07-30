@@ -3,8 +3,8 @@
 
 
 #include "shadow_reproject_merge_binding_slots.h"
-#include "shadow_resolve_binding_slots.h" // NWB_SHADOW_RESOLVE_GROUP_SIZE (the merge shares the resolve's group size)
-#include "sw_binding_slots.h"             // NWB_SW_SHADOW_SOFT_FACTOR + NWB_SCENE_SHADOW_SLOT_COUNT (via scene binding_slots)
+#include "shadow_resolve_binding_slots.h"
+#include "sw_binding_slots.h"
 #include "shadow_heap_resources.slangi"
 #include "../scene/binding_slots.h"
 #include "../common/math.slangi"
@@ -13,46 +13,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Soft OPAQUE shadow TEMPORAL reproject-merge. Runs at HALF resolution, one thread per half-res pixel, per shadow
-// slot (the C++ dispatches one slot per call, lightSlotCount == 1), inserted between the soft trace and the a-trous resolve.
-//
-// WHY REPROJECTION, NOT MOTION VECTORS: the engine rebuilds the view fresh each frame (no prev-G-buffer, no motion vectors).
-// So we STASH last frame's worldToClip on the CPU and reproject the CURRENT world position through it: clipPrev =
-// prevWorldToClip * float4(Wc,1); uvPrev = ndc*0.5+0.5 (y flipped, matching the caustic splat's exact NDC->UV convention).
-// For a STATIC receiver this reprojection is EXACT no matter how the OCCLUDER moved -- so the hard part (a large moving
-// occluder must not smear) is NOT a motion problem at all; it is a VALUE-DISAGREEMENT problem, handled by gates B and C.
-//
-// THE FIVE STEPS (per slot):
-//   1. REPROJECT: current world pos (read from the full-res world-position G-buffer at the half pixel's 2x texel, like the
-//      geometry downsample) -> uvPrev -> history texel. Off-screen / behind camera / no-history -> n=0 (pure current).
-//   2. GATE A (disocclusion / moving RECEIVER): compare current geometry to the PREV geometry cache at the history texel.
-//      plane distance (|curr camDist - prev camDist| < k*worldSpacing) AND normal agreement AND on-screen; fail -> reset
-//      n=0. Catches moving receivers + camera cuts; a no-op for a static-receiver/moving-occluder (that is gate B).
-//   3. GATE B (variance clamp = THE anti-ghost): clamp the reprojected history into mu +/- GAMMA*sigma of the CURRENT 3x3
-//      spatial visibility. A large occluder sweeping in drops the local mean; stale-bright history lands outside the band
-//      and is clamped hard toward the new dark value -> the ghost collapses in 1-2 frames. Value-disagreement is the signal.
-//   4. GATE C (temporal-gradient antilag): a large |lumaCur - lumaHistClamped| scales the effective history length toward 0
-//      so a hard swept edge snaps to current instead of lagging.
-//   5. BLEND: alpha = max(1/(nEff+1), ALPHA_MIN); out = lerp(histClamped, current, alpha). Write out (accumulated
-//      visibility = a-trous input = next-frame history) + the next moments (m1, m2, n+1 clamped).
-//
-// FALLBACK: historyValid == 0 (first frame / after resize / temporal disabled at the C++ level never dispatches this) forces
-// n=0 everywhere, so the output is the pure current sample -- never garbage/black. Invalid receiver texels also pass through
-// the current sample. So a first frame degrades exactly to the pre-temporal single-frame trace.
+// Reprojects half-resolution soft-shadow history from the previous world-to-clip matrix.
+// Geometry validation, variance clamping, and antilag reject invalid or changing history.
 
 struct NwbShadowReprojectMergePushConstants{
-    // The STASHED previous-frame worldToClip. row_major to match the C++ Float44U row-major raw dump (and the caustic
-    // view CB convention). 64 bytes; the 16 u32 scalars below bring the push to exactly 128 bytes.
+    // Must match ShadowReprojectMergePushConstants in C++ and its row-major Float44U layout.
     row_major float4x4 prevWorldToClip;
-    uint width;          // FULL-res width  (to read the world-position G-buffer at the 2x texel)
-    uint height;         // FULL-res height
-    uint halfWidth;      // HALF-res width  (dispatch / output dim)
-    uint halfHeight;     // HALF-res height
-    uint lightSlotStart; // first active SOFT shadow slot to process
-    uint lightSlotCount; // number of contiguous active SOFT slots (the C++ dispatches one slot per call -> 1)
-    uint historyValid;   // 0 = no valid history this frame (first frame / after resize) -> force n=0 (pure current)
-    // Global descriptor-heap inputs. The array inputs are selected independently for opaque vs transparent temporal
-    // accumulation; the geometry/world-position inputs are shared target-generation resources.
+    uint width;
+    uint height;
+    uint halfWidth;
+    uint halfHeight;
+    uint lightSlotStart;
+    uint lightSlotCount;
+    uint historyValid; // 0 forces pure-current output and prevents history reads.
     uint softTraceSlot;
     uint historyInSlot;
     uint momentsInSlot;
@@ -74,19 +47,14 @@ ConstantBuffer<NwbShadowReprojectMergePushConstants> g_NwbShadowMergePush;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Rec.709 luma of a (possibly colored transmittance) visibility triple -- the scalar the moments + gates B/C operate on.
 float nwbShadowMergeLuma(const float3 color){
     return dot(color, float3(0.2126, 0.7152, 0.0722));
 }
 
-// Camera-distance-proportional world spacing, matching the a-trous resolve's edge-stop metric (camDist * scale, clamped
-// away from zero). Gate A scales its plane tolerance by this so it tracks camera distance exactly like the wavelet does.
 float nwbShadowTemporalWorldSpacing(const float cameraDistance){
     return max(cameraDistance * NWB_SHADOW_TEMPORAL_WORLD_SPACING_SCALE, NWB_SHADOW_TEMPORAL_WORLD_SPACING_MIN);
 }
 
-// Half-res geometry cache accessors (see shadow_geometry_downsample_cs): .xy = octahedral normal, .z = camera distance,
-// .w = validity.
 float4 nwbShadowMergeGeomCurr(const int2 halfTexel){
     return NwbHeapSampledImage2D(g_NwbShadowMergePush.geometryCurrSlot).Load(int3(halfTexel, 0));
 }
@@ -107,20 +75,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint slotStart = g_NwbShadowMergePush.lightSlotStart;
     const uint slotEnd = min(slotStart + g_NwbShadowMergePush.lightSlotCount, NWB_SCENE_SHADOW_SLOT_COUNT);
 
-    // This half pixel's receiver geometry (curr).
     const float4 gc = nwbShadowMergeGeomCurr(texel);
     const bool valid = gc.w > 0.5;
     const float3 Nc = nwbOctDecodeNormal(gc.xy);
 
-    // Full-res world position at the block's top-left 2x texel (clamped), matching the geometry downsample's 2x sample.
     const int2 full = int2(
         min((int)h.x * NWB_SW_SHADOW_SOFT_FACTOR, (int)g_NwbShadowMergePush.width - 1),
         min((int)h.y * NWB_SW_SHADOW_SOFT_FACTOR, (int)g_NwbShadowMergePush.height - 1)
     );
     const float3 Wc = NwbHeapSampledImage2D(g_NwbShadowMergePush.worldPositionSlot).Load(int3(full, 0)).xyz;
 
-    // STEP 1 REPROJECT: project the current world pos through the STASHED previous-frame worldToClip. This is EXACT for a
-    // static receiver regardless of how the occluder moved (NDC->UV: y flipped, matching the caustic splat convention).
+    // Reproject the current world position into previous history.
     const float4 clipPrev = mul(g_NwbShadowMergePush.prevWorldToClip, float4(Wc, 1.0));
     bool onScreen = false;
     int2 hp = int2(0, 0);
@@ -134,10 +99,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         }
     }
 
-    // STEP 2 GATE A (disocclusion / moving RECEIVER): the reprojected history is trustworthy only if the receiver at the
-    // history texel matches this one -- same plane (camera-distance proxy within k*worldSpacing) AND same orientation. A
-    // moving receiver / camera cut fails this and resets to the pure current sample. (A moving OCCLUDER over a STATIC
-    // receiver PASSES here by construction -- that is precisely why it is handled by the value gate B, not this one.)
+    // Accept history only for matching receiver geometry.
     bool historyAccepted = false;
     if(onScreen && valid){
         const float4 gp = NwbHeapSampledImage2D(g_NwbShadowMergePush.geometryPrevSlot).Load(int3(hp, 0));
@@ -150,13 +112,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     }
 
     for(uint slot = slotStart; slot < slotEnd; ++slot){
-        // The current raw sample for this slot.
         const float3 cur = NwbHeapSampledImage2DArray(g_NwbShadowMergePush.softTraceSlot).Load(int4(texel, slot, 0)).rgb;
 
-        // A background/invalid receiver has no meaningful shadow to accumulate -- pass the current sample straight through
-        // and reset the moments with n=0 (so a receiver that appears next frame starts fresh, not from a stale history).
-        // The written (m1,m2) here are of the current sample luma; because n=0 the resolve treats this texel as low-history
-        // and takes the SPATIAL variance fallback, so this degenerate m2-m1^2==0 is never consumed as "converged variance".
+        // Invalid receiver: pass through the current sample and reset history.
         if(!valid){
             g_NwbShadowMergeHistoryOut[uint3(h, slot)] = float4(cur, 1.0);
             const float lumaCur0 = nwbShadowMergeLuma(cur);
@@ -164,12 +122,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             continue;
         }
 
-        // Reprojected history + its moments (only when gate A accepted; else pure current, n=0 -> the moment integration
-        // below degenerates to alpha=1, i.e. the current-sample moments, which is exactly right for a reset/disoccluded texel).
+        // Rejected history resets to the current sample.
         float3 hist = cur;
         float n = 0.0;
-        float m1Prev = 0.0; // prev integrated luma mean       (moments.x); stays 0 when history rejected -> pure-current
-        float m2Prev = 0.0; // prev integrated luma 2nd-moment (moments.y); stays 0 when history rejected -> pure-current
+        float m1Prev = 0.0;
+        float m2Prev = 0.0;
         if(historyAccepted){
             hist = NwbHeapSampledImage2DArray(g_NwbShadowMergePush.historyInSlot).Load(int4(hp, slot, 0)).rgb;
             const float3 mom = NwbHeapSampledImage2DArray(g_NwbShadowMergePush.momentsInSlot).Load(int4(hp, slot, 0)).xyz;
@@ -178,19 +135,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             n = mom.z;
         }
 
-        // STEP 3 GATE B (variance clamp): mean + stddev of the CURRENT trace over the 3x3 half-res neighborhood (valid
-        // receiver taps only). histClamped = clamp(hist, mu - GAMMA*sigma, mu + GAMMA*sigma) per channel. THE anti-ghost:
-        // stale-bright history over a newly-shadowed texel lands outside the band and snaps to the dark current mean.
+        // Clamp history to the current neighbourhood.
         float3 mu = float3(0.0, 0.0, 0.0);
         float3 mu2 = float3(0.0, 0.0, 0.0);
-        float lumaM1 = 0.0; // 3x3 luma mean  (gate C noise floor)
-        float lumaM2 = 0.0; // 3x3 luma 2nd-moment
+        float lumaM1 = 0.0;
+        float lumaM2 = 0.0;
         int cnt = 0;
         [unroll] for(int dy = -1; dy <= 1; ++dy){
             [unroll] for(int dx = -1; dx <= 1; ++dx){
                 const int2 t = int2(clamp(texel.x + dx, 0, hw - 1), clamp(texel.y + dy, 0, hh - 1));
                 if(NwbHeapSampledImage2D(g_NwbShadowMergePush.geometryCurrSlot).Load(int3(t, 0)).w <= 0.5)
-                    continue; // background tap -> no receiver, skip
+                    continue;
                 const float3 s = NwbHeapSampledImage2DArray(g_NwbShadowMergePush.softTraceSlot).Load(int4(t, slot, 0)).rgb;
                 mu += s;
                 mu2 += s * s;
@@ -201,7 +156,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             }
         }
         float3 histClamped = hist;
-        float sigmaLuma = 0.0; // gate C noise floor; 0 when no neighbours -> gate C falls back to the raw gradient
+        float sigmaLuma = 0.0;
         if(cnt > 0){
             const float invCount = 1.0 / (float)cnt;
             mu *= invCount;
@@ -214,27 +169,19 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             sigmaLuma = sqrt(max(lumaM2 * invCount - lumaMean * lumaMean, 0.0));
         }
 
-        // STEP 4 GATE C (temporal-gradient antilag), NOISE-AWARE: a hard SWEPT shadow edge shrinks the effective history so
-        // the blend snaps to current -- but only the part of the per-frame luma disagreement that EXCEEDS the local spatial
-        // noise floor (NOISE_SLACK * sigmaLuma) counts as such an edge. Subtracting the noise floor is what stops the raw
-        // 1-2 spp Monte-Carlo noise from reading as an edge and collapsing the history every frame (the static-scene random
-        // grain); a genuine umbra<->lit sweep sits many sigma out and still trips it. saturate keeps nEff in [0, n].
+        // Reduce history at temporal edges after removing local noise.
         const float lumaCur = nwbShadowMergeLuma(cur);
         const float lumaHist = nwbShadowMergeLuma(histClamped);
         const float edgeSignal = max(0.0, abs(lumaCur - lumaHist) - NWB_SHADOW_TEMPORAL_NOISE_SLACK * sigmaLuma);
         const float tempGrad = edgeSignal / max(max(lumaCur, lumaHist), 1e-3);
         const float nEff = n * saturate(1.0 - NWB_SHADOW_TEMPORAL_ANTILAG * tempGrad);
 
-        // STEP 5 BLEND: alpha (weight of the current sample) is 1/(nEff+1) capped from below by ALPHA_MIN, so the temporal
-        // lag never exceeds ~1/ALPHA_MIN frames (the global anti-ghost backstop). out is the accumulated visibility.
+        // Bound the current-sample blend weight.
         const float alpha = max(1.0 / (nEff + 1.0), NWB_SHADOW_TEMPORAL_ALPHA_MIN);
         const float3 outVis = lerp(histClamped, cur, alpha);
         const float nNext = min(nEff + 1.0, NWB_SHADOW_TEMPORAL_MAX_HISTORY);
 
-        // Temporally integrate the CURRENT sample's luma moments with the SAME alpha the colour used, so (m2 - m1^2) is a
-        // running variance of the noisy per-frame signal (SVGF). lumaCur is the current raw-trace luma computed at gate C
-        // above; the integration input is that noisy per-frame value, NOT the blended outVis. When history was rejected
-        // (m1Prev = m2Prev = 0, n = 0 -> nEff = 0 -> alpha = 1), this collapses to the pure current-sample moments.
+        // Integrate current-sample luminance moments with the same alpha.
         const float m1 = lerp(m1Prev, lumaCur, alpha);
         const float m2 = lerp(m2Prev, lumaCur * lumaCur, alpha);
 

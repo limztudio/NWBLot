@@ -511,16 +511,8 @@ struct CausticAccumulatorDecayPushConstants{
 };
 static_assert(sizeof(CausticAccumulatorDecayPushConstants) == sizeof(u32) * 4u, "CausticAccumulatorDecayPushConstants must match the shader push-constant layout");
 
-// Per-frame photon budget. Energy-conserving (per-photon flux = lightColor*emissionDomainArea*targetCount/photonCount,
-// so it scales 1/photonCount), so a higher count only DENSIFIES the splat without changing its per-frame brightness.
-// Density matters because the resolve is spatial-only (a-trous, no temporal accumulation): each frame must be dense
-// enough on its own. The HARDWARE ray-traced producer handles the full density even in an unoptimized dbg build
-// (hardware RT is fast), so it ALWAYS runs the full count -> a dense, coherent caustic in every build. The SOFTWARE-
-// compute producer does heavy per-photon work (per-mesh BVH descent + Moeller-Trumbore + the per-hit surface dispatch,
-// per bounce) that overruns the GPU watchdog (TDR) at the full count in dbg, so it is config-scaled: dbg-safe in dbg,
-// full density in opt/fin. The two counts are independent because the math is per-photon identical and energy-
-// conserving -> both produce the SAME image (the HW/SW parity A/B holds). The grid side rides the push constant
-// (gridSide), so the shaders stay config-agnostic. PHOTON_COUNT must stay == GRID_SIDE^2.
+// Hardware uses full density; software uses a debug-safe grid and full opt/fin grid.
+// PHOTON_COUNT must equal GRID_SIDE^2.
 inline constexpr u32 s_CausticHwPhotonGridSide = 512u;
 inline constexpr u32 s_CausticHwPhotonCount = s_CausticHwPhotonGridSide * s_CausticHwPhotonGridSide;
 #if defined(NDEBUG)
@@ -530,22 +522,10 @@ inline constexpr u32 s_CausticSwPhotonGridSide = NWB_CAUSTIC_SW_GRID_SIDE;  // d
 #endif
 inline constexpr u32 s_CausticSwPhotonCount = s_CausticSwPhotonGridSide * s_CausticSwPhotonGridSide;
 
-// Single exposure knob (the only caustic brightness gain), applied in the resolve after the PHYSICAL flux->irradiance
-// conversion (per-photon flux = lightColor * emissionDomainArea * targetCount / photonCount in the producer, divided
-// by the receiver area-per-pixel in the resolve). This keeps the caustic energy-conserving: focused caustics stay
-// bright at low exposure while sparse far-prism scatter falls below the visible floor. ~2 is a unit-ish exposure for
-// the demo lighting (light intensity 2.0); doubling the photon count leaves per-frame brightness unchanged.
+// Resolve exposure; photon-count changes preserve brightness.
 inline constexpr f32 s_CausticIntensity = 2.0f;
 
-// The caustic resolve denoise is an N-pass edge-avoiding a-trous wavelet (purely spatial, NO temporal accumulation ->
-// ghost-free for a moving caustic). The pass count + wavelet kernel live in the shader
-// (NWB_CAUSTIC_RESOLVE_PASS_COUNT, resolve_binding_slots.h).
-
-// Photon-aim slack for DEFORMING (runtime/skinned) refractors. Their emission AABB is derived from the bind-pose
-// (rest) bounds -- there is no per-frame CPU deformed bound (the per-frame bounds live only in the GPU meshlet-bounds
-// buffer). A skinned pose can push the surface past the rest extent, so the rest-bounds world AABB is inflated about
-// its center by this factor for runtime instances, keeping the photon emission domain over the deformed surface.
-// Matches the engine's skinned meshlet-bounds radius inflation precedent (NWB_SKINNED_MESH_BOUNDS_RADIUS_INFLATION).
+// Runtime refractor bounds are inflated because emission uses bind-pose AABBs.
 inline constexpr f32 s_CausticRuntimeBoundsInflation = 1.25f;
 
 // Software transparent-shadow broad phase: the scene BVH is only an instance-level reject before the per-mesh BVH and

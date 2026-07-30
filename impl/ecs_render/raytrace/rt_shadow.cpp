@@ -331,16 +331,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         return false;
     }
 
-    // Compacted edge list (recreated on resize alongside the visibility/coarse targets, so the SW shadow heap-slot
-    // refresh that already triggers on the visibility-pointer change refreshes it too). Each record is NWB_SW_SHADOW_EDGE_RECORD_WORDS
-    // u32. Lives on rayTracingState (a buffer, not a frame target) since it is shadow-subsystem scratch the lighting never samples.
-    // SIZING: capacity = one record per full-res pixel, but the classify pass appends one record per (pixel, active shadow slot) edge, so the
-    // TIGHT worst-case demand is width*height*activeShadowSlots (slots capped at NWB_SCENE_SHADOW_SLOT_COUNT=8). One-per-pixel is
-    // deliberately NOT that bound: at the measured ~3% edge fraction the demand is ~0.03*slots per pixel, so width*height is 4-16x
-    // the realistic worst case even with many lights -- and provisioning the 8x tight bound would burn ~73MB of 96%-empty scratch.
-    // Overflow (a pathological all-edge multi-slot frame) is SAFE, not corrupt: the append still increments the counter but the
-    // indexed list write is guarded by edgeCapacity, the build-args pass clamps the trace count to it, and the indirect
-    // pass's tail guard reads only in-range records -- so overflowed edges take the bilinear-interpolated fallback.
+    // Intentionally provision one record/pixel (not per active light); writes and indirect count are clamped, and overflowed edges use interpolated transmittance.
     const u32 edgeListCapacityRecords = targets.width * targets.height;
     Core::BufferDesc edgeListDesc;
     edgeListDesc

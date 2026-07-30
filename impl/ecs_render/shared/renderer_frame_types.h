@@ -470,8 +470,8 @@ struct DeferredFrameTargets{
     Core::TextureHandle causticIrradiance;
     // Resolved surfel-GI indirect irradiance (RGBA16F, screen space): the surfel_resolve_cs COMPUTE pass gathers the
     // surfel field once per pixel into this (rgb = indirect irradiance, a = coverage flag), and the deferred lighting
-    // PIXEL shader samples it -- so the read-write surfel pool never touches the pixel shader (compute-only, like the
-    // caustic accumulator), eliminating the frames-in-flight pool race. Cleared to 0 each frame (a = 0 -> hemiAmbient
+    // COMPUTE dispatch samples it -- so the read-write surfel pool never touches the lighting dispatch, eliminating
+    // the frames-in-flight pool race. Cleared to 0 each frame (a = 0 -> hemiAmbient
     // fallback) so a disabled/absent GI producer is a pixel-identical no-op.
     Core::TextureHandle surfelIrradiance;
     // Half-res producer: the resolve gathers into this HALF-res (RGBA16F, DivideUp(w/h, HALF_FACTOR)) target, and the

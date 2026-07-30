@@ -9,10 +9,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Deferred lighting framework: the engine-provided library a deferred lighting shader (engine default or a
-// project override) builds on. It exposes the surface inputs the geometry pass packed into the G-buffer
+// Deferred lighting framework: the engine-provided library used by the compute lighting pass. It exposes the surface
+// inputs the geometry pass packed into the G-buffer
 // (base color, normal, world position, the shading-model id + two BXDF params from the alpha channels), the
-// scene light list + per-light resolve, and the shadow-visibility accessor. The lighting shader itself owns
+// scene light list + per-light resolve, and the shadow-visibility accessor. The lighting pass itself owns
 // the loop: it loads the surface, dispatches on surface.shadingModel to a (user-authored) BXDF that walks the
 // lights, applies per-light visibility, and tonemaps. Nothing here hard-codes a shading model.
 
@@ -58,9 +58,9 @@ ConstantBuffer<NwbDeferredLightingPushConstants> g_NwbDeferredLightingPushConsta
 
 // Resolved surfel-GI indirect irradiance (RGBA16F, screen space): the surfel_resolve_cs COMPUTE pass gathered the
 // surfel field once per pixel into this texture (rgb = indirect irradiance, a = 1 where a surfel covered the pixel,
-// 0 = none). The lighting reads THIS texture rather than the read-write surfel pool, so the pool stays off the pixel
-// shader (compute-only) -- that is what kills the frames-in-flight pool race. Cleared to 0 (a = 0 -> hemiAmbient) when
-// no surfel producer ran this frame, so an unbound/disabled GI is a correct hemiAmbient no-op.
+// 0 = none). The lighting dispatch reads THIS texture rather than the read-write surfel pool, which prevents a
+// frames-in-flight pool race. Cleared to 0 (a = 0 -> hemiAmbient) when no surfel producer ran this frame, so an
+// unbound/disabled GI is a correct hemiAmbient no-op.
 
 // Indirect irradiance for the OPAQUE deferred path: read the resolved surfel texture at THIS pixel; where no surfel
 // covered it (a < 0.5) fall back to the hemiAmbient ambient term. The resolve texture is 1:1 with the screen, so use a
@@ -73,15 +73,6 @@ half3 nwbBxdfResolvedIndirect(float2 uv, float3 normalVector){
     const half4 resolved = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.z).Load(int3(pixel, 0)));
     return resolved.a > 0.5 ? half3(resolved.rgb) : nwbGiHemiAmbient(normalVector);
 }
-
-struct NwbDeferredLightingPixelInput{
-    float4 position : SV_Position;
-    [[vk::location(NWB_DEFERRED_FULLSCREEN_UV_LOCATION)]] float2 uv : TEXCOORD0;
-};
-
-struct NwbDeferredLightingPixelOutput{
-    [[vk::location(NWB_DEFERRED_COLOR_TARGET_LOCATION)]] half4 color : SV_Target0;
-};
 
 // NwbBxdfSurface (the BXDF parameter type) is shared with the transparent / AVBOIT accumulate path; it lives
 // in deferred/bxdf_surface.slangi, included above.

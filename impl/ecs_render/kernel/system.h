@@ -150,7 +150,7 @@ private:
     Core::CommandListResourceStateHandoff m_shadowVisibilityLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityReturnStateHandoff;
     // Both caustic producers can join the dedicated Compute lane. Their temporal scratch and resolved irradiance
-    // remain there through deferred lighting, with only opaqueColor crossing to Graphics composite.
+    // remain there through deferred lighting and compute composite; only compositeColor crosses to Graphics present.
     Core::CommandListResourceStateHandoff m_causticsComputeBaseStateHandoff;
     Core::CommandListResourceStateHandoff m_causticsComputeInputStateHandoff;
     Core::CommandListResourceStateHandoff m_causticsComputePersistentStateHandoff;

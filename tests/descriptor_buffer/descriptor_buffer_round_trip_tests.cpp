@@ -1958,8 +1958,8 @@ TEST_F(DescriptorBufferRoundTripTest, NormalizedStatePreludeFansInIndependentBra
 // Mirrors RendererSystem's split frame sequence: record mesh-view and scene-shading setup plus the non-CSG deferred
 // clear from the completed shadow-preparation snapshot, fan their disjoint outputs in for the opaque producer, then
 // normalize the G-buffer once. Shadow, caustics, surfel GI, and AVBOIT record from that same snapshot; their
-// four-way fan-in feeds deferred lighting before the ordered composite consumer.
-TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFanInBeforeComposite){
+// four-way fan-in feeds compute lighting, then compute composite and the final Graphics presentation consumer.
+TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFanInThroughComputePresent){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto makeGbufferTarget = [&device](){
@@ -1992,6 +1992,17 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
                 .setInitialState(ResourceStates::Common)
         );
     };
+    const auto makeStorageTarget = [&device](){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setFormat(Format::RGBA8_UNORM)
+                .setInUAV(true)
+                .setInitialState(ResourceStates::Common)
+                .setKeepInitialState(true)
+        );
+    };
     const auto makeSetupBuffer = [&device](){
         return device.createBuffer(
             BufferDesc()
@@ -2003,6 +2014,8 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
 
     auto meshViewBuffer = makeSetupBuffer();
     auto sceneShadingBuffer = makeSetupBuffer();
+    auto lightBuffer = makeSetupBuffer();
+    auto slotsBuffer = makeSetupBuffer();
     auto albedo = makeGbufferTarget();
     auto worldPosition = makeGbufferTarget();
     auto normal = makeGbufferTarget();
@@ -2010,11 +2023,14 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
     auto shadowVisibility = makePacketOutput();
     auto causticIrradiance = makePacketOutput();
     auto surfelIrradiance = makePacketOutput();
-    auto opaqueColor = makeGbufferTarget();
+    auto opaqueColor = makeStorageTarget();
+    auto compositeColor = makeStorageTarget();
     auto avboitAccumColor = makeGbufferTarget();
     auto avboitAccumExtinction = makeGbufferTarget();
     ASSERT_NE(meshViewBuffer.get(), nullptr);
     ASSERT_NE(sceneShadingBuffer.get(), nullptr);
+    ASSERT_NE(lightBuffer.get(), nullptr);
+    ASSERT_NE(slotsBuffer.get(), nullptr);
     ASSERT_NE(albedo.get(), nullptr);
     ASSERT_NE(worldPosition.get(), nullptr);
     ASSERT_NE(normal.get(), nullptr);
@@ -2023,6 +2039,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
     ASSERT_NE(causticIrradiance.get(), nullptr);
     ASSERT_NE(surfelIrradiance.get(), nullptr);
     ASSERT_NE(opaqueColor.get(), nullptr);
+    ASSERT_NE(compositeColor.get(), nullptr);
     ASSERT_NE(avboitAccumColor.get(), nullptr);
     ASSERT_NE(avboitAccumExtinction.get(), nullptr);
 
@@ -2037,8 +2054,22 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
     CommandListResourceStateHandoff causticsState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff surfelGiState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff avboitState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff fanInState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredLightingBaseState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff shadowLightingState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff causticLightingState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff surfelLightingState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff avboitLightingState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredLightingInputState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff deferredLightingState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff opaqueColorCompositeState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff avboitCompositeState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredCompositeBaseState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredCompositeInputState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredCompositeState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff compositeColorPresentState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredPresentBaseState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredPresentInputState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredPresentState(DescriptorBufferRoundTripTest::arena());
     auto shadowPrepare = device.createCommandList();
     auto meshViewSetup = device.createCommandList();
     auto sceneShadingSetup = device.createCommandList();
@@ -2051,6 +2082,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
     auto lighting = device.createCommandList();
     auto avboit = device.createCommandList();
     auto composite = device.createCommandList();
+    auto present = device.createCommandList();
     ASSERT_NE(shadowPrepare.get(), nullptr);
     ASSERT_NE(meshViewSetup.get(), nullptr);
     ASSERT_NE(sceneShadingSetup.get(), nullptr);
@@ -2063,10 +2095,18 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
     ASSERT_NE(lighting.get(), nullptr);
     ASSERT_NE(avboit.get(), nullptr);
     ASSERT_NE(composite.get(), nullptr);
+    ASSERT_NE(present.get(), nullptr);
 
     shadowPrepare->open();
+    shadowPrepare->setBufferState(slotsBuffer.get(), ResourceStates::CopyDest);
+    shadowPrepare->setBufferState(slotsBuffer.get(), ResourceStates::ConstantBuffer);
     shadowPrepare->close(&shadowPrepareState);
     ASSERT_TRUE(shadowPrepareState.valid());
+
+    CommandList* shadowPrepareCommandLists[] = { shadowPrepare.get() };
+    bool shadowPrepareSubmitted = false;
+    EXPECT_GT(device.executeCommandLists(shadowPrepareCommandLists, LengthOf(shadowPrepareCommandLists), CommandQueue::Graphics, &shadowPrepareSubmitted), 0u);
+    ASSERT_TRUE(shadowPrepareSubmitted);
 
     Latch frameSetupRecordingStarted(2);
     bool meshViewSetupRecorded = false;
@@ -2087,6 +2127,8 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
         sceneShadingSetup->open(&shadowPrepareState);
         sceneShadingSetup->setBufferState(sceneShadingBuffer.get(), ResourceStates::CopyDest);
         sceneShadingSetup->setBufferState(sceneShadingBuffer.get(), ResourceStates::ConstantBuffer);
+        sceneShadingSetup->setBufferState(lightBuffer.get(), ResourceStates::CopyDest);
+        sceneShadingSetup->setBufferState(lightBuffer.get(), ResourceStates::ShaderResource);
         sceneShadingSetup->close(&sceneShadingSetupState);
         sceneShadingSetupRecorded = sceneShadingSetupState.valid() && sceneShadingSetup->hasCommandBuffer();
     });
@@ -2123,11 +2165,13 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
     gbuffer->open(&frameSetupFanInState);
     EXPECT_EQ(gbuffer->getBufferState(meshViewBuffer.get()), ResourceStates::ConstantBuffer);
     EXPECT_EQ(gbuffer->getBufferState(sceneShadingBuffer.get()), ResourceStates::ConstantBuffer);
+    EXPECT_EQ(gbuffer->getBufferState(lightBuffer.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(gbuffer->getBufferState(slotsBuffer.get()), ResourceStates::ConstantBuffer);
     EXPECT_EQ(gbuffer->getTextureSubresourceState(albedo.get(), 0u, 0u), ResourceStates::CopyDest);
     EXPECT_EQ(gbuffer->getTextureSubresourceState(worldPosition.get(), 0u, 0u), ResourceStates::CopyDest);
     EXPECT_EQ(gbuffer->getTextureSubresourceState(normal.get(), 0u, 0u), ResourceStates::CopyDest);
     EXPECT_EQ(gbuffer->getTextureSubresourceState(depth.get(), 0u, 0u), ResourceStates::CopyDest);
-    EXPECT_EQ(gbuffer->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::CopyDest);
+    EXPECT_EQ(gbuffer->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);
     EXPECT_EQ(gbuffer->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::CopyDest);
     gbuffer->setTextureState(albedo.get(), s_AllSubresources, ResourceStates::RenderTarget);
     gbuffer->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::RenderTarget);
@@ -2156,6 +2200,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
         shadow->setTextureState(normal.get(), s_AllSubresources, ResourceStates::ShaderResource);
         shadow->setTextureState(depth.get(), s_AllSubresources, ResourceStates::ShaderResource);
         shadow->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+        shadow->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
         shadow->close(&shadowState);
         shadowRecorded = shadowState.valid() && shadow->hasCommandBuffer();
     });
@@ -2166,6 +2211,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
         caustics->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
         caustics->setTextureState(depth.get(), s_AllSubresources, ResourceStates::ShaderResource);
         caustics->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+        caustics->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
         caustics->close(&causticsState);
         causticsRecorded = causticsState.valid() && caustics->hasCommandBuffer();
     });
@@ -2174,6 +2220,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
         surfelGi->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
         surfelGi->setTextureState(normal.get(), s_AllSubresources, ResourceStates::ShaderResource);
         surfelGi->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+        surfelGi->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
         surfelGi->close(&surfelGiState);
         surfelGiRecorded = surfelGiState.valid() && surfelGi->hasCommandBuffer();
     });
@@ -2184,6 +2231,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
         avboit->setTextureState(normal.get(), s_AllSubresources, ResourceStates::RenderTarget);
         avboit->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::RenderTarget);
         avboit->setTextureState(depth.get(), s_AllSubresources, ResourceStates::DepthRead);
+        avboit->setTextureState(albedo.get(), s_AllSubresources, ResourceStates::RenderTarget);
         avboit->setTextureState(normal.get(), s_AllSubresources, ResourceStates::ShaderResource);
         avboit->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
         avboit->setTextureState(depth.get(), s_AllSubresources, ResourceStates::ShaderResource);
@@ -2206,49 +2254,150 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
     ASSERT_TRUE(surfelGiRecorded);
     ASSERT_TRUE(avboitRecorded);
 
-    const CommandListResourceStateHandoff* branchStates[] = {
-        &shadowState,
-        &causticsState,
-        &surfelGiState,
-        &avboitState,
+    Texture* const deferredLightingBaseTextures[] = {
+        albedo.get(),
+        normal.get(),
+        worldPosition.get(),
+        depth.get(),
+        opaqueColor.get(),
     };
-    ASSERT_TRUE(fanInState.buildFanIn(normalizedState, branchStates, 4u));
-    ASSERT_TRUE(fanInState.valid());
+    Buffer* const deferredLightingBaseBuffers[] = {
+        sceneShadingBuffer.get(),
+        lightBuffer.get(),
+        slotsBuffer.get(),
+    };
+    ASSERT_TRUE(deferredLightingBaseState.buildResourceSubset(
+        normalizedState,
+        deferredLightingBaseTextures,
+        LengthOf(deferredLightingBaseTextures),
+        deferredLightingBaseBuffers,
+        LengthOf(deferredLightingBaseBuffers)
+    ));
+    ASSERT_TRUE(shadowLightingState.buildTextureSubset(shadowState, shadowVisibility.get()));
+    ASSERT_TRUE(causticLightingState.buildTextureSubset(causticsState, causticIrradiance.get()));
+    ASSERT_TRUE(surfelLightingState.buildTextureSubset(surfelGiState, surfelIrradiance.get()));
+    Texture* const avboitLightingTextures[] = {
+        albedo.get(),
+        normal.get(),
+        worldPosition.get(),
+        depth.get(),
+    };
+    ASSERT_TRUE(avboitLightingState.buildResourceSubset(
+        avboitState,
+        avboitLightingTextures,
+        LengthOf(avboitLightingTextures),
+        nullptr,
+        0u
+    ));
+    const CommandListResourceStateHandoff* deferredLightingBranchStates[] = {
+        &shadowLightingState,
+        &causticLightingState,
+        &surfelLightingState,
+        &avboitLightingState,
+    };
+    ASSERT_TRUE(deferredLightingInputState.buildFanIn(
+        deferredLightingBaseState,
+        deferredLightingBranchStates,
+        LengthOf(deferredLightingBranchStates)
+    ));
 
+    bool lightingInputsCorrect = false;
     bool lightingRecorded = false;
     const Graphics::JobHandle lightingJob = graphics.scheduleGraphicsJob([&](){
-        lighting->open(&fanInState);
+        lighting->open(&deferredLightingInputState);
+        lightingInputsCorrect =
+            lighting->getBufferState(sceneShadingBuffer.get()) == ResourceStates::ConstantBuffer
+            && lighting->getBufferState(lightBuffer.get()) == ResourceStates::ShaderResource
+            && lighting->getBufferState(slotsBuffer.get()) == ResourceStates::ConstantBuffer
+        ;
         lighting->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
         lighting->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
         lighting->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
         lighting->setTextureState(albedo.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        lighting->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::RenderTarget);
+        lighting->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
         lighting->close(&deferredLightingState);
         lightingRecorded = deferredLightingState.valid() && lighting->hasCommandBuffer();
     });
     ASSERT_TRUE(lightingJob.valid());
 
     graphics.waitJob(lightingJob);
+    ASSERT_TRUE(lightingInputsCorrect);
     ASSERT_TRUE(lightingRecorded);
 
-    composite->open(&deferredLightingState);
-    EXPECT_EQ(composite->getTextureSubresourceState(albedo.get(), 0u, 0u), ResourceStates::ShaderResource);
-    EXPECT_EQ(composite->getTextureSubresourceState(worldPosition.get(), 0u, 0u), ResourceStates::ShaderResource);
-    EXPECT_EQ(composite->getTextureSubresourceState(normal.get(), 0u, 0u), ResourceStates::ShaderResource);
-    EXPECT_EQ(composite->getTextureSubresourceState(depth.get(), 0u, 0u), ResourceStates::ShaderResource);
-    EXPECT_EQ(composite->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::ShaderResource);
-    EXPECT_EQ(composite->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
-    EXPECT_EQ(composite->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
-    EXPECT_EQ(composite->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::RenderTarget);
+    ASSERT_TRUE(opaqueColorCompositeState.buildTextureSubset(deferredLightingState, opaqueColor.get()));
+    Texture* const avboitCompositeTextures[] = {
+        avboitAccumColor.get(),
+        avboitAccumExtinction.get(),
+    };
+    ASSERT_TRUE(avboitCompositeState.buildResourceSubset(
+        avboitState,
+        avboitCompositeTextures,
+        LengthOf(avboitCompositeTextures),
+        nullptr,
+        0u
+    ));
+    Buffer* const deferredCompositeBaseBuffers[] = {
+        slotsBuffer.get(),
+    };
+    ASSERT_TRUE(deferredCompositeBaseState.buildResourceSubset(
+        deferredLightingBaseState,
+        nullptr,
+        0u,
+        deferredCompositeBaseBuffers,
+        LengthOf(deferredCompositeBaseBuffers)
+    ));
+    const CommandListResourceStateHandoff* deferredCompositeBranchStates[] = {
+        &opaqueColorCompositeState,
+        &avboitCompositeState,
+    };
+    ASSERT_TRUE(deferredCompositeInputState.buildFanIn(
+        deferredCompositeBaseState,
+        deferredCompositeBranchStates,
+        LengthOf(deferredCompositeBranchStates)
+    ));
+
+    composite->open(&deferredCompositeInputState);
+    EXPECT_EQ(composite->getBufferState(slotsBuffer.get()), ResourceStates::ConstantBuffer);
+    EXPECT_EQ(composite->getTextureSubresourceState(albedo.get(), 0u, 0u), ResourceStates::Unknown);
+    EXPECT_EQ(composite->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::Unknown);
+    EXPECT_EQ(composite->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);
     EXPECT_EQ(composite->getTextureSubresourceState(avboitAccumColor.get(), 0u, 0u), ResourceStates::RenderTarget);
     EXPECT_EQ(composite->getTextureSubresourceState(avboitAccumExtinction.get(), 0u, 0u), ResourceStates::RenderTarget);
     composite->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
     composite->setTextureState(avboitAccumColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
     composite->setTextureState(avboitAccumExtinction.get(), s_AllSubresources, ResourceStates::ShaderResource);
-    composite->close();
+    composite->setTextureState(compositeColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    composite->close(&deferredCompositeState);
+    ASSERT_TRUE(deferredCompositeState.valid());
+
+    ASSERT_TRUE(compositeColorPresentState.buildTextureSubset(deferredCompositeState, compositeColor.get()));
+    Buffer* const deferredPresentBaseBuffers[] = {
+        slotsBuffer.get(),
+    };
+    ASSERT_TRUE(deferredPresentBaseState.buildResourceSubset(
+        deferredCompositeBaseState,
+        nullptr,
+        0u,
+        deferredPresentBaseBuffers,
+        LengthOf(deferredPresentBaseBuffers)
+    ));
+    const CommandListResourceStateHandoff* deferredPresentBranchStates[] = { &compositeColorPresentState };
+    ASSERT_TRUE(deferredPresentInputState.buildFanIn(
+        deferredPresentBaseState,
+        deferredPresentBranchStates,
+        LengthOf(deferredPresentBranchStates)
+    ));
+
+    present->open(&deferredPresentInputState);
+    EXPECT_EQ(present->getBufferState(slotsBuffer.get()), ResourceStates::ConstantBuffer);
+    EXPECT_EQ(present->getTextureSubresourceState(compositeColor.get(), 0u, 0u), ResourceStates::Common);
+    // opaqueColor is deliberately absent from this handoff; its keepInitialState contract supplies Common locally.
+    EXPECT_EQ(present->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);
+    present->setTextureState(compositeColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    present->close(&deferredPresentState);
+    ASSERT_TRUE(deferredPresentState.valid());
 
     CommandList* commandLists[] = {
-        shadowPrepare.get(),
         meshViewSetup.get(),
         sceneShadingSetup.get(),
         deferredClear.get(),
@@ -2260,9 +2409,10 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
         avboit.get(),
         lighting.get(),
         composite.get(),
+        present.get(),
     };
     bool submitted = false;
-    EXPECT_GT(device.executeCommandLists(commandLists, 12u, CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_GT(device.executeCommandLists(commandLists, LengthOf(commandLists), CommandQueue::Graphics, &submitted), 0u);
     EXPECT_TRUE(submitted);
     EXPECT_TRUE(device.waitForIdle());
 }

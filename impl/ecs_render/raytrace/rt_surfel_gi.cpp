@@ -1121,7 +1121,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     }
 
     // Resolve at half resolution: one thread per half-res pixel gathers the surfel field (pool + cell-head as COMPUTE
-    // SRVs) + the G-buffer into surfelIrradianceHalf. This is what keeps the pool off the pixel shader (compute-only),
+    // SRVs) + the G-buffer into surfelIrradianceHalf. This is what keeps the pool off the lighting dispatch,
     // eliminating the frames-in-flight pool race; the 125-cell gather runs for 1/FACTOR^2 the pixels.
     // The pool/cell-head UAV writes (trace/hash-build) are synced to SRV here; the half-res UAV write is synced to SRV
     // for the upsample after.

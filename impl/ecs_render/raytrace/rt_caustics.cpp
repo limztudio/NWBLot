@@ -251,7 +251,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
 
     // Surfel-GI resolved irradiance: full-res RGBA16F. The surfel_resolve_cs COMPUTE pass gathers the surfel field once
     // per pixel into this (rgb = indirect irradiance, a = 1 where a surfel covered the pixel); the deferred lighting
-    // samples it instead of the read-write surfel pool -- keeping the pool off the pixel shader eliminates the
+    // samples it instead of the read-write surfel pool -- keeping the pool off the lighting dispatch eliminates the
     // frames-in-flight pool race. Same lifecycle as causticIrradiance (full-res, recreated on resize).
     targets.surfelIrradianceFormat = Core::Format::RGBA16_FLOAT;
     Core::TextureDesc surfelIrradianceDesc;

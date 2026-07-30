@@ -4,8 +4,8 @@
 
 #include "lighting_framework.slangi"
 // Cook-generated dispatch module: assembled from every material's `bxdf` declaration (see the asset cooker's
-// EmitDeferredBxdfDispatchModule). It is shared with the legacy fullscreen harness, so material-authored shading
-// stays bit-for-bit at the same surface/BXDF boundary while the execution lane becomes compute-capable.
+// EmitDeferredBxdfDispatchModule). Material-authored shading stays at the same surface/BXDF boundary while the
+// lighting pass executes as compute.
 #include "deferred/generated/bxdf_dispatch.slangi"
 
 

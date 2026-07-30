@@ -1226,9 +1226,9 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
         1u
     ));
 
-    const Name cpuScopeName("cpu/update");
+    const Name cpuScopeName("gbuffer");
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
-    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, "cpu/update", stats, 2u));
+    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, "gbuffer", stats, 2u));
 
     const Name memoryScopeName("memory/project_arena");
     const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(memoryScopeName);
@@ -1263,7 +1263,8 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
     EXPECT_EQ(report.summary.frameGraphEdgeCount, 2u);
     EXPECT_TRUE(ContainsText(AStringView(report.json.data(), report.json.size()), "\"eventCount\": 4"));
     EXPECT_TRUE(ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "source,scope,publish_frame"));
-    EXPECT_TRUE(ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "cpu,cpu/update"));
+    EXPECT_TRUE(ContainsText(AStringView(report.perfCsv.data(), report.perfCsv.size()), "cpu,gbuffer"));
+    EXPECT_TRUE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "GBuffer Pass\\n125.000 ms"));
 }
 
 TEST(Telemetry, TelemetryIngestStoresRawAndReports){

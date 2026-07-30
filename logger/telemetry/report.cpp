@@ -178,6 +178,7 @@ void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayloa
     out += "  rankdir=LR;\n";
     out += "  node [shape=box, fontname=\"monospace\"];\n";
 
+    AString<TelemetryArena> timedLabel(arena);
     for(usize i = 0u; i < graph.nodes.size(); ++i){
         const Telemetry::FrameGraphNodePayload& node = graph.nodes[i];
 
@@ -185,13 +186,13 @@ void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayloa
         const AStringView labelView(node.label.data(), node.label.size());
         AppendFormat(out, "  n{} [shape={}, label=", i, FrameGraphNodeShape(node.kind));
         if(timed != timing.end()){
-            AString<TelemetryArena> label(arena);
-            label.reserve(labelView.size() + s_TimedGraphDotTimingLabelExtraBytes);
-            label.append(labelView.data(), labelView.size());
-            label += '\n';
-            AppendFormat(label, "{:.3f} ms", timed.value() * s_MillisecondsPerSecond);
+            timedLabel.clear();
+            timedLabel.reserve(labelView.size() + s_TimedGraphDotTimingLabelExtraBytes);
+            timedLabel.append(labelView.data(), labelView.size());
+            timedLabel += '\n';
+            AppendFormat(timedLabel, "{:.3f} ms", timed.value() * s_MillisecondsPerSecond);
 
-            AppendDotQuotedText(out, AStringView(label.data(), label.size()));
+            AppendDotQuotedText(out, AStringView(timedLabel.data(), timedLabel.size()));
         }
         else
             AppendDotQuotedText(out, labelView);

@@ -43,8 +43,8 @@
 #define NWB_SCENE_CAUSTIC_IRRADIANCE_DEFAULT_BINDING 8
 
 // Surfel GI: the deferred lighting pass samples a single RESOLVED screen-space irradiance texture. The per-pixel
-// surfel gather runs in a dedicated COMPUTE pass (surfel_resolve_cs) that writes this texture, so the lighting pixel
-// shader never touches the read-write surfel pool (that decoupling eliminates the frames-in-flight pool race). The
+// surfel gather runs in a dedicated COMPUTE pass (surfel_resolve_cs) that writes this texture, so the lighting
+// compute shader never touches the read-write surfel pool (that decoupling eliminates the frames-in-flight pool race). The
 // pool / hash / params are bound only in the resolve set (surfel_binding_slots.h), not the lighting set.
 #define NWB_SCENE_GI_SURFEL_IRRADIANCE_DEFAULT_SET 0
 #define NWB_SCENE_GI_SURFEL_IRRADIANCE_DEFAULT_BINDING 9

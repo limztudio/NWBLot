@@ -258,6 +258,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         && registerStorageTexture(bindless.surfelIrradianceHalfStorage, targets.surfelIrradianceHalf.get(), targets.surfelIrradianceFormat, Core::TextureDimension::Texture2D)
         && registerSampler(bindless.sampler, deferredState().m_sampler.get())
         && registerTexture(bindless.opaqueColor, Core::GpuDescriptorClass::SampledImage, targets.opaqueColor.get(), targets.opaqueColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerStorageTexture(bindless.opaqueColorStorage, targets.opaqueColor.get(), targets.opaqueColorFormat, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitAccumColor, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumColor.get(), targets.avboit.accumColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitAccumExtinction, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumExtinction.get(), targets.avboit.accumExtinctionFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitTransmittance, Core::GpuDescriptorClass::SampledImage3D, targets.avboit.transmittanceTexture.get(), targets.avboit.transmittanceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D)
@@ -334,6 +335,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
     bindless.slots.surfelIrradiance = bindless.surfelIrradiance.slot();
     bindless.slots.sampler = bindless.sampler.slot();
     bindless.slots.opaqueColor = bindless.opaqueColor.slot();
+    bindless.slots.opaqueColorStorage = bindless.opaqueColorStorage.slot();
     bindless.slots.avboitAccumColor = bindless.avboitAccumColor.slot();
     bindless.slots.avboitAccumExtinction = bindless.avboitAccumExtinction.slot();
     bindless.slots.avboitTransmittance = bindless.avboitTransmittance.slot();
@@ -404,6 +406,7 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTa
         heap.free(targets.bindless.surfelIrradianceHalfStorage);
         heap.free(targets.bindless.sampler);
         heap.free(targets.bindless.opaqueColor);
+        heap.free(targets.bindless.opaqueColorStorage);
         heap.free(targets.bindless.avboitAccumColor);
         heap.free(targets.bindless.avboitAccumExtinction);
         heap.free(targets.bindless.avboitTransmittance);
@@ -482,7 +485,6 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     resetDeferredBindlessFrameResources(deferredState().m_targets);
     resetAvboitFrameTargets(deferredState().m_targets.avboit);
     deferredState().m_targets.framebuffer.reset();
-    deferredState().m_targets.opaqueLightingFramebuffer.reset();
 
     deferredState().m_targets.albedo.reset();
     deferredState().m_targets.normal.reset();
@@ -515,7 +517,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     const Core::Format::Enum albedoFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(device);
     const Core::Format::Enum normalFormat = ECSRenderDetail::SelectGBufferVectorFormat(device);
     const Core::Format::Enum worldPositionFormat = ECSRenderDetail::SelectGBufferVectorFormat(device);
-    const Core::Format::Enum opaqueColorFormat = ECSRenderDetail::SelectGBufferAlbedoFormat(device);
+    const Core::Format::Enum opaqueColorFormat = ECSRenderDetail::SelectDeferredOpaqueColorFormat(device);
     const Core::Format::Enum depthFormat = ECSRenderDetail::SelectGBufferDepthFormat(device);
     const Core::Format::Enum csgCapNormalFormat = ECSRenderDetail::SelectCsgCapNormalFormat(device);
     const Core::Format::Enum csgIntervalDepthFormat = ECSRenderDetail::SelectCsgIntervalDepthFormat(device);
@@ -605,6 +607,9 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setHeight(createdTargets.height)
         .setFormat(createdTargets.albedoFormat)
         .setInRenderTarget(true)
+        // Deferred lighting now samples every G-buffer attachment from AsyncCompute after the Graphics AVBOIT
+        // packet. Keep the color attachment concurrent just like normal/world/depth.
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/gbuffer_albedo")
         .setClearValue(ECSRenderDetail::s_ClearColor)
     ;
@@ -651,7 +656,10 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setWidth(createdTargets.width)
         .setHeight(createdTargets.height)
         .setFormat(createdTargets.opaqueColorFormat)
-        .setInRenderTarget(true)
+        .setInUAV(true)
+        .setInitialState(Core::ResourceStates::Common)
+        .setKeepInitialState(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/opaque_color")
         .setClearValue(ECSRenderDetail::s_ClearColor)
     ;
@@ -699,14 +707,6 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     }
 
-    Core::FramebufferDesc opaqueLightingFramebufferDesc;
-    opaqueLightingFramebufferDesc.addColorAttachment(createdTargets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources);
-    createdTargets.opaqueLightingFramebuffer = device.createFramebuffer(opaqueLightingFramebufferDesc);
-    if(!createdTargets.opaqueLightingFramebuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting framebuffer"));
-        return false;
-    }
-
     if(!m_renderer.avboitSystem().createAvboitFrameTargets(
         createdTargets,
         avboitLowRasterFormat,
@@ -729,7 +729,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
 
     deferredState().m_targets = Move(createdTargets);
-    if(!createDeferredLightingPipeline(deferredState().m_targets)){
+    if(!createDeferredLightingPipeline()){
         resetDeferredFrameTargets();
         return false;
     }

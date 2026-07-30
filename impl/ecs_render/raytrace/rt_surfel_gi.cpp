@@ -1175,7 +1175,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         commandList.dispatch(DivideUp(targets.width, groupSize), DivideUp(targets.height, groupSize), 1u);
     }
 
-    // (6) Sync the surfelIrradiance UAV write -> the deferred-lighting pixel-shader SRV read.
+    // (6) Sync the surfelIrradiance UAV write -> the deferred-lighting compute-shader SRV read.
     commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
 

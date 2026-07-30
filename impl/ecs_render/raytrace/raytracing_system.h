@@ -108,7 +108,7 @@ public:
     // by m_surfelUseHwTrace on the HW-shadow branch; gated on RayQuery + accel-struct support (like ensureShadowPipeline).
     [[nodiscard]] bool ensureSurfelTraceHwPipeline();
     // The resolve pass: a COMPUTE gather-once-per-pixel into the screen-space surfelIrradiance texture the deferred
-    // lighting samples (keeps the RW pool off the pixel shader -> no frames-in-flight pool race). Its field/input/
+    // lighting compute dispatch samples (keeps the RW pool off the lighting shader -> no frames-in-flight pool race). Its field/input/
     // output resources are heap-selected by the common push block.
     [[nodiscard]] bool ensureSurfelResolvePipeline();
     // Half-res upsample: reconstructs the full-res surfelIrradiance from heap-selected half irradiance plus G-buffer

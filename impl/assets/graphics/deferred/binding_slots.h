@@ -26,9 +26,11 @@
 // reads THIS texture, never the read-write surfel pool -- keeping the pool off the pixel shader (compute-only) is what
 // eliminates the frames-in-flight pool race. Cleared to 0 (a = 0 -> hemiAmbient) so an unbound/disabled GI is a no-op.
 #define NWB_DEFERRED_LIGHTING_BINDING_GI_SURFEL_IRRADIANCE 9
-// Slots 0..9 remain reserved ABI positions. The fullscreen deferred lighting pass fetches the image/sampler resources
-// and scene buffers from the global heap through this per-frame slot cbuffer.
+// Slots 0..9 remain reserved ABI positions. The deferred-lighting compute dispatch fetches its image/sampler
+// resources and scene buffers from the global heap through this per-frame slot cbuffer.
 #define NWB_DEFERRED_LIGHTING_BINDING_BINDLESS_RESOURCES 10
+
+#define NWB_DEFERRED_LIGHTING_GROUP_SIZE 8
 
 #define NWB_DEFERRED_COMPOSITE_BINDING_OPAQUE_COLOR 0
 #define NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_COLOR 1

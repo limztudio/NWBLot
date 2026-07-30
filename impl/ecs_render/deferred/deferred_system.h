@@ -32,7 +32,7 @@ public:
 public:
     [[nodiscard]] bool updateSceneShadingBuffer(Core::CommandList& commandList, f32 fallbackAspectRatio);
     [[nodiscard]] bool createDeferredLightingResources();
-    [[nodiscard]] bool createDeferredLightingPipeline(DeferredFrameTargets& targets);
+    [[nodiscard]] bool createDeferredLightingPipeline();
     [[nodiscard]] bool renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool createDeferredFrameTargets(u32 width, u32 height);
     [[nodiscard]] bool createDeferredCompositeResources();

@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/kernel/renderer_private.h>
 
+#include <impl/assets/graphics/deferred/binding_slots.h>
 #include <impl/assets/graphics/deferred/names.h>
 
 
@@ -80,7 +81,7 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
     if(!deferredState().m_lightingBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(arena());
         bindingLayoutDesc
-            .setVisibility(Core::ShaderType::Pixel)
+            .setVisibility(Core::ShaderType::Compute)
         ;
         // The target-generation selector is a UniformBuffer heap entry; the local layout contains only its four-byte
         // slot.  That keeps both descriptor data and ordinary renderer resources on the global descriptor heap.
@@ -98,47 +99,39 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         return false;
     }
 
-    if(!m_renderer.shaderSystem().loadDeferredCompositeVertexShader())
-        return false;
-
-    // The deferred lighting shader is the engine harness; it includes the cook-generated BXDF dispatch module
-    // assembled from every material's `bxdf`. The engine ships no default BXDF and projects do not select a
-    // lighting shader -- shading is entirely material-driven (see EmitDeferredBxdfDispatchModule).
+    // The deferred-lighting compute harness includes the cook-generated BXDF dispatch module assembled from every
+    // material's `bxdf`. The engine ships no default BXDF and projects do not select a lighting shader -- shading is
+    // entirely material-driven (see EmitDeferredBxdfDispatchModule).
     if(!m_renderer.shaderSystem().loadShader(
-        deferredState().m_lightingPixelShader,
-        AssetsGraphicsDeferred::s_LightingPixelShaderName,
+        deferredState().m_lightingComputeShader,
+        AssetsGraphicsDeferred::s_LightingComputeShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Pixel,
-        "ECSRender_DeferredLightingPS"
+        Core::ShaderType::Compute,
+        "ECSRender_DeferredLightingCS"
     ))
         return false;
 
     return true;
 }
 
-bool RendererDeferredSystem::createDeferredLightingPipeline(DeferredFrameTargets& targets){
-    if(!targets.opaqueLightingFramebuffer)
-        return false;
+bool RendererDeferredSystem::createDeferredLightingPipeline(){
     if(!createDeferredLightingResources())
         return false;
 
-    const Core::FramebufferInfo& framebufferInfo = targets.opaqueLightingFramebuffer->getFramebufferInfo();
-    if(deferredState().m_lightingPipeline && deferredState().m_lightingPipeline->getFramebufferInfo() == framebufferInfo)
+    if(deferredState().m_lightingPipeline)
         return true;
 
     auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    Core::GraphicsPipelineDesc pipelineDesc;
+    Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc
-        .setVertexShader(deferredState().m_compositeVertexShader)
-        .setPixelShader(deferredState().m_lightingPixelShader)
-        .setRenderState(ECSRenderDetail::BuildCompositeRenderState())
+        .setComputeShader(deferredState().m_lightingComputeShader)
         .addBindingLayout(deferredState().m_lightingBindingLayout)
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
 
-    deferredState().m_lightingPipeline = device.createGraphicsPipeline(pipelineDesc, framebufferInfo);
+    deferredState().m_lightingPipeline = device.createComputePipeline(pipelineDesc);
     if(!deferredState().m_lightingPipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting pipeline"));
         return false;
@@ -220,14 +213,13 @@ bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& command
 }
 
 bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    NWB_ASSERT(targets.opaqueLightingFramebuffer);
     NWB_ASSERT(deferredState().m_lightingPipeline);
 
     if(!uploadDeferredBindlessFrameResources(commandList, targets))
         return false;
 
     // Heap writes are persistent descriptors rather than command-state items, so state tracking cannot discover these
-    // sampled textures automatically. Transition every target the lighting pixel shader resolves through the heap.
+    // resources automatically. Transition every sampled target and the sole storage output explicitly.
     commandList.setTextureState(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -235,29 +227,23 @@ bool RendererDeferredSystem::renderDeferredLighting(Core::CommandList& commandLi
     commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.causticIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+    commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredLighting, graphics().getDevice(), commandList);
 
-    Core::ViewportState viewportState;
-    viewportState.addViewportAndScissorRect(targets.opaqueLightingFramebuffer->getFramebufferInfo().getViewport());
-
-    Core::GraphicsState graphicsState;
-    graphicsState.setPipeline(deferredState().m_lightingPipeline.get());
-    graphicsState.setFramebuffer(targets.opaqueLightingFramebuffer.get());
-    graphicsState.setViewport(viewportState);
-
-    commandList.setGraphicsState(graphicsState);
-    graphics().getDevice().getDescriptorHeap().bindGraphics(commandList, *deferredState().m_lightingPipeline);
+    Core::ComputeState computeState;
+    computeState.setPipeline(deferredState().m_lightingPipeline.get());
+    commandList.setComputeState(computeState);
+    graphics().getDevice().getDescriptorHeap().bindCompute(commandList, *deferredState().m_lightingPipeline);
     const __hidden_deferred_lighting::PushConstants pushConstants{
         targets.bindless.slotsBufferDescriptor.slot()
     };
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
-    Core::DrawArguments drawArgs;
-    drawArgs.setVertexCount(ECSRenderDetail::s_FullscreenTriangleVertexCount);
-    commandList.draw(drawArgs);
-    commandList.endRenderPass();
+    const u32 groupCountX = (targets.width + NWB_DEFERRED_LIGHTING_GROUP_SIZE - 1u) / NWB_DEFERRED_LIGHTING_GROUP_SIZE;
+    const u32 groupCountY = (targets.height + NWB_DEFERRED_LIGHTING_GROUP_SIZE - 1u) / NWB_DEFERRED_LIGHTING_GROUP_SIZE;
+    commandList.dispatch(groupCountX, groupCountY, 1u);
     return true;
 }
 

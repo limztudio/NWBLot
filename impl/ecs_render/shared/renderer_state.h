@@ -247,8 +247,8 @@ private:
     Core::BufferHandle m_sceneShadingBuffer;
     Core::BufferHandle m_lightBuffer;
     Core::ShaderHandle m_compositeVertexShader;
-    Core::ShaderHandle m_lightingPixelShader;
-    Core::GraphicsPipelineHandle m_lightingPipeline;
+    Core::ShaderHandle m_lightingComputeShader;
+    Core::ComputePipelineHandle m_lightingPipeline;
     Core::BindingLayoutHandle m_compositeBindingLayout;
     Core::SamplerHandle m_sampler;
     Core::ShaderHandle m_compositePixelShader;
@@ -704,8 +704,8 @@ struct RtSurfelGiState{
     Core::ShaderHandle m_surfelTraceShader;
     Core::ComputePipelineHandle m_surfelTracePipeline;
     // Resolve pass: a COMPUTE pass that gathers the surfel field once per pixel into the screen-space surfelIrradiance
-    // texture the deferred lighting samples. Keeping the gather in compute (not the pixel shader) keeps the RW pool off
-    // the pixel stage, eliminating the frames-in-flight pool race. Its field, G-buffer, and irradiance output are all
+    // texture the deferred-lighting compute shader samples. Keeping the gather in compute keeps the RW pool off the
+    // lighting dispatch, eliminating the frames-in-flight pool race. Its field, G-buffer, and irradiance output are all
     // selected through global heap slots.
     Core::BindingLayoutHandle m_surfelResolveBindingLayout;
     Core::ShaderHandle m_surfelResolveShader;

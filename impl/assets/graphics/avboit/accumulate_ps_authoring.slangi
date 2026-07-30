@@ -70,13 +70,13 @@
 // / nwbMaterialSurface). The NWB_MESH_MATERIAL_CONTEXT_PROVIDED set above suppresses surface.slangi's
 // single-material nwbMaterialSurfaceAt (unused here); the AVBOIT main loads the surface-input statics + invokes
 // nwbMaterialSurface() directly. Finally the BXDF surface type + the cook-generated BXDF dispatch
-// (nwbDeferredDispatchBxdf), the same module lighting_ps.slang pulls, so the transparent fragment is shaded by
+// (nwbDeferredDispatchBxdf), the same module lighting_cs.slang pulls, so the transparent fragment is shaded by
 // the material's own BXDF by its shading-model id.
 #include "../mesh/material_typed_accessors.slangi"
 #include "../mesh/surface.slangi"
 #include "../deferred/bxdf_surface.slangi"
 // The cook-generated dispatch lives in its OWN include root (deferredBxdfIncludeRoot), not under engine/graphics,
-// so it is included by its include-root-relative path (exactly as lighting_ps.slang does) -- NOT a `../` path,
+// so it is included by its include-root-relative path (exactly as lighting_cs.slang does) -- NOT a `../` path,
 // which would (mis)resolve under engine/graphics where the generated file does not exist.
 #include "deferred/generated/bxdf_dispatch.slangi"
 

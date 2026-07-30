@@ -41,8 +41,8 @@
 
 // The surfel GI gather is NOT done here. It runs once per pixel in a dedicated COMPUTE resolve pass
 // (surfel_resolve_cs) into a screen-space irradiance texture, which the deferred-lighting harness samples
-// (lighting_framework.slangi's nwbBxdfLoadSurface). That keeps the read-write surfel pool off the pixel shader
-// (compute-only, like the caustic accumulator), eliminating the frames-in-flight pool race. nwbBxdfIndirectIrradiance
+// (lighting_framework.slangi's nwbBxdfLoadSurface). That keeps the read-write surfel pool off the lighting compute
+// shader (compute-only, like the caustic accumulator), eliminating the frames-in-flight pool race. nwbBxdfIndirectIrradiance
 // below is the hemiAmbient FALLBACK the AVBOIT transparent path (no G-buffer -> no resolve) and null coverage use.
 
 // 1 (white) = lit, 0 = shadowed, tint = colored transmittance. Reads the light's shadow-slot layer; a light

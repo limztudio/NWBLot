@@ -143,33 +143,38 @@ private:
     Core::CommandListResourceStateHandoff m_postGbufferNormalizedStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowComputeBaseStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowComputeInputStateHandoff;
-    // Compute-only shadow scratch/history retains its state across frames. The exclusive visibility output follows
-    // the separate Compute -> Graphics -> Compute ownership-return handoff below.
+    // Compute-only shadow scratch/history retains its state across frames. Deferred lighting now consumes the
+    // visibility result on the same Compute lane, so the result snapshot remains Compute-local until the next frame.
     Core::CommandListResourceStateHandoff m_shadowComputePersistentStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityStateHandoff;
-    Core::CommandListResourceStateHandoff m_shadowVisibilityGraphicsStateHandoff;
+    Core::CommandListResourceStateHandoff m_shadowVisibilityLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityReturnStateHandoff;
-    Core::CommandListResourceStateHandoff m_shadowOwnershipRecoveryInputStateHandoff;
-    Core::CommandListResourceStateHandoff m_shadowOwnershipRecoveryStateHandoff;
-    // Both caustic producers can join the dedicated Compute lane. Their temporal scratch remains private to Compute,
-    // while the resolved irradiance follows the same explicit Compute -> Graphics -> Compute ownership cycle as
-    // shadowVisibility.
+    // Both caustic producers can join the dedicated Compute lane. Their temporal scratch and resolved irradiance
+    // remain there through deferred lighting, with only opaqueColor crossing to Graphics composite.
     Core::CommandListResourceStateHandoff m_causticsComputeBaseStateHandoff;
     Core::CommandListResourceStateHandoff m_causticsComputeInputStateHandoff;
     Core::CommandListResourceStateHandoff m_causticsComputePersistentStateHandoff;
     Core::CommandListResourceStateHandoff m_causticsStateHandoff;
-    Core::CommandListResourceStateHandoff m_causticIrradianceGraphicsStateHandoff;
+    Core::CommandListResourceStateHandoff m_causticIrradianceLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_causticIrradianceReturnStateHandoff;
-    // Surfel GI is also entirely compute-dispatched, including its RayQuery trace variant. Its field/history stays
-    // private to AsyncCompute; only the resolved full-resolution irradiance crosses to deferred lighting.
+    // Surfel GI is also entirely compute-dispatched, including its RayQuery trace variant. Its field/history and
+    // resolved full-resolution irradiance stay on AsyncCompute through deferred lighting.
     Core::CommandListResourceStateHandoff m_surfelGiComputeBaseStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelGiComputeInputStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelGiComputePersistentStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelGiStateHandoff;
-    Core::CommandListResourceStateHandoff m_surfelIrradianceGraphicsStateHandoff;
+    Core::CommandListResourceStateHandoff m_surfelIrradianceLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelIrradianceReturnStateHandoff;
-    Core::CommandListResourceStateHandoff m_postGbufferFanInStateHandoff;
+    // Lighting runs on AsyncCompute after the Graphics AVBOIT chain. Its narrow input handoff contains the normalized
+    // G-buffer, the three Compute-produced lighting inputs, and the reusable opaque-color storage output only.
+    Core::CommandListResourceStateHandoff m_deferredLightingBaseStateHandoff;
+    Core::CommandListResourceStateHandoff m_deferredLightingInputStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredLightingStateHandoff;
+    Core::CommandListResourceStateHandoff m_avboitLightingStateHandoff;
+    Core::CommandListResourceStateHandoff m_avboitCompositeStateHandoff;
+    Core::CommandListResourceStateHandoff m_opaqueColorGraphicsStateHandoff;
+    Core::CommandListResourceStateHandoff m_deferredCompositeBaseStateHandoff;
+    Core::CommandListResourceStateHandoff m_deferredCompositeInputStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredCompositeStateHandoff;
     // AVBOIT's raster occupancy/extinction/accumulation stages stay on Graphics, while the depth-warp and integration
     // dispatches run on AsyncCompute. All inter-stage work resources use concurrent sharing; these handoffs carry
@@ -189,7 +194,9 @@ private:
     Core::CommandListHandle m_gbufferCommandList;
     Core::CommandListHandle m_postGbufferNormalizeCommandList;
     Core::CommandListHandle m_shadowVisibilityCommandList;
-    Core::CommandListHandle m_shadowOwnershipRecoveryCommandList;
+    // A small Graphics join packet retires accepted AsyncCompute work when a later dependent packet is rejected.
+    // It never assumes a queue-family ownership transfer because all remaining cross-lane resources are concurrent.
+    Core::CommandListHandle m_asyncRecoveryCommandList;
     // Empty Graphics packets that bracket the independently recorded effects submission for an aggregate queue-time
     // envelope. They are submitted only on the dedicated async-shadow schedule.
     Core::CommandListHandle m_asyncEffectsTimingBeginCommandList;
@@ -202,6 +209,7 @@ private:
     // family can record it independently of the Graphics fallback list.
     Core::CommandListHandle m_asyncSurfelGiCommandList;
     Core::CommandListHandle m_surfelGiCommandList;
+    Core::CommandListHandle m_asyncDeferredLightingCommandList;
     Core::CommandListHandle m_deferredLightingCommandList;
     // The hybrid AVBOIT packet uses Graphics lists for raster phases and AsyncCompute lists for its two pure dispatches.
     Core::CommandListHandle m_avboitCommandList;
@@ -214,9 +222,9 @@ private:
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;
     bool m_preparedShadowVisibilityReady = false;
-    // A Compute release without a successfully accepted Graphics acquire is not recoverable by guessing. The
-    // Graphics owner is asked to end this device generation, then resources are rebuilt before rendering resumes.
-    bool m_asyncShadowOwnershipRecoveryFailed = false;
+    // An accepted AsyncCompute packet whose Graphics recovery join cannot be submitted is not recoverable by guessing.
+    // End this device generation and rebuild resources before rendering resumes.
+    bool m_asyncRenderRecoveryFailed = false;
 
 private:
     RendererShaderSystem m_shaderSystem;

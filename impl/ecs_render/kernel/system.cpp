@@ -48,24 +48,28 @@ RendererSystem::RendererSystem(
     , m_shadowComputeInputStateHandoff(arena)
     , m_shadowComputePersistentStateHandoff(arena)
     , m_shadowVisibilityStateHandoff(arena)
-    , m_shadowVisibilityGraphicsStateHandoff(arena)
+    , m_shadowVisibilityLightingStateHandoff(arena)
     , m_shadowVisibilityReturnStateHandoff(arena)
-    , m_shadowOwnershipRecoveryInputStateHandoff(arena)
-    , m_shadowOwnershipRecoveryStateHandoff(arena)
     , m_causticsComputeBaseStateHandoff(arena)
     , m_causticsComputeInputStateHandoff(arena)
     , m_causticsComputePersistentStateHandoff(arena)
     , m_causticsStateHandoff(arena)
-    , m_causticIrradianceGraphicsStateHandoff(arena)
+    , m_causticIrradianceLightingStateHandoff(arena)
     , m_causticIrradianceReturnStateHandoff(arena)
     , m_surfelGiComputeBaseStateHandoff(arena)
     , m_surfelGiComputeInputStateHandoff(arena)
     , m_surfelGiComputePersistentStateHandoff(arena)
     , m_surfelGiStateHandoff(arena)
-    , m_surfelIrradianceGraphicsStateHandoff(arena)
+    , m_surfelIrradianceLightingStateHandoff(arena)
     , m_surfelIrradianceReturnStateHandoff(arena)
-    , m_postGbufferFanInStateHandoff(arena)
+    , m_deferredLightingBaseStateHandoff(arena)
+    , m_deferredLightingInputStateHandoff(arena)
     , m_deferredLightingStateHandoff(arena)
+    , m_avboitLightingStateHandoff(arena)
+    , m_avboitCompositeStateHandoff(arena)
+    , m_opaqueColorGraphicsStateHandoff(arena)
+    , m_deferredCompositeBaseStateHandoff(arena)
+    , m_deferredCompositeInputStateHandoff(arena)
     , m_deferredCompositeStateHandoff(arena)
     , m_avboitPreStateHandoff(arena)
     , m_avboitDepthWarpInputStateHandoff(arena)
@@ -119,21 +123,27 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
         m_shadowComputeInputStateHandoff.reset();
         m_shadowComputePersistentStateHandoff.reset();
         m_shadowVisibilityStateHandoff.reset();
-        m_shadowVisibilityGraphicsStateHandoff.reset();
+        m_shadowVisibilityLightingStateHandoff.reset();
         m_shadowVisibilityReturnStateHandoff.reset();
-        m_shadowOwnershipRecoveryInputStateHandoff.reset();
-        m_shadowOwnershipRecoveryStateHandoff.reset();
         m_causticsComputeBaseStateHandoff.reset();
         m_causticsComputeInputStateHandoff.reset();
         m_causticsComputePersistentStateHandoff.reset();
         m_causticsStateHandoff.reset();
-        m_causticIrradianceGraphicsStateHandoff.reset();
+        m_causticIrradianceLightingStateHandoff.reset();
         m_causticIrradianceReturnStateHandoff.reset();
         m_surfelGiComputeBaseStateHandoff.reset();
         m_surfelGiComputeInputStateHandoff.reset();
         m_surfelGiComputePersistentStateHandoff.reset();
         m_surfelGiStateHandoff.reset();
-        m_surfelIrradianceGraphicsStateHandoff.reset();
+        m_surfelIrradianceLightingStateHandoff.reset();
+        m_deferredLightingBaseStateHandoff.reset();
+        m_deferredLightingInputStateHandoff.reset();
+        m_deferredLightingStateHandoff.reset();
+        m_avboitLightingStateHandoff.reset();
+        m_avboitCompositeStateHandoff.reset();
+        m_opaqueColorGraphicsStateHandoff.reset();
+        m_deferredCompositeBaseStateHandoff.reset();
+        m_deferredCompositeInputStateHandoff.reset();
         m_surfelIrradianceReturnStateHandoff.reset();
         m_avboitPreStateHandoff.reset();
         m_avboitDepthWarpInputStateHandoff.reset();
@@ -188,24 +198,28 @@ void RendererSystem::invalidateResources(){
     m_shadowComputeInputStateHandoff.reset();
     m_shadowComputePersistentStateHandoff.reset();
     m_shadowVisibilityStateHandoff.reset();
-    m_shadowVisibilityGraphicsStateHandoff.reset();
+    m_shadowVisibilityLightingStateHandoff.reset();
     m_shadowVisibilityReturnStateHandoff.reset();
-    m_shadowOwnershipRecoveryInputStateHandoff.reset();
-    m_shadowOwnershipRecoveryStateHandoff.reset();
     m_causticsComputeBaseStateHandoff.reset();
     m_causticsComputeInputStateHandoff.reset();
     m_causticsComputePersistentStateHandoff.reset();
     m_causticsStateHandoff.reset();
-    m_causticIrradianceGraphicsStateHandoff.reset();
+    m_causticIrradianceLightingStateHandoff.reset();
     m_causticIrradianceReturnStateHandoff.reset();
     m_surfelGiComputeBaseStateHandoff.reset();
     m_surfelGiComputeInputStateHandoff.reset();
     m_surfelGiComputePersistentStateHandoff.reset();
     m_surfelGiStateHandoff.reset();
-    m_surfelIrradianceGraphicsStateHandoff.reset();
+    m_surfelIrradianceLightingStateHandoff.reset();
     m_surfelIrradianceReturnStateHandoff.reset();
-    m_postGbufferFanInStateHandoff.reset();
+    m_deferredLightingBaseStateHandoff.reset();
+    m_deferredLightingInputStateHandoff.reset();
     m_deferredLightingStateHandoff.reset();
+    m_avboitLightingStateHandoff.reset();
+    m_avboitCompositeStateHandoff.reset();
+    m_opaqueColorGraphicsStateHandoff.reset();
+    m_deferredCompositeBaseStateHandoff.reset();
+    m_deferredCompositeInputStateHandoff.reset();
     m_deferredCompositeStateHandoff.reset();
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpInputStateHandoff.reset();
@@ -222,13 +236,14 @@ void RendererSystem::invalidateResources(){
     m_gbufferCommandList.reset();
     m_postGbufferNormalizeCommandList.reset();
     m_shadowVisibilityCommandList.reset();
-    m_shadowOwnershipRecoveryCommandList.reset();
+    m_asyncRecoveryCommandList.reset();
     m_asyncEffectsTimingBeginCommandList.reset();
     m_asyncEffectsTimingEndCommandList.reset();
     m_asyncCausticsCommandList.reset();
     m_causticsCommandList.reset();
     m_asyncSurfelGiCommandList.reset();
     m_surfelGiCommandList.reset();
+    m_asyncDeferredLightingCommandList.reset();
     m_deferredLightingCommandList.reset();
     m_avboitCommandList.reset();
     m_asyncAvboitDepthWarpCommandList.reset();
@@ -237,7 +252,7 @@ void RendererSystem::invalidateResources(){
     m_avboitAccumulateCommandList.reset();
     m_deferredCompositeCommandList.reset();
     m_shadowPrepareCommandList.reset();
-    m_asyncShadowOwnershipRecoveryFailed = false;
+    m_asyncRenderRecoveryFailed = false;
     // The descriptor-buffer TLAS descriptor owns a retained acceleration-structure handle until its in-flight-frame
     // quarantine matures. Retire it before RendererRayTracingState releases the current TLAS so resource invalidation
     // cannot strand a descriptor-buffer block (or its retained AS) until device shutdown.
@@ -333,10 +348,10 @@ bool RendererSystem::ensureFrameCommandLists(){
         }
     }
 
-    if(!m_shadowOwnershipRecoveryCommandList){
-        m_shadowOwnershipRecoveryCommandList = device.createCommandList();
-        if(!m_shadowOwnershipRecoveryCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow ownership-recovery command list"));
+    if(!m_asyncRecoveryCommandList){
+        m_asyncRecoveryCommandList = device.createCommandList();
+        if(!m_asyncRecoveryCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async recovery command list"));
             return false;
         }
     }
@@ -371,6 +386,15 @@ bool RendererSystem::ensureFrameCommandLists(){
             m_asyncSurfelGiCommandList = device.createCommandList(asyncSurfelGiCommandListParameters);
             if(!m_asyncSurfelGiCommandList){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async surfel-GI command list"));
+                return false;
+            }
+        }
+        if(!m_asyncDeferredLightingCommandList){
+            Core::CommandListParameters asyncDeferredLightingCommandListParameters;
+            asyncDeferredLightingCommandListParameters.setRenderLane(Core::RenderLane::AsyncCompute);
+            m_asyncDeferredLightingCommandList = device.createCommandList(asyncDeferredLightingCommandListParameters);
+            if(!m_asyncDeferredLightingCommandList){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async deferred-lighting command list"));
                 return false;
             }
         }
@@ -595,6 +619,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     NWB_ASSERT(m_causticsCommandList);
     NWB_ASSERT(!m_graphics.getDevice().isRenderLaneDedicated(Core::RenderLane::AsyncCompute) || m_asyncSurfelGiCommandList);
     NWB_ASSERT(m_surfelGiCommandList);
+    NWB_ASSERT(!m_graphics.getDevice().isRenderLaneDedicated(Core::RenderLane::AsyncCompute) || m_asyncDeferredLightingCommandList);
     NWB_ASSERT(m_deferredLightingCommandList);
     NWB_ASSERT(m_avboitCommandList);
     NWB_ASSERT(m_deferredCompositeCommandList);
@@ -705,8 +730,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_graphics.requestDeviceRecreation();
         return;
     }
-    if(m_asyncShadowOwnershipRecoveryFailed){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async shadow ownership recovery failed; rendering is suspended until resources are recreated"));
+    if(m_asyncRenderRecoveryFailed){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async render recovery failed; rendering is suspended until resources are recreated"));
         return;
     }
     const bool asyncShadowSchedule = device.isRenderLaneDedicated(Core::RenderLane::AsyncCompute);
@@ -727,7 +752,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* gbufferCommandList = m_gbufferCommandList.get();
     Core::CommandList* postGbufferNormalizeCommandList = m_postGbufferNormalizeCommandList.get();
     Core::CommandList* shadowVisibilityCommandList = m_shadowVisibilityCommandList.get();
-    Core::CommandList* shadowOwnershipRecoveryCommandList = m_shadowOwnershipRecoveryCommandList.get();
+    Core::CommandList* asyncRecoveryCommandList = m_asyncRecoveryCommandList.get();
     Core::CommandList* asyncEffectsTimingBeginCommandList = m_asyncEffectsTimingBeginCommandList.get();
     Core::CommandList* asyncEffectsTimingEndCommandList = m_asyncEffectsTimingEndCommandList.get();
     Core::CommandList* graphicsCausticsCommandList = m_causticsCommandList.get();
@@ -742,7 +767,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? asyncSurfelGiCommandList
         : graphicsSurfelGiCommandList
     ;
-    Core::CommandList* deferredLightingCommandList = m_deferredLightingCommandList.get();
+    Core::CommandList* graphicsDeferredLightingCommandList = m_deferredLightingCommandList.get();
+    Core::CommandList* asyncDeferredLightingCommandList = m_asyncDeferredLightingCommandList.get();
+    Core::CommandList* deferredLightingCommandList = asyncShadowSchedule
+        ? asyncDeferredLightingCommandList
+        : graphicsDeferredLightingCommandList
+    ;
     Core::CommandList* avboitCommandList = m_avboitCommandList.get();
     Core::CommandList* asyncAvboitDepthWarpCommandList = m_asyncAvboitDepthWarpCommandList.get();
     Core::CommandList* avboitExtinctionCommandList = m_avboitExtinctionCommandList.get();
@@ -755,7 +785,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(gbufferCommandList);
     NWB_ASSERT(postGbufferNormalizeCommandList);
     NWB_ASSERT(shadowVisibilityCommandList);
-    NWB_ASSERT(shadowOwnershipRecoveryCommandList);
+    NWB_ASSERT(asyncRecoveryCommandList);
     NWB_ASSERT(!asyncShadowSchedule || asyncEffectsTimingBeginCommandList);
     NWB_ASSERT(!asyncShadowSchedule || asyncEffectsTimingEndCommandList);
     NWB_ASSERT(graphicsCausticsCommandList);
@@ -764,6 +794,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(graphicsSurfelGiCommandList);
     NWB_ASSERT(!asyncSurfelGiSchedule || asyncSurfelGiCommandList);
     NWB_ASSERT(surfelGiCommandList);
+    NWB_ASSERT(graphicsDeferredLightingCommandList);
+    NWB_ASSERT(!asyncShadowSchedule || asyncDeferredLightingCommandList);
     NWB_ASSERT(deferredLightingCommandList);
     NWB_ASSERT(avboitCommandList);
     NWB_ASSERT(!asyncAvboitSchedule || asyncAvboitDepthWarpCommandList);
@@ -778,7 +810,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !gbufferCommandList
         || !postGbufferNormalizeCommandList
         || !shadowVisibilityCommandList
-        || !shadowOwnershipRecoveryCommandList
+        || !asyncRecoveryCommandList
         || (asyncShadowSchedule && !asyncEffectsTimingBeginCommandList)
         || (asyncShadowSchedule && !asyncEffectsTimingEndCommandList)
         || !graphicsCausticsCommandList
@@ -787,6 +819,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !graphicsSurfelGiCommandList
         || (asyncSurfelGiSchedule && !asyncSurfelGiCommandList)
         || !surfelGiCommandList
+        || !graphicsDeferredLightingCommandList
+        || (asyncShadowSchedule && !asyncDeferredLightingCommandList)
         || !deferredLightingCommandList
         || !avboitCommandList
         || (asyncAvboitSchedule && !asyncAvboitDepthWarpCommandList)
@@ -806,19 +840,23 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_shadowComputeBaseStateHandoff.reset();
     m_shadowComputeInputStateHandoff.reset();
     m_shadowVisibilityStateHandoff.reset();
-    m_shadowVisibilityGraphicsStateHandoff.reset();
-    m_shadowOwnershipRecoveryInputStateHandoff.reset();
-    m_shadowOwnershipRecoveryStateHandoff.reset();
+    m_shadowVisibilityLightingStateHandoff.reset();
     m_causticsComputeBaseStateHandoff.reset();
     m_causticsComputeInputStateHandoff.reset();
     m_causticsStateHandoff.reset();
-    m_causticIrradianceGraphicsStateHandoff.reset();
+    m_causticIrradianceLightingStateHandoff.reset();
     m_surfelGiComputeBaseStateHandoff.reset();
     m_surfelGiComputeInputStateHandoff.reset();
     m_surfelGiStateHandoff.reset();
-    m_surfelIrradianceGraphicsStateHandoff.reset();
-    m_postGbufferFanInStateHandoff.reset();
+    m_surfelIrradianceLightingStateHandoff.reset();
+    m_deferredLightingBaseStateHandoff.reset();
+    m_deferredLightingInputStateHandoff.reset();
     m_deferredLightingStateHandoff.reset();
+    m_avboitLightingStateHandoff.reset();
+    m_avboitCompositeStateHandoff.reset();
+    m_opaqueColorGraphicsStateHandoff.reset();
+    m_deferredCompositeBaseStateHandoff.reset();
+    m_deferredCompositeInputStateHandoff.reset();
     m_deferredCompositeStateHandoff.reset();
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpInputStateHandoff.reset();
@@ -954,6 +992,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingSubmissionTicket avboitExtinctionTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket avboitIntegrationTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket avboitAccumulateTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket lightingTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket finalTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket* const prefixTimingTicketForPacket = asyncShadowSchedule ? &prefixTimingTicket : &renderTimingTicket;
     Core::GpuTimingSubmissionTicket* const shadowTimingTicketForPacket = asyncShadowSchedule ? &shadowTimingTicket : &renderTimingTicket;
@@ -970,6 +1009,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingSubmissionTicket* const avboitPreTimingTicketForPacket = asyncAvboitSchedule
         ? &avboitPreTimingTicket
         : effectsTimingTicketForPacket
+    ;
+    Core::GpuTimingSubmissionTicket* const lightingTimingTicketForPacket = asyncShadowSchedule
+        ? &lightingTimingTicket
+        : &renderTimingTicket
     ;
     Core::GpuTimingSubmissionTicket* const finalTimingTicketForPacket = asyncShadowSchedule ? &finalTimingTicket : &renderTimingTicket;
     // This scope crosses two synchronously-waited Graphics jobs, so it cannot live in either worker's scratch
@@ -992,6 +1035,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         avboitExtinctionTimingTicket.discard();
         avboitIntegrationTimingTicket.discard();
         avboitAccumulateTimingTicket.discard();
+        lightingTimingTicket.discard();
         finalTimingTicket.discard();
     };
     const auto discardRenderPackets = [&](){
@@ -1025,16 +1069,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_shadowComputeBaseStateHandoff.reset();
         m_shadowComputeInputStateHandoff.reset();
         m_shadowVisibilityStateHandoff.reset();
-        m_shadowVisibilityGraphicsStateHandoff.reset();
-        m_shadowOwnershipRecoveryInputStateHandoff.reset();
-        m_shadowOwnershipRecoveryStateHandoff.reset();
+        m_shadowVisibilityLightingStateHandoff.reset();
         m_causticsStateHandoff.reset();
+        m_causticIrradianceLightingStateHandoff.reset();
         m_surfelGiComputeBaseStateHandoff.reset();
         m_surfelGiComputeInputStateHandoff.reset();
         m_surfelGiStateHandoff.reset();
-        m_surfelIrradianceGraphicsStateHandoff.reset();
-        m_postGbufferFanInStateHandoff.reset();
+        m_surfelIrradianceLightingStateHandoff.reset();
+        m_deferredLightingBaseStateHandoff.reset();
+        m_deferredLightingInputStateHandoff.reset();
         m_deferredLightingStateHandoff.reset();
+        m_avboitLightingStateHandoff.reset();
+        m_avboitCompositeStateHandoff.reset();
+        m_opaqueColorGraphicsStateHandoff.reset();
+        m_deferredCompositeBaseStateHandoff.reset();
+        m_deferredCompositeInputStateHandoff.reset();
         m_deferredCompositeStateHandoff.reset();
         m_avboitPreStateHandoff.reset();
         m_avboitDepthWarpInputStateHandoff.reset();
@@ -1698,16 +1747,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!shadowVisibilityWritten)
             m_raytracingSystem.clearShadowVisibility(*shadowVisibilityCommandList, deferredTargets);
 
-        if(asyncShadowSchedule){
-            // The only exclusive cross-lane result: Compute releases after its final write, Graphics final acquires
-            // before deferred lighting samples it, then returns it to Compute after composite.
-            shadowVisibilityCommandList->releaseTextureOwnership(
-                deferredTargets.shadowVisibility.get(),
-                ECSRenderDetail::s_ShadowVisibilitySubresources,
-                Core::RenderLane::Graphics
-            );
-        }
-
         if(asyncShadowTiming){
             asyncShadowTiming->finishTiming(*shadowVisibilityCommandList);
             asyncShadowTiming.reset();
@@ -1754,16 +1793,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             }
         }
 
-        if(asyncCausticsSchedule){
-            // This is the sole caustic result that Graphics consumes. The temporal accumulator and resolve scratch
-            // remain private to Compute; deferred lighting acquires only the resolved irradiance below.
-            causticsCommandList->releaseTextureOwnership(
-                deferredTargets.causticIrradiance.get(),
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::RenderLane::Graphics
-            );
-        }
-
         causticsCommandList->close(&m_causticsStateHandoff);
         causticsCommandListReady =
             m_causticsStateHandoff.valid()
@@ -1804,16 +1833,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         // become visible to another worker halfway through their per-frame update.
         if(!m_raytracingSystem.renderSurfelGi(*surfelGiCommandList, deferredTargets))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel GI render pass failed"));
-
-        if(asyncSurfelGiSchedule){
-            // Deferred lighting is the only Graphics consumer of this full-resolution result. The half-resolution
-            // intermediate and persistent surfel field remain exclusive to Compute.
-            surfelGiCommandList->releaseTextureOwnership(
-                deferredTargets.surfelIrradiance.get(),
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::RenderLane::Graphics
-            );
-        }
 
         if(asyncSurfelGiTiming){
             asyncSurfelGiTiming->finishTiming(*surfelGiCommandList);
@@ -2131,73 +2150,103 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    if(asyncShadowSchedule && !m_shadowVisibilityGraphicsStateHandoff.buildTextureSubset(
+    // Keep the deferred-lighting import deliberately narrow. The three ray-effect results remain exclusively on
+    // AsyncCompute through their only consumer; only concurrent G-buffer/slot resources are imported from Graphics.
+    Core::Texture* const deferredLightingBaseTextures[] = {
+        deferredTargets.albedo.get(),
+        deferredTargets.normal.get(),
+        deferredTargets.worldPosition.get(),
+        deferredTargets.depth.get(),
+        deferredTargets.opaqueColor.get(),
+    };
+    Core::Buffer* const deferredLightingBaseBuffers[] = {
+        m_deferredState.m_sceneShadingBuffer.get(),
+        m_deferredState.m_lightBuffer.get(),
+        deferredTargets.bindless.slotsBuffer.get(),
+    };
+    if(!m_deferredLightingBaseStateHandoff.buildResourceSubset(
+        m_postGbufferNormalizedStateHandoff,
+        deferredLightingBaseTextures,
+        sizeof(deferredLightingBaseTextures) / sizeof(deferredLightingBaseTextures[0]),
+        deferredLightingBaseBuffers,
+        sizeof(deferredLightingBaseBuffers) / sizeof(deferredLightingBaseBuffers[0])
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-lighting base state selection failed"));
+        discardRenderPackets();
+        return;
+    }
+    if(!m_shadowVisibilityLightingStateHandoff.buildTextureSubset(
         m_shadowVisibilityStateHandoff,
         deferredTargets.shadowVisibility.get()
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the async shadow visibility handoff"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the shadow visibility lighting handoff"));
         discardRenderPackets();
         return;
     }
-    if(asyncCausticsSchedule && !m_causticIrradianceGraphicsStateHandoff.buildTextureSubset(
+    if(!m_causticIrradianceLightingStateHandoff.buildTextureSubset(
         m_causticsStateHandoff,
         deferredTargets.causticIrradiance.get()
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the async caustic irradiance handoff"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the caustic irradiance lighting handoff"));
         discardRenderPackets();
         return;
     }
-    if(asyncSurfelGiSchedule && !m_surfelIrradianceGraphicsStateHandoff.buildTextureSubset(
+    if(!m_surfelIrradianceLightingStateHandoff.buildTextureSubset(
         m_surfelGiStateHandoff,
         deferredTargets.surfelIrradiance.get()
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the async surfel irradiance handoff"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the surfel irradiance lighting handoff"));
+        discardRenderPackets();
+        return;
+    }
+    Core::Texture* const avboitLightingTextures[] = {
+        deferredTargets.albedo.get(),
+        deferredTargets.normal.get(),
+        deferredTargets.worldPosition.get(),
+        deferredTargets.depth.get(),
+    };
+    if(!m_avboitLightingStateHandoff.buildResourceSubset(
+        m_avboitStateHandoff,
+        avboitLightingTextures,
+        sizeof(avboitLightingTextures) / sizeof(avboitLightingTextures[0]),
+        nullptr,
+        0u
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the AVBOIT lighting inputs"));
         discardRenderPackets();
         return;
     }
 
-    const Core::CommandListResourceStateHandoff* postGbufferBranchStates[] = {
-        asyncShadowSchedule ? &m_shadowVisibilityGraphicsStateHandoff : &m_shadowVisibilityStateHandoff,
-        asyncCausticsSchedule ? &m_causticIrradianceGraphicsStateHandoff : &m_causticsStateHandoff,
-        asyncSurfelGiSchedule ? &m_surfelIrradianceGraphicsStateHandoff : &m_surfelGiStateHandoff,
-        &m_avboitStateHandoff,
+    const Core::CommandListResourceStateHandoff* deferredLightingBranchStates[] = {
+        &m_shadowVisibilityLightingStateHandoff,
+        &m_causticIrradianceLightingStateHandoff,
+        &m_surfelIrradianceLightingStateHandoff,
+        &m_avboitLightingStateHandoff,
     };
-    if(!m_postGbufferFanInStateHandoff.buildFanIn(
-        m_postGbufferNormalizedStateHandoff,
-        postGbufferBranchStates,
+    if(!m_deferredLightingInputStateHandoff.buildFanIn(
+        m_deferredLightingBaseStateHandoff,
+        deferredLightingBranchStates,
         4u
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: post-G-buffer packet state fan-in failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-lighting state fan-in failed"));
         discardRenderPackets();
         return;
     }
 
-    // Deferred lighting consumes the ray-effect outputs and follows AVBOIT because transparent CSG can touch shared
-    // G-buffer attachments. Record it only after the four-way fan-in has reconciled every sibling packet's state.
+    // Deferred lighting consumes the ray-effect outputs after AVBOIT has finished touching the shared G-buffer. On a
+    // dedicated lane the dispatch stays on AsyncCompute, so ray-effect ownership never bounces through Graphics.
     bool deferredLightingCommandListReady = false;
     const Core::Graphics::JobHandle deferredLightingRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
         &deferredTargets,
         deferredLightingCommandList,
         &deferredLightingCommandListReady,
-        &asyncFinalTiming,
-        asyncShadowSchedule,
-        finalTimingTicketForPacket
+        lightingTimingTicketForPacket
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*finalTimingTicketForPacket);
-        deferredLightingCommandList->open(&m_postGbufferFanInStateHandoff);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*lightingTimingTicketForPacket);
+        deferredLightingCommandList->open(&m_deferredLightingInputStateHandoff);
         if(!deferredLightingCommandList->hasCommandBuffer())
             return;
-
-        if(asyncShadowSchedule){
-            asyncFinalTiming.emplace(
-                m_graphics.gpuTiming(),
-                RendererGpuTimingScope::s_AsyncFinal,
-                m_graphics.getDevice(),
-                *deferredLightingCommandList
-            );
-            asyncFinalTiming->finishMarker();
-        }
 
         const bool deferredLightingRecorded = m_deferredSystem.renderDeferredLighting(*deferredLightingCommandList, deferredTargets);
         deferredLightingCommandList->close(&m_deferredLightingStateHandoff);
@@ -2218,6 +2267,57 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
+    if(!m_opaqueColorGraphicsStateHandoff.buildTextureSubset(
+        m_deferredLightingStateHandoff,
+        deferredTargets.opaqueColor.get()
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the deferred-lighting output for Graphics composite"));
+        discardRenderPackets();
+        return;
+    }
+    Core::Texture* const avboitCompositeTextures[] = {
+        deferredTargets.avboit.accumColor.get(),
+        deferredTargets.avboit.accumExtinction.get(),
+    };
+    if(!m_avboitCompositeStateHandoff.buildResourceSubset(
+        m_avboitStateHandoff,
+        avboitCompositeTextures,
+        sizeof(avboitCompositeTextures) / sizeof(avboitCompositeTextures[0]),
+        nullptr,
+        0u
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the AVBOIT composite inputs"));
+        discardRenderPackets();
+        return;
+    }
+    Core::Buffer* const deferredCompositeBaseBuffers[] = {
+        deferredTargets.bindless.slotsBuffer.get(),
+    };
+    if(!m_deferredCompositeBaseStateHandoff.buildResourceSubset(
+        m_deferredLightingBaseStateHandoff,
+        nullptr,
+        0u,
+        deferredCompositeBaseBuffers,
+        sizeof(deferredCompositeBaseBuffers) / sizeof(deferredCompositeBaseBuffers[0])
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-composite base state selection failed"));
+        discardRenderPackets();
+        return;
+    }
+    const Core::CommandListResourceStateHandoff* deferredCompositeBranchStates[] = {
+        &m_avboitCompositeStateHandoff,
+        &m_opaqueColorGraphicsStateHandoff,
+    };
+    if(!m_deferredCompositeInputStateHandoff.buildFanIn(
+        m_deferredCompositeBaseStateHandoff,
+        deferredCompositeBranchStates,
+        2u
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-composite state fan-in failed"));
+        discardRenderPackets();
+        return;
+    }
+
     bool deferredCompositeCommandListReady = false;
     const Core::Graphics::JobHandle deferredCompositeRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
@@ -2229,14 +2329,22 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &asyncFinalTiming,
         &deferredCompositeCommandListReady,
         asyncShadowSchedule,
-        asyncCausticsSchedule,
-        asyncSurfelGiSchedule,
         finalTimingTicketForPacket
     ](){
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*finalTimingTicketForPacket);
-        deferredCompositeCommandList->open(&m_deferredLightingStateHandoff);
+        deferredCompositeCommandList->open(&m_deferredCompositeInputStateHandoff);
         if(!deferredCompositeCommandList->hasCommandBuffer())
             return;
+
+        if(asyncShadowSchedule){
+            asyncFinalTiming.emplace(
+                m_graphics.gpuTiming(),
+                RendererGpuTimingScope::s_AsyncFinal,
+                m_graphics.getDevice(),
+                *deferredCompositeCommandList
+            );
+            asyncFinalTiming->finishMarker();
+        }
 
         const bool deferredCompositeRecorded = m_deferredSystem.renderDeferredComposite(
             *deferredCompositeCommandList,
@@ -2250,29 +2358,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(frameTiming)
             frameTiming->finishTiming(*deferredCompositeCommandList);
         if(asyncShadowSchedule && deferredCompositeRecorded){
-            deferredCompositeCommandList->releaseTextureOwnership(
-                deferredTargets.shadowVisibility.get(),
-                ECSRenderDetail::s_ShadowVisibilitySubresources,
-                Core::RenderLane::AsyncCompute
-            );
-            if(asyncCausticsSchedule){
-                // Deferred lighting has completed the only Graphics read of the caustic result. Return the reusable
-                // irradiance target to Compute together with its final Graphics submission.
-                deferredCompositeCommandList->releaseTextureOwnership(
-                    deferredTargets.causticIrradiance.get(),
-                    ECSRenderDetail::s_FramebufferSubresources,
-                    Core::RenderLane::AsyncCompute
-                );
-            }
-            if(asyncSurfelGiSchedule){
-                // The surfel resolve has exactly one Graphics consumer. Return the reusable full-resolution result
-                // after composite so the next Compute packet can acquire it before its clear/upsample.
-                deferredCompositeCommandList->releaseTextureOwnership(
-                    deferredTargets.surfelIrradiance.get(),
-                    ECSRenderDetail::s_FramebufferSubresources,
-                    Core::RenderLane::AsyncCompute
-                );
-            }
             if(asyncFinalTiming){
                 asyncFinalTiming->finishTiming(*deferredCompositeCommandList);
                 asyncFinalTiming.reset();
@@ -2332,233 +2417,77 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
+    const auto submitAsyncRecoveryJoin = [&](const Core::QueueSubmissionToken* waitToken) -> bool {
+        // A rejected dependent packet can leave accepted AsyncCompute work in flight. All remaining cross-lane
+        // resources are concurrently shared, so a Graphics join establishes execution order and retires the frame
+        // timestamp without attempting an unnecessary queue-family ownership repair.
+        if(device.isDeviceLost()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async recovery join skipped because the graphics device is lost"));
+            asyncFrameTiming.discard();
+            return false;
+        }
+        if(waitToken && !waitToken->valid()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async recovery join received an invalid Compute submission token"));
+            asyncFrameTiming.discard();
+            return false;
+        }
+
+        const bool retireTiming = asyncFrameTiming.needsRetirement();
+        if(retireTiming)
+            asyncFrameTiming.prepareForRecovery();
+        asyncRecoveryCommandList->open();
+        if(!asyncRecoveryCommandList->hasCommandBuffer()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to record async recovery join"));
+            asyncFrameTiming.discard();
+            return false;
+        }
+        if(retireTiming && !asyncFrameTiming.recordEnd(*asyncRecoveryCommandList)){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to write async recovery timing endpoint"));
+            asyncFrameTiming.discard();
+            return false;
+        }
+        asyncRecoveryCommandList->close();
+        if(!asyncRecoveryCommandList->hasCommandBuffer()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to close async recovery join"));
+            asyncFrameTiming.discard();
+            return false;
+        }
+
+        Core::QueueSubmissionDesc recoverySubmitDesc;
+        if(waitToken)
+            recoverySubmitDesc.setWaitTokens(waitToken, 1u);
+        Core::CommandList* recoveryCommandLists[] = { asyncRecoveryCommandList };
+        const Core::QueueSubmissionToken recoveryToken = device.executeCommandLists(
+            recoveryCommandLists,
+            1u,
+            Core::RenderLane::Graphics,
+            recoverySubmitDesc
+        );
+        if(!recoveryToken.valid()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async recovery join submission was rejected"));
+            asyncFrameTiming.discard();
+            return false;
+        }
+        if(retireTiming && !asyncFrameTiming.confirmEndSubmission(false)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire async recovery timing query"));
+            asyncFrameTiming.discard();
+        }
+        return true;
+    };
     const auto retireAsyncFrameTiming = [&](){
-        if(!asyncFrameTiming.needsRetirement())
-            return;
-
-        // A device-lost submit has no usable Graphics queue for the non-publishing timestamp endpoint. The outer
-        // Graphics policy will end this device generation, so discard the reservation rather than submit again.
-        if(device.isDeviceLost()){
-            asyncFrameTiming.discard();
-            return;
-        }
-
-        asyncFrameTiming.prepareForRecovery();
-        shadowOwnershipRecoveryCommandList->open();
-        if(!shadowOwnershipRecoveryCommandList->hasCommandBuffer()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record async frame-timing recovery endpoint"));
-            asyncFrameTiming.discard();
-            return;
-        }
-        if(!asyncFrameTiming.recordEnd(*shadowOwnershipRecoveryCommandList)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to write async frame-timing recovery endpoint"));
-            asyncFrameTiming.discard();
-            return;
-        }
-        shadowOwnershipRecoveryCommandList->close();
-        if(!shadowOwnershipRecoveryCommandList->hasCommandBuffer()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to close async frame-timing recovery endpoint"));
-            asyncFrameTiming.discard();
-            return;
-        }
-
-        Core::CommandList* recoveryCommandLists[] = { shadowOwnershipRecoveryCommandList };
-        const Core::QueueSubmissionToken recoveryToken = device.executeCommandLists(
-            recoveryCommandLists,
-            1u,
-            Core::RenderLane::Graphics,
-            Core::QueueSubmissionDesc{}
-        );
-        if(!recoveryToken.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: async frame-timing recovery submission was rejected"));
-            asyncFrameTiming.discard();
-            return;
-        }
-        if(!asyncFrameTiming.confirmEndSubmission(false)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire async frame-timing recovery query"));
-            asyncFrameTiming.discard();
-            return;
-        }
+        if(asyncFrameTiming.needsRetirement())
+            static_cast<void>(submitAsyncRecoveryJoin(nullptr));
     };
-
-    const auto recoverAsyncShadowOwnership = [&](
-        const Core::QueueSubmissionToken shadowSubmissionToken,
-        const bool recoverCausticIrradiance,
-        const bool recoverSurfelIrradiance
-    ) -> bool {
-        // A rejected Graphics packet is normally recoverable with a Graphics acquire/release. VK_ERROR_DEVICE_LOST
-        // is different: no submission can establish ownership, so escalate to device recreation without probing the
-        // dead queue a second time.
-        if(device.isDeviceLost()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async Compute ownership recovery skipped because the graphics device is lost"));
-            asyncFrameTiming.discard();
-            return false;
-        }
-        if(
-            !shadowSubmissionToken.valid()
-            || !deferredTargets.shadowVisibility
-            || (recoverCausticIrradiance && !deferredTargets.causticIrradiance)
-            || (recoverSurfelIrradiance && !deferredTargets.surfelIrradiance)
-        ){
-            asyncFrameTiming.discard();
-            return false;
-        }
-
-        m_shadowOwnershipRecoveryInputStateHandoff.reset();
-        m_shadowOwnershipRecoveryStateHandoff.reset();
-        const Core::CommandListResourceStateHandoff* recoveryBranches[2] = {};
-        usize recoveryBranchCount = 0u;
-        if(recoverCausticIrradiance)
-            recoveryBranches[recoveryBranchCount++] = &m_causticIrradianceGraphicsStateHandoff;
-        if(recoverSurfelIrradiance)
-            recoveryBranches[recoveryBranchCount++] = &m_surfelIrradianceGraphicsStateHandoff;
-        const bool recoveryInputReady = recoveryBranchCount != 0u
-            ? m_shadowOwnershipRecoveryInputStateHandoff.buildFanIn(
-                m_shadowVisibilityGraphicsStateHandoff,
-                recoveryBranches,
-                recoveryBranchCount
-            )
-            : m_shadowOwnershipRecoveryInputStateHandoff.buildTextureSubset(
-                m_shadowVisibilityGraphicsStateHandoff,
-                deferredTargets.shadowVisibility.get()
-            )
-        ;
-        if(!recoveryInputReady){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to select async Compute ownership-recovery input"));
-            asyncFrameTiming.discard();
-            return false;
-        }
-
-        shadowOwnershipRecoveryCommandList->open(&m_shadowOwnershipRecoveryInputStateHandoff);
-        if(!shadowOwnershipRecoveryCommandList->hasCommandBuffer()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to record async Compute ownership recovery acquire"));
-            asyncFrameTiming.discard();
-            return false;
-        }
-        shadowOwnershipRecoveryCommandList->releaseTextureOwnership(
-            deferredTargets.shadowVisibility.get(),
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::RenderLane::AsyncCompute
-        );
-        if(recoverCausticIrradiance){
-            shadowOwnershipRecoveryCommandList->releaseTextureOwnership(
-                deferredTargets.causticIrradiance.get(),
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::RenderLane::AsyncCompute
-            );
-        }
-        if(recoverSurfelIrradiance){
-            shadowOwnershipRecoveryCommandList->releaseTextureOwnership(
-                deferredTargets.surfelIrradiance.get(),
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::RenderLane::AsyncCompute
-            );
-        }
-        asyncFrameTiming.prepareForRecovery();
-        if(!asyncFrameTiming.recordEnd(*shadowOwnershipRecoveryCommandList)){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to write async shadow ownership-recovery timing endpoint"));
-            asyncFrameTiming.discard();
-            return false;
-        }
-        shadowOwnershipRecoveryCommandList->close(&m_shadowOwnershipRecoveryStateHandoff);
-        if(
-            !m_shadowOwnershipRecoveryStateHandoff.valid()
-            || !shadowOwnershipRecoveryCommandList->hasCommandBuffer()
-        ){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to close async Compute ownership recovery"));
-            asyncFrameTiming.discard();
-            return false;
-        }
-
-        Core::CommandList* recoveryCommandLists[] = { shadowOwnershipRecoveryCommandList };
-        Core::QueueSubmissionDesc recoverySubmitDesc;
-        recoverySubmitDesc.setWaitTokens(&shadowSubmissionToken, 1u);
-        const Core::QueueSubmissionToken recoveryToken = device.executeCommandLists(
-            recoveryCommandLists,
-            1u,
-            Core::RenderLane::Graphics,
-            recoverySubmitDesc
-        );
-        if(!recoveryToken.valid()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async Compute ownership recovery submission was rejected"));
-            asyncFrameTiming.discard();
-            return false;
-        }
-        if(!asyncFrameTiming.confirmEndSubmission(false)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire async shadow ownership-recovery timing query"));
-            asyncFrameTiming.discard();
-        }
-        if(!m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
-            m_shadowOwnershipRecoveryStateHandoff,
-            deferredTargets.shadowVisibility.get()
-        )){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to retain async shadow ownership recovery state"));
-            return false;
-        }
-        if(
-            recoverCausticIrradiance
-            && !m_causticIrradianceReturnStateHandoff.buildTextureSubset(
-                m_shadowOwnershipRecoveryStateHandoff,
-                deferredTargets.causticIrradiance.get()
-            )
-        ){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to retain async caustic ownership recovery state"));
-            return false;
-        }
-        if(
-            recoverSurfelIrradiance
-            && !m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
-                m_shadowOwnershipRecoveryStateHandoff,
-                deferredTargets.surfelIrradiance.get()
-            )
-        ){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to retain async surfel irradiance ownership recovery state"));
-            return false;
-        }
-        return true;
+    const auto recoverAcceptedAsyncComputeSubmission = [&](const Core::QueueSubmissionToken submissionToken) -> bool {
+        return submitAsyncRecoveryJoin(&submissionToken);
     };
-    const auto waitForAsyncAvboitCompute = [&](const Core::QueueSubmissionToken avboitComputeSubmissionToken) -> bool {
-        // AVBOIT's cross-lane resources are concurrent, so no ownership repair is necessary. A rejected Graphics
-        // consumer can nevertheless leave an accepted Compute dispatch in flight; establish a Graphics timeline
-        // point after that token before another frame's Graphics prelude is allowed to reuse the work resources.
-        if(device.isDeviceLost() || !avboitComputeSubmissionToken.valid()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async AVBOIT compute recovery cannot wait for an invalid or lost-device submission"));
-            return false;
-        }
-
-        shadowOwnershipRecoveryCommandList->open();
-        if(!shadowOwnershipRecoveryCommandList->hasCommandBuffer()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to record async AVBOIT compute recovery join"));
-            return false;
-        }
-        shadowOwnershipRecoveryCommandList->close();
-        if(!shadowOwnershipRecoveryCommandList->hasCommandBuffer()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to close async AVBOIT compute recovery join"));
-            return false;
-        }
-
-        Core::QueueSubmissionDesc recoverySubmitDesc;
-        recoverySubmitDesc.setWaitTokens(&avboitComputeSubmissionToken, 1u);
-        Core::CommandList* recoveryCommandLists[] = { shadowOwnershipRecoveryCommandList };
-        const Core::QueueSubmissionToken recoveryToken = device.executeCommandLists(
-            recoveryCommandLists,
-            1u,
-            Core::RenderLane::Graphics,
-            recoverySubmitDesc
-        );
-        if(!recoveryToken.valid()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async AVBOIT compute recovery join was rejected"));
-            return false;
-        }
-        return true;
-    };
-    const auto failAsyncShadowOwnershipRecovery = [&](){
-        if(m_asyncShadowOwnershipRecoveryFailed)
+    const auto failAsyncRenderRecovery = [&](){
+        if(m_asyncRenderRecoveryFailed)
             return;
-        m_asyncShadowOwnershipRecoveryFailed = true;
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: cannot safely continue after an unresolved async Compute ownership release; requesting device recreation"));
-        // This remains intentionally narrow: the Graphics owner performs orderly teardown/recreation after this
-        // frame returns, rather than invalidating resources while accepted Compute work may still be in flight.
+        m_asyncRenderRecoveryFailed = true;
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: cannot safely continue after an unresolved async Compute recovery join; requesting device recreation"));
+        // The Graphics owner performs orderly teardown/recreation after this frame returns, rather than invalidating
+        // resources while accepted Compute work may still be in flight.
         m_graphics.requestDeviceRecreation();
     };
 
@@ -2610,17 +2539,23 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_shadowComputeBaseStateHandoff.reset();
         m_shadowComputeInputStateHandoff.reset();
         m_shadowVisibilityStateHandoff.reset();
-        m_shadowVisibilityGraphicsStateHandoff.reset();
+        m_shadowVisibilityLightingStateHandoff.reset();
         m_causticsComputeBaseStateHandoff.reset();
         m_causticsComputeInputStateHandoff.reset();
         m_causticsStateHandoff.reset();
-        m_causticIrradianceGraphicsStateHandoff.reset();
+        m_causticIrradianceLightingStateHandoff.reset();
         m_surfelGiComputeBaseStateHandoff.reset();
         m_surfelGiComputeInputStateHandoff.reset();
         m_surfelGiStateHandoff.reset();
-        m_surfelIrradianceGraphicsStateHandoff.reset();
-        m_postGbufferFanInStateHandoff.reset();
+        m_surfelIrradianceLightingStateHandoff.reset();
+        m_deferredLightingBaseStateHandoff.reset();
+        m_deferredLightingInputStateHandoff.reset();
         m_deferredLightingStateHandoff.reset();
+        m_avboitLightingStateHandoff.reset();
+        m_avboitCompositeStateHandoff.reset();
+        m_opaqueColorGraphicsStateHandoff.reset();
+        m_deferredCompositeBaseStateHandoff.reset();
+        m_deferredCompositeInputStateHandoff.reset();
         m_deferredCompositeStateHandoff.reset();
         m_avboitPreStateHandoff.reset();
         m_avboitDepthWarpInputStateHandoff.reset();
@@ -2641,6 +2576,41 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_raytracingSystem.confirmShadowVisibilitySubmission(shadowSubmissionToken);
     m_raytracingSystem.confirmSurfelGiSubmission(shadowSubmissionToken);
     m_raytracingSystem.finalizeSurfelResourceInitialization();
+    Core::QueueSubmissionToken latestAsyncComputeSubmissionToken = shadowSubmissionToken;
+
+    // Preserve the current producer state as soon as its shared Compute packet is accepted. If a later Graphics or
+    // lighting submission is rejected, the next frame can still reopen these exclusive results on AsyncCompute.
+    const bool producerReturnStatesReady =
+        m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
+            m_shadowVisibilityStateHandoff,
+            deferredTargets.shadowVisibility.get()
+        )
+        && (!asyncCausticsSchedule || m_causticIrradianceReturnStateHandoff.buildTextureSubset(
+            m_causticsStateHandoff,
+            deferredTargets.causticIrradiance.get()
+        ))
+        && (!asyncSurfelGiSchedule || m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
+            m_surfelGiStateHandoff,
+            deferredTargets.surfelIrradiance.get()
+        ))
+    ;
+    if(!producerReturnStatesReady){
+        effectsTimingTicket.discard();
+        avboitPreTimingTicket.discard();
+        avboitDepthWarpTimingTicket.discard();
+        avboitExtinctionTimingTicket.discard();
+        avboitIntegrationTimingTicket.discard();
+        avboitAccumulateTimingTicket.discard();
+        lightingTimingTicket.discard();
+        finalTimingTicket.discard();
+        restoreUnacceptedGraphicsEffectsCpuState();
+        m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
+        if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+            failAsyncRenderRecovery();
+        // The accepted producer state could not be retained, so continuing would require guessing its next layout.
+        failAsyncRenderRecovery();
+        return;
+    }
     Core::Texture* const shadowComputeScratchTextures[] = {
         deferredTargets.shadowCoarseTransmittance.get(),
         deferredTargets.shadowSoftHalfA.get(),
@@ -2672,17 +2642,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         sizeof(shadowComputeScratchBuffers) / sizeof(shadowComputeScratchBuffers[0])
     )){
         effectsTimingTicket.discard();
+        avboitPreTimingTicket.discard();
+        avboitDepthWarpTimingTicket.discard();
+        avboitExtinctionTimingTicket.discard();
+        avboitIntegrationTimingTicket.discard();
+        avboitAccumulateTimingTicket.discard();
+        lightingTimingTicket.discard();
         finalTimingTicket.discard();
         restoreUnacceptedGraphicsEffectsCpuState();
         m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-        static_cast<void>(recoverAsyncShadowOwnership(
-            shadowSubmissionToken,
-            asyncCausticsSchedule,
-            asyncSurfelGiSchedule
-        ));
+        static_cast<void>(recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken));
         // Without a retained Compute-side scratch snapshot the next packet cannot safely restore its layouts, even
-        // when the visibility/caustic ownership recovery itself succeeds.
-        failAsyncShadowOwnershipRecovery();
+        // after the accepted Compute work has been joined.
+        failAsyncRenderRecovery();
         return;
     }
     m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
@@ -2702,12 +2674,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             0u
         )){
             effectsTimingTicket.discard();
+            avboitPreTimingTicket.discard();
+            avboitDepthWarpTimingTicket.discard();
+            avboitExtinctionTimingTicket.discard();
+            avboitIntegrationTimingTicket.discard();
+            avboitAccumulateTimingTicket.discard();
+            lightingTimingTicket.discard();
             finalTimingTicket.discard();
             restoreGraphicsEffectsCpuState();
-            // Both Compute outputs are now accepted. Return each released result before suspending the renderer, so
-            // validation and teardown never encounter a stranded queue-family owner.
-            static_cast<void>(recoverAsyncShadowOwnership(shadowSubmissionToken, true, asyncSurfelGiSchedule));
-            failAsyncShadowOwnershipRecovery();
+            static_cast<void>(recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken));
+            failAsyncRenderRecovery();
             return;
         }
     }
@@ -2734,12 +2710,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             sizeof(surfelGiComputeScratchBuffers) / sizeof(surfelGiComputeScratchBuffers[0])
         )){
             effectsTimingTicket.discard();
+            avboitPreTimingTicket.discard();
+            avboitDepthWarpTimingTicket.discard();
+            avboitExtinctionTimingTicket.discard();
+            avboitIntegrationTimingTicket.discard();
+            avboitAccumulateTimingTicket.discard();
+            lightingTimingTicket.discard();
             finalTimingTicket.discard();
             restoreUnacceptedGraphicsEffectsCpuState();
-            // The combined packet has released every result. Return all of them before suspending so teardown does not
-            // inherit an indeterminate queue-family owner.
-            static_cast<void>(recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, true));
-            failAsyncShadowOwnershipRecovery();
+            static_cast<void>(recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken));
+            failAsyncRenderRecovery();
             return;
         }
     }
@@ -2768,9 +2748,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitExtinctionTimingTicket.discard();
             avboitIntegrationTimingTicket.discard();
             avboitAccumulateTimingTicket.discard();
+            lightingTimingTicket.discard();
             restoreUnacceptedGraphicsEffectsCpuState();
-            if(!recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, asyncSurfelGiSchedule))
-                failAsyncShadowOwnershipRecovery();
+            if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+                failAsyncRenderRecovery();
             return;
         }
 
@@ -2789,10 +2770,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitExtinctionTimingTicket.discard();
             avboitIntegrationTimingTicket.discard();
             avboitAccumulateTimingTicket.discard();
-            if(!recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, asyncSurfelGiSchedule))
-                failAsyncShadowOwnershipRecovery();
+            lightingTimingTicket.discard();
+            if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+                failAsyncRenderRecovery();
             return;
         }
+        latestAsyncComputeSubmissionToken = avboitDepthWarpSubmissionToken;
 
         Core::QueueSubmissionDesc avboitExtinctionSubmitDesc;
         avboitExtinctionSubmitDesc.setWaitTokens(&avboitDepthWarpSubmissionToken, 1u);
@@ -2808,11 +2791,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             finalTimingTicket.discard();
             avboitIntegrationTimingTicket.discard();
             avboitAccumulateTimingTicket.discard();
-            if(
-                !recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, asyncSurfelGiSchedule)
-                || !waitForAsyncAvboitCompute(avboitDepthWarpSubmissionToken)
-            )
-                failAsyncShadowOwnershipRecovery();
+            lightingTimingTicket.discard();
+            if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+                failAsyncRenderRecovery();
             return;
         }
 
@@ -2829,10 +2810,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!avboitIntegrationSubmissionToken.valid()){
             finalTimingTicket.discard();
             avboitAccumulateTimingTicket.discard();
-            if(!recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, asyncSurfelGiSchedule))
-                failAsyncShadowOwnershipRecovery();
+            lightingTimingTicket.discard();
+            if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+                failAsyncRenderRecovery();
             return;
         }
+        latestAsyncComputeSubmissionToken = avboitIntegrationSubmissionToken;
 
         Core::QueueSubmissionDesc avboitAccumulateSubmitDesc;
         avboitAccumulateSubmitDesc.setWaitTokens(&avboitIntegrationSubmissionToken, 1u);
@@ -2846,11 +2829,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         );
         if(!avboitFinalSubmissionToken.valid()){
             finalTimingTicket.discard();
-            if(
-                !recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, asyncSurfelGiSchedule)
-                || !waitForAsyncAvboitCompute(avboitIntegrationSubmissionToken)
-            )
-                failAsyncShadowOwnershipRecovery();
+            lightingTimingTicket.discard();
+            if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+                failAsyncRenderRecovery();
             return;
         }
     }
@@ -2873,62 +2854,76 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         );
         if(!avboitFinalSubmissionToken.valid()){
             finalTimingTicket.discard();
+            lightingTimingTicket.discard();
             restoreUnacceptedGraphicsEffectsCpuState();
-            if(!recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, asyncSurfelGiSchedule))
-                failAsyncShadowOwnershipRecovery();
+            if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+                failAsyncRenderRecovery();
             return;
         }
     }
 
-    const Core::QueueSubmissionToken finalWaitTokens[] = {
-        shadowSubmissionToken,
-        avboitFinalSubmissionToken,
-    };
+    // The AsyncCompute lighting dispatch waits for the last AVBOIT Graphics packet. It is already ordered after the
+    // ray-effect packet on the same Compute queue, so shadow/caustic/surfel remain local to Compute until shading
+    // has consumed them. Graphics final then receives only the concurrent opaque-color result for compositing.
+    Core::QueueSubmissionDesc lightingSubmitDesc;
+    lightingSubmitDesc.setWaitTokens(&avboitFinalSubmissionToken, 1u);
+    Core::CommandList* lightingCommandLists[] = { deferredLightingCommandList };
+    const Core::QueueSubmissionToken lightingSubmissionToken = lightingTimingTicket.submit(
+        device,
+        lightingCommandLists,
+        1u,
+        Core::RenderLane::AsyncCompute,
+        lightingSubmitDesc
+    );
+    if(!lightingSubmissionToken.valid()){
+        finalTimingTicket.discard();
+        if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+            failAsyncRenderRecovery();
+        return;
+    }
+    latestAsyncComputeSubmissionToken = lightingSubmissionToken;
+
+    const bool lightingReturnStatesReady =
+        m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
+            m_deferredLightingStateHandoff,
+            deferredTargets.shadowVisibility.get()
+        )
+        && (!asyncCausticsSchedule || m_causticIrradianceReturnStateHandoff.buildTextureSubset(
+            m_deferredLightingStateHandoff,
+            deferredTargets.causticIrradiance.get()
+        ))
+        && (!asyncSurfelGiSchedule || m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
+            m_deferredLightingStateHandoff,
+            deferredTargets.surfelIrradiance.get()
+        ))
+    ;
+    if(!lightingReturnStatesReady){
+        finalTimingTicket.discard();
+        if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+            failAsyncRenderRecovery();
+        // The accepted lighting packet replaced the producer layouts, so a failed retained snapshot is terminal.
+        failAsyncRenderRecovery();
+        return;
+    }
+
     Core::QueueSubmissionDesc finalSubmitDesc;
-    finalSubmitDesc.setWaitTokens(finalWaitTokens, 2u);
-    Core::CommandList* finalCommandLists[] = {
-        deferredLightingCommandList,
-        deferredCompositeCommandList,
-    };
+    finalSubmitDesc.setWaitTokens(&lightingSubmissionToken, 1u);
+    Core::CommandList* finalCommandLists[] = { deferredCompositeCommandList };
     const Core::QueueSubmissionToken finalSubmissionToken = finalTimingTicket.submit(
         device,
         finalCommandLists,
-        2u,
+        1u,
         Core::RenderLane::Graphics,
         finalSubmitDesc
     );
     if(!finalSubmissionToken.valid()){
-        if(!recoverAsyncShadowOwnership(shadowSubmissionToken, asyncCausticsSchedule, asyncSurfelGiSchedule))
-            failAsyncShadowOwnershipRecovery();
+        if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+            failAsyncRenderRecovery();
         return;
     }
     if(!asyncFrameTiming.confirmEndSubmission(true)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm async frame critical-path timing"));
         asyncFrameTiming.discard();
-    }
-
-    const bool shadowVisibilityReturnStateReady = m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
-        m_deferredCompositeStateHandoff,
-        deferredTargets.shadowVisibility.get()
-    );
-    const bool causticIrradianceReturnStateReady =
-        !asyncCausticsSchedule
-        || m_causticIrradianceReturnStateHandoff.buildTextureSubset(
-            m_deferredCompositeStateHandoff,
-            deferredTargets.causticIrradiance.get()
-        )
-    ;
-    const bool surfelIrradianceReturnStateReady =
-        !asyncSurfelGiSchedule
-        || m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
-            m_deferredCompositeStateHandoff,
-            deferredTargets.surfelIrradiance.get()
-        )
-    ;
-    if(!shadowVisibilityReturnStateReady || !causticIrradianceReturnStateReady || !surfelIrradianceReturnStateReady){
-        // The Graphics release has already been accepted, so do not guess a next-frame owner if retaining its state
-        // fails unexpectedly. The current device must be rebuilt before recording another async packet.
-        failAsyncShadowOwnershipRecovery();
     }
 }
 

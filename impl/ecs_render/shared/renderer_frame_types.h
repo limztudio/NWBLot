@@ -136,7 +136,9 @@ struct DeferredBindlessResourceSlots{
     u32 opaqueColor = 0u;
     u32 avboitAccumColor = 0u;
     u32 avboitAccumExtinction = 0u;
-    u32 _pad = 0u;
+    // The lighting compute dispatch writes this StorageImage view. The compositor keeps using opaqueColor above as
+    // its sampled view, so the same physical target remains a narrow AsyncCompute -> Graphics handoff.
+    u32 opaqueColorStorage = 0u;
 
     u32 avboitTransmittance = 0u;
     u32 avboitLinearSampler = 0u;
@@ -202,6 +204,7 @@ struct DeferredBindlessFrameResources{
     Core::GpuDescriptorHandle surfelIrradianceHalfStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle sampler = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle opaqueColor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle opaqueColorStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitAccumColor = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitAccumExtinction = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitTransmittance = Core::GpuDescriptorHandle::invalid();
@@ -285,6 +288,7 @@ struct DeferredBindlessFrameResources{
             && surfelIrradianceHalfStorage.valid()
             && sampler.valid()
             && opaqueColor.valid()
+            && opaqueColorStorage.valid()
             && avboitAccumColor.valid()
             && avboitAccumExtinction.valid()
             && avboitTransmittance.valid()
@@ -477,7 +481,6 @@ struct DeferredFrameTargets{
     // world-position + depth G-buffer per a-trous tap (a read-bandwidth cut on the half-res dispatch).
     Core::TextureHandle causticResolveGeometry;
     Core::FramebufferHandle framebuffer;
-    Core::FramebufferHandle opaqueLightingFramebuffer;
     DeferredBindlessFrameResources bindless;
     AvboitFrameTargets avboit;
 
@@ -544,7 +547,6 @@ struct DeferredFrameTargets{
             && opaqueColor != nullptr
             && depth != nullptr
             && framebuffer != nullptr
-            && opaqueLightingFramebuffer != nullptr
             && bindless.valid()
             && avboit.valid()
         ;

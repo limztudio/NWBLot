@@ -1,10 +1,11 @@
-# Async-render lane foundation, shadow-visibility, caustics, surfel-GI, and hybrid-AVBOIT prototype
+# Async-render lane foundation, ray effects, hybrid-AVBOIT, and deferred-lighting prototype
 
 **Status:** Phase-zero backend foundation, the M2 shadow-visibility schedule, M3 acceptance-aware timing and
 failure-injection coverage, the M5 software-caustics migration, M6 surfel-GI migration, M7 hardware
-`dispatchRays`-caustics migration, and M8 hybrid AVBOIT migration are implemented behind the experimental
-async-compute switch. The M4 target-hardware benchmark/validation harness is available; distinct-family pixel-parity
-and performance results, including the caustics, surfel-GI, and AVBOIT slices, remain pending.
+`dispatchRays`-caustics migration, M8 hybrid AVBOIT migration, and M9 deferred-lighting migration are implemented
+behind the experimental async-compute switch. The M4 target-hardware benchmark/validation harness is available;
+distinct-family pixel-parity and performance results, including the caustics, surfel-GI, AVBOIT, and deferred-lighting
+slices, remain pending.
 
 When the switch resolves `AsyncCompute` to a dedicated Compute family, shadow visibility and either caustic producer
 join the same accepted Compute submission. Vulkan specifies `vkCmdTraceRaysKHR` for command pools that support
@@ -20,7 +21,8 @@ dependencies. The first job migration moves **only shadow visibility** onto a de
 bounded migrations move both **software-caustics** and hardware **`dispatchRays` caustics** with it. The current
 bounded migration also adds **surfel GI** on both its software-BVH and inline-RayQuery trace backends. AVBOIT's
 depth-warp and integration dispatches now use the dedicated Compute lane, bracketed by the required Graphics raster
-phases. Deferred lighting and composite remain on Graphics.
+phases. Deferred lighting now runs on AsyncCompute after the AVBOIT chain; presentation composite remains on
+Graphics.
 
 This is deliberately a narrow proof point. It tests the hard parts of multi-queue rendering —
 resource sharing, queue-family ownership, timeline dependencies, timing, and partial submission
@@ -28,7 +30,7 @@ failure — without turning the renderer into a general frame graph.
 
 Out of scope for this foundation and prototype:
 
-- porting AVBOIT's raster phases, deferred lighting, or composite to Compute;
+- porting AVBOIT's raster phases or presentation composite to Compute;
 - creating a second queue from the Graphics queue family as a substitute for a dedicated Compute
   family;
 - reordering the established GPU effects sequence or changing the CPU-recording wave;
@@ -83,19 +85,18 @@ resource whose queues use different families—queue-family ownership.
 | Resource class | Creation / ownership contract | Example |
 |---|---|---|
 | Common cross-lane inputs | Concurrent Graphics/Compute sharing when the effective families differ; still wait for the producer before reading. | Normalized G-buffer, scene and tracing buffers, descriptor-buffer segments, slot cbuffers, TLAS/material inputs. |
-| Exclusive cross-lane result | One owner at a time; paired release/acquire plus a timeline dependency. | `shadowVisibility`, software `causticIrradiance`, and `surfelIrradiance`, written by Compute and sampled by deferred lighting on Graphics. |
-| Single-lane scratch or history | Exclusive to its one lane; no handoff merely because it is related to an async pass. | Compute-only soft-shadow scratch and delayed-readback staging. |
+| Compute-local result or scratch | One owner at a time, but no cross-lane handoff when its only consumer is also Compute. | `shadowVisibility`, `causticIrradiance`, `surfelIrradiance`, soft-shadow scratch, and delayed-readback staging. |
+| Concurrent Compute-to-Graphics result | Concurrent sharing plus a timeline dependency; no queue-family ownership transfer. | `opaqueColor`, written by deferred-lighting Compute and sampled by Graphics composite. |
 
 The RHI creation API should express an engine-level queue-sharing mask, never raw Vulkan family
 indices. The Vulkan backend resolves that mask to `VK_SHARING_MODE_CONCURRENT` only when the effective
 Graphics and Compute families are distinct; the default remains exclusive. We must enumerate the
 resources that genuinely need concurrent access instead of marking all renderer allocations concurrent.
 
-### 1.4 Exclusive results need the full ownership round trip
+### 1.4 Exclusive cross-lane results need the full ownership round trip
 
-The first infrastructure proof must cover the cyclic lifetime of a reusable exclusive output, not only
-the easy Compute-to-Graphics half. A reused `shadowVisibility`, software `causticIrradiance`, or surfel
-`surfelIrradiance` frame slot follows this normal lifecycle:
+The phase-zero infrastructure proof must cover the cyclic lifetime of a reusable exclusive output, not only
+the easy Compute-to-Graphics half. That remains the contract for any future exclusive cross-lane result:
 
 ```text
 Compute owns / acquires slot → writes shadowVisibility → releases to Graphics
@@ -110,7 +111,8 @@ Graphics waits → acquires slot → deferred lighting samples it → releases t
 On its first use, a newly created slot may be claimed by the first queue that uses it; if Graphics
 initializes it first, the same Graphics-to-Compute release/acquire applies. On the Graphics fallback,
 the ownership half collapses to normal same-queue state transitions, but the logical lifecycle remains
-the same.
+the same. M9 removes this cycle from the current ray-effect results because deferred lighting now consumes them on
+AsyncCompute; it does not weaken the backend proof or the contract for a future Graphics consumer.
 
 This reverse handoff is required before shadow moves: otherwise a frame-slot reuse can begin on Compute
 while Vulkan still considers Graphics its owner. It also gives the failure path an unambiguous safe
@@ -180,17 +182,20 @@ The renderer now consumes these primitives as follows:
   backends: the hardware producer's `dispatchRays` command is valid on the selected `VK_QUEUE_COMPUTE_BIT` family.
   Surfel GI is likewise selected on both trace backends because its hardware path uses inline RayQuery from a compute
   pipeline. Otherwise the legacy Graphics batch remains unchanged.
-- The concurrent input inventory is limited to normal/world-position/depth, scene-shading and light buffers, deferred
-  slot cbuffer, trace-context buffers, software-BVH inputs, mesh geometry, camera mesh-view data, caustic emission
-  targets, surfel constants, and TLAS/BLAS backing allocations. The descriptor-buffer segments already carry the same
-  contract. `shadowVisibility`, `causticIrradiance`, `surfelIrradiance`, and private scratch/history stay exclusive.
+- The concurrent input inventory includes every G-buffer attachment (including albedo), scene-shading and light
+  buffers, the deferred slot cbuffer, trace-context buffers, software-BVH inputs, mesh geometry, camera mesh-view
+  data, caustic emission targets, surfel constants, and TLAS/BLAS backing allocations. The descriptor-buffer segments
+  already carry the same contract. `opaqueColor` is also concurrent because AsyncCompute lighting writes it before
+  Graphics composite samples it; `shadowVisibility`, `causticIrradiance`, `surfelIrradiance`, and private
+  scratch/history remain exclusive to Compute.
 - Selective state handoffs prevent Compute from importing unrelated Graphics-only state. Shadow, both caustic
-  producers, and surfel GI retain independent private cross-frame scratch handoffs; only their resolved lighting
-  outputs join the Graphics fan-in.
-- Accepted submissions commit independently. A rejected packet after the combined Compute submission triggers a small
-  Graphics recovery list that acquires every released result and returns it to Compute. Failure to submit that recovery
-  requests termination of the current graphics-device generation. Its owner must then tear down and recreate device
-  resources rather than allowing another pass or presentation to observe indeterminate ownership.
+  producers, and surfel GI retain independent private cross-frame scratch/result handoffs; deferred lighting fans
+  those results in on Compute and exports only `opaqueColor` for Graphics composite.
+- Accepted submissions commit independently. A rejected dependent packet after accepted Compute work triggers a small
+  Graphics recovery join on the latest accepted Compute token. No ray-effect ownership repair is necessary because
+  Graphics never imports those exclusive outputs. Failure to submit that join requests termination of the current
+  graphics-device generation; its owner must then tear down and recreate device resources rather than allowing another
+  pass or presentation to observe indeterminate execution.
 - `Device::isDeviceLost()` is a sticky renderer-facing signal set for queue submit, queue/timeline wait, swap-chain
   acquire, present, and device-idle loss. Recovery acquires run only while that signal is clear; a lost device skips
   the extra submit and immediately requests device recreation.
@@ -204,9 +209,10 @@ The renderer now consumes these primitives as follows:
 - The software edge-stat and surfel live-count readbacks record accepted producer timeline tokens and map only after
   their producing queues have completed.
 - A DEBUG/TEST-only pre-submit rejection seam exercises prefix, shadow, effects, final, and recovery rejection
-  boundaries without manufacturing invalid Vulkan command buffers. The dedicated-family suite verifies both
-  `shadowVisibility`, `causticIrradiance`, and `surfelIrradiance` recover and return exclusive ownership to Compute
-  before next reuse; a rejected recovery stops before reuse, matching the renderer's suspension/recreation policy.
+  boundaries without manufacturing invalid Vulkan command buffers. The dedicated-family suite verifies that deferred
+  lighting retains `shadowVisibility`, `causticIrradiance`, and `surfelIrradiance` on Compute through next reuse while
+  Graphics imports only the opaque-color composite handoff; a rejected recovery stops before reuse, matching the
+  renderer's suspension/recreation policy.
 
 Still required before enabling the path by default:
 
@@ -234,7 +240,6 @@ Graphics prefix:  mesh-view + scene-shading + deferred clear + G-buffer + normal
                          ├── timeline wait ──→ Compute packet: shadow visibility
                          │                     + caustics (software-BVH or dispatchRays)
                          │                     + surfel GI (software-BVH or inline RayQuery)
-                         │                     release shadowVisibility + causticIrradiance + surfelIrradiance to Graphics
                          │
                          └── queue order ────→ Graphics AVBOIT pre: clear + CSG/occupancy raster
                                                     │ timeline wait
@@ -250,16 +255,20 @@ Graphics prefix:  mesh-view + scene-shading + deferred clear + G-buffer + normal
                                                     ▼
                                                Graphics: AVBOIT accumulation raster
                                                     │
-                      shadow token + AVBOIT accumulation token
-                                                    ▼
-Graphics final:   acquire Compute lighting results + deferred lighting + composite
-                  + release reusable Compute results for their next frame-slot reuse
+                                                    └── timeline wait ──→ Compute: deferred lighting
+                                                                             reads shadow + caustic + surfel
+                                                                             writes concurrent opaqueColor
+                                                                                         │
+                                                                                         ▼
+                                                                               Graphics final: composite
+                                                                                              reads opaqueColor
 ```
 
 The first AVBOIT Graphics packet is queued after `Graphics prefix` on the same queue but has no wait on the shadow
 packet, so it can overlap that longer Compute work. AVBOIT's subsequent cross-lane edges are intentionally strict:
-each compute dispatch waits for its raster producer and each raster consumer waits for its dispatch. `Graphics final`
-waits for both the shadow packet and AVBOIT accumulation before consuming the lighting inputs.
+each compute dispatch waits for its raster producer and each raster consumer waits for its dispatch. Deferred lighting
+waits for AVBOIT accumulation and is already ordered behind the ray-effect packet on the same Compute queue. Graphics
+final waits only for the lighting token before sampling `opaqueColor`.
 
 The CPU records shadow, caustics, surfel GI, and the AVBOIT pre-raster packet as the first sibling wave after
 G-buffer normalization; AVBOIT's dependent slices record only after the preceding state handoff is available. The
@@ -273,7 +282,7 @@ compute-only family does not fail device selection and instead maps the lane to 
 
 | Hardware condition | Renderer behavior |
 |---|---|
-| Distinct Compute family available and async prototype enabled | Create that queue; run the shadow/caustic/surfel packet plus AVBOIT's Graphics → Compute → Graphics hybrid chain. Only AVBOIT depth-warp and integration move to Compute. |
+| Distinct Compute family available and async prototype enabled | Create that queue; run the shadow/caustic/surfel packet, AVBOIT's Graphics → Compute → Graphics hybrid chain, and deferred-lighting Compute dispatch. Presentation composite stays on Graphics. |
 | No distinct Compute family | Do not create an alias `Queue` for the Graphics `VkQueue`; retain the current single-Graphics schedule. |
 | Prototype disabled | Retain the current schedule regardless of hardware. |
 | Queue/device failure | Stop submitting dependent work, restore only unaccepted CPU state, repair ownership when possible, and make the next frame safe. |
@@ -297,7 +306,7 @@ Graphics/Compute sharing when a distinct Compute family is active.
 
 The resource-creation inventory must include at least:
 
-- G-buffer world position, normal, and depth;
+- G-buffer albedo, world position, normal, and depth, plus the concurrent `opaqueColor` lighting output;
 - scene-shading, lighting, mesh-view, scene-BVH, instance, material, mesh, caustic-emission, surfel-constants, and
   TLAS inputs used by shadow, both caustic producers, surfel GI, and the Graphics effects;
 - the backing buffers of the TLAS and every shared BLAS: hardware traversal shares those allocations
@@ -315,39 +324,37 @@ the shared TLAS/BLAS allocations exclusive.
 
 ### 4.2 Shadow result
 
-`shadowVisibility` has one producer on Compute and is first consumed by deferred lighting on
-Graphics. It remains exclusive and uses an explicit paired ownership round trip:
-
-1. Compute records a release barrier after its final write and signals its queue timeline.
-2. Graphics final waits for that timeline and records the matching acquire barrier before deferred
-   lighting samples the image.
-3. The state handoff records both image/buffer state and owning queue family, so later frame setup
-   never guesses ownership.
-4. After Graphics has completed its final read, it releases the reusable frame slot back to Compute;
-   Compute waits for and acquires that release before its next use of the slot.
-
-Soft-shadow scratch/history images and delayed-readback buffers stay Compute-owned unless a real
-Graphics consumer is discovered. They do not need a gratuitous handoff.
+`shadowVisibility` is produced and consumed on AsyncCompute: the shadow packet writes it and deferred lighting reads
+it later on the same physical Compute queue. It stays exclusive to Compute, with its retained next-frame handoff built
+from the accepted lighting state rather than from a Graphics ownership return. Soft-shadow scratch/history images and
+delayed-readback buffers use the same Compute-local rule unless a real Graphics consumer is introduced.
 
 ### 4.3 Caustics result
 
 On a dedicated Compute lane, the caustics command list follows shadow in the same accepted Compute submission on
 both trace backends. The software producer uses its software-BVH tables; the hardware producer records
 `vkCmdTraceRaysKHR`, whose command-pool requirement is `VK_QUEUE_COMPUTE_BIT`. The selected dedicated lane has that
-capability, so no separate queue-level ray-tracing capability is needed. Its accumulator, resolve half/history, and
-geometry cache remain private Compute scratch. Only the full-resolution `causticIrradiance` result is released to
-Graphics, merged with `shadowVisibility` for deferred lighting, then released back to Compute after composite.
+capability, so no separate queue-level ray-tracing capability is needed. Its accumulator, resolve half/history,
+geometry cache, and full-resolution `causticIrradiance` result remain Compute-local through deferred lighting.
 
 ### 4.4 Surfel-GI result
 
 Surfel GI is a normal compute-dispatch chain on both trace backends: the hardware variant uses inline RayQuery rather
-than `dispatchRays`. Its persistent pool, hash table, snapshots, indirect arguments, and readback staging remain
-private to Compute, including the first-use clear. Only full-resolution `surfelIrradiance` is released to Graphics,
-merged with the other lighting outputs for deferred lighting, and released back to Compute after composite. The
-per-frame surfel constants are concurrent Graphics/Compute input, while the delayed live-count readback records the
-accepted Compute token before CPU mapping.
+than `dispatchRays`. Its persistent pool, hash table, snapshots, indirect arguments, readback staging, and
+full-resolution `surfelIrradiance` result remain private to Compute, including the first-use clear. The per-frame
+surfel constants are concurrent Graphics/Compute input, while the delayed live-count readback records the accepted
+Compute token before CPU mapping.
 
-### 4.5 Hybrid AVBOIT work
+### 4.5 Deferred-lighting output
+
+Deferred lighting is a screen-space compute dispatch with the same cooked BXDF dispatch module as the former
+fullscreen pixel shader. It reads the normalized G-buffer plus the Compute-local ray results and writes the existing
+`opaqueColor` target through a StorageImage heap view. `opaqueColor` is created as a concurrent Graphics/AsyncCompute
+resource with a known `Common` close state. The Graphics composite packet waits for the lighting token and imports only
+that target, its AVBOIT accumulation inputs, and the already-Graphics slot-buffer state; it does not acquire or track
+the exclusive ray-effect outputs.
+
+### 4.6 Hybrid AVBOIT work
 
 AVBOIT cannot move as one command list because occupancy, extinction, and accumulation are material raster passes.
 The two pure dispatches are split at their natural producer/consumer boundaries:
@@ -356,8 +363,8 @@ The two pure dispatches are split at their natural producer/consumer boundaries:
 2. Compute waits for that packet and dispatches depth-warp, reading coverage and writing depth-warp/control buffers.
 3. Graphics waits, rasterizes extinction into the packed buffers, then Compute waits and integrates the transmittance
    volume.
-4. Graphics waits for integration and rasterizes accumulation. Deferred lighting then imports the final AVBOIT state
-   with the other post-G-buffer branches.
+4. Graphics waits for integration and rasterizes accumulation. Compute deferred lighting then waits for the final
+   AVBOIT packet before importing only the shared G-buffer inputs it needs.
 
 The five work buffers and transmittance volume use `GraphicsAndAsyncCompute` sharing, so the timeline waits establish
 execution and memory visibility without ownership transfers. Low-resolution raster and accumulation framebuffer
@@ -366,7 +373,7 @@ extra cross-lane submissions. If a Graphics AVBOIT consumer is rejected after de
 an empty Graphics recovery packet waits for that Compute token before the next frame may reuse the concurrent work
 resources; this is a timeline join, not an ownership transfer.
 
-### 4.6 State-tracking work
+### 4.7 State-tracking work
 
 `CommandListResourceStateHandoff` currently carries only layouts/access states. The prototype adds
 the minimum owner metadata needed to distinguish:
@@ -391,11 +398,12 @@ The async path therefore commits by accepted submission:
 | Accepted submission | State that becomes committed |
 |---|---|
 | Graphics prefix | its resource-state handoff and any uploads/cache changes recorded in the prefix |
-| Compute shadow + caustics + surfel GI | soft-shadow temporal advance, delayed-readback submission IDs, caustic temporal advance, surfel temporal/readback state, and Compute-side resource ownership/release |
+| Compute shadow + caustics + surfel GI | soft-shadow temporal advance, delayed-readback submission IDs, caustic temporal advance, surfel temporal/readback state, and Compute-local producer state |
 | Graphics AVBOIT pre | its clear latch; a later AVBOIT-stage rejection must not restore a clear already accepted by Graphics |
 | Compute AVBOIT depth-warp / integration | their concurrent work-buffer state only; AVBOIT has no cross-frame Compute ownership return |
-| Graphics AVBOIT extinction / accumulation | their raster output state; the latter publishes the AVBOIT branch for deferred lighting |
-| Graphics final | lighting/composite state, final frame completion, and presentation-visible completion |
+| Graphics AVBOIT extinction / accumulation | their raster output state; the latter publishes the AVBOIT branch for Compute deferred lighting |
+| Compute deferred lighting | the retained ray-result state for next Compute reuse and the concurrent opaque-color output |
+| Graphics final | composite state, final frame completion, and presentation-visible completion |
 
 Only work in a submission that was not accepted may be restored from the pre-frame snapshot.
 `finalizeSoftShadowTemporalHistory()` must occur after Compute acceptance, but only after all CPU
@@ -405,19 +413,18 @@ The software-shadow delayed readback must track the accepted **Compute** submiss
 Compute queue's completed timeline before mapping; a frame-count delay alone is no longer a valid
 completion proof.
 
-An exclusive release without a later acquire is a special recovery case. If Compute was accepted but
-Graphics final was not, the renderer must submit a small Graphics recovery command list that waits
-for Compute, acquires every released result, and returns it to a documented safe Compute state before reuse. If
-that recovery submission cannot be accepted, the device is treated as unusable rather than allowing
-the next frame to assume a false owner. This recovery path is a required failure-injection test, not
-an optional cleanup.
+If Compute was accepted but a later dependent packet was not, the renderer submits a small Graphics recovery join
+that waits for the latest accepted Compute token before another Graphics prelude may reuse concurrent work. The
+exclusive ray outputs never left Compute, and their latest retained producer/lighting snapshot supplies next-frame
+reuse. If that join cannot be accepted, the device is treated as unusable rather than allowing the next frame to
+assume completion. This recovery path is a required failure-injection test, not an optional cleanup.
 
 ## 6. Timing and observability
 
 The current `GpuTimingSubmissionTicket` represents one complete submission. The async schedule needs one
 accepted-submission ticket for Graphics prefix, the Compute shadow packet (including caustics and surfel GI), the
-AVBOIT pre/warp/extinction/integration/accumulation slices, and Graphics final, with each pass scope assigned to its
-owning ticket.
+AVBOIT pre/warp/extinction/integration/accumulation slices, Compute deferred lighting, and Graphics final, with each
+pass scope assigned to its owning ticket.
 
 The old whole-frame scope starts in the first Graphics command list and ends in composite. It cannot
 be reused with the current single-submission ticket rules. Before enabling the feature, timing must
@@ -461,13 +468,12 @@ produce the current one-Graphics-submission topology.
 Graphics fallback creates no accidental concurrent resources or duplicate queue wrapper; the probe
 completes the full ownership reuse cycle without copying its allocation.
 
-### M2 — Four-submission shadow schedule (implemented; validation pending)
+### M2 — Initial shadow schedule (implemented; ownership cycle superseded by M9)
 
 - Create the shadow command list for Compute only when M0's effective capability is true.
-- Submit prefix, Compute shadow, Graphics effects, and Graphics final with the two existing queue
-  timeline waits.
-- Record the full `shadowVisibility` cycle: Compute release → Graphics acquire for lighting → Graphics
-  release → Compute acquire before frame-slot reuse.
+- Submit prefix, Compute shadow, Graphics effects, and Graphics final with explicit timeline waits.
+- The original Compute → Graphics → Compute `shadowVisibility` ownership cycle remains covered by the phase-zero
+  RHI probe; M9 keeps the live renderer result on Compute through deferred lighting instead.
 
 **Gate:** hardware and software shadow paths are pixel-parity tested against the synchronous path
 over cold start, steady temporal frames, scene mutation, resize, opaque/transparent shadow cases,
@@ -475,16 +481,16 @@ and CSG paths.
 
 ### M3 — Acceptance-aware timing and recovery (implemented; hardware validation pending)
 
-- One timing ticket per accepted submission; accepted prefix/shadow/effects/final CPU-state commits; Graphics
-  recovery for a stranded Compute release; and Compute completion IDs for software-shadow readback.
+- One timing ticket per accepted submission; accepted prefix/shadow/effects/final CPU-state commits; a Graphics
+  recovery join for accepted Compute work; and Compute completion IDs for software-shadow readback.
 - `GpuTimingFrameTransaction` preserves the end-to-end `render.frame` measurement without summing concurrent work.
   An accepted prefix whose final packet is rejected receives a non-publishing Graphics recovery endpoint, so its timer
   query retires safely rather than leaking or masquerading as a complete frame.
 - Packet envelopes report prefix, shadow, effects, and final duration. On timestamp-capable dedicated-queue devices,
   the shadow/effects timestamp intersection reports actual overlap rather than merely schedule eligibility.
-- Deterministic pre-submit failure injection covers prefix, shadow, effects, final, and ownership-recovery submission
-  boundaries. Successful recovery proves the next Compute reuse sees the returned owner; failed recovery deliberately
-  prevents reuse until device/resource recreation.
+- Deterministic pre-submit failure injection covers prefix, shadow, effects, final, and recovery submission
+  boundaries. Successful recovery proves the next Compute reuse has an accepted completion edge; failed recovery
+  deliberately prevents reuse until device/resource recreation.
 
 **Gate:** every injected rejection leaves the next valid frame correct; no stale temporal history,
 descriptor retirement, query leak, or ownership validation error remains.
@@ -520,12 +526,12 @@ deserves a separate proposal.
   hardware `dispatchRays` producer.
 - Mark the extra Graphics-to-Compute read-only inputs — camera mesh-view data and caustic emission targets — concurrent.
   Keep temporal accumulator/resolve scratch Compute-private.
-- Release only `causticIrradiance` to Graphics, merge it with `shadowVisibility` for deferred lighting, and return both
-  exclusive outputs to Compute after composite.
-- Treat the combined Compute packet as one CPU-state acceptance boundary. A later Graphics rejection must preserve its
-  accepted software-caustic temporal state and recover both released outputs before another Compute packet can run.
-- Cover the two-output recovery/fan-in/reuse contract in the dedicated-family descriptor-buffer suite. It skips cleanly
-  on hosts without a compute-only family.
+- M9 keeps `causticIrradiance` on Compute through deferred lighting, together with `shadowVisibility`, instead of
+  releasing either result to Graphics.
+- Treat the combined Compute packet as one CPU-state acceptance boundary. A later dependent rejection preserves its
+  accepted software-caustic temporal state and joins accepted Compute work before reuse.
+- Cover the Compute-local result fan-in/reuse contract in the dedicated-family descriptor-buffer suite. It skips
+  cleanly on hosts without a compute-only family.
 
 **Gate:** on a distinct Compute-family, no-hardware-ray-tracing target, validate Vulkan ownership/layout cleanliness
 and sync/async pixel parity over cold start, temporal steady state, resize, no-caustic-work frames, and refractive
@@ -539,11 +545,10 @@ caustic scenes. Extend performance analysis separately before claiming a new def
 - Keep the persistent surfel field, snapshot buffers, indirect arguments, and count-readback staging Compute-private.
   Move the first-use field clear into that same packet. Mark only the per-frame surfel constants concurrent with the
   Graphics preparation upload.
-- Release only `surfelIrradiance` to Graphics, merge it with shadow and caustic outputs for deferred lighting, then
-  return it to Compute after composite. A later Graphics rejection must retain accepted surfel temporal/readback state
-  and recover all released outputs before another Compute packet can run.
+- M9 keeps `surfelIrradiance` on Compute through deferred lighting alongside shadow and caustic outputs. A later
+  dependent rejection retains accepted surfel temporal/readback state and joins accepted Compute work before reuse.
 - Bind periodic surfel counter readback to the accepted producer token, and cover the three-output
-  shadow/caustic/surfel recovery, fan-in, and reuse contract in the dedicated-family descriptor-buffer suite.
+  shadow/caustic/surfel Compute-local fan-in and reuse contract in the dedicated-family descriptor-buffer suite.
 
 **Gate:** on distinct Compute-family targets, run Vulkan validation and sync/async pixel parity on both software-BVH
 and inline-RayQuery surfel paths over cold start, temporal steady state, resize/recreation, GI-disabled frames, and
@@ -557,10 +562,10 @@ first-use/reseed frames. Collect a separate critical-path/overlap analysis befor
 - Import the normalized TLAS backing allocation and hardware corner-attribute buffers alongside the shared
   material, emission, G-buffer, and camera inputs. These are concurrent Graphics/Compute inputs; the caustic
   accumulator and resolve scratch remain Compute-private.
-- Keep the same exclusive `causticIrradiance` Compute → Graphics → Compute round trip, recovery packet, timing
-  ticket, and CPU temporal-state acceptance boundary already proven for the software producer.
-- Generalize the dedicated-family ownership probe's caustic wording because its two-output handoff validates the
-  common result contract regardless of which producer recorded it.
+- Keep the same Compute-local `causticIrradiance` result contract, timing ticket, and CPU temporal-state acceptance
+  boundary as the software producer; M9 removes the former Graphics ownership round trip.
+- Generalize the dedicated-family result fan-in/reuse probe because it validates the common result contract regardless
+  of which producer recorded it.
 
 **Gate:** on a distinct Compute-family device supporting `VK_KHR_ray_tracing_pipeline`, run Vulkan validation and
 sync/async pixel parity over cold start, temporal steady state, resize/recreation, no-caustic-work frames, and
@@ -586,6 +591,26 @@ refractive caustic scenes. Collect a separate critical-path/overlap analysis bef
 cold start, clear-only frames, transparent CSG, resize/recreation, and mixed opaque/transparent scenes. Capture the
 AVBOIT slice timings and the shadow/initial-AVBOIT overlap before considering any default-on change.
 
+### M9 — Deferred-lighting migration (implemented; distinct-family validation pending)
+
+- Replace the fullscreen deferred-lighting pixel pipeline with an 8×8 compute dispatch using the same generated BXDF
+  dispatch module and texel-centre G-buffer sampling convention.
+- Mark albedo and `opaqueColor` concurrent Graphics/AsyncCompute resources. `opaqueColor` gains a StorageImage heap
+  descriptor and a known `Common` close state; format selection now requires storage-image write support.
+- Build narrow Compute lighting fan-in from normalized G-buffer/scene inputs, the three exclusive ray results, and the
+  final AVBOIT G-buffer state. The ray results remain on Compute through their only consumer.
+- Submit Compute lighting after Graphics AVBOIT accumulation, then submit Graphics composite waiting only for the
+  lighting token. Composite imports the opaque-color output, AVBOIT accumulation textures, and Graphics slot-buffer
+  state; it does not acquire ray-effect resources.
+- Replace the former ownership-repair packet with a generic Graphics recovery join on the latest accepted Compute
+  token. Retain ray-result state immediately after producer acceptance and update it after lighting acceptance.
+- Cover the narrow handoff sequence in the dedicated-family descriptor-buffer suite: ray outputs are exclusive and
+  reused directly on Compute, while only concurrent `opaqueColor` reaches Graphics composite.
+
+**Gate:** on a distinct Compute-family target, run Vulkan validation and sync/async opaque pixel parity over cold
+start, temporal steady state, resize/recreation, no-ray-work frames, transparent/CSG scenes, and both ray-tracing
+backends. Compare deferred-lighting and frame-critical-path timing before changing the experimental default.
+
 ## 8. Implementation anchors
 
 | Concern | Current owner |
@@ -594,6 +619,7 @@ AVBOIT slice timings and the shadow/initial-AVBOIT overlap before considering an
 | Shadow recording and soft-shadow temporal/readback state | `impl/ecs_render/raytrace/rt_shadow.cpp`, `rt_softshadow.cpp` |
 | Software/hardware caustic producers and temporal resolve | `impl/ecs_render/raytrace/rt_caustics.cpp` |
 | Surfel GI resources, trace, resolve, and readback | `impl/ecs_render/raytrace/rt_surfel_gi.cpp` |
+| Deferred-lighting compute shader, output heap view, and composite handoff | `impl/ecs_render/deferred/deferred_lighting.cpp`, `impl/assets/graphics/deferred/lighting_cs.slang`, `deferred_targets.cpp` |
 | Normalized G-buffer / trace resource transition inventory | `impl/ecs_render/raytrace/rt_detail.cpp` |
 | Queue families and device queue creation | `core/graphics/vulkan/backend_context.cpp` |
 | Queue timelines, submit, and cross-queue wait helper | `core/graphics/vulkan/queue.cpp` |
@@ -607,9 +633,9 @@ AVBOIT slice timings and the shadow/initial-AVBOIT overlap before considering an
 1. **Frame timing transaction:** extend `GpuTimingSubmissionTicket` into a segmented ticket versus
    add a distinct multi-submission frame ticket. The latter keeps the existing single-submit contract
    simple and is preferred unless query ownership can be proven equally clear in an extension.
-2. **Recovery policy after device-level submit failure:** implemented. Use the recovery acquire only while the
-   Graphics queue remains usable; `Device::isDeviceLost()` skips that submit and `Graphics::requestDeviceRecreation()`
-   marks the current device generation terminal before later passes or presentation can continue.
+2. **Recovery policy after device-level submit failure:** implemented. Use the recovery join only while the Graphics
+   queue remains usable; `Device::isDeviceLost()` skips that submit and `Graphics::requestDeviceRecreation()` marks
+   the current device generation terminal before later passes or presentation can continue.
 
-These decisions are intentionally limited to the current shadow/caustics/surfel-GI and hybrid-AVBOIT prototype. They
-do not authorize porting AVBOIT raster phases, deferred lighting, or composite to Compute.
+These decisions are intentionally limited to the current shadow/caustics/surfel-GI, hybrid-AVBOIT, and deferred-
+lighting prototype. They do not authorize porting AVBOIT raster phases or presentation composite to Compute.

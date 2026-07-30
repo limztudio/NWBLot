@@ -1115,6 +1115,291 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneChainsConcurrentAvboitWork
 }
 
 
+// Deferred lighting now joins the dedicated Compute lane after AVBOIT. The exclusive ray-effect outputs therefore
+// remain Compute-local through their only consumer; Graphics composite imports only the concurrently shared opaque
+// color result plus its Graphics-owned AVBOIT inputs. This exercises the narrow handoffs and verifies that no
+// Graphics acquire/release is needed before the next Compute reuse of shadow/caustic/surfel outputs.
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingInputsOnComputeUntilOpaqueComposite){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+
+    const auto makeConcurrentTexture = [&device](const bool keepInitialState = false){
+        TextureDesc desc;
+        desc
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        ;
+        if(keepInitialState)
+            desc.setKeepInitialState(true);
+        return device.createTexture(desc);
+    };
+    const auto makeExclusiveRayOutput = [&device](){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setFormat(Format::RGBA8_UNORM)
+                .setInUAV(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+
+    auto gbuffer = makeConcurrentTexture();
+    auto opaqueColor = makeConcurrentTexture(true);
+    auto avboitColor = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInitialState(ResourceStates::Common)
+    );
+    auto avboitExtinction = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInitialState(ResourceStates::Common)
+    );
+    auto shadowVisibility = makeExclusiveRayOutput();
+    auto causticIrradiance = makeExclusiveRayOutput();
+    auto surfelIrradiance = makeExclusiveRayOutput();
+    auto slotsBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    ASSERT_NE(gbuffer.get(), nullptr);
+    ASSERT_NE(opaqueColor.get(), nullptr);
+    ASSERT_NE(avboitColor.get(), nullptr);
+    ASSERT_NE(avboitExtinction.get(), nullptr);
+    ASSERT_NE(shadowVisibility.get(), nullptr);
+    ASSERT_NE(causticIrradiance.get(), nullptr);
+    ASSERT_NE(surfelIrradiance.get(), nullptr);
+    ASSERT_NE(slotsBuffer.get(), nullptr);
+
+    CommandListParameters computeParams;
+    computeParams.setRenderLane(RenderLane::AsyncCompute);
+    auto prefix = device.createCommandList();
+    auto rayEffects = device.createCommandList(computeParams);
+    auto avboit = device.createCommandList();
+    auto lighting = device.createCommandList(computeParams);
+    auto composite = device.createCommandList();
+    auto computeReuse = device.createCommandList(computeParams);
+    ASSERT_NE(prefix.get(), nullptr);
+    ASSERT_NE(rayEffects.get(), nullptr);
+    ASSERT_NE(avboit.get(), nullptr);
+    ASSERT_NE(lighting.get(), nullptr);
+    ASSERT_NE(composite.get(), nullptr);
+    ASSERT_NE(computeReuse.get(), nullptr);
+
+    CommandListResourceStateHandoff prefixState(asyncScope.arena());
+    CommandListResourceStateHandoff rayEffectsState(asyncScope.arena());
+    CommandListResourceStateHandoff shadowLightingState(asyncScope.arena());
+    CommandListResourceStateHandoff causticLightingState(asyncScope.arena());
+    CommandListResourceStateHandoff surfelLightingState(asyncScope.arena());
+    CommandListResourceStateHandoff avboitState(asyncScope.arena());
+    CommandListResourceStateHandoff lightingBaseState(asyncScope.arena());
+    CommandListResourceStateHandoff avboitLightingState(asyncScope.arena());
+    CommandListResourceStateHandoff lightingInputState(asyncScope.arena());
+    CommandListResourceStateHandoff lightingState(asyncScope.arena());
+    CommandListResourceStateHandoff opaqueGraphicsState(asyncScope.arena());
+    CommandListResourceStateHandoff avboitCompositeState(asyncScope.arena());
+    CommandListResourceStateHandoff compositeBaseState(asyncScope.arena());
+    CommandListResourceStateHandoff compositeInputState(asyncScope.arena());
+    CommandListResourceStateHandoff compositeState(asyncScope.arena());
+    CommandListResourceStateHandoff shadowReturnState(asyncScope.arena());
+    CommandListResourceStateHandoff causticReturnState(asyncScope.arena());
+    CommandListResourceStateHandoff surfelReturnState(asyncScope.arena());
+    CommandListResourceStateHandoff computeReuseInputState(asyncScope.arena());
+
+    prefix->open();
+    prefix->setTextureState(gbuffer.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    prefix->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::CopyDest);
+    prefix->setBufferState(slotsBuffer.get(), ResourceStates::ConstantBuffer);
+    prefix->close(&prefixState);
+    ASSERT_TRUE(prefixState.valid());
+
+    rayEffects->open(&prefixState);
+    rayEffects->setTextureState(gbuffer.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    rayEffects->setBufferState(slotsBuffer.get(), ResourceStates::ConstantBuffer);
+    rayEffects->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    rayEffects->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    rayEffects->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    rayEffects->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    rayEffects->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    rayEffects->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    rayEffects->close(&rayEffectsState);
+    ASSERT_TRUE(rayEffectsState.valid());
+    ASSERT_TRUE(shadowLightingState.buildTextureSubset(rayEffectsState, shadowVisibility.get()));
+    ASSERT_TRUE(causticLightingState.buildTextureSubset(rayEffectsState, causticIrradiance.get()));
+    ASSERT_TRUE(surfelLightingState.buildTextureSubset(rayEffectsState, surfelIrradiance.get()));
+
+    avboit->open(&prefixState);
+    avboit->setTextureState(gbuffer.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    avboit->setTextureState(avboitColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    avboit->setTextureState(avboitExtinction.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    avboit->close(&avboitState);
+    ASSERT_TRUE(avboitState.valid());
+
+    Texture* const lightingBaseTextures[] = { gbuffer.get(), opaqueColor.get() };
+    Buffer* const lightingBaseBuffers[] = { slotsBuffer.get() };
+    ASSERT_TRUE(lightingBaseState.buildResourceSubset(
+        prefixState,
+        lightingBaseTextures,
+        2u,
+        lightingBaseBuffers,
+        1u
+    ));
+    Texture* const avboitLightingTextures[] = { gbuffer.get() };
+    ASSERT_TRUE(avboitLightingState.buildResourceSubset(
+        avboitState,
+        avboitLightingTextures,
+        1u,
+        nullptr,
+        0u
+    ));
+    const CommandListResourceStateHandoff* const lightingBranches[] = {
+        &shadowLightingState,
+        &causticLightingState,
+        &surfelLightingState,
+        &avboitLightingState,
+    };
+    ASSERT_TRUE(lightingInputState.buildFanIn(lightingBaseState, lightingBranches, 4u));
+
+    lighting->open(&lightingInputState);
+    EXPECT_EQ(lighting->getTextureSubresourceState(gbuffer.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(lighting->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(lighting->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(lighting->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(lighting->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::CopyDest);
+    lighting->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    lighting->close(&lightingState);
+    ASSERT_TRUE(lightingState.valid());
+    ASSERT_TRUE(opaqueGraphicsState.buildTextureSubset(lightingState, opaqueColor.get()));
+
+    Texture* const compositeBaseTextures[] = { avboitColor.get(), avboitExtinction.get() };
+    ASSERT_TRUE(avboitCompositeState.buildResourceSubset(
+        avboitState,
+        compositeBaseTextures,
+        2u,
+        nullptr,
+        0u
+    ));
+    Buffer* const compositeBaseBuffers[] = { slotsBuffer.get() };
+    ASSERT_TRUE(compositeBaseState.buildResourceSubset(
+        lightingBaseState,
+        nullptr,
+        0u,
+        compositeBaseBuffers,
+        1u
+    ));
+    const CommandListResourceStateHandoff* const compositeBranches[] = {
+        &avboitCompositeState,
+        &opaqueGraphicsState,
+    };
+    ASSERT_TRUE(compositeInputState.buildFanIn(compositeBaseState, compositeBranches, 2u));
+
+    composite->open(&compositeInputState);
+    EXPECT_EQ(composite->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);
+    EXPECT_EQ(composite->getTextureSubresourceState(avboitColor.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(composite->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::Unknown);
+    composite->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    composite->close(&compositeState);
+    ASSERT_TRUE(compositeState.valid());
+
+    ASSERT_TRUE(shadowReturnState.buildTextureSubset(lightingState, shadowVisibility.get()));
+    ASSERT_TRUE(causticReturnState.buildTextureSubset(lightingState, causticIrradiance.get()));
+    ASSERT_TRUE(surfelReturnState.buildTextureSubset(lightingState, surfelIrradiance.get()));
+    const CommandListResourceStateHandoff* const computeReuseBranches[] = {
+        &shadowReturnState,
+        &causticReturnState,
+        &surfelReturnState,
+    };
+    ASSERT_TRUE(computeReuseInputState.buildFanIn(prefixState, computeReuseBranches, 3u));
+    computeReuse->open(&computeReuseInputState);
+    EXPECT_EQ(computeReuse->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(computeReuse->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(computeReuse->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
+    computeReuse->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    computeReuse->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    computeReuse->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    computeReuse->close();
+
+    CommandList* prefixLists[] = { prefix.get() };
+    const QueueSubmissionToken prefixToken = device.executeCommandLists(
+        prefixLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(prefixToken.valid());
+
+    const QueueSubmissionDesc rayEffectsSubmitDesc = QueueSubmissionDesc().setWaitTokens(&prefixToken, 1u);
+    CommandList* rayEffectsLists[] = { rayEffects.get() };
+    const QueueSubmissionToken rayEffectsToken = device.executeCommandLists(
+        rayEffectsLists,
+        1u,
+        RenderLane::AsyncCompute,
+        rayEffectsSubmitDesc
+    );
+    ASSERT_TRUE(rayEffectsToken.valid());
+
+    const QueueSubmissionDesc avboitSubmitDesc = QueueSubmissionDesc().setWaitTokens(&prefixToken, 1u);
+    CommandList* avboitLists[] = { avboit.get() };
+    const QueueSubmissionToken avboitToken = device.executeCommandLists(
+        avboitLists,
+        1u,
+        RenderLane::Graphics,
+        avboitSubmitDesc
+    );
+    ASSERT_TRUE(avboitToken.valid());
+
+    const QueueSubmissionDesc lightingSubmitDesc = QueueSubmissionDesc().setWaitTokens(&avboitToken, 1u);
+    CommandList* lightingLists[] = { lighting.get() };
+    const QueueSubmissionToken lightingToken = device.executeCommandLists(
+        lightingLists,
+        1u,
+        RenderLane::AsyncCompute,
+        lightingSubmitDesc
+    );
+    ASSERT_TRUE(lightingToken.valid());
+
+    const QueueSubmissionDesc compositeSubmitDesc = QueueSubmissionDesc().setWaitTokens(&lightingToken, 1u);
+    CommandList* compositeLists[] = { composite.get() };
+    const QueueSubmissionToken compositeToken = device.executeCommandLists(
+        compositeLists,
+        1u,
+        RenderLane::Graphics,
+        compositeSubmitDesc
+    );
+    ASSERT_TRUE(compositeToken.valid());
+
+    // This reuse is ordered after lighting by the same AsyncCompute queue. It deliberately does not wait for the
+    // Graphics composite because that packet never imports any exclusive ray-effect output.
+    CommandList* reuseLists[] = { computeReuse.get() };
+    const QueueSubmissionToken reuseToken = device.executeCommandLists(
+        reuseLists,
+        1u,
+        RenderLane::AsyncCompute,
+        QueueSubmissionDesc{}
+    );
+    EXPECT_TRUE(reuseToken.valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Caustics (including the hardware dispatch-rays producer) and surfel GI add two exclusive Compute results beside
 // shadowVisibility. If Graphics effects/final cannot consume them, the recovery packet must acquire and return all
 // three outputs together; the next Compute packet

@@ -69,6 +69,18 @@ inline Core::Format::Enum SelectGBufferAlbedoFormat(Core::Device& device){
     return SelectSupportedFormat(device, candidates, requiredSupport);
 }
 
+inline Core::Format::Enum SelectDeferredOpaqueColorFormat(Core::Device& device){
+    constexpr Core::Format::Enum candidates[] = {
+        Core::Format::RGBA16_FLOAT,
+    };
+    constexpr Core::FormatSupport::Mask requiredSupport =
+        Core::FormatSupport::Texture
+        | Core::FormatSupport::ShaderUavStore
+    ;
+
+    return SelectSupportedFormat(device, candidates, requiredSupport);
+}
+
 inline Core::Format::Enum SelectGBufferVectorFormat(Core::Device& device){
     constexpr Core::Format::Enum candidates[] = {
         Core::Format::RGBA16_FLOAT,

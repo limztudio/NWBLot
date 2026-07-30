@@ -26,7 +26,7 @@ namespace AssetsGraphicsDeferred{
 
 
 inline constexpr Name s_CompositeVertexShaderName("engine/graphics/deferred/composite_vs");
-inline constexpr Name s_LightingPixelShaderName("engine/graphics/deferred/lighting_ps");
+inline constexpr Name s_LightingComputeShaderName("engine/graphics/deferred/lighting_cs");
 inline constexpr Name s_CompositePixelShaderName("engine/graphics/deferred/composite_ps");
 
 

@@ -63,16 +63,7 @@ Buffer::~Buffer(){
     }
     m_bufferViews.clear();
 
-    if(m_managed){
-        if(m_desc.isVirtual){
-            if(m_buffer != VK_NULL_HANDLE){
-                vkDestroyBuffer(m_context.device, m_buffer, m_context.allocationCallbacks);
-                m_buffer = VK_NULL_HANDLE;
-            }
-        }
-        else
-            m_allocator.destroyBuffer(*this);
-    }
+    m_allocator.destroyBuffer(*this);
 }
 
 
@@ -185,12 +176,6 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         usageFlags |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
     if(d.isAccelStructStorage)
         usageFlags |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
-    if(m_context.extensions.EXT_opacity_micromap){
-        if(d.isAccelStructBuildInput)
-            usageFlags |= VK_BUFFER_USAGE_MICROMAP_BUILD_INPUT_READ_ONLY_BIT_EXT;
-        if(d.isAccelStructStorage)
-            usageFlags |= VK_BUFFER_USAGE_MICROMAP_STORAGE_BIT_EXT;
-    }
     if(d.isShaderBindingTable){
         if(!m_context.extensions.KHR_ray_tracing_pipeline || !m_context.extensions.buffer_device_address){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
@@ -233,10 +218,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     bufferInfo.queueFamilyIndexCount = sharingInfo.familyIndexCount;
     bufferInfo.pQueueFamilyIndices = sharingInfo.data();
 
-    if(d.isVirtual)
-        res = vkCreateBuffer(m_context.device, &bufferInfo, m_context.allocationCallbacks, &buffer->m_buffer);
-    else
-        res = m_allocator.createBuffer(*buffer, bufferInfo);
+    res = m_allocator.createBuffer(*buffer, bufferInfo);
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: {}"), ResultToString(res));
@@ -244,13 +226,11 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         return nullptr;
     }
 
-    if(!d.isVirtual){
-        if(m_context.extensions.buffer_device_address){
-            VkBufferDeviceAddressInfo addressInfo{};
-            addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-            addressInfo.buffer = buffer->m_buffer;
-            buffer->m_deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
-        }
+    if(m_context.extensions.buffer_device_address){
+        VkBufferDeviceAddressInfo addressInfo{};
+        addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        addressInfo.buffer = buffer->m_buffer;
+        buffer->m_deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
     }
 
     return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
@@ -319,136 +299,6 @@ void Device::unmapBuffer(Buffer* bufferResource){
         buffer.m_mappedMemory = nullptr;
     }
 }
-
-MemoryRequirements Device::getBufferMemoryRequirements(Buffer* bufferResource){
-    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("get buffer memory requirements"), NWB_TEXT("buffer is null"), bufferResource))
-        return {};
-
-    Buffer& buffer = *bufferResource;
-
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_context.device, buffer.m_buffer, &memRequirements);
-
-    MemoryRequirements result;
-    result.size = memRequirements.size;
-    result.alignment = memRequirements.alignment;
-    return result;
-}
-
-#if defined(NWB_DEBUG)
-bool Device::validateHeapMemoryBinding(
-    const Heap& heap,
-    const VkMemoryRequirements& memoryRequirements,
-    const u64 offset,
-    const tchar* operationName,
-    const tchar* resourceName
-)const{
-    if(heap.m_allocation == nullptr){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: heap is invalid"), operationName);
-        return false;
-    }
-    if(heap.m_memoryTypeIndex >= s_VulkanMemoryTypeBitCount || (memoryRequirements.memoryTypeBits & (1u << heap.m_memoryTypeIndex)) == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: heap memory type is incompatible with the {}"), operationName, resourceName);
-        return false;
-    }
-    const u64 alignment = Max<u64>(static_cast<u64>(memoryRequirements.alignment), 1u);
-    if((offset % alignment) != 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: offset {} is not aligned to required alignment {}")
-            , operationName
-            , offset
-            , alignment
-        );
-        return false;
-    }
-    if(offset > heap.m_desc.capacity || static_cast<u64>(memoryRequirements.size) > heap.m_desc.capacity - offset){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: offset {} size {} exceeds heap capacity {}")
-            , operationName
-            , offset
-            , static_cast<u64>(memoryRequirements.size)
-            , heap.m_desc.capacity
-        );
-        return false;
-    }
-
-    return true;
-}
-#endif
-
-bool Device::bindBufferMemory(Buffer* bufferResource, Heap* heap, u64 offset){
-    VkResult res = VK_SUCCESS;
-
-    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("bind buffer memory"), NWB_TEXT("buffer is null"), bufferResource))
-        return false;
-
-    Buffer& buffer = *bufferResource;
-#if defined(NWB_DEBUG)
-    if(!buffer.m_desc.isVirtual){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer was not created as virtual"));
-        return false;
-    }
-#endif
-
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_context.device, buffer.m_buffer, &memRequirements);
-    if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("bind buffer memory"), NWB_TEXT("heap is invalid"), heap))
-        return false;
-#if defined(NWB_DEBUG)
-    Heap& memoryHeap = *heap;
-    if(!validateHeapMemoryBinding(memoryHeap, memRequirements, offset, NWB_TEXT("bind buffer memory"), NWB_TEXT("buffer")))
-        return false;
-#else
-    Heap& memoryHeap = *heap;
-#endif
-
-    res = m_allocator.bindHeapBufferMemory(buffer, memoryHeap, offset);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: {}"), ResultToString(res));
-        return false;
-    }
-    if(m_context.extensions.buffer_device_address){
-        VkBufferDeviceAddressInfo addressInfo{};
-        addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        addressInfo.buffer = buffer.m_buffer;
-        buffer.m_deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
-    }
-
-    return true;
-}
-
-BufferHandle Device::createHandleForNativeBuffer(ObjectType objectType, Object nativeBufferHandle, const BufferDesc& desc){
-    if(objectType != ObjectTypes::VK_Buffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: object type is not VK_Buffer"));
-        return nullptr;
-    }
-
-    auto* nativeBuffer = static_cast<VkBuffer_T*>(nativeBufferHandle);
-    if(nativeBuffer == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: buffer handle is null"));
-        return nullptr;
-    }
-    if(desc.byteSize == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer handle for native buffer: byte size is zero"));
-        return nullptr;
-    }
-
-    auto* buffer = NewArenaObject<Buffer>(m_context.objectArena, m_context, m_allocator);
-    buffer->m_desc = desc;
-    buffer->m_buffer = nativeBuffer;
-    buffer->m_managed = false;
-
-    if(m_context.extensions.buffer_device_address){
-        VkBufferDeviceAddressInfo addressInfo{};
-        addressInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        addressInfo.buffer = nativeBuffer;
-        buffer->m_deviceAddress = vkGetBufferDeviceAddress(m_context.device, &addressInfo);
-    }
-
-    return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 bool CommandList::prepareUploadStaging(const usize dataSize, const tchar* operationName, Buffer*& outStagingBuffer, u64& outStagingOffset, void*& outCpuVA){
     outStagingBuffer = nullptr;

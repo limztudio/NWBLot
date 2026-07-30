@@ -104,13 +104,7 @@ struct OptionalDeviceFeatureSet{
     VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructure = MakeVkFeatureStruct<VkPhysicalDeviceAccelerationStructureFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR);
     VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipeline = MakeVkFeatureStruct<VkPhysicalDeviceRayTracingPipelineFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR);
     VkPhysicalDeviceRayQueryFeaturesKHR rayQuery = MakeVkFeatureStruct<VkPhysicalDeviceRayQueryFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR);
-    VkPhysicalDeviceOpacityMicromapFeaturesEXT opacityMicromap = MakeVkFeatureStruct<VkPhysicalDeviceOpacityMicromapFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT);
-    VkPhysicalDeviceClusterAccelerationStructureFeaturesNV clusterAccelerationStructure = MakeVkFeatureStruct<VkPhysicalDeviceClusterAccelerationStructureFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CLUSTER_ACCELERATION_STRUCTURE_FEATURES_NV);
-    VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV rayTracingInvocationReorder = MakeVkFeatureStruct<VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_NV);
-    VkPhysicalDeviceRayTracingInvocationReorderFeaturesEXT rayTracingInvocationReorderExt = MakeVkFeatureStruct<VkPhysicalDeviceRayTracingInvocationReorderFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_EXT);
-    VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV rayTracingLinearSweptSpheres = MakeVkFeatureStruct<VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_LINEAR_SWEPT_SPHERES_FEATURES_NV);
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShader = MakeVkFeatureStruct<VkPhysicalDeviceMeshShaderFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT);
-    VkPhysicalDeviceFragmentShadingRateFeaturesKHR fragmentShadingRate = MakeVkFeatureStruct<VkPhysicalDeviceFragmentShadingRateFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR);
     // VK_EXT_descriptor_buffer (descriptor-as-memory). It is advertised by the BC-250/RADV target and
     // natively encodes acceleration structures via VkDescriptorGetInfoEXT; descriptor-buffer-compatible pipelines
     // consume it through the production binding path.
@@ -128,21 +122,7 @@ static OptionalDeviceFeatureSet MakeRequestedOptionalDeviceFeatures(){
 
     features.rayQuery.rayQuery = VK_TRUE;
 
-    features.opacityMicromap.micromap = VK_TRUE;
-
-    features.clusterAccelerationStructure.clusterAccelerationStructure = VK_TRUE;
-
-    features.rayTracingInvocationReorder.rayTracingInvocationReorder = VK_TRUE;
-    features.rayTracingInvocationReorderExt.rayTracingInvocationReorder = VK_TRUE;
-
-    features.rayTracingLinearSweptSpheres.spheres = VK_FALSE;
-    features.rayTracingLinearSweptSpheres.linearSweptSpheres = VK_FALSE;
-
     features.meshShader.meshShader = VK_TRUE;
-
-    features.fragmentShadingRate.pipelineFragmentShadingRate = VK_TRUE;
-    features.fragmentShadingRate.primitiveFragmentShadingRate = VK_TRUE;
-    features.fragmentShadingRate.attachmentFragmentShadingRate = VK_TRUE;
 
     // Descriptor buffers are a required renderer capability. The device feature support check below rejects a
     // selected GPU that exposes the extension but not its descriptorBuffer feature.
@@ -159,13 +139,7 @@ static void* GetOptionalDeviceFeatureStruct(OptionalDeviceFeatureSet& features, 
     case DeviceExtensionFeature::AccelerationStructure: return &features.accelerationStructure;
     case DeviceExtensionFeature::RayTracingPipeline: return &features.rayTracingPipeline;
     case DeviceExtensionFeature::RayQuery: return &features.rayQuery;
-    case DeviceExtensionFeature::OpacityMicromap: return &features.opacityMicromap;
-    case DeviceExtensionFeature::ClusterAccelerationStructure: return &features.clusterAccelerationStructure;
-    case DeviceExtensionFeature::RayTracingInvocationReorder: return &features.rayTracingInvocationReorder;
-    case DeviceExtensionFeature::RayTracingInvocationReorderExt: return &features.rayTracingInvocationReorderExt;
-    case DeviceExtensionFeature::RayTracingLinearSweptSpheres: return &features.rayTracingLinearSweptSpheres;
     case DeviceExtensionFeature::MeshShader: return &features.meshShader;
-    case DeviceExtensionFeature::FragmentShadingRate: return &features.fragmentShadingRate;
     case DeviceExtensionFeature::DescriptorBuffer: return &features.descriptorBuffer;
     case DeviceExtensionFeature::DeviceFault: return &features.deviceFault;
     case DeviceExtensionFeature::None:
@@ -277,27 +251,8 @@ static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
         ;
     case DeviceExtensionFeature::RayQuery:
         return SupportsRequestedValue(requested.rayQuery.rayQuery, supported.rayQuery.rayQuery);
-    case DeviceExtensionFeature::OpacityMicromap:
-        return SupportsRequestedValue(requested.opacityMicromap.micromap, supported.opacityMicromap.micromap);
-    case DeviceExtensionFeature::ClusterAccelerationStructure:
-        return SupportsRequestedValue(requested.clusterAccelerationStructure.clusterAccelerationStructure, supported.clusterAccelerationStructure.clusterAccelerationStructure);
-    case DeviceExtensionFeature::RayTracingInvocationReorder:
-        return SupportsRequestedValue(requested.rayTracingInvocationReorder.rayTracingInvocationReorder, supported.rayTracingInvocationReorder.rayTracingInvocationReorder);
-    case DeviceExtensionFeature::RayTracingInvocationReorderExt:
-        return SupportsRequestedValue(requested.rayTracingInvocationReorderExt.rayTracingInvocationReorder, supported.rayTracingInvocationReorderExt.rayTracingInvocationReorder);
-    case DeviceExtensionFeature::RayTracingLinearSweptSpheres:
-        return supported.rayTracingLinearSweptSpheres.spheres == VK_TRUE || supported.rayTracingLinearSweptSpheres.linearSweptSpheres == VK_TRUE;
     case DeviceExtensionFeature::MeshShader:
-        return
-            SupportsRequestedValue(requested.meshShader.taskShader, supported.meshShader.taskShader)
-            && SupportsRequestedValue(requested.meshShader.meshShader, supported.meshShader.meshShader)
-        ;
-    case DeviceExtensionFeature::FragmentShadingRate:
-        return
-            SupportsRequestedValue(requested.fragmentShadingRate.pipelineFragmentShadingRate, supported.fragmentShadingRate.pipelineFragmentShadingRate)
-            && SupportsRequestedValue(requested.fragmentShadingRate.primitiveFragmentShadingRate, supported.fragmentShadingRate.primitiveFragmentShadingRate)
-            && SupportsRequestedValue(requested.fragmentShadingRate.attachmentFragmentShadingRate, supported.fragmentShadingRate.attachmentFragmentShadingRate)
-        ;
+        return SupportsRequestedValue(requested.meshShader.meshShader, supported.meshShader.meshShader);
     case DeviceExtensionFeature::DescriptorBuffer:
         return SupportsRequestedValue(requested.descriptorBuffer.descriptorBuffer, supported.descriptorBuffer.descriptorBuffer);
     case DeviceExtensionFeature::DeviceFault:
@@ -313,9 +268,6 @@ static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
 }
 
 static void FinalizeOptionalDeviceFeatureEnablement(OptionalDeviceFeatureSet& enabled, const OptionalDeviceFeatureSet& supported){
-    enabled.meshShader.taskShader = supported.meshShader.taskShader;
-    enabled.rayTracingLinearSweptSpheres.spheres = supported.rayTracingLinearSweptSpheres.spheres;
-    enabled.rayTracingLinearSweptSpheres.linearSweptSpheres = supported.rayTracingLinearSweptSpheres.linearSweptSpheres;
     // Optional VK_EXT_device_fault sub-feature: only enable the vendor-binary capability where the device
     // actually supports it, otherwise vkCreateDevice fails with VK_ERROR_FEATURE_NOT_PRESENT (e.g. AMD iGPUs).
     enabled.deviceFault.deviceFaultVendorBinary = supported.deviceFault.deviceFaultVendorBinary;
@@ -1070,9 +1022,6 @@ bool BackendContext::createVulkanDevice(){
     m_bufferDeviceAddressSupported = false;
     m_dynamicRenderingSupported = false;
     m_synchronization2Supported = false;
-    m_meshTaskShaderSupported = false;
-    m_rayTracingSpheresSupported = false;
-    m_rayTracingLinearSweptSpheresSupported = false;
 
     uint32_t extCount = 0;
     res = vkEnumerateDeviceExtensionProperties(m_vulkanPhysicalDevice, nullptr, &extCount, nullptr);
@@ -1129,7 +1078,6 @@ bool BackendContext::createVulkanDevice(){
 #endif
 
     const bool apiSupportsVulkan13 = physicalDeviceProperties.apiVersion >= VK_API_VERSION_1_3;
-    const bool coopVecExtensionEnabled = isDeviceExtensionEnabled(VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME);
     const bool dynamicRenderingExtensionEnabled = isDeviceExtensionEnabled(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
     const bool synchronization2ExtensionEnabled = isDeviceExtensionEnabled(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
     const bool maintenance4ExtensionEnabled = isDeviceExtensionEnabled(VK_KHR_MAINTENANCE_4_EXTENSION_NAME);
@@ -1173,10 +1121,6 @@ bool BackendContext::createVulkanDevice(){
     VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceDynamicRenderingFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES);
     if(apiSupportsVulkan13 || dynamicRenderingExtensionEnabled)
         VulkanDetail::AppendFeatureStruct(pNext, &dynamicRenderingFeatures);
-
-    VkPhysicalDeviceCooperativeVectorFeaturesNV cooperativeVectorFeatures = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceCooperativeVectorFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV);
-    if(coopVecExtensionEnabled)
-        VulkanDetail::AppendFeatureStruct(pNext, &cooperativeVectorFeatures);
 
     bool queriedOptionalFeatures[kOptionalDeviceFeatureCount] = {};
     for(const auto& [_, feature] : m_enabledExtensions.device)
@@ -1253,9 +1197,7 @@ bool BackendContext::createVulkanDevice(){
     if(
         !requireFeature(supportedCoreFeatures.shaderImageGatherExtended, "shaderImageGatherExtended")
         || !requireFeature(supportedCoreFeatures.samplerAnisotropy, "samplerAnisotropy")
-        || !requireFeature(supportedCoreFeatures.tessellationShader, "tessellationShader")
         || !requireFeature(supportedCoreFeatures.textureCompressionBC, "textureCompressionBC")
-        || !requireFeature(supportedCoreFeatures.geometryShader, "geometryShader")
         || !requireFeature(supportedCoreFeatures.imageCubeArray, "imageCubeArray")
         || !requireFeature(supportedCoreFeatures.shaderInt16, "shaderInt16")
         || !requireFeature(supportedCoreFeatures.depthClamp, "depthClamp")
@@ -1290,19 +1232,6 @@ bool BackendContext::createVulkanDevice(){
     m_dynamicRenderingSupported = true;
     m_synchronization2Supported = true;
     VulkanDetail::FinalizeOptionalDeviceFeatureEnablement(requestedOptionalFeatures, supportedOptionalFeatures);
-    m_meshTaskShaderSupported =
-        isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME)
-        && requestedOptionalFeatures.meshShader.taskShader == VK_TRUE
-    ;
-    m_rayTracingSpheresSupported =
-        isDeviceExtensionEnabled(VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME)
-        && requestedOptionalFeatures.rayTracingLinearSweptSpheres.spheres == VK_TRUE
-    ;
-    m_rayTracingLinearSweptSpheresSupported =
-        isDeviceExtensionEnabled(VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME)
-        && requestedOptionalFeatures.rayTracingLinearSweptSpheres.linearSweptSpheres == VK_TRUE
-    ;
-
     HashSet<i32, Hasher<i32>, EqualTo<i32>, Alloc::ScratchArena> uniqueQueueFamilies(0, Hasher<i32>(), EqualTo<i32>(), scratchArena);
     uniqueQueueFamilies.reserve(s_MaxVulkanQueueFamilyKinds);
     uniqueQueueFamilies.insert(m_graphicsQueueFamily);
@@ -1345,9 +1274,6 @@ bool BackendContext::createVulkanDevice(){
     if(!apiSupportsVulkan13 && synchronization2Enabled)
         VulkanDetail::AppendFeatureStruct(pNext, &synchronization2Features);
 
-    if(coopVecExtensionEnabled && cooperativeVectorFeatures.cooperativeVector)
-        VulkanDetail::AppendFeatureStruct(pNext, &cooperativeVectorFeatures);
-
     if(apiSupportsVulkan13)
         VulkanDetail::AppendFeatureStruct(pNext, &vulkan13features);
     else if(maintenance4Enabled && maintenance4Features.maintenance4 == VK_TRUE)
@@ -1373,9 +1299,7 @@ bool BackendContext::createVulkanDevice(){
     VkPhysicalDeviceFeatures coreDeviceFeatures = {};
     coreDeviceFeatures.shaderImageGatherExtended = supportedCoreFeatures.shaderImageGatherExtended;
     coreDeviceFeatures.samplerAnisotropy = supportedCoreFeatures.samplerAnisotropy;
-    coreDeviceFeatures.tessellationShader = supportedCoreFeatures.tessellationShader;
     coreDeviceFeatures.textureCompressionBC = supportedCoreFeatures.textureCompressionBC;
-    coreDeviceFeatures.geometryShader = supportedCoreFeatures.geometryShader;
     coreDeviceFeatures.imageCubeArray = supportedCoreFeatures.imageCubeArray;
     coreDeviceFeatures.shaderInt16 = supportedCoreFeatures.shaderInt16;
     coreDeviceFeatures.depthClamp = supportedCoreFeatures.depthClamp;
@@ -1468,18 +1392,10 @@ bool BackendContext::createVulkanDevice(){
            << " synchronization2=" << VulkanDetail::BoolToString(m_synchronization2Supported)
            << " bufferDeviceAddress=" << VulkanDetail::BoolToString(m_bufferDeviceAddressSupported)
            << " descriptorBuffer=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME))
-           << " meshTaskShader=" << VulkanDetail::BoolToString(m_meshTaskShaderSupported)
            << " maintenance4=" << VulkanDetail::BoolToString(maintenance4Enabled && maintenance4Features.maintenance4 == VK_TRUE)
            << "\n    optional paths: meshShader=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME))
            << " rayTracingPipeline=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME))
            << " rayQuery=" << VulkanDetail::BoolToString(isDeviceExtensionEnabled(VK_KHR_RAY_QUERY_EXTENSION_NAME))
-           << " shaderExecutionReordering=" << VulkanDetail::BoolToString(
-                isDeviceExtensionEnabled(VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME)
-                || isDeviceExtensionEnabled(VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME)
-            )
-           << " spheres=" << VulkanDetail::BoolToString(m_rayTracingSpheresSupported)
-           << " linearSweptSpheres=" << VulkanDetail::BoolToString(m_rayTracingLinearSweptSpheresSupported)
-           << " cooperativeVector=" << VulkanDetail::BoolToString(coopVecExtensionEnabled && cooperativeVectorFeatures.cooperativeVector == VK_TRUE)
            << "\n    enabled device extensions: " << m_enabledExtensions.device.size()
         ;
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(ss.str()));
@@ -1919,9 +1835,6 @@ bool BackendContext::createDevice(){
     deviceDesc.bufferDeviceAddressSupported = m_bufferDeviceAddressSupported;
     deviceDesc.dynamicRenderingSupported = m_dynamicRenderingSupported;
     deviceDesc.synchronization2Supported = m_synchronization2Supported;
-    deviceDesc.meshTaskShaderSupported = m_meshTaskShaderSupported;
-    deviceDesc.rayTracingSpheresSupported = m_rayTracingSpheresSupported;
-    deviceDesc.rayTracingLinearSweptSpheresSupported = m_rayTracingLinearSweptSpheresSupported;
     deviceDesc.gpuCrashDiagnosticsEnabled = m_deviceParams.enableGpuCrashDiagnostics;
     deviceDesc.logBufferLifetime = m_deviceParams.logBufferLifetime;
     deviceDesc.bindlessHeapAbi = m_deviceParams.bindlessHeapAbi;

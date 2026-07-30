@@ -23,22 +23,7 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr usize s_MaxGraphicsPipelineShaderStageCount = 5u;
-
-
-constexpr VkPrimitiveTopology ConvertPrimitiveTopology(PrimitiveType::Enum primType){
-    switch(primType){
-    case PrimitiveType::PointList:     return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-    case PrimitiveType::LineList:      return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-    case PrimitiveType::TriangleList:  return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    case PrimitiveType::TriangleStrip: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-    case PrimitiveType::TriangleFan:   return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN;
-    case PrimitiveType::TriangleListWithAdjacency: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY;
-    case PrimitiveType::TriangleStripWithAdjacency: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY;
-    case PrimitiveType::PatchList:     return VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
-    default: return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    }
-}
+constexpr usize s_MaxGraphicsPipelineShaderStageCount = 2u;
 
 void SetGraphicsDynamicState(VkCommandBuffer commandBuffer, const GraphicsPipelineDesc& desc, const GraphicsState& state){
     const RasterState& rasterState = desc.renderState.rasterState;
@@ -155,56 +140,13 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         return nullptr;
     }
 
-    const bool hasTessellationControlShader = static_cast<bool>(desc.HS);
-    const bool hasTessellationEvaluationShader = static_cast<bool>(desc.DS);
-    const bool usesTessellation = hasTessellationControlShader || hasTessellationEvaluationShader || desc.primType == PrimitiveType::PatchList || desc.patchControlPoints > 0;
-
-    if(hasTessellationControlShader != hasTessellationEvaluationShader){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: tessellation control and evaluation shaders must both be provided"));
-        DestroyArenaObject(m_context.objectArena, pso);
-        return nullptr;
-    }
-    if(usesTessellation){
-        if(!hasTessellationControlShader || !hasTessellationEvaluationShader){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: patch topology requires tessellation shaders"));
-            DestroyArenaObject(m_context.objectArena, pso);
-            return nullptr;
-        }
-        if(desc.primType != PrimitiveType::PatchList){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: tessellation shaders require patch-list topology"));
-            DestroyArenaObject(m_context.objectArena, pso);
-            return nullptr;
-        }
-        if(desc.patchControlPoints == 0){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: tessellation patch control point count is zero"));
-            DestroyArenaObject(m_context.objectArena, pso);
-            return nullptr;
-        }
-        if(desc.patchControlPoints > m_context.physicalDeviceProperties.limits.maxTessellationPatchSize){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: patch control point count {} exceeds device limit {}")
-                , desc.patchControlPoints
-                , m_context.physicalDeviceProperties.limits.maxTessellationPatchSize
-            );
-            DestroyArenaObject(m_context.objectArena, pso);
-            return nullptr;
-        }
-    }
-
     PipelineShaderStageVector shaderStages{ scratchArena };
-    PipelineSpecializationInfoVector specInfos{ scratchArena };
     shaderStages.reserve(VulkanDetail::s_MaxGraphicsPipelineShaderStageCount);
-    specInfos.reserve(VulkanDetail::s_MaxGraphicsPipelineShaderStageCount);
 
     if(desc.VS)
-        appendPipelineShaderStage(desc.VS.get(), VK_SHADER_STAGE_VERTEX_BIT, specInfos, shaderStages);
-    if(desc.HS)
-        appendPipelineShaderStage(desc.HS.get(), VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, specInfos, shaderStages);
-    if(desc.DS)
-        appendPipelineShaderStage(desc.DS.get(), VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, specInfos, shaderStages);
-    if(desc.GS)
-        appendPipelineShaderStage(desc.GS.get(), VK_SHADER_STAGE_GEOMETRY_BIT, specInfos, shaderStages);
+        appendPipelineShaderStage(desc.VS.get(), VK_SHADER_STAGE_VERTEX_BIT, shaderStages);
     if(desc.PS)
-        appendPipelineShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
+        appendPipelineShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT, shaderStages);
 
     if(shaderStages.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create graphics pipeline: no shader stages provided"));
@@ -231,11 +173,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     }
 
     auto inputAssembly = VulkanDetail::MakeVkStruct<VkPipelineInputAssemblyStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO);
-    inputAssembly.topology = VulkanDetail::ConvertPrimitiveTopology(desc.primType);
+    inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-    auto tessellationState = VulkanDetail::MakeVkStruct<VkPipelineTessellationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO);
-    tessellationState.patchControlPoints = desc.patchControlPoints;
 
     const RasterState& rasterState = desc.renderState.rasterState;
     auto rasterizer = VulkanDetail::BuildPipelineRasterizationState(
@@ -274,7 +213,6 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pipelineInfo.pStages = shaderStages.data();
     pipelineInfo.pVertexInputState = &vertexInputInfo;
     pipelineInfo.pInputAssemblyState = &inputAssembly;
-    pipelineInfo.pTessellationState = (desc.patchControlPoints > 0) ? &tessellationState : nullptr;
     VulkanDetail::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, fixedState);
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     pipelineInfo.subpass = 0;
@@ -601,46 +539,9 @@ void CommandList::drawIndexed(const DrawArguments& args){
     vkCmdDrawIndexed(m_currentCmdBuf->m_cmdBuf, args.vertexCount, args.instanceCount, args.startIndexLocation, args.startVertexLocation, args.startInstanceLocation);
 }
 
-void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
-    Buffer* indirectBuffer = nullptr;
-    if(!prepareDrawIndirect(
-        offsetBytes,
-        drawCount,
-        sizeof(DrawIndirectArguments),
-        NWB_TEXT("draw indirect"),
-        NWB_TEXT("drawIndirect"),
-        VulkanDetail::IndirectDrawIndexMode::NonIndexed,
-        indirectBuffer
-    ))
-        return;
-
-    vkCmdDrawIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndirectArguments));
-    retainResource(m_currentGraphicsState.indirectParams);
-}
-
-void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
-    Buffer* indirectBuffer = nullptr;
-    if(!prepareDrawIndirect(
-        offsetBytes,
-        drawCount,
-        sizeof(DrawIndexedIndirectArguments),
-        NWB_TEXT("draw indexed indirect"),
-        NWB_TEXT("drawIndexedIndirect"),
-        VulkanDetail::IndirectDrawIndexMode::Indexed,
-        indirectBuffer
-    ))
-        return;
-
-    vkCmdDrawIndexedIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
-    retainResource(m_currentGraphicsState.indirectParams);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

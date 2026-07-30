@@ -49,21 +49,10 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     pso->m_framebufferInfo = fbinfo;
 
     PipelineShaderStageVector shaderStages{ scratchArena };
-    PipelineSpecializationInfoVector specInfos{ scratchArena };
-    shaderStages.reserve(s_MeshletPipelineStageReserveCount); // Task (optional), Mesh, Fragment
-    specInfos.reserve(s_MeshletPipelineStageReserveCount);
-
-    if(desc.AS && m_context.meshShaderFeatures.taskShader != VK_TRUE){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Task shader was supplied for meshlet pipeline, but VK_EXT_mesh_shader taskShader was not enabled."));
-        DestroyArenaObject(m_context.objectArena, pso);
-        return nullptr;
-    }
-
-    if(desc.AS)
-        appendPipelineShaderStage(desc.AS.get(), VK_SHADER_STAGE_TASK_BIT_EXT, specInfos, shaderStages);
+    shaderStages.reserve(s_MeshletPipelineStageReserveCount); // Mesh, Fragment
 
     if(desc.MS)
-        appendPipelineShaderStage(desc.MS.get(), VK_SHADER_STAGE_MESH_BIT_EXT, specInfos, shaderStages);
+        appendPipelineShaderStage(desc.MS.get(), VK_SHADER_STAGE_MESH_BIT_EXT, shaderStages);
     else{
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Mesh shader is required for meshlet pipeline"));
         DestroyArenaObject(m_context.objectArena, pso);
@@ -71,7 +60,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     }
 
     if(desc.PS)
-        appendPipelineShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
+        appendPipelineShaderStage(desc.PS.get(), VK_SHADER_STAGE_FRAGMENT_BIT, shaderStages);
 
     if(!configurePipelineBindingsOrDestroy(
         desc.bindingLayouts,
@@ -124,8 +113,6 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 
 
 void CommandList::setMeshletState(const MeshletState& state){
-    if(state.indirectParams)
-        setBufferState(state.indirectParams, ResourceStates::IndirectArgument);
     commitBarriers();
 
     if(!ensureGraphicsRenderPass(state.framebuffer))

@@ -27,7 +27,6 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
     , m_pendingBufferBarriers(device.m_context.objectArena)
     , m_textureOwnershipReleaseDestinations(0u, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo(), device.m_context.objectArena)
     , m_bufferOwnershipReleaseDestinations(0u, Hasher<Buffer*>(), EqualTo<Buffer*>(), device.m_context.objectArena)
-    , m_pendingCompactions(device.m_context.objectArena)
 {
     if(m_device.isAnyGpuMarkerEnabled())
         m_device.getGpuCrashTracker().registerGpuCrashMarkerTracker(m_gpuCrashMarkerTracker);
@@ -207,54 +206,7 @@ bool CommandList::validateIndirectBuffer(Buffer* bufferResource, u64 offsetBytes
 #endif
 }
 
-bool CommandList::prepareDrawIndirect(
-    const u32 offsetBytes,
-    const u32 drawCount,
-    const u64 commandSizeBytes,
-    const tchar* operationLabel,
-    const tchar* commandName,
-    VulkanDetail::IndirectDrawIndexMode::Enum indexMode,
-    Buffer*& outIndirectBuffer
-)const{
-    outIndirectBuffer = nullptr;
-    if(drawCount == 0)
-        return false;
-#if defined(NWB_DEBUG)
-    if(!m_renderPassActive || !m_currentGraphicsState.pipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: no graphics pipeline and active render pass are bound"), operationLabel);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: no graphics pipeline and active render pass are bound"), operationLabel);
-        return false;
-    }
-    if(indexMode == VulkanDetail::IndirectDrawIndexMode::Indexed && !m_currentGraphicsState.indexBuffer.buffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: no index buffer is bound"), operationLabel);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: no index buffer is bound"), operationLabel);
-        return false;
-    }
-    if(drawCount > m_context.physicalDeviceProperties.limits.maxDrawIndirectCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: draw count exceeds device limit"), operationLabel);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: draw count exceeds device limit"), operationLabel);
-        return false;
-    }
-    if(!validateIndirectBuffer(m_currentGraphicsState.indirectParams, offsetBytes, commandSizeBytes, drawCount, commandName))
-        return false;
-#else
-    static_cast<void>(offsetBytes);
-    static_cast<void>(commandSizeBytes);
-    static_cast<void>(operationLabel);
-    static_cast<void>(commandName);
-    static_cast<void>(indexMode);
-#endif
-
-    outIndirectBuffer = m_currentGraphicsState.indirectParams;
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

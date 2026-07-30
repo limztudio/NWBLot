@@ -71,14 +71,6 @@ public:
         }
     };
 
-    struct CoopVectorSupport{
-        bool inferencingSupported = false;
-        bool trainingSupported = false;
-        bool fp16InferencingSupported = false;
-        bool fp16TrainingSupported = false;
-        bool fp32TrainingSupported = false;
-    };
-
     using JobHandle = Alloc::JobSystem::JobHandle;
     using PointerScaleChangedCallback = void(*)(void* userData, f32 scaleX, f32 scaleY);
 
@@ -165,10 +157,6 @@ public:
     [[nodiscard]] JobHandle setupBufferAsync(const BufferSetupDesc& desc, BufferHandle& outBuffer);
     [[nodiscard]] JobHandle setupTextureAsync(const TextureSetupDesc& desc, TextureHandle& outTexture);
     [[nodiscard]] JobHandle setupMeshAsync(const MeshSetupDesc& desc, MeshResource& outMesh);
-
-    [[nodiscard]] CoopVectorSupport queryCoopVecSupport()const;
-    [[nodiscard]] CooperativeVectorDeviceFeatures queryCoopVecFeatures()const;
-    [[nodiscard]] usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const;
 
     // Schedules CPU-side graphics work on the graphics worker pool. Callers must wait for the returned job before
     // submitting or destroying any command lists/resources the work touches.

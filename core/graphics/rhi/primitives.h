@@ -71,34 +71,6 @@ inline bool operator==(const UIntColor& lhs, const UIntColor& rhs)noexcept{
 }
 inline bool operator!=(const UIntColor& lhs, const UIntColor& rhs)noexcept{ return !(lhs == rhs); }
 
-struct IntColor{
-    i32 r, g, b, a;
-
-    constexpr IntColor()noexcept
-        : r(0)
-        , g(0)
-        , b(0)
-        , a(0)
-    {}
-    constexpr IntColor(i32 c)noexcept
-        : r(c)
-        , g(c)
-        , b(c)
-        , a(c)
-    {}
-    constexpr IntColor(i32 red, i32 green, i32 blue, i32 alpha)noexcept
-        : r(red)
-        , g(green)
-        , b(blue)
-        , a(alpha)
-    {}
-};
-inline bool operator==(const IntColor& lhs, const IntColor& rhs)noexcept{
-    return (lhs.r == rhs.r) && (lhs.g == rhs.g) && (lhs.b == rhs.b) && (lhs.a == rhs.a);
-}
-inline bool operator!=(const IntColor& lhs, const IntColor& rhs)noexcept{ return !(lhs == rhs); }
-
-
 struct Viewport{
     f32 minX, maxX;
     f32 minY, maxY;

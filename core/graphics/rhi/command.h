@@ -46,8 +46,8 @@ struct TimerQueryResult{
 // their order in one queue submission or by using explicit queue synchronization. Resource lifetime remains
 // owned by the caller: every referenced texture and buffer must stay alive until the consumer has opened.
 //
-// It carries both transient and permanent state. UAV-barrier policy remains local to each command list, while
-// keepInitialState resources are captured after their close-time restore barriers.
+// It carries transient state plus explicitly permanent buffer state. UAV-barrier policy remains local to each command
+// list, while keepInitialState resources are captured after their close-time restore barriers.
 class CommandListResourceStateHandoff final : NoCopy{
     friend class GraphicsBackend::CommandList;
 
@@ -72,20 +72,10 @@ private:
         CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
     };
 
-    struct PermanentTextureState{
-        Texture* texture = nullptr;
-        ResourceStates::Mask state = ResourceStates::Unknown;
-        ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
-        CommandQueue::Enum ownerQueue = CommandQueue::kCount;
-        CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
-    };
-
-
 public:
     explicit CommandListResourceStateHandoff(GraphicsArena& arena)
         : m_textureStates(arena)
         , m_bufferStates(arena)
-        , m_permanentTextureStates(arena)
         , m_permanentBufferStates(arena)
     {}
 
@@ -94,7 +84,6 @@ public:
     void reset(){
         m_textureStates.clear();
         m_bufferStates.clear();
-        m_permanentTextureStates.clear();
         m_permanentBufferStates.clear();
         m_valid = false;
     }
@@ -128,7 +117,6 @@ public:
 private:
     GraphicsVector<TextureState> m_textureStates;
     GraphicsVector<BufferState> m_bufferStates;
-    GraphicsVector<PermanentTextureState> m_permanentTextureStates;
     GraphicsVector<BufferState> m_permanentBufferStates;
     bool m_valid = false;
 };
@@ -169,24 +157,19 @@ struct GraphicsState{
     GraphicsPipeline* pipeline = nullptr;
     Framebuffer* framebuffer = nullptr;
     ViewportState viewport;
-    VariableRateShadingState shadingRateState;
     Color blendConstantColor{};
     u8 dynamicStencilRefValue = 0;
 
     FixedVector<VertexBufferBinding, s_MaxVertexAttributes> vertexBuffers;
     IndexBufferBinding indexBuffer;
 
-    Buffer* indirectParams = nullptr;
-
     constexpr GraphicsState& setPipeline(GraphicsPipeline* value){ pipeline = value; return *this; }
     constexpr GraphicsState& setFramebuffer(Framebuffer* value){ framebuffer = value; return *this; }
     constexpr GraphicsState& setViewport(const ViewportState& value){ viewport = value; return *this; }
-    constexpr GraphicsState& setShadingRateState(const VariableRateShadingState& value){ shadingRateState = value; return *this; }
     constexpr GraphicsState& setBlendColor(const Color& value){ blendConstantColor = value; return *this; }
     constexpr GraphicsState& setDynamicStencilRefValue(u8 value){ dynamicStencilRefValue = value; return *this; }
     GraphicsState& addVertexBuffer(const VertexBufferBinding& value){ vertexBuffers.push_back(value); return *this; }
     constexpr GraphicsState& setIndexBuffer(const IndexBufferBinding& value){ indexBuffer = value; return *this; }
-    constexpr GraphicsState& setIndirectParams(Buffer* value){ indirectParams = value; return *this; }
 };
 
 struct DrawArguments{
@@ -201,32 +184,6 @@ struct DrawArguments{
     constexpr DrawArguments& setStartIndexLocation(u32 value){ startIndexLocation = value; return *this; }
     constexpr DrawArguments& setStartVertexLocation(u32 value){ startVertexLocation = value; return *this; }
     constexpr DrawArguments& setStartInstanceLocation(u32 value){ startInstanceLocation = value; return *this; }
-};
-
-struct DrawIndirectArguments{
-    u32 vertexCount = 0;
-    u32 instanceCount = 1;
-    u32 startVertexLocation = 0;
-    u32 startInstanceLocation = 0;
-
-    constexpr DrawIndirectArguments& setVertexCount(u32 value){ vertexCount = value; return *this; }
-    constexpr DrawIndirectArguments& setInstanceCount(u32 value){ instanceCount = value; return *this; }
-    constexpr DrawIndirectArguments& setStartVertexLocation(u32 value){ startVertexLocation = value; return *this; }
-    constexpr DrawIndirectArguments& setStartInstanceLocation(u32 value){ startInstanceLocation = value; return *this; }
-};
-
-struct DrawIndexedIndirectArguments{
-    u32 indexCount = 0;
-    u32 instanceCount = 1;
-    u32 startIndexLocation = 0;
-    i32  baseVertexLocation = 0;
-    u32 startInstanceLocation = 0;
-
-    constexpr DrawIndexedIndirectArguments& setIndexCount(u32 value){ indexCount = value; return *this; }
-    constexpr DrawIndexedIndirectArguments& setInstanceCount(u32 value){ instanceCount = value; return *this; }
-    constexpr DrawIndexedIndirectArguments& setStartIndexLocation(u32 value){ startIndexLocation = value; return *this; }
-    constexpr DrawIndexedIndirectArguments& setBaseVertexLocation(i32 value){ baseVertexLocation = value; return *this; }
-    constexpr DrawIndexedIndirectArguments& setStartInstanceLocation(u32 value){ startInstanceLocation = value; return *this; }
 };
 
 struct ComputeState{
@@ -257,13 +214,10 @@ struct MeshletState{
     Color blendConstantColor{};
     u8 dynamicStencilRefValue = 0;
 
-    Buffer* indirectParams = nullptr;
-
     constexpr MeshletState& setPipeline(MeshletPipeline* value){ pipeline = value; return *this; }
     constexpr MeshletState& setFramebuffer(Framebuffer* value){ framebuffer = value; return *this; }
     constexpr MeshletState& setViewport(const ViewportState& value){ viewport = value; return *this; }
     constexpr MeshletState& setBlendColor(const Color& value){ blendConstantColor = value; return *this; }
-    constexpr MeshletState& setIndirectParams(Buffer* value){ indirectParams = value; return *this; }
     constexpr MeshletState& setDynamicStencilRefValue(u8 value){ dynamicStencilRefValue = value; return *this; }
 };
 
@@ -274,47 +228,31 @@ struct MeshletState{
 
 struct RayTracingPipelineShaderDesc{
     ShaderHandle shader;
-    BindingLayoutHandle bindingLayout;
     GraphicsString exportName;
 
     explicit RayTracingPipelineShaderDesc(GraphicsArena& arena);
     ~RayTracingPipelineShaderDesc();
 
     RayTracingPipelineShaderDesc& setShader(const ShaderHandle& value);
-    RayTracingPipelineShaderDesc& setBindingLayout(const BindingLayoutHandle& value);
     RayTracingPipelineShaderDesc& setExportName(AStringView value){ exportName.assign(value); return *this; }
 };
 
 struct RayTracingPipelineHitGroupDesc{
     ShaderHandle closestHitShader;
-    ShaderHandle anyHitShader;
-    ShaderHandle intersectionShader;
-    BindingLayoutHandle bindingLayout;
     GraphicsString exportName;
-    bool isProceduralPrimitive = false;
 
     explicit RayTracingPipelineHitGroupDesc(GraphicsArena& arena);
     ~RayTracingPipelineHitGroupDesc();
 
     RayTracingPipelineHitGroupDesc& setClosestHitShader(const ShaderHandle& value);
-    RayTracingPipelineHitGroupDesc& setAnyHitShader(const ShaderHandle& value);
-    RayTracingPipelineHitGroupDesc& setIntersectionShader(const ShaderHandle& value);
-    RayTracingPipelineHitGroupDesc& setBindingLayout(const BindingLayoutHandle& value);
     RayTracingPipelineHitGroupDesc& setExportName(AStringView value){ exportName.assign(value); return *this; }
-    constexpr RayTracingPipelineHitGroupDesc& setIsProceduralPrimitive(bool value){ isProceduralPrimitive = value; return *this; }
 };
 
 struct RayTracingPipelineDesc{
     GraphicsVector<RayTracingPipelineShaderDesc> shaders;
     GraphicsVector<RayTracingPipelineHitGroupDesc> hitGroups;
     BindingLayoutVector globalBindingLayouts;
-    u32 maxPayloadSize = 0;
-    u32 maxAttributeSize = sizeof(f32) * 2; // typical case: float2 uv;
     u32 maxRecursionDepth = 1;
-    i32 hlslExtensionsUAV = -1;
-    bool allowOpacityMicromaps = false;
-    bool allowSpheres = false;
-    bool allowLinearSweptSpheres = false;
 
     explicit RayTracingPipelineDesc(GraphicsArena& arena)
         : shaders(arena)
@@ -325,13 +263,7 @@ struct RayTracingPipelineDesc{
     RayTracingPipelineDesc& addShader(const RayTracingPipelineShaderDesc& value);
     RayTracingPipelineDesc& addHitGroup(const RayTracingPipelineHitGroupDesc& value);
     RayTracingPipelineDesc& addBindingLayout(const BindingLayoutHandle& value);
-    constexpr RayTracingPipelineDesc& setMaxPayloadSize(u32 value){ maxPayloadSize = value; return *this; }
-    constexpr RayTracingPipelineDesc& setMaxAttributeSize(u32 value){ maxAttributeSize = value; return *this; }
     constexpr RayTracingPipelineDesc& setMaxRecursionDepth(u32 value){ maxRecursionDepth = value; return *this; }
-    constexpr RayTracingPipelineDesc& setHlslExtensionsUAV(i32 value){ hlslExtensionsUAV = value; return *this; }
-    constexpr RayTracingPipelineDesc& setAllowOpacityMicromaps(bool value){ allowOpacityMicromaps = value; return *this; }
-    constexpr RayTracingPipelineDesc& setAllowSpheres(bool value){ allowSpheres = value; return *this; }
-    constexpr RayTracingPipelineDesc& setAllowLinearSweptSpheres(bool value){ allowLinearSweptSpheres = value; return *this; }
 };
 
 typedef GraphicsBackend::Handle<RayTracingShaderTable> RayTracingShaderTableHandle;

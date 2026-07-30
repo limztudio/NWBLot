@@ -27,13 +27,10 @@ using VulkanAllocatorHandle = VulkanAllocatorStorage*;
 struct VulkanContext;
 class Buffer;
 class CommandList;
-class Heap;
 class MeshletPipeline;
 class Texture;
-class StagingTexture;
 using PipelineRenderingFormatVector = Vector<VkFormat, Alloc::ScratchArena>;
 using PipelineColorBlendAttachmentVector = Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchArena>;
-using SparseImageMemoryRequirementsVector = Vector<VkSparseImageMemoryRequirements, Alloc::ScratchArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,24 +42,10 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AccelStructCompactionMode{
-    enum Enum : u8{
-        Disabled = 0u,
-        Allowed = 1u,
-    };
-};
-
 namespace PipelineStencilFaceMode{
     enum Enum : u8{
         DepthOnly = 0u,
         IncludeStencilFaces = 1u,
-    };
-};
-
-namespace IndirectDrawIndexMode{
-    enum Enum : u8{
-        NonIndexed = 0u,
-        Indexed = 1u,
     };
 };
 
@@ -91,15 +74,6 @@ struct BufferImageCopyLayout{
     u32 bufferRowLength = 0;
     u32 bufferImageHeight = 0;
 };
-
-struct StagingTextureMipLayout{
-    u64 byteOffset = 0;
-    u64 rowPitch = 0;
-    u64 slicePitch = 0;
-    u32 bufferRowLength = 0;
-    u32 bufferImageHeight = 0;
-};
-using StagingTextureMipLayoutVector = Vector<StagingTextureMipLayout, Alloc::GlobalArena>;
 
 struct GraphicsPipelineFixedState{
     VkPipelineViewportStateCreateInfo viewportState = {};
@@ -173,17 +147,6 @@ bool BuildTextureImageViewCreateInfo(
     VkImageViewCreateInfo& outViewInfo
 );
 bool BuildImageViewCreateInfo(Texture& texture, const DescriptorWriteItem& item, VkImageViewCreateInfo& outViewInfo);
-u64 ComputeStagingTextureOffset(
-    const TextureSlice& resolvedSlice,
-    const StagingTextureMipLayout& mipLayout,
-    const TextureFormatBlockLayout& formatLayout,
-    u64 arrayByteSize,
-    usize* outRowPitch = nullptr,
-    u32* outBufferRowLength = nullptr,
-    u32* outBufferImageHeight = nullptr,
-    u64* outRangeSize = nullptr
-);
-bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout, TextureSlice* outResolved = nullptr);
 bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes);
 
 template<typename... Pointers>
@@ -233,52 +196,6 @@ inline bool DebugValidateBufferRange(
     return true;
 }
 
-inline bool DebugResolveTextureSlice(
-    const TextureDesc& desc,
-    const TextureSlice& slice,
-    const TextureFormatBlockLayout& formatLayout,
-    const tchar* operationName,
-    const tchar* message,
-    TextureSlice& outResolved
-){
-#if defined(NWB_DEBUG)
-    if(!IsTextureSliceInBounds(desc, slice, formatLayout, &outResolved)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
-        return false;
-    }
-#else
-    static_cast<void>(formatLayout);
-    static_cast<void>(operationName);
-    static_cast<void>(message);
-    outResolved = slice.resolve(desc);
-#endif
-
-    return true;
-}
-
-inline bool DebugValidateTextureSliceExtentsMatch(
-    const TextureSlice& first,
-    const TextureSlice& second,
-    const tchar* operationName,
-    const tchar* message
-){
-#if defined(NWB_DEBUG)
-    if(first.width != second.width || first.height != second.height || first.depth != second.depth){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
-        return false;
-    }
-#else
-    static_cast<void>(first);
-    static_cast<void>(second);
-    static_cast<void>(operationName);
-    static_cast<void>(message);
-#endif
-
-    return true;
-}
-
 inline bool DebugValidateTextureSubresourceRange(const TextureSubresourceSet& subresources, const tchar* operationName){
 #if defined(NWB_DEBUG)
     if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
@@ -313,7 +230,7 @@ u32 GetPushConstantByteSize(const BindingLayoutDesc& desc);
 bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, const tchar* operationName);
 bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, const tchar* operationName);
 void DestroyPipelineAndOwnedLayout(VkDevice device, const VkAllocationCallbacks* allocationCallbacks, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
-VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags, AccelStructCompactionMode::Enum compactionMode);
+VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags);
 bool BuildGraphicsPipelineFixedState(
     const FramebufferInfo& fbinfo,
     const RenderState& renderState,
@@ -323,31 +240,11 @@ bool BuildGraphicsPipelineFixedState(
     const tchar* operationName,
     GraphicsPipelineFixedState& outState
 );
-bool BuildClusterOperationInputInfo(
-    const RayTracingClusterOperationParams& params,
-    VkClusterAccelerationStructureInputInfoNV& outInputInfo,
-    VkClusterAccelerationStructureMoveObjectsInputNV& outMoveInput,
-    VkClusterAccelerationStructureTriangleClusterInputNV& outClusterInput,
-    VkClusterAccelerationStructureClustersBottomLevelInputNV& outBlasInput,
-    const tchar* operationName
-);
 VkDescriptorType ConvertDescriptorType(ResourceType::Enum type);
 VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages);
 // Descriptor-buffer offset alignment clamped to a 32-bit value (1 when zero/oversized) for byte-offset math.
 u32 GetDescriptorBufferOffsetAlignmentBytes(const VulkanContext& context);
-VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
-CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type);
-VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout);
 bool BuildPipelineRenderingInfo(const FramebufferInfo& fbinfo, const tchar* operationName, VkPipelineRenderingCreateInfo& outRenderingInfo, PipelineRenderingFormatVector& outColorFormats);
-
-inline void GetImageSparseMemoryRequirements(VkDevice device, VkImage image, SparseImageMemoryRequirementsVector& outRequirements){
-    uint32_t sparseReqCount = 0;
-    vkGetImageSparseMemoryRequirements(device, image, &sparseReqCount, nullptr);
-
-    outRequirements.resize(sparseReqCount);
-    if(sparseReqCount > 0)
-        vkGetImageSparseMemoryRequirements(device, image, &sparseReqCount, outRequirements.data());
-}
 
 template<typename T>
 constexpr T MakeVkStruct(VkStructureType sType){
@@ -594,28 +491,17 @@ struct VulkanContext{
         bool EXT_debug_utils = false;
         bool KHR_swapchain = false;
         bool KHR_dynamic_rendering = false;
-        bool EXT_opacity_micromap = false;
-        bool NV_cooperative_vector = false;
-        bool NV_cluster_acceleration_structure = false;
         bool NV_device_diagnostic_checkpoints = false;
         bool EXT_device_fault = false;
         bool AMD_buffer_marker = false;
         bool EXT_mesh_shader = false;
-        bool KHR_fragment_shading_rate = false;
-        bool EXT_ray_tracing_invocation_reorder = false;
-        bool NV_ray_tracing_invocation_reorder = false;
-        bool NV_ray_tracing_linear_swept_spheres = false;
     } extensions;
 
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};
     // Descriptor-buffer properties: per-type descriptor sizes, offset alignment, and binding/range caps needed to lay out
     // descriptor buffers and compute binding offsets for vkCmdSetDescriptorBufferOffsetsEXT.
     VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties{};
-    VkPhysicalDeviceCooperativeVectorPropertiesNV coopVecProperties{};
-    VkPhysicalDeviceCooperativeVectorFeaturesNV coopVecFeatures{};
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
-    VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV rayTracingLinearSweptSpheresFeatures{};
-    VkPhysicalDeviceClusterAccelerationStructurePropertiesNV nvClusterAccelerationStructureProperties{};
     // Core Vulkan 1.1 (engine floor is 1.3), so always populated. Holds the device wave/subgroup size.
     VkPhysicalDeviceSubgroupProperties subgroupProperties{};
     DescriptorBufferManager* descriptorBufferManager = nullptr;
@@ -750,7 +636,6 @@ public:
         usize localWaitCount = 0u,
         bool* outSubmissionAccepted = nullptr
     );
-    void updateTextureTileMappings(Texture* texture, const TextureTilesMapping* tileMappings, u32 numTileMappings);
     void updateLastFinishedID();
 
     void waitForIdle();
@@ -808,15 +693,6 @@ public:
     VkResult createTexture(Texture& texture, const VkImageCreateInfo& imageInfo);
     void destroyTexture(Texture& texture);
 
-    VkResult createStagingTexture(StagingTexture& texture, const VkBufferCreateInfo& bufferInfo, CpuAccessMode::Enum cpuAccess);
-    void destroyStagingTexture(StagingTexture& texture);
-    VkResult mapStagingTextureMemory(StagingTexture& texture, void** outData);
-    void unmapStagingTextureMemory(StagingTexture& texture);
-    VkResult invalidateStagingTextureMemory(StagingTexture& texture, u64 offset, u64 size);
-    VkResult allocateHeap(Heap& heap);
-    void freeHeap(Heap& heap);
-    VkResult bindHeapBufferMemory(Buffer& buffer, Heap& heap, u64 offset);
-    VkResult bindHeapTextureMemory(Texture& texture, Heap& heap, u64 offset);
     VkResult createHostMappedBuffer(
         VkBuffer& buffer,
         VulkanAllocationHandle& allocation,
@@ -829,37 +705,6 @@ public:
 private:
     const VulkanContext& m_context;
     VulkanAllocatorHandle m_allocator = nullptr;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Device memory for placed resources
-
-
-class Heap final : public RefCounter<GraphicsResource>, NoCopy{
-    friend class Device;
-    friend class VulkanAllocator;
-    friend class Queue;
-
-
-public:
-    Heap(const VulkanContext& context, VulkanAllocator& allocator);
-    ~Heap();
-
-
-public:
-    [[nodiscard]] const HeapDesc& getDescription()const{ return m_desc; }
-    Object getNativeHandle(ObjectType objectType);
-
-
-private:
-    HeapDesc m_desc;
-    VkDeviceMemory m_memory = VK_NULL_HANDLE;
-    VulkanAllocationHandle m_allocation = nullptr;
-    VkDeviceSize m_memoryOffset = 0;
-    u32 m_memoryTypeIndex = UINT32_MAX;
-
-    VulkanAllocator& m_allocator;
 };
 
 
@@ -986,8 +831,6 @@ private:
 
     bool m_persistentlyMapped = false;
     bool m_requiresInvalidate = false;
-    bool m_managed = true; // if true, owns the VkBuffer or VMA allocation
-
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
 };
@@ -1086,72 +929,8 @@ private:
 
     bool m_managed = true; // if true, owns the VkImage or VMA allocation
     bool m_keepInitialStateKnown = false;
-    u64 m_tileByteSize = 0; // for sparse/tiled resources
-
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Staging Texture
-
-
-class StagingTexture final : public RefCounter<GraphicsResource>, NoCopy{
-    friend class Device;
-    friend class CommandList;
-    friend class VulkanAllocator;
-
-
-public:
-    StagingTexture(const VulkanContext& context, VulkanAllocator& allocator);
-    ~StagingTexture();
-
-
-public:
-    [[nodiscard]] const TextureDesc& getDescription()const{ return m_desc; }
-
-
-private:
-    TextureDesc m_desc;
-    VulkanDetail::TextureFormatBlockLayout m_formatLayout;
-    VkImageAspectFlags m_aspectMask = 0;
-    u64 m_arrayByteSize = 0;
-    VulkanDetail::StagingTextureMipLayoutVector m_mipLayouts;
-
-    VkBuffer m_buffer = VK_NULL_HANDLE;
-    VulkanAllocationHandle m_allocation = nullptr;
-    void* m_mappedMemory = nullptr;
-    bool m_persistentlyMapped = false;
-    bool m_requiresInvalidate = false;
-    CpuAccessMode::Enum m_cpuAccess{};
-
-    const VulkanContext& m_context;
-    VulkanAllocator& m_allocator;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Sampler Feedback Texture
-
-
-class SamplerFeedbackTexture final : public RefCounter<GraphicsResource>, NoCopy{
-    friend class Device;
-
-
-public:
-    SamplerFeedbackTexture(const VulkanContext& context);
-    ~SamplerFeedbackTexture() = default;
-
-
-public:
-    [[nodiscard]] const SamplerFeedbackTextureDesc& getDescription()const{ return m_desc; }
-    TextureHandle getPairedTexture(){ return m_pairedTexture; }
-
-
-private:
-    SamplerFeedbackTextureDesc m_desc;
-    TextureHandle m_pairedTexture;
 };
 
 
@@ -1188,7 +967,6 @@ private:
 class Shader final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Device;
     friend class CommandList;
-    friend class ShaderLibrary;
 
 
 public:
@@ -1205,70 +983,11 @@ public:
 
 
 private:
-    [[nodiscard]] VkSpecializationInfo makeSpecializationInfo()const;
-
-
-private:
     ShaderDesc m_desc;
     VkShaderModule m_shaderModule = VK_NULL_HANDLE;
 
     Vector<u32, Alloc::GlobalArena> m_spirvWords;
     GraphicsString m_entryPointName;
-
-    Vector<VkSpecializationMapEntry, Alloc::GlobalArena> m_specializationEntries;
-    Vector<u32, Alloc::GlobalArena> m_specializationData;
-
-    const VulkanContext& m_context;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Shader Library
-
-
-struct ShaderLibraryKey{
-    explicit ShaderLibraryKey(GraphicsArena& arena)
-        : entryName(arena)
-    {}
-    ShaderLibraryKey(GraphicsArena& arena, const AStringView inEntryName, const ShaderType::Mask inShaderType)
-        : entryName(inEntryName, arena)
-        , shaderType(inShaderType)
-    {}
-
-    GraphicsString entryName;
-    ShaderType::Mask shaderType = ShaderType::None;
-};
-
-inline bool operator==(const ShaderLibraryKey& lhs, const ShaderLibraryKey& rhs)noexcept{
-    return lhs.entryName == rhs.entryName && lhs.shaderType == rhs.shaderType;
-}
-
-struct ShaderLibraryKeyHasher{
-    usize operator()(const ShaderLibraryKey& value)const noexcept{
-        usize seed = Hasher<GraphicsString>{}(value.entryName);
-        ::HashCombine(seed, static_cast<u32>(value.shaderType));
-        return seed;
-    }
-};
-
-
-class ShaderLibrary final : public RefCounter<GraphicsResource>, NoCopy{
-    friend class Device;
-
-
-public:
-    ShaderLibrary(const VulkanContext& context);
-    ~ShaderLibrary();
-
-
-public:
-    void getBytecode(const void** ppBytecode, usize* pSize)const;
-    ShaderHandle getShader(AStringView entryName, ShaderType::Mask shaderType);
-
-
-private:
-    Vector<u32, Alloc::GlobalArena> m_spirvWords;
-    HashMap<ShaderLibraryKey, Handle<Shader>, ShaderLibraryKeyHasher, EqualTo<ShaderLibraryKey>, GraphicsArena> m_shaders;
 
     const VulkanContext& m_context;
 };
@@ -1344,7 +1063,6 @@ private:
 
 
 using PipelineShaderStageVector = Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchArena>;
-using PipelineSpecializationInfoVector = Vector<VkSpecializationInfo, Alloc::ScratchArena>;
 
 struct PipelineBindingState{
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
@@ -1839,10 +1557,6 @@ public:
     void setRayGenerationShader(AStringView exportName);
     u32 addMissShader(AStringView exportName);
     u32 addHitGroup(AStringView exportName);
-    u32 addCallableShader(AStringView exportName);
-    void clearMissShaders();
-    void clearHitShaders();
-    void clearCallableShaders();
     RayTracingPipeline* getPipeline(){ return m_pipeline.get(); }
     Object getNativeHandle(ObjectType objectType);
 
@@ -1867,19 +1581,16 @@ private:
     BufferHandle m_raygenBuffer;
     BufferHandle m_missBuffer;
     BufferHandle m_hitBuffer;
-    BufferHandle m_callableBuffer;
 
     u64 m_raygenOffset = 0;
     u64 m_missOffset = 0;
     u64 m_hitOffset = 0;
-    u64 m_callableOffset = 0;
 
     const VulkanContext& m_context;
     Device& m_device;
 
     u32 m_missCount = 0;
     u32 m_hitCount = 0;
-    u32 m_callableCount = 0;
 };
 
 
@@ -1951,7 +1662,6 @@ public:
 
 public:
     [[nodiscard]] const RayTracingAccelStructDesc& getDescription()const{ return m_desc; }
-    [[nodiscard]] bool isCompacted()const{ return m_compacted; }
     [[nodiscard]] u64 getDeviceAddress()const{ return m_deviceAddress; }
     // The backing allocation participates in ordinary resource-state handoffs. Expose it so renderer scheduling can
     // select the TLAS state without importing an unrelated broad handoff into another queue.
@@ -1964,43 +1674,9 @@ private:
     VkAccelerationStructureKHR m_accelStruct = VK_NULL_HANDLE;
     BufferHandle m_buffer;
     u64 m_deviceAddress = 0;
-    VkQueryPool m_compactionQueryPool = VK_NULL_HANDLE;
 
     const VulkanContext& m_context;
-    u32 m_compactionQueryIndex = 0;
-    bool m_compacted = false;
     bool m_built = false;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Opacity Micromap
-
-
-class OpacityMicromap final : public RefCounter<GraphicsResource>, NoCopy{
-    friend class Device;
-    friend class CommandList;
-
-
-public:
-    OpacityMicromap(const VulkanContext& context);
-    ~OpacityMicromap();
-
-
-public:
-    [[nodiscard]] const RayTracingOpacityMicromapDesc& getDescription()const{ return m_desc; }
-    [[nodiscard]] bool isCompacted()const{ return m_compacted; }
-    [[nodiscard]] u64 getDeviceAddress()const{ return m_deviceAddress; }
-
-
-private:
-    RayTracingOpacityMicromapDesc m_desc;
-    BufferHandle m_dataBuffer;
-    VkMicromapEXT m_micromap = VK_NULL_HANDLE;
-    u64 m_deviceAddress = 0;
-    bool m_compacted = false;
-
-    const VulkanContext& m_context;
 };
 
 
@@ -2041,10 +1717,8 @@ public:
 
 public:
     void reset();
-    void setPermanentTextureState(Texture& texture, ResourceStates::Mask state);
     void setPermanentBufferState(Buffer& buffer, ResourceStates::Mask state);
 
-    [[nodiscard]] bool isPermanentTexture(Texture& texture)const;
     [[nodiscard]] bool isPermanentBuffer(Buffer& buffer)const;
     [[nodiscard]] ResourceStates::Mask getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
     [[nodiscard]] ResourceStates::Mask getBufferState(Buffer* buffer)const;
@@ -2073,7 +1747,6 @@ private:
 
 
 private:
-    HashMap<Texture*, ResourceStates::Mask, Hasher<Texture*>, EqualTo<Texture*>, Alloc::GlobalArena> m_permanentTextureStates;
     HashMap<Buffer*, ResourceStates::Mask, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_permanentBufferStates;
     HashMap<TextureSubresourceStateKey, ResourceStates::Mask, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureStates;
     HashMap<Buffer*, ResourceStates::Mask, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferStates;
@@ -2134,48 +1807,25 @@ public:
     void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, RenderLane::Enum destinationLane);
     void releaseBufferOwnership(Buffer* buffer, RenderLane::Enum destinationLane);
 
-    void setPermanentTextureState(Texture* texture, ResourceStates::Mask stateBits);
     void setPermanentBufferState(Buffer* buffer, ResourceStates::Mask stateBits);
 
     void clearTextureFloat(Texture* texture, TextureSubresourceSet subresources, const Color& clearColor);
-    void clearTextureRectFloat(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, const Color& clearColor);
-    void clearTextureBoxFloat(Texture* texture, TextureSubresourceSet subresources, const Box& box, const Color& clearColor);
     void clearDepthStencilTexture(Texture* texture, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
-    void clearDepthStencilTextureRect(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
-    void clearDepthStencilTextureBox(Texture* texture, TextureSubresourceSet subresources, const Box& box, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
     void clearTextureUInt(Texture* texture, TextureSubresourceSet subresources, u32 clearColor);
     void clearTextureUInt(Texture* texture, TextureSubresourceSet subresources, const UIntColor& clearColor);
     void clearTextureRectUInt(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, u32 clearColor);
     void clearTextureRectUInt(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, const UIntColor& clearColor);
-    void clearTextureBoxUInt(Texture* texture, TextureSubresourceSet subresources, const Box& box, u32 clearColor);
-    void clearTextureBoxUInt(Texture* texture, TextureSubresourceSet subresources, const Box& box, const UIntColor& clearColor);
-    void clearTextureInt(Texture* texture, TextureSubresourceSet subresources, i32 clearColor);
-    void clearTextureInt(Texture* texture, TextureSubresourceSet subresources, const IntColor& clearColor);
-    void clearTextureRectInt(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, i32 clearColor);
-    void clearTextureRectInt(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, const IntColor& clearColor);
-    void clearTextureBoxInt(Texture* texture, TextureSubresourceSet subresources, const Box& box, i32 clearColor);
-    void clearTextureBoxInt(Texture* texture, TextureSubresourceSet subresources, const Box& box, const IntColor& clearColor);
 
-    void copyTexture(Texture* dest, const TextureSlice& destSlice, Texture* src, const TextureSlice& srcSlice);
-    void copyTexture(StagingTexture* dest, const TextureSlice& destSlice, Texture* src, const TextureSlice& srcSlice);
-    void copyTexture(Texture* dest, const TextureSlice& destSlice, StagingTexture* src, const TextureSlice& srcSlice);
     void writeBuffer(Buffer* buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
     void clearBufferUInt(Buffer* buffer, u32 clearValue);
     void copyBuffer(Buffer* dest, u64 destOffsetBytes, Buffer* src, u64 srcOffsetBytes, u64 dataSizeBytes);
     void writeTexture(Texture* dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch = 0);
-    void resolveTexture(Texture* dest, const TextureSubresourceSet& dstSubresources, Texture* src, const TextureSubresourceSet& srcSubresources);
-
-    void clearSamplerFeedbackTexture(SamplerFeedbackTexture* texture);
-    void decodeSamplerFeedbackTexture(Buffer* buffer, SamplerFeedbackTexture* texture, Format::Enum format);
-    void setSamplerFeedbackTextureState(SamplerFeedbackTexture* texture, ResourceStates::Mask stateBits);
 
     void setPushConstants(const void* data, usize byteSize);
 
     void setGraphicsState(const GraphicsState& state);
     void draw(const DrawArguments& args);
     void drawIndexed(const DrawArguments& args);
-    void drawIndirect(u32 offsetBytes, u32 drawCount = 1);
-    void drawIndexedIndirect(u32 offsetBytes, u32 drawCount = 1);
 
     void setComputeState(const ComputeState& state);
     void dispatch(u32 groupsX, u32 groupsY = 1, u32 groupsZ = 1);
@@ -2198,12 +1848,7 @@ public:
     void setRayTracingState(const RayTracingState& state);
     void dispatchRays(const RayTracingDispatchRaysArguments& args);
     void buildBottomLevelAccelStruct(RayTracingAccelStruct* as, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None);
-    void compactBottomLevelAccelStructs();
     void buildTopLevelAccelStruct(RayTracingAccelStruct* as, const RayTracingInstanceDesc* pInstances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None);
-    void buildOpacityMicromap(RayTracingOpacityMicromap* omm, const RayTracingOpacityMicromapDesc& desc);
-    void buildTopLevelAccelStructFromBuffer(RayTracingAccelStruct* as, Buffer* instanceBuffer, u64 instanceBufferOffset, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None);
-    void executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& desc);
-    void convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs);
 
     void resetTimerQuery(TimerQuery* query);
     [[nodiscard]] bool canResetTimerQueryHere()const;
@@ -2214,8 +1859,6 @@ public:
 
     void setEnableUavBarriersForTexture(Texture* texture, bool enableBarriers);
     void setEnableUavBarriersForBuffer(Buffer* buffer, bool enableBarriers);
-    void beginTrackingTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits);
-    void beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits);
     ResourceStates::Mask getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel);
     ResourceStates::Mask getBufferState(Buffer* buffer);
 
@@ -2240,20 +1883,10 @@ private:
     void endActiveRenderPass();
     void executePipelineBarrier(const VkDependencyInfo& depInfo);
     bool validateIndirectBuffer(Buffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const;
-    bool prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, const tchar* operationLabel, const tchar* commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode, Buffer*& outIndirectBuffer)const;
     void clearColorTexture(Texture* textureResource, TextureSubresourceSet subresources, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
-    void clearColorTextureBox(Texture* textureResource, TextureSubresourceSet subresources, const Box& box, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
+    void clearColorTextureBox(Texture* textureResource, TextureSubresourceSet subresources, const Box& box, const VkClearColorValue& clearValue);
     bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, const tchar* valueName);
     bool clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
-    bool prepareStagingTextureCopy(
-        StagingTexture& stagingResource,
-        const TextureSlice& stagingSlice,
-        Texture& textureResource,
-        const TextureSlice& textureSlice,
-        const tchar* operationName,
-        const tchar* singleSampleRequirement,
-        VkBufferImageCopy& outRegion
-    )const;
     bool prepareUploadStaging(usize dataSize, const tchar* operationName, Buffer*& outStagingBuffer, u64& outStagingOffset, void*& outCpuVA);
     bool prepareUploadStaging(const void* data, usize dataSize, const tchar* operationName, Buffer*& outStagingBuffer, u64& outStagingOffset);
     bool buildTopLevelAccelStructFromInstanceData(
@@ -2288,8 +1921,6 @@ private:
     Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena> m_pendingBufferBarriers;
     HashMap<TextureSubresourceStateKey, CommandQueue::Enum, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureOwnershipReleaseDestinations;
     HashMap<Buffer*, CommandQueue::Enum, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferOwnershipReleaseDestinations;
-
-    Vector<Handle<AccelStruct>, Alloc::GlobalArena> m_pendingCompactions;
 };
 
 
@@ -2386,27 +2017,12 @@ public:
 
 
 public:
-    [[nodiscard]] HeapHandle createHeap(const HeapDesc& d);
     [[nodiscard]] TextureHandle createTexture(const TextureDesc& d);
-    [[nodiscard]] MemoryRequirements getTextureMemoryRequirements(Texture* texture);
-    bool bindTextureMemory(Texture* texture, Heap* heap, u64 offset);
     [[nodiscard]] TextureHandle createHandleForNativeTexture(ObjectType objectType, Object texture, const TextureDesc& desc);
-    [[nodiscard]] StagingTextureHandle createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess);
-    void* mapStagingTexture(StagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch);
-    void unmapStagingTexture(StagingTexture* tex);
-    void getTextureTiling(Texture* texture, u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum, SubresourceTiling* subresourceTilings);
-    void updateTextureTileMappings(Texture* texture, const TextureTilesMapping* tileMappings, u32 numTileMappings, CommandQueue::Enum executionQueue = CommandQueue::Graphics);
-    [[nodiscard]] SamplerFeedbackTextureHandle createSamplerFeedbackTexture(Texture* pairedTexture, const SamplerFeedbackTextureDesc& desc);
-    [[nodiscard]] SamplerFeedbackTextureHandle createSamplerFeedbackForNativeTexture(ObjectType objectType, Object texture, Texture* pairedTexture);
     [[nodiscard]] BufferHandle createBuffer(const BufferDesc& d);
     void* mapBuffer(Buffer* buffer, CpuAccessMode::Enum);
     void unmapBuffer(Buffer* buffer);
-    [[nodiscard]] MemoryRequirements getBufferMemoryRequirements(Buffer* buffer);
-    bool bindBufferMemory(Buffer* buffer, Heap* heap, u64 offset);
-    [[nodiscard]] BufferHandle createHandleForNativeBuffer(ObjectType objectType, Object buffer, const BufferDesc& desc);
     [[nodiscard]] ShaderHandle createShader(const ShaderDesc& d, const void* binary, usize binarySize);
-    [[nodiscard]] ShaderHandle createShaderSpecialization(Shader* baseShader, const ShaderSpecialization* constants, u32 numConstants);
-    [[nodiscard]] ShaderLibraryHandle createShaderLibrary(const void* binary, usize binarySize);
     [[nodiscard]] SamplerHandle createSampler(const SamplerDesc& d);
     [[nodiscard]] InputLayoutHandle createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, Shader*);
     [[nodiscard]] EventQueryHandle createEventQuery();
@@ -2425,11 +2041,7 @@ public:
     [[nodiscard]] RayTracingPipelineHandle createRayTracingPipeline(const RayTracingPipelineDesc& desc);
     [[nodiscard]] BindingLayoutHandle createBindingLayout(const BindingLayoutDesc& desc);
     [[nodiscard]] BindingLayoutHandle createBindlessLayout(const BindlessLayoutDesc& desc);
-    [[nodiscard]] RayTracingOpacityMicromapHandle createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc);
     [[nodiscard]] RayTracingAccelStructHandle createAccelStruct(const RayTracingAccelStructDesc& desc);
-    [[nodiscard]] MemoryRequirements getAccelStructMemoryRequirements(RayTracingAccelStruct* as);
-    [[nodiscard]] RayTracingClusterOperationSizeInfo getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params);
-    bool bindAccelStructMemory(RayTracingAccelStruct* as, Heap* heap, u64 offset);
     [[nodiscard]] CommandListHandle createCommandList(const CommandListParameters& params = CommandListParameters());
     // Returns the queue submission ID. outCommandListsSubmitted distinguishes command buffers accepted into a new
     // submission from a previous ID returned after a no-op or failed submit. A semaphore-only queue submission does
@@ -2473,8 +2085,6 @@ public:
     void runGarbageCollection();
     bool queryFeatureSupport(Feature::Enum feature, void* = nullptr, usize = 0);
     [[nodiscard]] FormatSupport::Mask queryFormatSupport(Format::Enum format);
-    [[nodiscard]] CooperativeVectorDeviceFeatures queryCoopVecFeatures();
-    usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns);
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue);
     bool isGpuCrashDiagnosticsEnabled(){ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.NV_device_diagnostic_checkpoints; }
     bool isAmdBreadcrumbEnabled(){ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.AMD_buffer_marker && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
@@ -2531,15 +2141,6 @@ private:
     // global heap at sets 8/9) so every set layout remains descriptor-buffer-compatible. Returns VK_NULL_HANDLE
     // (logged) if creation fails.
     [[nodiscard]] VkDescriptorSetLayout getOrCreateEmptyDescriptorBufferSetLayout()const;
-#if defined(NWB_DEBUG)
-    [[nodiscard]] bool validateHeapMemoryBinding(
-        const Heap& heap,
-        const VkMemoryRequirements& memoryRequirements,
-        u64 offset,
-        const tchar* operationName,
-        const tchar* resourceName
-    )const;
-#endif
     [[nodiscard]] bool configurePipelineBindings(
         const BindingLayoutVector& bindingLayouts,
         const tchar* operationName,
@@ -2615,7 +2216,6 @@ private:
     void appendPipelineShaderStage(
         Shader* shader,
         VkShaderStageFlagBits stage,
-        PipelineSpecializationInfoVector& specializationInfos,
         PipelineShaderStageVector& shaderStages
     )const;
 
@@ -2659,4 +2259,3 @@ NWB_VULKAN_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

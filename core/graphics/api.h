@@ -22,7 +22,6 @@
 #include "rhi/gpu_descriptor_heap.h"
 #include "rhi/pipeline.h"
 #include "rhi/command.h"
-#include "rhi/coopvec.h"
 #include "rhi/device.h"
 #include "rhi/hash.h"
 

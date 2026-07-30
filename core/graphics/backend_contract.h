@@ -59,25 +59,12 @@ concept GraphicsApi = requires(const T& graphics){
 template<typename T>
 concept DeviceApi = requires(
     T& device,
-    const HeapDesc& heapDesc,
     const TextureDesc& textureDesc,
     Texture* texture,
-    StagingTexture* stagingTexture,
-    Heap* heap,
-    const TextureSlice& textureSlice,
-    usize* rowPitch,
-    const SamplerFeedbackTextureDesc& samplerFeedbackDesc,
     const BufferDesc& bufferDesc,
     Buffer* buffer,
-    u32* tileCount,
-    PackedMipDesc* packedMipDesc,
-    TileShape* tileShape,
-    u32* subresourceTilingCount,
-    SubresourceTiling* subresourceTilings,
-    const TextureTilesMapping* tileMappings,
     const ShaderDesc& shaderDesc,
     const void* binary,
-    const ShaderSpecialization* specializationConstants,
     const SamplerDesc& samplerDesc,
     const VertexAttributeDesc* vertexAttributeDescs,
     Shader* shader,
@@ -92,10 +79,8 @@ concept DeviceApi = requires(
     const RayTracingPipelineDesc& rayTracingPipelineDesc,
     const BindingLayoutDesc& bindingLayoutDesc,
     const BindlessLayoutDesc& bindlessLayoutDesc,
-    const RayTracingOpacityMicromapDesc& opacityMicromapDesc,
     const RayTracingAccelStructDesc& accelStructDesc,
     RayTracingAccelStruct* accelStruct,
-    const RayTracingClusterOperationParams& clusterOperationParams,
     const CommandListParameters& commandListParams,
     CommandList* const* commandLists,
     bool* outSubmitted,
@@ -103,29 +88,12 @@ concept DeviceApi = requires(
     void* featureInfo,
     Object nativeObject
 ){
-    { device.createHeap(heapDesc) }->SameAs<HeapHandle>;
     { device.createTexture(textureDesc) }->SameAs<TextureHandle>;
-    { device.getTextureMemoryRequirements(texture) }->SameAs<MemoryRequirements>;
-    { device.bindTextureMemory(texture, heap, u64{}) }->SameAs<bool>;
     { device.createHandleForNativeTexture(ObjectType{}, nativeObject, textureDesc) }->SameAs<TextureHandle>;
-    { device.createStagingTexture(textureDesc, CpuAccessMode::Read) }->SameAs<StagingTextureHandle>;
-    { device.mapStagingTexture(stagingTexture, textureSlice, CpuAccessMode::Read, rowPitch) }->SameAs<void*>;
-    device.unmapStagingTexture(stagingTexture);
-    device.getTextureTiling(texture, tileCount, packedMipDesc, tileShape, subresourceTilingCount, subresourceTilings);
-    device.updateTextureTileMappings(texture, tileMappings, u32{}, CommandQueue::Graphics);
-    { device.createSamplerFeedbackTexture(texture, samplerFeedbackDesc) }->SameAs<SamplerFeedbackTextureHandle>;
-    { device.createSamplerFeedbackForNativeTexture(ObjectType{}, nativeObject, texture) }->SameAs<SamplerFeedbackTextureHandle>;
-
     { device.createBuffer(bufferDesc) }->SameAs<BufferHandle>;
     { device.mapBuffer(buffer, CpuAccessMode::Write) }->SameAs<void*>;
     device.unmapBuffer(buffer);
-    { device.getBufferMemoryRequirements(buffer) }->SameAs<MemoryRequirements>;
-    { device.bindBufferMemory(buffer, heap, u64{}) }->SameAs<bool>;
-    { device.createHandleForNativeBuffer(ObjectType{}, nativeObject, bufferDesc) }->SameAs<BufferHandle>;
-
     { device.createShader(shaderDesc, binary, usize{}) }->SameAs<ShaderHandle>;
-    { device.createShaderSpecialization(shader, specializationConstants, u32{}) }->SameAs<ShaderHandle>;
-    { device.createShaderLibrary(binary, usize{}) }->SameAs<ShaderLibraryHandle>;
     { device.createSampler(samplerDesc) }->SameAs<SamplerHandle>;
     { device.createInputLayout(vertexAttributeDescs, u32{}, shader) }->SameAs<InputLayoutHandle>;
 
@@ -147,11 +115,7 @@ concept DeviceApi = requires(
     { device.createBindingLayout(bindingLayoutDesc) }->SameAs<BindingLayoutHandle>;
     { device.createBindlessLayout(bindlessLayoutDesc) }->SameAs<BindingLayoutHandle>;
 
-    { device.createOpacityMicromap(opacityMicromapDesc) }->SameAs<RayTracingOpacityMicromapHandle>;
     { device.createAccelStruct(accelStructDesc) }->SameAs<RayTracingAccelStructHandle>;
-    { device.getAccelStructMemoryRequirements(accelStruct) }->SameAs<MemoryRequirements>;
-    { device.getClusterOperationSizeInfo(clusterOperationParams) }->SameAs<RayTracingClusterOperationSizeInfo>;
-    { device.bindAccelStructMemory(accelStruct, heap, u64{}) }->SameAs<bool>;
 
     { device.createCommandList(commandListParams) }->SameAs<CommandListHandle>;
     { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics) }->SameAs<u64>;
@@ -166,8 +130,6 @@ concept DeviceApi = requires(
     device.runGarbageCollection();
     { device.queryFeatureSupport(Feature::Meshlets, featureInfo, usize{}) }->SameAs<bool>;
     { device.queryFormatSupport(Format::RGBA8_UNORM) }->SameAs<FormatSupport::Mask>;
-    { device.queryCoopVecFeatures() }->SameAs<CooperativeVectorDeviceFeatures>;
-    { device.getCoopVecMatrixSize(CooperativeVectorDataType::Float16, CooperativeVectorMatrixLayout::RowMajor, i32{}, i32{}) }->SameAs<usize>;
     { device.getNativeQueue(ObjectType{}, CommandQueue::Graphics) }->SameAs<Object>;
     { device.isGpuCrashDiagnosticsEnabled() }->SameAs<bool>;
     { device.getGpuCrashTracker() }->SameAs<GpuCrashTracker&>;
@@ -177,20 +139,14 @@ template<typename T>
 concept CommandListApi = requires(
     T& commandList,
     Texture* texture,
-    StagingTexture* stagingTexture,
     Buffer* buffer,
-    SamplerFeedbackTexture* samplerFeedbackTexture,
     Framebuffer& framebuffer,
     RayTracingAccelStruct* accelStruct,
-    RayTracingOpacityMicromap* opacityMicromap,
     TimerQuery* timerQuery,
-    const TextureSlice& textureSlice,
     const TextureSubresourceSet& subresources,
     const Rect& rect,
-    const Box& box,
     const Color& color,
     const UIntColor& uintColor,
-    const IntColor& intColor,
     const void* data,
     const GraphicsState& graphicsState,
     const DrawArguments& drawArguments,
@@ -200,9 +156,6 @@ concept CommandListApi = requires(
     const RayTracingDispatchRaysArguments& rayTracingArguments,
     const RayTracingGeometryDesc* geometries,
     const RayTracingInstanceDesc* instances,
-    const RayTracingOpacityMicromapDesc& opacityMicromapDesc,
-    const RayTracingClusterOperationDesc& clusterOperationDesc,
-    const CooperativeVectorConvertMatrixLayoutDesc* coopVecConvertDescs,
     const AStringView markerName,
     CommandListResourceStateHandoff& resourceStateHandoff
 ){
@@ -217,42 +170,21 @@ concept CommandListApi = requires(
     commandList.endRenderPass();
 
     commandList.clearTextureFloat(texture, subresources, color);
-    commandList.clearTextureRectFloat(texture, subresources, rect, color);
-    commandList.clearTextureBoxFloat(texture, subresources, box, color);
     commandList.clearDepthStencilTexture(texture, subresources, bool{}, f32{}, bool{}, u8{});
-    commandList.clearDepthStencilTextureRect(texture, subresources, rect, bool{}, f32{}, bool{}, u8{});
-    commandList.clearDepthStencilTextureBox(texture, subresources, box, bool{}, f32{}, bool{}, u8{});
     commandList.clearTextureUInt(texture, subresources, u32{});
     commandList.clearTextureUInt(texture, subresources, uintColor);
     commandList.clearTextureRectUInt(texture, subresources, rect, u32{});
     commandList.clearTextureRectUInt(texture, subresources, rect, uintColor);
-    commandList.clearTextureBoxUInt(texture, subresources, box, u32{});
-    commandList.clearTextureBoxUInt(texture, subresources, box, uintColor);
-    commandList.clearTextureInt(texture, subresources, i32{});
-    commandList.clearTextureInt(texture, subresources, intColor);
-    commandList.clearTextureRectInt(texture, subresources, rect, i32{});
-    commandList.clearTextureRectInt(texture, subresources, rect, intColor);
-    commandList.clearTextureBoxInt(texture, subresources, box, i32{});
-    commandList.clearTextureBoxInt(texture, subresources, box, intColor);
-    commandList.copyTexture(texture, textureSlice, texture, textureSlice);
-    commandList.copyTexture(stagingTexture, textureSlice, texture, textureSlice);
-    commandList.copyTexture(texture, textureSlice, stagingTexture, textureSlice);
     commandList.writeTexture(texture, u32{}, u32{}, data, usize{}, usize{});
-    commandList.resolveTexture(texture, subresources, texture, subresources);
     commandList.writeBuffer(buffer, data, usize{}, u64{});
     commandList.clearBufferUInt(buffer, u32{});
     commandList.copyBuffer(buffer, u64{}, buffer, u64{}, u64{});
 
-    commandList.clearSamplerFeedbackTexture(samplerFeedbackTexture);
-    commandList.decodeSamplerFeedbackTexture(buffer, samplerFeedbackTexture, Format::R8_UINT);
-    commandList.setSamplerFeedbackTextureState(samplerFeedbackTexture, ResourceStates::UnorderedAccess);
     commandList.setPushConstants(data, usize{});
 
     commandList.setGraphicsState(graphicsState);
     commandList.draw(drawArguments);
     commandList.drawIndexed(drawArguments);
-    commandList.drawIndirect(u32{}, u32{});
-    commandList.drawIndexedIndirect(u32{}, u32{});
     commandList.setComputeState(computeState);
     commandList.dispatch(u32{}, u32{}, u32{});
     commandList.dispatchIndirect(u32{});
@@ -261,13 +193,8 @@ concept CommandListApi = requires(
     commandList.setRayTracingState(rayTracingState);
     commandList.dispatchRays(rayTracingArguments);
 
-    commandList.buildOpacityMicromap(opacityMicromap, opacityMicromapDesc);
     commandList.buildBottomLevelAccelStruct(accelStruct, geometries, usize{}, RayTracingAccelStructBuildFlags::None);
-    commandList.compactBottomLevelAccelStructs();
     commandList.buildTopLevelAccelStruct(accelStruct, instances, usize{}, RayTracingAccelStructBuildFlags::None);
-    commandList.executeMultiIndirectClusterOperation(clusterOperationDesc);
-    commandList.buildTopLevelAccelStructFromBuffer(accelStruct, buffer, u64{}, usize{}, RayTracingAccelStructBuildFlags::None);
-    commandList.convertCoopVecMatrices(coopVecConvertDescs, usize{});
     commandList.beginTimerQuery(timerQuery);
     commandList.endTimerQuery(timerQuery);
     commandList.beginMarker(markerName);
@@ -276,14 +203,11 @@ concept CommandListApi = requires(
     commandList.setResourceStatesForFramebuffer(framebuffer);
     commandList.setEnableUavBarriersForTexture(texture, bool{});
     commandList.setEnableUavBarriersForBuffer(buffer, bool{});
-    commandList.beginTrackingTextureState(texture, subresources, ResourceStates::ShaderResource);
-    commandList.beginTrackingBufferState(buffer, ResourceStates::ShaderResource);
     commandList.setTextureState(texture, subresources, ResourceStates::ShaderResource);
     commandList.setBufferState(buffer, ResourceStates::ShaderResource);
     commandList.setAccelStructState(accelStruct, ResourceStates::AccelStructRead);
     commandList.releaseTextureOwnership(texture, subresources, RenderLane::AsyncCompute);
     commandList.releaseBufferOwnership(buffer, RenderLane::AsyncCompute);
-    commandList.setPermanentTextureState(texture, ResourceStates::ShaderResource);
     commandList.setPermanentBufferState(buffer, ResourceStates::ShaderResource);
     commandList.commitBarriers();
     { commandList.getTextureSubresourceState(texture, ArraySlice{}, MipLevel{}) }->SameAs<ResourceStates::Mask>;
@@ -322,30 +246,12 @@ concept ShaderApi = DescribedResourceApi<T, ShaderDesc> && requires(
 };
 
 template<typename T>
-concept ShaderLibraryApi = requires(
-    const T& constLibrary,
-    T& library,
-    const void** bytecode,
-    usize* bytecodeSize
-){
-    constLibrary.getBytecode(bytecode, bytecodeSize);
-    { library.getShader(AStringView{}, ShaderType::All) }->SameAs<ShaderHandle>;
-};
-
-template<typename T>
 concept FramebufferApi = DescribedResourceApi<T, FramebufferDesc> && requires(const T& framebuffer){
     { framebuffer.getFramebufferInfo() }->SameAs<const FramebufferInfoEx&>;
 };
 
 template<typename T>
-concept RayTracingOpacityMicromapApi = DescribedResourceApi<T, RayTracingOpacityMicromapDesc> && requires(const T& micromap){
-    { micromap.isCompacted() }->SameAs<bool>;
-    { micromap.getDeviceAddress() }->SameAs<u64>;
-};
-
-template<typename T>
 concept RayTracingAccelStructApi = DescribedResourceApi<T, RayTracingAccelStructDesc> && requires(const T& accelStruct){
-    { accelStruct.isCompacted() }->SameAs<bool>;
     { accelStruct.getDeviceAddress() }->SameAs<u64>;
 };
 
@@ -387,10 +293,6 @@ concept RayTracingShaderTableApi = requires(
     shaderTable.setRayGenerationShader(exportName);
     { shaderTable.addMissShader(exportName) }->SameAs<u32>;
     { shaderTable.addHitGroup(exportName) }->SameAs<u32>;
-    { shaderTable.addCallableShader(exportName) }->SameAs<u32>;
-    shaderTable.clearMissShaders();
-    shaderTable.clearHitShaders();
-    shaderTable.clearCallableShaders();
     { shaderTable.getPipeline() }->SameAs<RayTracingPipeline*>;
 };
 
@@ -408,4 +310,3 @@ NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

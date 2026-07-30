@@ -33,7 +33,6 @@ using TextureStateIndexMap = HashMap<
     Alloc::GlobalArena
 >;
 using BufferStateIndexMap = HashMap<Buffer*, usize, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena>;
-using PermanentTextureStateIndexMap = HashMap<Texture*, usize, Hasher<Texture*>, EqualTo<Texture*>, Alloc::GlobalArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -89,15 +88,6 @@ bool CommandListResourceStateHandoff::buildFanIn(
             && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
         ;
     };
-    const auto samePermanentTextureState = [](const PermanentTextureState& lhs, const PermanentTextureState& rhs){
-        return
-            lhs.state == rhs.state
-            && lhs.queueSharing == rhs.queueSharing
-            && lhs.ownerQueue == rhs.ownerQueue
-            && lhs.releaseDestinationQueue == rhs.releaseDestinationQueue
-        ;
-    };
-
     TextureStateIndexMap baseTextureIndices(
         0u,
         GraphicsBackend::TextureSubresourceStateKeyHasher(),
@@ -112,8 +102,6 @@ bool CommandListResourceStateHandoff::buildFanIn(
     );
     BufferStateIndexMap baseBufferIndices(0u, Hasher<Buffer*>(), EqualTo<Buffer*>(), arena);
     BufferStateIndexMap resultBufferIndices(0u, Hasher<Buffer*>(), EqualTo<Buffer*>(), arena);
-    PermanentTextureStateIndexMap basePermanentTextureIndices(0u, Hasher<Texture*>(), EqualTo<Texture*>(), arena);
-    PermanentTextureStateIndexMap resultPermanentTextureIndices(0u, Hasher<Texture*>(), EqualTo<Texture*>(), arena);
     BufferStateIndexMap basePermanentBufferIndices(0u, Hasher<Buffer*>(), EqualTo<Buffer*>(), arena);
     BufferStateIndexMap resultPermanentBufferIndices(0u, Hasher<Buffer*>(), EqualTo<Buffer*>(), arena);
 
@@ -136,16 +124,6 @@ bool CommandListResourceStateHandoff::buildFanIn(
         m_bufferStates.push_back(state);
         baseBufferIndices.insert_or_assign(state.buffer, index);
         resultBufferIndices.insert_or_assign(state.buffer, index);
-    }
-
-    m_permanentTextureStates.reserve(base.m_permanentTextureStates.size());
-    basePermanentTextureIndices.reserve(base.m_permanentTextureStates.size());
-    resultPermanentTextureIndices.reserve(base.m_permanentTextureStates.size());
-    for(const PermanentTextureState& state : base.m_permanentTextureStates){
-        const usize index = m_permanentTextureStates.size();
-        m_permanentTextureStates.push_back(state);
-        basePermanentTextureIndices.insert_or_assign(state.texture, index);
-        resultPermanentTextureIndices.insert_or_assign(state.texture, index);
     }
 
     m_permanentBufferStates.reserve(base.m_permanentBufferStates.size());
@@ -207,30 +185,6 @@ bool CommandListResourceStateHandoff::buildFanIn(
         resultState = state;
         return true;
     };
-    const auto mergePermanentTextureState = [&](const PermanentTextureState& state){
-        const auto baseIt = basePermanentTextureIndices.find(state.texture);
-        const PermanentTextureState* const baseState = baseIt != basePermanentTextureIndices.end()
-            ? &base.m_permanentTextureStates[baseIt.value()]
-            : nullptr
-        ;
-        if(baseState && samePermanentTextureState(state, *baseState))
-            return true;
-
-        const auto resultIt = resultPermanentTextureIndices.find(state.texture);
-        if(resultIt == resultPermanentTextureIndices.end()){
-            const usize index = m_permanentTextureStates.size();
-            m_permanentTextureStates.push_back(state);
-            resultPermanentTextureIndices.insert_or_assign(state.texture, index);
-            return true;
-        }
-
-        PermanentTextureState& resultState = m_permanentTextureStates[resultIt.value()];
-        if((!baseState || !samePermanentTextureState(resultState, *baseState)) && !samePermanentTextureState(resultState, state))
-            return false;
-
-        resultState = state;
-        return true;
-    };
     const auto mergePermanentBufferState = [&](const BufferState& state){
         const auto baseIt = basePermanentBufferIndices.find(state.buffer);
         const BufferState* const baseState = baseIt != basePermanentBufferIndices.end()
@@ -266,12 +220,6 @@ bool CommandListResourceStateHandoff::buildFanIn(
         }
         for(const BufferState& state : branch.m_bufferStates){
             if(!mergeBufferState(state)){
-                reset();
-                return false;
-            }
-        }
-        for(const PermanentTextureState& state : branch.m_permanentTextureStates){
-            if(!mergePermanentTextureState(state)){
                 reset();
                 return false;
             }
@@ -332,10 +280,6 @@ bool CommandListResourceStateHandoff::buildResourceSubset(
     for(const BufferState& state : source.m_bufferStates){
         if(containsBuffer(state.buffer))
             m_bufferStates.push_back(state);
-    }
-    for(const PermanentTextureState& state : source.m_permanentTextureStates){
-        if(containsTexture(state.texture))
-            m_permanentTextureStates.push_back(state);
     }
     for(const BufferState& state : source.m_permanentBufferStates){
         if(containsBuffer(state.buffer))
@@ -551,8 +495,6 @@ void CommandList::setResourceStatesForFramebuffer(Framebuffer& framebuffer){
     if(desc.depthAttachment.valid())
         setTextureState(desc.depthAttachment.texture, desc.depthAttachment.subresources, desc.depthAttachment.isReadOnly ? ResourceStates::DepthRead : ResourceStates::DepthWrite);
 
-    if(desc.shadingRateAttachment.valid())
-        setTextureState(desc.shadingRateAttachment.texture, desc.shadingRateAttachment.subresources, ResourceStates::ShadingRateSurface);
 }
 
 void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state){
@@ -563,9 +505,6 @@ void CommandList::setResourceStatesForGraphicsBuffers(const GraphicsState& state
 
     if(state.indexBuffer.buffer)
         setBufferState(state.indexBuffer.buffer, ResourceStates::IndexBuffer);
-
-    if(state.indirectParams)
-        setBufferState(state.indirectParams, ResourceStates::IndirectArgument);
 }
 
 bool CommandList::importResourceStateHandoff(const CommandListResourceStateHandoff& states){
@@ -714,17 +653,6 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         m_stateTracker.m_bufferStates.insert_or_assign(state.buffer, state.state);
     }
 
-    ::ContainerDetail::ReserveAdditionalCapacity(m_stateTracker.m_permanentTextureStates, states.m_permanentTextureStates.size());
-    for(const CommandListResourceStateHandoff::PermanentTextureState& state : states.m_permanentTextureStates){
-        if(!state.texture)
-            continue;
-
-        if(!appendTextureAcquire(*state.texture, s_AllSubresources, state.state, state.queueSharing, state.ownerQueue, state.releaseDestinationQueue))
-            return false;
-
-        m_stateTracker.m_permanentTextureStates.insert_or_assign(state.texture, state.state);
-    }
-
     ::ContainerDetail::ReserveAdditionalCapacity(m_stateTracker.m_permanentBufferStates, states.m_permanentBufferStates.size());
     for(const CommandListResourceStateHandoff::BufferState& state : states.m_permanentBufferStates){
         if(!state.buffer)
@@ -802,24 +730,6 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
         getBufferOwnership(it->first, it->first->m_desc.queueSharing, ownerQueue, releaseDestinationQueue);
         states.m_bufferStates.push_back(CommandListResourceStateHandoff::BufferState{
-            it->first,
-            it.value(),
-            it->first->m_desc.queueSharing,
-            ownerQueue,
-            releaseDestinationQueue
-        });
-    }
-
-    states.m_permanentTextureStates.reserve(m_stateTracker.m_permanentTextureStates.size());
-    for(auto it = m_stateTracker.m_permanentTextureStates.begin(); it != m_stateTracker.m_permanentTextureStates.end(); ++it){
-        if(!it->first)
-            continue;
-
-        CommandQueue::Enum ownerQueue = CommandQueue::kCount;
-        CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
-        const TextureSubresourceStateKey key{ it->first, 0u, 0u };
-        getTextureOwnership(key, it->first->m_desc.queueSharing, ownerQueue, releaseDestinationQueue);
-        states.m_permanentTextureStates.push_back(CommandListResourceStateHandoff::PermanentTextureState{
             it->first,
             it.value(),
             it->first->m_desc.queueSharing,
@@ -1008,9 +918,6 @@ void CommandList::setTextureState(Texture* textureResource, TextureSubresourceSe
         return;
 
     Texture& texture = *textureResource;
-    if(m_stateTracker.isPermanentTexture(texture))
-        return;
-
     const TextureSubresourceSet resolvedSubresources = subresources.resolve(texture.m_desc, TextureSubresourceMipResolve::Range);
     if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSubresources, NWB_TEXT("set texture state")))
         return;
@@ -1187,11 +1094,6 @@ void CommandList::releaseTextureOwnership(
         return;
 
     Texture& texture = *textureResource;
-    if(m_stateTracker.isPermanentTexture(texture)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release ownership of a permanently tracked texture"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot release ownership of a permanently tracked texture"));
-        return;
-    }
     if(m_device.usesConcurrentQueueSharing(texture.m_desc.queueSharing)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release ownership of a concurrently shared texture"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot release ownership of a concurrently shared texture"));
@@ -1290,14 +1192,6 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const RenderLan
     m_bufferOwnershipReleaseDestinations.insert_or_assign(&buffer, destinationQueue);
 }
 
-void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mask stateBits){
-    if(!texture)
-        return;
-
-    setTextureState(texture, s_AllSubresources, stateBits);
-    m_stateTracker.setPermanentTextureState(*texture, stateBits);
-}
-
 void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask stateBits){
     if(!buffer)
         return;
@@ -1311,8 +1205,7 @@ void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask s
 
 
 StateTracker::StateTracker(const VulkanContext& context)
-    : m_permanentTextureStates(0, Hasher<Texture*>(), EqualTo<Texture*>(), context.objectArena)
-    , m_permanentBufferStates(0, Hasher<Buffer*>(), EqualTo<Buffer*>(), context.objectArena)
+    : m_permanentBufferStates(0, Hasher<Buffer*>(), EqualTo<Buffer*>(), context.objectArena)
     , m_textureStates(0, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo(), context.objectArena)
     , m_bufferStates(0, Hasher<Buffer*>(), EqualTo<Buffer*>(), context.objectArena)
     , m_textureUavBarriers(0, Hasher<Texture*>(), EqualTo<Texture*>(), context.objectArena)
@@ -1326,16 +1219,8 @@ void StateTracker::reset(){
     m_bufferStates.clear();
 }
 
-void StateTracker::setPermanentTextureState(Texture& texture, ResourceStates::Mask state){
-    m_permanentTextureStates.insert_or_assign(&texture, state);
-}
-
 void StateTracker::setPermanentBufferState(Buffer& buffer, ResourceStates::Mask state){
     m_permanentBufferStates.insert_or_assign(&buffer, state);
-}
-
-bool StateTracker::isPermanentTexture(Texture& texture)const{
-    return m_permanentTextureStates.find(&texture) != m_permanentTextureStates.end();
 }
 
 bool StateTracker::isPermanentBuffer(Buffer& buffer)const{
@@ -1345,10 +1230,6 @@ bool StateTracker::isPermanentBuffer(Buffer& buffer)const{
 ResourceStates::Mask StateTracker::getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const{
     if(!texture)
         return ResourceStates::Unknown;
-
-    auto permIt = m_permanentTextureStates.find(texture);
-    if(permIt != m_permanentTextureStates.end())
-        return permIt.value();
 
     ResourceStates::Mask state = ResourceStates::Unknown;
     return getTransientTextureState(*texture, arraySlice, mipLevel, state) ? state : ResourceStates::Unknown;
@@ -1410,9 +1291,6 @@ bool StateTracker::getTransientBufferState(Buffer& buffer, ResourceStates::Mask&
 
 void StateTracker::beginTrackingTexture(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state){
     if(!texture)
-        return;
-
-    if(m_permanentTextureStates.find(texture) != m_permanentTextureStates.end())
         return;
 
     beginTrackingTransientTexture(*texture, subresources, state);
@@ -1543,14 +1421,6 @@ void CommandList::setEnableUavBarriersForBuffer(Buffer* buffer, bool enableBarri
     if(!buffer)
         return;
     m_stateTracker.setEnableUavBarriersForBuffer(*buffer, enableBarriers);
-}
-
-void CommandList::beginTrackingTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits){
-    m_stateTracker.beginTrackingTexture(texture, subresources, stateBits);
-}
-
-void CommandList::beginTrackingBufferState(Buffer* buffer, ResourceStates::Mask stateBits){
-    m_stateTracker.beginTrackingBuffer(buffer, stateBits);
 }
 
 ResourceStates::Mask CommandList::getTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel){

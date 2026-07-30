@@ -218,12 +218,6 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.KHR_dynamic_rendering = true;
         else if(NWB_STRCMP(ext, VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME) == 0)
             m_context.extensions.EXT_descriptor_buffer = true;
-        else if(NWB_STRCMP(ext, VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME) == 0)
-            m_context.extensions.EXT_opacity_micromap = true;
-        else if(NWB_STRCMP(ext, VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME) == 0)
-            m_context.extensions.NV_cooperative_vector = true;
-        else if(NWB_STRCMP(ext, VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME) == 0)
-            m_context.extensions.NV_cluster_acceleration_structure = true;
         else if(NWB_STRCMP(ext, VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME) == 0)
             m_context.extensions.NV_device_diagnostic_checkpoints = true;
         else if(NWB_STRCMP(ext, VK_EXT_DEVICE_FAULT_EXTENSION_NAME) == 0)
@@ -232,26 +226,11 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.AMD_buffer_marker = true;
         else if(NWB_STRCMP(ext, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0)
             m_context.extensions.EXT_mesh_shader = true;
-        else if(NWB_STRCMP(ext, VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME) == 0)
-            m_context.extensions.KHR_fragment_shading_rate = true;
-        else if(NWB_STRCMP(ext, VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME) == 0)
-            m_context.extensions.EXT_ray_tracing_invocation_reorder = true;
-        else if(NWB_STRCMP(ext, VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME) == 0)
-            m_context.extensions.NV_ray_tracing_invocation_reorder = true;
-        else if(NWB_STRCMP(ext, VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME) == 0)
-            m_context.extensions.NV_ray_tracing_linear_swept_spheres = true;
     }
 
     m_context.meshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
     if(m_context.extensions.EXT_mesh_shader){
         m_context.meshShaderFeatures.meshShader = VK_TRUE;
-        m_context.meshShaderFeatures.taskShader = desc.meshTaskShaderSupported ? VK_TRUE : VK_FALSE;
-    }
-
-    m_context.rayTracingLinearSweptSpheresFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_LINEAR_SWEPT_SPHERES_FEATURES_NV;
-    if(m_context.extensions.NV_ray_tracing_linear_swept_spheres){
-        m_context.rayTracingLinearSweptSpheresFeatures.spheres = desc.rayTracingSpheresSupported ? VK_TRUE : VK_FALSE;
-        m_context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres = desc.rayTracingLinearSweptSpheresSupported ? VK_TRUE : VK_FALSE;
     }
 
     if(m_context.extensions.EXT_debug_utils && (!vkCmdBeginDebugUtilsLabelEXT || !vkCmdEndDebugUtilsLabelEXT)){
@@ -291,8 +270,6 @@ Device::Device(const DeviceDesc& desc)
             || !vkGetAccelerationStructureBuildSizesKHR
             || !vkGetAccelerationStructureDeviceAddressKHR
             || !vkCmdBuildAccelerationStructuresKHR
-            || !vkCmdCopyAccelerationStructureKHR
-            || !vkCmdWriteAccelerationStructuresPropertiesKHR
         )
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Acceleration structure entry points are unavailable."));
@@ -311,47 +288,10 @@ Device::Device(const DeviceDesc& desc)
         m_context.extensions.KHR_ray_tracing_pipeline = false;
     }
 
-    if(
-        m_context.extensions.EXT_opacity_micromap
-        && (
-            !vkCreateMicromapEXT
-            || !vkDestroyMicromapEXT
-            || !vkGetMicromapBuildSizesEXT
-            || !vkCmdBuildMicromapsEXT
-        )
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Opacity micromap entry points are unavailable."));
-        m_context.extensions.EXT_opacity_micromap = false;
-    }
-
-    if(
-        m_context.extensions.NV_cluster_acceleration_structure
-        && (
-            !vkGetClusterAccelerationStructureBuildSizesNV
-            || !vkCmdBuildClusterAccelerationStructureIndirectNV
-        )
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Cluster acceleration structure entry points are unavailable."));
-        m_context.extensions.NV_cluster_acceleration_structure = false;
-    }
-
-    if(
-        m_context.extensions.NV_cooperative_vector
-        && (
-            !vkGetPhysicalDeviceCooperativeVectorPropertiesNV
-            || !vkConvertCooperativeVectorMatrixNV
-            || !vkCmdConvertCooperativeVectorMatrixNV
-        )
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Cooperative vector entry points are unavailable."));
-        m_context.extensions.NV_cooperative_vector = false;
-    }
-
     if(m_context.extensions.EXT_mesh_shader && !vkCmdDrawMeshTasksEXT){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Mesh shader draw entry point is unavailable."));
         m_context.extensions.EXT_mesh_shader = false;
         m_context.meshShaderFeatures.meshShader = VK_FALSE;
-        m_context.meshShaderFeatures.taskShader = VK_FALSE;
     }
 
     {
@@ -381,29 +321,10 @@ Device::Device(const DeviceDesc& desc)
             pNext = &m_context.descriptorBufferProperties;
         }
 
-        if(m_context.extensions.NV_cluster_acceleration_structure){
-            m_context.nvClusterAccelerationStructureProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CLUSTER_ACCELERATION_STRUCTURE_PROPERTIES_NV;
-            m_context.nvClusterAccelerationStructureProperties.pNext = pNext;
-            pNext = &m_context.nvClusterAccelerationStructureProperties;
-        }
-
-        if(m_context.extensions.NV_cooperative_vector){
-            m_context.coopVecProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_PROPERTIES_NV;
-            m_context.coopVecProperties.pNext = pNext;
-            pNext = &m_context.coopVecProperties;
-        }
-
         if(pNext){
             props2.pNext = pNext;
             vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
         }
-    }
-
-    if(m_context.extensions.NV_cooperative_vector){
-        auto features2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
-        m_context.coopVecFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV;
-        features2.pNext = &m_context.coopVecFeatures;
-        vkGetPhysicalDeviceFeatures2(m_context.physicalDevice, &features2);
     }
 
     // Descriptor-buffer entry points are a hard device requirement. Keep the extension state intact on failure so
@@ -1221,32 +1142,14 @@ void Device::runGarbageCollection(){
 
 bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize featureInfoSize){
     switch(feature){
-    case Feature::DeferredCommandLists:
-        return true;
     case Feature::RayTracingAccelStruct:
         return m_context.extensions.KHR_acceleration_structure;
     case Feature::RayTracingPipeline:
         return m_context.extensions.KHR_ray_tracing_pipeline;
     case Feature::RayQuery:
         return m_context.extensions.KHR_ray_query;
-    case Feature::ShaderExecutionReordering:
-        return m_context.extensions.EXT_ray_tracing_invocation_reorder || m_context.extensions.NV_ray_tracing_invocation_reorder;
-    case Feature::Spheres:
-        return m_context.extensions.NV_ray_tracing_linear_swept_spheres && m_context.rayTracingLinearSweptSpheresFeatures.spheres == VK_TRUE;
-    case Feature::LinearSweptSpheres:
-        return m_context.extensions.NV_ray_tracing_linear_swept_spheres && m_context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres == VK_TRUE;
-    case Feature::RayTracingOpacityMicromap:
-        return m_context.extensions.EXT_opacity_micromap && m_context.extensions.KHR_synchronization2;
-    case Feature::RayTracingClusters:
-        return m_context.extensions.NV_cluster_acceleration_structure;
-    case Feature::CooperativeVectorInferencing:
-        return m_context.extensions.NV_cooperative_vector && m_context.coopVecFeatures.cooperativeVector;
-    case Feature::CooperativeVectorTraining:
-        return m_context.extensions.NV_cooperative_vector && m_context.coopVecFeatures.cooperativeVectorTraining;
     case Feature::Meshlets:
         return m_context.extensions.EXT_mesh_shader && m_context.meshShaderFeatures.meshShader == VK_TRUE && vkCmdDrawMeshTasksEXT;
-    case Feature::VariableRateShading:
-        return m_context.extensions.KHR_fragment_shading_rate;
     case Feature::WaveLaneCountMinMax:{
         // Wave/subgroup size is core Vulkan 1.1 (engine floor is 1.3), so this is always supported.
         auto* out = static_cast<WaveLaneCountMinMaxFeatureInfo*>(featureInfo);
@@ -1256,12 +1159,6 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
         }
         return true;
     }
-    case Feature::SamplerFeedback:
-        return false;
-    case Feature::VirtualResources:
-        return false;
-    case Feature::ConstantBufferRanges:
-        return true;
     default:
         return false;
     }
@@ -1312,156 +1209,6 @@ Object Device::getNativeQueue(ObjectType objectType, CommandQueue::Enum queue){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-Heap::Heap(const VulkanContext& context, VulkanAllocator& allocator)
-    : RefCounter<GraphicsResource>(context.threadPool)
-    , m_allocator(allocator)
-{}
-Heap::~Heap(){
-    m_allocator.freeHeap(*this);
-}
-
-Object Heap::getNativeHandle(ObjectType objectType){
-    if(objectType == ObjectTypes::VK_DeviceMemory)
-        return Object(m_memory);
-    return Object(nullptr);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-HeapHandle Device::createHeap(const HeapDesc& d){
-    VkResult res = VK_SUCCESS;
-
-    if(d.capacity == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create heap: capacity is zero"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create heap: capacity is zero"));
-        return nullptr;
-    }
-
-    switch(d.type){
-    case HeapType::DeviceLocal:
-    case HeapType::Upload:
-    case HeapType::Readback:
-        break;
-    default:
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create heap: invalid heap type"));
-        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create heap: invalid heap type"));
-        return nullptr;
-    }
-
-    auto* heap = NewArenaObject<Heap>(m_context.objectArena, m_context, m_allocator);
-    heap->m_desc = d;
-
-    res = m_allocator.allocateHeap(*heap);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate heap memory ({} bytes): {}"), d.capacity, ResultToString(res));
-        DestroyArenaObject(m_context.objectArena, heap);
-        return nullptr;
-    }
-
-    return HeapHandle(heap, HeapHandle::deleter_type(&m_context.objectArena), AdoptRef);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
-    VkResult res = VK_SUCCESS;
-
-    CooperativeVectorDeviceFeatures output(m_context.objectArena);
-
-    if(!m_context.extensions.NV_cooperative_vector || !m_context.coopVecFeatures.cooperativeVector)
-        return output;
-
-    uint32_t propertyCount = 0;
-    res = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, nullptr);
-    if(res != VK_SUCCESS || propertyCount == 0)
-        return output;
-
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_CooperativeVectorQueryArena);
-    Vector<VkCooperativeVectorPropertiesNV, Alloc::ScratchArena> properties(propertyCount, scratchArena);
-    for(u32 i = 0; i < propertyCount; ++i){
-        properties[i].sType = VK_STRUCTURE_TYPE_COOPERATIVE_VECTOR_PROPERTIES_NV;
-        properties[i].pNext = nullptr;
-    }
-
-    res = vkGetPhysicalDeviceCooperativeVectorPropertiesNV(m_context.physicalDevice, &propertyCount, properties.data());
-    if(res != VK_SUCCESS)
-        return output;
-
-    output.matMulFormats.resize(propertyCount);
-    auto fillMatMulFormat = [&](usize i){
-        const auto& prop = properties[i];
-        CooperativeVectorMatMulFormatCombo& combo = output.matMulFormats[i];
-        combo.inputType = VulkanDetail::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.inputType));
-        combo.inputInterpretation = VulkanDetail::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.inputInterpretation));
-        combo.matrixInterpretation = VulkanDetail::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.matrixInterpretation));
-        combo.biasInterpretation = VulkanDetail::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.biasInterpretation));
-        combo.outputType = VulkanDetail::ConvertCoopVecDataType(static_cast<VkComponentTypeKHR>(prop.resultType));
-        combo.transposeSupported = prop.transpose != VK_FALSE;
-    };
-
-    if(taskPool().isParallelEnabled() && propertyCount >= s_ParallelCoopVecThreshold)
-        scheduleParallelFor(static_cast<usize>(0), propertyCount, fillMatMulFormat);
-    else{
-        for(usize i = 0; i < propertyCount; ++i)
-            fillMatMulFormat(i);
-    }
-
-    output.trainingFloat16 =
-        m_context.coopVecFeatures.cooperativeVectorTraining != VK_FALSE
-        && m_context.coopVecProperties.cooperativeVectorTrainingFloat16Accumulation != VK_FALSE
-    ;
-    output.trainingFloat32 =
-        m_context.coopVecFeatures.cooperativeVectorTraining != VK_FALSE
-        && m_context.coopVecProperties.cooperativeVectorTrainingFloat32Accumulation != VK_FALSE
-    ;
-
-    return output;
-}
-
-usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns){
-    VkResult res = VK_SUCCESS;
-
-    if(!m_context.extensions.NV_cooperative_vector || !m_context.coopVecFeatures.cooperativeVector)
-        return 0;
-    if(rows <= 0 || columns <= 0)
-        return 0;
-
-    usize dstSize = 0;
-    usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
-    const usize rowCount = static_cast<usize>(rows);
-    const usize columnCount = static_cast<usize>(columns);
-    if(rowCount > (Limit<usize>::s_Max / columnCount))
-        return 0;
-
-    const usize elementCount = rowCount * columnCount;
-    if(dataTypeSize > (Limit<usize>::s_Max / elementCount))
-        return 0;
-
-    auto convertInfo = VulkanDetail::MakeVkStruct<VkConvertCooperativeVectorMatrixInfoNV>(VK_STRUCTURE_TYPE_CONVERT_COOPERATIVE_VECTOR_MATRIX_INFO_NV);
-    convertInfo.srcSize = dataTypeSize * elementCount;
-    convertInfo.srcData.hostAddress = nullptr;
-    convertInfo.pDstSize = &dstSize;
-    convertInfo.dstData.hostAddress = nullptr;
-    convertInfo.srcComponentType = VulkanDetail::ConvertCoopVecDataType(type);
-    convertInfo.dstComponentType = convertInfo.srcComponentType;
-    convertInfo.numRows = static_cast<u32>(rows);
-    convertInfo.numColumns = static_cast<u32>(columns);
-    convertInfo.srcLayout = VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_ROW_MAJOR_NV;
-    convertInfo.srcStride = dataTypeSize * columns;
-    convertInfo.dstLayout = VulkanDetail::ConvertCoopVecMatrixLayout(layout);
-    convertInfo.dstStride = GetCooperativeVectorOptimalMatrixStride(type, layout, rows, columns);
-
-    res = vkConvertCooperativeVectorMatrixNV(m_context.device, &convertInfo);
-    if(res == VK_SUCCESS)
-        return dstSize;
-
-    return 0;
-}
 
 DeviceHandle CreateDevice(const DeviceDesc& desc){
     auto* device = NewArenaObject<Device>(desc.allocator.getObjectArena(), desc);

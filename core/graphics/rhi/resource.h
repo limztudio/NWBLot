@@ -17,27 +17,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace HeapType{
-    enum Enum : u8{
-        DeviceLocal,
-        Upload,
-        Readback,
-    };
-};
-
-struct HeapDesc{
-    u64 capacity = 0;
-    HeapType::Enum type = HeapType::DeviceLocal;
-    Name debugName;
-};
-
-typedef GraphicsBackend::Handle<Heap> HeapHandle;
-
-struct MemoryRequirements{
-    u64 size = 0;
-    u64 alignment = 0;
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Texture
@@ -93,21 +72,13 @@ namespace ResourceStates{
         RenderTarget = 1 << 7,
         DepthWrite = 1 << 8,
         DepthRead = 1 << 9,
-        StreamOut = 1 << 10,
         CopyDest = 1 << 11,
         CopySource = 1 << 12,
-        ResolveDest = 1 << 13,
-        ResolveSource = 1 << 14,
         Present = 1 << 15,
         AccelStructRead = 1 << 16,
         AccelStructWrite = 1 << 17,
         AccelStructBuildInput = 1 << 18,
         AccelStructBuildBlas = 1 << 19,
-        ShadingRateSurface = 1 << 20,
-        OpacityMicromapWrite = 1 << 21,
-        OpacityMicromapBuildInput = 1 << 22,
-        ConvertCoopVecMatrixInput = 1 << 23,
-        ConvertCoopVecMatrixOutput = 1 << 24,
     };
 
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
@@ -135,13 +106,6 @@ struct TextureDesc{
     bool isRenderTarget = false;
     bool isUAV = false;
     bool isTypeless = false;
-    bool isShadingRateSurface = false;
-
-    // Indicates that the texture is created with no backing memory,
-    // and memory is bound to the texture later using bindTextureMemory.
-    bool isVirtual = false;
-    bool isTiled = false;
-
     bool useClearValue = false;
 
     // If keepInitialState is true, command lists that use the texture will automatically
@@ -166,34 +130,6 @@ struct TextureDesc{
     constexpr TextureDesc& setInitialState(ResourceStates::Mask v)noexcept{ initialState = v; return *this; }
     constexpr TextureDesc& setKeepInitialState(bool v)noexcept{ keepInitialState = v; return *this; }
     constexpr TextureDesc& setQueueSharing(ResourceQueueSharing::Mask v)noexcept{ queueSharing = v; return *this; }
-};
-
-struct TextureSlice{
-    static constexpr u32 AllDimensions = Limit<u32>::s_Max;
-
-    u32 x = 0;
-    u32 y = 0;
-    u32 z = 0;
-
-    // AllDimensions means the entire dimension is part of the region.
-    // resolve() will translate these values into actual dimensions
-    u32 width = AllDimensions;
-    u32 height = AllDimensions;
-    u32 depth = AllDimensions;
-
-    MipLevel mipLevel = 0;
-    ArraySlice arraySlice = 0;
-
-    [[nodiscard]] TextureSlice resolve(const TextureDesc& desc)const;
-    [[nodiscard]] TextureSlice resolve(u32 mipWidth, u32 mipHeight, u32 mipDepth)const;
-
-    constexpr TextureSlice& setOrigin(u32 vx = 0, u32 vy = 0, u32 vz = 0){ x = vx; y = vy; z = vz; return *this; }
-    constexpr TextureSlice& setWidth(u32 value){ width = value; return *this; }
-    constexpr TextureSlice& setHeight(u32 value){ height = value; return *this; }
-    constexpr TextureSlice& setDepth(u32 value){ depth = value; return *this; }
-    constexpr TextureSlice& setSize(u32 vx = AllDimensions, u32 vy = AllDimensions, u32 vz = AllDimensions){ width = vx; height = vy; depth = vz; return *this; }
-    constexpr TextureSlice& setMipLevel(MipLevel level){ mipLevel = level; return *this; }
-    constexpr TextureSlice& setArraySlice(ArraySlice slice){ arraySlice = slice; return *this; }
 };
 
 namespace TextureSubresourceMipResolve{
@@ -250,69 +186,6 @@ inline constexpr auto s_AllSubresources = TextureSubresourceSet(0, TextureSubres
 
 typedef GraphicsBackend::Handle<Texture> TextureHandle;
 
-typedef GraphicsBackend::Handle<StagingTexture> StagingTextureHandle;
-
-struct TiledTextureCoordinate{
-    u16 mipLevel = 0;
-    u16 arrayLevel = 0;
-    u32 x = 0;
-    u32 y = 0;
-    u32 z = 0;
-};
-struct TiledTextureRegion{
-    u32 tilesNum = 0;
-    u32 width = 0;
-    u32 height = 0;
-    u32 depth = 0;
-};
-
-struct TextureTilesMapping{
-    TiledTextureCoordinate* tiledTextureCoordinates = nullptr;
-    TiledTextureRegion* tiledTextureRegions = nullptr;
-    u64* byteOffsets = nullptr;
-    u32 numTextureRegions = 0;
-    Heap* heap = nullptr;
-};
-
-struct PackedMipDesc{
-    u32 numStandardMips = 0;
-    u32 numPackedMips = 0;
-    u32 numTilesForPackedMips = 0;
-    u32 startTileIndexInOverallResource = 0;
-};
-
-struct TileShape{
-    u32 widthInTexels = 0;
-    u32 heightInTexels = 0;
-    u32 depthInTexels = 0;
-};
-
-struct SubresourceTiling{
-    u32 widthInTiles = 0;
-    u32 heightInTiles = 0;
-    u32 depthInTiles = 0;
-    u32 startTileIndexInOverallResource = 0;
-};
-
-namespace SamplerFeedbackFormat{
-    enum Enum : u8{
-        MinMipOpaque = 0x0,
-        MipRegionUsedOpaque = 0x1,
-    };
-};
-
-struct SamplerFeedbackTextureDesc{
-    u32 samplerFeedbackMipRegionX = 0;
-    u32 samplerFeedbackMipRegionY = 0;
-    u32 samplerFeedbackMipRegionZ = 0;
-    ResourceStates::Mask initialState = ResourceStates::Unknown;
-    SamplerFeedbackFormat::Enum samplerFeedbackFormat = SamplerFeedbackFormat::MinMipOpaque;
-    bool keepInitialState = false;
-};
-
-typedef GraphicsBackend::Handle<SamplerFeedbackTexture> SamplerFeedbackTextureHandle;
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Input Layout
 
@@ -364,10 +237,6 @@ struct BufferDesc{
     // A dynamic/upload buffer whose contents only live in the current command list
     bool isVolatile = false;
 
-    // Indicates that the buffer is created with no backing memory,
-    // and memory is bound to the buffer later using bindBufferMemory.
-    bool isVirtual = false;
-
     // see TextureDesc::keepInitialState
     bool keepInitialState = false;
 
@@ -389,7 +258,6 @@ struct BufferDesc{
     constexpr BufferDesc& setIsAccelStructStorage(bool value){ isAccelStructStorage = value; return *this; }
     constexpr BufferDesc& setIsShaderBindingTable(bool value){ isShaderBindingTable = value; return *this; }
     constexpr BufferDesc& setIsVolatile(bool value){ isVolatile = value; return *this; }
-    constexpr BufferDesc& setIsVirtual(bool value){ isVirtual = value; return *this; }
     constexpr BufferDesc& setInitialState(ResourceStates::Mask value){ initialState = value; return *this; }
     constexpr BufferDesc& setKeepInitialState(bool value){ keepInitialState = value; return *this; }
     constexpr BufferDesc& setQueueSharing(ResourceQueueSharing::Mask value){ queueSharing = value; return *this; }

@@ -73,50 +73,6 @@ static_assert(alignof(IndirectInstanceDesc) >= alignof(Float4), "IndirectInstanc
 static_assert((offsetof(IndirectInstanceDesc, transform) % alignof(Float4)) == 0, "IndirectInstanceDesc::transform must stay SIMD-aligned");
 #endif
 
-inline constexpr u32 s_ClasByteAlignment = 128;
-inline constexpr u32 s_ClasMaxTriangles = 256;
-inline constexpr u32 s_ClasMaxVertices = 256;
-inline constexpr u32 s_MaxGeometryIndex = 16777215;
-
-// CLAS construction and template construction share this ABI prefix exactly. Keep it macro-defined rather than using
-// a C++ base type: this header is also consumed as a shader ABI and both structs must remain plain contiguous records.
-#define NWB_INDIRECT_TRIANGLE_COMMON_ARGS_FIELDS \
-    u32               clusterId; \
-    u32               clusterFlags; \
-    u32               triangleCount : 9;                 /* The number of triangles (max 256). */ \
-    u32               vertexCount : 9;                   /* The number of vertices (max 256). */ \
-    u32               positionTruncateBitCount : 6; \
-    u32               indexFormat : 4; \
-    u32               opacityMicromapIndexFormat : 4; \
-    u32               baseGeometryIndexAndFlags;         /* Low 24 bits = base geometry index; high 8 bits = flags. */ \
-    u16               indexBufferStride;                 /* indexBuffer element stride in bytes. */ \
-    u16               vertexBufferStride;                /* vertexBuffer element stride in bytes. */ \
-    u16               geometryIndexAndFlagsBufferStride; /* geometryIndexBuffer element stride in bytes. */ \
-    u16               opacityMicromapIndexBufferStride;  /* opacityMicromapIndexBuffer element stride in bytes. */ \
-    GpuVirtualAddress indexBuffer; \
-    GpuVirtualAddress vertexBuffer; \
-    GpuVirtualAddress geometryIndexAndFlagsBuffer;        /* Optional per-triangle geometry-index/flag data. */ \
-    GpuVirtualAddress opacityMicromapArray;               /* Optional valid opacity-micromap array. */ \
-    GpuVirtualAddress opacityMicromapIndexBuffer;         /* Optional opacity-micromap index buffer. */
-
-struct IndirectTriangleClasArgs{
-    NWB_INDIRECT_TRIANGLE_COMMON_ARGS_FIELDS
-};
-
-struct IndirectTriangleTemplateArgs{
-    NWB_INDIRECT_TRIANGLE_COMMON_ARGS_FIELDS
-    GpuVirtualAddress instantiationBoundingBoxLimit;     // Optional six-float position limit for template instantiations.
-};
-
-#undef NWB_INDIRECT_TRIANGLE_COMMON_ARGS_FIELDS
-
-struct IndirectInstantiateTemplateArgs{
-    u32                        clusterIdOffset;      // Added to each template cluster ID.
-    u32                        geometryIndexOffset;  // Added to each template geometry index; the result must fit s_MaxGeometryIndex.
-    GpuVirtualAddress          clusterTemplate;      // GPU address of the cluster template.
-    GpuVirtualAddressAndStride vertexBuffer;         // Vertex positions used for instantiation.
-};
-
 struct IndirectArgs{
     u32                       clusterCount;     // Number of cluster addresses.
     u32                       reserved;         // Reserved, must be 0

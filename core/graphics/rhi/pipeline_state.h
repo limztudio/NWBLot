@@ -157,14 +157,6 @@ struct RasterState{
     f32 depthBiasClamp = 0.f;
     f32 slopeScaledDepthBias = 0.f;
 
-    // Extended rasterizer state supported by Maxwell
-    u8 forcedSampleCount = 0;
-    bool programmableSamplePositionsEnable = false;
-    bool conservativeRasterEnable = false;
-    bool quadFillEnable = false;
-    char samplePositionsX[s_MaxProgrammableSamplePositions]{};
-    char samplePositionsY[s_MaxProgrammableSamplePositions]{};
-
     constexpr RasterState& setFillMode(RasterFillMode::Enum value){ fillMode = value; return *this; }
     constexpr RasterState& setFillSolid(){ fillMode = RasterFillMode::Solid; return *this; }
     constexpr RasterState& setFillWireframe(){ fillMode = RasterFillMode::Wireframe; return *this; }
@@ -188,26 +180,6 @@ struct RasterState{
     constexpr RasterState& setDepthBias(i32 value){ depthBias = value; return *this; }
     constexpr RasterState& setDepthBiasClamp(f32 value){ depthBiasClamp = value; return *this; }
     constexpr RasterState& setSlopeScaleDepthBias(f32 value){ slopeScaledDepthBias = value; return *this; }
-    constexpr RasterState& setForcedSampleCount(u8 value){ forcedSampleCount = value; return *this; }
-    constexpr RasterState& setProgrammableSamplePositionsEnable(bool value){ programmableSamplePositionsEnable = value; return *this; }
-    constexpr RasterState& enableProgrammableSamplePositions(){ programmableSamplePositionsEnable = true; return *this; }
-    constexpr RasterState& disableProgrammableSamplePositions(){ programmableSamplePositionsEnable = false; return *this; }
-    constexpr RasterState& setConservativeRasterEnable(bool value){ conservativeRasterEnable = value; return *this; }
-    constexpr RasterState& enableConservativeRaster(){ conservativeRasterEnable = true; return *this; }
-    constexpr RasterState& disableConservativeRaster(){ conservativeRasterEnable = false; return *this; }
-    constexpr RasterState& setQuadFillEnable(bool value){ quadFillEnable = value; return *this; }
-    constexpr RasterState& enableQuadFill(){ quadFillEnable = true; return *this; }
-    constexpr RasterState& disableQuadFill(){ quadFillEnable = false; return *this; }
-    constexpr RasterState& setSamplePositions(const i8* x, const i8* y, usize count){
-        if(!x || !y)
-            return *this;
-        const usize samplePositionCount = count < s_MaxProgrammableSamplePositions ? count : s_MaxProgrammableSamplePositions;
-        for(usize i = 0; i < samplePositionCount; ++i){
-            samplePositionsX[i] = x[i];
-            samplePositionsY[i] = y[i];
-        }
-        return *this;
-    }
 };
 
 

@@ -52,12 +52,6 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     shaderStage.module = cs->m_shaderModule;
     shaderStage.pName = cs->m_entryPointName.c_str();
 
-    VkSpecializationInfo specInfo{};
-    if(!cs->m_specializationEntries.empty()){
-        specInfo = cs->makeSpecializationInfo();
-        shaderStage.pSpecializationInfo = &specInfo;
-    }
-
     PipelineShaderStageVector shaderStages{ scratchArena };
     shaderStages.push_back(shaderStage);
 

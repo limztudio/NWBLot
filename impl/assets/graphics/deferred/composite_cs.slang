@@ -17,6 +17,10 @@ struct NwbDeferredCompositePushConstants{
 [[vk::push_constant]]
 ConstantBuffer<NwbDeferredCompositePushConstants> g_NwbDeferredCompositePushConstants;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #define g_NwbDeferredBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbDeferredCompositePushConstants.resourceSlots]
 #define g_NwbDeferredCompositeOutput NwbHeapStorageImage2DFloat4(g_NwbDeferredBindlessResources.avboitWorkSlots1.w)
 
@@ -52,3 +56,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
 #undef g_NwbDeferredCompositeOutput
 #undef g_NwbDeferredBindlessResources
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

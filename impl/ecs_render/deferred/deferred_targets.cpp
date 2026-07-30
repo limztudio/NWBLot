@@ -481,7 +481,7 @@ void RendererDeferredSystem::resetLaggedLightingHistoryResources(DeferredFrameTa
     targets.laggedLightingHistory = DeferredLaggedLightingHistoryResources{};
 }
 
-bool RendererDeferredSystem::ensureLaggedLightingHistoryResources(DeferredFrameTargets& targets){
+bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameTargets& targets){
     DeferredLaggedLightingHistoryResources& history = targets.laggedLightingHistory;
     if(history.valid())
         return true;
@@ -948,6 +948,8 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
 
     if(!createDeferredBindlessFrameResources(createdTargets))
+        return false;
+    if(!createLaggedLightingHistoryResources(createdTargets))
         return false;
 
     deferredState().m_targets = Move(createdTargets);

@@ -364,7 +364,7 @@ struct DeferredLaggedLightingHistoryResources{
     Core::GpuDescriptorHandle shadowVisibilityDescriptor = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle causticIrradianceDescriptor = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle surfelIrradianceDescriptor = Core::GpuDescriptorHandle::invalid();
-    // Incremented for every successful lazy allocation. RendererSystem compares this identity rather than a recycled
+    // Incremented for every successful target generation. RendererSystem compares this identity rather than a recycled
     // descriptor slot or allocator address before accepting history from a prior target generation.
     u64 generation = 0u;
     bool slotsUploaded = false;

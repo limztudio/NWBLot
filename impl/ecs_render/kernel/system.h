@@ -256,8 +256,8 @@ private:
     bool m_frameLaggedAsyncLightingEnabled = false;
     bool m_laggedLightingHistoryValid = false;
     Core::QueueSubmissionToken m_laggedLightingHistorySubmissionToken;
-    // DeferredFrameTargets increments this identity for every lazy allocation. It prevents a recycled descriptor slot
-    // or allocator address from making a freshly recreated history look accepted.
+    // Deferred target creation increments this identity for every target generation. It prevents a recycled descriptor
+    // slot or allocator address from making a freshly recreated history look accepted.
     u64 m_laggedLightingHistoryGeneration = 0u;
     // An accepted AsyncCompute packet whose Graphics recovery join cannot be submitted is not recoverable by guessing.
     // End this device generation and rebuild resources before rendering resumes.

@@ -800,27 +800,23 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
     const bool asyncShadowSchedule = device.isRenderLaneDedicated(Core::RenderLane::AsyncCompute);
     const bool laggedAsyncLightingRequested = m_frameLaggedAsyncLightingEnabled && asyncShadowSchedule;
-    bool laggedLightingHistoryResourcesReady = false;
+    const bool laggedLightingHistoryResourcesReady = deferredTargets.laggedLightingHistory.valid();
+    if(laggedAsyncLightingRequested && !laggedLightingHistoryResourcesReady){
+        NWB_ASSERT(laggedLightingHistoryResourcesReady);
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: lagged async lighting requires validated history targets"));
+        return;
+    }
+
     if(laggedAsyncLightingRequested){
-        laggedLightingHistoryResourcesReady = m_deferredSystem.ensureLaggedLightingHistoryResources(deferredTargets);
-        if(laggedLightingHistoryResourcesReady){
-            const u64 historyGeneration = deferredTargets.laggedLightingHistory.generation;
-            if(m_laggedLightingHistoryGeneration != historyGeneration){
-                // A resize/recreate can recycle descriptor slots and allocator addresses while replacing the images.
-                // The lazy allocation generation guarantees a fresh target starts with a current-frame seed.
-                m_laggedLightingHistoryValid = false;
-                m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
-                m_laggedLightingStashInputStateHandoff.reset();
-                m_laggedLightingStashStateHandoff.reset();
-                m_laggedLightingHistoryGeneration = historyGeneration;
-            }
-        }
-        else{
-            // Resource allocation is an optional acceleration path. Keep the standard current-frame schedule correct
-            // instead of sampling an incomplete or stale history after a failed lazy allocation.
+        const u64 historyGeneration = deferredTargets.laggedLightingHistory.generation;
+        if(m_laggedLightingHistoryGeneration != historyGeneration){
+            // A resize/recreate can recycle descriptor slots and allocator addresses while replacing the images.
+            // The validated target generation guarantees a fresh history starts with a current-frame seed.
             m_laggedLightingHistoryValid = false;
             m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
-            m_laggedLightingHistoryGeneration = 0u;
+            m_laggedLightingStashInputStateHandoff.reset();
+            m_laggedLightingStashStateHandoff.reset();
+            m_laggedLightingHistoryGeneration = historyGeneration;
         }
     }
     else{
@@ -836,7 +832,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     ;
     // A history snapshot is captured after every opt-in frame, including the current-frame bootstrap. Once the
     // previous accepted snapshot exists this packet shades independently on Graphics while the producer runs on Async.
-    const bool captureLaggedLightingHistory = laggedAsyncLightingRequested && laggedLightingHistoryResourcesReady;
+    const bool captureLaggedLightingHistory = laggedAsyncLightingRequested;
     const bool deferredLightingAsyncSchedule = asyncShadowSchedule && !laggedAsyncLightingSchedule;
     const bool hardwareShadowSupported =
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)

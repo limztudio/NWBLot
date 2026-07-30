@@ -93,6 +93,20 @@ public:
     virtual bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override;
     [[nodiscard]] CsgShapeRegistry& csgShapeRegistry(){ return m_csgShapeRegistry; }
     [[nodiscard]] const CsgShapeRegistry& csgShapeRegistry()const{ return m_csgShapeRegistry; }
+    // This explicitly trades one frame of ray-effect latency for overlap: Graphics lights the current G-buffer from
+    // an accepted prior shadow/caustic/surfel snapshot while AsyncCompute produces the next one. It is off by default
+    // and self-bootstraps through the normal current-frame path after every toggle or target recreation.
+    void setFrameLaggedAsyncLightingEnabled(const bool enabled)noexcept{
+        if(m_frameLaggedAsyncLightingEnabled == enabled)
+            return;
+        m_frameLaggedAsyncLightingEnabled = enabled;
+        m_laggedLightingHistoryValid = false;
+        m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
+        m_laggedLightingHistoryGeneration = 0u;
+        m_laggedLightingStashInputStateHandoff.reset();
+        m_laggedLightingStashStateHandoff.reset();
+    }
+    [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept{ return m_frameLaggedAsyncLightingEnabled; }
 
 private:
     [[nodiscard]] bool ensureFrameCommandLists();
@@ -149,24 +163,27 @@ private:
     Core::CommandListResourceStateHandoff m_shadowVisibilityStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityReturnStateHandoff;
-    // Both caustic producers can join the dedicated Compute lane. Their temporal scratch and resolved irradiance
-    // remain there through deferred lighting and compute composite; only compositeColor crosses to Graphics present.
+    // Both caustic producers can join the dedicated Compute lane. Their temporal scratch remains there; normal
+    // deferred lighting consumes the resolved irradiance on Compute, while the optional lagged path snapshots it for
+    // the next Graphics lighting packet.
     Core::CommandListResourceStateHandoff m_causticsComputeBaseStateHandoff;
     Core::CommandListResourceStateHandoff m_causticsComputeInputStateHandoff;
     Core::CommandListResourceStateHandoff m_causticsComputePersistentStateHandoff;
     Core::CommandListResourceStateHandoff m_causticsStateHandoff;
     Core::CommandListResourceStateHandoff m_causticIrradianceLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_causticIrradianceReturnStateHandoff;
-    // Surfel GI is also entirely compute-dispatched, including its RayQuery trace variant. Its field/history and
-    // resolved full-resolution irradiance stay on AsyncCompute through deferred lighting.
+    // Surfel GI is also entirely compute-dispatched, including its RayQuery trace variant. Its field/history stays on
+    // AsyncCompute; the resolved full-resolution irradiance is either consumed there or snapshotted for optional
+    // frame-lagged Graphics lighting.
     Core::CommandListResourceStateHandoff m_surfelGiComputeBaseStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelGiComputeInputStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelGiComputePersistentStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelGiStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelIrradianceLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelIrradianceReturnStateHandoff;
-    // Lighting runs on AsyncCompute after the Graphics AVBOIT chain. Its narrow input handoff contains the normalized
-    // G-buffer, the three Compute-produced lighting inputs, and the reusable opaque-color storage output only.
+    // Normal lighting runs on AsyncCompute after the Graphics AVBOIT chain. The opt-in lagged path instead runs it on
+    // Graphics with accepted history, so its narrow input handoff contains only current G-buffer data, AVBOIT state,
+    // and the reusable opaque-color storage output.
     Core::CommandListResourceStateHandoff m_deferredLightingBaseStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredLightingInputStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredLightingStateHandoff;
@@ -180,6 +197,10 @@ private:
     Core::CommandListResourceStateHandoff m_deferredPresentBaseStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredPresentInputStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredPresentStateHandoff;
+    // The source images leave the accepted producer/current-lighting path in this state while an AsyncCompute packet
+    // copies them into the separately tracked history. The history textures themselves restore to Common on close.
+    Core::CommandListResourceStateHandoff m_laggedLightingStashInputStateHandoff;
+    Core::CommandListResourceStateHandoff m_laggedLightingStashStateHandoff;
     // AVBOIT's raster occupancy/extinction/accumulation stages stay on Graphics, while the depth-warp and integration
     // dispatches run on AsyncCompute. All inter-stage work resources use concurrent sharing; these handoffs carry
     // state only and are submitted in strict Graphics -> Compute -> Graphics order.
@@ -216,6 +237,7 @@ private:
     Core::CommandListHandle m_asyncDeferredLightingCommandList;
     Core::CommandListHandle m_deferredLightingCommandList;
     Core::CommandListHandle m_asyncDeferredCompositeCommandList;
+    Core::CommandListHandle m_asyncLaggedLightingStashCommandList;
     // The hybrid AVBOIT packet uses Graphics lists for raster phases and AsyncCompute lists for its two pure dispatches.
     Core::CommandListHandle m_avboitCommandList;
     Core::CommandListHandle m_asyncAvboitDepthWarpCommandList;
@@ -224,12 +246,19 @@ private:
     Core::CommandListHandle m_avboitAccumulateCommandList;
     Core::CommandListHandle m_deferredCompositeCommandList;
     // Surface images are not required to support storage writes, so a short Graphics raster present pass follows the
-    // Compute composite result on both the fallback and dedicated schedules.
+    // composite result. The normal dedicated schedule obtains that result from Compute; the optional lagged schedule
+    // keeps lighting/composite on Graphics.
     Core::CommandListHandle m_deferredPresentCommandList;
     Core::CommandListHandle m_shadowPrepareCommandList;
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;
     bool m_preparedShadowVisibilityReady = false;
+    bool m_frameLaggedAsyncLightingEnabled = false;
+    bool m_laggedLightingHistoryValid = false;
+    Core::QueueSubmissionToken m_laggedLightingHistorySubmissionToken;
+    // DeferredFrameTargets increments this identity for every lazy allocation. It prevents a recycled descriptor slot
+    // or allocator address from making a freshly recreated history look accepted.
+    u64 m_laggedLightingHistoryGeneration = 0u;
     // An accepted AsyncCompute packet whose Graphics recovery join cannot be submitted is not recoverable by guessing.
     // End this device generation and rebuild resources before rendering resumes.
     bool m_asyncRenderRecoveryFailed = false;

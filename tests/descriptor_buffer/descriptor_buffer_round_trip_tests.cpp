@@ -1430,6 +1430,366 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCo
 }
 
 
+// The optional latency trade-off keeps the three exclusive live ray-effect outputs on AsyncCompute, but copies an
+// accepted snapshot into concurrent, keep-initial-state history images. The next frame's Graphics lighting samples
+// only those history images while AsyncCompute writes a new live triple; final still joins the current producer before
+// the next snapshot. This verifies the precise queue and state topology without relying on a renderer pipeline.
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLightingHistory){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+
+    const auto makeConcurrentTexture = [&device](const bool keepInitialState = false){
+        TextureDesc desc;
+        desc
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        ;
+        if(keepInitialState)
+            desc.setKeepInitialState(true);
+        return device.createTexture(desc);
+    };
+    const auto makeExclusiveRayOutput = [&device](){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setFormat(Format::RGBA8_UNORM)
+                .setInUAV(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+
+    auto gbuffer = makeConcurrentTexture();
+    auto opaqueColor = makeConcurrentTexture(true);
+    auto compositeColor = makeConcurrentTexture(true);
+    auto shadowVisibility = makeExclusiveRayOutput();
+    auto causticIrradiance = makeExclusiveRayOutput();
+    auto surfelIrradiance = makeExclusiveRayOutput();
+    auto shadowHistory = makeConcurrentTexture(true);
+    auto causticHistory = makeConcurrentTexture(true);
+    auto surfelHistory = makeConcurrentTexture(true);
+    ASSERT_NE(gbuffer.get(), nullptr);
+    ASSERT_NE(opaqueColor.get(), nullptr);
+    ASSERT_NE(compositeColor.get(), nullptr);
+    ASSERT_NE(shadowVisibility.get(), nullptr);
+    ASSERT_NE(causticIrradiance.get(), nullptr);
+    ASSERT_NE(surfelIrradiance.get(), nullptr);
+    ASSERT_NE(shadowHistory.get(), nullptr);
+    ASSERT_NE(causticHistory.get(), nullptr);
+    ASSERT_NE(surfelHistory.get(), nullptr);
+
+    CommandListParameters asyncParams;
+    asyncParams.setRenderLane(RenderLane::AsyncCompute);
+    auto seedPrefix = device.createCommandList();
+    auto seedProducer = device.createCommandList(asyncParams);
+    auto seedFinal = device.createCommandList();
+    auto seedStash = device.createCommandList(asyncParams);
+    auto nextPrefix = device.createCommandList();
+    auto nextProducer = device.createCommandList(asyncParams);
+    auto laggedLighting = device.createCommandList();
+    auto laggedComposite = device.createCommandList();
+    auto laggedFinal = device.createCommandList();
+    auto nextStash = device.createCommandList(asyncParams);
+    ASSERT_NE(seedPrefix.get(), nullptr);
+    ASSERT_NE(seedProducer.get(), nullptr);
+    ASSERT_NE(seedFinal.get(), nullptr);
+    ASSERT_NE(seedStash.get(), nullptr);
+    ASSERT_NE(nextPrefix.get(), nullptr);
+    ASSERT_NE(nextProducer.get(), nullptr);
+    ASSERT_NE(laggedLighting.get(), nullptr);
+    ASSERT_NE(laggedComposite.get(), nullptr);
+    ASSERT_NE(laggedFinal.get(), nullptr);
+    ASSERT_NE(nextStash.get(), nullptr);
+
+    CommandListResourceStateHandoff seedPrefixState(asyncScope.arena());
+    CommandListResourceStateHandoff seedProducerState(asyncScope.arena());
+    CommandListResourceStateHandoff seedShadowSourceState(asyncScope.arena());
+    CommandListResourceStateHandoff seedCausticSourceState(asyncScope.arena());
+    CommandListResourceStateHandoff seedSurfelSourceState(asyncScope.arena());
+    CommandListResourceStateHandoff seedStashInputState(asyncScope.arena());
+    CommandListResourceStateHandoff seedStashState(asyncScope.arena());
+    CommandListResourceStateHandoff seedShadowReturnState(asyncScope.arena());
+    CommandListResourceStateHandoff seedCausticReturnState(asyncScope.arena());
+    CommandListResourceStateHandoff seedSurfelReturnState(asyncScope.arena());
+    CommandListResourceStateHandoff nextPrefixState(asyncScope.arena());
+    CommandListResourceStateHandoff nextProducerInputState(asyncScope.arena());
+    CommandListResourceStateHandoff nextProducerState(asyncScope.arena());
+    CommandListResourceStateHandoff nextShadowSourceState(asyncScope.arena());
+    CommandListResourceStateHandoff nextCausticSourceState(asyncScope.arena());
+    CommandListResourceStateHandoff nextSurfelSourceState(asyncScope.arena());
+    CommandListResourceStateHandoff laggedLightingBaseState(asyncScope.arena());
+    CommandListResourceStateHandoff laggedLightingState(asyncScope.arena());
+    CommandListResourceStateHandoff laggedOpaqueCompositeState(asyncScope.arena());
+    CommandListResourceStateHandoff laggedCompositeState(asyncScope.arena());
+    CommandListResourceStateHandoff laggedCompositeFinalState(asyncScope.arena());
+    CommandListResourceStateHandoff laggedFinalState(asyncScope.arena());
+    CommandListResourceStateHandoff nextStashInputState(asyncScope.arena());
+    CommandListResourceStateHandoff nextStashState(asyncScope.arena());
+
+    seedPrefix->open();
+    seedPrefix->setTextureState(gbuffer.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    seedPrefix->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::CopyDest);
+    seedPrefix->close(&seedPrefixState);
+    ASSERT_TRUE(seedPrefixState.valid());
+
+    seedProducer->open(&seedPrefixState);
+    seedProducer->setTextureState(gbuffer.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    seedProducer->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    seedProducer->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    seedProducer->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    seedProducer->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    seedProducer->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    seedProducer->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    seedProducer->close(&seedProducerState);
+    ASSERT_TRUE(seedProducerState.valid());
+    ASSERT_TRUE(seedShadowSourceState.buildTextureSubset(seedProducerState, shadowVisibility.get()));
+    ASSERT_TRUE(seedCausticSourceState.buildTextureSubset(seedProducerState, causticIrradiance.get()));
+    ASSERT_TRUE(seedSurfelSourceState.buildTextureSubset(seedProducerState, surfelIrradiance.get()));
+
+    seedFinal->open();
+    seedFinal->close();
+    ASSERT_TRUE(seedFinal->hasCommandBuffer());
+
+    const CommandListResourceStateHandoff* const seedStashBranches[] = {
+        &seedCausticSourceState,
+        &seedSurfelSourceState,
+    };
+    ASSERT_TRUE(seedStashInputState.buildFanIn(
+        seedShadowSourceState,
+        seedStashBranches,
+        LengthOf(seedStashBranches)
+    ));
+    seedStash->open(&seedStashInputState);
+    EXPECT_EQ(seedStash->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(seedStash->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(seedStash->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
+    seedStash->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::CopySource);
+    seedStash->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::CopySource);
+    seedStash->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::CopySource);
+    seedStash->setTextureState(shadowHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
+    seedStash->setTextureState(causticHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
+    seedStash->setTextureState(surfelHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
+    seedStash->commitBarriers();
+    const TextureSlice slice;
+    seedStash->copyTexture(shadowHistory.get(), slice, shadowVisibility.get(), slice);
+    seedStash->copyTexture(causticHistory.get(), slice, causticIrradiance.get(), slice);
+    seedStash->copyTexture(surfelHistory.get(), slice, surfelIrradiance.get(), slice);
+    seedStash->close(&seedStashState);
+    ASSERT_TRUE(seedStashState.valid());
+    ASSERT_TRUE(seedShadowReturnState.buildTextureSubset(seedStashState, shadowVisibility.get()));
+    ASSERT_TRUE(seedCausticReturnState.buildTextureSubset(seedStashState, causticIrradiance.get()));
+    ASSERT_TRUE(seedSurfelReturnState.buildTextureSubset(seedStashState, surfelIrradiance.get()));
+
+    nextPrefix->open();
+    nextPrefix->setTextureState(gbuffer.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    nextPrefix->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::CopyDest);
+    nextPrefix->close(&nextPrefixState);
+    ASSERT_TRUE(nextPrefixState.valid());
+
+    const CommandListResourceStateHandoff* const nextProducerBranches[] = {
+        &seedShadowReturnState,
+        &seedCausticReturnState,
+        &seedSurfelReturnState,
+    };
+    ASSERT_TRUE(nextProducerInputState.buildFanIn(
+        nextPrefixState,
+        nextProducerBranches,
+        LengthOf(nextProducerBranches)
+    ));
+    nextProducer->open(&nextProducerInputState);
+    EXPECT_EQ(nextProducer->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::CopySource);
+    EXPECT_EQ(nextProducer->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::CopySource);
+    EXPECT_EQ(nextProducer->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::CopySource);
+    nextProducer->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    nextProducer->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    nextProducer->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    nextProducer->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    nextProducer->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    nextProducer->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    nextProducer->close(&nextProducerState);
+    ASSERT_TRUE(nextProducerState.valid());
+    ASSERT_TRUE(nextShadowSourceState.buildTextureSubset(nextProducerState, shadowVisibility.get()));
+    ASSERT_TRUE(nextCausticSourceState.buildTextureSubset(nextProducerState, causticIrradiance.get()));
+    ASSERT_TRUE(nextSurfelSourceState.buildTextureSubset(nextProducerState, surfelIrradiance.get()));
+
+    Texture* const laggedLightingBaseTextures[] = {
+        gbuffer.get(),
+        opaqueColor.get(),
+    };
+    ASSERT_TRUE(laggedLightingBaseState.buildResourceSubset(
+        nextPrefixState,
+        laggedLightingBaseTextures,
+        LengthOf(laggedLightingBaseTextures),
+        nullptr,
+        0u
+    ));
+    laggedLighting->open(&laggedLightingBaseState);
+    EXPECT_EQ(laggedLighting->getTextureSubresourceState(gbuffer.get(), 0u, 0u), ResourceStates::ShaderResource);
+    // The history is intentionally absent from the producer handoff. Its keep-initial-state close from the accepted
+    // stash makes the prior snapshot independently importable on Graphics after the stash token is waited.
+    EXPECT_EQ(laggedLighting->getTextureSubresourceState(shadowHistory.get(), 0u, 0u), ResourceStates::Common);
+    EXPECT_EQ(laggedLighting->getTextureSubresourceState(causticHistory.get(), 0u, 0u), ResourceStates::Common);
+    EXPECT_EQ(laggedLighting->getTextureSubresourceState(surfelHistory.get(), 0u, 0u), ResourceStates::Common);
+    EXPECT_EQ(laggedLighting->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::Unknown);
+    laggedLighting->setTextureState(shadowHistory.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    laggedLighting->setTextureState(causticHistory.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    laggedLighting->setTextureState(surfelHistory.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    laggedLighting->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    laggedLighting->close(&laggedLightingState);
+    ASSERT_TRUE(laggedLightingState.valid());
+    ASSERT_TRUE(laggedOpaqueCompositeState.buildTextureSubset(laggedLightingState, opaqueColor.get()));
+
+    laggedComposite->open(&laggedOpaqueCompositeState);
+    EXPECT_EQ(laggedComposite->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);
+    laggedComposite->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    laggedComposite->setTextureState(compositeColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    laggedComposite->close(&laggedCompositeState);
+    ASSERT_TRUE(laggedCompositeState.valid());
+    ASSERT_TRUE(laggedCompositeFinalState.buildTextureSubset(laggedCompositeState, compositeColor.get()));
+
+    laggedFinal->open(&laggedCompositeFinalState);
+    EXPECT_EQ(laggedFinal->getTextureSubresourceState(compositeColor.get(), 0u, 0u), ResourceStates::Common);
+    laggedFinal->setTextureState(compositeColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    laggedFinal->close(&laggedFinalState);
+    ASSERT_TRUE(laggedFinalState.valid());
+
+    const CommandListResourceStateHandoff* const nextStashBranches[] = {
+        &nextCausticSourceState,
+        &nextSurfelSourceState,
+    };
+    ASSERT_TRUE(nextStashInputState.buildFanIn(
+        nextShadowSourceState,
+        nextStashBranches,
+        LengthOf(nextStashBranches)
+    ));
+    nextStash->open(&nextStashInputState);
+    nextStash->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::CopySource);
+    nextStash->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::CopySource);
+    nextStash->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::CopySource);
+    nextStash->setTextureState(shadowHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
+    nextStash->setTextureState(causticHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
+    nextStash->setTextureState(surfelHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
+    nextStash->commitBarriers();
+    nextStash->copyTexture(shadowHistory.get(), slice, shadowVisibility.get(), slice);
+    nextStash->copyTexture(causticHistory.get(), slice, causticIrradiance.get(), slice);
+    nextStash->copyTexture(surfelHistory.get(), slice, surfelIrradiance.get(), slice);
+    nextStash->close(&nextStashState);
+    ASSERT_TRUE(nextStashState.valid());
+
+    CommandList* seedPrefixLists[] = { seedPrefix.get() };
+    const QueueSubmissionToken seedPrefixToken = device.executeCommandLists(
+        seedPrefixLists,
+        LengthOf(seedPrefixLists),
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(seedPrefixToken.valid());
+
+    const QueueSubmissionDesc seedProducerSubmitDesc = QueueSubmissionDesc().setWaitTokens(&seedPrefixToken, 1u);
+    CommandList* seedProducerLists[] = { seedProducer.get() };
+    const QueueSubmissionToken seedProducerToken = device.executeCommandLists(
+        seedProducerLists,
+        LengthOf(seedProducerLists),
+        RenderLane::AsyncCompute,
+        seedProducerSubmitDesc
+    );
+    ASSERT_TRUE(seedProducerToken.valid());
+
+    const QueueSubmissionDesc seedFinalSubmitDesc = QueueSubmissionDesc().setWaitTokens(&seedProducerToken, 1u);
+    CommandList* seedFinalLists[] = { seedFinal.get() };
+    const QueueSubmissionToken seedFinalToken = device.executeCommandLists(
+        seedFinalLists,
+        LengthOf(seedFinalLists),
+        RenderLane::Graphics,
+        seedFinalSubmitDesc
+    );
+    ASSERT_TRUE(seedFinalToken.valid());
+
+    const QueueSubmissionDesc seedStashSubmitDesc = QueueSubmissionDesc().setWaitTokens(&seedFinalToken, 1u);
+    CommandList* seedStashLists[] = { seedStash.get() };
+    const QueueSubmissionToken seedStashToken = device.executeCommandLists(
+        seedStashLists,
+        LengthOf(seedStashLists),
+        RenderLane::AsyncCompute,
+        seedStashSubmitDesc
+    );
+    ASSERT_TRUE(seedStashToken.valid());
+
+    CommandList* nextPrefixLists[] = { nextPrefix.get() };
+    const QueueSubmissionToken nextPrefixToken = device.executeCommandLists(
+        nextPrefixLists,
+        LengthOf(nextPrefixLists),
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(nextPrefixToken.valid());
+
+    const QueueSubmissionDesc nextProducerSubmitDesc = QueueSubmissionDesc().setWaitTokens(&nextPrefixToken, 1u);
+    CommandList* nextProducerLists[] = { nextProducer.get() };
+    const QueueSubmissionToken nextProducerToken = device.executeCommandLists(
+        nextProducerLists,
+        LengthOf(nextProducerLists),
+        RenderLane::AsyncCompute,
+        nextProducerSubmitDesc
+    );
+    ASSERT_TRUE(nextProducerToken.valid());
+
+    const QueueSubmissionDesc laggedLightingSubmitDesc = QueueSubmissionDesc().setWaitTokens(&seedStashToken, 1u);
+    CommandList* laggedLightingLists[] = { laggedLighting.get() };
+    const QueueSubmissionToken laggedLightingToken = device.executeCommandLists(
+        laggedLightingLists,
+        LengthOf(laggedLightingLists),
+        RenderLane::Graphics,
+        laggedLightingSubmitDesc
+    );
+    ASSERT_TRUE(laggedLightingToken.valid());
+
+    CommandList* laggedCompositeLists[] = { laggedComposite.get() };
+    const QueueSubmissionToken laggedCompositeToken = device.executeCommandLists(
+        laggedCompositeLists,
+        LengthOf(laggedCompositeLists),
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(laggedCompositeToken.valid());
+
+    const QueueSubmissionToken laggedFinalWaitTokens[] = { laggedCompositeToken, nextProducerToken };
+    const QueueSubmissionDesc laggedFinalSubmitDesc = QueueSubmissionDesc().setWaitTokens(
+        laggedFinalWaitTokens,
+        LengthOf(laggedFinalWaitTokens)
+    );
+    CommandList* laggedFinalLists[] = { laggedFinal.get() };
+    const QueueSubmissionToken laggedFinalToken = device.executeCommandLists(
+        laggedFinalLists,
+        LengthOf(laggedFinalLists),
+        RenderLane::Graphics,
+        laggedFinalSubmitDesc
+    );
+    ASSERT_TRUE(laggedFinalToken.valid());
+
+    const QueueSubmissionDesc nextStashSubmitDesc = QueueSubmissionDesc().setWaitTokens(&laggedFinalToken, 1u);
+    CommandList* nextStashLists[] = { nextStash.get() };
+    const QueueSubmissionToken nextStashToken = device.executeCommandLists(
+        nextStashLists,
+        LengthOf(nextStashLists),
+        RenderLane::AsyncCompute,
+        nextStashSubmitDesc
+    );
+    EXPECT_TRUE(nextStashToken.valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Caustics (including the hardware dispatch-rays producer) and surfel GI add two exclusive Compute results beside
 // shadowVisibility. If Graphics effects/final cannot consume them, the recovery packet must acquire and return all
 // three outputs together; the next Compute packet

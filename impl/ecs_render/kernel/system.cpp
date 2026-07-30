@@ -75,6 +75,8 @@ RendererSystem::RendererSystem(
     , m_deferredPresentBaseStateHandoff(arena)
     , m_deferredPresentInputStateHandoff(arena)
     , m_deferredPresentStateHandoff(arena)
+    , m_laggedLightingStashInputStateHandoff(arena)
+    , m_laggedLightingStashStateHandoff(arena)
     , m_avboitPreStateHandoff(arena)
     , m_avboitDepthWarpInputStateHandoff(arena)
     , m_avboitDepthWarpStateHandoff(arena)
@@ -152,6 +154,11 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
         m_deferredPresentBaseStateHandoff.reset();
         m_deferredPresentInputStateHandoff.reset();
         m_deferredPresentStateHandoff.reset();
+        m_laggedLightingStashInputStateHandoff.reset();
+        m_laggedLightingStashStateHandoff.reset();
+        m_laggedLightingHistoryValid = false;
+        m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
+        m_laggedLightingHistoryGeneration = 0u;
         m_surfelIrradianceReturnStateHandoff.reset();
         m_avboitPreStateHandoff.reset();
         m_avboitDepthWarpInputStateHandoff.reset();
@@ -233,6 +240,8 @@ void RendererSystem::invalidateResources(){
     m_deferredPresentBaseStateHandoff.reset();
     m_deferredPresentInputStateHandoff.reset();
     m_deferredPresentStateHandoff.reset();
+    m_laggedLightingStashInputStateHandoff.reset();
+    m_laggedLightingStashStateHandoff.reset();
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpInputStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
@@ -258,6 +267,7 @@ void RendererSystem::invalidateResources(){
     m_asyncDeferredLightingCommandList.reset();
     m_deferredLightingCommandList.reset();
     m_asyncDeferredCompositeCommandList.reset();
+    m_asyncLaggedLightingStashCommandList.reset();
     m_avboitCommandList.reset();
     m_asyncAvboitDepthWarpCommandList.reset();
     m_avboitExtinctionCommandList.reset();
@@ -266,6 +276,9 @@ void RendererSystem::invalidateResources(){
     m_deferredCompositeCommandList.reset();
     m_deferredPresentCommandList.reset();
     m_shadowPrepareCommandList.reset();
+    m_laggedLightingHistoryValid = false;
+    m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
+    m_laggedLightingHistoryGeneration = 0u;
     m_asyncRenderRecoveryFailed = false;
     // The descriptor-buffer TLAS descriptor owns a retained acceleration-structure handle until its in-flight-frame
     // quarantine matures. Retire it before RendererRayTracingState releases the current TLAS so resource invalidation
@@ -418,6 +431,15 @@ bool RendererSystem::ensureFrameCommandLists(){
             m_asyncDeferredCompositeCommandList = device.createCommandList(asyncDeferredCompositeCommandListParameters);
             if(!m_asyncDeferredCompositeCommandList){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async deferred-composite command list"));
+                return false;
+            }
+        }
+        if(!m_asyncLaggedLightingStashCommandList){
+            Core::CommandListParameters asyncLaggedLightingStashCommandListParameters;
+            asyncLaggedLightingStashCommandListParameters.setRenderLane(Core::RenderLane::AsyncCompute);
+            m_asyncLaggedLightingStashCommandList = device.createCommandList(asyncLaggedLightingStashCommandListParameters);
+            if(!m_asyncLaggedLightingStashCommandList){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async lagged-lighting stash command list"));
                 return false;
             }
         }
@@ -777,6 +799,45 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
     const bool asyncShadowSchedule = device.isRenderLaneDedicated(Core::RenderLane::AsyncCompute);
+    const bool laggedAsyncLightingRequested = m_frameLaggedAsyncLightingEnabled && asyncShadowSchedule;
+    bool laggedLightingHistoryResourcesReady = false;
+    if(laggedAsyncLightingRequested){
+        laggedLightingHistoryResourcesReady = m_deferredSystem.ensureLaggedLightingHistoryResources(deferredTargets);
+        if(laggedLightingHistoryResourcesReady){
+            const u64 historyGeneration = deferredTargets.laggedLightingHistory.generation;
+            if(m_laggedLightingHistoryGeneration != historyGeneration){
+                // A resize/recreate can recycle descriptor slots and allocator addresses while replacing the images.
+                // The lazy allocation generation guarantees a fresh target starts with a current-frame seed.
+                m_laggedLightingHistoryValid = false;
+                m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
+                m_laggedLightingStashInputStateHandoff.reset();
+                m_laggedLightingStashStateHandoff.reset();
+                m_laggedLightingHistoryGeneration = historyGeneration;
+            }
+        }
+        else{
+            // Resource allocation is an optional acceleration path. Keep the standard current-frame schedule correct
+            // instead of sampling an incomplete or stale history after a failed lazy allocation.
+            m_laggedLightingHistoryValid = false;
+            m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
+            m_laggedLightingHistoryGeneration = 0u;
+        }
+    }
+    else{
+        m_laggedLightingHistoryValid = false;
+        m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
+        m_laggedLightingHistoryGeneration = 0u;
+    }
+    const bool laggedAsyncLightingSchedule =
+        laggedAsyncLightingRequested
+        && laggedLightingHistoryResourcesReady
+        && m_laggedLightingHistoryValid
+        && m_laggedLightingHistorySubmissionToken.valid()
+    ;
+    // A history snapshot is captured after every opt-in frame, including the current-frame bootstrap. Once the
+    // previous accepted snapshot exists this packet shades independently on Graphics while the producer runs on Async.
+    const bool captureLaggedLightingHistory = laggedAsyncLightingRequested && laggedLightingHistoryResourcesReady;
+    const bool deferredLightingAsyncSchedule = asyncShadowSchedule && !laggedAsyncLightingSchedule;
     const bool hardwareShadowSupported =
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
         && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
@@ -787,7 +848,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const bool asyncSurfelGiSchedule = asyncShadowSchedule;
     // AVBOIT alternates Graphics raster passes with two pure dispatches. Only split it when transparent work exists;
     // a clear-only frame remains one Graphics packet and avoids needless cross-lane submissions.
-    const bool asyncAvboitSchedule = asyncShadowSchedule && hasTransparentRenderers;
+    const bool asyncAvboitSchedule = asyncShadowSchedule && hasTransparentRenderers && !laggedAsyncLightingSchedule;
     Core::CommandList* meshViewSetupCommandList = m_meshViewSetupCommandList.get();
     Core::CommandList* sceneShadingSetupCommandList = m_sceneShadingSetupCommandList.get();
     Core::CommandList* deferredClearCommandList = m_deferredClearCommandList.get();
@@ -811,16 +872,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     ;
     Core::CommandList* graphicsDeferredLightingCommandList = m_deferredLightingCommandList.get();
     Core::CommandList* asyncDeferredLightingCommandList = m_asyncDeferredLightingCommandList.get();
-    Core::CommandList* deferredLightingCommandList = asyncShadowSchedule
+    Core::CommandList* deferredLightingCommandList = deferredLightingAsyncSchedule
         ? asyncDeferredLightingCommandList
         : graphicsDeferredLightingCommandList
     ;
     Core::CommandList* graphicsDeferredCompositeCommandList = m_deferredCompositeCommandList.get();
     Core::CommandList* asyncDeferredCompositeCommandList = m_asyncDeferredCompositeCommandList.get();
-    Core::CommandList* deferredCompositeCommandList = asyncShadowSchedule
+    Core::CommandList* deferredCompositeCommandList = deferredLightingAsyncSchedule
         ? asyncDeferredCompositeCommandList
         : graphicsDeferredCompositeCommandList
     ;
+    Core::CommandList* asyncLaggedLightingStashCommandList = m_asyncLaggedLightingStashCommandList.get();
     Core::CommandList* avboitCommandList = m_avboitCommandList.get();
     Core::CommandList* asyncAvboitDepthWarpCommandList = m_asyncAvboitDepthWarpCommandList.get();
     Core::CommandList* avboitExtinctionCommandList = m_avboitExtinctionCommandList.get();
@@ -843,11 +905,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(!asyncSurfelGiSchedule || asyncSurfelGiCommandList);
     NWB_ASSERT(surfelGiCommandList);
     NWB_ASSERT(graphicsDeferredLightingCommandList);
-    NWB_ASSERT(!asyncShadowSchedule || asyncDeferredLightingCommandList);
+    NWB_ASSERT(!deferredLightingAsyncSchedule || asyncDeferredLightingCommandList);
     NWB_ASSERT(deferredLightingCommandList);
     NWB_ASSERT(graphicsDeferredCompositeCommandList);
-    NWB_ASSERT(!asyncShadowSchedule || asyncDeferredCompositeCommandList);
+    NWB_ASSERT(!deferredLightingAsyncSchedule || asyncDeferredCompositeCommandList);
     NWB_ASSERT(deferredCompositeCommandList);
+    NWB_ASSERT(!captureLaggedLightingHistory || asyncLaggedLightingStashCommandList);
     NWB_ASSERT(avboitCommandList);
     NWB_ASSERT(!asyncAvboitSchedule || asyncAvboitDepthWarpCommandList);
     NWB_ASSERT(!asyncAvboitSchedule || avboitExtinctionCommandList);
@@ -871,11 +934,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || (asyncSurfelGiSchedule && !asyncSurfelGiCommandList)
         || !surfelGiCommandList
         || !graphicsDeferredLightingCommandList
-        || (asyncShadowSchedule && !asyncDeferredLightingCommandList)
+        || (deferredLightingAsyncSchedule && !asyncDeferredLightingCommandList)
         || !deferredLightingCommandList
         || !graphicsDeferredCompositeCommandList
-        || (asyncShadowSchedule && !asyncDeferredCompositeCommandList)
+        || (deferredLightingAsyncSchedule && !asyncDeferredCompositeCommandList)
         || !deferredCompositeCommandList
+        || (captureLaggedLightingHistory && !asyncLaggedLightingStashCommandList)
         || !avboitCommandList
         || (asyncAvboitSchedule && !asyncAvboitDepthWarpCommandList)
         || (asyncAvboitSchedule && !avboitExtinctionCommandList)
@@ -916,6 +980,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredPresentBaseStateHandoff.reset();
     m_deferredPresentInputStateHandoff.reset();
     m_deferredPresentStateHandoff.reset();
+    m_laggedLightingStashInputStateHandoff.reset();
+    m_laggedLightingStashStateHandoff.reset();
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpInputStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
@@ -1157,6 +1223,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredPresentBaseStateHandoff.reset();
         m_deferredPresentInputStateHandoff.reset();
         m_deferredPresentStateHandoff.reset();
+        m_laggedLightingStashInputStateHandoff.reset();
+        m_laggedLightingStashStateHandoff.reset();
         m_avboitPreStateHandoff.reset();
         m_avboitDepthWarpInputStateHandoff.reset();
         m_avboitDepthWarpStateHandoff.reset();
@@ -2222,8 +2290,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    // Keep the deferred-lighting import deliberately narrow. The three ray-effect results remain exclusively on
-    // AsyncCompute through their only consumer; only concurrent G-buffer/slot resources are imported from Graphics.
+    // Keep the deferred-lighting import deliberately narrow. In the default path the three ray-effect results remain
+    // exclusively on AsyncCompute through their only consumer. The lagged path deliberately omits those live outputs:
+    // its history textures restore to Common and are gated by the last accepted stash token instead.
     Core::Texture* const deferredLightingBaseTextures[] = {
         deferredTargets.albedo.get(),
         deferredTargets.normal.get(),
@@ -2289,30 +2358,34 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    const Core::CommandListResourceStateHandoff* deferredLightingBranchStates[] = {
-        &m_shadowVisibilityLightingStateHandoff,
-        &m_causticIrradianceLightingStateHandoff,
-        &m_surfelIrradianceLightingStateHandoff,
-        &m_avboitLightingStateHandoff,
-    };
+    const Core::CommandListResourceStateHandoff* deferredLightingBranchStates[4] = {};
+    usize deferredLightingBranchCount = 0u;
+    if(!laggedAsyncLightingSchedule){
+        deferredLightingBranchStates[deferredLightingBranchCount++] = &m_shadowVisibilityLightingStateHandoff;
+        deferredLightingBranchStates[deferredLightingBranchCount++] = &m_causticIrradianceLightingStateHandoff;
+        deferredLightingBranchStates[deferredLightingBranchCount++] = &m_surfelIrradianceLightingStateHandoff;
+    }
+    deferredLightingBranchStates[deferredLightingBranchCount++] = &m_avboitLightingStateHandoff;
     if(!m_deferredLightingInputStateHandoff.buildFanIn(
         m_deferredLightingBaseStateHandoff,
         deferredLightingBranchStates,
-        4u
+        deferredLightingBranchCount
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-lighting state fan-in failed"));
         discardRenderPackets();
         return;
     }
 
-    // Deferred lighting consumes the ray-effect outputs after AVBOIT has finished touching the shared G-buffer. On a
-    // dedicated lane the dispatch stays on AsyncCompute, so ray-effect ownership never bounces through Graphics.
+    // Deferred lighting consumes the ray-effect outputs after AVBOIT has finished touching the shared G-buffer. The
+    // normal dedicated path stays on AsyncCompute; once a history snapshot is accepted the opt-in path instead uses
+    // Graphics and only reads the immutable prior-frame ray-effect images.
     bool deferredLightingCommandListReady = false;
     const Core::Graphics::JobHandle deferredLightingRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
         &deferredTargets,
         deferredLightingCommandList,
         &deferredLightingCommandListReady,
+        laggedAsyncLightingSchedule,
         lightingTimingTicketForPacket
     ](){
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*lightingTimingTicketForPacket);
@@ -2320,7 +2393,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!deferredLightingCommandList->hasCommandBuffer())
             return;
 
-        const bool deferredLightingRecorded = m_deferredSystem.renderDeferredLighting(*deferredLightingCommandList, deferredTargets);
+        const bool deferredLightingRecorded = m_deferredSystem.renderDeferredLighting(
+            *deferredLightingCommandList,
+            deferredTargets,
+            laggedAsyncLightingSchedule
+        );
         deferredLightingCommandList->close(&m_deferredLightingStateHandoff);
         deferredLightingCommandListReady =
             deferredLightingRecorded
@@ -2782,9 +2859,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!m_shadowComputePersistentStateHandoff.buildResourceSubset(
         m_shadowVisibilityStateHandoff,
         shadowComputeScratchTextures,
-        sizeof(shadowComputeScratchTextures) / sizeof(shadowComputeScratchTextures[0]),
+        LengthOf(shadowComputeScratchTextures),
         shadowComputeScratchBuffers,
-        sizeof(shadowComputeScratchBuffers) / sizeof(shadowComputeScratchBuffers[0])
+        LengthOf(shadowComputeScratchBuffers)
     )){
         effectsTimingTicket.discard();
         avboitPreTimingTicket.discard();
@@ -2815,7 +2892,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!m_causticsComputePersistentStateHandoff.buildResourceSubset(
             m_causticsStateHandoff,
             causticsComputeScratchTextures,
-            sizeof(causticsComputeScratchTextures) / sizeof(causticsComputeScratchTextures[0]),
+            LengthOf(causticsComputeScratchTextures),
             nullptr,
             0u
         )){
@@ -2852,9 +2929,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!m_surfelGiComputePersistentStateHandoff.buildResourceSubset(
             m_surfelGiStateHandoff,
             surfelGiComputeScratchTextures,
-            sizeof(surfelGiComputeScratchTextures) / sizeof(surfelGiComputeScratchTextures[0]),
+            LengthOf(surfelGiComputeScratchTextures),
             surfelGiComputeScratchBuffers,
-            sizeof(surfelGiComputeScratchBuffers) / sizeof(surfelGiComputeScratchBuffers[0])
+            LengthOf(surfelGiComputeScratchBuffers)
         )){
             effectsTimingTicket.discard();
             avboitPreTimingTicket.discard();
@@ -3016,17 +3093,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    // The AsyncCompute lighting dispatch waits for the last AVBOIT Graphics packet. It is already ordered after the
-    // ray-effect packet on the same Compute queue, so shadow/caustic/surfel remain local to Compute until shading
-    // and compute composite have consumed them. Graphics then receives only the composite presentation image.
+    // The normal dedicated path keeps lighting/composite behind the producer on AsyncCompute. Once the optional
+    // history is accepted, Graphics waits only for the previous stash and shades current G-buffer data in parallel
+    // with this frame's producer; AVBOIT stays entirely on Graphics in that mode to avoid queueing behind the producer.
+    Core::QueueSubmissionToken lightingWaitTokens[2] = { avboitFinalSubmissionToken, Core::QueueSubmissionToken{} };
+    usize lightingWaitTokenCount = 1u;
+    if(laggedAsyncLightingSchedule)
+        lightingWaitTokens[lightingWaitTokenCount++] = m_laggedLightingHistorySubmissionToken;
     Core::QueueSubmissionDesc lightingSubmitDesc;
-    lightingSubmitDesc.setWaitTokens(&avboitFinalSubmissionToken, 1u);
+    lightingSubmitDesc.setWaitTokens(lightingWaitTokens, lightingWaitTokenCount);
     Core::CommandList* lightingCommandLists[] = { deferredLightingCommandList };
     const Core::QueueSubmissionToken lightingSubmissionToken = lightingTimingTicket.submit(
         device,
         lightingCommandLists,
         1u,
-        Core::RenderLane::AsyncCompute,
+        deferredLightingAsyncSchedule ? Core::RenderLane::AsyncCompute : Core::RenderLane::Graphics,
         lightingSubmitDesc
     );
     if(!lightingSubmissionToken.valid()){
@@ -3036,9 +3117,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             failAsyncRenderRecovery();
         return;
     }
-    latestAsyncComputeSubmissionToken = lightingSubmissionToken;
+    if(laggedAsyncLightingSchedule)
+        deferredTargets.laggedLightingHistory.slotsUploaded = true;
+    if(deferredLightingAsyncSchedule)
+        latestAsyncComputeSubmissionToken = lightingSubmissionToken;
 
-    const bool lightingReturnStatesReady =
+    const bool lightingReturnStatesReady = laggedAsyncLightingSchedule || (
         m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
             m_deferredLightingStateHandoff,
             deferredTargets.shadowVisibility.get()
@@ -3051,7 +3135,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingStateHandoff,
             deferredTargets.surfelIrradiance.get()
         ))
-    ;
+    );
     if(!lightingReturnStatesReady){
         compositeTimingTicket.discard();
         finalTimingTicket.discard();
@@ -3062,14 +3146,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // Submissions to one Vulkan queue are ordered, so the compute composite follows lighting without an additional
-    // semaphore. Its token is nevertheless retained for the Graphics presentation dependency and recovery join.
+    // The selected lane orders composite after lighting. Its token remains the presentation dependency in both modes;
+    // in the lagged mode that is simply a Graphics-to-Graphics order edge while AsyncCompute continues the producer.
     Core::CommandList* compositeCommandLists[] = { deferredCompositeCommandList };
     const Core::QueueSubmissionToken compositeSubmissionToken = compositeTimingTicket.submit(
         device,
         compositeCommandLists,
         1u,
-        Core::RenderLane::AsyncCompute,
+        deferredLightingAsyncSchedule ? Core::RenderLane::AsyncCompute : Core::RenderLane::Graphics,
         Core::QueueSubmissionDesc{}
     );
     if(!compositeSubmissionToken.valid()){
@@ -3078,10 +3162,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             failAsyncRenderRecovery();
         return;
     }
-    latestAsyncComputeSubmissionToken = compositeSubmissionToken;
+    if(deferredLightingAsyncSchedule)
+        latestAsyncComputeSubmissionToken = compositeSubmissionToken;
 
+    // History removes the producer from the current lighting dependency, not from the frame-lifetime dependency. The
+    // final Graphics packet still waits for this frame's Async producer before the next frame can rewrite shared scene
+    // inputs; that preserves the existing cross-frame resource contract while exposing the useful overlap above.
+    Core::QueueSubmissionToken finalWaitTokens[2] = { compositeSubmissionToken, Core::QueueSubmissionToken{} };
+    usize finalWaitTokenCount = 1u;
+    if(laggedAsyncLightingSchedule)
+        finalWaitTokens[finalWaitTokenCount++] = latestAsyncComputeSubmissionToken;
     Core::QueueSubmissionDesc finalSubmitDesc;
-    finalSubmitDesc.setWaitTokens(&compositeSubmissionToken, 1u);
+    finalSubmitDesc.setWaitTokens(finalWaitTokens, finalWaitTokenCount);
     Core::CommandList* finalCommandLists[] = { deferredPresentCommandList };
     const Core::QueueSubmissionToken finalSubmissionToken = finalTimingTicket.submit(
         device,
@@ -3098,6 +3190,152 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!asyncFrameTiming.confirmEndSubmission(true)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm async frame critical-path timing"));
         asyncFrameTiming.discard();
+    }
+
+    if(captureLaggedLightingHistory){
+        // The capture imports the live producer results after their last current-frame consumer. In the bootstrap the
+        // consumer was AsyncCompute lighting; in the active mode it was not touched by Graphics lighting at all. The
+        // final Graphics token is the conservative read-complete edge in both cases, while AsyncCompute queue order
+        // already places this copy after the current producer submission.
+        const Core::CommandListResourceStateHandoff* const stashBranches[] = {
+            &m_causticIrradianceReturnStateHandoff,
+            &m_surfelIrradianceReturnStateHandoff,
+        };
+        const bool stashInputReady = m_laggedLightingStashInputStateHandoff.buildFanIn(
+            m_shadowVisibilityReturnStateHandoff,
+            stashBranches,
+            LengthOf(stashBranches)
+        );
+        if(!stashInputReady){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged lighting-history capture skipped because its source state was unavailable"));
+            m_laggedLightingHistoryValid = false;
+            m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
+        }
+        else{
+            asyncLaggedLightingStashCommandList->open(&m_laggedLightingStashInputStateHandoff);
+            bool stashRecorded = asyncLaggedLightingStashCommandList->hasCommandBuffer();
+            if(stashRecorded){
+                DeferredLaggedLightingHistoryResources& history = deferredTargets.laggedLightingHistory;
+                stashRecorded = history.valid();
+                if(stashRecorded){
+                    asyncLaggedLightingStashCommandList->setTextureState(
+                        deferredTargets.shadowVisibility.get(),
+                        ECSRenderDetail::s_ShadowVisibilitySubresources,
+                        Core::ResourceStates::CopySource
+                    );
+                    asyncLaggedLightingStashCommandList->setTextureState(
+                        history.shadowVisibility.get(),
+                        ECSRenderDetail::s_ShadowVisibilitySubresources,
+                        Core::ResourceStates::CopyDest
+                    );
+                    asyncLaggedLightingStashCommandList->setTextureState(
+                        deferredTargets.causticIrradiance.get(),
+                        ECSRenderDetail::s_FramebufferSubresources,
+                        Core::ResourceStates::CopySource
+                    );
+                    asyncLaggedLightingStashCommandList->setTextureState(
+                        history.causticIrradiance.get(),
+                        ECSRenderDetail::s_FramebufferSubresources,
+                        Core::ResourceStates::CopyDest
+                    );
+                    asyncLaggedLightingStashCommandList->setTextureState(
+                        deferredTargets.surfelIrradiance.get(),
+                        ECSRenderDetail::s_FramebufferSubresources,
+                        Core::ResourceStates::CopySource
+                    );
+                    asyncLaggedLightingStashCommandList->setTextureState(
+                        history.surfelIrradiance.get(),
+                        ECSRenderDetail::s_FramebufferSubresources,
+                        Core::ResourceStates::CopyDest
+                    );
+                    asyncLaggedLightingStashCommandList->commitBarriers();
+
+                    for(u32 shadowSlot = 0u; shadowSlot < NWB_SCENE_SHADOW_SLOT_COUNT; ++shadowSlot){
+                        Core::TextureSlice shadowSlice;
+                        shadowSlice.setArraySlice(shadowSlot);
+                        asyncLaggedLightingStashCommandList->copyTexture(
+                            history.shadowVisibility.get(),
+                            shadowSlice,
+                            deferredTargets.shadowVisibility.get(),
+                            shadowSlice
+                        );
+                    }
+                    const Core::TextureSlice irradianceSlice;
+                    asyncLaggedLightingStashCommandList->copyTexture(
+                        history.causticIrradiance.get(),
+                        irradianceSlice,
+                        deferredTargets.causticIrradiance.get(),
+                        irradianceSlice
+                    );
+                    asyncLaggedLightingStashCommandList->copyTexture(
+                        history.surfelIrradiance.get(),
+                        irradianceSlice,
+                        deferredTargets.surfelIrradiance.get(),
+                        irradianceSlice
+                    );
+                }
+            }
+            asyncLaggedLightingStashCommandList->close(&m_laggedLightingStashStateHandoff);
+            stashRecorded =
+                stashRecorded
+                && m_laggedLightingStashStateHandoff.valid()
+                && asyncLaggedLightingStashCommandList->hasCommandBuffer()
+            ;
+
+            if(!stashRecorded){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record lagged lighting-history capture; reverting to current-frame lighting"));
+                m_laggedLightingHistoryValid = false;
+                m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
+                m_laggedLightingStashInputStateHandoff.reset();
+                m_laggedLightingStashStateHandoff.reset();
+            }
+            else{
+                Core::QueueSubmissionDesc stashSubmitDesc;
+                stashSubmitDesc.setWaitTokens(&finalSubmissionToken, 1u);
+                Core::CommandList* stashCommandLists[] = { asyncLaggedLightingStashCommandList };
+                const Core::QueueSubmissionToken stashSubmissionToken = device.executeCommandLists(
+                    stashCommandLists,
+                    1u,
+                    Core::RenderLane::AsyncCompute,
+                    stashSubmitDesc
+                );
+                if(!stashSubmissionToken.valid()){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged lighting-history capture submission was rejected; reverting to current-frame lighting"));
+                    m_laggedLightingHistoryValid = false;
+                    m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
+                    m_laggedLightingStashInputStateHandoff.reset();
+                    m_laggedLightingStashStateHandoff.reset();
+                }
+                else{
+                    latestAsyncComputeSubmissionToken = stashSubmissionToken;
+                    const bool stashReturnStatesReady =
+                        m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
+                            m_laggedLightingStashStateHandoff,
+                            deferredTargets.shadowVisibility.get()
+                        )
+                        && m_causticIrradianceReturnStateHandoff.buildTextureSubset(
+                            m_laggedLightingStashStateHandoff,
+                            deferredTargets.causticIrradiance.get()
+                        )
+                        && m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
+                            m_laggedLightingStashStateHandoff,
+                            deferredTargets.surfelIrradiance.get()
+                        )
+                    ;
+                    if(!stashReturnStatesReady){
+                        if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+                            failAsyncRenderRecovery();
+                        // The accepted copy changed the producer-image layouts. Without an exported next-frame state,
+                        // reusing either the history or the live output would require guessing.
+                        failAsyncRenderRecovery();
+                        return;
+                    }
+
+                    m_laggedLightingHistorySubmissionToken = stashSubmissionToken;
+                    m_laggedLightingHistoryValid = true;
+                }
+            }
+        }
     }
 }
 

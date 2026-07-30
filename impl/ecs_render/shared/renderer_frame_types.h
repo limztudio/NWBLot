@@ -351,6 +351,39 @@ struct DeferredBindlessFrameResources{
     }
 };
 
+// Optional one-frame-lagged lighting keeps its three expensive ray-effect outputs in a separate, immutable-for-the-
+// frame history. The ordinary producer slots remain untouched, so AsyncCompute can write the current shadow/caustic/GI
+// images while Graphics samples this accepted history. Only deferred lighting selects this alternate slot cbuffer.
+struct DeferredLaggedLightingHistoryResources{
+    Core::TextureHandle shadowVisibility;
+    Core::TextureHandle causticIrradiance;
+    Core::TextureHandle surfelIrradiance;
+    Core::BufferHandle slotsBuffer;
+    DeferredBindlessResourceSlots slots;
+    Core::GpuDescriptorHandle slotsBufferDescriptor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle shadowVisibilityDescriptor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle causticIrradianceDescriptor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle surfelIrradianceDescriptor = Core::GpuDescriptorHandle::invalid();
+    // Incremented for every successful lazy allocation. RendererSystem compares this identity rather than a recycled
+    // descriptor slot or allocator address before accepting history from a prior target generation.
+    u64 generation = 0u;
+    bool slotsUploaded = false;
+
+    [[nodiscard]] bool valid()const noexcept{
+        return
+            shadowVisibility != nullptr
+            && causticIrradiance != nullptr
+            && surfelIrradiance != nullptr
+            && slotsBuffer != nullptr
+            && slotsBufferDescriptor.valid()
+            && shadowVisibilityDescriptor.valid()
+            && causticIrradianceDescriptor.valid()
+            && surfelIrradianceDescriptor.valid()
+            && generation != 0u
+        ;
+    }
+};
+
 struct DeferredFrameTargets{
     u32 width = 0;
     u32 height = 0;
@@ -492,6 +525,7 @@ struct DeferredFrameTargets{
     Core::TextureHandle causticResolveGeometry;
     Core::FramebufferHandle framebuffer;
     DeferredBindlessFrameResources bindless;
+    DeferredLaggedLightingHistoryResources laggedLightingHistory;
     AvboitFrameTargets avboit;
 
     [[nodiscard]] bool csgIntervalTargetsValid()const noexcept{

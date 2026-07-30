@@ -106,7 +106,7 @@ static void GFSDK_AFTERMATH_CALL OnGpuCrashDump(const void* pGpuCrashDump, const
 // Crash dump description callback (free-threaded). Adds application identity to the dump for triage.
 static void GFSDK_AFTERMATH_CALL OnCrashDumpDescription(PFN_GFSDK_Aftermath_AddGpuCrashDumpDescription addValue, void* pUserData){
     static_cast<void>(pUserData);
-    addValue(static_cast<uint32_t>(GFSDK_Aftermath_GpuCrashDumpDescriptionKey_ApplicationName), s_AppName);
+    addValue(static_cast<uint32_t>(GFSDK_Aftermath_GpuCrashDumpDescriptionKey_ApplicationName), s_AppName.data());
 }
 
 

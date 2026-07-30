@@ -19,9 +19,9 @@ NWB_CORE_BEGIN
 
 class ShaderArchive{
 public:
-    static constexpr const char* s_IndexVirtualPath = "shader/index.bin";
-    static constexpr const char* s_DefaultVariant = "default";
-    inline static constexpr Name s_IndexVirtualPathName = Name(s_IndexVirtualPath);
+    static constexpr StringView s_IndexVirtualPath = "shader/index.bin";
+    static constexpr StringView s_DefaultVariant = "default";
+    inline static constexpr Name s_IndexVirtualPathName = Name(s_IndexVirtualPath.data());
 
 
 public:

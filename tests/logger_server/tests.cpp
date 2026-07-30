@@ -164,9 +164,9 @@ static void LinuxSilenceExpectedCrashChildConsole(){
 
 [[nodiscard]] static const char* LinuxObservableAssertCategory(){
 #if NWB_OCCUR_ASSERT
-    return DiagnosticEventCategory::s_Assert;
+    return DiagnosticEventCategory::s_Assert.data();
 #else
-    return DiagnosticEventCategory::s_FatalAssert;
+    return DiagnosticEventCategory::s_FatalAssert.data();
 #endif
 }
 
@@ -187,8 +187,8 @@ NWB_LOGSERVER_TEST_NOINLINE static void LinuxForceAssertFalseForCrashObservation
 #if defined(NWB_PLATFORM_WINDOWS) || (defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID))
 NWB_LOGSERVER_TEST_NOINLINE static void CaptureRecoverableErrorForCrashObservation(const AStringView message){
     CaptureDiagnosticEvent(DiagnosticEventRecord{
-        .event = DiagnosticEventName::s_Error,
-        .category = NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError,
+        .event = DiagnosticEventName::s_Error.data(),
+        .category = NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError.data(),
         .message = message.data(),
         .file = "tests/logger_server/tests.cpp",
         .line = __LINE__,

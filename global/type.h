@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <string_view>
 #include <stdexcept>
 #include <system_error>
 #include <type_traits>
@@ -55,6 +56,13 @@ typedef wchar tchar;
 #else
 typedef char tchar;
 #endif
+
+template<typename T>
+using BasicStringView = std::basic_string_view<T>;
+using StringView = BasicStringView<char>;
+using AStringView = StringView;
+using WStringView = BasicStringView<wchar>;
+using TStringView = BasicStringView<tchar>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

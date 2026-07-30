@@ -84,7 +84,7 @@ static constexpr u32 s_AnimatedJointModulo = 16u;
 static constexpr u32 s_StaticPreviewAnimatedJointModulo = 2u;
 static constexpr AStringView s_BenchmarkModelPath = "project/characters/body/model";
 static constexpr AStringView s_SkinningBenchmarkMaterialPath = "project/smoke/skinning_culling_benchmark/materials/solid";
-static constexpr const char* s_StaticPreviewEnv = "NWB_SKINNING_CULLING_STATIC_PREVIEW";
+static constexpr StringView s_StaticPreviewEnv = "NWB_SKINNING_CULLING_STATIC_PREVIEW";
 static constexpr Name s_ModelSkeletonObject("skeleton");
 
 static constexpr BenchmarkCase s_BenchmarkCases[] = {
@@ -147,7 +147,7 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
 }
 
 [[nodiscard]] static bool StaticPreviewEnabled(){
-    return EnvironmentFlagEnabled(s_StaticPreviewEnv);
+    return EnvironmentFlagEnabled(s_StaticPreviewEnv.data());
 }
 
 static void BuildAnimatedJointMatrix(

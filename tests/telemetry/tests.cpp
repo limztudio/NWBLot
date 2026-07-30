@@ -319,7 +319,7 @@ TEST(Telemetry, CaptureSessionCaptureScopeRecordsLogAndDiagnostic){
 
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("scope text"));
             CaptureDiagnosticEvent(DiagnosticEventRecord{
-                .event = DiagnosticEventName::s_Error,
+                .event = DiagnosticEventName::s_Error.data(),
                 .category = "scope_diagnostic",
                 .message = "scope diagnostic",
                 .file = "scope.cpp",
@@ -331,7 +331,7 @@ TEST(Telemetry, CaptureSessionCaptureScopeRecordsLogAndDiagnostic){
     }
 
     CaptureDiagnosticEvent(DiagnosticEventRecord{
-        .event = DiagnosticEventName::s_Error,
+        .event = DiagnosticEventName::s_Error.data(),
         .category = "scope_diagnostic",
         .message = "ignored after scope",
     });
@@ -446,7 +446,7 @@ TEST(Telemetry, DiagnosticPayloadRoundTrip){
     Telemetry::TelemetryBytes payload(testArena.arena);
 
     const DiagnosticEventRecord source{
-        .event = DiagnosticEventName::s_Error,
+        .event = DiagnosticEventName::s_Error.data(),
         .category = "unit_category",
         .expression = "value != nullptr",
         .message = "diagnostic message",
@@ -480,8 +480,8 @@ TEST(Telemetry, RecordDiagnosticUsesTelemetryEvent){
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
     const DiagnosticEventRecord source{
-        .event = DiagnosticEventName::s_Assert,
-        .category = DiagnosticEventCategory::s_Assert,
+        .event = DiagnosticEventName::s_Assert.data(),
+        .category = DiagnosticEventCategory::s_Assert.data(),
         .expression = "condition",
         .message = "assert payload",
         .file = "assert.cpp",
@@ -516,7 +516,7 @@ TEST(Telemetry, DiagnosticCaptureGuardRecordsGlobalDiagnostic){
         guard.setFrameIndex(333u);
         guard.setStreamId(8u);
         CaptureDiagnosticEvent(DiagnosticEventRecord{
-            .event = DiagnosticEventName::s_Error,
+            .event = DiagnosticEventName::s_Error.data(),
             .category = "telemetry_guard",
             .message = "captured diagnostic",
             .file = "guard.cpp",
@@ -525,7 +525,7 @@ TEST(Telemetry, DiagnosticCaptureGuardRecordsGlobalDiagnostic){
     }
 
     CaptureDiagnosticEvent(DiagnosticEventRecord{
-        .event = DiagnosticEventName::s_Error,
+        .event = DiagnosticEventName::s_Error.data(),
         .category = "telemetry_guard",
         .message = "ignored after guard",
     });
@@ -553,7 +553,7 @@ TEST(Telemetry, DiagnosticCaptureGuardManualCaptureReturnsStatus){
     Telemetry::Recorder disabledRecorder(testArena.arena);
     Telemetry::DiagnosticCaptureGuard disabledGuard(disabledRecorder);
     EXPECT_FALSE(disabledGuard.capture(DiagnosticEventRecord{
-        .event = DiagnosticEventName::s_Error,
+        .event = DiagnosticEventName::s_Error.data(),
         .message = "disabled diagnostic",
     }));
 
@@ -564,7 +564,7 @@ TEST(Telemetry, DiagnosticCaptureGuardManualCaptureReturnsStatus){
     guard.setStreamId(5u);
 
     EXPECT_TRUE(guard.capture(DiagnosticEventRecord{
-        .event = DiagnosticEventName::s_Error,
+        .event = DiagnosticEventName::s_Error.data(),
         .category = "manual_capture",
         .message = "manual diagnostic",
         .file = "manual.cpp",
@@ -595,7 +595,7 @@ TEST(Telemetry, DiagnosticCaptureGuardDoesNotReplaceExistingCallback){
         Telemetry::DiagnosticCaptureGuard guard(recorder);
         EXPECT_FALSE(guard.installed());
         CaptureDiagnosticEvent(DiagnosticEventRecord{
-            .event = DiagnosticEventName::s_Error,
+            .event = DiagnosticEventName::s_Error.data(),
             .message = "existing callback should keep ownership",
         });
     }

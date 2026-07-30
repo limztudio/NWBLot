@@ -25,13 +25,13 @@ namespace __hidden_telemetry_ingest{
 
 inline constexpr int s_LocalTimeYearBase = 1900;
 inline constexpr int s_LocalTimeMonthBase = 1;
-inline constexpr const char* s_StorageDirectoryName = "telemetry";
-inline constexpr const char* s_RawDirectoryName = "raw";
-inline constexpr const char* s_ReportDirectoryName = "reports";
-inline constexpr const char* s_RawStreamFileExtension = ".nwbs";
-inline constexpr const char* s_JsonFileExtension = ".json";
-inline constexpr const char* s_PerfCsvFileExtension = ".perf.csv";
-inline constexpr const char* s_GraphFileExtension = ".graph.dot";
+inline constexpr StringView s_StorageDirectoryName = "telemetry";
+inline constexpr StringView s_RawDirectoryName = "raw";
+inline constexpr StringView s_ReportDirectoryName = "reports";
+inline constexpr StringView s_RawStreamFileExtension = ".nwbs";
+inline constexpr StringView s_JsonFileExtension = ".json";
+inline constexpr StringView s_PerfCsvFileExtension = ".perf.csv";
+inline constexpr StringView s_GraphFileExtension = ".graph.dot";
 static Atomic<u64> s_TelemetryUploadCounter{ 1u };
 
 [[nodiscard]] Path MakeTelemetryUploadStem(LogArena& arena){

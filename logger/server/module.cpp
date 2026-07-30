@@ -370,9 +370,9 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
     const auto conClsPtr = MakeNotNull(con_cls);
     auto& conCls = *conClsPtr;
 
-    const bool isCrashUpload = NWB_STRCMP(url, Core::Crash::PackageNames::s_CrashUploadEndpoint) == 0;
-    const bool isTelemetryUpload = NWB_STRCMP(url, s_TelemetryUploadEndpoint) == 0;
-    const bool isNameSymbolUpload = NWB_STRCMP(url, s_NameSymbolUploadEndpoint) == 0;
+    const bool isCrashUpload = NWB_STRCMP(url, Core::Crash::PackageNames::s_CrashUploadEndpoint.data()) == 0;
+    const bool isTelemetryUpload = NWB_STRCMP(url, s_TelemetryUploadEndpoint.data()) == 0;
+    const bool isNameSymbolUpload = NWB_STRCMP(url, s_NameSymbolUploadEndpoint.data()) == 0;
     const auto uploadKind = isCrashUpload
         ? __hidden_logger_server::ConnectionUploadKind::Crash
         : isTelemetryUpload

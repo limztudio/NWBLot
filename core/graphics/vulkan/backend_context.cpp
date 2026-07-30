@@ -523,8 +523,8 @@ void BackendContext::initDefaultExtensions(){
 
     m_rayTracingExtensions.clear();
 
-    for(const auto* name : s_EnabledInstanceExts)
-        m_enabledExtensions.instance.emplace(name, m_arena);
+    for(const auto name : s_EnabledInstanceExts)
+        m_enabledExtensions.instance.emplace(GraphicsString(name, m_arena));
     for(const auto& e : s_EnabledDeviceExts)
         m_enabledExtensions.device.emplace(GraphicsString(e.name, m_arena), e.feature);
 
@@ -532,8 +532,8 @@ void BackendContext::initDefaultExtensions(){
         m_optionalExtensions.device.emplace(GraphicsString(e.name, m_arena), e.feature);
 
     if(m_deviceParams.enableDebugRuntime){
-        for(const auto* name : s_DebugRequiredInstanceExts)
-            m_enabledExtensions.instance.emplace(name, m_arena);
+        for(const auto name : s_DebugRequiredInstanceExts)
+            m_enabledExtensions.instance.emplace(GraphicsString(name, m_arena));
     }
 
     for(const auto& e : s_RayTracingExts)
@@ -677,9 +677,9 @@ bool BackendContext::createVulkanInstance(){
 
     VkApplicationInfo applicationInfo = {};
     applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    applicationInfo.pApplicationName = s_AppName;
+    applicationInfo.pApplicationName = s_AppName.data();
     applicationInfo.applicationVersion = static_cast<uint32_t>(s_AppVersion);
-    applicationInfo.pEngineName = s_AppName;
+    applicationInfo.pEngineName = s_AppName.data();
     applicationInfo.engineVersion = static_cast<uint32_t>(s_EngineVersion);
 
     res = vkEnumerateInstanceVersion(&applicationInfo.apiVersion);

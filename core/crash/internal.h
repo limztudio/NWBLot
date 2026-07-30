@@ -62,11 +62,11 @@ inline constexpr tchar s_HandlerExecutableFileName[] = NWB_TEXT(NWB_CRASH_HANDLE
 inline constexpr tchar s_RequestHandleArgument[] = NWB_TEXT("--request-handle");
 inline constexpr tchar s_AckHandleArgument[] = NWB_TEXT("--ack-handle");
 inline constexpr tchar s_AckEventArgument[] = NWB_TEXT("--ack-event");
-inline constexpr const char* s_RequestFdArgument = "--request-fd";
-inline constexpr const char* s_AckFdArgument = "--ack-fd";
-inline constexpr const char* s_DefaultBreadcrumbCategory = "general";
-inline constexpr const char* s_ManualDumpCategory = "manual_dump";
-inline constexpr const char* s_GpuCrashCategory = "gpu_crash";
+inline constexpr StringView s_RequestFdArgument = "--request-fd";
+inline constexpr StringView s_AckFdArgument = "--ack-fd";
+inline constexpr StringView s_DefaultBreadcrumbCategory = "general";
+inline constexpr StringView s_ManualDumpCategory = "manual_dump";
+inline constexpr StringView s_GpuCrashCategory = "gpu_crash";
 
 
 template<typename ArenaT>

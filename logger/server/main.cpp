@@ -25,12 +25,12 @@ namespace __hidden_logger_server_main{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr const char* s_AppName = "logserver";
-inline constexpr const char* s_CrashSymbolStoreOption = "--crash-symbol-store";
-inline constexpr const char* s_CrashUploadTokenOption = "--crash-upload-token";
-inline constexpr const char* s_CrashRetainPackagesOption = "--crash-retain-packages";
-inline constexpr const char* s_CrashRetainRawOption = "--crash-retain-raw";
-inline constexpr const char* s_CrashRetainInvalidOption = "--crash-retain-invalid";
+inline constexpr StringView s_AppName = "logserver";
+inline constexpr StringView s_CrashSymbolStoreOption = "--crash-symbol-store";
+inline constexpr StringView s_CrashUploadTokenOption = "--crash-upload-token";
+inline constexpr StringView s_CrashRetainPackagesOption = "--crash-retain-packages";
+inline constexpr StringView s_CrashRetainRawOption = "--crash-retain-raw";
+inline constexpr StringView s_CrashRetainInvalidOption = "--crash-retain-invalid";
 inline constexpr tchar s_LogFileNameBase[] = NWB_TEXT("logserver");
 inline constexpr Name s_CommandLineArena("logger/server/command_line");
 
@@ -95,14 +95,14 @@ static int EntryPoint(isize argc, tchar** argv, void* inst){
     AString<NWB::Core::Alloc::GlobalArena> crashUploadToken(commandLineArena);
     NWB::Log::CrashRetentionConfig crashRetentionConfig;
     {
-        CLI::App app{ __hidden_logger_server_main::s_AppName };
+        CLI::App app{ __hidden_logger_server_main::s_AppName.data() };
 
         NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, logPort);
-        app.add_option(__hidden_logger_server_main::s_CrashSymbolStoreOption, crashSymbolStoreDirectory, "Directory containing crash symbol files");
-        app.add_option(__hidden_logger_server_main::s_CrashUploadTokenOption, crashUploadToken, "Bearer token required for crash uploads; empty disables upload auth");
-        app.add_option(__hidden_logger_server_main::s_CrashRetainPackagesOption, crashRetentionConfig.maxExtractedPackages, "Maximum extracted crash packages to keep; zero disables pruning");
-        app.add_option(__hidden_logger_server_main::s_CrashRetainRawOption, crashRetentionConfig.maxRawArchives, "Maximum raw crash uploads to keep; zero disables pruning");
-        app.add_option(__hidden_logger_server_main::s_CrashRetainInvalidOption, crashRetentionConfig.maxInvalidArchives, "Maximum invalid crash uploads to keep; zero disables pruning");
+        app.add_option(__hidden_logger_server_main::s_CrashSymbolStoreOption.data(), crashSymbolStoreDirectory, "Directory containing crash symbol files");
+        app.add_option(__hidden_logger_server_main::s_CrashUploadTokenOption.data(), crashUploadToken, "Bearer token required for crash uploads; empty disables upload auth");
+        app.add_option(__hidden_logger_server_main::s_CrashRetainPackagesOption.data(), crashRetentionConfig.maxExtractedPackages, "Maximum extracted crash packages to keep; zero disables pruning");
+        app.add_option(__hidden_logger_server_main::s_CrashRetainRawOption.data(), crashRetentionConfig.maxRawArchives, "Maximum raw crash uploads to keep; zero disables pruning");
+        app.add_option(__hidden_logger_server_main::s_CrashRetainInvalidOption.data(), crashRetentionConfig.maxInvalidArchives, "Maximum invalid crash uploads to keep; zero disables pruning");
 
         try{
             CommandLineParseApp(app, argc, argv);

@@ -50,7 +50,7 @@ NWB_VULKAN_BEGIN
 inline constexpr u32 s_MinimumVersion = static_cast<u32>(VK_MAKE_API_VERSION(0, 1, 3, 0));
 inline constexpr u32 s_AppVersion = static_cast<u32>(VK_MAKE_API_VERSION(0, 1, 0, 0));
 inline constexpr u32 s_EngineVersion = static_cast<u32>(VK_MAKE_API_VERSION(0, 1, 0, 0));
-inline constexpr const char* s_AppName = "NWB";
+inline constexpr StringView s_AppName = "NWB";
 
 // Device memory and upload defaults.
 inline constexpr u64 s_DefaultUploadChunkSize = 64 * 1024 * 1024; // 64 MB

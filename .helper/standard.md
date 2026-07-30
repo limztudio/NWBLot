@@ -329,6 +329,9 @@ Updated: 2026-07-08
 
 ## 9. Performance-oriented conventions
 - Use `constexpr` for static mappings and constants.
+- For compile-time string literals, use `constexpr StringView` rather than `constexpr const char*`:
+  - Correct: `constexpr StringView str = "foobar";`
+  - Wrong: `constexpr const char* str = "foobar";`
 - Reserve container capacity when expected counts are known.
 - Use thread pool and chunking thresholds for larger CPU-side memory/data operations.
 - Prefer scratch/arena allocations in hot paths to minimize heap churn.

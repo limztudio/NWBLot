@@ -535,7 +535,7 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
         char ackFdText[s_HandlerArgumentTextCapacity] = {};
         AppendUnsignedToFixedBuffer(fdText, static_cast<u64>(requestChannelFds[__hidden_crash_posix::s_ChildEndIndex]));
         AppendUnsignedToFixedBuffer(ackFdText, static_cast<u64>(ackPipeFds[__hidden_crash_posix::s_ChildEndIndex]));
-        execl(handlerExecutablePath.c_str(), handlerExecutablePath.c_str(), s_RequestFdArgument, fdText, s_AckFdArgument, ackFdText, nullptr);
+        execl(handlerExecutablePath.c_str(), handlerExecutablePath.c_str(), s_RequestFdArgument.data(), fdText, s_AckFdArgument.data(), ackFdText, nullptr);
         _exit(__hidden_crash_posix::s_HandlerExecFailureExitCode);
     }
 

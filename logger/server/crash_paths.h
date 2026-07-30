@@ -17,14 +17,14 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr const char* s_CrashRawDirectoryName = "raw";
-inline constexpr const char* s_CrashInvalidDirectoryName = "invalid";
-inline constexpr const char* s_CrashExtractedDirectoryName = "packages";
-inline constexpr const char* s_CrashInboxDirectoryName = "inbox";
-inline constexpr const char* s_CrashSymbolStoreDirectoryName = "symbols";
-inline constexpr const char* s_CrashUploadArchiveFilePrefix = "crash_";
-inline constexpr const char* s_CrashUploadArchiveFileExtension = ".nwbcrashpkg";
-inline constexpr const char* s_ServerSymbolicationFileName = "server_symbolication.txt";
+inline constexpr StringView s_CrashRawDirectoryName = "raw";
+inline constexpr StringView s_CrashInvalidDirectoryName = "invalid";
+inline constexpr StringView s_CrashExtractedDirectoryName = "packages";
+inline constexpr StringView s_CrashInboxDirectoryName = "inbox";
+inline constexpr StringView s_CrashSymbolStoreDirectoryName = "symbols";
+inline constexpr StringView s_CrashUploadArchiveFilePrefix = "crash_";
+inline constexpr StringView s_CrashUploadArchiveFileExtension = ".nwbcrashpkg";
+inline constexpr StringView s_ServerSymbolicationFileName = "server_symbolication.txt";
 
 [[nodiscard]] Path CrashDefaultRootDirectory(LogArena& arena);
 [[nodiscard]] Path CrashStorageDirectory(LogArena& arena, const Path& configuredStorageDirectory);

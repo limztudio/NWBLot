@@ -64,9 +64,9 @@ namespace LoggerDetail{
 
 extern ILogger* g_logger;
 
-inline constexpr const char* s_DiagnosticEventCategoryAssert = "logger_Assert";
-inline constexpr const char* s_DiagnosticEventCategoryError = "logger_Error";
-inline constexpr const char* s_DiagnosticEventCategoryFatal = "logger_Fatal";
+inline constexpr StringView s_DiagnosticEventCategoryAssert = "logger_Assert";
+inline constexpr StringView s_DiagnosticEventCategoryError = "logger_Error";
+inline constexpr StringView s_DiagnosticEventCategoryFatal = "logger_Fatal";
 
 template<typename... ARGS>
 constexpr void IgnoreMessage(ARGS&&...){}
@@ -74,11 +74,11 @@ constexpr void IgnoreMessage(ARGS&&...){}
 [[nodiscard]] inline const char* DiagnosticEventNameFromLogType(const LogType::Enum type)noexcept{
     switch(type){
     case LogType::Assert:
-        return DiagnosticEventName::s_Assert;
+        return DiagnosticEventName::s_Assert.data();
     case LogType::Error:
-        return DiagnosticEventName::s_Error;
+        return DiagnosticEventName::s_Error.data();
     case LogType::Fatal:
-        return DiagnosticEventName::s_Fatal;
+        return DiagnosticEventName::s_Fatal.data();
     default:
         return "";
     }
@@ -270,7 +270,7 @@ NWB_COMMON_END
         [[maybe_unused]] constexpr auto nwbIgnoredLoggerMessageSize =                                                          \
             sizeof((::NWB::Core::Common::LoggerDetail::IgnoreMessage(__VA_ARGS__), 0));                                        \
     }while(false)
-#define NWB_DIAGNOSTIC_LOGGER_CATEGORY(Type) ::NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategory ## Type
+#define NWB_DIAGNOSTIC_LOGGER_CATEGORY(Type) ::NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategory ## Type.data()
 
 #define NWB_LOGGER_ENQUEUE_MESSAGE(Type, ...)                                                                                  \
     do{                                                                                                                        \

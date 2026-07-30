@@ -315,8 +315,8 @@ static bool WriteWindowsMinidump(ArenaT& arena, const CrashRequest& request){
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 template<typename ArenaT>
-static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const char* sourcePath, const char* outputName){
-    InputFileStream input(sourcePath, s_FileOpenBinary);
+static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const AStringView sourcePath, const AStringView outputName){
+    InputFileStream input(sourcePath.data(), s_FileOpenBinary);
     if(!input.is_open())
         return;
 
@@ -326,12 +326,12 @@ static void CopyFileToPackage(ArenaT& arena, const CrashRequest& request, const 
 }
 
 template<typename ArenaT>
-static void CopyProcFile(ArenaT& arena, const CrashRequest& request, const char* procName, const char* outputName){
+static void CopyProcFile(ArenaT& arena, const CrashRequest& request, const AStringView procName, const AStringView outputName){
     char procPath[s_LinuxProcPathTextCapacity] = {};
     CopyFixedBuffer(procPath, PackageNames::s_LinuxProcRootPath);
     AppendUnsignedToFixedBuffer(procPath, request.processId);
     AppendFixedBuffer(procPath, "/");
-    AppendFixedBuffer(procPath, procName);
+    AppendFixedBuffer(procPath, procName.data());
 
     CopyFileToPackage(arena, request, procPath, outputName);
 }

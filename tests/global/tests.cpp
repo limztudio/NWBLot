@@ -966,7 +966,7 @@ TEST(Global, LoggerDiagnosticCaptureUsesFormattedMessage){
     NWB::Core::Common::LoggerDetail::EnqueueMessageAndCapture(
         logger,
         NWB::Core::Common::LogType::Error,
-        NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError,
+        NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError.data(),
         "logger_diagnostic_test.cpp",
         77u,
         NWB_TEXT("recoverable error {}"),
@@ -983,8 +983,8 @@ TEST(Global, LoggerDiagnosticCaptureUsesFormattedMessage){
     ASSERT_NE(s_DiagnosticEventExpression, nullptr);
     ASSERT_NE(s_DiagnosticEventMessage, nullptr);
     ASSERT_NE(s_DiagnosticEventFile, nullptr);
-    EXPECT_STREQ(s_DiagnosticEventName, DiagnosticEventName::s_Error);
-    EXPECT_STREQ(s_DiagnosticEventCategory, NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError);
+    EXPECT_STREQ(s_DiagnosticEventName, DiagnosticEventName::s_Error.data());
+    EXPECT_STREQ(s_DiagnosticEventCategory, NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError.data());
     EXPECT_STREQ(s_DiagnosticEventExpression, "");
     EXPECT_STREQ(s_DiagnosticEventMessage, "recoverable error 13");
     EXPECT_STREQ(s_DiagnosticEventFile, "logger_diagnostic_test.cpp");
@@ -999,7 +999,7 @@ TEST(Global, LoggerAssertTypeCapturesAssertDiagnostic){
     NWB::Core::Common::LoggerDetail::EnqueueMessageAndCapture(
         logger,
         NWB::Core::Common::LogType::Assert,
-        NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryAssert,
+        NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryAssert.data(),
         "logger_assert_test.cpp",
         91u,
         NWB_TEXT("assert log {}"),
@@ -1015,8 +1015,8 @@ TEST(Global, LoggerAssertTypeCapturesAssertDiagnostic){
     ASSERT_NE(s_DiagnosticEventCategory, nullptr);
     ASSERT_NE(s_DiagnosticEventMessage, nullptr);
     ASSERT_NE(s_DiagnosticEventFile, nullptr);
-    EXPECT_STREQ(s_DiagnosticEventName, DiagnosticEventName::s_Assert);
-    EXPECT_STREQ(s_DiagnosticEventCategory, NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryAssert);
+    EXPECT_STREQ(s_DiagnosticEventName, DiagnosticEventName::s_Assert.data());
+    EXPECT_STREQ(s_DiagnosticEventCategory, NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryAssert.data());
     EXPECT_STREQ(s_DiagnosticEventMessage, "assert log 21");
     EXPECT_STREQ(s_DiagnosticEventFile, "logger_assert_test.cpp");
     EXPECT_EQ(s_DiagnosticEventLine, 91u);
@@ -1047,10 +1047,10 @@ TEST(Global, DiagnosticEventHook){
     EXPECT_STREQ(s_DiagnosticEventMessage, "message");
     EXPECT_STREQ(s_DiagnosticEventFile, "diagnostics_test.cpp");
     EXPECT_EQ(s_DiagnosticEventLine, 42u);
-    EXPECT_EQ(DiagnosticEventNameFromCategory(DiagnosticEventCategory::s_Assert), DiagnosticEventName::s_Assert);
-    EXPECT_EQ(DiagnosticEventNameFromCategory(DiagnosticEventCategory::s_FatalAssert), DiagnosticEventName::s_Assert);
+    EXPECT_EQ(DiagnosticEventNameFromCategory(DiagnosticEventCategory::s_Assert.data()), DiagnosticEventName::s_Assert.data());
+    EXPECT_EQ(DiagnosticEventNameFromCategory(DiagnosticEventCategory::s_FatalAssert.data()), DiagnosticEventName::s_Assert.data());
     EXPECT_EQ(DiagnosticEventNameFromCategory("unknown"), nullptr);
-    EXPECT_EQ(DiagnosticEventNameFromRecord(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error }), DiagnosticEventName::s_Error);
+    EXPECT_EQ(DiagnosticEventNameFromRecord(DiagnosticEventRecord{ .event = DiagnosticEventName::s_Error.data() }), DiagnosticEventName::s_Error.data());
 }
 
 

@@ -24,12 +24,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename T>
-using BasicStringView = std::basic_string_view<T>;
-using AStringView = BasicStringView<char>;
-using WStringView = BasicStringView<wchar>;
-using TStringView = BasicStringView<tchar>;
-
 template<typename T, typename ArenaT>
 using BasicString = std::basic_string<T, std::char_traits<T>, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
 template<typename ArenaT>

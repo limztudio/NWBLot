@@ -146,9 +146,9 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
     int requestReadFd = -1;
     int ackWriteFd = -1;
     for(isize i = 1; i + 1 < argc; ++i){
-        if(__hidden_crash_handler::__hidden_arg_equals(argv[i], Detail::s_RequestFdArgument))
+        if(__hidden_crash_handler::__hidden_arg_equals(argv[i], Detail::s_RequestFdArgument.data()))
             requestReadFd = static_cast<int>(__hidden_crash_handler::__hidden_parse_u64(argv[++i]));
-        else if(__hidden_crash_handler::__hidden_arg_equals(argv[i], Detail::s_AckFdArgument))
+        else if(__hidden_crash_handler::__hidden_arg_equals(argv[i], Detail::s_AckFdArgument.data()))
             ackWriteFd = static_cast<int>(__hidden_crash_handler::__hidden_parse_u64(argv[++i]));
     }
 

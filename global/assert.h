@@ -18,8 +18,8 @@
 
 #define NWB_DETAIL_ASSERT_CAPTURE(categoryValue, conditionValue, messageTextValue)       \
     ::CaptureDiagnosticEvent(::DiagnosticEventRecord{                                    \
-        .event = ::DiagnosticEventName::s_Assert,                                        \
-        .category = categoryValue,                                                       \
+        .event = ::DiagnosticEventName::s_Assert.data(),                                 \
+        .category = categoryValue.data(),                                                \
         .expression = #conditionValue,                                                   \
         .message = messageTextValue,                                                     \
         .file = __FILE__,                                                                \

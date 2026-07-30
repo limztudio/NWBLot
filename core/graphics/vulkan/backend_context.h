@@ -70,10 +70,10 @@ private:
 
 
 private:
-    static constexpr const char* s_EnabledInstanceExts[] = {
+    static constexpr StringView s_EnabledInstanceExts[] = {
         VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
     };
-    static constexpr const char* s_DebugRequiredInstanceExts[] = {
+    static constexpr StringView s_DebugRequiredInstanceExts[] = {
         VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
     };
 

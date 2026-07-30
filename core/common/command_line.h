@@ -26,7 +26,7 @@ namespace ArgCommand{
         iNumArg,
     };
 };
-inline constexpr const char* g_ArgCmd[] = {
+inline constexpr StringView g_ArgCmd[] = {
     "-a,--logaddress",
     "-p,--logport",
 };
@@ -38,14 +38,14 @@ inline const Tuple<
     "http://localhost",
     s_DefaultLogServerPort,
 };
-inline constexpr const char* g_ArgDesc[] = {
+inline constexpr StringView g_ArgDesc[] = {
     "Log server address",
     "Log server port",
 };
 
 template<ArgCommand::Enum i, typename CLI, typename T>
 inline auto ArgAddOption(CLI& cli, T& arg){
-    return cli.add_option(g_ArgCmd[static_cast<usize>(i)], arg, g_ArgDesc[static_cast<usize>(i)])->default_val(Get<static_cast<usize>(i)>(g_ArgDefault));
+    return cli.add_option(g_ArgCmd[static_cast<usize>(i)].data(), arg, g_ArgDesc[static_cast<usize>(i)].data())->default_val(Get<static_cast<usize>(i)>(g_ArgDefault));
 }
 
 

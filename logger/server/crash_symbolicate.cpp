@@ -25,7 +25,7 @@ namespace __hidden_logger_crash_symbolicate{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void AppendOptionalTextFile(LogArena& arena, CrashReportText& outReport, const Path& packageDirectory, const char* fileName, const char* label){
+static void AppendOptionalTextFile(LogArena& arena, CrashReportText& outReport, const Path& packageDirectory, const AStringView fileName, const AStringView label){
     CrashReportText text{arena};
     if(!ReadTextFile(packageDirectory / fileName, text) || text.empty())
         return;

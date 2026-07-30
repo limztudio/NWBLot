@@ -40,8 +40,8 @@ namespace DiagnosticEventCategory{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr const char* s_Assert = "assert";
-inline constexpr const char* s_FatalAssert = "fatal_assert";
+inline constexpr StringView s_Assert = "assert";
+inline constexpr StringView s_FatalAssert = "fatal_assert";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,12 +59,12 @@ namespace DiagnosticEventName{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr const char* s_Assert = "assert";
-inline constexpr const char* s_Error = "error";
-inline constexpr const char* s_Fatal = "fatal";
-inline constexpr const char* s_ManualDump = "manual_dump";
-inline constexpr const char* s_Crash = "crash";
-inline constexpr const char* s_GpuCrash = "gpu_crash";
+inline constexpr StringView s_Assert = "assert";
+inline constexpr StringView s_Error = "error";
+inline constexpr StringView s_Fatal = "fatal";
+inline constexpr StringView s_ManualDump = "manual_dump";
+inline constexpr StringView s_Crash = "crash";
+inline constexpr StringView s_GpuCrash = "gpu_crash";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,9 +87,9 @@ inline AtomicFlag g_EventActive;
 inline constexpr usize s_MaxEventTextBytes = 2048u;
 inline constexpr usize s_NumberTextBufferBytes = 128u;
 inline constexpr wchar_t s_AsciiCharacterMax = 0x7F;
-inline constexpr const char* s_NullText = "(null)";
-inline constexpr const char* s_PointerHexPrefix = "0x";
-inline constexpr const char* s_UnprintableText = "<unprintable>";
+inline constexpr StringView s_NullText = "(null)";
+inline constexpr StringView s_PointerHexPrefix = "0x";
+inline constexpr StringView s_UnprintableText = "<unprintable>";
 inline constexpr i32 s_PointerTextRadix = 16;
 
 
@@ -334,8 +334,8 @@ inline void FormatEventText(char (&outText)[s_MaxEventTextBytes], const std::bas
 
 
 [[nodiscard]] inline const char* DiagnosticEventNameFromCategory(const char* const category)noexcept{
-    if(DiagnosticDetail::TextEquals(category, DiagnosticEventCategory::s_Assert) || DiagnosticDetail::TextEquals(category, DiagnosticEventCategory::s_FatalAssert))
-        return DiagnosticEventName::s_Assert;
+    if(DiagnosticDetail::TextEquals(category, DiagnosticEventCategory::s_Assert.data()) || DiagnosticDetail::TextEquals(category, DiagnosticEventCategory::s_FatalAssert.data()))
+        return DiagnosticEventName::s_Assert.data();
 
     return nullptr;
 }

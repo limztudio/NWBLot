@@ -58,9 +58,9 @@ const char* ReasonKindName(const u32 reasonKind)noexcept{
     case CrashReasonKind::Terminate:
         return "terminate";
     case CrashReasonKind::ManualDump:
-        return s_ManualDumpCategory;
+        return s_ManualDumpCategory.data();
     case CrashReasonKind::GpuCrash:
-        return s_GpuCrashCategory;
+        return s_GpuCrashCategory.data();
     default:
         return "unknown";
     }
@@ -210,9 +210,9 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
             if(!options.gpuDump.empty()){
                 const char* gpuDumpFileName = nullptr;
                 if(options.gpuDumpKind == GpuCrashDumpKind::RadeonGpuDetective)
-                    gpuDumpFileName = PackageNames::s_GpuDetectiveCaptureFileName;
+                    gpuDumpFileName = PackageNames::s_GpuDetectiveCaptureFileName.data();
                 else if(options.gpuDumpKind == GpuCrashDumpKind::Aftermath)
-                    gpuDumpFileName = PackageNames::s_AftermathGpuDumpFileName;
+                    gpuDumpFileName = PackageNames::s_AftermathGpuDumpFileName.data();
 
                 if(gpuDumpFileName){
                     if(!WriteTextFile(packageDirectory / gpuDumpFileName, options.gpuDump))

@@ -192,10 +192,10 @@ static bool UploadPackage(
 }
 
 template<typename ArenaT>
-static bool WriteUploadAttemptText(ArenaT& arena, const ::Path<ArenaT>& packageDirectory, const char* state){
+static bool WriteUploadAttemptText(ArenaT& arena, const ::Path<ArenaT>& packageDirectory, const AStringView state){
     CrashStringT<ArenaT> text{arena};
     text += "state=";
-    text += state ? state : PackageNames::s_UploadAttemptUnknownState;
+    text += state.data() ? state : PackageNames::s_UploadAttemptUnknownState;
     text += "\n";
     return WriteTextFile(packageDirectory / PackageNames::s_UploadAttemptFileName, AStringView(text.data(), text.size()));
 }

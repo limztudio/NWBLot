@@ -259,6 +259,8 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         && registerSampler(bindless.sampler, deferredState().m_sampler.get())
         && registerTexture(bindless.opaqueColor, Core::GpuDescriptorClass::SampledImage, targets.opaqueColor.get(), targets.opaqueColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerStorageTexture(bindless.opaqueColorStorage, targets.opaqueColor.get(), targets.opaqueColorFormat, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.compositeColor, Core::GpuDescriptorClass::SampledImage, targets.compositeColor.get(), targets.compositeColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerStorageTexture(bindless.compositeColorStorage, targets.compositeColor.get(), targets.compositeColorFormat, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitAccumColor, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumColor.get(), targets.avboit.accumColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitAccumExtinction, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumExtinction.get(), targets.avboit.accumExtinctionFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitTransmittance, Core::GpuDescriptorClass::SampledImage3D, targets.avboit.transmittanceTexture.get(), targets.avboit.transmittanceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D)
@@ -336,6 +338,8 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
     bindless.slots.sampler = bindless.sampler.slot();
     bindless.slots.opaqueColor = bindless.opaqueColor.slot();
     bindless.slots.opaqueColorStorage = bindless.opaqueColorStorage.slot();
+    bindless.slots.compositeColor = bindless.compositeColor.slot();
+    bindless.slots.compositeColorStorage = bindless.compositeColorStorage.slot();
     bindless.slots.avboitAccumColor = bindless.avboitAccumColor.slot();
     bindless.slots.avboitAccumExtinction = bindless.avboitAccumExtinction.slot();
     bindless.slots.avboitTransmittance = bindless.avboitTransmittance.slot();
@@ -407,6 +411,8 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTa
         heap.free(targets.bindless.sampler);
         heap.free(targets.bindless.opaqueColor);
         heap.free(targets.bindless.opaqueColorStorage);
+        heap.free(targets.bindless.compositeColor);
+        heap.free(targets.bindless.compositeColorStorage);
         heap.free(targets.bindless.avboitAccumColor);
         heap.free(targets.bindless.avboitAccumExtinction);
         heap.free(targets.bindless.avboitTransmittance);
@@ -501,6 +507,7 @@ void RendererDeferredSystem::resetDeferredFrameTargets(){
     deferredState().m_targets.csgRemovedIntervalData.reset();
     deferredState().m_targets.csgRemovedIntervalCount.reset();
     deferredState().m_targets.opaqueColor.reset();
+    deferredState().m_targets.compositeColor.reset();
     deferredState().m_targets.depth.reset();
     deferredState().m_targets.shadowVisibility.reset();
 
@@ -575,7 +582,8 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     resetDeferredFrameTargets();
     materialState().m_pipelines.clear();
     deferredState().m_lightingPipeline.reset();
-    deferredState().m_compositePipeline.reset();
+    deferredState().m_compositeComputePipeline.reset();
+    deferredState().m_presentPipeline.reset();
 
     DeferredFrameTargets createdTargets;
     createdTargets.width = width;
@@ -584,6 +592,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     createdTargets.normalFormat = normalFormat;
     createdTargets.worldPositionFormat = worldPositionFormat;
     createdTargets.opaqueColorFormat = opaqueColorFormat;
+    createdTargets.compositeColorFormat = opaqueColorFormat;
     createdTargets.depthFormat = depthFormat;
     createdTargets.csgCapNormalFormat = csgCapNormalFormat;
     createdTargets.csgIntervalDepthFormat = csgIntervalDepthFormat;
@@ -669,6 +678,24 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     }
 
+    Core::TextureDesc compositeColorDesc;
+    compositeColorDesc
+        .setWidth(createdTargets.width)
+        .setHeight(createdTargets.height)
+        .setFormat(createdTargets.compositeColorFormat)
+        .setInUAV(true)
+        .setInitialState(Core::ResourceStates::Common)
+        .setKeepInitialState(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setName("engine/deferred/composite_color")
+        .setClearValue(ECSRenderDetail::s_ClearColor)
+    ;
+    createdTargets.compositeColor = graphics().createTexture(compositeColorDesc);
+    if(!createdTargets.compositeColor){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite color target"));
+        return false;
+    }
+
     Core::TextureDesc depthDesc;
     depthDesc
         .setWidth(createdTargets.width)
@@ -733,6 +760,10 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         resetDeferredFrameTargets();
         return false;
     }
+    if(!createDeferredCompositePipeline()){
+        resetDeferredFrameTargets();
+        return false;
+    }
 
     // AVBOIT registers its target-generation work resources after deferred lighting has created the shared slot
     // payload. The material and compute pipeline layouts remain push-only gaps; no local descriptor object is allocated.
@@ -745,13 +776,14 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         return false;
     }
 
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, depth {}, shadow visibility {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver events {} layers: event data {}, event count {}, receiver spans {} layers: span data {}, span count {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, AVBOIT color {}, extinction {}, transmittance {})")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: deferred rendering targets ready ({}x{}, albedo {}, normal {}, world position {}, opaque color {}, composite color {}, depth {}, shadow visibility {}, CSG peel {} layers: cap back normal {}, interval depth {}, interval id {}, receiver events {} layers: event data {}, event count {}, receiver spans {} layers: span data {}, span count {}, removed intervals {} layers: interval depth {}, cap normal {}, interval data {}, interval count {}, AVBOIT color {}, extinction {}, transmittance {})")
         , deferredState().m_targets.width
         , deferredState().m_targets.height
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.albedoFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.normalFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.worldPositionFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.opaqueColorFormat).name)
+        , StringConvert(Core::GetFormatInfo(deferredState().m_targets.compositeColorFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.depthFormat).name)
         , StringConvert(Core::GetFormatInfo(deferredState().m_targets.shadowVisibilityFormat).name)
         , deferredState().m_targets.csgPeelLayerCount

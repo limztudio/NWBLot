@@ -4,7 +4,6 @@
 
 #include "binding_slots.h"
 #include "bindless_resources.slangi"
-#include "../avboit/constants.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,13 +30,12 @@ struct NwbDeferredCompositePixelOutput{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Surface images commonly expose ColorAttachment and sampled usage but not storage writes. Composite math therefore
+// runs in composite_cs on AsyncCompute, while this tiny Graphics pass samples its linear result into the presentable
+// framebuffer and preserves the existing swapchain format conversion.
 NwbDeferredCompositePixelOutput main(NwbDeferredCompositePixelInput input){
     const SamplerState sampler = NwbHeapSampler(g_NwbDeferredBindlessResources.lightingSlots.w);
-    const half3 opaqueColor = half3(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.x).Sample(sampler, input.uv).rgb);
-    const half4 transparentColorAccum = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.y).Sample(sampler, input.uv));
-    const half transparentExtinction = half(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.z).Sample(sampler, input.uv).r);
-    const half totalTransmittance = exp(-min(transparentExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
-    const half3 compositeColor = transparentColorAccum.rgb + opaqueColor * totalTransmittance;
+    const half3 compositeColor = half3(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.avboitWorkSlots1.z).Sample(sampler, input.uv).rgb);
 
     NwbDeferredCompositePixelOutput output;
     output.color = half4(compositeColor, half(1.0));

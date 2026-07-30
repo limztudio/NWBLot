@@ -150,7 +150,10 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
 
     const Handle deferredComposite = appendPass(RendererGpuTimingScope::s_DeferredComposite, "Deferred Composite");
     builder.addEdge(deferredTargets, deferredComposite, Edge::Reads);
-    builder.addEdge(deferredComposite, backBuffer, Edge::Writes);
+
+    const Handle deferredPresent = appendPass(RendererGpuTimingScope::s_DeferredPresent, "Deferred Present");
+    builder.addEdge(deferredComposite, deferredPresent, Edge::DependsOn);
+    builder.addEdge(deferredPresent, backBuffer, Edge::Writes);
 
     return true;
 }

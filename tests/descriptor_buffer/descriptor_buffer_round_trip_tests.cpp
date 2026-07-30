@@ -1115,11 +1115,11 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneChainsConcurrentAvboitWork
 }
 
 
-// Deferred lighting now joins the dedicated Compute lane after AVBOIT. The exclusive ray-effect outputs therefore
-// remain Compute-local through their only consumer; Graphics composite imports only the concurrently shared opaque
-// color result plus its Graphics-owned AVBOIT inputs. This exercises the narrow handoffs and verifies that no
-// Graphics acquire/release is needed before the next Compute reuse of shadow/caustic/surfel outputs.
-TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingInputsOnComputeUntilOpaqueComposite){
+// Deferred lighting and the logical composite now join the dedicated Compute lane after AVBOIT. The exclusive
+// ray-effect outputs therefore remain Compute-local through their only consumer; Graphics imports only the linear
+// composite image for presentation. This exercises the narrow handoffs and verifies that no Graphics acquire/release
+// is needed before the next Compute reuse of shadow/caustic/surfel outputs.
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCompositeOnComputeUntilPresent){
     HeadlessGraphicsScope asyncScope;
     ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
     if(!asyncScope.initialize())
@@ -1156,20 +1156,9 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingInput
 
     auto gbuffer = makeConcurrentTexture();
     auto opaqueColor = makeConcurrentTexture(true);
-    auto avboitColor = device.createTexture(
-        TextureDesc()
-            .setWidth(4u)
-            .setHeight(4u)
-            .setFormat(Format::RGBA8_UNORM)
-            .setInitialState(ResourceStates::Common)
-    );
-    auto avboitExtinction = device.createTexture(
-        TextureDesc()
-            .setWidth(4u)
-            .setHeight(4u)
-            .setFormat(Format::RGBA8_UNORM)
-            .setInitialState(ResourceStates::Common)
-    );
+    auto compositeColor = makeConcurrentTexture(true);
+    auto avboitColor = makeConcurrentTexture();
+    auto avboitExtinction = makeConcurrentTexture();
     auto shadowVisibility = makeExclusiveRayOutput();
     auto causticIrradiance = makeExclusiveRayOutput();
     auto surfelIrradiance = makeExclusiveRayOutput();
@@ -1182,6 +1171,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingInput
     );
     ASSERT_NE(gbuffer.get(), nullptr);
     ASSERT_NE(opaqueColor.get(), nullptr);
+    ASSERT_NE(compositeColor.get(), nullptr);
     ASSERT_NE(avboitColor.get(), nullptr);
     ASSERT_NE(avboitExtinction.get(), nullptr);
     ASSERT_NE(shadowVisibility.get(), nullptr);
@@ -1195,13 +1185,15 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingInput
     auto rayEffects = device.createCommandList(computeParams);
     auto avboit = device.createCommandList();
     auto lighting = device.createCommandList(computeParams);
-    auto composite = device.createCommandList();
+    auto composite = device.createCommandList(computeParams);
+    auto present = device.createCommandList();
     auto computeReuse = device.createCommandList(computeParams);
     ASSERT_NE(prefix.get(), nullptr);
     ASSERT_NE(rayEffects.get(), nullptr);
     ASSERT_NE(avboit.get(), nullptr);
     ASSERT_NE(lighting.get(), nullptr);
     ASSERT_NE(composite.get(), nullptr);
+    ASSERT_NE(present.get(), nullptr);
     ASSERT_NE(computeReuse.get(), nullptr);
 
     CommandListResourceStateHandoff prefixState(asyncScope.arena());
@@ -1214,11 +1206,15 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingInput
     CommandListResourceStateHandoff avboitLightingState(asyncScope.arena());
     CommandListResourceStateHandoff lightingInputState(asyncScope.arena());
     CommandListResourceStateHandoff lightingState(asyncScope.arena());
-    CommandListResourceStateHandoff opaqueGraphicsState(asyncScope.arena());
+    CommandListResourceStateHandoff opaqueCompositeState(asyncScope.arena());
     CommandListResourceStateHandoff avboitCompositeState(asyncScope.arena());
     CommandListResourceStateHandoff compositeBaseState(asyncScope.arena());
     CommandListResourceStateHandoff compositeInputState(asyncScope.arena());
     CommandListResourceStateHandoff compositeState(asyncScope.arena());
+    CommandListResourceStateHandoff compositePresentState(asyncScope.arena());
+    CommandListResourceStateHandoff presentBaseState(asyncScope.arena());
+    CommandListResourceStateHandoff presentInputState(asyncScope.arena());
+    CommandListResourceStateHandoff presentState(asyncScope.arena());
     CommandListResourceStateHandoff shadowReturnState(asyncScope.arena());
     CommandListResourceStateHandoff causticReturnState(asyncScope.arena());
     CommandListResourceStateHandoff surfelReturnState(asyncScope.arena());
@@ -1287,7 +1283,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingInput
     lighting->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
     lighting->close(&lightingState);
     ASSERT_TRUE(lightingState.valid());
-    ASSERT_TRUE(opaqueGraphicsState.buildTextureSubset(lightingState, opaqueColor.get()));
+    ASSERT_TRUE(opaqueCompositeState.buildTextureSubset(lightingState, opaqueColor.get()));
 
     Texture* const compositeBaseTextures[] = { avboitColor.get(), avboitExtinction.get() };
     ASSERT_TRUE(avboitCompositeState.buildResourceSubset(
@@ -1307,7 +1303,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingInput
     ));
     const CommandListResourceStateHandoff* const compositeBranches[] = {
         &avboitCompositeState,
-        &opaqueGraphicsState,
+        &opaqueCompositeState,
     };
     ASSERT_TRUE(compositeInputState.buildFanIn(compositeBaseState, compositeBranches, 2u));
 
@@ -1316,8 +1312,29 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingInput
     EXPECT_EQ(composite->getTextureSubresourceState(avboitColor.get(), 0u, 0u), ResourceStates::ShaderResource);
     EXPECT_EQ(composite->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::Unknown);
     composite->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    composite->setTextureState(avboitColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    composite->setTextureState(avboitExtinction.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    composite->setTextureState(compositeColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
     composite->close(&compositeState);
     ASSERT_TRUE(compositeState.valid());
+
+    ASSERT_TRUE(compositePresentState.buildTextureSubset(compositeState, compositeColor.get()));
+    Buffer* const presentBaseBuffers[] = { slotsBuffer.get() };
+    ASSERT_TRUE(presentBaseState.buildResourceSubset(
+        compositeBaseState,
+        nullptr,
+        0u,
+        presentBaseBuffers,
+        1u
+    ));
+    const CommandListResourceStateHandoff* const presentBranches[] = { &compositePresentState };
+    ASSERT_TRUE(presentInputState.buildFanIn(presentBaseState, presentBranches, 1u));
+    present->open(&presentInputState);
+    EXPECT_EQ(present->getTextureSubresourceState(compositeColor.get(), 0u, 0u), ResourceStates::Common);
+    EXPECT_EQ(present->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Unknown);
+    present->setTextureState(compositeColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    present->close(&presentState);
+    ASSERT_TRUE(presentState.valid());
 
     ASSERT_TRUE(shadowReturnState.buildTextureSubset(lightingState, shadowVisibility.get()));
     ASSERT_TRUE(causticReturnState.buildTextureSubset(lightingState, causticIrradiance.get()));
@@ -1376,18 +1393,27 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingInput
     );
     ASSERT_TRUE(lightingToken.valid());
 
-    const QueueSubmissionDesc compositeSubmitDesc = QueueSubmissionDesc().setWaitTokens(&lightingToken, 1u);
     CommandList* compositeLists[] = { composite.get() };
     const QueueSubmissionToken compositeToken = device.executeCommandLists(
         compositeLists,
         1u,
-        RenderLane::Graphics,
-        compositeSubmitDesc
+        RenderLane::AsyncCompute,
+        QueueSubmissionDesc{}
     );
     ASSERT_TRUE(compositeToken.valid());
 
-    // This reuse is ordered after lighting by the same AsyncCompute queue. It deliberately does not wait for the
-    // Graphics composite because that packet never imports any exclusive ray-effect output.
+    const QueueSubmissionDesc presentSubmitDesc = QueueSubmissionDesc().setWaitTokens(&compositeToken, 1u);
+    CommandList* presentLists[] = { present.get() };
+    const QueueSubmissionToken presentToken = device.executeCommandLists(
+        presentLists,
+        1u,
+        RenderLane::Graphics,
+        presentSubmitDesc
+    );
+    ASSERT_TRUE(presentToken.valid());
+
+    // This reuse is ordered after composite by the same AsyncCompute queue. It deliberately does not wait for the
+    // Graphics present packet because that packet imports only the concurrent composite presentation image.
     CommandList* reuseLists[] = { computeReuse.get() };
     const QueueSubmissionToken reuseToken = device.executeCommandLists(
         reuseLists,

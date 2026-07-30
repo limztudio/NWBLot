@@ -43,6 +43,7 @@ inline constexpr Core::GpuTimingScopeDefinition s_CausticPhotons("render.caustic
 inline constexpr Core::GpuTimingScopeDefinition s_CausticResolve("render.caustic_resolve");
 inline constexpr Core::GpuTimingScopeDefinition s_DeferredLighting("render.deferred_lighting");
 inline constexpr Core::GpuTimingScopeDefinition s_DeferredComposite("render.deferred_composite");
+inline constexpr Core::GpuTimingScopeDefinition s_DeferredPresent("render.deferred_present");
 inline constexpr Core::GpuTimingScopeDefinition s_MaterialUpload("render.material_upload");
 inline constexpr Core::GpuTimingScopeDefinition s_OpaqueRegular("render.opaque_regular");
 inline constexpr Core::GpuTimingScopeDefinition s_OpaqueCsgReceiverSurface("render.opaque_csg_receiver_surface");

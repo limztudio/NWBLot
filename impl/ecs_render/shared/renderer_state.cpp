@@ -134,10 +134,13 @@ void RendererDeferredState::invalidateResources(){
     m_compositeVertexShader.reset();
     m_lightingComputeShader.reset();
     m_lightingPipeline.reset();
-    m_compositeBindingLayout.reset();
+    m_compositeComputeBindingLayout.reset();
+    m_compositeComputeShader.reset();
+    m_compositeComputePipeline.reset();
+    m_presentBindingLayout.reset();
     m_sampler.reset();
-    m_compositePixelShader.reset();
-    m_compositePipeline.reset();
+    m_presentPixelShader.reset();
+    m_presentPipeline.reset();
     m_sceneShadingGpuDataValid = false;
     m_targets = DeferredFrameTargets{};
 }

@@ -172,10 +172,14 @@ private:
     Core::CommandListResourceStateHandoff m_deferredLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_avboitLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_avboitCompositeStateHandoff;
-    Core::CommandListResourceStateHandoff m_opaqueColorGraphicsStateHandoff;
+    Core::CommandListResourceStateHandoff m_opaqueColorCompositeStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredCompositeBaseStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredCompositeInputStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredCompositeStateHandoff;
+    Core::CommandListResourceStateHandoff m_compositeColorPresentStateHandoff;
+    Core::CommandListResourceStateHandoff m_deferredPresentBaseStateHandoff;
+    Core::CommandListResourceStateHandoff m_deferredPresentInputStateHandoff;
+    Core::CommandListResourceStateHandoff m_deferredPresentStateHandoff;
     // AVBOIT's raster occupancy/extinction/accumulation stages stay on Graphics, while the depth-warp and integration
     // dispatches run on AsyncCompute. All inter-stage work resources use concurrent sharing; these handoffs carry
     // state only and are submitted in strict Graphics -> Compute -> Graphics order.
@@ -211,6 +215,7 @@ private:
     Core::CommandListHandle m_surfelGiCommandList;
     Core::CommandListHandle m_asyncDeferredLightingCommandList;
     Core::CommandListHandle m_deferredLightingCommandList;
+    Core::CommandListHandle m_asyncDeferredCompositeCommandList;
     // The hybrid AVBOIT packet uses Graphics lists for raster phases and AsyncCompute lists for its two pure dispatches.
     Core::CommandListHandle m_avboitCommandList;
     Core::CommandListHandle m_asyncAvboitDepthWarpCommandList;
@@ -218,6 +223,9 @@ private:
     Core::CommandListHandle m_asyncAvboitIntegrationCommandList;
     Core::CommandListHandle m_avboitAccumulateCommandList;
     Core::CommandListHandle m_deferredCompositeCommandList;
+    // Surface images are not required to support storage writes, so a short Graphics raster present pass follows the
+    // Compute composite result on both the fallback and dedicated schedules.
+    Core::CommandListHandle m_deferredPresentCommandList;
     Core::CommandListHandle m_shadowPrepareCommandList;
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;

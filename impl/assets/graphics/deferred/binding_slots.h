@@ -36,8 +36,11 @@
 #define NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_COLOR 1
 #define NWB_DEFERRED_COMPOSITE_BINDING_AVBOIT_ACCUM_EXTINCTION 2
 #define NWB_DEFERRED_COMPOSITE_BINDING_SAMPLER 3
-// Slots 0..3 remain reserved ABI positions; compositing uses the shared per-frame bindless slot cbuffer at 4.
+// Slots 0..3 remain reserved ABI positions; the composite compute dispatch and Graphics presentation blit use the
+// shared per-frame bindless slot cbuffer at 4.
 #define NWB_DEFERRED_COMPOSITE_BINDING_BINDLESS_RESOURCES 4
+
+#define NWB_DEFERRED_COMPOSITE_GROUP_SIZE 8
 
 #define NWB_DEFERRED_FULLSCREEN_UV_LOCATION 0
 #define NWB_DEFERRED_COLOR_TARGET_LOCATION 0

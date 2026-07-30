@@ -249,10 +249,13 @@ private:
     Core::ShaderHandle m_compositeVertexShader;
     Core::ShaderHandle m_lightingComputeShader;
     Core::ComputePipelineHandle m_lightingPipeline;
-    Core::BindingLayoutHandle m_compositeBindingLayout;
+    Core::BindingLayoutHandle m_compositeComputeBindingLayout;
+    Core::ShaderHandle m_compositeComputeShader;
+    Core::ComputePipelineHandle m_compositeComputePipeline;
+    Core::BindingLayoutHandle m_presentBindingLayout;
     Core::SamplerHandle m_sampler;
-    Core::ShaderHandle m_compositePixelShader;
-    Core::GraphicsPipelineHandle m_compositePipeline;
+    Core::ShaderHandle m_presentPixelShader;
+    Core::GraphicsPipelineHandle m_presentPipeline;
     u8 m_sceneShadingGpuData[sizeof(f32) * NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT] = {};
     bool m_sceneShadingGpuDataValid = false;
     DeferredFrameTargets m_targets;

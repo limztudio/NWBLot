@@ -67,10 +67,14 @@ RendererSystem::RendererSystem(
     , m_deferredLightingStateHandoff(arena)
     , m_avboitLightingStateHandoff(arena)
     , m_avboitCompositeStateHandoff(arena)
-    , m_opaqueColorGraphicsStateHandoff(arena)
+    , m_opaqueColorCompositeStateHandoff(arena)
     , m_deferredCompositeBaseStateHandoff(arena)
     , m_deferredCompositeInputStateHandoff(arena)
     , m_deferredCompositeStateHandoff(arena)
+    , m_compositeColorPresentStateHandoff(arena)
+    , m_deferredPresentBaseStateHandoff(arena)
+    , m_deferredPresentInputStateHandoff(arena)
+    , m_deferredPresentStateHandoff(arena)
     , m_avboitPreStateHandoff(arena)
     , m_avboitDepthWarpInputStateHandoff(arena)
     , m_avboitDepthWarpStateHandoff(arena)
@@ -141,9 +145,13 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
         m_deferredLightingStateHandoff.reset();
         m_avboitLightingStateHandoff.reset();
         m_avboitCompositeStateHandoff.reset();
-        m_opaqueColorGraphicsStateHandoff.reset();
+        m_opaqueColorCompositeStateHandoff.reset();
         m_deferredCompositeBaseStateHandoff.reset();
         m_deferredCompositeInputStateHandoff.reset();
+        m_compositeColorPresentStateHandoff.reset();
+        m_deferredPresentBaseStateHandoff.reset();
+        m_deferredPresentInputStateHandoff.reset();
+        m_deferredPresentStateHandoff.reset();
         m_surfelIrradianceReturnStateHandoff.reset();
         m_avboitPreStateHandoff.reset();
         m_avboitDepthWarpInputStateHandoff.reset();
@@ -161,7 +169,7 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
         return false;
 
     if(Core::Framebuffer* presentationFramebuffer = m_graphics.getCurrentFramebuffer()){
-        if(!m_deferredSystem.createDeferredCompositePipeline(presentationFramebuffer))
+        if(!m_deferredSystem.createDeferredPresentPipeline(presentationFramebuffer))
             return false;
     }
 
@@ -217,10 +225,14 @@ void RendererSystem::invalidateResources(){
     m_deferredLightingStateHandoff.reset();
     m_avboitLightingStateHandoff.reset();
     m_avboitCompositeStateHandoff.reset();
-    m_opaqueColorGraphicsStateHandoff.reset();
+    m_opaqueColorCompositeStateHandoff.reset();
     m_deferredCompositeBaseStateHandoff.reset();
     m_deferredCompositeInputStateHandoff.reset();
     m_deferredCompositeStateHandoff.reset();
+    m_compositeColorPresentStateHandoff.reset();
+    m_deferredPresentBaseStateHandoff.reset();
+    m_deferredPresentInputStateHandoff.reset();
+    m_deferredPresentStateHandoff.reset();
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpInputStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
@@ -245,12 +257,14 @@ void RendererSystem::invalidateResources(){
     m_surfelGiCommandList.reset();
     m_asyncDeferredLightingCommandList.reset();
     m_deferredLightingCommandList.reset();
+    m_asyncDeferredCompositeCommandList.reset();
     m_avboitCommandList.reset();
     m_asyncAvboitDepthWarpCommandList.reset();
     m_avboitExtinctionCommandList.reset();
     m_asyncAvboitIntegrationCommandList.reset();
     m_avboitAccumulateCommandList.reset();
     m_deferredCompositeCommandList.reset();
+    m_deferredPresentCommandList.reset();
     m_shadowPrepareCommandList.reset();
     m_asyncRenderRecoveryFailed = false;
     // The descriptor-buffer TLAS descriptor owns a retained acceleration-structure handle until its in-flight-frame
@@ -398,6 +412,15 @@ bool RendererSystem::ensureFrameCommandLists(){
                 return false;
             }
         }
+        if(!m_asyncDeferredCompositeCommandList){
+            Core::CommandListParameters asyncDeferredCompositeCommandListParameters;
+            asyncDeferredCompositeCommandListParameters.setRenderLane(Core::RenderLane::AsyncCompute);
+            m_asyncDeferredCompositeCommandList = device.createCommandList(asyncDeferredCompositeCommandListParameters);
+            if(!m_asyncDeferredCompositeCommandList){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async deferred-composite command list"));
+                return false;
+            }
+        }
         if(!m_asyncAvboitDepthWarpCommandList){
             Core::CommandListParameters asyncAvboitDepthWarpCommandListParameters;
             asyncAvboitDepthWarpCommandListParameters.setRenderLane(Core::RenderLane::AsyncCompute);
@@ -472,6 +495,14 @@ bool RendererSystem::ensureFrameCommandLists(){
         }
     }
 
+    if(!m_deferredPresentCommandList){
+        m_deferredPresentCommandList = device.createCommandList();
+        if(!m_deferredPresentCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred-present command list"));
+            return false;
+        }
+    }
+
     if(!m_shadowPrepareCommandList){
         m_shadowPrepareCommandList = device.createCommandList();
         if(!m_shadowPrepareCommandList){
@@ -506,6 +537,7 @@ bool RendererSystem::prepareGpuTimingScopes(){
         { &RendererGpuTimingScope::s_CausticResolve, 2u },
         { &RendererGpuTimingScope::s_DeferredLighting, 2u },
         { &RendererGpuTimingScope::s_DeferredComposite, 2u },
+        { &RendererGpuTimingScope::s_DeferredPresent, 2u },
         { &RendererGpuTimingScope::s_MaterialUpload, 2u },
         { &RendererGpuTimingScope::s_OpaqueRegular, 2u },
         { &RendererGpuTimingScope::s_OpaqueCsgReceiverSurface, 2u },
@@ -621,8 +653,10 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     NWB_ASSERT(m_surfelGiCommandList);
     NWB_ASSERT(!m_graphics.getDevice().isRenderLaneDedicated(Core::RenderLane::AsyncCompute) || m_asyncDeferredLightingCommandList);
     NWB_ASSERT(m_deferredLightingCommandList);
+    NWB_ASSERT(!m_graphics.getDevice().isRenderLaneDedicated(Core::RenderLane::AsyncCompute) || m_asyncDeferredCompositeCommandList);
     NWB_ASSERT(m_avboitCommandList);
     NWB_ASSERT(m_deferredCompositeCommandList);
+    NWB_ASSERT(m_deferredPresentCommandList);
     NWB_ASSERT(m_shadowPrepareCommandList);
 
     auto& device = m_graphics.getDevice();
@@ -773,12 +807,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? asyncDeferredLightingCommandList
         : graphicsDeferredLightingCommandList
     ;
+    Core::CommandList* graphicsDeferredCompositeCommandList = m_deferredCompositeCommandList.get();
+    Core::CommandList* asyncDeferredCompositeCommandList = m_asyncDeferredCompositeCommandList.get();
+    Core::CommandList* deferredCompositeCommandList = asyncShadowSchedule
+        ? asyncDeferredCompositeCommandList
+        : graphicsDeferredCompositeCommandList
+    ;
     Core::CommandList* avboitCommandList = m_avboitCommandList.get();
     Core::CommandList* asyncAvboitDepthWarpCommandList = m_asyncAvboitDepthWarpCommandList.get();
     Core::CommandList* avboitExtinctionCommandList = m_avboitExtinctionCommandList.get();
     Core::CommandList* asyncAvboitIntegrationCommandList = m_asyncAvboitIntegrationCommandList.get();
     Core::CommandList* avboitAccumulateCommandList = m_avboitAccumulateCommandList.get();
-    Core::CommandList* deferredCompositeCommandList = m_deferredCompositeCommandList.get();
+    Core::CommandList* deferredPresentCommandList = m_deferredPresentCommandList.get();
     NWB_ASSERT(meshViewSetupCommandList);
     NWB_ASSERT(sceneShadingSetupCommandList);
     NWB_ASSERT(deferredClearCommandList);
@@ -797,12 +837,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(graphicsDeferredLightingCommandList);
     NWB_ASSERT(!asyncShadowSchedule || asyncDeferredLightingCommandList);
     NWB_ASSERT(deferredLightingCommandList);
+    NWB_ASSERT(graphicsDeferredCompositeCommandList);
+    NWB_ASSERT(!asyncShadowSchedule || asyncDeferredCompositeCommandList);
+    NWB_ASSERT(deferredCompositeCommandList);
     NWB_ASSERT(avboitCommandList);
     NWB_ASSERT(!asyncAvboitSchedule || asyncAvboitDepthWarpCommandList);
     NWB_ASSERT(!asyncAvboitSchedule || avboitExtinctionCommandList);
     NWB_ASSERT(!asyncAvboitSchedule || asyncAvboitIntegrationCommandList);
     NWB_ASSERT(!asyncAvboitSchedule || avboitAccumulateCommandList);
-    NWB_ASSERT(deferredCompositeCommandList);
+    NWB_ASSERT(deferredPresentCommandList);
     if(
         !meshViewSetupCommandList
         || !sceneShadingSetupCommandList
@@ -822,12 +865,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !graphicsDeferredLightingCommandList
         || (asyncShadowSchedule && !asyncDeferredLightingCommandList)
         || !deferredLightingCommandList
+        || !graphicsDeferredCompositeCommandList
+        || (asyncShadowSchedule && !asyncDeferredCompositeCommandList)
+        || !deferredCompositeCommandList
         || !avboitCommandList
         || (asyncAvboitSchedule && !asyncAvboitDepthWarpCommandList)
         || (asyncAvboitSchedule && !avboitExtinctionCommandList)
         || (asyncAvboitSchedule && !asyncAvboitIntegrationCommandList)
         || (asyncAvboitSchedule && !avboitAccumulateCommandList)
-        || !deferredCompositeCommandList
+        || !deferredPresentCommandList
     )
         return;
 
@@ -854,10 +900,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredLightingStateHandoff.reset();
     m_avboitLightingStateHandoff.reset();
     m_avboitCompositeStateHandoff.reset();
-    m_opaqueColorGraphicsStateHandoff.reset();
+    m_opaqueColorCompositeStateHandoff.reset();
     m_deferredCompositeBaseStateHandoff.reset();
     m_deferredCompositeInputStateHandoff.reset();
     m_deferredCompositeStateHandoff.reset();
+    m_compositeColorPresentStateHandoff.reset();
+    m_deferredPresentBaseStateHandoff.reset();
+    m_deferredPresentInputStateHandoff.reset();
+    m_deferredPresentStateHandoff.reset();
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpInputStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
@@ -993,6 +1043,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingSubmissionTicket avboitIntegrationTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket avboitAccumulateTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket lightingTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket compositeTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket finalTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket* const prefixTimingTicketForPacket = asyncShadowSchedule ? &prefixTimingTicket : &renderTimingTicket;
     Core::GpuTimingSubmissionTicket* const shadowTimingTicketForPacket = asyncShadowSchedule ? &shadowTimingTicket : &renderTimingTicket;
@@ -1012,6 +1063,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     ;
     Core::GpuTimingSubmissionTicket* const lightingTimingTicketForPacket = asyncShadowSchedule
         ? &lightingTimingTicket
+        : &renderTimingTicket
+    ;
+    Core::GpuTimingSubmissionTicket* const compositeTimingTicketForPacket = asyncShadowSchedule
+        ? &compositeTimingTicket
         : &renderTimingTicket
     ;
     Core::GpuTimingSubmissionTicket* const finalTimingTicketForPacket = asyncShadowSchedule ? &finalTimingTicket : &renderTimingTicket;
@@ -1036,6 +1091,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         avboitIntegrationTimingTicket.discard();
         avboitAccumulateTimingTicket.discard();
         lightingTimingTicket.discard();
+        compositeTimingTicket.discard();
         finalTimingTicket.discard();
     };
     const auto discardRenderPackets = [&](){
@@ -1081,10 +1137,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingStateHandoff.reset();
         m_avboitLightingStateHandoff.reset();
         m_avboitCompositeStateHandoff.reset();
-        m_opaqueColorGraphicsStateHandoff.reset();
+        m_opaqueColorCompositeStateHandoff.reset();
         m_deferredCompositeBaseStateHandoff.reset();
         m_deferredCompositeInputStateHandoff.reset();
         m_deferredCompositeStateHandoff.reset();
+        m_compositeColorPresentStateHandoff.reset();
+        m_deferredPresentBaseStateHandoff.reset();
+        m_deferredPresentInputStateHandoff.reset();
+        m_deferredPresentStateHandoff.reset();
         m_avboitPreStateHandoff.reset();
         m_avboitDepthWarpInputStateHandoff.reset();
         m_avboitDepthWarpStateHandoff.reset();
@@ -2267,11 +2327,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    if(!m_opaqueColorGraphicsStateHandoff.buildTextureSubset(
+    if(!m_opaqueColorCompositeStateHandoff.buildTextureSubset(
         m_deferredLightingStateHandoff,
         deferredTargets.opaqueColor.get()
     )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the deferred-lighting output for Graphics composite"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the deferred-lighting output for Compute composite"));
         discardRenderPackets();
         return;
     }
@@ -2306,7 +2366,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
     const Core::CommandListResourceStateHandoff* deferredCompositeBranchStates[] = {
         &m_avboitCompositeStateHandoff,
-        &m_opaqueColorGraphicsStateHandoff,
+        &m_opaqueColorCompositeStateHandoff,
     };
     if(!m_deferredCompositeInputStateHandoff.buildFanIn(
         m_deferredCompositeBaseStateHandoff,
@@ -2321,53 +2381,20 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     bool deferredCompositeCommandListReady = false;
     const Core::Graphics::JobHandle deferredCompositeRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
-        framebuffer,
         &deferredTargets,
         deferredCompositeCommandList,
-        &frameTiming,
-        &asyncFrameTiming,
-        &asyncFinalTiming,
         &deferredCompositeCommandListReady,
-        asyncShadowSchedule,
-        finalTimingTicketForPacket
+        compositeTimingTicketForPacket
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*finalTimingTicketForPacket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*compositeTimingTicketForPacket);
         deferredCompositeCommandList->open(&m_deferredCompositeInputStateHandoff);
         if(!deferredCompositeCommandList->hasCommandBuffer())
             return;
 
-        if(asyncShadowSchedule){
-            asyncFinalTiming.emplace(
-                m_graphics.gpuTiming(),
-                RendererGpuTimingScope::s_AsyncFinal,
-                m_graphics.getDevice(),
-                *deferredCompositeCommandList
-            );
-            asyncFinalTiming->finishMarker();
-        }
-
-        const bool deferredCompositeRecorded = m_deferredSystem.renderDeferredComposite(
-            *deferredCompositeCommandList,
-            deferredTargets,
-            framebuffer
-        );
-
-        bool asyncFrameTimingEnded = true;
-        // This endpoint completes the legacy one-submission frame scope and records the dedicated path's deferred
-        // critical-path endpoint. The latter is not published until Graphics final is accepted below.
-        if(frameTiming)
-            frameTiming->finishTiming(*deferredCompositeCommandList);
-        if(asyncShadowSchedule && deferredCompositeRecorded){
-            if(asyncFinalTiming){
-                asyncFinalTiming->finishTiming(*deferredCompositeCommandList);
-                asyncFinalTiming.reset();
-            }
-            asyncFrameTimingEnded = asyncFrameTiming.recordEnd(*deferredCompositeCommandList);
-        }
+        const bool deferredCompositeRecorded = m_deferredSystem.renderDeferredComposite(*deferredCompositeCommandList, deferredTargets);
         deferredCompositeCommandList->close(&m_deferredCompositeStateHandoff);
         deferredCompositeCommandListReady =
             deferredCompositeRecorded
-            && asyncFrameTimingEnded
             && m_deferredCompositeStateHandoff.valid()
             && deferredCompositeCommandList->hasCommandBuffer()
         ;
@@ -2379,6 +2406,106 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     m_graphics.waitJob(deferredCompositeRecordingJob);
     if(!deferredCompositeCommandListReady){
+        discardRenderPackets();
+        return;
+    }
+
+    if(!m_compositeColorPresentStateHandoff.buildTextureSubset(
+        m_deferredCompositeStateHandoff,
+        deferredTargets.compositeColor.get()
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the Compute composite output for Graphics presentation"));
+        discardRenderPackets();
+        return;
+    }
+    Core::Buffer* const deferredPresentBaseBuffers[] = {
+        deferredTargets.bindless.slotsBuffer.get(),
+    };
+    if(!m_deferredPresentBaseStateHandoff.buildResourceSubset(
+        m_deferredCompositeBaseStateHandoff,
+        nullptr,
+        0u,
+        deferredPresentBaseBuffers,
+        sizeof(deferredPresentBaseBuffers) / sizeof(deferredPresentBaseBuffers[0])
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-present base state selection failed"));
+        discardRenderPackets();
+        return;
+    }
+    const Core::CommandListResourceStateHandoff* deferredPresentBranchStates[] = {
+        &m_compositeColorPresentStateHandoff,
+    };
+    if(!m_deferredPresentInputStateHandoff.buildFanIn(
+        m_deferredPresentBaseStateHandoff,
+        deferredPresentBranchStates,
+        1u
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-present state fan-in failed"));
+        discardRenderPackets();
+        return;
+    }
+
+    bool deferredPresentCommandListReady = false;
+    const Core::Graphics::JobHandle deferredPresentRecordingJob = m_graphics.scheduleGraphicsJob([
+        this,
+        framebuffer,
+        &deferredTargets,
+        deferredPresentCommandList,
+        &frameTiming,
+        &asyncFrameTiming,
+        &asyncFinalTiming,
+        &deferredPresentCommandListReady,
+        asyncShadowSchedule,
+        finalTimingTicketForPacket
+    ](){
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*finalTimingTicketForPacket);
+        deferredPresentCommandList->open(&m_deferredPresentInputStateHandoff);
+        if(!deferredPresentCommandList->hasCommandBuffer())
+            return;
+
+        if(asyncShadowSchedule){
+            asyncFinalTiming.emplace(
+                m_graphics.gpuTiming(),
+                RendererGpuTimingScope::s_AsyncFinal,
+                m_graphics.getDevice(),
+                *deferredPresentCommandList
+            );
+            asyncFinalTiming->finishMarker();
+        }
+
+        const bool deferredPresentRecorded = m_deferredSystem.renderDeferredPresent(
+            *deferredPresentCommandList,
+            deferredTargets,
+            framebuffer
+        );
+
+        bool asyncFrameTimingEnded = true;
+        // This endpoint completes the legacy one-submission frame scope and records the dedicated path's deferred
+        // critical-path endpoint. The latter is not published until Graphics presentation accepts below.
+        if(frameTiming)
+            frameTiming->finishTiming(*deferredPresentCommandList);
+        if(asyncShadowSchedule && deferredPresentRecorded){
+            if(asyncFinalTiming){
+                asyncFinalTiming->finishTiming(*deferredPresentCommandList);
+                asyncFinalTiming.reset();
+            }
+            asyncFrameTimingEnded = asyncFrameTiming.recordEnd(*deferredPresentCommandList);
+        }
+        deferredPresentCommandList->close(&m_deferredPresentStateHandoff);
+        deferredPresentCommandListReady =
+            deferredPresentRecorded
+            && asyncFrameTimingEnded
+            && m_deferredPresentStateHandoff.valid()
+            && deferredPresentCommandList->hasCommandBuffer()
+        ;
+    });
+    if(!deferredPresentRecordingJob.valid()){
+        discardRenderPackets();
+        return;
+    }
+
+    m_graphics.waitJob(deferredPresentRecordingJob);
+    if(!deferredPresentCommandListReady){
         discardRenderPackets();
         return;
     }
@@ -2397,11 +2524,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitCommandList,
             deferredLightingCommandList,
             deferredCompositeCommandList,
+            deferredPresentCommandList,
         };
         const Core::QueueSubmissionToken fallbackSubmissionToken = renderTimingTicket.submit(
             device,
             commandLists,
-            11u,
+            12u,
             Core::RenderLane::Graphics,
             Core::QueueSubmissionDesc{}
         );
@@ -2553,10 +2681,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingStateHandoff.reset();
         m_avboitLightingStateHandoff.reset();
         m_avboitCompositeStateHandoff.reset();
-        m_opaqueColorGraphicsStateHandoff.reset();
+        m_opaqueColorCompositeStateHandoff.reset();
         m_deferredCompositeBaseStateHandoff.reset();
         m_deferredCompositeInputStateHandoff.reset();
         m_deferredCompositeStateHandoff.reset();
+        m_compositeColorPresentStateHandoff.reset();
+        m_deferredPresentBaseStateHandoff.reset();
+        m_deferredPresentInputStateHandoff.reset();
+        m_deferredPresentStateHandoff.reset();
         m_avboitPreStateHandoff.reset();
         m_avboitDepthWarpInputStateHandoff.reset();
         m_avboitDepthWarpStateHandoff.reset();
@@ -2602,6 +2734,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         avboitIntegrationTimingTicket.discard();
         avboitAccumulateTimingTicket.discard();
         lightingTimingTicket.discard();
+        compositeTimingTicket.discard();
         finalTimingTicket.discard();
         restoreUnacceptedGraphicsEffectsCpuState();
         m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
@@ -2648,6 +2781,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         avboitIntegrationTimingTicket.discard();
         avboitAccumulateTimingTicket.discard();
         lightingTimingTicket.discard();
+        compositeTimingTicket.discard();
         finalTimingTicket.discard();
         restoreUnacceptedGraphicsEffectsCpuState();
         m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
@@ -2680,6 +2814,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitIntegrationTimingTicket.discard();
             avboitAccumulateTimingTicket.discard();
             lightingTimingTicket.discard();
+            compositeTimingTicket.discard();
             finalTimingTicket.discard();
             restoreGraphicsEffectsCpuState();
             static_cast<void>(recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken));
@@ -2716,6 +2851,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitIntegrationTimingTicket.discard();
             avboitAccumulateTimingTicket.discard();
             lightingTimingTicket.discard();
+            compositeTimingTicket.discard();
             finalTimingTicket.discard();
             restoreUnacceptedGraphicsEffectsCpuState();
             static_cast<void>(recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken));
@@ -2749,6 +2885,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitIntegrationTimingTicket.discard();
             avboitAccumulateTimingTicket.discard();
             lightingTimingTicket.discard();
+            compositeTimingTicket.discard();
             restoreUnacceptedGraphicsEffectsCpuState();
             if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
                 failAsyncRenderRecovery();
@@ -2771,6 +2908,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitIntegrationTimingTicket.discard();
             avboitAccumulateTimingTicket.discard();
             lightingTimingTicket.discard();
+            compositeTimingTicket.discard();
             if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
                 failAsyncRenderRecovery();
             return;
@@ -2792,6 +2930,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitIntegrationTimingTicket.discard();
             avboitAccumulateTimingTicket.discard();
             lightingTimingTicket.discard();
+            compositeTimingTicket.discard();
             if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
                 failAsyncRenderRecovery();
             return;
@@ -2811,6 +2950,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             finalTimingTicket.discard();
             avboitAccumulateTimingTicket.discard();
             lightingTimingTicket.discard();
+            compositeTimingTicket.discard();
             if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
                 failAsyncRenderRecovery();
             return;
@@ -2830,6 +2970,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!avboitFinalSubmissionToken.valid()){
             finalTimingTicket.discard();
             lightingTimingTicket.discard();
+            compositeTimingTicket.discard();
             if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
                 failAsyncRenderRecovery();
             return;
@@ -2855,6 +2996,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!avboitFinalSubmissionToken.valid()){
             finalTimingTicket.discard();
             lightingTimingTicket.discard();
+            compositeTimingTicket.discard();
             restoreUnacceptedGraphicsEffectsCpuState();
             if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
                 failAsyncRenderRecovery();
@@ -2864,7 +3006,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     // The AsyncCompute lighting dispatch waits for the last AVBOIT Graphics packet. It is already ordered after the
     // ray-effect packet on the same Compute queue, so shadow/caustic/surfel remain local to Compute until shading
-    // has consumed them. Graphics final then receives only the concurrent opaque-color result for compositing.
+    // and compute composite have consumed them. Graphics then receives only the composite presentation image.
     Core::QueueSubmissionDesc lightingSubmitDesc;
     lightingSubmitDesc.setWaitTokens(&avboitFinalSubmissionToken, 1u);
     Core::CommandList* lightingCommandLists[] = { deferredLightingCommandList };
@@ -2876,6 +3018,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         lightingSubmitDesc
     );
     if(!lightingSubmissionToken.valid()){
+        compositeTimingTicket.discard();
         finalTimingTicket.discard();
         if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
             failAsyncRenderRecovery();
@@ -2898,6 +3041,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ))
     ;
     if(!lightingReturnStatesReady){
+        compositeTimingTicket.discard();
         finalTimingTicket.discard();
         if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
             failAsyncRenderRecovery();
@@ -2906,9 +3050,27 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
+    // Submissions to one Vulkan queue are ordered, so the compute composite follows lighting without an additional
+    // semaphore. Its token is nevertheless retained for the Graphics presentation dependency and recovery join.
+    Core::CommandList* compositeCommandLists[] = { deferredCompositeCommandList };
+    const Core::QueueSubmissionToken compositeSubmissionToken = compositeTimingTicket.submit(
+        device,
+        compositeCommandLists,
+        1u,
+        Core::RenderLane::AsyncCompute,
+        Core::QueueSubmissionDesc{}
+    );
+    if(!compositeSubmissionToken.valid()){
+        finalTimingTicket.discard();
+        if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+            failAsyncRenderRecovery();
+        return;
+    }
+    latestAsyncComputeSubmissionToken = compositeSubmissionToken;
+
     Core::QueueSubmissionDesc finalSubmitDesc;
-    finalSubmitDesc.setWaitTokens(&lightingSubmissionToken, 1u);
-    Core::CommandList* finalCommandLists[] = { deferredCompositeCommandList };
+    finalSubmitDesc.setWaitTokens(&compositeSubmissionToken, 1u);
+    Core::CommandList* finalCommandLists[] = { deferredPresentCommandList };
     const Core::QueueSubmissionToken finalSubmissionToken = finalTimingTicket.submit(
         device,
         finalCommandLists,

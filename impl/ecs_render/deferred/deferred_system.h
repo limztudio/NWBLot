@@ -36,12 +36,14 @@ public:
     [[nodiscard]] bool renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool createDeferredFrameTargets(u32 width, u32 height);
     [[nodiscard]] bool createDeferredCompositeResources();
-    [[nodiscard]] bool createDeferredCompositePipeline(Core::Framebuffer* presentationFramebuffer);
+    [[nodiscard]] bool createDeferredCompositePipeline();
+    [[nodiscard]] bool createDeferredPresentPipeline(Core::Framebuffer* presentationFramebuffer);
     void resetAvboitFrameTargets(AvboitFrameTargets& targets);
     void resetDeferredFrameTargets();
     void clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, bool clearCsgTargets, const Core::Rect& csgClearRect, bool clearSurfelIrradiance);
     void clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::Rect& csgClearRect);
-    [[nodiscard]] bool renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Framebuffer* presentationFramebuffer);
+    [[nodiscard]] bool renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    [[nodiscard]] bool renderDeferredPresent(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Framebuffer* presentationFramebuffer);
     // One-time target-generation upload shared by every consumer of DeferredBindlessResourceSlots. Shadow tracing runs
     // before deferred lighting, so it must be able to make the slot cbuffer resident during shadow preparation.
     [[nodiscard]] bool uploadDeferredBindlessFrameResources(Core::CommandList& commandList, DeferredFrameTargets& targets);

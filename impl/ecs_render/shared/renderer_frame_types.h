@@ -136,8 +136,8 @@ struct DeferredBindlessResourceSlots{
     u32 opaqueColor = 0u;
     u32 avboitAccumColor = 0u;
     u32 avboitAccumExtinction = 0u;
-    // The lighting compute dispatch writes this StorageImage view. The compositor keeps using opaqueColor above as
-    // its sampled view, so the same physical target remains a narrow AsyncCompute -> Graphics handoff.
+    // The lighting compute dispatch writes this StorageImage view. The following composite dispatch consumes the
+    // sampled opaqueColor view above on the same Compute lane.
     u32 opaqueColorStorage = 0u;
 
     u32 avboitTransmittance = 0u;
@@ -155,8 +155,10 @@ struct DeferredBindlessResourceSlots{
 
     u32 avboitExtinctionOverflow = 0u;
     u32 avboitTransmittanceStorage = 0u;
-    u32 _avboitWorkPad1 = 0u;
-    u32 _avboitWorkPad2 = 0u;
+    // The logical deferred composite writes this full-resolution StorageImage, then the Graphics presentation blit
+    // samples its SRV view. Reusing the two reserved AVBOIT-work lanes preserves the nine-lane target-slot ABI.
+    u32 compositeColor = 0u;
+    u32 compositeColorStorage = 0u;
 
     // CSG interval/peel targets are all Texture2DArray storage images. Their typed shader aliases share the global
     // StorageImage descriptor array; these lanes only select the per-target heap slots.
@@ -205,6 +207,8 @@ struct DeferredBindlessFrameResources{
     Core::GpuDescriptorHandle sampler = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle opaqueColor = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle opaqueColorStorage = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle compositeColor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle compositeColorStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitAccumColor = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitAccumExtinction = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitTransmittance = Core::GpuDescriptorHandle::invalid();
@@ -289,6 +293,8 @@ struct DeferredBindlessFrameResources{
             && sampler.valid()
             && opaqueColor.valid()
             && opaqueColorStorage.valid()
+            && compositeColor.valid()
+            && compositeColorStorage.valid()
             && avboitAccumColor.valid()
             && avboitAccumExtinction.valid()
             && avboitTransmittance.valid()
@@ -352,6 +358,7 @@ struct DeferredFrameTargets{
     Core::Format::Enum normalFormat = Core::Format::UNKNOWN;
     Core::Format::Enum worldPositionFormat = Core::Format::UNKNOWN;
     Core::Format::Enum opaqueColorFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum compositeColorFormat = Core::Format::UNKNOWN;
     Core::Format::Enum depthFormat = Core::Format::UNKNOWN;
     Core::Format::Enum shadowVisibilityFormat = Core::Format::UNKNOWN;
     Core::Format::Enum causticIrradianceFormat = Core::Format::UNKNOWN;
@@ -391,6 +398,9 @@ struct DeferredFrameTargets{
     Core::TextureHandle csgRemovedIntervalData;
     Core::TextureHandle csgRemovedIntervalCount;
     Core::TextureHandle opaqueColor;
+    // Compute composite output. This stays linear RGBA16F and reaches the swapchain only through the small Graphics
+    // presentation blit, avoiding an assumption that every surface image supports storage writes.
+    Core::TextureHandle compositeColor;
     Core::TextureHandle depth;
     // Per-light shadow visibility (RGBA16F Texture2DArray, NWB_SCENE_SHADOW_SLOT_COUNT layers). On RT hardware the HW
     // RayQuery pass writes the binary opaque mask and the software traversal multiplies the colored transparent shadow
@@ -524,6 +534,7 @@ struct DeferredFrameTargets{
             && normalFormat != Core::Format::UNKNOWN
             && worldPositionFormat != Core::Format::UNKNOWN
             && opaqueColorFormat != Core::Format::UNKNOWN
+            && compositeColorFormat != Core::Format::UNKNOWN
             && depthFormat != Core::Format::UNKNOWN
             && csgCapNormalFormat != Core::Format::UNKNOWN
             && csgIntervalDepthFormat != Core::Format::UNKNOWN
@@ -545,6 +556,7 @@ struct DeferredFrameTargets{
             && normal != nullptr
             && worldPosition != nullptr
             && opaqueColor != nullptr
+            && compositeColor != nullptr
             && depth != nullptr
             && framebuffer != nullptr
             && bindless.valid()

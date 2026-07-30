@@ -26,7 +26,8 @@ static Core::TextureHandle CreateRenderTarget(
     const u32 height,
     const Core::Format::Enum format,
     const char* debugName,
-    const Core::Color& clearValue
+    const Core::Color& clearValue,
+    const bool shareWithAsyncCompute = false
 ){
     Core::TextureDesc desc;
     desc
@@ -37,6 +38,8 @@ static Core::TextureHandle CreateRenderTarget(
         .setName(debugName)
         .setClearValue(clearValue)
     ;
+    if(shareWithAsyncCompute)
+        desc.setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
     Core::TextureHandle texture = graphics.createTexture(desc);
     if(texture)
         return texture;
@@ -155,7 +158,8 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
         avboitTargets.fullHeight,
         avboitTargets.accumColorFormat,
         "engine/avboit/accum_color",
-        transparentBlack
+        transparentBlack,
+        true
     );
     if(!avboitTargets.accumColor){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulated color target"));
@@ -168,7 +172,8 @@ bool RendererAvboitSystem::createAvboitFrameTargets(
         avboitTargets.fullHeight,
         avboitTargets.accumExtinctionFormat,
         "engine/avboit/accum_extinction",
-        transparentBlack
+        transparentBlack,
+        true
     );
     if(!avboitTargets.accumExtinction){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT accumulated extinction target"));

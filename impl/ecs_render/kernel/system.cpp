@@ -667,6 +667,14 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     m_raytracingSystem.discardSurfelResourceInitialization();
     Core::GpuTimingSubmissionTicket shadowPrepareTimingTicket(m_graphics.gpuTiming());
     const auto discardShadowPrepare = [&](){
+        // Scene-cache keys are advanced while recording the preparation command list. If that list is abandoned or
+        // rejected, a capacity grow may already have replaced the backing resource even though its build/upload never
+        // reached the GPU. Do not restore the old key in that case: it could describe the retired resource rather than
+        // the new, uninitialized one. Force one conservative rebuild after every failed preparation submission.
+        m_rayTracingState.m_tlasStaticSceneHashValid = false;
+        m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
+        m_rayTracingState.m_hwShadowMaterialContextHashValid = false;
+        m_rayTracingState.m_swShadowMaterialContextHashValid = false;
         shadowPrepareTimingTicket.discard();
         m_shadowPrepareStateHandoff.reset();
         m_preparedShadowVisibilityReady = false;
@@ -979,6 +987,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         // this packet batch is abandoned, so force both uploads on the retry rather than restoring stale byte caches.
         m_drawState.m_meshViewGpuDataValid = false;
         m_deferredState.m_sceneShadingGpuDataValid = false;
+        m_deferredState.m_lightGpuDataValid = false;
     };
 
     const auto restoreShadowCpuState = [&](){

@@ -142,6 +142,8 @@ void RendererDeferredState::invalidateResources(){
     m_presentPixelShader.reset();
     m_presentPipeline.reset();
     m_sceneShadingGpuDataValid = false;
+    m_lightGpuDataCount = 0u;
+    m_lightGpuDataValid = false;
     m_targets = DeferredFrameTargets{};
 }
 
@@ -172,6 +174,14 @@ void RendererRayTracingState::invalidateResources(){
     m_tlasMaxInstances = 0u;
     m_tlasDeviceAddress = 0u;
     m_tlasInstanceCount = 0u;
+    m_tlasStaticSceneHash = 0u;
+    m_sceneSwBvhStaticSceneHash = 0u;
+    m_tlasStaticSceneHashValid = false;
+    m_sceneSwBvhStaticSceneHashValid = false;
+    m_hwShadowMaterialContextHash = 0u;
+    m_swShadowMaterialContextHash = 0u;
+    m_hwShadowMaterialContextHashValid = false;
+    m_swShadowMaterialContextHashValid = false;
     m_shadowShader.reset();
     m_shadowPipeline.reset();
     m_shadowBindingLayout.reset();

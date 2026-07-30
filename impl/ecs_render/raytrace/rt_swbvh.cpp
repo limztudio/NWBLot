@@ -5,6 +5,7 @@
 #include <impl/ecs_render/raytrace/rt_private.h>
 
 #include <global/algorithm.h>
+#include <global/hash_utils.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,6 +30,82 @@ using MeshBufferSlotLookup = HashMap<
     EqualTo<const Core::Buffer*>,
     Core::Alloc::ScratchArena
 >;
+
+
+// The scene-level caches below intentionally hash only canonical, fully initialized upload/build inputs. Raw
+// RayTracingInstanceDesc bytes include bitfields, and the temporary SIMD BVH values carry lanes that are not part of
+// the spatial build, so hash their semantic fields instead of their object representations.
+inline constexpr u32 s_SceneStaticCacheHashVersion = 1u;
+
+void AppendSceneCacheFloat3(u64& inOutHash, const SIMDVector value){
+    Float4 stored{};
+    StoreFloat(value, &stored);
+    stored.w = 0.f;
+    Fnv64AppendValue(inOutHash, stored);
+}
+
+void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTracingInstanceDesc& instance){
+    Fnv64AppendValue(inOutHash, instance.transform);
+    Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceID));
+    Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceMask));
+    Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceContributionToHitGroupIndex));
+    Fnv64AppendValue(inOutHash, static_cast<u32>(instance.flags));
+    const usize bottomLevelAsIdentity = reinterpret_cast<usize>(instance.bottomLevelAS);
+    Fnv64AppendValue(inOutHash, bottomLevelAsIdentity);
+}
+
+[[nodiscard]] u64 ComputeTlasStaticSceneHash(
+    const Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena>& instances
+){
+    u64 hash = FNV64_OFFSET_BASIS;
+    Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
+    Fnv64AppendValue(hash, instances.size());
+    for(const Core::RayTracingInstanceDesc& instance : instances)
+        AppendTlasInstanceStaticCacheInput(hash, instance);
+    return hash;
+}
+
+[[nodiscard]] u64 ComputeSceneSwBvhStaticSceneHash(
+    const Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena>& instances,
+    const Vector<SceneBvhPrimitiveCalculation, Core::Alloc::ScratchArena>& primitives
+){
+    NWB_ASSERT(instances.size() == primitives.size());
+
+    u64 hash = FNV64_OFFSET_BASIS;
+    Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
+    Fnv64AppendValue(hash, instances.size());
+    for(usize index = 0u; index < instances.size(); ++index){
+        const SceneSwBvhInstanceGpu& instance = instances[index];
+        Fnv64AppendValue(hash, instance.worldToObject);
+        Fnv64AppendValue(hash, instance.primitiveCount);
+        AppendSceneCacheFloat3(hash, primitives[index].aabbMin);
+        AppendSceneCacheFloat3(hash, primitives[index].aabbMax);
+    }
+    return hash;
+}
+
+[[nodiscard]] u64 ComputeShadowMaterialContextHash(
+    const Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena>& instanceMaterials,
+    const InstanceGpuDataVector& instanceData,
+    const MaterialTypedByteDataVector& materialTypedBytes
+){
+    NWB_ASSERT(instanceMaterials.size() == instanceData.size());
+
+    u64 hash = FNV64_OFFSET_BASIS;
+    Fnv64AppendValue(hash, s_SceneStaticCacheHashVersion);
+    Fnv64AppendBuffer(
+        hash,
+        reinterpret_cast<const u8*>(instanceMaterials.data()),
+        instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu)
+    );
+    Fnv64AppendBuffer(
+        hash,
+        reinterpret_cast<const u8*>(instanceData.data()),
+        instanceData.size() * sizeof(InstanceGpuData)
+    );
+    Fnv64AppendBuffer(hash, materialTypedBytes.data(), materialTypedBytes.size());
+    return hash;
+}
 
 
 // Look up the backing buffer in the cross-frame cache. A hit reuses its valid handle; a miss registers the buffer
@@ -304,6 +381,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     // prepare: the HW pass casts only the opaque (binary) shadow, so the SW colored pass is needed only when a
     // transparent occluder exists; opaque-only scenes skip the software BVH build entirely.
     rayTracingState().m_sceneHasTransparentOccluder = false;
+    bool staticScene = true;
 
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible)
@@ -323,6 +401,10 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         // normals, so require all three.
         if(!meshReady || !mesh || !mesh->blas || !mesh->triangleIndexBuffer || !mesh->attributeBuffer || !mesh->positionBuffer)
             continue;
+        // Runtime mesh BLASes refit or rebuild in place, so their resource identity is insufficient to prove that a
+        // resident TLAS still bounds the current geometry. Keep the dynamic path fully per-frame.
+        if(resolvedMesh.runtime || mesh->runtimeMesh)
+            staticScene = false;
 
         // Dedupe to a per-mesh table slot: instances sharing a mesh share its index/attribute/position buffers. The
         // scratch lookup avoids rescanning the growing dense table for every instance while preserving its first-seen
@@ -459,10 +541,26 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     rayTracingState().m_tlasInstanceCount = static_cast<u32>(instances.size());
     if(instances.empty()){
         rayTracingState().m_tlasDeviceAddress = 0u;
+        rayTracingState().m_tlasStaticSceneHashValid = false;
+        rayTracingState().m_hwShadowMaterialContextHashValid = false;
         return false;
     }
 
-    if(!rayTracingState().m_tlas || rayTracingState().m_tlasMaxInstances < instances.size()){
+    // The exact TLAS inputs are stable only for a fully static set of gathered occluders. The per-instance material
+    // context has a separate key below: a material edit can reuse the TLAS while still refreshing its trace data.
+    const u64 tlasStaticSceneHash = staticScene ? ComputeTlasStaticSceneHash(instances) : 0u;
+    const bool canReuseTlas =
+        staticScene
+        && rayTracingState().m_tlasStaticSceneHashValid
+        && rayTracingState().m_tlasStaticSceneHash == tlasStaticSceneHash
+        && rayTracingState().m_tlas
+        && rayTracingState().m_tlasMaxInstances >= instances.size()
+        && rayTracingState().m_tlasHeapHandle.valid()
+    ;
+    if(!staticScene || !canReuseTlas)
+        rayTracingState().m_tlasStaticSceneHashValid = false;
+
+    if(!canReuseTlas && (!rayTracingState().m_tlas || rayTracingState().m_tlasMaxInstances < instances.size())){
         const usize capacity = ::NextGrowingCapacity(
             rayTracingState().m_tlasMaxInstances,
             instances.size(),
@@ -497,12 +595,14 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         );
     }
 
-    commandList.buildTopLevelAccelStruct(
-        rayTracingState().m_tlas.get(),
-        instances.data(),
-        instances.size(),
-        Core::RayTracingAccelStructBuildFlags::PreferFastTrace
-    );
+    if(!canReuseTlas){
+        commandList.buildTopLevelAccelStruct(
+            rayTracingState().m_tlas.get(),
+            instances.data(),
+            instances.size(),
+            Core::RayTracingAccelStructBuildFlags::PreferFastTrace
+        );
+    }
     rayTracingState().m_tlasDeviceAddress = rayTracingState().m_tlas->getDeviceAddress();
 
     // The shared scene TLAS is selected from a dedicated fixed heap set. A fresh handle/block is allocated only when
@@ -521,22 +621,52 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         rayTracingState().m_tlasHeapHandle = tlasHeapHandle;
     }
 
-    // Upload the per-instance occluder material table (indexed by InstanceID()) for the hardware trace paths.
-    if(!ensureShadowInstanceMaterialBuffer(instances.size()))
-        return false;
-    Core::Buffer* materialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
-    commandList.setBufferState(materialBuffer, Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
-    commandList.setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
-    commandList.commitBarriers();
-
-    // Upload the shadow-owned combined material-constants context the trace surface dispatch reads. A word of
-    // padding keeps the typed buffer valid when no occluder contributed any typed bytes.
+    // A word of padding keeps the typed buffer valid when no occluder contributed any typed bytes. Hash the final
+    // upload representation, including the descriptor slots, so edits refresh only the material context and not the
+    // TLAS. Hybrid transparent frames deliberately write this HW version even if it was cached: the SW gather runs
+    // next and must restore its own node-slot-bearing context if it succeeds.
     if(shadowMaterialTypedBytes.empty())
         shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
-    if(!uploadShadowMaterialContextBuffers(commandList, shadowInstanceData, shadowMaterialTypedBytes))
-        return false;
+    const u64 hwMaterialContextHash = ComputeShadowMaterialContextHash(
+        instanceMaterials,
+        shadowInstanceData,
+        shadowMaterialTypedBytes
+    );
+    const bool canReuseHwMaterialContext =
+        staticScene
+        && !rayTracingState().m_sceneHasTransparentOccluder
+        && rayTracingState().m_hwShadowMaterialContextHashValid
+        && rayTracingState().m_hwShadowMaterialContextHash == hwMaterialContextHash
+        && rayTracingState().m_shadowInstanceMaterialBuffer
+        && rayTracingState().m_shadowInstanceBuffer
+        && rayTracingState().m_shadowMaterialTypedBuffer
+    ;
+    if(!canReuseHwMaterialContext){
+        if(!ensureShadowInstanceMaterialBuffer(instances.size()))
+            return false;
+        Core::Buffer* materialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
+        commandList.setBufferState(materialBuffer, Core::ResourceStates::CopyDest);
+        commandList.commitBarriers();
+        commandList.writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
+        commandList.setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
+        commandList.commitBarriers();
+        if(!uploadShadowMaterialContextBuffers(commandList, shadowInstanceData, shadowMaterialTypedBytes))
+            return false;
+
+        if(staticScene){
+            rayTracingState().m_hwShadowMaterialContextHash = hwMaterialContextHash;
+            rayTracingState().m_hwShadowMaterialContextHashValid = true;
+        }
+        else
+            rayTracingState().m_hwShadowMaterialContextHashValid = false;
+        // One physical context buffer cannot simultaneously hold the SW-specific node slots.
+        rayTracingState().m_swShadowMaterialContextHashValid = false;
+    }
+
+    if(staticScene){
+        rayTracingState().m_tlasStaticSceneHash = tlasStaticSceneHash;
+        rayTracingState().m_tlasStaticSceneHashValid = true;
+    }
     return true;
 }
 
@@ -546,9 +676,9 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     // Software scene/instance BVH (TLAS-analog) over ALL gathered occluders, plus the shadow-owned material context.
     // Built by the no-RayQuery fallback prepare (the only shadow backend) AND, on RT hardware, by the hybrid prepare
     // when the scene has a transparent occluder. The gather order matches buildSceneTlas's (same RendererComponent
-    // view, aligned conditions), so the scene-BVH leaf index equals the hardware InstanceID -- and the material context
-    // it rebuilds is byte-identical to buildSceneTlas's, so the HW caustic (which reads that context by InstanceID) is
-    // unaffected even though both write it. The caller gates WHEN this runs.
+    // view, aligned conditions), so the scene-BVH leaf index equals the hardware InstanceID. The shared material
+    // context keeps that order too; its descriptor slots are valid for both paths, while the software write restores
+    // the additional node slots needed by the transparent traversal. The caller gates WHEN this runs.
     auto* meshSystem = world().getSystem<NWB::Impl::MeshSystem>();
     if(!meshSystem)
         return false;
@@ -609,6 +739,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     rayTracingState().m_swShadowMeshIndexHandles.clear();
     rayTracingState().m_swShadowMeshAttributeHandles.clear();
     rayTracingState().m_swShadowMeshCount = 0u;
+    bool staticScene = true;
 
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible)
@@ -638,6 +769,10 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             || !mesh->csgLocalBounds.valid()
         )
             continue;
+        // A runtime mesh updates its local BVH every frame. Its world-space instance bounds can therefore change even
+        // when the transform and descriptor slots do not, so static scene-BVH reuse is intentionally disabled.
+        if(resolvedMesh.runtime || mesh->runtimeMesh)
+            staticScene = false;
 
         // Dedupe to a per-mesh table slot: instances sharing a mesh share its node/position/index buffers. The
         // scratch lookup avoids rescanning the growing dense table for every instance while preserving its first-seen
@@ -772,73 +907,129 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         // No traceable instances is not a failure: the consumer treats a zero instance count as
         // "nothing occludes" (fully lit), so report success and leave the resident buffers untouched.
         rayTracingState().m_sceneBvhInstanceCount = 0u;
+        rayTracingState().m_sceneSwBvhStaticSceneHashValid = false;
+        rayTracingState().m_swShadowMaterialContextHashValid = false;
         return true;
     }
 
-    // CPU-build the scene BVH over the gathered instance world AABBs. At TLAS scale (a handful to a few
-    // hundred instances) a CPU build + upload is far cheaper than a GPU LBVH dispatch, and the node layout
-    // matches the per-mesh BVH so the traversal pass reads scene and mesh BVHs the same way.
-    Vector<u32, Core::Alloc::ScratchArena> indices{ scratchArena };
-    indices.reserve(instanceCount);
-    for(u32 i = 0u; i < instanceCount; ++i)
-        indices.push_back(i);
+    // The topology key covers the exact world-space leaf bounds and world->object records the CPU SAH build consumes.
+    // Material changes use their own key below, so a surface edit does not needlessly rebuild the scene hierarchy.
+    const u64 sceneStaticHash = staticScene
+        ? ComputeSceneSwBvhStaticSceneHash(instances, instanceBvhPrimitives)
+        : 0u
+    ;
+    const usize requiredNodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
+    const bool canReuseSceneBvh =
+        staticScene
+        && rayTracingState().m_sceneSwBvhStaticSceneHashValid
+        && rayTracingState().m_sceneSwBvhStaticSceneHash == sceneStaticHash
+        && rayTracingState().m_sceneBvhInstanceCount == instanceCount
+        && rayTracingState().m_sceneBvhNodeBuffer
+        && rayTracingState().m_sceneInstanceBuffer
+        && rayTracingState().m_sceneBvhNodeCapacity >= requiredNodeCount
+        && rayTracingState().m_sceneInstanceCapacity >= instanceCount
+        && rayTracingState().m_sceneBvhNodeHeapHandle.valid()
+        && rayTracingState().m_sceneInstanceHeapHandle.valid()
+    ;
+    if(!staticScene || !canReuseSceneBvh)
+        rayTracingState().m_sceneSwBvhStaticSceneHashValid = false;
 
-    const usize nodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
-    Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena> buildNodes{ scratchArena };
-    buildNodes.reserve(nodeCount);
-    // Per-instance leaf cost = primitive count, so a large instance biases the SAH tree like a large primitive.
-    Vector<u32, Core::Alloc::ScratchArena> instanceLeafCost{ scratchArena };
-    instanceLeafCost.reserve(instanceCount);
-    for(u32 i = 0u; i < instanceCount; ++i)
-        instanceLeafCost.push_back(instances[i].primitiveCount);
-    __hidden_raytracing_system::BuildSceneBvhNode(
-        indices.data(),
-        0u,
-        instanceCount,
-        instanceBvhPrimitives.data(),
-        buildNodes,
-        instanceLeafCost.data()
-    );
-    NWB_ASSERT(buildNodes.size() == nodeCount);
+    if(!canReuseSceneBvh){
+        // CPU-build the scene BVH over the gathered instance world AABBs. At TLAS scale (a handful to a few
+        // hundred instances) a CPU build + upload is far cheaper than a GPU LBVH dispatch, and the node layout
+        // matches the per-mesh BVH so the traversal pass reads scene and mesh BVHs the same way.
+        Vector<u32, Core::Alloc::ScratchArena> indices{ scratchArena };
+        indices.reserve(instanceCount);
+        for(u32 i = 0u; i < instanceCount; ++i)
+            indices.push_back(i);
 
-    Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena> nodes{ scratchArena };
-    nodes.reserve(buildNodes.size());
-    for(const SceneBvhNodeCalculation& buildNode : buildNodes){
-        NwbBvhNodeGpu node;
-        StoreFloatInt(buildNode.aabbMin, buildNode.leftChild, &node.aabbMinLeftChild);
-        StoreFloatInt(buildNode.aabbMax, buildNode.rightChild, &node.aabbMaxRightChild);
-        nodes.push_back(node);
+        Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena> buildNodes{ scratchArena };
+        buildNodes.reserve(requiredNodeCount);
+        // Per-instance leaf cost = primitive count, so a large instance biases the SAH tree like a large primitive.
+        Vector<u32, Core::Alloc::ScratchArena> instanceLeafCost{ scratchArena };
+        instanceLeafCost.reserve(instanceCount);
+        for(u32 i = 0u; i < instanceCount; ++i)
+            instanceLeafCost.push_back(instances[i].primitiveCount);
+        __hidden_raytracing_system::BuildSceneBvhNode(
+            indices.data(),
+            0u,
+            instanceCount,
+            instanceBvhPrimitives.data(),
+            buildNodes,
+            instanceLeafCost.data()
+        );
+        NWB_ASSERT(buildNodes.size() == requiredNodeCount);
+
+        Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena> nodes{ scratchArena };
+        nodes.reserve(buildNodes.size());
+        for(const SceneBvhNodeCalculation& buildNode : buildNodes){
+            NwbBvhNodeGpu node;
+            StoreFloatInt(buildNode.aabbMin, buildNode.leftChild, &node.aabbMinLeftChild);
+            StoreFloatInt(buildNode.aabbMax, buildNode.rightChild, &node.aabbMaxRightChild);
+            nodes.push_back(node);
+        }
+
+        if(!ensureSceneBvhBuffers(instanceCount))
+            return false;
+
+        Core::Buffer* nodeBuffer = rayTracingState().m_sceneBvhNodeBuffer.get();
+        Core::Buffer* instanceBuffer = rayTracingState().m_sceneInstanceBuffer.get();
+        commandList.setBufferState(nodeBuffer, Core::ResourceStates::CopyDest);
+        commandList.setBufferState(instanceBuffer, Core::ResourceStates::CopyDest);
+        commandList.commitBarriers();
+        commandList.writeBuffer(nodeBuffer, nodes.data(), nodes.size() * sizeof(NwbBvhNodeGpu));
+        commandList.writeBuffer(instanceBuffer, instances.data(), instances.size() * sizeof(SceneSwBvhInstanceGpu));
+        commandList.setBufferState(nodeBuffer, Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(instanceBuffer, Core::ResourceStates::ShaderResource);
+        commandList.commitBarriers();
     }
 
-    if(!ensureSceneBvhBuffers(instanceCount))
-        return false;
-    if(!ensureShadowInstanceMaterialBuffer(instances.size()))
-        return false;
-
-    Core::Buffer* nodeBuffer = rayTracingState().m_sceneBvhNodeBuffer.get();
-    Core::Buffer* instanceBuffer = rayTracingState().m_sceneInstanceBuffer.get();
-    Core::Buffer* materialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
-
-    commandList.setBufferState(nodeBuffer, Core::ResourceStates::CopyDest);
-    commandList.setBufferState(instanceBuffer, Core::ResourceStates::CopyDest);
-    commandList.setBufferState(materialBuffer, Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(nodeBuffer, nodes.data(), nodes.size() * sizeof(NwbBvhNodeGpu));
-    commandList.writeBuffer(instanceBuffer, instances.data(), instances.size() * sizeof(SceneSwBvhInstanceGpu));
-    commandList.writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
-    commandList.setBufferState(nodeBuffer, Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(instanceBuffer, Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
-    commandList.commitBarriers();
-
-    // Upload the shadow-owned combined material-constants context the software traversal's per-hit transmittance
-    // dispatch reads. A word of padding keeps the typed buffer valid when no occluder contributed any typed bytes.
+    // A word of padding keeps the typed buffer valid when no occluder contributed any typed bytes. In a hybrid
+    // frame buildSceneTlas has just populated this shared buffer with HW descriptor slots, so this independent key
+    // correctly refreshes the SW node-slot-bearing material context even when the scene topology was reused.
     if(shadowMaterialTypedBytes.empty())
         shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
-    if(!uploadShadowMaterialContextBuffers(commandList, shadowInstanceData, shadowMaterialTypedBytes))
-        return false;
+    const u64 swMaterialContextHash = ComputeShadowMaterialContextHash(
+        instanceMaterials,
+        shadowInstanceData,
+        shadowMaterialTypedBytes
+    );
+    const bool canReuseSwMaterialContext =
+        staticScene
+        && rayTracingState().m_swShadowMaterialContextHashValid
+        && rayTracingState().m_swShadowMaterialContextHash == swMaterialContextHash
+        && rayTracingState().m_shadowInstanceMaterialBuffer
+        && rayTracingState().m_shadowInstanceBuffer
+        && rayTracingState().m_shadowMaterialTypedBuffer
+    ;
+    if(!canReuseSwMaterialContext){
+        if(!ensureShadowInstanceMaterialBuffer(instances.size()))
+            return false;
+
+        Core::Buffer* materialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
+        commandList.setBufferState(materialBuffer, Core::ResourceStates::CopyDest);
+        commandList.commitBarriers();
+        commandList.writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
+        commandList.setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
+        commandList.commitBarriers();
+        if(!uploadShadowMaterialContextBuffers(commandList, shadowInstanceData, shadowMaterialTypedBytes))
+            return false;
+
+        if(staticScene){
+            rayTracingState().m_swShadowMaterialContextHash = swMaterialContextHash;
+            rayTracingState().m_swShadowMaterialContextHashValid = true;
+        }
+        else
+            rayTracingState().m_swShadowMaterialContextHashValid = false;
+        // The hardware table lacks software node slots, so its cache is no longer representative of this buffer.
+        rayTracingState().m_hwShadowMaterialContextHashValid = false;
+    }
 
     rayTracingState().m_sceneBvhInstanceCount = instanceCount;
+    if(staticScene){
+        rayTracingState().m_sceneSwBvhStaticSceneHash = sceneStaticHash;
+        rayTracingState().m_sceneSwBvhStaticSceneHashValid = true;
+    }
     return true;
 }
 

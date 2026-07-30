@@ -184,11 +184,28 @@ bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& command
     rayTracingState().m_softShadowSlotMask = softShadowSlotMask;
     logCausticClassificationOnce(lightData, lightCount, causticLightCount, refractiveInstanceCount);
 
-    commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(deferredState().m_lightBuffer.get(), lightData, static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData));
-    commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.commitBarriers();
+    const usize lightByteCount = static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData);
+    NWB_ASSERT(lightByteCount <= sizeof(deferredState().m_lightGpuData));
+    const bool lightDataUnchanged =
+        deferredState().m_lightGpuDataValid
+        && deferredState().m_lightGpuDataCount == lightCount
+        && NWB_MEMCMP(deferredState().m_lightGpuData, lightData, lightByteCount) == 0
+    ;
+    if(!lightDataUnchanged){
+        commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::CopyDest);
+        commandList.commitBarriers();
+        commandList.writeBuffer(deferredState().m_lightBuffer.get(), lightData, lightByteCount);
+        commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.commitBarriers();
+        NWB_MEMCPY(
+            deferredState().m_lightGpuData,
+            sizeof(deferredState().m_lightGpuData),
+            lightData,
+            lightByteCount
+        );
+        deferredState().m_lightGpuDataCount = lightCount;
+        deferredState().m_lightGpuDataValid = true;
+    }
 
     const ECSRenderDetail::SceneShadingGpuData sceneShadingState = ECSRenderDetail::ResolveSceneShadingState(world(), fallbackAspectRatio, lightCount);
     if(

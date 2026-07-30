@@ -258,6 +258,11 @@ private:
     Core::GraphicsPipelineHandle m_presentPipeline;
     u8 m_sceneShadingGpuData[sizeof(f32) * NWB_SCENE_SHADING_BUFFER_FLOAT_COUNT] = {};
     bool m_sceneShadingGpuDataValid = false;
+    // The resolved light list is immutable across most frames. Keep its exact uploaded bytes so the setup packet can
+    // leave the shared SRV resident when neither the light set nor its resolved shadow/caustic slot assignment changed.
+    u8 m_lightGpuData[sizeof(f32) * NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT * NWB_SCENE_MAX_LIGHTS] = {};
+    u32 m_lightGpuDataCount = 0u;
+    bool m_lightGpuDataValid = false;
     DeferredFrameTargets m_targets;
 };
 
@@ -304,6 +309,20 @@ struct RtSceneBvhState{
     u64 m_tlasDeviceAddress = 0u;
     u32 m_tlasInstanceCount = 0u; // live TLAS instance count (set by buildSceneTlas); the HW caustic raygen's non-zero guard
     u32 m_sceneBvhInstanceCount = 0u;
+    // Static scene gathers retain their exact build inputs so an unchanged frame can reuse the resident TLAS or
+    // software scene BVH. Any runtime/deforming mesh deliberately invalidates these keys: its per-mesh BVH may refit
+    // in place while retaining the same resource identity, so only the existing per-frame dynamic path is safe there.
+    u64 m_tlasStaticSceneHash = 0u;
+    u64 m_sceneSwBvhStaticSceneHash = 0u;
+    bool m_tlasStaticSceneHashValid = false;
+    bool m_sceneSwBvhStaticSceneHashValid = false;
+    // The hardware and software scene gathers share one material-context buffer but encode different descriptor slots.
+    // Track which writer's exact bytes are resident so an opaque HW-only or SW-only static scene skips all uploads,
+    // while a hybrid transparent frame still restores the software context after the hardware gather writes its copy.
+    u64 m_hwShadowMaterialContextHash = 0u;
+    u64 m_swShadowMaterialContextHash = 0u;
+    bool m_hwShadowMaterialContextHashValid = false;
+    bool m_swShadowMaterialContextHashValid = false;
     // HYBRID shadow split (RT hardware): the HW RayQuery pass casts the binary OPAQUE shadow; when the scene holds a
     // transparent occluder, the software traversal additionally casts the colored TRANSPARENT shadow and multiplies it
     // onto the opaque mask. m_sceneHasTransparentOccluder (set by buildSceneTlas) gates building the software BVH on RT
@@ -332,7 +351,7 @@ struct RtSceneBvhState{
     Core::BufferHandle m_bvhVisitCounterBuffer;
     Core::GpuDescriptorHandle m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
     usize m_bvhBuildCapacity = 0u;
-    Core::BufferHandle m_sceneBvhNodeBuffer;  // CPU-built scene/instance LBVH (TLAS-analog), uploaded each frame
+    Core::BufferHandle m_sceneBvhNodeBuffer;  // CPU-built scene/instance LBVH (TLAS-analog), uploaded when inputs change
     Core::BufferHandle m_sceneInstanceBuffer; // per-instance world->object transform + reserved ABI word + BVH leaf cost
     // The software scene BVH's two persistent context buffers are global StorageBuffer heap entries. The common
     // trace-context slot cbuffer selects these current generations for SW shadow, GI, and caustics.

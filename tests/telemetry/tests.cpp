@@ -1143,6 +1143,7 @@ TEST(Telemetry, RecordPerfSessionReportUsesTelemetryEvents){
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
     const Telemetry::PerfSessionRecordResult result = Telemetry::RecordPerfSessionReport(recorder, report, 17u);
+    EXPECT_TRUE(result.ok());
     EXPECT_TRUE(result.recordedAny());
     EXPECT_EQ(result.cpuTimingEvents, 1u);
     EXPECT_EQ(result.gpuTimingEvents, 1u);
@@ -1191,6 +1192,7 @@ TEST(Telemetry, CaptureSessionRecordsPerfReport){
     session.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
 
     const Telemetry::PerfSessionRecordResult result = session.recordPerfReport(report, 23u);
+    EXPECT_TRUE(result.ok());
     EXPECT_EQ(result.eventCount(), 3u);
     EXPECT_EQ(session.eventCount(), 3u);
 

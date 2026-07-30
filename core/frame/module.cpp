@@ -154,8 +154,10 @@ bool Frame::updateFrame(f32 delta){
     m_perfSession.recordMemorySnapshot(m_projectObjectArenaMemoryScope, m_projectObjectArena);
     m_perfSession.publishFrame();
     if(m_telemetrySession.captureOptions().perfEnabled()){
-        [[maybe_unused]] const Telemetry::PerfSessionRecordResult perfRecordResult =
+        const Telemetry::PerfSessionRecordResult perfRecordResult =
             m_telemetrySession.recordPerfReport(m_perfSession.report());
+        if(!perfRecordResult.ok())
+            NWB_LOGGER_WARNING(NWB_TEXT("Frame: one or more perf telemetry records failed"));
     }
     return true;
 }

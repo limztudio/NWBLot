@@ -114,10 +114,12 @@ struct PerfMemoryPayload{
 };
 
 struct PerfSessionRecordResult{
+    bool succeeded = true;
     u32 cpuTimingEvents = 0u;
     u32 gpuTimingEvents = 0u;
     u32 memoryEvents = 0u;
 
+    [[nodiscard]] bool ok()const{ return succeeded; }
     [[nodiscard]] u32 eventCount()const{ return cpuTimingEvents + gpuTimingEvents + memoryEvents; }
     [[nodiscard]] bool recordedAny()const{ return eventCount() != 0u; }
 };

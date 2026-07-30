@@ -526,7 +526,9 @@ bool Server::internalInit(
         m_crashIngestConfig.symbolication.symbolStoreDirectory = crashSymbolStoreDirectory;
     m_crashIngestConfig.retention = crashRetentionConfig;
     m_crashUploadToken.assign(crashUploadToken.data(), crashUploadToken.size());
-    [[maybe_unused]] const bool loadedNameSymbols = Core::Common::NameSymbols::LoadDefaultFile(BaseType::arena());
+    const bool loadedNameSymbols = Core::Common::NameSymbols::LoadDefaultFile(BaseType::arena());
+    if(loadedNameSymbols)
+        enqueue(BasicStringView<tchar>(NWB_TEXT("Log server: loaded startup name-symbol mappings")), Type::Info);
 
     if(logFileNameBase.empty()){
         if(!m_processedMsgFile.openByExecutableName())
@@ -587,7 +589,7 @@ bool Server::internalUpdate(){
     while(tryDequeue(msg)){
         const auto type = Get<1>(msg);
         LogString formattedMessage = FormatMessageForProcessing(BaseType::arena(), msg);
-        [[maybe_unused]] const bool decodedNameSymbols = Core::Common::NameSymbols::DecodeHashTokens(BaseType::arena(), formattedMessage);
+        Core::Common::NameSymbols::DecodeHashTokens(BaseType::arena(), formattedMessage);
 
         Frame::print(formattedMessage, type);
         m_processedMsgFile.writeLine(formattedMessage);

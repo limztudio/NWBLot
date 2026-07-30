@@ -532,9 +532,9 @@ bool Device::createPipelineLayoutForBindingLayouts(
 
     bool anyExplicitSet = false;
     for(u32 i = 0; i < static_cast<u32>(bindingLayouts.size()) && !anyExplicitSet; ++i){
-        bool isExplicit = false;
-        [[maybe_unused]] const u32 setIndex = layoutSetIndex(*bindingLayouts[i].get(), i, isExplicit);
-        anyExplicitSet = isExplicit;
+        const BindingLayout* const layout = bindingLayouts[i].get();
+        NWB_ASSERT(layout != nullptr);
+        anyExplicitSet = layout->getBindlessDesc() != nullptr;
     }
 
 

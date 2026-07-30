@@ -134,9 +134,9 @@ inline void AppendResolvedText(ArenaT& arena, BasicString<CharT, ArenaT>& outTex
 }
 
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline bool DecodeHashTokens(ArenaT& arena, BasicString<CharT, ArenaT>& inOutText){
+inline void DecodeHashTokens(ArenaT& arena, BasicString<CharT, ArenaT>& inOutText){
     if(inOutText.size() < s_DebugHashTextLength)
-        return false;
+        return;
 
     BasicString<CharT, ArenaT> decoded(arena);
     decoded.reserve(inOutText.size());
@@ -163,7 +163,6 @@ template<typename CharT, typename ArenaT>
 
     if(changed)
         inOutText = Move(decoded);
-    return changed;
 }
 
 

@@ -194,12 +194,14 @@ DiagnosticCaptureGuard::DiagnosticCaptureGuard(Recorder& recorder)
         }
         else{
             expectedGuard = this;
-            [[maybe_unused]] const bool clearedGuard = __hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(
+            if(!__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(
                 expectedGuard,
                 nullptr,
                 MemoryOrder::acq_rel
-            );
-            NWB_ASSERT(clearedGuard);
+            )){
+                NWB_LOGGER_WARNING(NWB_TEXT("Telemetry: diagnostic capture guard ownership changed while installing callback"));
+                NWB_ASSERT(false);
+            }
         }
     }
 }
@@ -209,20 +211,24 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard(){
         return;
 
     DiagnosticEventCallback expectedCallback = __hidden_telemetry_diagnostic::CaptureCallback;
-    [[maybe_unused]] const bool clearedCallback = ::DiagnosticDetail::g_EventCallback.compare_exchange_strong(
+    if(!::DiagnosticDetail::g_EventCallback.compare_exchange_strong(
         expectedCallback,
         nullptr,
         MemoryOrder::acq_rel
-    );
-    NWB_ASSERT(clearedCallback);
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("Telemetry: diagnostic callback ownership changed before capture guard destruction"));
+        NWB_ASSERT(false);
+    }
 
     DiagnosticCaptureGuard* expected = this;
-    [[maybe_unused]] const bool clearedGuard = __hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(
+    if(!__hidden_telemetry_diagnostic::g_CaptureGuard.compare_exchange_strong(
         expected,
         nullptr,
         MemoryOrder::acq_rel
-    );
-    NWB_ASSERT(clearedGuard);
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("Telemetry: diagnostic capture guard ownership changed before destruction"));
+        NWB_ASSERT(false);
+    }
 }
 
 bool DiagnosticCaptureGuard::capture(const DiagnosticEventRecord& record){

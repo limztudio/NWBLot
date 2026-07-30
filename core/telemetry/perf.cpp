@@ -72,45 +72,55 @@ namespace __hidden_telemetry_perf{
     return !delta.hasSamples || delta.currentFrameIndex == snapshot.frameIndex;
 }
 
-[[nodiscard]] static u32 RecordTimingView(
+static void RecordTimingView(
     Recorder& recorder,
     const PerfTimingSource::Enum source,
     const Perf::TimingView& timing,
-    const u32 streamId
+    const u32 streamId,
+    u32& outRecordedEvents,
+    bool& inOutSucceeded
 ){
-    if(!recorder.enabled(EventKind::PerfFrame))
-        return 0u;
+    if(!recorder.enabled(EventKind::PerfFrame)){
+        inOutSucceeded = false;
+        return;
+    }
 
-    u32 recorded = 0u;
     for(usize i = 0u; i < timing.scopeCount(); ++i){
         const Name scopeName = timing.scopeNameAt(i);
         const Perf::TimingStats& stats = timing.statsAt(i);
         if(!stats.valid())
             continue;
-        if(RecordPerfTiming(recorder, source, scopeName, stats, streamId))
-            ++recorded;
+        if(!RecordPerfTiming(recorder, source, scopeName, stats, streamId)){
+            inOutSucceeded = false;
+            continue;
+        }
+        ++outRecordedEvents;
     }
-    return recorded;
 }
 
-[[nodiscard]] static u32 RecordMemoryView(
+static void RecordMemoryView(
     Recorder& recorder,
     const Perf::MemoryView& memory,
-    const u32 streamId
+    const u32 streamId,
+    u32& outRecordedEvents,
+    bool& inOutSucceeded
 ){
-    if(!recorder.enabled(EventKind::MemoryFrame))
-        return 0u;
+    if(!recorder.enabled(EventKind::MemoryFrame)){
+        inOutSucceeded = false;
+        return;
+    }
 
-    u32 recorded = 0u;
     for(usize i = 0u; i < memory.scopeCount(); ++i){
         const Name scopeName = memory.scopeNameAt(i);
         const Perf::MemorySnapshot& snapshot = memory.snapshotAt(i);
         if(!snapshot.valid())
             continue;
-        if(RecordPerfMemory(recorder, scopeName, snapshot, memory.deltaAt(i), streamId))
-            ++recorded;
+        if(!RecordPerfMemory(recorder, scopeName, snapshot, memory.deltaAt(i), streamId)){
+            inOutSucceeded = false;
+            continue;
+        }
+        ++outRecordedEvents;
     }
-    return recorded;
 }
 
 
@@ -387,11 +397,31 @@ PerfSessionRecordResult RecordPerfSessionReport(
 ){
     PerfSessionRecordResult result;
     if(report.capture.cpuTimingActive())
-        result.cpuTimingEvents = __hidden_telemetry_perf::RecordTimingView(recorder, PerfTimingSource::Cpu, report.cpuTiming, streamId);
+        __hidden_telemetry_perf::RecordTimingView(
+            recorder,
+            PerfTimingSource::Cpu,
+            report.cpuTiming,
+            streamId,
+            result.cpuTimingEvents,
+            result.succeeded
+        );
     if(report.capture.gpuTimingActive())
-        result.gpuTimingEvents = __hidden_telemetry_perf::RecordTimingView(recorder, PerfTimingSource::Gpu, report.gpuTiming, streamId);
+        __hidden_telemetry_perf::RecordTimingView(
+            recorder,
+            PerfTimingSource::Gpu,
+            report.gpuTiming,
+            streamId,
+            result.gpuTimingEvents,
+            result.succeeded
+        );
     if(report.capture.memoryActive())
-        result.memoryEvents = __hidden_telemetry_perf::RecordMemoryView(recorder, report.memory, streamId);
+        __hidden_telemetry_perf::RecordMemoryView(
+            recorder,
+            report.memory,
+            streamId,
+            result.memoryEvents,
+            result.succeeded
+        );
     return result;
 }
 

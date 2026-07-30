@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject explicit casts that conceal first-party function-call return values."""
+"""Reject first-party function-call result suppression."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ SOURCE_DIRECTORIES = (
 SOURCE_SUFFIXES = frozenset((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ixx"))
 STATIC_VOID_CAST = re.compile(r"static_cast\s*<\s*void\s*>\s*\(")
 C_STYLE_VOID_CAST = re.compile(r"\(\s*void\s*\)")
+MAYBE_UNUSED = re.compile(r"\[\[\s*maybe_unused\s*\]\]")
 CALL = re.compile(r"(?<!\w)([A-Za-z_]\w*)\s*\(")
 CALL_AT_START = re.compile(
     r"(?:(?:::)?([A-Za-z_]\w*)(?:(?:::[A-Za-z_]\w*)|(?:->|\.)[A-Za-z_]\w*)*)\s*\("
@@ -156,6 +157,29 @@ def line_number(source: str, position: int) -> int:
     return source.count("\n", 0, position) + 1
 
 
+def maybe_unused_initializer_start(source: str, start: int) -> int | None:
+    for position in range(start, len(source)):
+        character = source[position]
+        if character != "=":
+            if character in ";:{}":
+                return None
+            continue
+        before = source[position - 1] if position != 0 else ""
+        after = source[position + 1] if position + 1 < len(source) else ""
+        if before not in "=!<>" and after != "=":
+            return position + 1
+    return None
+
+
+def initializer_contains_call(expression: str) -> bool:
+    expression = expression.replace("\\\n", "").lstrip()
+    if re.match(r"(?:alignof|decltype|noexcept|sizeof)\b", expression):
+        return False
+    if expression.startswith("[") and not starts_with_lambda_call(expression, 0):
+        return False
+    return contains_call(expression)
+
+
 def find_discarded_calls(source: str) -> list[tuple[int, str]]:
     code = blank_non_code(source)
     violations: list[tuple[int, str]] = []
@@ -170,6 +194,16 @@ def find_discarded_calls(source: str) -> list[tuple[int, str]]:
         expression = code[match.end() :]
         if starts_with_call(expression):
             violations.append((line_number(code, match.start()), "C-style void cast"))
+
+    for match in MAYBE_UNUSED.finditer(code):
+        initializer = maybe_unused_initializer_start(code, match.end())
+        if initializer is None:
+            continue
+        end = code.find(";", initializer)
+        if end == -1:
+            continue
+        if initializer_contains_call(code[initializer:end]):
+            violations.append((line_number(code, match.start()), "maybe_unused local"))
 
     return violations
 
@@ -190,6 +224,9 @@ def run_self_test() -> int:
         ("immediate lambda", "static_cast<void>([]{}());", ((1, "static_cast<void>"),)),
         ("c-style parenthesized callable", "(void)(callback)();", ((1, "C-style void cast"),)),
         ("c-style immediate lambda", "(void)([]{}());", ((1, "C-style void cast"),)),
+        ("maybe-unused call", "[[maybe_unused]] const bool result = callback();", ((1, "maybe_unused local"),)),
+        ("maybe-unused unevaluated call", "[[maybe_unused]] constexpr auto typeSize = sizeof(callback());", ()),
+        ("maybe-unused lambda object", "[[maybe_unused]] const auto callback = []{ handler(); };", ()),
         ("unused parameter", "static_cast<void>(parameter);", ()),
     )
     failed = False
@@ -213,7 +250,7 @@ def main() -> int:
             violations.append(f"{path.relative_to(source_root)}:{line}: {cast_kind} conceals a function-call return value")
 
     if violations:
-        print("Explicit void casts must not discard function-call return values:", file=sys.stderr)
+        print("Function-call return values must not be discarded:", file=sys.stderr)
         print("\n".join(violations), file=sys.stderr)
         return 1
     return 0

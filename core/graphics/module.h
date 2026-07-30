@@ -189,6 +189,7 @@ public:
     void backBufferResized();
     void invalidateRenderPassResources();
     [[nodiscard]] bool validateRenderPassResources();
+    [[nodiscard]] bool createFrameTimingCommandList();
     void displayScaleChanged();
 
     void animate(f64 elapsedTime);
@@ -235,6 +236,7 @@ private:
     u64 m_disabledFeatureSupportMask = 0u;
 #endif
 
+    CommandListHandle m_frameTimingCommandList;
     Vector<FramebufferHandle, Alloc::GlobalArena> m_swapChainFramebuffers;
 
     GraphicsTString m_windowTitle;

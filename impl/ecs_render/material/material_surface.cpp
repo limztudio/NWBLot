@@ -379,11 +379,12 @@ bool RendererMaterialSystem::findMaterialSurfaceInfo(const Core::Assets::AssetRe
     if(foundInfo == materialState().m_surfaceInfos.end())
         return false;
 
-    outInfo = &foundInfo.value();
-    // A device reset keeps the CPU material cache but deliberately clears its descriptor-backed fixture slots.
-    // Find-only paths (notably the shadow/trace material context) must not observe those zeroed words before a
-    // visible-material creation pass happens to revisit the cache.
-    return resolveMaterialResourceFixtures(*outInfo);
+    MaterialSurfaceInfo& materialInfo = foundInfo.value();
+    if(!materialInfo.resourceFixturesResolved)
+        return false;
+
+    outInfo = &materialInfo;
+    return true;
 }
 
 bool RendererMaterialSystem::prepareVisibleMaterialSurfaceInfos(){

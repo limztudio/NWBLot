@@ -239,18 +239,19 @@ public:
             return false;
 
         m_framebuffer = device.createFramebuffer(FramebufferDesc().addColorAttachment(m_target.get()));
-        return m_framebuffer != nullptr;
+        if(!m_framebuffer)
+            return false;
+
+        m_commandList = device.createCommandList();
+        return m_commandList != nullptr;
     }
 
     virtual void render(Framebuffer*)override{
-        if(m_recorded || !m_framebuffer)
+        if(m_recorded || !m_framebuffer || !m_commandList)
             return;
 
         auto& device = getGraphics().getDevice();
-
-        CommandListHandle commandList = device.createCommandList();
-        if(!commandList)
-            return;
+        CommandList* const commandList = m_commandList.get();
 
         {
             GpuTimingSubmissionTicket timingTicket(getGraphics().gpuTiming());
@@ -268,7 +269,7 @@ public:
                 commandList->close();
             }
 
-            CommandList* commandLists[] = { commandList.get() };
+            CommandList* commandLists[] = { commandList };
             m_recorded = timingTicket.submit(device, commandLists, 1u);
         }
     }
@@ -280,6 +281,7 @@ private:
     const GpuTimingScopeDefinition& m_timingScope;
     TextureHandle m_target;
     FramebufferHandle m_framebuffer;
+    CommandListHandle m_commandList;
     bool m_recorded = false;
 };
 

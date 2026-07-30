@@ -347,6 +347,9 @@ bool Graphics::init(const Common::FrameData& data){
     if(!m_backend->createDevice())
         return false;
 
+    if(!createFrameTimingCommandList())
+        return false;
+
     m_deviceRecreationRequested = false;
 
     if(!m_backend->createSwapChain())
@@ -375,6 +378,9 @@ bool Graphics::createHeadlessDevice(){
     }
 
     if(!m_backend->createDevice())
+        return false;
+
+    if(!createFrameTimingCommandList())
         return false;
 
     m_deviceRecreationRequested = false;
@@ -482,6 +488,7 @@ void Graphics::destroy(){
     m_renderPasses.clear();
     m_gpuTiming.resetQueries();
 
+    m_frameTimingCommandList.reset();
     m_swapChainFramebuffers.clear();
     m_backend->destroy();
     m_instanceCreated = false;
@@ -639,6 +646,19 @@ bool Graphics::validateRenderPassResources(){
     return valid;
 }
 
+bool Graphics::createFrameTimingCommandList(){
+    if(m_frameTimingCommandList)
+        return true;
+
+    m_frameTimingCommandList = getDevice().createCommandList();
+    if(!m_frameTimingCommandList){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create the frame GPU-timing reset command list"));
+        return false;
+    }
+
+    return true;
+}
+
 void Graphics::displayScaleChanged(){
     notifyPointerScaleChanged();
 
@@ -673,23 +693,22 @@ void Graphics::render(){
         // Do not allow render-pass scopes to reuse a prior frame's reset if recording or submitting this preamble
         // fails. confirmFrameReset() below reenables only the pools covered by the successful submission.
         m_gpuTiming.discardFrameReset();
-        CommandListHandle frameTimingCommandList = device.createCommandList();
-        if(!frameTimingCommandList)
-            NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to create the frame GPU-timing reset command list"));
+        if(!m_frameTimingCommandList)
+            NWB_LOGGER_WARNING(NWB_TEXT("Graphics: frame GPU-timing reset command list is unavailable"));
         else{
-            frameTimingCommandList->open();
-            if(!frameTimingCommandList->hasCommandBuffer())
+            m_frameTimingCommandList->open();
+            if(!m_frameTimingCommandList->hasCommandBuffer())
                 NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to open the frame GPU-timing reset command list"));
             else{
-                m_gpuTiming.recordFrameReset(*frameTimingCommandList);
-                frameTimingCommandList->close();
+                m_gpuTiming.recordFrameReset(*m_frameTimingCommandList);
+                m_frameTimingCommandList->close();
 
-                if(!frameTimingCommandList->hasCommandBuffer()){
+                if(!m_frameTimingCommandList->hasCommandBuffer()){
                     m_gpuTiming.discardFrameReset();
                     NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to close the frame GPU-timing reset command list"));
                 }
                 else{
-                    CommandList* commandLists[] = { frameTimingCommandList.get() };
+                    CommandList* commandLists[] = { m_frameTimingCommandList.get() };
                     bool frameTimingResetSubmitted = false;
                     device.executeCommandLists(commandLists, 1u, CommandQueue::Graphics, &frameTimingResetSubmitted);
                     if(!frameTimingResetSubmitted){

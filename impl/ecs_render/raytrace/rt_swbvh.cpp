@@ -37,13 +37,6 @@ using MeshBufferSlotLookup = HashMap<
 // the spatial build, so hash their semantic fields instead of their object representations.
 inline constexpr u32 s_SceneStaticCacheHashVersion = 1u;
 
-void AppendSceneCacheFloat3(u64& inOutHash, const SIMDVector value){
-    Float4 stored{};
-    StoreFloat(value, &stored);
-    stored.w = 0.f;
-    Fnv64AppendValue(inOutHash, stored);
-}
-
 void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTracingInstanceDesc& instance){
     Fnv64AppendValue(inOutHash, instance.transform);
     Fnv64AppendValue(inOutHash, static_cast<u32>(instance.instanceID));
@@ -76,10 +69,17 @@ void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTracingIn
     Fnv64AppendValue(hash, instances.size());
     for(usize index = 0u; index < instances.size(); ++index){
         const SceneSwBvhInstanceGpu& instance = instances[index];
+        Float4 aabbMin{};
+        Float4 aabbMax{};
+        StoreFloat(primitives[index].aabbMin, &aabbMin);
+        StoreFloat(primitives[index].aabbMax, &aabbMax);
+        aabbMin.w = 0.f;
+        aabbMax.w = 0.f;
+
         Fnv64AppendValue(hash, instance.worldToObject);
         Fnv64AppendValue(hash, instance.primitiveCount);
-        AppendSceneCacheFloat3(hash, primitives[index].aabbMin);
-        AppendSceneCacheFloat3(hash, primitives[index].aabbMax);
+        Fnv64AppendValue(hash, aabbMin);
+        Fnv64AppendValue(hash, aabbMax);
     }
     return hash;
 }

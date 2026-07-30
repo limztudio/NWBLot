@@ -54,13 +54,13 @@ inline constexpr u32 s_UvComponentMask = 0x3u;
 
 
 struct alignas(Float4) TangentFrameAccumulator{
-    Float4 normal;
-    Float4 tangent;
-    Float4 bitangent;
+    SIMDVector normal = {};
+    SIMDVector tangent = {};
+    SIMDVector bitangent = {};
 };
 static_assert(
     alignof(TangentFrameAccumulator) >= alignof(Float4),
-    "TangentFrameAccumulator must keep vector storage lanes aligned"
+    "TangentFrameAccumulator must keep SIMD calculation lanes aligned"
 );
 static_assert(
     (sizeof(TangentFrameAccumulator) % alignof(TangentFrameAccumulator)) == 0,
@@ -185,19 +185,19 @@ template<typename ScratchArenaT>
         TangentFrameRebuildDetail::TangentFrameAccumulator& accumulator0 = accumulators[i0];
         TangentFrameRebuildDetail::TangentFrameAccumulator& accumulator1 = accumulators[i1];
         TangentFrameRebuildDetail::TangentFrameAccumulator& accumulator2 = accumulators[i2];
-        StoreFloat(VectorAdd(LoadFloat(accumulator0.normal), faceNormal), &accumulator0.normal);
-        StoreFloat(VectorAdd(LoadFloat(accumulator1.normal), faceNormal), &accumulator1.normal);
-        StoreFloat(VectorAdd(LoadFloat(accumulator2.normal), faceNormal), &accumulator2.normal);
+        accumulator0.normal = VectorAdd(accumulator0.normal, faceNormal);
+        accumulator1.normal = VectorAdd(accumulator1.normal, faceNormal);
+        accumulator2.normal = VectorAdd(accumulator2.normal, faceNormal);
 
         SIMDVector tangent = VectorZero();
         SIMDVector bitangent = VectorZero();
         if(TangentFrameRebuildDetail::AccumulateTriangleTangentFrame(uv0, uv1, uv2, edge01, edge02, tangent, bitangent)){
-            StoreFloat(VectorAdd(LoadFloat(accumulator0.tangent), tangent), &accumulator0.tangent);
-            StoreFloat(VectorAdd(LoadFloat(accumulator1.tangent), tangent), &accumulator1.tangent);
-            StoreFloat(VectorAdd(LoadFloat(accumulator2.tangent), tangent), &accumulator2.tangent);
-            StoreFloat(VectorAdd(LoadFloat(accumulator0.bitangent), bitangent), &accumulator0.bitangent);
-            StoreFloat(VectorAdd(LoadFloat(accumulator1.bitangent), bitangent), &accumulator1.bitangent);
-            StoreFloat(VectorAdd(LoadFloat(accumulator2.bitangent), bitangent), &accumulator2.bitangent);
+            accumulator0.tangent = VectorAdd(accumulator0.tangent, tangent);
+            accumulator1.tangent = VectorAdd(accumulator1.tangent, tangent);
+            accumulator2.tangent = VectorAdd(accumulator2.tangent, tangent);
+            accumulator0.bitangent = VectorAdd(accumulator0.bitangent, bitangent);
+            accumulator1.bitangent = VectorAdd(accumulator1.bitangent, bitangent);
+            accumulator2.bitangent = VectorAdd(accumulator2.bitangent, bitangent);
         }
         else{
             ++result.degenerateUvTriangleCount;
@@ -208,12 +208,12 @@ template<typename ScratchArenaT>
         TangentFrameRebuildVertex& vertex = vertices[vertexIndex];
         const TangentFrameRebuildDetail::TangentFrameAccumulator& accumulator = accumulators[vertexIndex];
         const SIMDVector previousNormal = FrameNormalizeDirection(LoadFloat(vertex.normal), VectorSet(0.0f, 0.0f, 1.0f, 0.0f));
-        const SIMDVector normal = FrameNormalizeDirection(LoadFloat(accumulator.normal), previousNormal);
+        const SIMDVector normal = FrameNormalizeDirection(accumulator.normal, previousNormal);
         if(!FrameValidDirection(normal))
             return false;
 
         const SIMDVector previousTangent = VectorSetW(LoadFloat(vertex.tangent), 0.0f);
-        SIMDVector tangentSource = LoadFloat(accumulator.tangent);
+        SIMDVector tangentSource = accumulator.tangent;
         if(!FrameValidDirection(tangentSource)){
             tangentSource = previousTangent;
             ++result.fallbackTangentVertexCount;
@@ -230,7 +230,7 @@ template<typename ScratchArenaT>
             return false;
 
         f32 handedness = TangentFrameRebuildDetail::ResolveTangentHandedness(vertex.tangent.w);
-        const SIMDVector bitangent = LoadFloat(accumulator.bitangent);
+        const SIMDVector bitangent = accumulator.bitangent;
         if(FrameValidDirection(bitangent)){
             const SIMDVector bitangentSign = Vector3Dot(Vector3Cross(normal, tangent), bitangent);
             if(

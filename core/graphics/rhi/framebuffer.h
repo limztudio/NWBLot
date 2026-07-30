@@ -37,6 +37,7 @@ struct FramebufferAttachment{
 struct FramebufferDesc{
     FixedVector<FramebufferAttachment, s_MaxRenderTargets> colorAttachments;
     FramebufferAttachment depthAttachment;
+    FramebufferAttachment shadingRateAttachment;
 
     constexpr FramebufferDesc& addColorAttachment(const FramebufferAttachment& a){ colorAttachments.push_back(a); return *this; }
     constexpr FramebufferDesc& addColorAttachment(Texture* texture){ colorAttachments.push_back(FramebufferAttachment().setTexture(texture)); return *this; }
@@ -44,6 +45,9 @@ struct FramebufferDesc{
     constexpr FramebufferDesc& setDepthAttachment(const FramebufferAttachment& d){ depthAttachment = d; return *this; }
     constexpr FramebufferDesc& setDepthAttachment(Texture* texture){ depthAttachment = FramebufferAttachment().setTexture(texture); return *this; }
     constexpr FramebufferDesc& setDepthAttachment(Texture* texture, TextureSubresourceSet subresources){ depthAttachment = FramebufferAttachment().setTexture(texture).setSubresources(subresources); return *this; }
+    constexpr FramebufferDesc& setShadingRateAttachment(const FramebufferAttachment& d){ shadingRateAttachment = d; return *this; }
+    constexpr FramebufferDesc& setShadingRateAttachment(Texture* texture){ shadingRateAttachment = FramebufferAttachment().setTexture(texture); return *this; }
+    constexpr FramebufferDesc& setShadingRateAttachment(Texture* texture, TextureSubresourceSet subresources){ shadingRateAttachment = FramebufferAttachment().setTexture(texture).setSubresources(subresources); return *this; }
 };
 
 struct FramebufferInfo{

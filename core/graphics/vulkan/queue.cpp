@@ -468,6 +468,215 @@ void Device::queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+void Queue::updateTextureTileMappings(Texture* textureResource, const TextureTilesMapping* tileMappings, u32 numTileMappings){
+    VkResult res = VK_SUCCESS;
+
+    if(!textureResource || !tileMappings || numTileMappings == 0)
+        return;
+
+    auto* texture = textureResource;
+    Alloc::ThreadPool& workerPool = m_context.threadPool;
+    const bool useParallelPool = workerPool.isParallelEnabled();
+    const usize mappingCount = static_cast<usize>(numTileMappings);
+
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_SparseTextureBindArena, s_SparseTextureBindScratchArenaBytes);
+
+    Vector<VkSparseImageMemoryBind, Alloc::ScratchArena> sparseImageMemoryBinds{scratchArena};
+    Vector<VkSparseMemoryBind, Alloc::ScratchArena> sparseMemoryBinds{scratchArena};
+
+    const VkImageCreateInfo& imageInfo = texture->m_imageInfo;
+    const VkImageAspectFlags textureAspectFlags = texture->m_aspectMask;
+
+    u32 tileWidth = 1;
+    u32 tileHeight = 1;
+    u32 tileDepth = 1;
+
+    VkDeviceSize imageMipTailOffset = 0;
+    VkDeviceSize imageMipTailStride = 1;
+
+    uint32_t formatPropCount = 0;
+    vkGetPhysicalDeviceSparseImageFormatProperties(
+        m_context.physicalDevice,
+        imageInfo.format, imageInfo.imageType, imageInfo.samples,
+        imageInfo.usage, imageInfo.tiling,
+        &formatPropCount, nullptr
+    );
+
+    Vector<VkSparseImageFormatProperties, Alloc::ScratchArena> formatProps(formatPropCount, scratchArena);
+    if(formatPropCount > 0)
+        vkGetPhysicalDeviceSparseImageFormatProperties(
+            m_context.physicalDevice,
+            imageInfo.format, imageInfo.imageType, imageInfo.samples,
+            imageInfo.usage, imageInfo.tiling,
+            &formatPropCount, formatProps.data()
+        );
+
+    if(!formatProps.empty()){
+        tileWidth = formatProps[0].imageGranularity.width;
+        tileHeight = formatProps[0].imageGranularity.height;
+        tileDepth = formatProps[0].imageGranularity.depth;
+    }
+
+    SparseImageMemoryRequirementsVector sparseReqs{ scratchArena };
+    VulkanDetail::GetImageSparseMemoryRequirements(m_context.device, texture->m_image, sparseReqs);
+
+    if(!sparseReqs.empty()){
+        imageMipTailOffset = sparseReqs[0].imageMipTailOffset;
+        imageMipTailStride = sparseReqs[0].imageMipTailStride;
+    }
+
+    struct MappingBindCounts{
+        usize opaqueCount = 0;
+        usize imageCount = 0;
+        usize opaqueBase = 0;
+        usize imageBase = 0;
+    };
+    Vector<MappingBindCounts, Alloc::ScratchArena> mappingCounts(mappingCount, scratchArena);
+
+    auto countMappingBinds = [&](usize i){
+        MappingBindCounts& counts = mappingCounts[i];
+        counts.opaqueCount = 0;
+        counts.imageCount = 0;
+
+        const TextureTilesMapping& mapping = tileMappings[i];
+        if(mapping.numTextureRegions == 0 || !mapping.tiledTextureRegions || !mapping.tiledTextureCoordinates)
+            return;
+        if(mapping.heap && !mapping.byteOffsets)
+            return;
+
+        for(u32 j = 0; j < mapping.numTextureRegions; ++j){
+            const TiledTextureRegion& region = mapping.tiledTextureRegions[j];
+            if(region.tilesNum)
+                ++counts.opaqueCount;
+            else
+                ++counts.imageCount;
+        }
+    };
+
+    if(useParallelPool && mappingCount >= s_ParallelTileCountThreshold)
+        workerPool.parallelFor(static_cast<usize>(0), mappingCount, s_TileCountGrainSize, countMappingBinds);
+    else{
+        for(usize i = 0; i < mappingCount; ++i)
+            countMappingBinds(i);
+    }
+
+    usize totalOpaqueBinds = 0;
+    usize totalImageBinds = 0;
+    for(usize i = 0; i < mappingCount; ++i){
+        MappingBindCounts& counts = mappingCounts[i];
+        counts.opaqueBase = totalOpaqueBinds;
+        counts.imageBase = totalImageBinds;
+        if(counts.opaqueCount > Limit<usize>::s_Max - totalOpaqueBinds){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: opaque sparse bind count overflows"));
+            return;
+        }
+        if(counts.imageCount > Limit<usize>::s_Max - totalImageBinds){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: image sparse bind count overflows"));
+            return;
+        }
+        totalOpaqueBinds += counts.opaqueCount;
+        totalImageBinds += counts.imageCount;
+    }
+
+    if(totalOpaqueBinds > static_cast<usize>(Limit<u32>::s_Max) || totalImageBinds > static_cast<usize>(Limit<u32>::s_Max)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: sparse bind count exceeds Vulkan limit"));
+        return;
+    }
+    if(totalOpaqueBinds > Limit<usize>::s_Max - totalImageBinds){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: total sparse bind count overflows"));
+        return;
+    }
+    const usize totalBindings = totalOpaqueBinds + totalImageBinds;
+
+    sparseMemoryBinds.resize(totalOpaqueBinds);
+    sparseImageMemoryBinds.resize(totalImageBinds);
+
+    auto buildMappingBinds = [&](usize i){
+        const TextureTilesMapping& mapping = tileMappings[i];
+        const MappingBindCounts& counts = mappingCounts[i];
+        if(mapping.numTextureRegions == 0 || !mapping.tiledTextureRegions || !mapping.tiledTextureCoordinates)
+            return;
+        if(mapping.heap && !mapping.byteOffsets)
+            return;
+
+        Heap* heap = mapping.heap ? mapping.heap : nullptr;
+        VkDeviceMemory deviceMemory = heap ? heap->m_memory : VK_NULL_HANDLE;
+        const VkDeviceSize heapMemoryOffset = heap ? heap->m_memoryOffset : 0;
+
+        usize opaqueWrite = counts.opaqueBase;
+        usize imageWrite = counts.imageBase;
+
+        for(u32 j = 0; j < mapping.numTextureRegions; ++j){
+            const TiledTextureCoordinate& coord = mapping.tiledTextureCoordinates[j];
+            const TiledTextureRegion& region = mapping.tiledTextureRegions[j];
+
+            if(region.tilesNum){
+                VkSparseMemoryBind bind = {};
+                bind.resourceOffset = imageMipTailOffset + coord.arrayLevel * imageMipTailStride;
+                bind.size = region.tilesNum * texture->m_tileByteSize;
+                bind.memory = deviceMemory;
+                bind.memoryOffset = deviceMemory ? heapMemoryOffset + mapping.byteOffsets[j] : 0;
+                sparseMemoryBinds[opaqueWrite] = bind;
+                ++opaqueWrite;
+            }
+            else{
+                VkSparseImageMemoryBind bind = {};
+                bind.subresource.arrayLayer = coord.arrayLevel;
+                bind.subresource.mipLevel = coord.mipLevel;
+                bind.subresource.aspectMask = textureAspectFlags;
+                bind.offset.x = coord.x * tileWidth;
+                bind.offset.y = coord.y * tileHeight;
+                bind.offset.z = coord.z * tileDepth;
+                bind.extent.width = region.width * tileWidth;
+                bind.extent.height = region.height * tileHeight;
+                bind.extent.depth = region.depth * tileDepth;
+                bind.memory = deviceMemory;
+                bind.memoryOffset = deviceMemory ? heapMemoryOffset + mapping.byteOffsets[j] : 0;
+                sparseImageMemoryBinds[imageWrite] = bind;
+                ++imageWrite;
+            }
+        }
+    };
+
+    if(useParallelPool && totalBindings >= s_ParallelTileMappingThreshold)
+        workerPool.parallelFor(static_cast<usize>(0), mappingCount, s_TileMappingGrainSize, buildMappingBinds);
+    else{
+        for(usize i = 0; i < mappingCount; ++i)
+            buildMappingBinds(i);
+    }
+
+    auto bindSparseInfo = VulkanDetail::MakeVkStruct<VkBindSparseInfo>(VK_STRUCTURE_TYPE_BIND_SPARSE_INFO);
+
+    VkSparseImageMemoryBindInfo sparseImageMemoryBindInfo = {};
+    if(!sparseImageMemoryBinds.empty()){
+        sparseImageMemoryBindInfo.image = texture->m_image;
+        sparseImageMemoryBindInfo.bindCount = static_cast<u32>(sparseImageMemoryBinds.size());
+        sparseImageMemoryBindInfo.pBinds = sparseImageMemoryBinds.data();
+        bindSparseInfo.imageBindCount = 1;
+        bindSparseInfo.pImageBinds = &sparseImageMemoryBindInfo;
+    }
+
+    VkSparseImageOpaqueMemoryBindInfo sparseOpaqueBindInfo = {};
+    if(!sparseMemoryBinds.empty()){
+        sparseOpaqueBindInfo.image = texture->m_image;
+        sparseOpaqueBindInfo.bindCount = static_cast<u32>(sparseMemoryBinds.size());
+        sparseOpaqueBindInfo.pBinds = sparseMemoryBinds.data();
+        bindSparseInfo.imageOpaqueBindCount = 1;
+        bindSparseInfo.pImageOpaqueBinds = &sparseOpaqueBindInfo;
+    }
+
+    {
+        ScopedLock lock(m_mutex);
+        res = vkQueueBindSparse(m_queue, 1, &bindSparseInfo, VK_NULL_HANDLE);
+    }
+    if(res != VK_SUCCESS)
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update texture tile mappings: {}"), ResultToString(res));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_VULKAN_END
 
 

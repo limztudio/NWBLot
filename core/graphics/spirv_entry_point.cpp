@@ -33,12 +33,20 @@ inline constexpr u32 s_SpirvInstructionWordCountBitShift = 16u;
 namespace SpirvExecutionModel{
     enum Enum : u32{
         Vertex = 0u,
+        TessellationControl = 1u,
+        TessellationEvaluation = 2u,
+        Geometry = 3u,
         Fragment = 4u,
         GLCompute = 5u,
+        TaskNV = 5267u,
         MeshNV = 5268u,
         RayGenerationKHR = 5313u,
+        IntersectionKHR = 5314u,
+        AnyHitKHR = 5315u,
         ClosestHitKHR = 5316u,
         MissKHR = 5317u,
+        CallableKHR = 5318u,
+        TaskEXT = 5364u,
         MeshEXT = 5365u,
     };
 };
@@ -52,12 +60,20 @@ struct SpirvEntryPointInstruction{
 inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel){
     switch(executionModel){
     case SpirvExecutionModel::Vertex: return ShaderType::Vertex;
+    case SpirvExecutionModel::TessellationControl: return ShaderType::Hull;
+    case SpirvExecutionModel::TessellationEvaluation: return ShaderType::Domain;
+    case SpirvExecutionModel::Geometry: return ShaderType::Geometry;
     case SpirvExecutionModel::Fragment: return ShaderType::Pixel;
     case SpirvExecutionModel::GLCompute: return ShaderType::Compute;
+    case SpirvExecutionModel::TaskNV: return ShaderType::Amplification;
     case SpirvExecutionModel::MeshNV: return ShaderType::Mesh;
     case SpirvExecutionModel::RayGenerationKHR: return ShaderType::RayGeneration;
+    case SpirvExecutionModel::IntersectionKHR: return ShaderType::Intersection;
+    case SpirvExecutionModel::AnyHitKHR: return ShaderType::AnyHit;
     case SpirvExecutionModel::ClosestHitKHR: return ShaderType::ClosestHit;
     case SpirvExecutionModel::MissKHR: return ShaderType::Miss;
+    case SpirvExecutionModel::CallableKHR: return ShaderType::Callable;
+    case SpirvExecutionModel::TaskEXT: return ShaderType::Amplification;
     case SpirvExecutionModel::MeshEXT: return ShaderType::Mesh;
     default: return ShaderType::None;
     }

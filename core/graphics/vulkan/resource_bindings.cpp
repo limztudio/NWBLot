@@ -57,14 +57,22 @@ VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages){
 
     if(stages & ShaderType::Vertex)
         flags |= VK_SHADER_STAGE_VERTEX_BIT;
+    if(stages & ShaderType::Hull)
+        flags |= VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+    if(stages & ShaderType::Domain)
+        flags |= VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+    if(stages & ShaderType::Geometry)
+        flags |= VK_SHADER_STAGE_GEOMETRY_BIT;
     if(stages & ShaderType::Pixel)
         flags |= VK_SHADER_STAGE_FRAGMENT_BIT;
     if(stages & ShaderType::Compute)
         flags |= VK_SHADER_STAGE_COMPUTE_BIT;
+    if(stages & ShaderType::Amplification)
+        flags |= VK_SHADER_STAGE_TASK_BIT_EXT;
     if(stages & ShaderType::Mesh)
         flags |= VK_SHADER_STAGE_MESH_BIT_EXT;
     if(stages & ShaderType::AllRayTracing)
-        flags |= VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+        flags |= VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
 
     if(flags == 0)
         flags = VK_SHADER_STAGE_ALL;
@@ -652,6 +660,7 @@ bool Device::configurePipelineBindings(
 void Device::appendPipelineShaderStage(
     Shader* shader,
     const VkShaderStageFlagBits stage,
+    PipelineSpecializationInfoVector& specializationInfos,
     PipelineShaderStageVector& shaderStages
 )const{
     auto* s = shader;
@@ -659,6 +668,11 @@ void Device::appendPipelineShaderStage(
     stageInfo.stage = stage;
     stageInfo.module = s->m_shaderModule;
     stageInfo.pName = s->m_entryPointName.c_str();
+
+    if(!s->m_specializationEntries.empty()){
+        specializationInfos.push_back(s->makeSpecializationInfo());
+        stageInfo.pSpecializationInfo = &specializationInfos.back();
+    }
 
     shaderStages.push_back(stageInfo);
 }

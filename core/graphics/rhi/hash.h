@@ -95,6 +95,18 @@ struct hash<NWB::Core::BlendState>{
     }
 };
 
+template<>
+struct hash<NWB::Core::VariableRateShadingState>{
+    size_t operator()(NWB::Core::VariableRateShadingState const& s)const noexcept{
+        usize hash = 0;
+        ::HashCombine(hash, s.enabled);
+        ::HashCombine(hash, s.shadingRate);
+        ::HashCombine(hash, s.pipelinePrimitiveCombiner);
+        ::HashCombine(hash, s.imageCombiner);
+        return static_cast<size_t>(hash);
+    }
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

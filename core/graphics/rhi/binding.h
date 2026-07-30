@@ -34,6 +34,7 @@ namespace ResourceType{
         Sampler,
         RayTracingAccelStruct,
         PushConstants,
+        SamplerFeedbackTexture_UAV,
 
         kCount
     };
@@ -77,6 +78,7 @@ struct BindingLayoutItem{
     NWB_BINDING_LAYOUT_ITEM_INITIALIZER(VolatileConstantBuffer)
     NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Sampler)
     NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RayTracingAccelStruct)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(SamplerFeedbackTexture_UAV)
     static constexpr BindingLayoutItem PushConstants(const u32 slot, const usize size){
         BindingLayoutItem ret{};
         ret.slot = slot;
@@ -253,6 +255,11 @@ struct DescriptorWriteItem{
         DescriptorWriteItem result = Base(slot, ResourceType::PushConstants, nullptr, Format::UNKNOWN, TextureDimension::Unknown);
         result.range.byteOffset = 0;
         result.range.byteSize = byteSize;
+        return result;
+    }
+    static DescriptorWriteItem SamplerFeedbackTexture_UAV(u32 slot, SamplerFeedbackTexture* texture){
+        DescriptorWriteItem result = Base(slot, ResourceType::SamplerFeedbackTexture_UAV, texture, Format::UNKNOWN, TextureDimension::Unknown);
+        result.subresources = s_AllSubresources;
         return result;
     }
 };

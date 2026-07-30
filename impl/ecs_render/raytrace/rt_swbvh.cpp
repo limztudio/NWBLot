@@ -868,6 +868,7 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
     Core::RayTracingGeometryDesc geometry;
     geometry
         .setTriangles(triangles)
+        .setFlags(Core::RayTracingGeometryFlags::NoDuplicateAnyHitInvocation)
     ;
 
     // Runtime (skinned) meshes keep a single resident BLAS built with AllowUpdate and refit it in

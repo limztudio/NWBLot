@@ -25,12 +25,19 @@ namespace ShaderStageNames{
 
 #define NWB_SHADER_STAGE_NAME_ENTRIES(Entry)                                                                                  \
     Entry(VertexStage, "vs")                                                                                                  \
+    Entry(HullStage, "hs")                                                                                                    \
+    Entry(DomainStage, "ds")                                                                                                  \
+    Entry(GeometryStage, "gs")                                                                                                \
     Entry(PixelStage, "ps")                                                                                                   \
     Entry(ComputeStage, "cs")                                                                                                 \
+    Entry(AmplificationStage, "task")                                                                                         \
     Entry(MeshStage, "mesh")                                                                                                  \
     Entry(RayGenerationStage, "rgen")                                                                                         \
+    Entry(AnyHitStage, "rahit")                                                                                               \
     Entry(ClosestHitStage, "rchit")                                                                                           \
-    Entry(MissStage, "rmiss")
+    Entry(MissStage, "rmiss")                                                                                                 \
+    Entry(IntersectionStage, "rint")                                                                                          \
+    Entry(CallableStage, "rcall")
 
 #define NWB_SHADER_STAGE_NAME_CONSTANT(Stage, Text) inline constexpr Name s_##Stage##Name(Text);
 NWB_SHADER_STAGE_NAME_ENTRIES(NWB_SHADER_STAGE_NAME_CONSTANT)

@@ -27,6 +27,11 @@ GraphicsAllocator::GraphicsAllocator(Alloc::GlobalArena& objectArena)
 GraphicsPipelineDesc::~GraphicsPipelineDesc() = default;
 GraphicsPipelineDesc& GraphicsPipelineDesc::setInputLayout(const InputLayoutHandle& value){ inputLayout = value; return *this; }
 GraphicsPipelineDesc& GraphicsPipelineDesc::setVertexShader(const ShaderHandle& value){ VS = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setHullShader(const ShaderHandle& value){ HS = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setTessellationControlShader(const ShaderHandle& value){ HS = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setDomainShader(const ShaderHandle& value){ DS = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setTessellationEvaluationShader(const ShaderHandle& value){ DS = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setGeometryShader(const ShaderHandle& value){ GS = value; return *this; }
 GraphicsPipelineDesc& GraphicsPipelineDesc::setPixelShader(const ShaderHandle& value){ PS = value; return *this; }
 GraphicsPipelineDesc& GraphicsPipelineDesc::setFragmentShader(const ShaderHandle& value){ PS = value; return *this; }
 GraphicsPipelineDesc& GraphicsPipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
@@ -36,6 +41,8 @@ ComputePipelineDesc& ComputePipelineDesc::setComputeShader(const ShaderHandle& v
 ComputePipelineDesc& ComputePipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
 
 MeshletPipelineDesc::~MeshletPipelineDesc() = default;
+MeshletPipelineDesc& MeshletPipelineDesc::setTaskShader(const ShaderHandle& value){ AS = value; return *this; }
+MeshletPipelineDesc& MeshletPipelineDesc::setAmplificationShader(const ShaderHandle& value){ AS = value; return *this; }
 MeshletPipelineDesc& MeshletPipelineDesc::setMeshShader(const ShaderHandle& value){ MS = value; return *this; }
 MeshletPipelineDesc& MeshletPipelineDesc::setPixelShader(const ShaderHandle& value){ PS = value; return *this; }
 MeshletPipelineDesc& MeshletPipelineDesc::setFragmentShader(const ShaderHandle& value){ PS = value; return *this; }
@@ -46,12 +53,16 @@ RayTracingPipelineShaderDesc::RayTracingPipelineShaderDesc(GraphicsArena& arena)
 {}
 RayTracingPipelineShaderDesc::~RayTracingPipelineShaderDesc() = default;
 RayTracingPipelineShaderDesc& RayTracingPipelineShaderDesc::setShader(const ShaderHandle& value){ shader = value; return *this; }
+RayTracingPipelineShaderDesc& RayTracingPipelineShaderDesc::setBindingLayout(const BindingLayoutHandle& value){ bindingLayout = value; return *this; }
 
 RayTracingPipelineHitGroupDesc::RayTracingPipelineHitGroupDesc(GraphicsArena& arena)
     : exportName(arena)
 {}
 RayTracingPipelineHitGroupDesc::~RayTracingPipelineHitGroupDesc() = default;
 RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setClosestHitShader(const ShaderHandle& value){ closestHitShader = value; return *this; }
+RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setAnyHitShader(const ShaderHandle& value){ anyHitShader = value; return *this; }
+RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setIntersectionShader(const ShaderHandle& value){ intersectionShader = value; return *this; }
+RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setBindingLayout(const BindingLayoutHandle& value){ bindingLayout = value; return *this; }
 
 RayTracingPipelineDesc::~RayTracingPipelineDesc() = default;
 RayTracingPipelineDesc& RayTracingPipelineDesc::addShader(const RayTracingPipelineShaderDesc& value){ shaders.push_back(value); return *this; }
@@ -237,6 +248,35 @@ u32 GetFormatBlockHeight(const FormatInfo& formatInfo)noexcept{
 }
 
 
+TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
+    NWB_ASSERT(mipLevel < desc.mipLevels);
+    const MipLevel resolvedMipLevel = (desc.mipLevels > 0 && mipLevel < desc.mipLevels) ? mipLevel : 0;
+
+    const u32 mipWidth = Max(desc.width >> resolvedMipLevel, static_cast<u32>(1));
+    const u32 mipHeight = Max(desc.height >> resolvedMipLevel, static_cast<u32>(1));
+    const u32 mipDepth = desc.dimension == TextureDimension::Texture3D
+        ? Max(desc.depth >> resolvedMipLevel, static_cast<u32>(1))
+        : static_cast<u32>(1)
+    ;
+
+    return resolve(mipWidth, mipHeight, mipDepth);
+}
+
+TextureSlice TextureSlice::resolve(const u32 mipWidth, const u32 mipHeight, const u32 mipDepth)const{
+    TextureSlice ret(*this);
+
+    if(width == TextureSlice::AllDimensions)
+        ret.width = x < mipWidth ? mipWidth - x : 0;
+    if(height == TextureSlice::AllDimensions)
+        ret.height = y < mipHeight ? mipHeight - y : 0;
+
+    if(depth == TextureSlice::AllDimensions)
+        ret.depth = z < mipDepth ? mipDepth - z : 0;
+
+    return ret;
+}
+
+
 TextureSubresourceSet TextureSubresourceSet::resolve(const TextureDesc& desc, TextureSubresourceMipResolve::Enum mipResolve)const{
     TextureSubresourceSet ret;
     ret.baseMipLevel = baseMipLevel;
@@ -408,6 +448,54 @@ FramebufferInfoEx::FramebufferInfoEx(const FramebufferDesc& desc)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type){
+    switch(type){
+    case CooperativeVectorDataType::UInt8:
+    case CooperativeVectorDataType::SInt8:
+        return 1;
+    case CooperativeVectorDataType::UInt8Packed:
+    case CooperativeVectorDataType::SInt8Packed:
+        return 1;
+    case CooperativeVectorDataType::UInt16:
+    case CooperativeVectorDataType::SInt16:
+        return 2;
+    case CooperativeVectorDataType::UInt32:
+    case CooperativeVectorDataType::SInt32:
+        return 4;
+    case CooperativeVectorDataType::UInt64:
+    case CooperativeVectorDataType::SInt64:
+        return 8;
+    case CooperativeVectorDataType::FloatE4M3:
+    case CooperativeVectorDataType::FloatE5M2:
+        return 1;
+    case CooperativeVectorDataType::Float16:
+    case CooperativeVectorDataType::BFloat16:
+        return 2;
+    case CooperativeVectorDataType::Float32:
+        return 4;
+    case CooperativeVectorDataType::Float64:
+        return 8;
+    }
+    NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Unknown CooperativeVectorDataType::Enum value"));
+    return 0;
+}
+
+usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, u32 rows, u32 columns){
+    const usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
+
+    switch(layout){
+    case CooperativeVectorMatrixLayout::RowMajor:
+        return dataTypeSize * columns;
+    case CooperativeVectorMatrixLayout::ColumnMajor:
+        return dataTypeSize * rows;
+    case CooperativeVectorMatrixLayout::InferencingOptimal:
+    case CooperativeVectorMatrixLayout::TrainingOptimal:
+        return 0;
+    }
+    return 0;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

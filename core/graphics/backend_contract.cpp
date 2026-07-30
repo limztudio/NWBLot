@@ -22,12 +22,16 @@ static_assert(GraphicsContract::GraphicsApi<Graphics>);
 static_assert(GraphicsContract::DeviceApi<GraphicsBackend::Device>);
 static_assert(GraphicsContract::CommandListApi<GraphicsBackend::CommandList>);
 
+static_assert(GraphicsContract::DescribedResourceApi<GraphicsBackend::Heap, HeapDesc>);
 static_assert(GraphicsContract::TextureApi<GraphicsBackend::Texture>);
+static_assert(GraphicsContract::DescribedResourceApi<GraphicsBackend::StagingTexture, TextureDesc>);
 static_assert(GraphicsContract::BufferApi<GraphicsBackend::Buffer>);
 static_assert(GraphicsContract::ShaderApi<GraphicsBackend::Shader>);
+static_assert(GraphicsContract::ShaderLibraryApi<GraphicsBackend::ShaderLibrary>);
 static_assert(GraphicsContract::DescribedResourceApi<GraphicsBackend::Sampler, SamplerDesc>);
 static_assert(GraphicsContract::InputLayoutApi<GraphicsBackend::InputLayout>);
 static_assert(GraphicsContract::FramebufferApi<GraphicsBackend::Framebuffer>);
+static_assert(GraphicsContract::RayTracingOpacityMicromapApi<GraphicsBackend::RayTracingOpacityMicromap>);
 static_assert(GraphicsContract::RayTracingAccelStructApi<GraphicsBackend::RayTracingAccelStruct>);
 static_assert(GraphicsContract::BindingLayoutApi<GraphicsBackend::BindingLayout>);
 static_assert(GraphicsContract::GraphicsPipelineApi<GraphicsBackend::GraphicsPipeline>);

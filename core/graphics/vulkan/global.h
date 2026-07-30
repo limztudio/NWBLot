@@ -89,16 +89,22 @@ inline constexpr u32 s_TimerQueryBeginIndex = 0;
 inline constexpr u32 s_TimerQueryEndIndex = 1;
 inline constexpr u32 s_SingleQueryCount = 1;
 inline constexpr f32 s_DefaultRasterLineWidth = 1.0f;
-inline constexpr usize s_MeshletPipelineStageReserveCount = 2;
+inline constexpr usize s_MeshletPipelineStageReserveCount = 3;
 
 // CPU-side parallel tuning for Vulkan helper paths.
 inline constexpr usize s_CopyHostMemoryParallelThreshold = 1024 * 1024;
 inline constexpr usize s_CopyHostMemoryChunkSize = 256 * 1024;
 inline constexpr usize s_ParallelAdapterThreshold = 4;
+inline constexpr usize s_ParallelCoopVecThreshold = 128;
+inline constexpr usize s_ParallelSpecializationThreshold = 256;
 inline constexpr usize s_ParallelInputLayoutThreshold = 128;
 inline constexpr usize s_InputLayoutGrainSize = 64;
 inline constexpr usize s_ParallelConvertThreshold = 256;
 inline constexpr usize s_ConvertGrainSize = 64;
+inline constexpr usize s_ParallelTileCountThreshold = 128;
+inline constexpr usize s_TileCountGrainSize = 16;
+inline constexpr usize s_ParallelTileMappingThreshold = 128;
+inline constexpr usize s_TileMappingGrainSize = 8;
 inline constexpr usize s_ParallelGeometryThreshold = 256;
 inline constexpr usize s_GeometryGrainSize = 64;
 inline constexpr usize s_ParallelTlasInstanceThreshold = 1024;
@@ -108,7 +114,7 @@ inline constexpr usize s_MaxVulkanQueueFamilyKinds = 3u;
 
 // Ray tracing helper defaults.
 inline constexpr u64 s_DefaultTopLevelASBufferSize = 1024 * 1024;
-inline constexpr u32 s_RayTracingHitGroupShaderStageCount = 1;
+inline constexpr u32 s_RayTracingHitGroupShaderStageCount = 3;
 inline constexpr u32 s_TrianglesPerPrimitive = 3;
 inline constexpr u32 s_InstanceFieldMask24Bit = 0x00FFFFFF;
 
@@ -116,6 +122,7 @@ inline constexpr u32 s_InstanceFieldMask24Bit = 0x00FFFFFF;
 inline constexpr usize s_GraphicsPipelineScratchArenaBytes = 2048;
 inline constexpr usize s_DescriptorBindingScratchArenaBytes = 4096;
 inline constexpr usize s_RayTracingScratchArenaBytes = 4096;
+inline constexpr usize s_SparseTextureBindScratchArenaBytes = 8192;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

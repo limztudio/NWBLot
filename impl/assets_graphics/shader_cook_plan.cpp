@@ -546,6 +546,7 @@ bool PrepareShaderEntriesForCook(
             || preparedEntryArchiveStage == "ps"
             || preparedEntryArchiveStage == "cs"
             || preparedEntryArchiveStage == "rgen"
+            || preparedEntryArchiveStage == "rahit"
             || preparedEntryArchiveStage == "rchit"
             || preparedEntryArchiveStage == "rmiss"
         ;

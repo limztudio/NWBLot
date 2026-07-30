@@ -31,13 +31,18 @@ namespace GraphicsBackend{
     class BackendContext;
     using Backend = BackendContext;
     class Device;
+    class Heap;
     class Texture;
+    class StagingTexture;
+    class SamplerFeedbackTexture;
     class Buffer;
     class Shader;
+    class ShaderLibrary;
     class Sampler;
     class InputLayout;
     class Framebuffer;
     class AccelStruct;
+    class OpacityMicromap;
     class BindingLayout;
     class GraphicsPipeline;
     class ComputePipeline;
@@ -49,6 +54,7 @@ namespace GraphicsBackend{
     class CommandList;
     class GpuDescriptorHeap;   // Device-owned global descriptor heap; not a refcounted GraphicsResource.
 
+    using RayTracingOpacityMicromap = OpacityMicromap;
     using RayTracingAccelStruct = AccelStruct;
     using RayTracingShaderTable = ShaderTable;
 
@@ -58,13 +64,18 @@ namespace GraphicsBackend{
     void DestroyArenaReference(Alloc::GlobalArena* arena, Type* value)noexcept;
 
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Device)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Heap)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Texture)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(StagingTexture)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(SamplerFeedbackTexture)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Buffer)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Shader)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(ShaderLibrary)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Sampler)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(InputLayout)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Framebuffer)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(AccelStruct)
+    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(OpacityMicromap)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(BindingLayout)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(GraphicsPipeline)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(ComputePipeline)
@@ -86,12 +97,17 @@ namespace GraphicsBackend{
 
 
 using Device = GraphicsBackend::Device;
+using Heap = GraphicsBackend::Heap;
 using Texture = GraphicsBackend::Texture;
+using StagingTexture = GraphicsBackend::StagingTexture;
+using SamplerFeedbackTexture = GraphicsBackend::SamplerFeedbackTexture;
 using InputLayout = GraphicsBackend::InputLayout;
 using Buffer = GraphicsBackend::Buffer;
 using Shader = GraphicsBackend::Shader;
+using ShaderLibrary = GraphicsBackend::ShaderLibrary;
 using Sampler = GraphicsBackend::Sampler;
 using Framebuffer = GraphicsBackend::Framebuffer;
+using RayTracingOpacityMicromap = GraphicsBackend::RayTracingOpacityMicromap;
 using RayTracingAccelStruct = GraphicsBackend::RayTracingAccelStruct;
 using BindingLayout = GraphicsBackend::BindingLayout;
 using GraphicsPipeline = GraphicsBackend::GraphicsPipeline;
@@ -111,6 +127,7 @@ using GpuDescriptorHeap = GraphicsBackend::GpuDescriptorHeap;
 inline constexpr u32 s_MaxRenderTargets = 8;
 inline constexpr u32 s_MaxViewports = 16;
 inline constexpr u32 s_MaxVertexAttributes = 16;
+inline constexpr usize s_MaxProgrammableSamplePositions = 16u;
 inline constexpr u32 s_MaxBindingLayouts = 8;
 inline constexpr u32 s_MaxBindlessRegisterSpaces = 16;
 inline constexpr u32 s_MaxVolatileConstantBuffersPerLayout = 6;

@@ -140,6 +140,9 @@ static bool TryMapStageToSlangStage(const AStringView stage, AStringView& outSta
         { "rgen", "raygeneration" },
         { "rmiss", "miss" },
         { "rchit", "closesthit" },
+        { "rahit", "anyhit" },
+        { "rint", "intersection" },
+        { "rcall", "callable" },
     };
 
     for(const StageMapping& mapping : s_StageMappings){

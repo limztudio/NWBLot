@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "coopvec.h"
 #include "gpu_descriptor_heap.h"
 
 
@@ -19,11 +20,30 @@ NWB_CORE_BEGIN
 
 namespace Feature{
     enum Enum : u8{
+        ConservativeRasterization,
+        ConstantBufferRanges,
+        DeferredCommandLists,
+        FastGeometryShader,
+        HeapDirectlyIndexed,
+        HlslExtensionUAV,
+        LinearSweptSpheres,
         Meshlets,
         RayQuery,
         RayTracingAccelStruct,
+        RayTracingClusters,
+        RayTracingOpacityMicromap,
         RayTracingPipeline,
+        SamplerFeedback,
+        ShaderExecutionReordering,
+        ShaderSpecializations,
+        SinglePassStereo,
+        Spheres,
+        VariableRateShading,
+        VirtualResources,
         WaveLaneCountMinMax,
+        CooperativeVectorInferencing,
+        CooperativeVectorTraining,
+
         kCount
     };
 };
@@ -62,6 +82,10 @@ struct QueueSubmissionDesc{
         waitTokenCount = count;
         return *this;
     }
+};
+
+struct VariableRateShadingFeatureInfo{
+    u32 shadingRateImageTileSize;
 };
 
 struct WaveLaneCountMinMaxFeatureInfo{

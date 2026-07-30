@@ -1014,6 +1014,7 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     Core::RayTracingPipelineDesc pipelineDesc(arena());
     // Payload = NwbCausticHwPayload (3*float3 + 2*float + 2*uint = 52 bytes); round up to 64. Recursion stays 1 (the
     // shared bounce loop drives the bounces via a fresh TraceRay per segment, not shader recursion).
+    pipelineDesc.setMaxPayloadSize(static_cast<u32>(sizeof(f32) * 16u));
     pipelineDesc.setMaxRecursionDepth(1u);
     pipelineDesc.addBindingLayout(rayTracingState().m_hwCausticBindingLayout);
     // Pin the global resource (set 8), sampler (set 9), and TLAS (set 10) layouts onto the hardware caustic

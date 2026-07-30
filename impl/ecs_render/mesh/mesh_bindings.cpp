@@ -70,14 +70,9 @@ bool RendererMeshSystem::createMeshFrameHeapHandles(){
     if(meshFrameHeapHandlesReady())
         return true;
 
-    if(
-        drawState().m_instanceBufferHeapHandle.valid()
-        || drawState().m_materialTypedBufferHeapHandle.valid()
-        || drawState().m_meshViewBufferHeapHandle.valid()
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame heap registration is partially initialized"));
-        return false;
-    }
+    NWB_ASSERT(!drawState().m_instanceBufferHeapHandle.valid());
+    NWB_ASSERT(!drawState().m_materialTypedBufferHeapHandle.valid());
+    NWB_ASSERT(!drawState().m_meshViewBufferHeapHandle.valid());
     if(!drawState().m_instanceBuffer || !drawState().m_materialTypedBuffer || !drawState().m_meshViewBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame heap registration requires instance, typed-material, and view buffers"));
         return false;
@@ -170,14 +165,8 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
 
     // A failed earlier attempt leaves no live handles behind (the failure path below resets every acquired slot),
     // so a non-empty partial set signals a broken lifetime transition rather than something we can safely merge.
-    for(const Core::GpuDescriptorHandle handle : mesh.geometryHeapHandles){
-        if(handle.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has a partial geometry heap registration")
-                , StringConvert(mesh.meshName.c_str())
-            );
-            return false;
-        }
-    }
+    for(const Core::GpuDescriptorHandle handle : mesh.geometryHeapHandles)
+        NWB_ASSERT(!handle.valid());
 
     Core::GpuDescriptorHandle acquired[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
     bool registered = true;
@@ -254,12 +243,8 @@ bool RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(MeshResources& mesh){
     if(inputsReady())
         return true;
 
-    if(mesh.swBvhPositionHeapHandle.valid() || mesh.swBvhTriangleIndexHeapHandle.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has a partial software-BVH input heap registration")
-            , StringConvert(mesh.meshName.c_str())
-        );
-        return false;
-    }
+    NWB_ASSERT(!mesh.swBvhPositionHeapHandle.valid());
+    NWB_ASSERT(!mesh.swBvhTriangleIndexHeapHandle.valid());
     if(!mesh.positionBuffer || !mesh.triangleIndexBuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has no software-BVH position or triangle-index input")
             , StringConvert(mesh.meshName.c_str())

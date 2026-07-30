@@ -776,13 +776,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     NWB_ASSERT(m_preparedCsgFrameStateValid);
     NWB_ASSERT(m_shadowPrepareStateHandoff.valid());
-    if(!m_shadowPrepareStateHandoff.valid())
-        return;
     // AVBOIT can record before deferred lighting, so its heap-selected resources must have been uploaded by the
     // ordered shadow-preparation packet rather than relying on deferred lighting's otherwise-idempotent upload.
     NWB_ASSERT(deferredTargets.bindless.slotsUploaded);
-    if(!deferredTargets.bindless.slotsUploaded)
-        return;
 
     const CsgFrameState csgFrameState = m_preparedCsgFrameState;
     const bool hasOpaqueCsgFrameWork = csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
@@ -913,37 +909,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(!asyncAvboitSchedule || asyncAvboitIntegrationCommandList);
     NWB_ASSERT(!asyncAvboitSchedule || avboitAccumulateCommandList);
     NWB_ASSERT(deferredPresentCommandList);
-    if(
-        !meshViewSetupCommandList
-        || !sceneShadingSetupCommandList
-        || !deferredClearCommandList
-        || !gbufferCommandList
-        || !postGbufferNormalizeCommandList
-        || !shadowVisibilityCommandList
-        || !asyncRecoveryCommandList
-        || (asyncShadowSchedule && !asyncEffectsTimingBeginCommandList)
-        || (asyncShadowSchedule && !asyncEffectsTimingEndCommandList)
-        || !graphicsCausticsCommandList
-        || (asyncCausticsSchedule && !asyncCausticsCommandList)
-        || !causticsCommandList
-        || !graphicsSurfelGiCommandList
-        || (asyncSurfelGiSchedule && !asyncSurfelGiCommandList)
-        || !surfelGiCommandList
-        || !graphicsDeferredLightingCommandList
-        || (deferredLightingAsyncSchedule && !asyncDeferredLightingCommandList)
-        || !deferredLightingCommandList
-        || !graphicsDeferredCompositeCommandList
-        || (deferredLightingAsyncSchedule && !asyncDeferredCompositeCommandList)
-        || !deferredCompositeCommandList
-        || (captureLaggedLightingHistory && !asyncLaggedLightingStashCommandList)
-        || !avboitCommandList
-        || (asyncAvboitSchedule && !asyncAvboitDepthWarpCommandList)
-        || (asyncAvboitSchedule && !avboitExtinctionCommandList)
-        || (asyncAvboitSchedule && !asyncAvboitIntegrationCommandList)
-        || (asyncAvboitSchedule && !avboitAccumulateCommandList)
-        || !deferredPresentCommandList
-    )
-        return;
 
     m_meshViewSetupStateHandoff.reset();
     m_sceneShadingSetupStateHandoff.reset();

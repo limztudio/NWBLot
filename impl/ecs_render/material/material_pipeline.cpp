@@ -380,14 +380,9 @@ bool RendererMaterialSystem::createRendererPipeline(
     };
 
     auto tryBuildComputePipeline = [&]() -> bool{
-        if(
-            !drawState().m_computeBindingLayout
-            || !drawState().m_emulationVertexShader
-            || !drawState().m_emulationInputLayout
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compute-emulation resources were not validated before material pipeline creation"));
-            return false;
-        }
+        NWB_ASSERT(drawState().m_computeBindingLayout);
+        NWB_ASSERT(drawState().m_emulationVertexShader);
+        NWB_ASSERT(drawState().m_emulationInputLayout);
         const Name& meshComputeArchiveStageName = MaterialShaderStageNames::s_MeshComputeArchiveStageName;
         if(!m_renderer.shaderSystem().loadShader(
             resources.computeShader,

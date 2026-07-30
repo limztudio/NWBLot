@@ -2025,7 +2025,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             nullptr,
             0u,
             avboitDepthWarpInputBuffers,
-            sizeof(avboitDepthWarpInputBuffers) / sizeof(avboitDepthWarpInputBuffers[0])
+            LengthOf(avboitDepthWarpInputBuffers)
         )){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async AVBOIT depth-warp input state selection failed"));
             discardRenderPackets();
@@ -2122,9 +2122,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!m_avboitIntegrationInputStateHandoff.buildResourceSubset(
             m_avboitExtinctionStateHandoff,
             avboitIntegrationInputTextures,
-            sizeof(avboitIntegrationInputTextures) / sizeof(avboitIntegrationInputTextures[0]),
+            LengthOf(avboitIntegrationInputTextures),
             avboitIntegrationInputBuffers,
-            sizeof(avboitIntegrationInputBuffers) / sizeof(avboitIntegrationInputBuffers[0])
+            LengthOf(avboitIntegrationInputBuffers)
         )){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async AVBOIT integration input state selection failed"));
             discardRenderPackets();
@@ -2227,9 +2227,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!m_deferredLightingBaseStateHandoff.buildResourceSubset(
         m_postGbufferNormalizedStateHandoff,
         deferredLightingBaseTextures,
-        sizeof(deferredLightingBaseTextures) / sizeof(deferredLightingBaseTextures[0]),
+        LengthOf(deferredLightingBaseTextures),
         deferredLightingBaseBuffers,
-        sizeof(deferredLightingBaseBuffers) / sizeof(deferredLightingBaseBuffers[0])
+        LengthOf(deferredLightingBaseBuffers)
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-lighting base state selection failed"));
         discardRenderPackets();
@@ -2268,7 +2268,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!m_avboitLightingStateHandoff.buildResourceSubset(
         m_avboitStateHandoff,
         avboitLightingTextures,
-        sizeof(avboitLightingTextures) / sizeof(avboitLightingTextures[0]),
+        LengthOf(avboitLightingTextures),
         nullptr,
         0u
     )){
@@ -2342,7 +2342,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!m_avboitCompositeStateHandoff.buildResourceSubset(
         m_avboitStateHandoff,
         avboitCompositeTextures,
-        sizeof(avboitCompositeTextures) / sizeof(avboitCompositeTextures[0]),
+        LengthOf(avboitCompositeTextures),
         nullptr,
         0u
     )){
@@ -2358,7 +2358,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         nullptr,
         0u,
         deferredCompositeBaseBuffers,
-        sizeof(deferredCompositeBaseBuffers) / sizeof(deferredCompositeBaseBuffers[0])
+        LengthOf(deferredCompositeBaseBuffers)
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-composite base state selection failed"));
         discardRenderPackets();
@@ -2426,7 +2426,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         nullptr,
         0u,
         deferredPresentBaseBuffers,
-        sizeof(deferredPresentBaseBuffers) / sizeof(deferredPresentBaseBuffers[0])
+        LengthOf(deferredPresentBaseBuffers)
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-present base state selection failed"));
         discardRenderPackets();

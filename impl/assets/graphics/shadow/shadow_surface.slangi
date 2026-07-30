@@ -1,8 +1,12 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #ifndef NWB_GRAPHICS_SHADOW_SURFACE_SLANGI
 #define NWB_GRAPHICS_SHADOW_SURFACE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // The shadow trace's material-constants context. A material's surface hook reads its typed `.bind` constants
@@ -15,6 +19,9 @@
 // g_NwbMeshInstances) the accessors read.
 #define NWB_MESH_MATERIAL_CONTEXT_PROVIDED
 #include "../mesh/material_typed_bindings.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // One ray hit, fully resolved to the inputs a material surface hook needs. The trace fills it from the hit's
@@ -33,6 +40,9 @@ struct NwbShadowHit{
     float3 worldPosition;
     float3 rayDirection;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Per-invocation material context, set from the hit being shaded. A ray hit is shaded by a single dispatch call,
@@ -65,6 +75,9 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // The typed-word load families the generated .bind accessors build on. Pulled in AFTER the context accessors so
 // the Constant-storage loads (which expand nwbMeshMaterialConstantByteOffset()) + the instance type resolve to
 // this header's definitions. surface.slangi brings the surface contract (NwbMeshSurface / nwbMakeMeshSurface) +
@@ -74,6 +87,9 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
 // global nwbMaterialSurface(), and the generated dispatch wrapper inlines that entry's two steps instead).
 #include "../mesh/material_typed_accessors.slangi"
 #include "../mesh/surface.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Builds the surface-input bundle a hook reads from a ray hit. The trace supplies uv0 / normal / worldPosition;
@@ -93,6 +109,11 @@ NwbMeshSurfaceInputs nwbShadowBuildSurfaceInputs(NwbShadowHit hit){
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -1,9 +1,13 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "binding_slots.h"
 #include "bindless_resources.slangi"
 #include "constants.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct NwbSkinnedMeshPushConstants{
@@ -19,6 +23,9 @@ ConstantBuffer<NwbSkinnedMeshPushConstants> g_NwbSkinnedMeshPushConstants;
 #define g_NwbSkinnedMeshBindlessResources nwbSkinnedMeshHeapBindlessResources(\
     g_NwbSkinnedMeshPushConstants.payload1[NWB_SKINNED_MESH_PUSH_BINDLESS_RESOURCES_SLOT - 4u]\
 )
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 uint nwbSkinnedMeshMeshletCount(){
@@ -186,6 +193,9 @@ void nwbSkinnedMeshApplySkin(const uint skinIndex, inout float3 position, inout 
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void nwbSkinnedMeshSkinPosition(
     const NwbMeshletDesc meshlet,
     const NwbMeshletRefDecodeInfo decodeInfo,
@@ -257,6 +267,9 @@ void nwbSkinnedMeshMain(const uint meshletIndex, const uint groupThreadIndex){
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [numthreads(NWB_SKINNED_MESH_GROUP_SIZE_X, 1, 1)]
 void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     nwbSkinnedMeshMain(groupID.x, groupThreadID.x);
@@ -264,4 +277,6 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 
 #undef g_NwbSkinnedMeshBindlessResources
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

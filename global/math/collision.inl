@@ -1,4 +1,5 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #if !defined(NWB_MATH_COLLISION_INCLUDE_INLINE)
@@ -6,7 +7,13 @@
 #endif
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace CollisionDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 inline constexpr f32 s_RayEpsilon = 1.0e-20f;
@@ -693,7 +700,13 @@ inline void FrustumPlanes(
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] NWB_INLINE SIMDVector SIMDCALL PlaneTests::Distance(const SIMDVector plane, const SIMDVector point)noexcept{
@@ -712,6 +725,9 @@ inline void FrustumPlanes(
         unitNormal = VectorSetW(VectorMultiply(normal, VectorReciprocalSqrt(lengthSquared)), 0.0f);
     return VectorSetW(unitNormal, -VectorGetX(Vector3Dot(unitNormal, point)));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] NWB_INLINE SIMDVector SIMDCALL SdfTests::Plane(
@@ -804,6 +820,9 @@ inline void FrustumPlanes(
         minLengthSquared
     );
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] NWB_INLINE bool SIMDCALL AabbTests::Valid(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
@@ -935,6 +954,9 @@ NWB_INLINE void SIMDCALL AabbTests::ExpandTriangle(
         && VectorGetX(VectorGreaterOrEqual(ca, negativeTolerance)) != 0.0f
     ;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 inline void SIMDCALL BoundingSphere::transform(BoundingSphere& outSphere, const SIMDMatrix& matrix)const noexcept{
@@ -1238,6 +1260,9 @@ inline void BoundingSphere::createFromFrustum(BoundingSphere& outSphere, const B
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline void SIMDCALL BoundingBox::transform(BoundingBox& outBox, const SIMDMatrix& matrix)const noexcept{
     SIMDVector corners[s_CornerCount];
     CollisionDetail::AabbCorners(LoadFloat(center), LoadFloat(extents), corners);
@@ -1492,6 +1517,9 @@ inline void BoundingBox::createFromPoints(
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline void SIMDCALL BoundingOrientedBox::transform(BoundingOrientedBox& outBox, const SIMDMatrix& matrix)const noexcept{
     SIMDVector scale{};
     SIMDVector rotation{};
@@ -1717,6 +1745,9 @@ inline void BoundingOrientedBox::createFromPoints(
     BoundingBox::createFromPoints(box, count, points, stride);
     createFromBoundingBox(outBox, box);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 inline BoundingFrustum::BoundingFrustum(const SIMDMatrix& projection, const bool rightHandedCoordinates)noexcept{
@@ -2047,6 +2078,9 @@ inline void SIMDCALL BoundingFrustum::createFromMatrix(
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] inline bool SIMDCALL TriangleTests::Intersects(
     const SIMDVector origin,
     const SIMDVector direction,
@@ -2118,4 +2152,6 @@ inline void SIMDCALL BoundingFrustum::createFromMatrix(
     return CollisionDetail::ContainmentFromPlaneTests(points, CollisionDetail::s_TriangleVertexCount, planes, CollisionDetail::s_FrustumPlaneCount);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

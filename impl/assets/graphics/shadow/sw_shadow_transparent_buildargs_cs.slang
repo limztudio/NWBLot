@@ -1,4 +1,5 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Stage-3 BUILD INDIRECT ARGS (compacted transparent resolve). One thread: clamp the classify pass's append count to
@@ -15,6 +16,9 @@
 #define g_NwbSwShadowIndirectArgs NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.indirectArgsStorageSlot)
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [numthreads(NWB_SW_SHADOW_GROUP_SIZE, NWB_SW_SHADOW_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(dispatchThreadID.x != 0u || dispatchThreadID.y != 0u)
@@ -29,4 +33,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     g_NwbSwShadowEdgeCounter[NWB_SW_SHADOW_EDGE_COUNTER_TRACE] = count;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

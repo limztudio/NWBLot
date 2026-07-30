@@ -1,4 +1,5 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #pragma once
@@ -11,7 +12,13 @@
 #include <cstddef>
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_SCENE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Default camera projection policy. The zero aspect-ratio sentinel deliberately asks the renderer to derive the
@@ -23,6 +30,9 @@ inline constexpr f32 s_FarPlane = 10000.0f;
 inline constexpr f32 s_AutoAspectRatio = 0.0f;
 inline constexpr f32 s_FallbackAspectRatio = 1.0f;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct alignas(Float4) TransformComponent{
@@ -42,6 +52,9 @@ static_assert((offsetof(TransformComponent, rotation) % alignof(Float4)) == 0, "
 static_assert((offsetof(TransformComponent, scale) % alignof(Float4)) == 0, "TransformComponent::scale must stay aligned");
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct ActiveCameraComponent{
     Core::ECS::EntityID camera = Core::ECS::ENTITY_ID_INVALID;
 };
@@ -49,6 +62,9 @@ struct ActiveCameraComponent{
 static_assert(IsStandardLayout_V<ActiveCameraComponent>, "ActiveCameraComponent must stay layout-stable for ECS storage");
 static_assert(IsTriviallyCopyable_V<ActiveCameraComponent>, "ActiveCameraComponent must stay cheap to move in dense ECS storage");
 static_assert(sizeof(ActiveCameraComponent) == sizeof(Core::ECS::EntityID), "ActiveCameraComponent must only contain the active camera entity reference");
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct alignas(Float4) CameraComponent{
@@ -80,6 +96,9 @@ static_assert((sizeof(CameraComponent) % alignof(CameraComponent)) == 0, "Camera
 static_assert((offsetof(CameraComponent, projection) % alignof(Float4)) == 0, "CameraComponent::projection must stay aligned");
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace LightType{
     enum Enum : u8{
         Directional,
@@ -89,6 +108,9 @@ namespace LightType{
         kCount
     };
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Default physical-light policy shared by authoring components and the renderer's resolved light representation.
@@ -102,6 +124,9 @@ inline constexpr f32 s_DirectionalAngularRadius = 0.00465f;
 inline constexpr f32 s_PunctualSourceRadius = 0.1f;
 inline constexpr bool s_EnableCaustics = true;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct alignas(Float4) LightComponent{
@@ -155,6 +180,11 @@ static_assert((offsetof(LightComponent, angularRadius) % alignof(f32)) == 0, "Li
 static_assert((offsetof(LightComponent, sourceRadius) % alignof(f32)) == 0, "LightComponent::sourceRadius must stay aligned");
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_SCENE_END
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -1,8 +1,12 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "binding_slots.h"
 #include "constants.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct NwbCsgReceiverSurfaceEvent{
@@ -32,6 +36,9 @@ ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPush
 #define g_NwbCsgReceiverEventCount (NwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgSpanSlots.x))
 #define g_NwbCsgReceiverSpanData (NwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgSpanSlots.y))
 #define g_NwbCsgReceiverSpanCount (NwbHeapStorageImage2DArrayUint2(g_NwbCsgBindlessResources.csgSpanSlots.z))
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 uint2 nwbCsgReceiverSpanBuildFrameExtent(){
@@ -203,6 +210,9 @@ void nwbCsgReceiverSpanBuildPairEvents(
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [numthreads(NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_X, NWB_CSG_INTERVAL_PEEL_GROUP_SIZE_Y, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint2 frameExtent = nwbCsgReceiverSpanBuildFrameExtent();
@@ -234,4 +244,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     g_NwbCsgReceiverSpanCount[uint3(pixel, 0u)] = uint2(spanCount, flags);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

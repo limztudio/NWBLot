@@ -1,8 +1,12 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "resolve_binding_slots.h"
 #include "../bindless/bindless_heap.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Geometry downsample pre-pass for the half-res caustic resolve. The resolve runs at half resolution but its edge-stop +
@@ -29,6 +33,9 @@ struct NwbCausticGeometryDownsamplePushConstants{
 ConstantBuffer<NwbCausticGeometryDownsamplePushConstants> g_NwbCausticGeometryDownsamplePushConstants;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [numthreads(NWB_CAUSTIC_RESOLVE_GROUP_SIZE, NWB_CAUSTIC_RESOLVE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint2 halfTexel = dispatchThreadID.xy;
@@ -47,4 +54,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     NwbHeapStorageImage2DFloat4(g_NwbCausticGeometryDownsamplePushConstants.outputStorageSlot)[halfTexel] = float4(world, validity);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

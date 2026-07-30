@@ -1,4 +1,5 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Per-runtime skinned-mesh StorageBuffer-heap selectors. The C++ RuntimeBindlessResourceSlots mirror is four std140
@@ -9,8 +10,14 @@
 #define NWB_GRAPHICS_SKINNED_MESH_BINDLESS_RESOURCES_SLANGI
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "../bindless/bindless_heap.slangi"
 #include "../mesh/meshlet_payload.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct NwbSkinnedMeshSkinInfluence{
@@ -41,6 +48,9 @@ ConstantBuffer<NwbSkinnedMeshBindlessResources, Std140DataLayout> g_NwbHeapSkinn
 #pragma warning(pop)
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // These aliases intentionally view the one global StorageBuffer descriptor table with the strides the skinned compute
 // passes require. Read-only and writable views share a Vulkan STORAGE_BUFFER descriptor; the resource access qualifier
 // remains shader-local, so each pass can fetch exactly the persistent stream it needs.
@@ -65,6 +75,9 @@ StructuredBuffer<NwbSkinnedMeshSkinInfluence, Std430DataLayout> g_NwbHeapSkinned
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 StructuredBuffer<NwbSkinnedMeshJointMatrix, Std430DataLayout> g_NwbHeapSkinnedMeshJointMatrixBuffers[];
 #pragma warning(pop)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 StructuredBuffer<NwbMeshPosition, Std430DataLayout> nwbSkinnedMeshHeapPositions(const uint slot){
@@ -112,6 +125,11 @@ ConstantBuffer<NwbSkinnedMeshBindlessResources, Std140DataLayout> nwbSkinnedMesh
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

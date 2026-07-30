@@ -1,4 +1,5 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "shadow_resolve_binding_slots.h"
@@ -6,6 +7,9 @@
 #include "shadow_heap_resources.slangi"
 #include "../scene/binding_slots.h"
 #include "../common/math.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // A-trous WAVELET channel count: 1 = SCALAR (soft OPAQUE grayscale visibility -- the default), 3 = RGB (soft
@@ -109,6 +113,9 @@ groupshared float  s_NwbShadowResolveTileDist[NWB_SHADOW_RESOLVE_TILE_TEXELS];  
 groupshared uint   s_NwbShadowResolveTileValid[NWB_SHADOW_RESOLVE_TILE_TEXELS]; // 1 = receiver
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Half-res geometry cache accessors (see shadow_geometry_downsample_cs): .xy = octahedral normal, .z = camera
 // distance, .w = validity.
 float4 nwbShadowResolveGeomAtHalf(const int2 halfTexel){
@@ -117,6 +124,9 @@ float4 nwbShadowResolveGeomAtHalf(const int2 halfTexel){
 bool nwbShadowResolveValidAtHalf(const int2 halfTexel){
     return NwbHeapSampledImage2D(g_NwbShadowResolvePushConstants.geometrySlot).Load(int3(halfTexel, 0)).w > 0.5;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // 5x5 B-spline a-trous kernel (separable [1,4,6,4,1]/16). Edge-AVOIDING: each tap is weighted by the spatial kernel
@@ -526,4 +536,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

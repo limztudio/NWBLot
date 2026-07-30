@@ -1,4 +1,5 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Stage-2 ADAPTIVE transparent resolve (full resolution). One thread per full-res pixel: read the coarse neighbourhood;
@@ -26,6 +27,9 @@
 // Edge-fraction instrumentation counter ([0] full-res traced rays, [1] total candidate rays). Tallied only when
 // collectStats is set; read back to the log to decide the Stage-3 payoff.
 #define g_NwbSwShadowEdgeStats NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeStatsStorageSlot)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [numthreads(NWB_SW_SHADOW_GROUP_SIZE, NWB_SW_SHADOW_GROUP_SIZE, 1)]
@@ -82,4 +86,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

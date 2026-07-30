@@ -1,4 +1,5 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #ifndef NWB_GRAPHICS_CAUSTIC_HW_COMMON_SLANGI
@@ -75,6 +76,9 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "light_pick.slangi"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // The closest-hit payload carries the NwbCausticHit fields (caustic_trace.slangi) the shared bounce loop consumes; the
 // transmission tint stays float3 here for stable ray-payload packing and is narrowed when the raygen builds NwbCausticHit.
 // The two bool fields ride as uint for stable HLSL payload packing. The closest-hit fills every field, the miss clears
@@ -116,6 +120,8 @@ StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbHeapCausticHwE
 ConstantBuffer<NwbCausticHwView, Std140DataLayout> g_NwbHeapCausticHwViews[];
 #pragma warning(pop)
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 // The fixed-function intersector supplies triangle/barycentric data; its InstanceID selects the heap-backed material
 // record through the UniformBuffer heap payload. Per-corner attributes remain separately addressed by that record's
@@ -142,6 +148,9 @@ StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> nwbCausticHwEmissio
 ConstantBuffer<NwbCausticHwView, Std140DataLayout> nwbCausticHwView(){
     return g_NwbHeapCausticHwViews[g_NwbCausticHwPushConstants.viewSlot];
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Per-triangle-corner attribute load -- identical layout to the SW kernel's nwbCausticSwLoadVertexAttrib + the
@@ -171,6 +180,9 @@ NwbCausticHwVertexAttrib nwbCausticHwLoadVertexAttrib(const uint attributeSlot, 
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #define NWB_CAUSTIC_SPLAT_VIEW nwbCausticHwView()
 #define NWB_CAUSTIC_SPLAT_PUSH g_NwbCausticHwPushConstants
 #define NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH nwbCausticHwGbufferDepth()
@@ -184,6 +196,11 @@ NwbCausticHwVertexAttrib nwbCausticHwLoadVertexAttrib(const uint attributeSlot, 
 #undef NWB_CAUSTIC_SPLAT_VIEW
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

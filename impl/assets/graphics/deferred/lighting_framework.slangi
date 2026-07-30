@@ -1,8 +1,12 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #ifndef NWB_GRAPHICS_DEFERRED_LIGHTING_FRAMEWORK_SLANGI
 #define NWB_GRAPHICS_DEFERRED_LIGHTING_FRAMEWORK_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Deferred lighting framework: the engine-provided library used by the compute lighting pass. It exposes the surface
@@ -49,6 +53,9 @@ ConstantBuffer<NwbDeferredLightingPushConstants> g_NwbDeferredLightingPushConsta
 #undef NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Resolved surfel-GI indirect irradiance (RGBA16F, screen space): the surfel_resolve_cs COMPUTE pass gathered the
 // surfel field once per pixel into this texture (rgb = indirect irradiance, a = 1 where a surfel covered the pixel,
 // 0 = none). The lighting dispatch reads THIS texture rather than the read-write surfel pool, which prevents a
@@ -65,6 +72,9 @@ half3 nwbBxdfResolvedIndirect(const int2 pixel, float3 normalVector){
 
 // NwbBxdfSurface (the BXDF parameter type) is shared with the transparent / AVBOIT accumulate path; it lives
 // in deferred/bxdf_surface.slangi, included above.
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 float3 nwbDeferredDecodeNormal(half3 value){
@@ -100,6 +110,11 @@ half3 nwbBxdfTonemap(half3 color){
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

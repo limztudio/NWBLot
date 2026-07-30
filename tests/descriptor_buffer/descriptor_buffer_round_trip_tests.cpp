@@ -1,4 +1,5 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Descriptor-buffer round-trip proof — VK_EXT_descriptor_buffer.
@@ -40,7 +41,13 @@
 #include <volk/volk.h>
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 namespace Tests{
@@ -51,6 +58,12 @@ namespace Tests{
 // suite is nested in NWB::Tests, so a single using-directive keeps the bodies readable without full qualification.
 // DescriptorBufferSegmentKind is a nested namespace inside GraphicsBackend and is spelled out fully at each use.
 using namespace Core;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Brings up a real headless GPU device with the minimum dependency set Graphics requires, mirroring Core::Frame's
@@ -103,6 +116,9 @@ private:
     Perf::TimingRecorder m_gpuTiming;
     Graphics m_graphics;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Fixture: one headless device shared across the suite. The descriptor-buffer segments are HOST-mapped and persist
@@ -184,6 +200,9 @@ TEST_F(DescriptorBufferRoundTripTest, DeviceRecreationRequestStopsTheCurrentGrap
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline constexpr GpuTimingScopeDefinition s_FrameTimingPreambleScope("tests/frame_timing_preamble");
 inline constexpr GpuTimingScopeDefinition s_FrameTimingLateActivationScope("tests/frame_timing_late_activation");
 inline constexpr GpuTimingScopeDefinition s_SubmissionTicketScope("tests/timing_submission_ticket");
@@ -263,6 +282,9 @@ private:
     FramebufferHandle m_framebuffer;
     bool m_recorded = false;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Manager is enabled and its two global segments report a non-zero device address after device init. The bound
@@ -3196,6 +3218,9 @@ TEST_F(DescriptorBufferRoundTripTest, CausticGeometryDownsampleShapeBuildsAsDesc
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Caustic accumulator decay selects its writable R32_UINT Texture2DArray from the global StorageImage heap. Its local
 // ABI is only the four-word push block.
 TEST_F(DescriptorBufferRoundTripTest, CausticAccumulatorDecayShapeBuildsAsDescriptorBuffer){
@@ -3218,6 +3243,9 @@ TEST_F(DescriptorBufferRoundTripTest, CausticAccumulatorDecayShapeBuildsAsDescri
     EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Both caustic photon producers fetch every selector, input, and accumulator output from the global descriptor heap.
@@ -3256,6 +3284,9 @@ TEST_F(DescriptorBufferRoundTripTest, CausticPhotonProducerShapesBuildAsDescript
     EXPECT_EQ(hwLayout->getDescriptorBufferSetSizeBytes(), 0u);
     EXPECT_TRUE(hwLayout->getDescriptorBufferBindingOffsets().empty());
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Both surfel-GI trace backends select their target-generation, material-context, surfel, and scene data through the
@@ -3328,6 +3359,9 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelTraceShapesBuildAsDescriptorBuffer){
         << "surfel HW trace shape did not route to the descriptor-buffer path";
     EXPECT_TRUE(hwLayout->getDescriptorBufferBindingOffsets().empty());
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Surfel upsample selects its half irradiance, G-buffer inputs, and storage output through the descriptor heap. Its
@@ -3411,6 +3445,9 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelHashBuildShapeBuildsAsDescriptorBuff
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TEST_F(DescriptorBufferRoundTripTest, SurfelAgeFreeShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
@@ -3455,6 +3492,9 @@ TEST_F(DescriptorBufferRoundTripTest, SurfelAgeFreeShapeBuildsAsDescriptorBuffer
         << "surfel age-free shape did not route to the descriptor-buffer path";
     EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 TEST_F(DescriptorBufferRoundTripTest, SurfelTraceBuildArgsShapeBuildsAsDescriptorBuffer){
@@ -4221,9 +4261,17 @@ TEST_F(DescriptorBufferRoundTripTest, PipelineLocalResourceLayoutsAreRejected){
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 }; // namespace Tests
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_END
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

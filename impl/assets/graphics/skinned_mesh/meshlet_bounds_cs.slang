@@ -1,4 +1,5 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "binding_slots.h"
@@ -6,8 +7,14 @@
 #include "constants.h"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static const float NWB_SKINNED_MESH_BOUNDS_FLOAT_MAX = 3.402823e+38;
 static const float NWB_SKINNED_MESH_BOUNDS_RADIUS_INFLATION = 1.25;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct NwbSkinnedMeshBoundsPushConstants{
@@ -23,6 +30,9 @@ ConstantBuffer<NwbSkinnedMeshBoundsPushConstants> g_NwbSkinnedMeshBoundsPushCons
 )
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 groupshared float3 g_NwbSkinnedMeshBoundsMin[NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X];
 groupshared float3 g_NwbSkinnedMeshBoundsMax[NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X];
 groupshared float g_NwbSkinnedMeshBoundsRadiusSq[NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X];
@@ -32,6 +42,9 @@ groupshared uint g_NwbSkinnedMeshBoundsValidPositionCount[NWB_SKINNED_MESH_BOUND
 groupshared uint g_NwbSkinnedMeshBoundsValidFaceNormalCount[NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X];
 groupshared float3 g_NwbSkinnedMeshBoundsCenter;
 groupshared float3 g_NwbSkinnedMeshBoundsConeAxis;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 uint nwbSkinnedMeshBoundsMeshletCount(){
@@ -397,4 +410,6 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 
 #undef g_NwbSkinnedMeshBoundsBindlessResources
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -1,4 +1,5 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Build the trace's DispatchIndirectArguments: 1 thread reads the allocation high-water BUMP_TOP + the update
@@ -13,9 +14,15 @@
 #include "surfel_heap_resources.slangi"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #define g_NwbSurfelBuildArgsConstants g_NwbHeapSurfelConstantBuffers[g_NwbSurfelHeapPushConstants.constantsHeapSlot]
 #define g_NwbSurfelBuildArgsCounter g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.counterHeapSlot]
 #define g_NwbSurfelBuildArgsOutput g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.traceIndirectArgsHeapSlot]
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [numthreads(
@@ -37,4 +44,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     g_NwbSurfelBuildArgsOutput[NWB_SURFEL_TRACE_INDIRECT_ARGS_GROUP_COUNT_Z] = 1u;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

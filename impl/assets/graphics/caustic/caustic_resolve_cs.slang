@@ -1,9 +1,13 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 #include "resolve_binding_slots.h"
 #include "splat_constants.slangi"
 #include "../bindless/bindless_heap_uint_array.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Caustic resolve = an EDGE-AVOIDING A-TROUS WAVELET denoise (Dammertz et al.), run at HALF RESOLUTION as N ping-pong
@@ -60,6 +64,9 @@ groupshared half3  s_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS]
 groupshared float3 s_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   s_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   s_NwbCausticResolveTileActive; // 1 iff the loaded tile+halo holds ANY caustic -> empty-tile early-out
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Half-res receiver geometry, read from the precomputed cache. xyz = world position (the 2x point sample of the
@@ -306,4 +313,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
 #undef g_NwbCausticResolveOutput
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

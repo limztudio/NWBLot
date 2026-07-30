@@ -3808,7 +3808,7 @@ TEST_F(DescriptorBufferRoundTripTest, ShadowReprojectMergeShapeBuildsAsDescripto
 
 
 // The HW hard and soft inline-RayQuery passes select their TLAS, G-buffer inputs, and visibility outputs from the
-// global heap. They differ only in their six-word hard and eight-word soft push selector ABIs.
+// global heap. They differ only in their six-word hard and nine-word soft push selector ABIs.
 TEST_F(DescriptorBufferRoundTripTest, ShadowRtTraceShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
 
@@ -3821,7 +3821,7 @@ TEST_F(DescriptorBufferRoundTripTest, ShadowRtTraceShapeBuildsAsDescriptorBuffer
     };
     const RayQueryShape shapes[] = {
         { "hard", 6u },
-        { "soft", 8u },
+        { "soft", 9u },
     };
     for(const RayQueryShape& shape : shapes){
         SCOPED_TRACE(shape.name);
@@ -3840,7 +3840,7 @@ TEST_F(DescriptorBufferRoundTripTest, ShadowRtTraceShapeBuildsAsDescriptorBuffer
 }
 
 
-// All nine software-shadow kernels share one 20-word selector push ABI. Their G-buffer, context, output, scratch,
+// All nine software-shadow kernels share one 21-word selector push ABI. Their G-buffer, context, output, scratch,
 // and indirect resources are global-heap entries, leaving no local descriptor bindings.
 TEST_F(DescriptorBufferRoundTripTest, SwShadowTraceShapeBuildsAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
@@ -3850,7 +3850,7 @@ TEST_F(DescriptorBufferRoundTripTest, SwShadowTraceShapeBuildsAsDescriptorBuffer
 
     BindingLayoutDesc layoutDesc(descArena);
     layoutDesc.setVisibility(ShaderType::Compute);
-    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 20u));
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 21u));
 
     auto layout = device.createBindingLayout(layoutDesc);
     ASSERT_NE(layout.get(), nullptr);

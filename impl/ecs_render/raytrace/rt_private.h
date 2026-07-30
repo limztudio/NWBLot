@@ -263,7 +263,7 @@ namespace RtInstanceMaterialFlag{
 inline constexpr usize s_ShadowInstanceMaterialInitialCapacity = 128u;
 
 // CPU mirror of sw_shadow_heap_resources.slangi. Every software-shadow pass uses this one heap-only selector block:
-// fields unused by a particular kernel are inert, while the shared layout remains a fixed 80-byte push range.
+// fields unused by a particular kernel are inert, while the shared layout remains a fixed 84-byte push range.
 struct SwShadowHeapPushConstants{
     u32 width = 0u;
     u32 height = 0u;
@@ -285,8 +285,10 @@ struct SwShadowHeapPushConstants{
     u32 edgeCounterStorageSlot = 0u;
     u32 edgeListStorageSlot = 0u;
     u32 indirectArgsStorageSlot = 0u;
+    u32 softSampleCount = NWB_SW_SHADOW_SOFT_SPP;
 };
-static_assert(sizeof(SwShadowHeapPushConstants) == sizeof(u32) * 20u, "SwShadowHeapPushConstants must match the shader push-constant layout");
+static_assert(NWB_SW_SHADOW_SOFT_TEMPORAL_SPP >= 1u && NWB_SW_SHADOW_SOFT_TEMPORAL_SPP <= NWB_SW_SHADOW_SOFT_SPP, "temporal soft-shadow sample budget must be within the bootstrap budget");
+static_assert(sizeof(SwShadowHeapPushConstants) == sizeof(u32) * 21u, "SwShadowHeapPushConstants must match the shader push-constant layout");
 
 // CPU mirror of the hardware RayQuery shadow push constants (shadow_rayquery_cs.slang): the cone-jitter frame counter
 // followed by target-generation heap slots for the full-resolution world-position, normal, and depth G-buffers.
@@ -314,8 +316,9 @@ struct ShadowRqSoftPushConstants{
     u32 depthSlot = 0u;
     u32 deferredResourcesHeapSlot = 0u;
     u32 visibilityStorageSlot = 0u;
+    u32 softSampleCount = NWB_SW_SHADOW_SOFT_SPP;
 };
-static_assert(sizeof(ShadowRqSoftPushConstants) == sizeof(u32) * 8u, "ShadowRqSoftPushConstants must match the shader push-constant layout");
+static_assert(sizeof(ShadowRqSoftPushConstants) == sizeof(u32) * 9u, "ShadowRqSoftPushConstants must match the shader push-constant layout");
 
 // CPU mirror of shadow_resolve_cs.slang's NwbShadowResolvePushConstants: the full/half dims, the a-trous dilation +
 // stage selector, the active shadow-slot range the resolve loops, the temporal-moments-valid flag, the upsample fold,

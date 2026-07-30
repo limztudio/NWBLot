@@ -13,7 +13,7 @@
 
 
 // One push ABI serves every software-shadow kernel.  The old per-pass structs made the shared G-buffer/context
-// selectors local CBVs; keeping all selectors in this compact (80-byte) block makes every source independent of a
+// selectors local CBVs; keeping all selectors in this compact (84-byte) block makes every source independent of a
 // set-0 resource block while preserving each pass's existing width/trace-control fields.
 struct NwbSwShadowHeapPushConstants{
     uint width;
@@ -36,6 +36,7 @@ struct NwbSwShadowHeapPushConstants{
     uint edgeCounterStorageSlot;
     uint edgeListStorageSlot;
     uint indirectArgsStorageSlot;
+    uint softSampleCount;
 };
 
 [[vk::push_constant]]

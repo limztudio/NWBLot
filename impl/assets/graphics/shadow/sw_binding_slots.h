@@ -126,8 +126,10 @@
 // lit and casts no candidate ray. The gbuffer concern's nwbSwShadowIsBackground and every pass share this definition.
 #define NWB_SW_SHADOW_BACKGROUND_DEPTH 0.999999
 
-// Two opaque samples reduce shimmer when temporal history resets.
+// Two opaque samples seed/reset temporal history without shimmer. Once an accepted history is available, the trace
+// drops to the smaller runtime budget below while the reproject-merge still validates every current sample.
 #define NWB_SW_SHADOW_SOFT_SPP 2u
+#define NWB_SW_SHADOW_SOFT_TEMPORAL_SPP 1u
 
 // One transparent sample converges after temporal RGB denoising.
 #define NWB_SW_SHADOW_TRANSPARENT_SPP 1u

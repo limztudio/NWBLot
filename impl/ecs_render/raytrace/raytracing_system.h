@@ -210,6 +210,7 @@ private:
     // every sampled and writable image. swapSoftShadowTemporalHistory stashes this frame's worldToClip for next-frame reprojection +
     // ping-pongs the history / moments / geometry buffers at frame end (guarded on m_softShadowTemporalReady).
     [[nodiscard]] bool ensureShadowReprojectMergePipeline();
+    [[nodiscard]] bool softShadowTemporalHistoryUsable()const noexcept;
     void swapSoftShadowTemporalHistory(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureSwCausticPipeline();
     [[nodiscard]] bool ensureCausticMaterialContextSlotsHeapHandle();

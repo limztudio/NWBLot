@@ -43,6 +43,18 @@ struct ShadowReprojectMergeHeapResources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool RendererRayTracingSystem::softShadowTemporalHistoryUsable()const noexcept{
+    return
+        rayTracingState().m_softShadowTemporalReady
+        && rayTracingState().m_prevWorldToClipValid
+        && rayTracingState().m_softShadowTemporalSeeded
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 frameIndex, u32 softGroupsX, u32 softGroupsY){
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
@@ -107,11 +119,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
 
     const bool frontIsA = rayTracingState().m_softShadowHistoryFrontIsA != 0u;
     const bool opaqueTemporalActive = rayTracingState().m_softShadowTemporalReady;
-    const u32 historyValid = (
-        opaqueTemporalActive
-        && rayTracingState().m_prevWorldToClipValid
-        && rayTracingState().m_softShadowTemporalSeeded
-    ) ? 1u : 0u;
+    const u32 historyValid = softShadowTemporalHistoryUsable() ? 1u : 0u;
 
     const auto dispatchMerge = [&](const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources& resources){
         NWB_ASSERT(resources.softTrace && resources.historyIn && resources.momentsIn && resources.historyOut && resources.momentsOut);
@@ -215,6 +223,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
         tracePush.height = targets.height;
         tracePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
         tracePush.frameIndex = frameIndex;
+        tracePush.softSampleCount = NWB_SW_SHADOW_TRANSPARENT_SPP;
         tracePush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
         tracePush.materialContextSlotsHeapSlot = rayTracingState().m_shadowMaterialContextSlotsHeapHandle.slot();
         tracePush.visibilityStorageSlot = targets.bindless.shadowVisibilityStorage.slot();

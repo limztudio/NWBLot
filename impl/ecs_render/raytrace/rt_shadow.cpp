@@ -439,6 +439,9 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         softPush.width = targets.width;
         softPush.height = targets.height;
         softPush.frameIndex = frameIndex;
+        softPush.softSampleCount = softShadowTemporalHistoryUsable()
+            ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP
+            : NWB_SW_SHADOW_SOFT_SPP;
         softPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
         softPush.normalSlot = targets.bindless.gbufferNormal.slot();
         softPush.depthSlot = targets.bindless.gbufferDepth.slot();
@@ -665,6 +668,9 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             softTracePush.width = targets.width;
             softTracePush.height = targets.height;
             softTracePush.frameIndex = frameIndex;
+            softTracePush.softSampleCount = softShadowTemporalHistoryUsable()
+                ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP
+                : NWB_SW_SHADOW_SOFT_SPP;
             commandList.setComputeState(passState(rayTracingState().m_swShadowSoftOpaquePipeline));
             bindPassHeap(rayTracingState().m_swShadowSoftOpaquePipeline);
             commandList.setPushConstants(&softTracePush, sizeof(softTracePush));

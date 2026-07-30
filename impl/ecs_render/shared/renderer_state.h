@@ -581,9 +581,8 @@ struct RtSoftShadowState{
     u32 m_softShadowSlotMask = 0u;
     // Soft opaque shadow (soft-ray-traced-shadow feature): a per-frame counter seeding the per-pixel low-discrepancy
     // cone-jitter sample. Incremented once per frame by whichever primary shadow producer runs (the HW RayQuery opaque
-    // trace on the HW path, the no-RT software traversal otherwise -- mutually exclusive per frame), so each pixel's
-    // single jittered ray walks the source across frames. No temporal reuse this stage, so this only decorrelates the
-    // per-frame sample (a later stage feeds it into a temporal accumulator).
+    // trace on the HW path, the no-RT software traversal otherwise -- mutually exclusive per frame). Bootstrap uses the
+    // full sample budget; once accepted history exists the trace uses the temporal budget while the merge validates it.
     u32 m_softShadowFrameIndex = 0u;
     // Shadow geometry downsample pre-pass (its own pipeline): fills the half-res packed geometry cache (octahedral
     // normal + camera distance + validity) the resolve passes read for the edge-stop, so they tap one half-res texel.

@@ -4,11 +4,11 @@
 failure-injection coverage, the M5 software-caustics migration, M6 surfel-GI migration, M7 hardware
 `dispatchRays`-caustics migration, M8 hybrid AVBOIT migration, M9 deferred-lighting migration, and M10 deferred-
 composite migration are implemented
-behind the experimental async-compute switch. The M4 target-hardware benchmark/validation harness is available;
+behind the default best-effort async-compute request. The M4 target-hardware benchmark/validation harness is available;
 distinct-family pixel-parity and performance results, including the caustics, surfel-GI, AVBOIT, deferred-lighting,
 and composite slices, remain pending.
 
-When the switch resolves `AsyncCompute` to a dedicated Compute family, shadow visibility and either caustic producer
+When the default request resolves `AsyncCompute` to a dedicated Compute family, shadow visibility and either caustic producer
 join the same accepted Compute submission. Vulkan specifies `vkCmdTraceRaysKHR` for command pools that support
 `VK_QUEUE_COMPUTE_BIT`, which includes the selected dedicated Compute family. Surfel GI also joins that packet on both
 trace backends because its hardware variant uses inline `RayQuery` from an ordinary compute dispatch. Unsupported or
@@ -29,6 +29,8 @@ This is deliberately a narrow proof point. It tests the hard parts of multi-queu
 resource sharing, queue-family ownership, timeline dependencies, timing, and partial submission
 failure — without turning the renderer into a general frame graph.
 
+![Synchronous and AsyncCompute render flow](assets/sync-vs-async-render-flow.png)
+
 Out of scope for this foundation and prototype:
 
 - porting AVBOIT's raster phases or writing directly to a presentation surface from Compute;
@@ -46,7 +48,7 @@ Renderer code should select one of two logical lanes, not reach directly for a V
 | Logical lane | Preferred physical queue | Effective fallback |
 |---|---|---|
 | `Graphics` | Graphics queue | Always available. |
-| `AsyncCompute` | A separately created compute-only queue family | Resolve to Graphics and preserve queue order when no distinct Compute queue exists or the experiment is disabled. |
+| `AsyncCompute` | A separately created compute-only queue family | Resolve to Graphics and preserve queue order when no distinct Compute queue exists or the lane is explicitly disabled. |
 
 The resolution is immutable for a device lifetime and must be logged as requested versus effective
 mode, with Graphics and Compute family indices. The fallback is a mapping decision, not a second
@@ -156,8 +158,8 @@ same time.
 
 ### 1.7 Implementation status
 
-The following phase-zero pieces are now in the backend, behind the experimental
-`Graphics::setAsyncComputeLaneEnabled(true)` switch:
+The following phase-zero pieces are now in the backend behind the default best-effort
+`DeviceCreationParameters::enableAsyncComputeLane` request, which callers may explicitly disable:
 
 - `RenderLane::Graphics` and `RenderLane::AsyncCompute` resolve to physical queues at device creation;
   AsyncCompute falls back to Graphics when no compute-only family is available, and the requested/effective
@@ -291,13 +293,13 @@ compute-only family does not fail device selection and instead maps the lane to 
 
 | Hardware condition | Renderer behavior |
 |---|---|
-| Distinct Compute family available and async prototype enabled | Create that queue; run the shadow/caustic/surfel packet, AVBOIT's Graphics → Compute → Graphics hybrid chain, plus deferred-lighting and composite Compute dispatches. The presentation blit stays on Graphics. |
+| Distinct Compute family available and async lane requested | Create that queue; run the shadow/caustic/surfel packet, AVBOIT's Graphics → Compute → Graphics hybrid chain, plus deferred-lighting and composite Compute dispatches. The presentation blit stays on Graphics. |
 | No distinct Compute family | Do not create an alias `Queue` for the Graphics `VkQueue`; retain the current single-Graphics schedule. |
-| Prototype disabled | Retain the current schedule regardless of hardware. |
+| Async lane explicitly disabled | Retain the current schedule regardless of hardware. |
 | Queue/device failure | Stop submitting dependent work, restore only unaccepted CPU state, repair ownership when possible, and make the next frame safe. |
 
-The initial switch is experimental and off by default. It must be independently observable in logs:
-requested/effective mode, Graphics and Compute family indices, and the reason for fallback.
+The async lane is requested by default and remains independently observable in logs: requested/effective mode,
+Graphics and Compute family indices, and the reason for fallback.
 
 Using a second queue from the Graphics family is a separate optimization. It adds queue-count and
 driver-scheduling questions while failing to exercise the queue-family ownership path this prototype
@@ -517,12 +519,12 @@ descriptor retirement, query leak, or ownership validation error remains.
 
 - Capture queue timelines/timestamps that prove effects overlap shadow on supported hardware.
 - Compare frame critical path, not a sum of queue durations, against the current path.
-- Keep the feature opt-in until the validation and failure gates pass on the target Vulkan drivers.
+- Keep the explicit synchronous baseline until the validation and failure gates pass on the target Vulkan drivers.
 
 `tests/ab/async_shadow_m4/run.py` automates this decision with a paired, fixed-yaw stress-scene A/B:
 
-- `nwb_async_shadow_m4_sync_benchmark` preserves the Graphics-only baseline and
-  `nwb_async_shadow_m4_async_benchmark` requests the experimental lane before device creation;
+- `nwb_async_shadow_m4_sync_benchmark` explicitly disables the default async-lane request, while
+  `nwb_async_shadow_m4_async_benchmark` retains it;
 - the runner skips rather than accepts a Graphics fallback when no dedicated compute-only family is available;
 - it captures the packet timestamp envelopes and requires measurable
   `render.async_shadow_effects_overlap`, compares median `render.frame` critical path, captures fixed-scene pixels,
@@ -570,7 +572,7 @@ caustic scenes. Extend performance analysis separately before claiming a new def
 
 **Gate:** on distinct Compute-family targets, run Vulkan validation and sync/async pixel parity on both software-BVH
 and inline-RayQuery surfel paths over cold start, temporal steady state, resize/recreation, GI-disabled frames, and
-first-use/reseed frames. Collect a separate critical-path/overlap analysis before changing the experimental default.
+first-use/reseed frames. Collect a separate critical-path/overlap analysis before revising the default policy.
 
 ### M7 — Hardware dispatch-rays caustics migration (implemented; distinct-family validation pending)
 
@@ -587,7 +589,7 @@ first-use/reseed frames. Collect a separate critical-path/overlap analysis befor
 
 **Gate:** on a distinct Compute-family device supporting `VK_KHR_ray_tracing_pipeline`, run Vulkan validation and
 sync/async pixel parity over cold start, temporal steady state, resize/recreation, no-caustic-work frames, and
-refractive caustic scenes. Collect a separate critical-path/overlap analysis before changing the experimental default.
+refractive caustic scenes. Collect a separate critical-path/overlap analysis before revising the default policy.
 
 ### M8 — Hybrid AVBOIT migration (implemented; distinct-family validation pending)
 
@@ -630,7 +632,7 @@ M10 replaces that tail with Compute composite plus Graphics presentation.
 
 **Gate:** on a distinct Compute-family target, run Vulkan validation and sync/async opaque pixel parity over cold
 start, temporal steady state, resize/recreation, no-ray-work frames, transparent/CSG scenes, and both ray-tracing
-backends. Compare deferred-lighting and frame-critical-path timing before changing the experimental default.
+backends. Compare deferred-lighting and frame-critical-path timing before revising the default policy.
 
 ### M10 — Deferred-composite migration (implemented; distinct-family validation pending)
 
@@ -652,7 +654,7 @@ backends. Compare deferred-lighting and frame-critical-path timing before changi
 **Gate:** on a distinct Compute-family target, run Vulkan validation and sync/async opaque and transparent pixel
 parity over cold start, temporal steady state, resize/recreation, no-ray-work frames, transparent/CSG scenes, surface
 format changes, and both ray-tracing backends. Compare composite/present and frame-critical-path timings before
-changing the experimental default.
+revising the default policy.
 
 ## 8. Implementation anchors
 

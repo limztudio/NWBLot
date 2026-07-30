@@ -301,9 +301,9 @@ struct DeviceCreationParameters : public InstanceParameters{
     u32 maxFramesInFlight = s_MaxFramesInFlight;
     bool enableNvrhiValidationLayer = false;
     bool enableRayTracingExtensions = false;
-    // Best-effort experimental lane. A dedicated compute-only family is used when present; otherwise AsyncCompute
+    // Best-effort default lane. A dedicated compute-only family is used when present; otherwise AsyncCompute
     // resolves to Graphics without failing device creation or fabricating an alias queue.
-    bool enableAsyncComputeLane = false;
+    bool enableAsyncComputeLane = true;
     i32 adapterIndex = -1;
     bool supportExplicitDisplayScaling = false;
     bool resizeWindowWithDisplayScale = false;

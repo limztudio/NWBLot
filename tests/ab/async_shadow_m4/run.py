@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Run the M4 async-shadow queue-validation and critical-path A/B benchmark.
 
-The paired smoke executables are intentionally identical except that the async binary requests
-Graphics::setAsyncComputeLaneEnabled(true) before Vulkan device creation. This runner refuses a
-Graphics fallback, captures fixed-yaw pixel output from both binaries, collects the renderer's
+The paired smoke executables are intentionally identical except that the synchronous baseline explicitly disables
+the default AsyncCompute request before Vulkan device creation. This runner refuses a Graphics fallback, captures
+fixed-yaw pixel output from both binaries, collects the renderer's
 timestamp envelopes, and makes the M4 rollout gate explicit:
 
 * a distinct Vulkan compute family must be active;

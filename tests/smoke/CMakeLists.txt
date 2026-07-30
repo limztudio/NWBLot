@@ -683,15 +683,16 @@ if(Python3_Interpreter_FOUND)
         add_dependencies(nwb_stress_test_sw_smoke nwb_skinning_culling_benchmark_assets)
 
         # M4 target-hardware A/B pair. Both binaries use the same fixed-friendly stress scene and cooked runtime
-        # assets; only the async binary asks Graphics for the experimental compute lane before device creation.
-        # The runner under tests/ab/async_shadow_m4/ validates that the request resolves to a distinct queue rather
-        # than accepting the normal Graphics fallback as an async result.
+        # assets; the synchronous baseline explicitly disables the default async-lane request. The runner under
+        # tests/ab/async_shadow_m4/ validates that the normal request resolves to a distinct queue rather than
+        # accepting the Graphics fallback as an async result.
         nwb_declare_executable(nwb_async_shadow_m4_sync_benchmark)
         target_sources(nwb_async_shadow_m4_sync_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
         )
         target_compile_definitions(nwb_async_shadow_m4_sync_benchmark PRIVATE
             NWB_ASYNC_SHADOW_M4_BENCHMARK=1
+            NWB_SMOKE_DISABLE_ASYNC_COMPUTE=1
         )
         nwb_configure_runtime_smoke_target(
             nwb_async_shadow_m4_sync_benchmark
@@ -707,7 +708,6 @@ if(Python3_Interpreter_FOUND)
         )
         target_compile_definitions(nwb_async_shadow_m4_async_benchmark PRIVATE
             NWB_ASYNC_SHADOW_M4_BENCHMARK=1
-            NWB_SMOKE_ENABLE_ASYNC_COMPUTE=1
         )
         nwb_configure_runtime_smoke_target(
             nwb_async_shadow_m4_async_benchmark

@@ -1,0 +1,194 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2600" height="1540" viewBox="0 0 2600 1540" role="img" aria-labelledby="title desc">
+  <title id="title">Synchronous versus asynchronous render flow</title>
+  <desc id="desc">A side-by-side flow chart comparing the serial single Graphics queue renderer with the default best-effort Graphics and dedicated AsyncCompute queue renderer.</desc>
+  <defs>
+    <style>
+      .title { font: 700 48px Inter, Arial, sans-serif; fill: #172033; letter-spacing: -0.7px; }
+      .subtitle { font: 400 23px Inter, Arial, sans-serif; fill: #56657A; }
+      .panelTitle { font: 700 30px Inter, Arial, sans-serif; fill: #172033; letter-spacing: -0.2px; }
+      .panelText { font: 400 19px Inter, Arial, sans-serif; fill: #56657A; }
+      .laneTitle { font: 700 20px Inter, Arial, sans-serif; fill: #FFFFFF; letter-spacing: 0.3px; }
+      .cardTitle { font: 700 20px Inter, Arial, sans-serif; fill: #172033; }
+      .cardText { font: 400 17px Inter, Arial, sans-serif; fill: #425169; }
+      .small { font: 500 16px Inter, Arial, sans-serif; fill: #56657A; }
+      .tiny { font: 600 14px Inter, Arial, sans-serif; fill: #56657A; letter-spacing: 0.2px; }
+      .badge { font: 700 15px Inter, Arial, sans-serif; letter-spacing: 0.6px; }
+      .calloutTitle { font: 700 18px Inter, Arial, sans-serif; fill: #172033; }
+      .calloutText { font: 400 17px Inter, Arial, sans-serif; fill: #425169; }
+      .arrowLabel { font: 700 14px Inter, Arial, sans-serif; fill: #7A4DD8; letter-spacing: 0.1px; }
+    </style>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="7" stdDeviation="9" flood-color="#1A2740" flood-opacity="0.10"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2F6FDB"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8146E8"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#0D8A6A"/>
+    </marker>
+    <linearGradient id="asyncGlow" x1="0" x2="1">
+      <stop offset="0" stop-color="#F1EAFF"/>
+      <stop offset="1" stop-color="#F7F4FF"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="2600" height="1540" fill="#F6F9FE"/>
+
+  <text x="100" y="92" class="title">Render flow: synchronous vs. asynchronous compute</text>
+  <text x="100" y="132" class="subtitle">Current Vulkan schedule — async is requested by default and uses a distinct Compute family when one is available.</text>
+
+  <!-- Legend -->
+  <g transform="translate(1730 63)">
+    <line x1="0" y1="8" x2="66" y2="8" stroke="#2F6FDB" stroke-width="4" marker-end="url(#arrowBlue)"/>
+    <text x="82" y="15" class="small">same-queue order</text>
+    <line x1="300" y1="8" x2="366" y2="8" stroke="#8146E8" stroke-width="4" stroke-dasharray="9 8" marker-end="url(#arrowPurple)"/>
+    <text x="382" y="15" class="small">timeline wait / cross-queue dependency</text>
+  </g>
+
+  <!-- SYNC PANEL -->
+  <g>
+    <rect x="80" y="190" width="1100" height="1180" rx="26" fill="#FFFFFF" stroke="#DDE5F0" stroke-width="2" filter="url(#shadow)"/>
+    <rect x="126" y="234" width="125" height="34" rx="17" fill="#EAF3FF"/>
+    <text x="148" y="257" class="badge" fill="#2F6FDB">BASELINE</text>
+    <text x="126" y="318" class="panelTitle">Synchronous: one ordered Graphics queue</text>
+    <text x="126" y="350" class="panelText">Every GPU stage runs in sequence after G-buffer normalization.</text>
+
+    <rect x="126" y="390" width="1008" height="46" rx="12" fill="#2F6FDB"/>
+    <text x="156" y="420" class="laneTitle">GRAPHICS QUEUE</text>
+    <text x="1032" y="420" text-anchor="end" class="laneTitle" opacity="0.92">SERIAL EXECUTION</text>
+
+    <!-- shadow preparation submission -->
+    <rect x="211" y="476" width="838" height="89" rx="16" fill="#EAF3FF" stroke="#A8C7FF" stroke-width="2"/>
+    <text x="247" y="511" class="cardTitle">Shadow preparation</text>
+    <text x="247" y="539" class="cardText">Graphics submission 1</text>
+    <text x="1009" y="527" text-anchor="end" class="tiny">PREPARE</text>
+    <line x1="630" y1="565" x2="630" y2="608" stroke="#2F6FDB" stroke-width="4" marker-end="url(#arrowBlue)"/>
+
+    <!-- serial frame submission -->
+    <rect x="169" y="622" width="922" height="444" rx="20" fill="#F9FBFE" stroke="#D6E1EF" stroke-width="2"/>
+    <text x="211" y="660" class="tiny">GRAPHICS SUBMISSION 2 — ENTIRE VISIBLE FRAME</text>
+
+    <rect x="211" y="686" width="838" height="64" rx="13" fill="#EAF3FF" stroke="#A8C7FF" stroke-width="2"/>
+    <text x="238" y="715" class="cardTitle">Prefix / G-buffer</text>
+    <text x="238" y="738" class="cardText">mesh-view · scene shading · deferred clear · G-buffer · normalize</text>
+    <line x1="630" y1="750" x2="630" y2="774" stroke="#2F6FDB" stroke-width="4" marker-end="url(#arrowBlue)"/>
+
+    <rect x="211" y="788" width="838" height="64" rx="13" fill="#EAF3FF" stroke="#A8C7FF" stroke-width="2"/>
+    <text x="238" y="817" class="cardTitle">Ray effects</text>
+    <text x="238" y="840" class="cardText">shadow visibility · caustics · surfel GI</text>
+    <line x1="630" y1="852" x2="630" y2="876" stroke="#2F6FDB" stroke-width="4" marker-end="url(#arrowBlue)"/>
+
+    <rect x="211" y="890" width="838" height="64" rx="13" fill="#EAF3FF" stroke="#A8C7FF" stroke-width="2"/>
+    <text x="238" y="919" class="cardTitle">AVBOIT transparent path</text>
+    <text x="238" y="942" class="cardText">CSG / occupancy · depth warp · extinction · integration · accumulation</text>
+    <line x1="630" y1="954" x2="630" y2="978" stroke="#2F6FDB" stroke-width="4" marker-end="url(#arrowBlue)"/>
+
+    <rect x="211" y="992" width="838" height="64" rx="13" fill="#EAF3FF" stroke="#A8C7FF" stroke-width="2"/>
+    <text x="238" y="1021" class="cardTitle">Deferred lighting → composite → present</text>
+    <text x="238" y="1044" class="cardText">all on Graphics; presentation consumes the final color</text>
+
+    <rect x="169" y="1120" width="922" height="174" rx="18" fill="#FFF8E7" stroke="#F3D58A" stroke-width="2"/>
+    <circle cx="215" cy="1168" r="17" fill="#D66A00"/>
+    <path d="M215 1158v13M215 1179h.1" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round"/>
+    <text x="247" y="1165" class="calloutTitle">Critical path is the sum of every stage</text>
+    <text x="247" y="1197" class="calloutText">There are no cross-queue waits because there is only one queue,</text>
+    <text x="247" y="1223" class="calloutText">but ray effects cannot overlap the Graphics AVBOIT pre-pass.</text>
+    <text x="247" y="1261" class="tiny" fill="#A35300">EXPECTED BEHAVIOR ON EVERY DEVICE</text>
+  </g>
+
+  <!-- ASYNC PANEL -->
+  <g>
+    <rect x="1220" y="190" width="1300" height="1180" rx="26" fill="#FFFFFF" stroke="#DDE5F0" stroke-width="2" filter="url(#shadow)"/>
+    <rect x="1266" y="234" width="196" height="34" rx="17" fill="#F1EAFF"/>
+    <text x="1288" y="257" class="badge" fill="#8146E8">DEFAULT REQUEST</text>
+    <text x="1266" y="318" class="panelTitle">Async: Graphics + dedicated AsyncCompute lanes</text>
+    <text x="1266" y="350" class="panelText">Transparent-work path shown. The first Graphics AVBOIT packet can overlap the Compute ray-effects packet.</text>
+
+    <!-- swim lanes -->
+    <rect x="1266" y="390" width="532" height="878" rx="20" fill="#F7FAFF" stroke="#BED5FF" stroke-width="2"/>
+    <rect x="1848" y="390" width="626" height="878" rx="20" fill="url(#asyncGlow)" stroke="#CDB8FF" stroke-width="2"/>
+    <rect x="1266" y="390" width="532" height="46" rx="18" fill="#2F6FDB"/>
+    <rect x="1848" y="390" width="626" height="46" rx="18" fill="#8146E8"/>
+    <text x="1294" y="420" class="laneTitle">GRAPHICS QUEUE</text>
+    <text x="1876" y="420" class="laneTitle">ASYNC COMPUTE QUEUE</text>
+
+    <!-- graphics prelude -->
+    <rect x="1322" y="467" width="420" height="67" rx="13" fill="#EAF3FF" stroke="#A8C7FF" stroke-width="2"/>
+    <text x="1350" y="495" class="cardTitle">Shadow preparation</text>
+    <text x="1350" y="518" class="cardText">Graphics submission</text>
+    <line x1="1532" y1="534" x2="1532" y2="558" stroke="#2F6FDB" stroke-width="4" marker-end="url(#arrowBlue)"/>
+
+    <rect x="1322" y="572" width="420" height="86" rx="13" fill="#EAF3FF" stroke="#A8C7FF" stroke-width="2"/>
+    <text x="1350" y="600" class="cardTitle">Graphics prefix</text>
+    <text x="1350" y="624" class="cardText">mesh-view · scene shading · G-buffer</text>
+    <text x="1350" y="646" class="cardText">deferred clear · normalize</text>
+
+    <!-- sibling packets -->
+    <rect x="1322" y="713" width="420" height="83" rx="13" fill="#EAF3FF" stroke="#A8C7FF" stroke-width="2"/>
+    <text x="1350" y="742" class="cardTitle">AVBOIT pre-raster</text>
+    <text x="1350" y="766" class="cardText">clear · CSG / occupancy raster</text>
+
+    <rect x="1904" y="713" width="514" height="99" rx="13" fill="#F1EAFF" stroke="#C3A8FF" stroke-width="2"/>
+    <text x="1932" y="742" class="cardTitle">Ray effects packet</text>
+    <text x="1932" y="766" class="cardText">shadow visibility · caustics · surfel GI</text>
+    <text x="1932" y="789" class="tiny" fill="#6D37BE">ONE ACCEPTED COMPUTE SUBMISSION</text>
+
+    <!-- prefix dependencies -->
+    <path d="M1532 658 L1532 688 L1532 713" fill="none" stroke="#2F6FDB" stroke-width="4" marker-end="url(#arrowBlue)"/>
+    <path d="M1742 615 L1815 615 L1815 762 L1904 762" fill="none" stroke="#8146E8" stroke-width="4" stroke-dasharray="9 8" marker-end="url(#arrowPurple)"/>
+    <text x="1747" y="597" class="arrowLabel">timeline wait</text>
+
+    <!-- intended overlap bracket -->
+    <path d="M1305 689 L1305 824 M1305 689 L1320 689 M1305 824 L1320 824" fill="none" stroke="#0D8A6A" stroke-width="3"/>
+    <path d="M2435 689 L2435 824 M2435 689 L2420 689 M2435 824 L2420 824" fill="none" stroke="#0D8A6A" stroke-width="3"/>
+    <rect x="1642" y="815" width="462" height="38" rx="19" fill="#E3F8F0" stroke="#9CDDC8"/>
+    <text x="1873" y="840" text-anchor="middle" class="badge" fill="#0D8A6A">INTENDED GPU OVERLAP</text>
+
+    <!-- strict AVBOIT alternating chain -->
+    <rect x="1904" y="874" width="514" height="67" rx="13" fill="#F1EAFF" stroke="#C3A8FF" stroke-width="2"/>
+    <text x="1932" y="902" class="cardTitle">AVBOIT depth warp</text>
+    <text x="1932" y="926" class="cardText">Compute dispatch</text>
+    <path d="M1742 754 L1815 754 L1815 907 L1904 907" fill="none" stroke="#8146E8" stroke-width="4" stroke-dasharray="9 8" marker-end="url(#arrowPurple)"/>
+
+    <rect x="1322" y="964" width="420" height="67" rx="13" fill="#EAF3FF" stroke="#A8C7FF" stroke-width="2"/>
+    <text x="1350" y="992" class="cardTitle">AVBOIT extinction</text>
+    <text x="1350" y="1016" class="cardText">Graphics raster</text>
+    <path d="M1904 907 L1815 907 L1815 997 L1742 997" fill="none" stroke="#8146E8" stroke-width="4" stroke-dasharray="9 8" marker-end="url(#arrowPurple)"/>
+
+    <rect x="1904" y="1054" width="514" height="67" rx="13" fill="#F1EAFF" stroke="#C3A8FF" stroke-width="2"/>
+    <text x="1932" y="1082" class="cardTitle">AVBOIT integration</text>
+    <text x="1932" y="1106" class="cardText">Compute dispatch</text>
+    <path d="M1742 997 L1815 997 L1815 1087 L1904 1087" fill="none" stroke="#8146E8" stroke-width="4" stroke-dasharray="9 8" marker-end="url(#arrowPurple)"/>
+
+    <rect x="1322" y="1144" width="420" height="67" rx="13" fill="#EAF3FF" stroke="#A8C7FF" stroke-width="2"/>
+    <text x="1350" y="1172" class="cardTitle">AVBOIT accumulation</text>
+    <text x="1350" y="1196" class="cardText">Graphics raster</text>
+    <path d="M1904 1087 L1815 1087 L1815 1177 L1742 1177" fill="none" stroke="#8146E8" stroke-width="4" stroke-dasharray="9 8" marker-end="url(#arrowPurple)"/>
+
+    <!-- compute fan-in and final -->
+    <rect x="1848" y="1305" width="626" height="65" rx="18" fill="#F1EAFF" stroke="#C3A8FF" stroke-width="2"/>
+    <text x="1876" y="1332" class="cardTitle">Deferred lighting → deferred composite</text>
+    <text x="1876" y="1355" class="cardText">reads ray effects + AVBOIT · writes concurrent compositeColor</text>
+    <path d="M1742 1177 L1815 1177 L1815 1338 L1848 1338" fill="none" stroke="#8146E8" stroke-width="4" stroke-dasharray="9 8" marker-end="url(#arrowPurple)"/>
+    <path d="M2161 812 L2161 1272 L2161 1305" fill="none" stroke="#8146E8" stroke-width="4" marker-end="url(#arrowPurple)"/>
+
+    <!-- lower footer / final Graphics present -->
+    <rect x="1266" y="1294" width="532" height="76" rx="18" fill="#EAF3FF" stroke="#A8C7FF" stroke-width="2"/>
+    <text x="1294" y="1324" class="cardTitle">Graphics final: present</text>
+    <text x="1294" y="1348" class="cardText">waits for compositeColor</text>
+    <path d="M1848 1338 L1798 1338" fill="none" stroke="#8146E8" stroke-width="4" stroke-dasharray="9 8" marker-end="url(#arrowPurple)"/>
+    <text x="1626" y="1282" text-anchor="middle" class="arrowLabel">timeline wait</text>
+  </g>
+
+  <!-- Bottom conclusions -->
+  <g>
+    <rect x="80" y="1410" width="2440" height="84" rx="20" fill="#172033"/>
+    <circle cx="132" cy="1452" r="14" fill="#58D4A8"/>
+    <text x="164" y="1444" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="700" fill="#FFFFFF">Why async can help</text>
+    <text x="164" y="1472" font-family="Inter, Arial, sans-serif" font-size="19" fill="#D8E1EF">The ray-effects packet and AVBOIT pre-raster share the same normalized inputs, so they can run concurrently. The later AVBOIT handoffs remain ordered; Graphics presents only after Compute produces compositeColor.</text>
+    <text x="2480" y="1459" text-anchor="end" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="700" fill="#B8C4D6">NO DEDICATED COMPUTE FAMILY → FALL BACK TO THE SYNC SCHEDULE</text>
+  </g>
+</svg>

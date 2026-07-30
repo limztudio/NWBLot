@@ -2,8 +2,8 @@
 
 This harness makes the M4 rollout decision repeatable on a Vulkan target that exposes a dedicated compute-only queue family. It runs the same fixed-yaw stress scene twice:
 
-- `nwb_async_shadow_m4_sync_benchmark` keeps the normal Graphics-only submission path.
-- `nwb_async_shadow_m4_async_benchmark` requests the experimental `AsyncCompute` lane before device creation.
+- `nwb_async_shadow_m4_sync_benchmark` explicitly disables the default async-lane request.
+- `nwb_async_shadow_m4_async_benchmark` retains the default `AsyncCompute` request.
 
 The runner rejects an async result if it silently resolves to the Graphics fallback. For a real dedicated lane, it collects the renderer's timestamp envelopes, checks measured `render.async_shadow_effects_overlap`, compares the `render.frame` Graphics critical path rather than summing queue work, captures a fixed-scene pixel A/B, and scans logs for ownership or Vulkan-validation failures.
 

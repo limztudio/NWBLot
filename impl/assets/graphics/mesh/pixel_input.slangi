@@ -55,15 +55,13 @@ struct NwbMeshSurfaceInputs{
     float4 tangent;
     float2 uv0;
     float3 worldPosition;
-    // World-space direction of the ray arriving at this surface, for a refractive hook's Fresnel/Snell term. The
-    // shadow trace fills it from the occlusion ray (NwbShadowHit.rayDirection); the rasterizer has no view buffer
-    // in the G-buffer pass, so it supplies a documented dummy (-inNormal) -- harmless, since the G-buffer discards
-    // transmittance (the only value that reads this), so it is consumed only by the shadow trace.
+    // World-space direction of the ray arriving at this surface. Raster paths supply the normalized camera-to-surface
+    // direction from their mesh-frame view; the shadow trace supplies the occlusion ray (NwbShadowHit.rayDirection).
     float3 incidentDirection;
 };
 
-// Loads the surface-input statics a hook reads. Both the rasterizer (nwbLoadMeshPixelInput) and the shadow
-// trace (nwbMaterialSurfaceAt) route through here so the hook sees the same statics regardless of stage.
+// Loads the surface-input statics a hook reads. Raster and trace paths both route through here so the hook sees
+// the same inputs regardless of stage.
 void nwbLoadMeshSurfaceInputs(NwbMeshSurfaceInputs inputs){
     inColor = inputs.color;
     inNormal = inputs.normal;
@@ -73,7 +71,7 @@ void nwbLoadMeshSurfaceInputs(NwbMeshSurfaceInputs inputs){
     inIncidentDirection = inputs.incidentDirection;
 }
 
-void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
+void nwbLoadMeshPixelInput(NwbMeshPixelInput input, const float3 incidentDirection){
     NwbMeshSurfaceInputs inputs;
     inputs.color = input.color;
     // Normals/tangents cross the rasterizer as half varyings; restore float before any material or geometry math.
@@ -81,11 +79,7 @@ void nwbLoadMeshPixelInput(NwbMeshPixelInput input){
     inputs.tangent = float4(input.tangent);
     inputs.uv0 = input.uv0;
     inputs.worldPosition = input.worldPosition.xyz;
-    // No view buffer is bound in the G-buffer pass, so the true view direction (normalize(worldPosition -
-    // cameraPosition)) is unavailable here. Use the documented dummy -normal: the G-buffer discards transmittance
-    // (the only value any refractive hook computes from this), so the dummy is harmless in the rasterizer; the
-    // shadow trace supplies the real ray direction for the value that actually matters.
-    inputs.incidentDirection = -float3(input.normal);
+    inputs.incidentDirection = incidentDirection;
     nwbLoadMeshSurfaceInputs(inputs);
     inPixelDepth = input.position.z;
 #if NWB_CSG_ENABLED

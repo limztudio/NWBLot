@@ -32,7 +32,7 @@ bool nwbAvboitLoadAcceptedMaterialAlpha(
     surfaceInputs.tangent = float4(tangent);
     surfaceInputs.uv0 = uv0;
     surfaceInputs.worldPosition = worldPosition.xyz;
-    surfaceInputs.incidentDirection = -float3(normal);
+    surfaceInputs.incidentDirection = nwbMeshCameraToSurfaceDirection(worldPosition.xyz);
     nwbLoadMeshSurfaceInputs(surfaceInputs);
 
 #if NWB_CSG_ENABLED

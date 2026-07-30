@@ -26,7 +26,7 @@
 // engine default -- a material that omits it fails to link (the entry below references it). The world position
 // written to the G-buffer is the interpolated geometry position, owned by the engine.
 NwbMeshGBufferOutput main(NwbMeshPixelInput input){
-    nwbLoadMeshPixelInput(input);
+    nwbLoadMeshPixelInput(input, nwbMeshCameraToSurfaceDirection(input.worldPosition.xyz));
 
     const NwbMeshSurface surface = nwbMaterialSurface();
     nwbWriteMeshGBufferParams(surface.baseColor, surface.normal, inWorldPosition, surface.param0, surface.param1);

@@ -417,6 +417,18 @@ NwbMeshSurface nwbMaterialSurface(){
 
 )NWB_SLANG";
 
+// Project-owned transparent surface fixture. Its coverage deliberately depends on the incident ray, so all generated
+// raster and AVBOIT pixel shaders must expose the same real mesh-frame direction to compile and behave consistently.
+static constexpr AStringView s_ViewDependentTransparentMaterialSurfaceSource = R"NWB_SLANG(NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    NwbMeshSurface result = nwbMakeMeshSurface(surface.base_color.rgb, inNormal);
+    result.renderCoverage = half(saturate(dot(inIncidentDirection, inNormal) * 0.5 + 0.5));
+    return result;
+}
+
+)NWB_SLANG";
+
 static constexpr AStringView s_StaticResourceFixtureShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
 #include "project/material_interfaces/test_surface.bind"
 
@@ -1439,6 +1451,21 @@ static bool WriteMaterialBindMaterialIntegrationAssets(
     );
 }
 
+static bool WriteMaterialSurfaceIntegrationAssets(
+    const Path& assetRoot,
+    const AStringView bindText,
+    const AStringView materialText,
+    const AStringView surfaceSourceText
+){
+    if(!WriteTextFile(assetRoot / "material_interfaces" / "test_surface.bind", bindText))
+        return false;
+    if(!WriteTextFile(assetRoot / "shaders" / "material_bxdf.bxdf", s_MaterialBindBxdfSource))
+        return false;
+    if(!WriteTextFile(assetRoot / "shaders" / "material_surface.surface", surfaceSourceText))
+        return false;
+    return WriteTextFile(assetRoot / "materials" / "test_material.nwb", materialText);
+}
+
 static bool CookMaterialBindMaterialIntegrationWithPixelSource(
     const AStringView bindText,
     const AStringView materialText,
@@ -1462,6 +1489,26 @@ static bool CookMaterialBindMaterialIntegrationWithPixelSource(
         return false;
 
     return CookPreparedGraphicsAssetRoots(testArena, outRoot, outOutputDirectory, { assetRoot });
+}
+
+static bool CookMaterialSurfaceIntegration(
+    const AStringView bindText,
+    const AStringView materialText,
+    const AStringView surfaceSourceText,
+    const AStringView caseName,
+    TestArena& testArena,
+    Path& outRoot,
+    Path& outOutputDirectory
+){
+    if(!PrepareAssetsGraphicsCookCase(testArena, caseName, outRoot, outOutputDirectory))
+        return false;
+
+    const Path assetRoot = outRoot / "assets";
+    if(!WriteMaterialSurfaceIntegrationAssets(assetRoot, bindText, materialText, surfaceSourceText))
+        return false;
+
+    const Path engineAssetRoot = AssetsGraphicsTestRepoRoot(testArena) / "impl" / "assets";
+    return CookPreparedGraphicsAssetRoots(testArena, outRoot, outOutputDirectory, { engineAssetRoot, assetRoot });
 }
 
 static bool CookMaterialBindMaterialIntegration(

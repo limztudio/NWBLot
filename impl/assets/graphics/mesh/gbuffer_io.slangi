@@ -127,6 +127,12 @@ uint nwbMeshFrameViewHeapSlot(){
 }
 #endif
 
+// Raster material hooks receive the camera-to-surface ray through the same mesh-frame view buffer in every
+// generated pass. Keep its orientation explicit: BXDF view vectors are surface-to-camera, while this is incident.
+float3 nwbMeshCameraToSurfaceDirection(const float3 worldPosition){
+    return nwbSafeNormalize(worldPosition - g_NwbMeshCameraPosition.xyz, float3(0.0, 0.0, 1.0));
+}
+
 // Full G-buffer write: the three RGBA16F targets carry, in their otherwise-unused alpha channels, the
 // shading-model id (base-color.a, delivered as data by the renderer) + two user BXDF parameters (normal.a,
 // world.a). The deferred lighting framework unpacks these into the surface the material BXDF reads, so a

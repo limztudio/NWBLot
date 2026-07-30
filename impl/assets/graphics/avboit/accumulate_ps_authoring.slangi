@@ -129,9 +129,9 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     surfaceInputs.tangent = float4(input.tangent);
     surfaceInputs.uv0 = input.uv0;
     surfaceInputs.worldPosition = input.worldPosition.xyz;
-    // The view direction (surface toward camera, reversed): the AVBOIT pass binds the scene shading buffer, so a
-    // refractive hook's Fresnel/Snell term reads a real incident direction (unlike the rasterizer dummy).
-    surfaceInputs.incidentDirection = nwbSafeNormalize(input.worldPosition.xyz - g_NwbSceneCameraPosition.xyz, float3(0.0, 0.0, 1.0));
+    // Match the G-buffer plus occupancy/extinction surface inputs: every raster pass supplies the same mesh-frame
+    // camera-to-surface incident ray to an authored hook.
+    surfaceInputs.incidentDirection = nwbMeshCameraToSurfaceDirection(input.worldPosition.xyz);
     nwbLoadMeshSurfaceInputs(surfaceInputs);
 #if NWB_CSG_ENABLED
     if(nwbAvboitCsgPixelDiscard(input.position, input.worldPosition))

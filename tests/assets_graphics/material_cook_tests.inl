@@ -357,6 +357,68 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
 #endif
 }
 
+TEST(AssetsGraphics, TransparentMaterialCookUsesViewDependentSurface){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    Path root(testArena.arena);
+    Path outputDirectory(testArena.arena);
+    const bool cooked = CookMaterialSurfaceIntegration(
+        s_MinimalMaterialBindSource,
+        s_TransparentMaterialMeta,
+        s_ViewDependentTransparentMaterialSurfaceSource,
+        "material_view_dependent_transparent_surface",
+        testArena,
+        root,
+        outputDirectory
+    );
+    EXPECT_TRUE(cooked);
+    if(cooked){
+        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+        EXPECT_TRUE(LoadCookedMaterial(
+            testArena,
+            outputDirectory,
+            Name("project/materials/test_material"),
+            loadedAsset
+        ));
+        if(loadedAsset){
+            const NWB::Impl::Material& material = static_cast<const NWB::Impl::Material&>(*loadedAsset);
+            EXPECT_TRUE(material.transparent());
+            EXPECT_EQ(
+                material.avboitAccumulatePixelShader().virtualPath,
+                Name("generated/avboit_accumulate_ps/project/materials/test_material")
+            );
+            EXPECT_EQ(
+                material.avboitOccupancyPixelShader().virtualPath,
+                Name("generated/avboit_occupancy_ps/project/materials/test_material")
+            );
+            EXPECT_EQ(
+                material.avboitExtinctionPixelShader().virtualPath,
+                Name("generated/avboit_extinction_ps/project/materials/test_material")
+            );
+        }
+
+        NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
+        EXPECT_TRUE(LoadCookedShaderArchiveRecords(testArena, outputDirectory, records));
+        const Name pixelStageName("ps");
+        const Name generatedPixelShaderName("generated/material_ps/project/materials/test_material");
+        const Name accumulatePixelShaderName("generated/avboit_accumulate_ps/project/materials/test_material");
+        const Name occupancyPixelShaderName("generated/avboit_occupancy_ps/project/materials/test_material");
+        const Name extinctionPixelShaderName("generated/avboit_extinction_ps/project/materials/test_material");
+        u64 sourceChecksum = 0u;
+        EXPECT_TRUE(FindShaderArchiveSourceChecksum(records, generatedPixelShaderName, pixelStageName, sourceChecksum));
+        EXPECT_TRUE(FindShaderArchiveSourceChecksum(records, accumulatePixelShaderName, pixelStageName, sourceChecksum));
+        EXPECT_TRUE(FindShaderArchiveSourceChecksum(records, occupancyPixelShaderName, pixelStageName, sourceChecksum));
+        EXPECT_TRUE(FindShaderArchiveSourceChecksum(records, extinctionPixelShaderName, pixelStageName, sourceChecksum));
+    }
+
+    EXPECT_EQ(logger.errorCount(), 0u);
+
+    ErrorCode errorCode;
+    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+}
+
 TEST(AssetsGraphics, MaterialRejectsMissingInterfaceCookIntegration){
 #if defined(NWB_FINAL)
     CapturingLogger logger;

@@ -177,15 +177,34 @@ float2 nwbCausticEmissionJitter(uint photonIndex){
     return float2((float)(h0 >> 8) * (1.0 / 16777216.0), (float)(h1 >> 8) * (1.0 / 16777216.0));
 }
 
-// Two checkerboard phases cover every full-grid cell once while retaining jitter keyed to that cell.
-float2 nwbCausticJitteredCheckerboardCell(const uint photonIndex, const uint gridSide, const uint frameIndex){
+// Interleaved temporal phases cover every full-grid cell while retaining jitter keyed to its physical cell. The
+// bootstrap path preserves the original two-phase checkerboard; the converged path uses four spatially regular 2x2
+// phases. phaseCount = 1 is the non-temporal full-grid fallback.
+float2 nwbCausticJitteredTemporalCell(const uint photonIndex, const uint gridSide, const uint frameIndex, const uint temporalPhaseCount){
     const uint fullGridSide = max(gridSide, 1u);
-    const uint phase = frameIndex & 1u;
-    const uint halfWidth = fullGridSide >> 1u;
-    const uint row = photonIndex / halfWidth;
-    const uint pair = photonIndex % halfWidth;
-    const uint parityColBase = ((row & 1u) != 0u) ? (phase ^ 1u) : phase;
-    const uint column = parityColBase + 2u * pair;
+    const uint phaseCount = temporalPhaseCount == 4u ? 4u : (temporalPhaseCount == 2u ? 2u : 1u);
+    const uint phase = frameIndex % phaseCount;
+    uint row = 0u;
+    uint column = 0u;
+
+    if(phaseCount == 4u){
+        const uint halfWidth = max(fullGridSide >> 1u, 1u);
+        const uint subgridRow = photonIndex / halfWidth;
+        const uint pair = photonIndex % halfWidth;
+        row = ((phase >> 1u) & 1u) + 2u * subgridRow;
+        column = (phase & 1u) + 2u * pair;
+    }
+    else if(phaseCount == 2u){
+        const uint halfWidth = max(fullGridSide >> 1u, 1u);
+        row = photonIndex / halfWidth;
+        const uint pair = photonIndex % halfWidth;
+        const uint parityColBase = ((row & 1u) != 0u) ? (phase ^ 1u) : phase;
+        column = parityColBase + 2u * pair;
+    }
+    else{
+        row = photonIndex / fullGridSide;
+        column = photonIndex % fullGridSide;
+    }
     const float2 jitter = nwbCausticEmissionJitter(column + row * fullGridSide);
     return (float2(column, row) + jitter) / (float)fullGridSide;
 }

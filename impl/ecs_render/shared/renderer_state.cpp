@@ -327,7 +327,8 @@ void RendererRayTracingState::invalidateResources(){
     // The accumulator target is released on invalidation (deferred targets are recreated), so re-seed the EMA; the next
     // enabled frame clears instead of decaying.
     m_causticAccumulatorInitialized = false;
-    // Reset the SW temporal-reuse phase so the checkerboard sequence restarts deterministically after a device reset.
+    m_causticTemporalReuseFrameCount = 0u;
+    // Reset the SW temporal-reuse phase so the interleaved sequence restarts deterministically after a device reset.
     m_swCausticFrameIndex = 0u;
     // Reset the HW temporal-reuse phase likewise (byte-parallel HW scheme).
     m_hwCausticFrameIndex = 0u;

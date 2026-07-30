@@ -3253,7 +3253,7 @@ TEST_F(DescriptorBufferRoundTripTest, CausticAccumulatorDecayShapeBuildsAsDescri
 
 
 // Both caustic photon producers fetch every selector, input, and accumulator output from the global descriptor heap.
-// Their identical local set ABI is only the shared 14-word photon push block; the fixed global-heap TLAS remains
+// Their identical local set ABI is only the shared 15-word photon push block; the fixed global-heap TLAS remains
 // outside set 0.
 TEST_F(DescriptorBufferRoundTripTest, CausticPhotonProducerShapesBuildAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
@@ -3261,10 +3261,10 @@ TEST_F(DescriptorBufferRoundTripTest, CausticPhotonProducerShapesBuildAsDescript
     static constexpr Name kDescArenaName{"tests/descriptor_buffer/caustic_photon_producer_desc_arena"};
     Alloc::GlobalArena descArena{kDescArenaName};
 
-    // CausticPhotonPushConstants is 14 scalar words and byte-identical for the SW and HW producers.
+    // CausticPhotonPushConstants is 15 scalar words and byte-identical for the SW and HW producers.
     BindingLayoutDesc swLayoutDesc(descArena);
     swLayoutDesc.setVisibility(ShaderType::Compute);
-    swLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
+    swLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 15u));
 
     auto swLayout = device.createBindingLayout(swLayoutDesc);
     ASSERT_NE(swLayout.get(), nullptr);
@@ -3278,7 +3278,7 @@ TEST_F(DescriptorBufferRoundTripTest, CausticPhotonProducerShapesBuildAsDescript
     // runnable on descriptor-buffer-only test devices.
     BindingLayoutDesc hwLayoutDesc(descArena);
     hwLayoutDesc.setVisibility(ShaderType::Compute);
-    hwLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
+    hwLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 15u));
 
     auto hwLayout = device.createBindingLayout(hwLayoutDesc);
     ASSERT_NE(hwLayout.get(), nullptr);

@@ -224,6 +224,10 @@ private:
     [[nodiscard]] bool ensureCausticAccumulatorDecayPipeline();
     // Returns the fixed splat-space EMA decay factor (m_causticTemporalDecay = 0.85). <=0 would mean temporal off.
     [[nodiscard]] f32 causticTemporalDecay();
+    // Selects full-grid, bootstrap, or converged temporal photon sampling. The phase count changes only after accepted
+    // producer updates; packet rollback restores the frame count before a retry records the same work.
+    [[nodiscard]] u32 causticTemporalPhaseCount();
+    void advanceCausticTemporalReuse();
     // Splat-space temporal step, run at the top of each caustic producer (SW/HW) when temporal is enabled: on the first
     // enabled frame (or after a resize) the accumulator holds no history so it is CLEARED to 0; every later frame the
     // decay pass multiplies it by decayFactor in place (accum_N = decay*accum_{N-1}). Leaves the accumulator in

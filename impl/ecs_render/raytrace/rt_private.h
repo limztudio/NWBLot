@@ -411,19 +411,19 @@ static_assert(sizeof(ShadowReprojectMergePushConstants) == sizeof(f32) * 16u + s
 
 // CPU mirror of the caustic photon producer push constants, shared by BOTH the software compute producer
 // (caustic/caustic_photon_sw_cs.slang) and the hardware ray-traced producer (caustic/caustic_photon_hw_raygen.slang).
-// The byte-identical layout across the two backends is a parity invariant (same photon grid / flux). frameIndex drives
-// the 2x temporal-reuse checkerboard phase on BOTH backends (each emits half the grid per frame; the splat-space EMA
-// recombines the two halves). The trailing slots select the two UniformBuffer selector payloads, the depth/world-
+// The byte-identical layout across the two backends is a parity invariant (same photon grid / flux). frameIndex and
+// temporalPhaseCount drive the temporal emission phase on BOTH backends (the splat-space EMA recombines the interleaved
+// grid phases). The trailing slots select the two UniformBuffer selector payloads, the depth/world-
 // position G-buffer images, the refractive emission-target buffer, mesh view buffer, and writable accumulator from
 // the global descriptor heap for both producers.
 struct CausticPhotonPushConstants{
     u32 width = 0u;
     u32 height = 0u;
     u32 instanceCount = 0u;
-    u32 photonCount = 0u; // the per-frame temporal-reuse budget (half the full grid) on BOTH the SW + HW producers
+    u32 photonCount = 0u; // the per-frame temporal-reuse budget (full grid divided by temporalPhaseCount) on BOTH producers
     u32 emissionTargetCount = 0u;
     u32 gridSide = 0u; // the FULL emission grid side (sqrt of the full photon budget); runtime so the density scales per build config (dbg vs opt/fin)
-    u32 frameIndex = 0u; // 2x temporal-reuse checkerboard phase: (frameIndex & 1) selects which half of the grid this frame emits (SW + HW)
+    u32 frameIndex = 0u; // temporal emission phase (SW + HW)
     u32 depthSlot = 0u; // SampledImage: full-resolution depth G-buffer
     u32 worldPositionSlot = 0u; // SampledImage: full-resolution world-position G-buffer
     u32 emissionTargetSlot = 0u; // StorageBuffer: refractive-instance emission AABBs
@@ -431,8 +431,9 @@ struct CausticPhotonPushConstants{
     u32 deferredResourcesHeapSlot = 0u; // UniformBuffer: target-generation NwbDeferredBindlessResources payload
     u32 materialContextSlotsHeapSlot = 0u; // UniformBuffer: NwbRayTraceMaterialContextSlots payload
     u32 accumulatorStorageSlot = 0u; // StorageImage: writable R32_UINT Texture2DArray splat accumulator
+    u32 temporalPhaseCount = 1u; // 1 = full grid / no temporal reuse; 2 = bootstrap checkerboard; 4 = converged 2x2 phases
 };
-static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 14u, "CausticPhotonPushConstants must match the shader push-constant layout");
+static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 15u, "CausticPhotonPushConstants must match the shader push-constant layout");
 
 // CPU mirror of the caustic resolve push constants (caustic/caustic_resolve_cs.slang). The resolve is an N-pass
 // edge-avoiding a-trous wavelet denoise: per pass it carries the wavelet dilation (stepWidth) and whether this is the
@@ -524,6 +525,16 @@ inline constexpr u32 s_CausticSwPhotonGridSide = 512u;                      // o
 inline constexpr u32 s_CausticSwPhotonGridSide = NWB_CAUSTIC_SW_GRID_SIDE;  // dbg-safe (128 -> 16384; the SW path TDRs above this unoptimized)
 #endif
 inline constexpr u32 s_CausticSwPhotonCount = s_CausticSwPhotonGridSide * s_CausticSwPhotonGridSide;
+
+// Temporal caustic work reduction: begin with the existing two-phase checkerboard while the splat-space EMA seeds, then
+// use four interleaved 2x2 phases once it has received a short accepted-update warm-up. Each active phase keeps the
+// photon flux normalized by its actual photonCount, so the static expected irradiance stays unchanged.
+inline constexpr u32 s_CausticTemporalBootstrapPhaseCount = 2u;
+inline constexpr u32 s_CausticTemporalConvergedPhaseCount = 4u;
+inline constexpr u32 s_CausticTemporalWarmupFrameCount = 8u;
+static_assert(s_CausticTemporalBootstrapPhaseCount == 2u && s_CausticTemporalConvergedPhaseCount == 4u);
+static_assert((s_CausticHwPhotonGridSide % s_CausticTemporalConvergedPhaseCount) == 0u);
+static_assert((s_CausticSwPhotonGridSide % s_CausticTemporalConvergedPhaseCount) == 0u);
 
 // Resolve exposure; photon-count changes preserve brightness.
 inline constexpr f32 s_CausticIntensity = 2.0f;

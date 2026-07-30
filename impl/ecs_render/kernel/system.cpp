@@ -934,6 +934,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         bool swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
         bool swShadowDispatchLogged = false;
         bool causticAccumulatorInitialized = false;
+        u32 causticTemporalReuseFrameCount = 0u;
         u32 swCausticFrameIndex = 0u;
         u32 hwCausticFrameIndex = 0u;
         bool swCausticDispatchLogged = false;
@@ -959,6 +960,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionUnconfirmed,
         m_rayTracingState.m_swShadowDispatchLogged,
         m_rayTracingState.m_causticAccumulatorInitialized,
+        m_rayTracingState.m_causticTemporalReuseFrameCount,
         m_rayTracingState.m_swCausticFrameIndex,
         m_rayTracingState.m_hwCausticFrameIndex,
         m_rayTracingState.m_swCausticDispatchLogged,
@@ -992,6 +994,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     const auto restoreCausticsCpuState = [&](){
         m_rayTracingState.m_causticAccumulatorInitialized = postGbufferPacketCpuState.causticAccumulatorInitialized;
+        m_rayTracingState.m_causticTemporalReuseFrameCount = postGbufferPacketCpuState.causticTemporalReuseFrameCount;
         m_rayTracingState.m_swCausticFrameIndex = postGbufferPacketCpuState.swCausticFrameIndex;
         m_rayTracingState.m_hwCausticFrameIndex = postGbufferPacketCpuState.hwCausticFrameIndex;
         m_rayTracingState.m_swCausticDispatchLogged = postGbufferPacketCpuState.swCausticDispatchLogged;

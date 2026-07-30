@@ -21,7 +21,7 @@ struct NwbCausticHwPushConstants{
     uint photonCount;
     uint emissionTargetCount;
     uint gridSide; // the FULL emission grid side (sqrt of the full photon budget); runtime so the density scales per build config
-    uint frameIndex; // HW 2x temporal-reuse checkerboard phase: (frameIndex & 1) selects which half of the grid this frame emits
+    uint frameIndex; // HW temporal emission phase
     uint depthSlot;
     uint worldPositionSlot;
     uint emissionTargetSlot;
@@ -29,6 +29,7 @@ struct NwbCausticHwPushConstants{
     uint deferredResourcesHeapSlot;
     uint materialContextSlotsHeapSlot;
     uint accumulatorStorageSlot;
+    uint temporalPhaseCount; // 1 = full grid; 2 = bootstrap checkerboard; 4 = converged 2x2 phases
 };
 
 [[vk::push_constant]]

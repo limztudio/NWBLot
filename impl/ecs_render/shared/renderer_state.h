@@ -642,14 +642,14 @@ struct RtCausticState{
     // state is photons/(1-decay), so the resolve pre-multiplies causticIntensity by (1-decay) to keep the STATIC
     // brightness byte-unchanged.
     f32 m_causticTemporalDecay = 0.85f;
-    // SW-only 2x temporal-reuse checkerboard phase: the software producer emits half the photon grid each frame, on a
-    // frame-parity checkerboard, so the two-frame union covers the full stratified domain at half the per-frame BVH
-    // cost (the splat-space EMA recombines the two halves). phase = m_swCausticFrameIndex & 1.
+    // Number of accepted temporal caustic updates since the accumulator was seeded. Both producers use it to begin with
+    // a two-phase checkerboard and move to four interleaved 2x2 phases after the EMA warm-up, reducing steady-state
+    // photon tracing to one quarter of the full grid. It is saved/restored with packet CPU state so rejected packets do
+    // not falsely advance temporal convergence.
+    u32 m_causticTemporalReuseFrameCount = 0u;
+    // SW temporal-reuse phase: the software producer selects the next interleaved emission-grid phase from this index.
     u32 m_swCausticFrameIndex = 0u;
-    // HW-only 2x temporal-reuse checkerboard phase: the byte-parallel hardware producer mirrors the SW scheme --
-    // emits half the photon grid each frame on a frame-parity checkerboard so the two-frame union covers the full
-    // stratified domain at half the per-frame TraceRay cost (the splat-space EMA recombines the two halves). phase =
-    // m_hwCausticFrameIndex & 1.
+    // HW temporal-reuse phase: the byte-parallel hardware producer mirrors the SW interleaved emission-grid sequence.
     u32 m_hwCausticFrameIndex = 0u;
     bool m_causticEmissionGateLogged = false;
     bool m_causticGeometryDownsamplePipelineFailed = false;

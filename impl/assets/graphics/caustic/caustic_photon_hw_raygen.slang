@@ -50,7 +50,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The hardware raygen mirrors the SW photon sequence over a half-budget 2D grid.
+// The hardware raygen mirrors the SW photon sequence over the selected temporal-budget 2D grid.
 [shader("raygeneration")]
 void main(){
     const uint photonIndex = DispatchRaysIndex().y * DispatchRaysDimensions().x + DispatchRaysIndex().x;
@@ -72,10 +72,11 @@ void main(){
     const float3 targetAabbMin = target.aabbMin.xyz;
     const float3 targetAabbMax = target.aabbMax.xyz;
 
-    const float2 cell = nwbCausticJitteredCheckerboardCell(
+    const float2 cell = nwbCausticJitteredTemporalCell(
         photonIndex,
         g_NwbCausticHwPushConstants.gridSide,
-        g_NwbCausticHwPushConstants.frameIndex
+        g_NwbCausticHwPushConstants.frameIndex,
+        g_NwbCausticHwPushConstants.temporalPhaseCount
     );
 
     const NwbCausticEmission emission = nwbCausticEmitPhotonAtTarget(lightDir, targetAabbMin, targetAabbMax, cell);

@@ -17,7 +17,7 @@ struct NwbCausticSwPushConstants{
     uint photonCount;
     uint emissionTargetCount;
     uint gridSide; // the FULL emission grid side (sqrt of the full photon budget); runtime so the density scales per build config
-    uint frameIndex; // SW 2x temporal-reuse checkerboard phase: (frameIndex & 1) selects which half of the grid this frame emits
+    uint frameIndex; // SW temporal emission phase
     uint depthSlot;
     uint worldPositionSlot;
     uint emissionTargetSlot;
@@ -25,6 +25,7 @@ struct NwbCausticSwPushConstants{
     uint deferredResourcesHeapSlot;
     uint materialContextSlotsHeapSlot;
     uint accumulatorStorageSlot;
+    uint temporalPhaseCount; // 1 = full grid; 2 = bootstrap checkerboard; 4 = converged 2x2 phases
 };
 
 [[vk::push_constant]]
@@ -461,10 +462,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 targetAabbMin = target.aabbMin.xyz;
     const float3 targetAabbMax = target.aabbMax.xyz;
 
-    const float2 cell = nwbCausticJitteredCheckerboardCell(
+    const float2 cell = nwbCausticJitteredTemporalCell(
         photonIndex,
         g_NwbCausticSwPushConstants.gridSide,
-        g_NwbCausticSwPushConstants.frameIndex
+        g_NwbCausticSwPushConstants.frameIndex,
+        g_NwbCausticSwPushConstants.temporalPhaseCount
     );
 
     const NwbCausticEmission emission = nwbCausticEmitPhotonAtTarget(lightDir, targetAabbMin, targetAabbMax, cell);

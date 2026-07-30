@@ -12,6 +12,8 @@
 #include "sw_binding_slots.h"
 
 #include "../bvh/bvh_common.slangi"
+#include "../bvh/ray_vertex_attrib.slangi"
+#include "../bvh/sw_instance.slangi"
 #include "../common/math.slangi"
 #include "instance_material.slangi"
 
@@ -31,52 +33,21 @@
 // pass. Their uniform slots come from g_NwbSwShadowMaterialContextSlots (declared by sw_shadow_gbuffer.slangi before
 // this concern is included), so no local SRV remains in the SW shadow layout.
 
-// Per-instance record: the affine world->object transform (3 rows), an ABI-reserved word, and CPU-only leaf-cost
-// data. Mirrors the C++ SceneSwBvhInstanceGpu (64 bytes).
-struct NwbSwShadowInstance{
-    float4 worldToObjectRow0;
-    float4 worldToObjectRow1;
-    float4 worldToObjectRow2;
-    uint reservedMeshIndex;
-    uint primitiveCount;
-    uint pad0;
-    uint pad1;
-};
-
 // The scene-instance table has a distinct 64-byte record stride but shares the global StorageBuffer descriptor class
 // with the BVH and material buffers. This view supplies its shader-side stride without a new descriptor class.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table in bindless_heap.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbSwShadowInstance, Std430DataLayout> g_NwbHeapSwShadowSceneInstanceBuffers[];
+StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> g_NwbHeapSwShadowSceneInstanceBuffers[];
 #pragma warning(pop)
 
-StructuredBuffer<NwbSwShadowInstance, Std430DataLayout> NwbHeapSwShadowSceneInstances(const uint slot){
+StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> NwbHeapSwShadowSceneInstances(const uint slot){
     return g_NwbHeapSwShadowSceneInstanceBuffers[slot];
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-// Affine world->object transform of a point (row-major 3x4; the engine SIMDMatrix rows map onto the rows).
-float3 nwbSwShadowTransformPoint(const NwbSwShadowInstance instance, const float3 point){
-    return float3(
-        dot(instance.worldToObjectRow0.xyz, point) + instance.worldToObjectRow0.w,
-        dot(instance.worldToObjectRow1.xyz, point) + instance.worldToObjectRow1.w,
-        dot(instance.worldToObjectRow2.xyz, point) + instance.worldToObjectRow2.w
-    );
-}
-
-// Same transform applied as a direction (no translation). Left UN-normalized on purpose so the ray
-// parameter t is preserved between world and object space (object hit at t == world hit at t).
-float3 nwbSwShadowTransformVector(const NwbSwShadowInstance instance, const float3 vector){
-    return float3(
-        dot(instance.worldToObjectRow0.xyz, vector),
-        dot(instance.worldToObjectRow1.xyz, vector),
-        dot(instance.worldToObjectRow2.xyz, vector)
-    );
-}
 
 // Transforms an object-space normal to world space for the surface hook (NwbMeshSurface.normal is world space).
 // The normal transform is the inverse-transpose of object->world -- the transpose of the world->object 3x3 carried
@@ -86,33 +57,19 @@ float3 nwbSwShadowTransformVector(const NwbSwShadowInstance instance, const floa
 // common case) and diverges in direction only under NON-uniform scale (where the rasterizer applies the forward
 // map instead) -- latent for transmittance hooks that don't read the normal. nwbSafeNormalize guards the
 // degenerate (near-zero / non-finite, e.g. a singular instance transform) result, matching the engine pattern.
-float3 nwbSwShadowTransformNormal(const NwbSwShadowInstance instance, const float3 objectNormal){
-    const float3 worldNormal = float3(
-        dot(float3(instance.worldToObjectRow0.x, instance.worldToObjectRow1.x, instance.worldToObjectRow2.x), objectNormal),
-        dot(float3(instance.worldToObjectRow0.y, instance.worldToObjectRow1.y, instance.worldToObjectRow2.y), objectNormal),
-        dot(float3(instance.worldToObjectRow0.z, instance.worldToObjectRow1.z, instance.worldToObjectRow2.z), objectNormal)
-    );
+float3 nwbSwShadowTransformNormal(const NwbSwBvhInstance instance, const float3 objectNormal){
+    const float3 worldNormal = nwbSwBvhTransformNormal(instance, objectNormal);
     return nwbSafeNormalize(worldNormal, float3(0.0, 0.0, 1.0));
 }
 
 // Unpacks a per-triangle-corner shadow-trace attribute (AttribGpu) from a per-mesh attribute byte buffer: Half4U
 // normal (two packed-half uints) at +0, Float2U uv0 (two floats) at +8. Returns object-space normal in .xyz, uv0.
-struct NwbSwShadowVertexAttrib{
-    float3 normal;
-    float2 uv0;
-};
-
-NwbSwShadowVertexAttrib nwbSwShadowLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
+NwbRayTraceVertexAttrib nwbSwShadowLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
     // attributeSlot is a non-uniform global heap slot; NwbHeapRawBuffer() applies the required decoration per load.
     const uint base = attributeIndex * 16u;
     const uint2 packedNormal = NwbHeapRawBuffer(attributeSlot).Load2(base);
-    NwbSwShadowVertexAttrib attrib;
-    attrib.normal = float3(
-        nwbUnpackHalf2x16(packedNormal.x),
-        nwbUnpackHalf2x16(packedNormal.y).x
-    );
-    attrib.uv0 = asfloat(NwbHeapRawBuffer(attributeSlot).Load2(base + 8u));
-    return attrib;
+    const uint2 packedUv0 = NwbHeapRawBuffer(attributeSlot).Load2(base + 8u);
+    return nwbRayTraceDecodeVertexAttrib(uint4(packedNormal.x, packedNormal.y, packedUv0.x, packedUv0.y));
 }
 
 
@@ -123,4 +80,5 @@ NwbSwShadowVertexAttrib nwbSwShadowLoadVertexAttrib(const uint attributeSlot, co
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

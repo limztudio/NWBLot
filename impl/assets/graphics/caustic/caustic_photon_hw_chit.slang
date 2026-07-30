@@ -37,13 +37,13 @@ void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttri
         const uint prim = PrimitiveIndex();
         const uint attributeBase = prim * 3u;
         // material.attributeSlot is this mesh's per-corner attribute buffer's global heap slot.
-        const NwbCausticHwVertexAttrib a0 = nwbCausticHwLoadVertexAttrib(material.attributeSlot, attributeBase);
-        const NwbCausticHwVertexAttrib a1 = nwbCausticHwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
-        const NwbCausticHwVertexAttrib a2 = nwbCausticHwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
+        const NwbRayTraceVertexAttrib a0 = nwbCausticHwLoadVertexAttrib(material.attributeSlot, attributeBase);
+        const NwbRayTraceVertexAttrib a1 = nwbCausticHwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
+        const NwbRayTraceVertexAttrib a2 = nwbCausticHwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
         const float3 objectShadingNormal = a0.normal * weights.x + a1.normal * weights.y + a2.normal * weights.z;
 
         // The interpolated SHADING normal in world space (inverse-transpose of object->world == mul(n,
-        // (float3x3)WorldToObject3x4()) == the SW nwbCausticSwTransformNormal). The bend normal AND the surface
+        // (float3x3)WorldToObject3x4()) == the SW nwbSwBvhTransformNormal). The bend normal AND the surface
         // dispatch normal.
         const float3 worldShadingNormal = nwbSafeNormalize(mul(objectShadingNormal, (float3x3)WorldToObject3x4()), float3(0.0, 0.0, 1.0));
         payload.shadingNormal = worldShadingNormal;
@@ -65,4 +65,5 @@ void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttri
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

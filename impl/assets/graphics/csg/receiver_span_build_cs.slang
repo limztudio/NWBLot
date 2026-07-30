@@ -2,8 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "binding_slots.h"
-#include "constants.h"
+#include "interval_dispatch.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,21 +13,6 @@ struct NwbCsgReceiverSurfaceEvent{
     uint receiverIndex;
     uint faceSign;
 };
-
-struct NwbCsgIntervalDispatchPushConstants{
-    uint4 frame;
-    uint4 workRegion;
-    uint4 resourceSlots;
-};
-
-[[vk::push_constant]]
-ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPushConstants;
-
-// The standalone compute passes carry their one CSG context UniformBuffer slot in the pre-existing second
-// resource-slot word.  That context selects the deferred target payload from the global heap.
-#define NWB_CSG_CONTEXT_HEAP_SLOT (g_NwbCsgIntervalDispatchPushConstants.resourceSlots[NWB_CSG_INTERVAL_DISPATCH_PUSH_RESOURCE_SLOT_CONTEXT])
-#include "bindless_resources.slangi"
-#undef NWB_CSG_CONTEXT_HEAP_SLOT
 
 // The event read and span write images share the global StorageImage table. Bindings 5/6/9/10 remain ABI gaps; the
 // heap-selected CSG context resolves the correct typed array views.
@@ -66,17 +50,11 @@ uint nwbCsgReceiverSpanBuildSpanLayerCount(){
 }
 
 uint2 nwbCsgReceiverSpanBuildWorkOffset(){
-    return uint2(
-        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_OFFSET_X],
-        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_OFFSET_Y]
-    );
+    return nwbCsgIntervalDispatchWorkOffset();
 }
 
 uint2 nwbCsgReceiverSpanBuildWorkExtent(){
-    return uint2(
-        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_EXTENT_X],
-        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_EXTENT_Y]
-    );
+    return nwbCsgIntervalDispatchWorkExtent();
 }
 
 uint nwbCsgReceiverSpanBuildLoadEventCount(const uint2 pixel, const uint eventLayerCount, inout uint inOutFlags){
@@ -246,4 +224,5 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

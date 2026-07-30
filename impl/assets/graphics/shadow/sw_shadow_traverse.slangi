@@ -66,7 +66,7 @@ uint nwbSwShadowInstanceCount(){
 // triangle BVH. Each transparent triangle folds one surface crossing into the shared running accumulator; an opaque
 // triangle zeroes the transmittance and stops the traversal.
 void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout NwbShadowVisibilityAccumulator acc){
-    const NwbSwShadowInstance instance = NwbHeapSwShadowSceneInstances(g_NwbSwShadowMaterialContextSlots.sceneSlots.y)[instanceIndex];
+    const NwbSwBvhInstance instance = NwbHeapSwShadowSceneInstances(g_NwbSwShadowMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbSwShadowMaterialContextSlots.sceneSlots.z)[instanceIndex];
     const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
     // COMPILE-TIME occluder-class filter (see sw_binding_slots.h): OPAQUE passes skip transparent occluders (a binary
@@ -88,8 +88,8 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     // local) so the decoration is applied fresh at every subscript. Omitting it is undefined behaviour: on a wave that
     // straddles a mesh-shadow boundary the hardware can read a DIFFERENT mesh's BVH/geometry for some lanes, which
     // culls real occluder hits there and leaves an under-occluded (bright) wave-tile-aligned band.
-    const float3 origin = nwbSwShadowTransformPoint(instance, worldOrigin);
-    const float3 direction = nwbSwShadowTransformVector(instance, worldDirection);
+    const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
+    const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
     const float3 invDir = nwbSwShadowSafeInvDir(direction);
 
     // Front-to-back traversal ranks the two children by ray-entry distance, descends the near child inline, and pushes
@@ -148,9 +148,9 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
                 // hook reads the interpolated normal/uv0 + the material-constants context carried by the instance
                 // record; dispatched by shadowTransmittanceModelId.
                 const uint attributeBase = triangle * 3u;
-                const NwbSwShadowVertexAttrib a0 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase);
-                const NwbSwShadowVertexAttrib a1 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
-                const NwbSwShadowVertexAttrib a2 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
+                const NwbRayTraceVertexAttrib a0 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase);
+                const NwbRayTraceVertexAttrib a1 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
+                const NwbRayTraceVertexAttrib a2 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
                 const float smoothNormalWeight = nwbShadowSmoothNormalWeight(a0.normal, a1.normal, a2.normal);
 
                 // Interpolate the object-space normal, then transform it to world space (the surface contract) with
@@ -313,4 +313,5 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

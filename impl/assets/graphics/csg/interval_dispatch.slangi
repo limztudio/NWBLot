@@ -1,0 +1,55 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CSG_INTERVAL_DISPATCH_SLANGI
+#define NWB_GRAPHICS_CSG_INTERVAL_DISPATCH_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "binding_slots.h"
+#include "constants.h"
+
+
+// All standalone CSG interval passes use the same push-only dispatch ABI. Its resource slot selects the persistent CSG
+// context UniformBuffer, which in turn selects the target-generation resources from the global descriptor heap.
+struct NwbCsgIntervalDispatchPushConstants{
+    uint4 frame;
+    uint4 workRegion;
+    uint4 resourceSlots;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPushConstants;
+
+#define NWB_CSG_CONTEXT_HEAP_SLOT (g_NwbCsgIntervalDispatchPushConstants.resourceSlots[NWB_CSG_INTERVAL_DISPATCH_PUSH_RESOURCE_SLOT_CONTEXT])
+#include "bindless_resources.slangi"
+#undef NWB_CSG_CONTEXT_HEAP_SLOT
+
+uint2 nwbCsgIntervalDispatchWorkOffset(){
+    return uint2(
+        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_OFFSET_X],
+        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_OFFSET_Y]
+    );
+}
+
+uint2 nwbCsgIntervalDispatchWorkExtent(){
+    return uint2(
+        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_EXTENT_X],
+        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_EXTENT_Y]
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

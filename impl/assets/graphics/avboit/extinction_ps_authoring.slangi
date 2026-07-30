@@ -40,15 +40,7 @@
 
 void main(NwbAvboitMaterialAlphaPixelInput input){
     half alpha;
-    if(!nwbAvboitLoadAcceptedMaterialAlpha(
-        input.position,
-        input.color,
-        input.normal,
-        input.tangent,
-        input.uv0,
-        input.worldPosition,
-        alpha
-    ))
+    if(!nwbAvboitLoadAcceptedMaterialAlpha(input, alpha))
         discard;
 
     const uint2 lowPixel = nwbAvboitLowPixelFromLowFragCoord(input.position.xy);
@@ -67,4 +59,5 @@ void main(NwbAvboitMaterialAlphaPixelInput input){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

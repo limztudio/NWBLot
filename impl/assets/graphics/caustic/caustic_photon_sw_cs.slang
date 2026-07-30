@@ -3,33 +3,15 @@
 
 
 #include "sw_binding_slots.h"
+#include "photon_push_constants.slangi"
+#include "photon_types.slangi"
 #include "../mesh/runtime_constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"
 #include "../bindless/bindless_heap_rt.slangi"
 
-// Per-dispatch constants -- matches the C++ CausticPhotonPushConstants. The two UniformBuffer selector slots and the
-// writable accumulator StorageImage slot keep this producer entirely on the global descriptor heap.
-struct NwbCausticSwPushConstants{
-    uint width;
-    uint height;
-    uint instanceCount;
-    uint photonCount;
-    uint emissionTargetCount;
-    uint gridSide; // the FULL emission grid side (sqrt of the full photon budget); runtime so the density scales per build config
-    uint frameIndex; // SW temporal emission phase
-    uint depthSlot;
-    uint worldPositionSlot;
-    uint emissionTargetSlot;
-    uint viewSlot;
-    uint deferredResourcesHeapSlot;
-    uint materialContextSlotsHeapSlot;
-    uint accumulatorStorageSlot;
-    uint temporalPhaseCount; // 1 = full grid; 2 = bootstrap checkerboard; 4 = converged 2x2 phases
-};
-
 [[vk::push_constant]]
-ConstantBuffer<NwbCausticSwPushConstants> g_NwbCausticSwPushConstants;
+ConstantBuffer<NwbCausticPhotonPushConstants> g_NwbCausticSwPushConstants;
 
 // The shared scene-shading CB + light list are selected by the frame selector payload in the UniformBuffer heap.
 #pragma warning(push)
@@ -58,6 +40,8 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "../scene/buffer.slangi"
 #include "../bvh/bvh_common.slangi"
 #include "../bvh/ray_intersect.slangi"
+#include "../bvh/sw_instance.slangi"
+#include "../bvh/ray_vertex_attrib.slangi"
 #include "../common/math.slangi"
 
 // Global descriptor-heap accessors for per-mesh geometry. The material record carries the slots; this include provides
@@ -81,48 +65,20 @@ uint nwbMeshFrameViewHeapSlot(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-instance record: the affine world->object transform (3 rows), an ABI-reserved word, and CPU-only leaf-cost
-// data. Mirrors the C++ SceneSwBvhInstanceGpu (64 bytes) / the SW shadow NwbSwShadowInstance.
-struct NwbCausticSwInstance{
-    float4 worldToObjectRow0;
-    float4 worldToObjectRow1;
-    float4 worldToObjectRow2;
-    uint reservedMeshIndex;
-    uint primitiveCount;
-    uint pad0;
-    uint pad1;
-};
-
 // The software scene-instance table has its own structured record stride, but shares the global StorageBuffer
 // descriptor class with all other trace-context buffers. The b5 cbuffer supplies this table's uniform heap slot.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<NwbCausticSwInstance, Std430DataLayout> g_NwbHeapCausticSwInstanceBuffers[];
+StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> g_NwbHeapCausticSwInstanceBuffers[];
 #pragma warning(pop)
 
-StructuredBuffer<NwbCausticSwInstance, Std430DataLayout> NwbHeapCausticSwInstances(const uint slot){
+StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> NwbHeapCausticSwInstances(const uint slot){
     return g_NwbHeapCausticSwInstanceBuffers[slot];
 }
 
 // Per-mesh nodes, positions, indices, and attributes are read through descriptor-heap slots carried by the material
 // record. The shared backing buffers remain transitioned for those heap reads.
-
-// One caustic emission target: the world-space AABB of a refractive instance. Mirrors the C++
-// NwbCausticEmissionTargetGpu (32 bytes; the w lanes are unused padding).
-struct NwbCausticEmissionTarget{
-    float4 aabbMin;
-    float4 aabbMax;
-};
-
-// Camera view buffer: only worldToClip is read (to project the receiver hit to a screen pixel for the splat).
-// Std140 layout matching the C++ MeshViewGpuData / the mesh view_buffer.slangi struct.
-struct NwbCausticSwView{
-    row_major float4x4 worldToClip;
-    row_major float4x4 clipToWorld;
-    float4 cameraPosition;
-    float4 frustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];
-};
 
 // The caustic-specific producer inputs share the global heap's StorageBuffer / UniformBuffer tables with the trace
 // material context and mesh-frame view. Their slots are uniform for one dispatch and ride the photon push block, so
@@ -132,7 +88,7 @@ struct NwbCausticSwView{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbHeapCausticSwEmissionTargets[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbCausticSwView, Std140DataLayout> g_NwbHeapCausticSwViews[];
+ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> g_NwbHeapCausticSwViews[];
 #pragma warning(pop)
 
 Texture2D<float4> nwbCausticSwGbufferDepth(){
@@ -147,43 +103,13 @@ StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> nwbCausticSwEmissio
     return g_NwbHeapCausticSwEmissionTargets[g_NwbCausticSwPushConstants.emissionTargetSlot];
 }
 
-ConstantBuffer<NwbCausticSwView, Std140DataLayout> nwbCausticSwView(){
+ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> nwbCausticSwView(){
     return g_NwbHeapCausticSwViews[g_NwbCausticSwPushConstants.viewSlot];
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-float3 nwbCausticSwTransformPoint(const NwbCausticSwInstance instance, const float3 point){
-    return float3(
-        dot(instance.worldToObjectRow0.xyz, point) + instance.worldToObjectRow0.w,
-        dot(instance.worldToObjectRow1.xyz, point) + instance.worldToObjectRow1.w,
-        dot(instance.worldToObjectRow2.xyz, point) + instance.worldToObjectRow2.w
-    );
-}
-
-// Direction transform (no translation), left UN-normalized so the ray parameter t is preserved between world and
-// object space (object hit at t == world hit at t).
-float3 nwbCausticSwTransformVector(const NwbCausticSwInstance instance, const float3 vector){
-    return float3(
-        dot(instance.worldToObjectRow0.xyz, vector),
-        dot(instance.worldToObjectRow1.xyz, vector),
-        dot(instance.worldToObjectRow2.xyz, vector)
-    );
-}
-
-// Transforms an object-space normal/vector to world space with the inverse-transpose of object->world (the
-// transpose of the world->object 3x3 carried in the instance rows), so a non-identity instance rotation/scale
-// matches the rasterizer's world-space normal. Same transform the SW shadow trace's nwbSwShadowTransformNormal
-// applies. Left UN-normalized (the shared loop orients + the caller normalizes for the refraction math).
-float3 nwbCausticSwTransformNormal(const NwbCausticSwInstance instance, const float3 objectNormal){
-    return float3(
-        dot(float3(instance.worldToObjectRow0.x, instance.worldToObjectRow1.x, instance.worldToObjectRow2.x), objectNormal),
-        dot(float3(instance.worldToObjectRow0.y, instance.worldToObjectRow1.y, instance.worldToObjectRow2.y), objectNormal),
-        dot(float3(instance.worldToObjectRow0.z, instance.worldToObjectRow1.z, instance.worldToObjectRow2.z), objectNormal)
-    );
-}
 
 struct NwbCausticSwTriangleHit{
     bool hit;
@@ -211,26 +137,14 @@ NwbCausticSwTriangleHit nwbCausticSwRayTriangle(const float3 origin, const float
     return result;
 }
 
-struct NwbCausticSwVertexAttrib{
-    float3 normal;
-    float2 uv0;
-};
-
-NwbCausticSwVertexAttrib nwbCausticSwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
+NwbRayTraceVertexAttrib nwbCausticSwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
     // attributeSlot is this mesh's per-corner attribute buffer's GLOBAL HEAP slot (carried on the instance material
     // record, populated lockstep with the mesh in rt_swbvh.cpp). It is non-uniform across the wave -- each photon's ray
     // hits a different mesh -- so the heap subscript MUST be NonUniformResourceIndex-tagged; NwbHeapRawBuffer() applies
     // that internally and is re-invoked at each Load so the decoration is applied fresh at every descriptor access.
     // One Load4 for the whole 16-byte attribute record (packed normal in .xy, uv0 in .zw) -- a single memory request
     // instead of two dependent Load2s (bit-identical result, lower latency in the refractive-hit path).
-    const uint4 packed = NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u);
-    NwbCausticSwVertexAttrib attrib;
-    attrib.normal = float3(
-        nwbUnpackHalf2x16(packed.x),
-        nwbUnpackHalf2x16(packed.y).x
-    );
-    attrib.uv0 = asfloat(packed.zw);
-    return attrib;
+    return nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u));
 }
 
 
@@ -245,7 +159,7 @@ NwbCausticSwVertexAttrib nwbCausticSwLoadVertexAttrib(const uint attributeSlot, 
 // optical params (ior / transmission) from the occluder's surface hook, evaluated through the SAME dispatch the
 // shadow trace uses.
 void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, inout NwbCausticHit closest){
-    const NwbCausticSwInstance instance = NwbHeapCausticSwInstances(g_NwbCausticSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
+    const NwbSwBvhInstance instance = NwbHeapCausticSwInstances(g_NwbCausticSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbCausticSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
     const bool refractive = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u;
     // This instance's per-mesh geometry (BVH nodes / indices / positions / attributes) is fetched from the global
@@ -255,8 +169,8 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     // NwbHeapRawBuffer() apply that internally and are re-invoked at EACH access below (never hoisted into a resource
     // local) so the decoration is applied fresh at every subscript. Omitting it is undefined behaviour: a wave
     // straddling a mesh boundary reads a DIFFERENT mesh's BVH/geometry for some lanes.
-    const float3 origin = nwbCausticSwTransformPoint(instance, worldOrigin);
-    const float3 direction = nwbCausticSwTransformVector(instance, worldDirection);
+    const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
+    const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
     const float3 invDir = nwbBvhSafeInvDir(direction);
 
     // FRONT-TO-BACK ordered descent. Keep the current node loaded; at an internal node descend the NEARER-entry child
@@ -295,14 +209,14 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
                     // Evaluate this material's surface hook for its optical params, the SAME way the shadow trace
                     // does (interpolated normal/uv0 + the material-constants context the instance record carries).
                     const uint attributeBase = triangle * 3u;
-                    const NwbCausticSwVertexAttrib a0 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase);
-                    const NwbCausticSwVertexAttrib a1 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
-                    const NwbCausticSwVertexAttrib a2 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
+                    const NwbRayTraceVertexAttrib a0 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase);
+                    const NwbRayTraceVertexAttrib a1 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
+                    const NwbRayTraceVertexAttrib a2 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
                     const float3 objectShadingNormal = a0.normal * triangleHit.w + a1.normal * triangleHit.u + a2.normal * triangleHit.v;
 
                     // The interpolated SHADING normal in world space (inverse-transpose of object->world). This is the
                     // bend normal (smooth across the mesh -> smooth caustic) AND the surface-dispatch normal.
-                    const float3 worldShadingNormal = nwbSafeNormalize(nwbCausticSwTransformNormal(instance, objectShadingNormal), float3(0.0, 0.0, 1.0));
+                    const float3 worldShadingNormal = nwbSafeNormalize(nwbSwBvhTransformNormal(instance, objectShadingNormal), float3(0.0, 0.0, 1.0));
                     closest.shadingNormal = worldShadingNormal;
 
                     NwbShadowHit hit;
@@ -489,4 +403,5 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

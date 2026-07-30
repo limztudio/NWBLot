@@ -2,8 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "binding_slots.h"
-#include "constants.h"
+#include "interval_dispatch.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -15,19 +14,6 @@ struct NwbCsgRemovedIntervalEntry{
     uint4 data;
     float sortDepth;
 };
-
-struct NwbCsgIntervalDispatchPushConstants{
-    uint4 frame;
-    uint4 workRegion;
-    uint4 resourceSlots;
-};
-
-[[vk::push_constant]]
-ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPushConstants;
-
-#define NWB_CSG_CONTEXT_HEAP_SLOT (g_NwbCsgIntervalDispatchPushConstants.resourceSlots[NWB_CSG_INTERVAL_DISPATCH_PUSH_RESOURCE_SLOT_CONTEXT])
-#include "bindless_resources.slangi"
-#undef NWB_CSG_CONTEXT_HEAP_SLOT
 
 // Every input/output texture is a CSG StorageImage heap entry. The local binding numbers remain intentional gaps;
 // the heap-selected CSG context resolves the typed array aliases for this dispatch.
@@ -87,17 +73,11 @@ uint nwbCsgIntervalCombineRemovedIntervalLayerCount(){
 }
 
 uint2 nwbCsgIntervalCombineWorkOffset(){
-    return uint2(
-        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_OFFSET_X],
-        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_OFFSET_Y]
-    );
+    return nwbCsgIntervalDispatchWorkOffset();
 }
 
 uint2 nwbCsgIntervalCombineWorkExtent(){
-    return uint2(
-        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_EXTENT_X],
-        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_EXTENT_Y]
-    );
+    return nwbCsgIntervalDispatchWorkExtent();
 }
 
 uint nwbCsgIntervalCombineIdReceiverIndex(const uint id){
@@ -285,4 +265,5 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

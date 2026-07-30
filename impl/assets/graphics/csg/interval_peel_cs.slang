@@ -2,18 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "binding_slots.h"
-#include "constants.h"
+#define NWB_CSG_MESH_INSTANCE_INDEX 0u
+#include "interval_dispatch.slangi"
+#undef NWB_CSG_MESH_INSTANCE_INDEX
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-struct NwbCsgIntervalDispatchPushConstants{
-    uint4 frame;
-    uint4 workRegion;
-    uint4 resourceSlots;
-};
 
 struct NwbCsgIntervalPeelEntry{
     float frontDepth;
@@ -23,18 +18,6 @@ struct NwbCsgIntervalPeelEntry{
     float3 backCapNormal;
     uint id;
 };
-
-[[vk::push_constant]]
-ConstantBuffer<NwbCsgIntervalDispatchPushConstants> g_NwbCsgIntervalDispatchPushConstants;
-
-// Standalone CSG work has no material draw context.  Its existing second resource-slot word selects the persistent
-// CSG UniformBuffer payload, which in turn selects both receiver/cutter data and the deferred target slots.
-#define NWB_CSG_CONTEXT_HEAP_SLOT (g_NwbCsgIntervalDispatchPushConstants.resourceSlots[NWB_CSG_INTERVAL_DISPATCH_PUSH_RESOURCE_SLOT_CONTEXT])
-#define NWB_CSG_MESH_INSTANCE_INDEX 0u
-#include "runtime.slangi"
-#undef NWB_CSG_MESH_INSTANCE_INDEX
-#include "bindless_resources.slangi"
-#undef NWB_CSG_CONTEXT_HEAP_SLOT
 
 // The standalone peel dispatch has no mesh draw constants. Its view UniformBuffer slot therefore rides in its own
 // push payload, while b13 remains an intentional local-layout gap.
@@ -68,17 +51,11 @@ uint nwbCsgIntervalPeelLayerCount(){
 }
 
 uint2 nwbCsgIntervalPeelWorkOffset(){
-    return uint2(
-        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_OFFSET_X],
-        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_OFFSET_Y]
-    );
+    return nwbCsgIntervalDispatchWorkOffset();
 }
 
 uint2 nwbCsgIntervalPeelWorkExtent(){
-    return uint2(
-        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_EXTENT_X],
-        g_NwbCsgIntervalDispatchPushConstants.workRegion[NWB_CSG_INTERVAL_DISPATCH_PUSH_WORK_EXTENT_Y]
-    );
+    return nwbCsgIntervalDispatchWorkExtent();
 }
 
 float nwbCsgSafeHomogeneousW(const float w){
@@ -364,4 +341,5 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

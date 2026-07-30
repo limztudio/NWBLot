@@ -15,6 +15,7 @@
 #include <impl/assets/graphics/shadow/names.h>
 #include <impl/assets/graphics/caustic/sw_binding_slots.h>
 #include <impl/assets/graphics/caustic/hw_binding_slots.h>
+#include <impl/assets/graphics/caustic/photon_push_constants.h>
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 #include <impl/assets/graphics/caustic/names.h>
 #include <impl/assets/graphics/bvh/binding_slots.h>
@@ -417,21 +418,9 @@ static_assert(sizeof(ShadowReprojectMergePushConstants) == sizeof(f32) * 16u + s
 // position G-buffer images, the refractive emission-target buffer, mesh view buffer, and writable accumulator from
 // the global descriptor heap for both producers.
 struct CausticPhotonPushConstants{
-    u32 width = 0u;
-    u32 height = 0u;
-    u32 instanceCount = 0u;
-    u32 photonCount = 0u; // the per-frame temporal-reuse budget (full grid divided by temporalPhaseCount) on BOTH producers
-    u32 emissionTargetCount = 0u;
-    u32 gridSide = 0u; // the FULL emission grid side (sqrt of the full photon budget); runtime so the density scales per build config (dbg vs opt/fin)
-    u32 frameIndex = 0u; // temporal emission phase (SW + HW)
-    u32 depthSlot = 0u; // SampledImage: full-resolution depth G-buffer
-    u32 worldPositionSlot = 0u; // SampledImage: full-resolution world-position G-buffer
-    u32 emissionTargetSlot = 0u; // StorageBuffer: refractive-instance emission AABBs
-    u32 viewSlot = 0u; // UniformBuffer: mesh view / worldToClip
-    u32 deferredResourcesHeapSlot = 0u; // UniformBuffer: target-generation NwbDeferredBindlessResources payload
-    u32 materialContextSlotsHeapSlot = 0u; // UniformBuffer: NwbRayTraceMaterialContextSlots payload
-    u32 accumulatorStorageSlot = 0u; // StorageImage: writable R32_UINT Texture2DArray splat accumulator
-    u32 temporalPhaseCount = 1u; // 1 = full grid / no temporal reuse; 2 = bootstrap checkerboard; 4 = converged 2x2 phases
+#define NWB_CAUSTIC_PHOTON_PUSH_CONSTANT_FIELD(name, defaultValue) u32 name = defaultValue;
+    NWB_CAUSTIC_PHOTON_PUSH_CONSTANTS_FIELDS(NWB_CAUSTIC_PHOTON_PUSH_CONSTANT_FIELD)
+#undef NWB_CAUSTIC_PHOTON_PUSH_CONSTANT_FIELD
 };
 static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 15u, "CausticPhotonPushConstants must match the shader push-constant layout");
 
@@ -628,4 +617,5 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

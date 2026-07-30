@@ -56,6 +56,20 @@ bool nwbAvboitLoadAcceptedMaterialAlpha(
     );
 }
 
+// Occupancy and extinction consume the same raster payload. Keep their conversion at this authoring boundary so a new
+// field in NwbAvboitMaterialAlphaPixelInput cannot quietly reach only one of the two target-generation passes.
+bool nwbAvboitLoadAcceptedMaterialAlpha(const NwbAvboitMaterialAlphaPixelInput input, out half outAlpha){
+    return nwbAvboitLoadAcceptedMaterialAlpha(
+        input.position,
+        input.color,
+        input.normal,
+        input.tangent,
+        input.uv0,
+        input.worldPosition,
+        outAlpha
+    );
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -64,4 +78,5 @@ bool nwbAvboitLoadAcceptedMaterialAlpha(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

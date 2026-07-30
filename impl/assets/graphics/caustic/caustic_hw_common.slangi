@@ -7,33 +7,15 @@
 
 
 #include "hw_binding_slots.h"
+#include "photon_push_constants.slangi"
+#include "photon_types.slangi"
 #include "../mesh/runtime_constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"
 #include "../bindless/bindless_heap_rt.slangi"
 
-// Per-dispatch constants -- byte-identical to the SW producer's push constants (CPU mirror
-// CausticPhotonPushConstants), including the global-heap selector and accumulator slots.
-struct NwbCausticHwPushConstants{
-    uint width;
-    uint height;
-    uint instanceCount;
-    uint photonCount;
-    uint emissionTargetCount;
-    uint gridSide; // the FULL emission grid side (sqrt of the full photon budget); runtime so the density scales per build config
-    uint frameIndex; // HW temporal emission phase
-    uint depthSlot;
-    uint worldPositionSlot;
-    uint emissionTargetSlot;
-    uint viewSlot;
-    uint deferredResourcesHeapSlot;
-    uint materialContextSlotsHeapSlot;
-    uint accumulatorStorageSlot;
-    uint temporalPhaseCount; // 1 = full grid; 2 = bootstrap checkerboard; 4 = converged 2x2 phases
-};
-
 [[vk::push_constant]]
-ConstantBuffer<NwbCausticHwPushConstants> g_NwbCausticHwPushConstants;
+ConstantBuffer<NwbCausticPhotonPushConstants> g_NwbCausticHwPushConstants;
 
 // The shared scene-shading CB + light list are selected by the frame selector payload in the UniformBuffer heap. The
 // per-hit surface dispatch reads the same shadow-owned material buffers as the SW path through the heap selector below.
@@ -62,6 +44,7 @@ uint nwbMeshFrameViewHeapSlot(){
 
 #include "../scene/buffer.slangi"
 #include "../common/math.slangi"
+#include "../bvh/ray_vertex_attrib.slangi"
 
 // The shadow trace's material-constants context (NwbShadowHit + the surface contract + the engine shadow physics
 // helpers) + the cook-generated per-hit surface dispatch (nwbShadowDispatchSurface), routed by
@@ -94,22 +77,6 @@ struct NwbCausticHwPayload{
     uint isRefractive;
 };
 
-// One caustic emission target: the world-space AABB of a refractive instance. Mirrors the C++
-// NwbCausticEmissionTargetGpu (32 bytes) + the SW kernel's NwbCausticEmissionTarget (the w lanes are padding).
-struct NwbCausticEmissionTarget{
-    float4 aabbMin;
-    float4 aabbMax;
-};
-
-// Camera view buffer: only worldToClip is read (to project the receiver hit to a screen pixel for the splat).
-// Std140 layout matching the C++ MeshViewGpuData / the SW kernel's NwbCausticSwView.
-struct NwbCausticHwView{
-    row_major float4x4 worldToClip;
-    row_major float4x4 clipToWorld;
-    float4 cameraPosition;
-    float4 frustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];
-};
-
 // The caustic-specific producer inputs share the global heap's StorageBuffer / UniformBuffer tables with the trace
 // material context and mesh-frame view. Their slots are uniform for one ray dispatch and ride the photon push block,
 // so no NonUniformResourceIndex decoration is needed here.
@@ -118,7 +85,7 @@ struct NwbCausticHwView{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> g_NwbHeapCausticHwEmissionTargets[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbCausticHwView, Std140DataLayout> g_NwbHeapCausticHwViews[];
+ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> g_NwbHeapCausticHwViews[];
 #pragma warning(pop)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -146,7 +113,7 @@ StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> nwbCausticHwEmissio
     return g_NwbHeapCausticHwEmissionTargets[g_NwbCausticHwPushConstants.emissionTargetSlot];
 }
 
-ConstantBuffer<NwbCausticHwView, Std140DataLayout> nwbCausticHwView(){
+ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> nwbCausticHwView(){
     return g_NwbHeapCausticHwViews[g_NwbCausticHwPushConstants.viewSlot];
 }
 
@@ -157,12 +124,7 @@ ConstantBuffer<NwbCausticHwView, Std140DataLayout> nwbCausticHwView(){
 // Per-triangle-corner attribute load -- identical layout to the SW kernel's nwbCausticSwLoadVertexAttrib + the
 // shadow trace's nwbShadowRtLoadVertexAttrib (Half4U normal @ +0, Float2U uv0 @ +8, 16B stride), so the closest-hit
 // interpolates the SAME inputs into the per-hit surface dispatch.
-struct NwbCausticHwVertexAttrib{
-    float3 normal;
-    float2 uv0;
-};
-
-NwbCausticHwVertexAttrib nwbCausticHwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
+NwbRayTraceVertexAttrib nwbCausticHwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
     // attributeSlot is this mesh's per-corner attribute buffer's GLOBAL HEAP slot (carried on the instance material
     // record, populated lockstep with the mesh by the HW shadow builder in rt_swbvh.cpp). It is
     // non-uniform across the ray wave -- each hit is on a different instance/mesh -- so the heap subscript MUST be
@@ -170,14 +132,7 @@ NwbCausticHwVertexAttrib nwbCausticHwLoadVertexAttrib(const uint attributeSlot, 
     // decoration is applied fresh at every descriptor access.
     // One Load4 for the whole 16-byte attribute record (packed normal in .xy, uv0 in .zw) -- one request instead of two
     // dependent Load2s (bit-identical; mirrors the SW producer).
-    const uint4 packed = NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u);
-    NwbCausticHwVertexAttrib attrib;
-    attrib.normal = float3(
-        nwbUnpackHalf2x16(packed.x),
-        nwbUnpackHalf2x16(packed.y).x
-    );
-    attrib.uv0 = asfloat(packed.zw);
-    return attrib;
+    return nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u));
 }
 
 
@@ -204,4 +159,5 @@ NwbCausticHwVertexAttrib nwbCausticHwLoadVertexAttrib(const uint attributeSlot, 
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

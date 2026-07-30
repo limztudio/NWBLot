@@ -1,0 +1,41 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_BVH_RAY_VERTEX_ATTRIB_SLANGI
+#define NWB_GRAPHICS_BVH_RAY_VERTEX_ATTRIB_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../common/math.slangi"
+
+
+// Per-triangle-corner attribute ABI shared by software and hardware ray traces: packed Half4 normal at byte 0 and
+// Float2 uv0 at byte 8. Callers keep their own heap-load strategy, then decode the identical 16-byte record here.
+struct NwbRayTraceVertexAttrib{
+    float3 normal;
+    float2 uv0;
+};
+
+NwbRayTraceVertexAttrib nwbRayTraceDecodeVertexAttrib(const uint4 packed){
+    NwbRayTraceVertexAttrib attrib;
+    attrib.normal = float3(
+        nwbUnpackHalf2x16(packed.x),
+        nwbUnpackHalf2x16(packed.y).x
+    );
+    attrib.uv0 = asfloat(packed.zw);
+    return attrib;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

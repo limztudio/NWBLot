@@ -93,7 +93,7 @@ NwbGiHwVertexAttrib nwbGiHwLoadVertexAttrib(const uint attributeSlot, const uint
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// worldToObject^T * objectNormal -- byte-matches nwbGiSwTransformNormal (gi_sw_trace.slangi), but fed the driver's
+// worldToObject^T * objectNormal -- byte-matches nwbSwBvhTransformNormal (bvh/sw_instance.slangi), but fed the driver's
 // TLAS-baked world->object rows instead of the CPU-uploaded instance record (both derive from the same world matrix).
 float3 nwbGiHwTransformNormal(const float3x4 worldToObject, const float3 objectNormal){
     return float3(
@@ -180,4 +180,5 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

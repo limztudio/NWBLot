@@ -570,21 +570,6 @@ struct DeferredFrameTargets{
             && opaqueColorFormat != Core::Format::UNKNOWN
             && compositeColorFormat != Core::Format::UNKNOWN
             && depthFormat != Core::Format::UNKNOWN
-            && csgCapNormalFormat != Core::Format::UNKNOWN
-            && csgIntervalDepthFormat != Core::Format::UNKNOWN
-            && csgIntervalIdFormat != Core::Format::UNKNOWN
-            && csgReceiverEventDataFormat != Core::Format::UNKNOWN
-            && csgReceiverEventCountFormat != Core::Format::UNKNOWN
-            && csgReceiverSpanDataFormat != Core::Format::UNKNOWN
-            && csgReceiverSpanCountFormat != Core::Format::UNKNOWN
-            && csgRemovedIntervalDepthFormat != Core::Format::UNKNOWN
-            && csgRemovedIntervalCapNormalFormat != Core::Format::UNKNOWN
-            && csgRemovedIntervalDataFormat != Core::Format::UNKNOWN
-            && csgRemovedIntervalCountFormat != Core::Format::UNKNOWN
-            && csgPeelLayerCount > 0u
-            && csgReceiverEventLayerCount > 0u
-            && csgReceiverSpanLayerCount > 0u
-            && csgRemovedIntervalLayerCount > 0u
             && csgIntervalTargetsValid()
             && albedo != nullptr
             && normal != nullptr
@@ -610,4 +595,5 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 

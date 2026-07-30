@@ -1,0 +1,61 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_BVH_SW_INSTANCE_SLANGI
+#define NWB_GRAPHICS_BVH_SW_INSTANCE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Shared software-BVH scene-instance ABI. The three affine rows and trailing four words match the C++
+// SceneSwBvhInstanceGpu record (64 bytes) used by the shadow, surfel-GI, and caustic software trace paths.
+struct NwbSwBvhInstance{
+    float4 worldToObjectRow0;
+    float4 worldToObjectRow1;
+    float4 worldToObjectRow2;
+    uint reservedMeshIndex;
+    uint primitiveCount;
+    uint pad0;
+    uint pad1;
+};
+
+float3 nwbSwBvhTransformPoint(const NwbSwBvhInstance instance, const float3 point){
+    return float3(
+        dot(instance.worldToObjectRow0.xyz, point) + instance.worldToObjectRow0.w,
+        dot(instance.worldToObjectRow1.xyz, point) + instance.worldToObjectRow1.w,
+        dot(instance.worldToObjectRow2.xyz, point) + instance.worldToObjectRow2.w
+    );
+}
+
+// Leave ray directions un-normalized so object-space and world-space ray parameters stay identical.
+float3 nwbSwBvhTransformVector(const NwbSwBvhInstance instance, const float3 vector){
+    return float3(
+        dot(instance.worldToObjectRow0.xyz, vector),
+        dot(instance.worldToObjectRow1.xyz, vector),
+        dot(instance.worldToObjectRow2.xyz, vector)
+    );
+}
+
+// This is the inverse-transpose of object->world, expressed as the transpose of the stored world->object 3x3. Callers
+// choose their own normalization/fallback policy because their surface contracts differ.
+float3 nwbSwBvhTransformNormal(const NwbSwBvhInstance instance, const float3 objectNormal){
+    return float3(
+        dot(float3(instance.worldToObjectRow0.x, instance.worldToObjectRow1.x, instance.worldToObjectRow2.x), objectNormal),
+        dot(float3(instance.worldToObjectRow0.y, instance.worldToObjectRow1.y, instance.worldToObjectRow2.y), objectNormal),
+        dot(float3(instance.worldToObjectRow0.z, instance.worldToObjectRow1.z, instance.worldToObjectRow2.z), objectNormal)
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

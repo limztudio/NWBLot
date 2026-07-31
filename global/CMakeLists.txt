@@ -5,4 +5,5 @@ target_sources(nwb_global PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/container/adaptor.h"
     "${CMAKE_CURRENT_LIST_DIR}/inplace_function.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/tangent_frame_rebuild.h"
+    "${CMAKE_CURRENT_LIST_DIR}/mesh/triangle_area.h"
 )

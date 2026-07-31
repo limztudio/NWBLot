@@ -186,8 +186,12 @@ static void BuildAnimatedJointMatrix(
         angle * (0.58f + static_cast<f32>((seed >> 6u) & 3u) * 0.04f),
         secondary * (rollBase + static_cast<f32>((seed >> 9u) & 3u) * rollJitter)
     );
-    matrix = NWB::Impl::SkeletonRuntime::MultiplyJointMatrices(bindJoint, matrix);
-    if(!NWB::Impl::SkeletonRuntime::IsInvertibleAffineJointMatrix(matrix))
+    matrix = MatrixMultiply(bindJoint, matrix);
+    if(!MatrixIsInvertibleAffine(
+        matrix,
+        NWB::Impl::SkeletonRuntime::s_AffineEpsilon,
+        NWB::Impl::SkeletonRuntime::s_JointDeterminantEpsilon
+    ))
         return;
 
     outMatrix = matrix;
@@ -349,7 +353,11 @@ private:
         m_bindJoints.clear();
         m_bindJoints.reserve(skeleton->joints().size());
         for(const NWB::Impl::SkeletonJoint& joint : skeleton->joints()){
-            if(!NWB::Impl::SkeletonRuntime::IsInvertibleAffineJointMatrix(LoadFloat(joint.localBindPose))){
+            if(!MatrixIsInvertibleAffine(
+                LoadFloat(joint.localBindPose),
+                NWB::Impl::SkeletonRuntime::s_AffineEpsilon,
+                NWB::Impl::SkeletonRuntime::s_JointDeterminantEpsilon
+            )){
                 NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark skeleton contains an invalid bind pose"));
                 return false;
             }

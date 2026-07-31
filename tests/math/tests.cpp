@@ -369,6 +369,23 @@ TEST(Math, HalfFloatScalarConversion){
     EXPECT_TRUE(IsNaN(ConvertHalfToFloat(static_cast<Half>(0x7e00u))));
 }
 
+TEST(Math, UnsignedFloatConversion){
+    EXPECT_EQ(ConvertFloatToUnsignedFloat<6u>(0.0f), 0u);
+    EXPECT_EQ(ConvertFloatToUnsignedFloat<6u>(-0.0f), 0u);
+    EXPECT_EQ(ConvertFloatToUnsignedFloat<6u>(-1.0f), 0u);
+    EXPECT_EQ(ConvertFloatToUnsignedFloat<6u>(1.0f), 0x3c0u);
+    EXPECT_EQ(ConvertFloatToUnsignedFloat<6u>(9.5367431640625e-7f), 0x001u);
+    EXPECT_EQ(ConvertFloatToUnsignedFloat<6u>(6.103515625e-5f), 0x040u);
+    EXPECT_EQ(ConvertFloatToUnsignedFloat<6u>(65536.0f), 0x7c0u);
+    EXPECT_EQ(ConvertFloatToUnsignedFloat<6u>(-Limit<f32>::s_Infinity), 0u);
+    EXPECT_EQ(ConvertFloatToUnsignedFloat<6u>(Limit<f32>::s_Infinity), 0x7c0u);
+    EXPECT_EQ(ConvertFloatToUnsignedFloat<5u>(1.0f), 0x1e0u);
+
+    const u32 quietNaN = ConvertFloatToUnsignedFloat<6u>(Limit<f32>::s_QuietNaN);
+    EXPECT_EQ(quietNaN & 0x7c0u, 0x7c0u);
+    EXPECT_NE(quietNaN & 0x03fu, 0u);
+}
+
 TEST(Math, HalfFloatBufferConversion){
     f32 source[6] = {
         0.0f,
@@ -423,6 +440,45 @@ TEST(Math, HalfFloat4Conversion){
     EXPECT_TRUE(NearlyEqual(specialUnpacked.y, 5.9604644775390625e-8f));
     EXPECT_TRUE(IsNaN(specialUnpacked.z));
     EXPECT_EQ(specialUnpacked.w, -Limit<f32>::s_Infinity);
+}
+
+TEST(Math, AffineMatrixQueriesAndDualQuaternion){
+    constexpr f32 s_AffineEpsilon = 0.000001f;
+    constexpr f32 s_DeterminantEpsilon = 0.000000000001f;
+    constexpr f32 s_RigidEpsilon = 0.001f;
+
+    const SIMDMatrix translation = MatrixTranslation(1.0f, 2.0f, 3.0f);
+    EXPECT_TRUE(MatrixIsAffine(translation, s_AffineEpsilon));
+    EXPECT_TRUE(NearlyEqual(MatrixLinearDeterminant(translation), 1.0f));
+    EXPECT_TRUE(MatrixIsInvertibleAffine(translation, s_AffineEpsilon, s_DeterminantEpsilon));
+    EXPECT_TRUE(MatrixIsRigidAffine(translation, s_AffineEpsilon, s_RigidEpsilon));
+
+    SIMDVector real = VectorZero();
+    SIMDVector dual = VectorZero();
+    ASSERT_TRUE(MatrixTryBuildRigidDualQuaternion(
+        translation,
+        s_AffineEpsilon,
+        s_RigidEpsilon,
+        real,
+        dual
+    ));
+    EXPECT_TRUE(NearlyEqual4(real, 0.0f, 0.0f, 0.0f, 1.0f));
+    EXPECT_TRUE(NearlyEqual4(dual, 0.5f, 1.0f, 1.5f, 0.0f));
+
+    const SIMDMatrix scaled = MatrixScaling(2.0f, 3.0f, 4.0f);
+    EXPECT_TRUE(NearlyEqual(MatrixLinearDeterminant(scaled), 24.0f));
+    EXPECT_TRUE(MatrixIsInvertibleAffine(scaled, s_AffineEpsilon, s_DeterminantEpsilon));
+    EXPECT_FALSE(MatrixIsRigidAffine(scaled, s_AffineEpsilon, s_RigidEpsilon));
+
+    SIMDMatrix nonAffine = MatrixIdentity();
+    nonAffine.v[3] = VectorZero();
+    EXPECT_FALSE(MatrixIsAffine(nonAffine, s_AffineEpsilon));
+}
+
+TEST(Math, AabbSurfaceArea){
+    const SIMDVector minBounds = VectorSet(-1.0f, -2.0f, -3.0f, 0.0f);
+    const SIMDVector maxBounds = VectorSet(1.0f, 2.0f, 3.0f, 0.0f);
+    EXPECT_TRUE(NearlyEqual(AabbTests::SurfaceArea(minBounds, maxBounds), 88.0f));
 }
 
 TEST(Math, FloatIntStorageConversion){

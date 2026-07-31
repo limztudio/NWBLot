@@ -107,7 +107,7 @@ namespace __hidden_runtime_cache_resources{
     }
     for(const SkeletonJointMatrix& storedInverseBind : instance.inverseBindMatrices){
         const SIMDMatrix inverseBind = LoadFloat(storedInverseBind);
-        if(SkinValidation::ValidAffineJointMatrix(inverseBind))
+        if(MatrixIsInvertibleAffine(inverseBind, SkinValidation::s_Epsilon, SkinValidation::s_Epsilon))
             continue;
 
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' inverse bind matrices are invalid")

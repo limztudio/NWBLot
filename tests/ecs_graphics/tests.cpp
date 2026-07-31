@@ -445,7 +445,12 @@ static void CheckJointRotationQuaternion(
     const f32 z,
     const f32 w){
     SIMDVector quaternion = QuaternionIdentity();
-    ASSERT_TRUE(NWB::Impl::SkeletonRuntime::TryBuildJointRotationQuaternion(joint, quaternion));
+    ASSERT_TRUE(MatrixTryBuildRigidRotationQuaternion(
+        joint,
+        NWB::Impl::SkeletonRuntime::s_AffineEpsilon,
+        NWB::Impl::SkeletonRuntime::s_RigidJointEpsilon,
+        quaternion
+    ));
     EXPECT_TRUE(NearlyEqual(VectorGetX(quaternion), x));
     EXPECT_TRUE(NearlyEqual(VectorGetY(quaternion), y));
     EXPECT_TRUE(NearlyEqual(VectorGetZ(quaternion), z));
@@ -462,10 +467,12 @@ TEST(EcsGraphics, JointRotationQuaternionBuildsColumnVectorRotations){
     CheckJointRotationQuaternion(LoadFloat(MakeZHalfTurnJointMatrix()), 0.0f, 0.0f, 1.0f, 0.0f);
 
     SIMDVector quaternion = QuaternionIdentity();
-    EXPECT_FALSE(NWB::Impl::SkeletonRuntime::TryBuildJointRotationQuaternion(
-            LoadFloat(MakeNonUniformScaleJointMatrix()),
-            quaternion
-        ));
+    EXPECT_FALSE(MatrixTryBuildRigidRotationQuaternion(
+        LoadFloat(MakeNonUniformScaleJointMatrix()),
+        NWB::Impl::SkeletonRuntime::s_AffineEpsilon,
+        NWB::Impl::SkeletonRuntime::s_RigidJointEpsilon,
+        quaternion
+    ));
 }
 
 static NWB::Impl::SkeletonPoseComponent MakeTwoJointSkeletonPose(

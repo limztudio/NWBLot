@@ -23,7 +23,7 @@ namespace SkeletonRuntime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_Epsilon = 0.000001f;
+static constexpr f32 s_AffineEpsilon = 0.000001f;
 static constexpr f32 s_JointDeterminantEpsilon = 0.000000000001f;
 static constexpr f32 s_RigidJointEpsilon = 0.001f;
 
@@ -35,50 +35,21 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     return pose && (!pose->localJoints.empty() || !pose->parentJoints.empty());
 }
 
-[[nodiscard]] NWB_INLINE SIMDMatrix MultiplyJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs){
-    return MatrixMultiply(lhs, rhs);
-}
-
-[[nodiscard]] NWB_INLINE bool IsAffineJointMatrix(const SIMDMatrix& matrix){
-    return
-        VectorIsFinite(matrix.v[0], VectorComponentMask::s_XYZW)
-        && VectorIsFinite(matrix.v[1], VectorComponentMask::s_XYZW)
-        && VectorIsFinite(matrix.v[2], VectorComponentMask::s_XYZW)
-        && VectorIsFinite(matrix.v[3], VectorComponentMask::s_XYZW)
-        && Vector4NearEqual(matrix.v[3], s_SIMDIdentityR3, VectorReplicate(s_Epsilon))
-    ;
-}
-
-[[nodiscard]] NWB_INLINE f32 JointLinearDeterminant(const SIMDMatrix& matrix){
-    const SIMDVector row0 = VectorSetW(matrix.v[0], 0.0f);
-    const SIMDVector row1 = VectorSetW(matrix.v[1], 0.0f);
-    const SIMDVector row2 = VectorSetW(matrix.v[2], 0.0f);
-    return VectorGetX(Vector3Dot(row0, Vector3Cross(row1, row2)));
-}
-
-[[nodiscard]] NWB_INLINE bool IsInvertibleAffineJointMatrix(const SIMDMatrix& matrix){
-    if(!IsAffineJointMatrix(matrix))
-        return false;
-
-    const f32 determinant = JointLinearDeterminant(matrix);
-    return IsFinite(determinant) && Abs(determinant) > s_JointDeterminantEpsilon;
-}
-
 [[nodiscard]] NWB_INLINE bool ResolveSkinningJointMatrix(
     const SIMDMatrix& poseJoint,
     const bool hasInverseBind,
     const SIMDMatrix& inverseBind,
     SIMDMatrix& outMatrix){
     outMatrix = poseJoint;
-    if(!IsInvertibleAffineJointMatrix(outMatrix))
+    if(!MatrixIsInvertibleAffine(outMatrix, s_AffineEpsilon, s_JointDeterminantEpsilon))
         return false;
     if(!hasInverseBind)
         return true;
-    if(!IsInvertibleAffineJointMatrix(inverseBind))
+    if(!MatrixIsInvertibleAffine(inverseBind, s_AffineEpsilon, s_JointDeterminantEpsilon))
         return false;
 
-    outMatrix = MultiplyJointMatrices(outMatrix, inverseBind);
-    return IsInvertibleAffineJointMatrix(outMatrix);
+    outMatrix = MatrixMultiply(outMatrix, inverseBind);
+    return MatrixIsInvertibleAffine(outMatrix, s_AffineEpsilon, s_JointDeterminantEpsilon);
 }
 
 [[nodiscard]] NWB_INLINE bool ResolveSkeletonPoseJointMatrix(
@@ -87,12 +58,12 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     SIMDMatrix& outMatrix
 ){
     outMatrix = localJoint;
-    if(!IsInvertibleAffineJointMatrix(outMatrix))
+    if(!MatrixIsInvertibleAffine(outMatrix, s_AffineEpsilon, s_JointDeterminantEpsilon))
         return false;
 
     if(parentJoint){
-        outMatrix = MultiplyJointMatrices(*parentJoint, outMatrix);
-        if(!IsInvertibleAffineJointMatrix(outMatrix))
+        outMatrix = MatrixMultiply(*parentJoint, outMatrix);
+        if(!MatrixIsInvertibleAffine(outMatrix, s_AffineEpsilon, s_JointDeterminantEpsilon))
             return false;
     }
     return true;
@@ -148,63 +119,6 @@ template<typename JointMatrixVector>
     outSkinningMode = pose.skinningMode;
     return true;
 }
-
-[[nodiscard]] inline bool IsRigidJointMatrix(const SIMDMatrix& matrix){
-    if(!IsAffineJointMatrix(matrix))
-        return false;
-
-    const SIMDVector row0 = VectorSetW(matrix.v[0], 0.0f);
-    const SIMDVector row1 = VectorSetW(matrix.v[1], 0.0f);
-    const SIMDVector row2 = VectorSetW(matrix.v[2], 0.0f);
-    const SIMDVector lengthSq = VectorMergeX(
-        Vector3LengthSq(row0),
-        Vector3LengthSq(row1),
-        Vector3LengthSq(row2),
-        s_SIMDOne
-    );
-    const SIMDVector dotAndDeterminant = VectorMergeX(
-        Vector3Dot(row0, row1),
-        Vector3Dot(row0, row2),
-        Vector3Dot(row1, row2),
-        Vector3Dot(row0, Vector3Cross(row1, row2))
-    );
-    const SIMDVector epsilon = VectorReplicate(s_RigidJointEpsilon);
-    return
-        VectorIsFinite(lengthSq, VectorComponentMask::s_XYZ)
-        && VectorIsFinite(dotAndDeterminant, VectorComponentMask::s_XYZW)
-        && Vector4LessOrEqual(VectorAbs(VectorSubtract(lengthSq, s_SIMDOne)), epsilon)
-        && Vector4LessOrEqual(VectorAbs(VectorSubtract(dotAndDeterminant, s_SIMDIdentityR3)), epsilon)
-    ;
-}
-
-[[nodiscard]] inline bool TryBuildJointRotationQuaternion(const SIMDMatrix& matrix, SIMDVector& outQuaternion){
-    outQuaternion = QuaternionIdentity();
-    if(!IsRigidJointMatrix(matrix))
-        return false;
-
-    outQuaternion = QuaternionRotationMatrix(MatrixTranspose(matrix));
-    return !QuaternionIsNaN(outQuaternion) && !QuaternionIsInfinite(outQuaternion);
-}
-
-[[nodiscard]] inline bool TryBuildJointDualQuaternion(const SIMDMatrix& matrix, SIMDVector& outReal, SIMDVector& outDual){
-    outReal = QuaternionIdentity();
-    outDual = VectorZero();
-    if(!TryBuildJointRotationQuaternion(matrix, outReal))
-        return false;
-
-    const SIMDVector translation = VectorSet(
-        VectorGetW(matrix.v[0]),
-        VectorGetW(matrix.v[1]),
-        VectorGetW(matrix.v[2]),
-        0.0f
-    );
-    outDual = VectorScale(QuaternionMultiply(translation, outReal), 0.5f);
-    return VectorIsFinite(outDual, VectorComponentMask::s_XYZW);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 };
 

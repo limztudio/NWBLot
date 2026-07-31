@@ -26,6 +26,7 @@
 #include <global/math/type.h>
 #include <global/math/vector.h>
 #include <global/mesh/tangent_frame_rebuild.h>
+#include <global/mesh/triangle_area.h>
 #include <global/overflow.h>
 #include <global/process_execution.h>
 #include <global/text_utils.h>
@@ -263,6 +264,33 @@ TEST(Global, GrowingCapacityHelpers){
     EXPECT_EQ(::NextGrowingCapacity(8u, 9u), 16u);
     EXPECT_EQ(::NextGrowingCapacity(0u, 4097u, 4096u), 8192u);
     EXPECT_EQ(::NextGrowingCapacity((Limit<usize>::s_Max / 2u) + 1u, Limit<usize>::s_Max), Limit<usize>::s_Max);
+}
+
+TEST(Global, CheckedDivideUp){
+    u32 result = 0u;
+    EXPECT_TRUE(::DivideUpChecked(17u, 4u, result));
+    EXPECT_EQ(result, 5u);
+    EXPECT_FALSE(::DivideUpChecked(17u, 0u, result));
+}
+
+TEST(Global, TriangleAreaPrecisionHelpers){
+    const Float3U a(1.0f, 1.0f, 1.0f);
+    const Float3U b(4.0f, 1.0f, 1.0f);
+    const Float3U c(1.0f, 5.0f, 1.0f);
+    const TriangleAreaNormal64 areaNormal = ::BuildTriangleAreaNormal64(a, b, c);
+    EXPECT_DOUBLE_EQ(areaNormal.x, 0.0);
+    EXPECT_DOUBLE_EQ(areaNormal.y, 0.0);
+    EXPECT_DOUBLE_EQ(areaNormal.z, 12.0);
+    EXPECT_DOUBLE_EQ(::TriangleAreaNormalLengthSquared(areaNormal), 144.0);
+    EXPECT_TRUE(::TriangleHasArea(a, b, c, 143.0));
+    EXPECT_FALSE(::TriangleHasArea(a, b, c, 144.0));
+
+    const TriangleAreaNormal64 simdAreaNormal = ::BuildTriangleAreaNormal64(
+        VectorSet(1.0f, 1.0f, 1.0f, 0.0f),
+        VectorSet(4.0f, 1.0f, 1.0f, 0.0f),
+        VectorSet(1.0f, 5.0f, 1.0f, 0.0f)
+    );
+    EXPECT_DOUBLE_EQ(simdAreaNormal.z, 12.0);
 }
 
 TEST(Global, Float34IdentityUsesAffineStorage){

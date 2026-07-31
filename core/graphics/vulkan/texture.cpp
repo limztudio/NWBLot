@@ -49,20 +49,6 @@ inline constexpr f32 s_SRGBClearLinearScale = 12.92f;
 inline constexpr f32 s_SRGBClearNonlinearScale = 1.055f;
 inline constexpr f32 s_SRGBClearNonlinearExponent = 2.4f;
 inline constexpr f32 s_SRGBClearNonlinearOffset = 0.055f;
-inline constexpr u32 s_F32SignBitMask = 0x80000000u;
-inline constexpr u32 s_F32AbsoluteBitMask = 0x7fffffffu;
-inline constexpr u32 s_F32InfinityBits = 0x7f800000u;
-inline constexpr u32 s_F32MantissaBitCount = 23u;
-inline constexpr u32 s_F32ExponentBias = 127u;
-inline constexpr u32 s_F32ImplicitMantissaBit = 0x800000u;
-inline constexpr u32 s_F32MantissaBitMask = 0x7fffffu;
-inline constexpr u32 s_UFloatExponentFieldMask = 0x1fu;
-inline constexpr u32 s_UFloatExponentBitCount = 5u;
-inline constexpr u32 s_UFloatExponentBias = 15u;
-inline constexpr u32 s_UFloatSubnormalMaxMantissaBitCount = 10u;
-inline constexpr u32 s_UFloatOverflowBits = 0x47800000u;
-inline constexpr u32 s_UFloatMinNormalBits = 0x38800000u;
-inline constexpr u32 s_UFloatNormalRoundingBiasBits = 0xc8000000u;
 
 struct TextureCreateMetadata{
     VkFormat format = VK_FORMAT_UNDEFINED;
@@ -602,42 +588,6 @@ inline void WriteBC4SNormClearBlock(u8* outPattern, const f32 value){
         outPattern[byteIndex] = 0u;
 }
 
-inline u32 FloatToUnsignedFloatClearBits(const f32 value, const u32 mantissaBits){
-    u32 bits = std::bit_cast<u32>(value);
-    const u32 absBits = bits & s_F32AbsoluteBitMask;
-    const u32 targetInf = s_UFloatExponentFieldMask << mantissaBits;
-    const u32 targetMantissaMask = (1u << mantissaBits) - 1u;
-
-    if(absBits > s_F32InfinityBits){
-        const u32 payload = (absBits >> (s_F32MantissaBitCount - mantissaBits)) & targetMantissaMask;
-        return targetInf | (payload != 0u ? payload : 1u);
-    }
-    if((bits & s_F32SignBitMask) != 0u || absBits == 0u)
-        return 0u;
-
-    bits = absBits;
-    if(bits >= s_UFloatOverflowBits)
-        return targetInf;
-
-    const u32 zeroThreshold = (s_F32ExponentBias - s_UFloatExponentBias - mantissaBits) << s_F32MantissaBitCount;
-    if(bits <= zeroThreshold)
-        return 0u;
-
-    if(bits < s_UFloatMinNormalBits){
-        const u32 sourceExponent = bits >> s_F32MantissaBitCount;
-        const u32 roundShift = (s_F32ExponentBias - 1u) - sourceExponent + (s_UFloatSubnormalMaxMantissaBitCount - mantissaBits);
-        bits = s_F32ImplicitMantissaBit | (bits & s_F32MantissaBitMask);
-        u32 result = bits >> roundShift;
-        const u32 sticky = (bits & ((1u << (roundShift - 1u)) - 1u)) != 0u ? 1u : 0u;
-        result += (result | sticky) & ((bits >> (roundShift - 1u)) & 1u);
-        return result;
-    }
-
-    const u32 shift = s_F32MantissaBitCount - mantissaBits;
-    bits += s_UFloatNormalRoundingBiasBits;
-    return ((bits + ((1u << (shift - 1u)) - 1u) + ((bits >> shift) & 1u)) >> shift) & ((1u << (s_UFloatExponentBitCount + mantissaBits)) - 1u);
-}
-
 inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkClearColorValue& clearValue, u8* outPattern, u32& outPatternSize){
     outPatternSize = 0u;
     const f32 values[] = {
@@ -751,9 +701,9 @@ inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkCle
     };
     auto writeUFloat111110RGBComponents = [&](){
         const u32 packed =
-            FloatToUnsignedFloatClearBits(values[0], 6u)
-            | (FloatToUnsignedFloatClearBits(values[1], 6u) << 11u)
-            | (FloatToUnsignedFloatClearBits(values[2], 5u) << 22u);
+            ConvertFloatToUnsignedFloat<6u>(values[0])
+            | (ConvertFloatToUnsignedFloat<6u>(values[1]) << 11u)
+            | (ConvertFloatToUnsignedFloat<5u>(values[2]) << 22u);
         WriteClearPatternValue(outPattern, sizeof(packed), &packed, sizeof(packed));
         outPatternSize = sizeof(packed);
         return true;

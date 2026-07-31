@@ -124,6 +124,7 @@ void SIMDCALL ExpandTriangle(
 )noexcept;
 [[nodiscard]] SIMDVector SIMDCALL Center(SIMDVector minBounds, SIMDVector maxBounds)noexcept;
 [[nodiscard]] SIMDVector SIMDCALL Extents(SIMDVector minBounds, SIMDVector maxBounds)noexcept;
+[[nodiscard]] f32 SIMDCALL SurfaceArea(SIMDVector minBounds, SIMDVector maxBounds)noexcept;
 [[nodiscard]] f32 SIMDCALL Radius(SIMDVector minBounds, SIMDVector maxBounds)noexcept;
 [[nodiscard]] bool SIMDCALL Transform(
     const SIMDMatrix& localToWorld,

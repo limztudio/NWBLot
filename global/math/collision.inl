@@ -883,6 +883,19 @@ NWB_INLINE void SIMDCALL AabbTests::ExpandTriangle(
     return VectorSetW(VectorScale(VectorSubtract(maxBounds, minBounds), CollisionDetail::s_Half), 0.0f);
 }
 
+[[nodiscard]] NWB_INLINE f32 SIMDCALL AabbTests::SurfaceArea(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
+    const SIMDVector extent = VectorSubtract(maxBounds, minBounds);
+    const SIMDVector pairProducts = VectorMultiply(extent, VectorSwizzle<1, 2, 0, 3>(extent));
+    const SIMDVector area = VectorScale(
+        VectorAdd(
+            VectorAdd(VectorSplatX(pairProducts), VectorSplatZ(pairProducts)),
+            VectorSplatY(pairProducts)
+        ),
+        2.0f
+    );
+    return VectorGetX(area);
+}
+
 [[nodiscard]] NWB_INLINE f32 SIMDCALL AabbTests::Radius(const SIMDVector minBounds, const SIMDVector maxBounds)noexcept{
     return VectorGetX(Vector3Length(AabbTests::Extents(minBounds, maxBounds)));
 }

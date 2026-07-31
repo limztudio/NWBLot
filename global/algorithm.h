@@ -92,6 +92,15 @@ constexpr T DivideUp(const T value, const T divisor){
 }
 
 template<typename T>
+constexpr bool DivideUpChecked(const T value, const T divisor, T& outValue){
+    if(divisor == 0)
+        return false;
+
+    outValue = DivideUp(value, divisor);
+    return true;
+}
+
+template<typename T>
 constexpr bool AlignUpChecked(const T value, const T alignment, T& outValue){
     if(alignment == 0){
         outValue = value;

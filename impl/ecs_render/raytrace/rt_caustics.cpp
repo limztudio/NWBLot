@@ -93,8 +93,9 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
 
         const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
         const SIMDMatrix objectToWorld = transform
-            ? __hidden_raytracing_system::BuildObjectToWorld(
+            ? MatrixAffineTransformation(
                 LoadFloat(transform->scale),
+                VectorZero(),
                 LoadFloat(transform->rotation),
                 LoadFloat(transform->position)
             )

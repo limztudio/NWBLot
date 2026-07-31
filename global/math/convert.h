@@ -162,6 +162,89 @@ NWB_INLINE f32* HalfBufferToFloatF16C(f32* outFloatBuffer, const Half* halfBuffe
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace UnsignedFloatConvertDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr u32 s_F32SignBitMask = 0x80000000u;
+inline constexpr u32 s_F32AbsoluteBitMask = 0x7fffffffu;
+inline constexpr u32 s_F32InfinityBits = 0x7f800000u;
+inline constexpr u32 s_F32MantissaBitCount = 23u;
+inline constexpr u32 s_F32ExponentBias = 127u;
+inline constexpr u32 s_F32ImplicitMantissaBit = 0x800000u;
+inline constexpr u32 s_F32MantissaBitMask = 0x7fffffu;
+inline constexpr u32 s_ExponentFieldMask = 0x1fu;
+inline constexpr u32 s_ExponentBitCount = 5u;
+inline constexpr u32 s_ExponentBias = 15u;
+inline constexpr u32 s_MaxMantissaBitCount = 10u;
+inline constexpr u32 s_OverflowBits = 0x47800000u;
+inline constexpr u32 s_MinNormalBits = 0x38800000u;
+inline constexpr u32 s_NormalRoundingBiasBits = 0xc8000000u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<u32 MANTISSA_BIT_COUNT>
+[[nodiscard]] NWB_INLINE u32 ConvertFloatToUnsignedFloat(const f32 value)noexcept{
+    static_assert(MANTISSA_BIT_COUNT > 0u, "Unsigned floating-point values need a mantissa");
+    static_assert(MANTISSA_BIT_COUNT <= UnsignedFloatConvertDetail::s_MaxMantissaBitCount, "Unsupported unsigned floating-point mantissa width");
+
+    u32 bits = std::bit_cast<u32>(value);
+    const u32 absBits = bits & UnsignedFloatConvertDetail::s_F32AbsoluteBitMask;
+    const u32 targetInf = UnsignedFloatConvertDetail::s_ExponentFieldMask << MANTISSA_BIT_COUNT;
+    const u32 targetMantissaMask = (1u << MANTISSA_BIT_COUNT) - 1u;
+
+    if(absBits > UnsignedFloatConvertDetail::s_F32InfinityBits){
+        const u32 payload = (absBits >> (UnsignedFloatConvertDetail::s_F32MantissaBitCount - MANTISSA_BIT_COUNT)) & targetMantissaMask;
+        return targetInf | (payload != 0u ? payload : 1u);
+    }
+    if((bits & UnsignedFloatConvertDetail::s_F32SignBitMask) != 0u || absBits == 0u)
+        return 0u;
+
+    bits = absBits;
+    if(bits >= UnsignedFloatConvertDetail::s_OverflowBits)
+        return targetInf;
+
+    const u32 zeroThreshold = (
+        UnsignedFloatConvertDetail::s_F32ExponentBias
+        - UnsignedFloatConvertDetail::s_ExponentBias
+        - MANTISSA_BIT_COUNT
+    ) << UnsignedFloatConvertDetail::s_F32MantissaBitCount;
+    if(bits <= zeroThreshold)
+        return 0u;
+
+    if(bits < UnsignedFloatConvertDetail::s_MinNormalBits){
+        const u32 sourceExponent = bits >> UnsignedFloatConvertDetail::s_F32MantissaBitCount;
+        const u32 roundShift = (UnsignedFloatConvertDetail::s_F32ExponentBias - 1u)
+            - sourceExponent
+            + (UnsignedFloatConvertDetail::s_MaxMantissaBitCount - MANTISSA_BIT_COUNT);
+        bits = UnsignedFloatConvertDetail::s_F32ImplicitMantissaBit | (bits & UnsignedFloatConvertDetail::s_F32MantissaBitMask);
+        u32 result = bits >> roundShift;
+        const u32 sticky = (bits & ((1u << (roundShift - 1u)) - 1u)) != 0u ? 1u : 0u;
+        result += (result | sticky) & ((bits >> (roundShift - 1u)) & 1u);
+        return result;
+    }
+
+    const u32 shift = UnsignedFloatConvertDetail::s_F32MantissaBitCount - MANTISSA_BIT_COUNT;
+    bits += UnsignedFloatConvertDetail::s_NormalRoundingBiasBits;
+    return (
+        (bits + ((1u << (shift - 1u)) - 1u) + ((bits >> shift) & 1u)) >> shift
+    ) & ((1u << (UnsignedFloatConvertDetail::s_ExponentBitCount + MANTISSA_BIT_COUNT)) - 1u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] NWB_INLINE Half ConvertFloatToHalf(const f32 value)noexcept{
 #if defined(NWB_HAS_F16C)
     return HalfConvertDetail::FloatToHalfF16C(value);

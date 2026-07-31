@@ -35,14 +35,6 @@ void ClearTextureTilingOutputs(u32* numTiles, PackedMipDesc* desc, TileShape* ti
         *subresourceTilingsNum = 0;
 }
 
-[[nodiscard]] bool DivideUpU32(const u32 value, const u32 divisor, u32& outValue){
-    if(divisor == 0)
-        return false;
-
-    outValue = DivideUp(value, divisor);
-    return true;
-}
-
 [[nodiscard]] bool AddSparseTileCount(
     const u32 startTileIndex,
     const u32 widthInTiles,
@@ -504,9 +496,9 @@ void Device::getTextureTiling(Texture* textureResource, u32* numTiles, PackedMip
         for(u32 i = 0; i < *subresourceTilingsNum; ++i){
             if(i < numStandardMips){
                 if(
-                    !__hidden_vulkan_extensions::DivideUpU32(width, tileWidth, subresourceTilings[i].widthInTiles)
-                    || !__hidden_vulkan_extensions::DivideUpU32(height, tileHeight, subresourceTilings[i].heightInTiles)
-                    || !__hidden_vulkan_extensions::DivideUpU32(depth, tileDepth, subresourceTilings[i].depthInTiles)
+                    !DivideUpChecked(width, tileWidth, subresourceTilings[i].widthInTiles)
+                    || !DivideUpChecked(height, tileHeight, subresourceTilings[i].heightInTiles)
+                    || !DivideUpChecked(depth, tileDepth, subresourceTilings[i].depthInTiles)
                 ){
                     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture tiling: sparse image tile shape is invalid"));
                     __hidden_vulkan_extensions::ClearTextureTilingOutputs(numTiles, desc, tileShape, subresourceTilingsNum);

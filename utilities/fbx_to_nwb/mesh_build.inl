@@ -242,7 +242,12 @@ bool AppendInstanceMesh(
             triangleCorners[triangleCornerIndex] = corner;
         }
 
-        if(!TriangleHasArea(triangleCorners, options.triangleAreaLengthSquaredEpsilon))
+        if(!::TriangleHasArea(
+            triangleCorners[0u].position,
+            triangleCorners[1u].position,
+            triangleCorners[2u].position,
+            options.triangleAreaLengthSquaredEpsilon
+        ))
             return true;
 
         if(normalMode == NormalMode::Regenerate){

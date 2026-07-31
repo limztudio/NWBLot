@@ -481,6 +481,107 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] NWB_INLINE bool SIMDCALL MatrixIsAffine(const SIMDMatrix& matrix, const f32 epsilon)noexcept{
+    return
+        VectorIsFinite(matrix.v[0], VectorComponentMask::s_XYZW)
+        && VectorIsFinite(matrix.v[1], VectorComponentMask::s_XYZW)
+        && VectorIsFinite(matrix.v[2], VectorComponentMask::s_XYZW)
+        && VectorIsFinite(matrix.v[3], VectorComponentMask::s_XYZW)
+        && Vector4NearEqual(matrix.v[3], s_SIMDIdentityR3, VectorReplicate(epsilon))
+    ;
+}
+
+[[nodiscard]] NWB_INLINE f32 SIMDCALL MatrixLinearDeterminant(const SIMDMatrix& matrix)noexcept{
+    const SIMDVector row0 = VectorSetW(matrix.v[0], 0.0f);
+    const SIMDVector row1 = VectorSetW(matrix.v[1], 0.0f);
+    const SIMDVector row2 = VectorSetW(matrix.v[2], 0.0f);
+    return VectorGetX(Vector3Dot(row0, Vector3Cross(row1, row2)));
+}
+
+[[nodiscard]] NWB_INLINE bool SIMDCALL MatrixIsInvertibleAffine(
+    const SIMDMatrix& matrix,
+    const f32 affineEpsilon,
+    const f32 determinantEpsilon
+)noexcept{
+    if(!MatrixIsAffine(matrix, affineEpsilon))
+        return false;
+
+    const f32 determinant = MatrixLinearDeterminant(matrix);
+    return IsFinite(determinant) && Abs(determinant) > determinantEpsilon;
+}
+
+[[nodiscard]] NWB_INLINE bool SIMDCALL MatrixIsRigidAffine(
+    const SIMDMatrix& matrix,
+    const f32 affineEpsilon,
+    const f32 rigidEpsilon
+)noexcept{
+    if(!MatrixIsAffine(matrix, affineEpsilon))
+        return false;
+
+    const SIMDVector row0 = VectorSetW(matrix.v[0], 0.0f);
+    const SIMDVector row1 = VectorSetW(matrix.v[1], 0.0f);
+    const SIMDVector row2 = VectorSetW(matrix.v[2], 0.0f);
+    const SIMDVector lengthSq = VectorMergeX(
+        Vector3LengthSq(row0),
+        Vector3LengthSq(row1),
+        Vector3LengthSq(row2),
+        s_SIMDOne
+    );
+    const SIMDVector dotAndDeterminant = VectorMergeX(
+        Vector3Dot(row0, row1),
+        Vector3Dot(row0, row2),
+        Vector3Dot(row1, row2),
+        Vector3Dot(row0, Vector3Cross(row1, row2))
+    );
+    const SIMDVector epsilon = VectorReplicate(rigidEpsilon);
+    return
+        VectorIsFinite(lengthSq, VectorComponentMask::s_XYZ)
+        && VectorIsFinite(dotAndDeterminant, VectorComponentMask::s_XYZW)
+        && Vector4LessOrEqual(VectorAbs(VectorSubtract(lengthSq, s_SIMDOne)), epsilon)
+        && Vector4LessOrEqual(VectorAbs(VectorSubtract(dotAndDeterminant, s_SIMDIdentityR3)), epsilon)
+    ;
+}
+
+[[nodiscard]] NWB_INLINE bool SIMDCALL MatrixTryBuildRigidRotationQuaternion(
+    const SIMDMatrix& matrix,
+    const f32 affineEpsilon,
+    const f32 rigidEpsilon,
+    SIMDVector& outQuaternion
+)noexcept{
+    outQuaternion = QuaternionIdentity();
+    if(!MatrixIsRigidAffine(matrix, affineEpsilon, rigidEpsilon))
+        return false;
+
+    outQuaternion = QuaternionRotationMatrix(MatrixTranspose(matrix));
+    return !QuaternionIsNaN(outQuaternion) && !QuaternionIsInfinite(outQuaternion);
+}
+
+[[nodiscard]] NWB_INLINE bool SIMDCALL MatrixTryBuildRigidDualQuaternion(
+    const SIMDMatrix& matrix,
+    const f32 affineEpsilon,
+    const f32 rigidEpsilon,
+    SIMDVector& outReal,
+    SIMDVector& outDual
+)noexcept{
+    outReal = QuaternionIdentity();
+    outDual = VectorZero();
+    if(!MatrixTryBuildRigidRotationQuaternion(matrix, affineEpsilon, rigidEpsilon, outReal))
+        return false;
+
+    const SIMDVector translation = VectorSet(
+        VectorGetW(matrix.v[0]),
+        VectorGetW(matrix.v[1]),
+        VectorGetW(matrix.v[2]),
+        0.0f
+    );
+    outDual = VectorScale(QuaternionMultiply(translation, outReal), 0.5f);
+    return VectorIsFinite(outDual, VectorComponentMask::s_XYZW);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_INLINE SIMDMatrix SIMDCALL MatrixIdentity()noexcept{
     SIMDMatrix matrix{};
     matrix.v[0] = s_SIMDIdentityR0;

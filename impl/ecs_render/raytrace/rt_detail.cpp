@@ -20,28 +20,6 @@ namespace __hidden_raytracing_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Extracts the axis-th component (0=x, 1=y, 2=z) of a SIMD vector.
-[[nodiscard]] f32 SceneBvhAxisComponent(const SIMDVector value, const u32 axis)noexcept{
-    return axis == 0u ? VectorGetX(value) : (axis == 1u ? VectorGetY(value) : VectorGetZ(value));
-}
-
-// Surface area of an AABB from its min/max SIMD corners (the SA term in the binned-SAH split cost).
-[[nodiscard]] f32 SceneBvhAabbSurfaceArea(const SIMDVector aabbMin, const SIMDVector aabbMax)noexcept{
-    const SIMDVector extent = VectorSubtract(aabbMax, aabbMin);
-    const SIMDVector pairProducts = VectorMultiply(
-        extent,
-        VectorSwizzle<1, 2, 0, 3>(extent)
-    );
-    const SIMDVector area = VectorScale(
-        VectorAdd(
-            VectorAdd(VectorSplatX(pairProducts), VectorSplatZ(pairProducts)),
-            VectorSplatY(pairProducts)
-        ),
-        2.0f
-    );
-    return VectorGetX(area);
-}
-
 void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noexcept{
     const SIMDVector extent = VectorSubtract(boundsMax, boundsMin);
     const SIMDVector paddingVector = VectorSetW(
@@ -53,17 +31,6 @@ void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noe
     );
     boundsMin = VectorSubtract(boundsMin, paddingVector);
     boundsMax = VectorAdd(boundsMax, paddingVector);
-}
-
-// Composes the affine object->world matrix from already-loaded scale/rotation/translation SIMD vectors.
-// The SIMD<->storage boundary stays in the caller: this helper only does SIMD math.
-SIMDMatrix BuildObjectToWorld(const SIMDVector scale, const SIMDVector rotation, const SIMDVector translation)noexcept{
-    return MatrixAffineTransformation(
-        scale,
-        VectorZero(),
-        rotation,
-        translation
-    );
 }
 
 bool ResolveRenderableMeshResources(
@@ -216,8 +183,8 @@ u32 BuildSceneBvhNode(
     f32 bestCost = s_RayTracingFiniteInfinity;
 
     for(u32 axis = 0u; axis < s_SceneBvhAxisCount; ++axis){
-        const f32 loExtent = SceneBvhAxisComponent(centroidMin, axis);
-        const f32 hiExtent = SceneBvhAxisComponent(centroidMax, axis);
+        const f32 loExtent = VectorGetByIndex(centroidMin, axis);
+        const f32 hiExtent = VectorGetByIndex(centroidMax, axis);
         const f32 extent = hiExtent - loExtent;
         if(extent <= 0.0f)
             continue; // coincident centroids on this axis -> binning cannot split it
@@ -232,7 +199,7 @@ u32 BuildSceneBvhNode(
         }
         for(u32 i = lo; i < hi; ++i){
             const u32 instance = indices[i];
-            const f32 c = SceneBvhAxisComponent(primitiveBounds[instance].centroid, axis);
+            const f32 c = VectorGetByIndex(primitiveBounds[instance].centroid, axis);
             u32 b = static_cast<u32>((c - loExtent) * invExtent);
             if(b >= s_SceneBvhSahBinCount)
                 b = s_SceneBvhSahBinCount - 1u;
@@ -271,7 +238,7 @@ u32 BuildSceneBvhNode(
         // slice, so the un-normalized cost ct*SA + SA_L*cost_L + SA_R*cost_R is minimized directly.
         const SIMDVector parentMin = suffixMin[0u];
         const SIMDVector parentMax = suffixMax[0u];
-        const f32 parentArea = SceneBvhAabbSurfaceArea(parentMin, parentMax);
+        const f32 parentArea = AabbTests::SurfaceArea(parentMin, parentMax);
 
         SIMDVector leftMin = VectorReplicate(s_RayTracingFiniteInfinity);
         SIMDVector leftMax = VectorReplicate(-s_RayTracingFiniteInfinity);
@@ -288,8 +255,8 @@ u32 BuildSceneBvhNode(
             if(leftCount == 0u || rightCount == 0u)
                 continue; // boundary puts every instance on one side -> not a real split
 
-            const f32 leftArea = SceneBvhAabbSurfaceArea(leftMin, leftMax);
-            const f32 rightArea = SceneBvhAabbSurfaceArea(suffixMin[k], suffixMax[k]);
+            const f32 leftArea = AabbTests::SurfaceArea(leftMin, leftMax);
+            const f32 rightArea = AabbTests::SurfaceArea(suffixMin[k], suffixMax[k]);
             const f32 cost = parentArea * s_SceneBvhSahTraversalCost
                 + leftArea * leftCost
                 + rightArea * suffixCost[k];
@@ -304,14 +271,14 @@ u32 BuildSceneBvhNode(
     u32 mid;
     if(anyAxisValid){
         // Partition the index slice by the winning axis/bin boundary, matching the binning that produced bestCost.
-        const f32 loExtent = SceneBvhAxisComponent(centroidMin, bestAxis);
-        const f32 hiExtent = SceneBvhAxisComponent(centroidMax, bestAxis);
+        const f32 loExtent = VectorGetByIndex(centroidMin, bestAxis);
+        const f32 hiExtent = VectorGetByIndex(centroidMax, bestAxis);
         const f32 extent = hiExtent - loExtent;
         const f32 invExtent = s_SceneBvhSahBinCount / extent;
         mid = lo;
         for(u32 i = lo; i < hi; ++i){
             const u32 instance = indices[i];
-            const f32 c = SceneBvhAxisComponent(primitiveBounds[instance].centroid, bestAxis);
+            const f32 c = VectorGetByIndex(primitiveBounds[instance].centroid, bestAxis);
             u32 b = static_cast<u32>((c - loExtent) * invExtent);
             if(b >= s_SceneBvhSahBinCount)
                 b = s_SceneBvhSahBinCount - 1u;

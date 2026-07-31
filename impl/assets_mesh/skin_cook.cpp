@@ -344,7 +344,7 @@ template<usize ComponentCount>
         ))
             return false;
 
-        if(!SkinValidation::ValidAffineJointMatrix(LoadFloat(matrix))){
+        if(!MatrixIsInvertibleAffine(LoadFloat(matrix), SkinValidation::s_Epsilon, SkinValidation::s_Epsilon)){
             NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix")
                 , PathToString<tchar>(nwbFilePath)
                 , matrixIndex

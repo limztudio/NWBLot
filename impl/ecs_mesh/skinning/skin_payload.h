@@ -93,7 +93,11 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         ;
         const bool hasInverseBind = inverseBind != nullptr;
         const SIMDMatrix inverseBindMatrix = hasInverseBind ? LoadFloat(*inverseBind) : SIMDMatrix{};
-        NWB_ASSERT(!hasInverseBind || SkinValidation::ValidAffineJointMatrix(inverseBindMatrix));
+        NWB_ASSERT(!hasInverseBind || MatrixIsInvertibleAffine(
+            inverseBindMatrix,
+            SkinValidation::s_Epsilon,
+            SkinValidation::s_Epsilon
+        ));
 
         SIMDMatrix jointMatrix{};
         if(!SkeletonRuntime::ResolveSkinningJointMatrix(
@@ -116,7 +120,13 @@ template<typename SourceJointVector, typename SkinInfluenceVector, typename Join
         else{
             SIMDVector real = QuaternionIdentity();
             SIMDVector dual = VectorZero();
-            if(SkeletonRuntime::TryBuildJointDualQuaternion(jointMatrix, real, dual)){
+            if(MatrixTryBuildRigidDualQuaternion(
+                jointMatrix,
+                SkeletonRuntime::s_AffineEpsilon,
+                SkeletonRuntime::s_RigidJointEpsilon,
+                real,
+                dual
+            )){
                 StoreFloat(real, &storedJointMatrix.rows[0]);
                 StoreFloat(dual, &storedJointMatrix.rows[1]);
             }

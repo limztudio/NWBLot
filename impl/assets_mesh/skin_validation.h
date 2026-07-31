@@ -54,27 +54,6 @@ static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
     return true;
 }
 
-[[nodiscard]] inline bool ValidAffineJointMatrix(const SIMDMatrix matrix){
-    const SIMDVector row0 = matrix.v[0];
-    const SIMDVector row1 = matrix.v[1];
-    const SIMDVector row2 = matrix.v[2];
-    const SIMDVector row3 = matrix.v[3];
-    if(
-        !VectorIsFinite(row0, VectorComponentMask::s_XYZW)
-        || !VectorIsFinite(row1, VectorComponentMask::s_XYZW)
-        || !VectorIsFinite(row2, VectorComponentMask::s_XYZW)
-        || !VectorIsFinite(row3, VectorComponentMask::s_XYZW)
-        || !Vector4NearEqual(row3, s_SIMDIdentityR3, VectorReplicate(s_Epsilon))
-    )
-        return false;
-
-    const SIMDVector determinant = Vector3Dot(
-        VectorSetW(row0, 0.0f),
-        Vector3Cross(VectorSetW(row1, 0.0f), VectorSetW(row2, 0.0f))
-    );
-    return VectorIsFinite(determinant, VectorComponentMask::s_XYZW) && Vector4Greater(VectorAbs(determinant), VectorReplicate(s_Epsilon));
-}
-
 [[nodiscard]] inline bool ValidInverseBindMatrixCount(
     const usize inverseBindMatrixCount,
     const u32 skeletonJointCount){

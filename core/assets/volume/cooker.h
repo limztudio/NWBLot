@@ -15,6 +15,8 @@
 
 #include <core/assets/cooker.h>
 
+#include "cook_types.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -35,7 +37,7 @@ struct AssetVolumeCookResult{
 class AssetVolumeCooker final : public Core::Assets::IAssetCooker{
 public:
     explicit AssetVolumeCooker(Core::Alloc::GlobalArena& arena)
-        : IAssetCooker(arena, ACompactString("graphics"))
+        : IAssetCooker(arena, ACompactString(AssetsVolumeCookDetail::s_AssetVolumeName))
     {}
 
     virtual bool cook(const Core::Assets::AssetCookOptions& options)override;

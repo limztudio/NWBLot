@@ -12,6 +12,12 @@
 // Backend-independent receiver splat. The including producer supplies its view, push constants, G-buffer, and shared
 // R32_UINT accumulator through the macros below; both HW TraceRay and SW BVH paths therefore project, reject, weight,
 // and atomically deposit a surviving photon identically.
+
+
+#include "resolve_binding_slots.h"
+#include "../scene/binding_slots.h"
+
+
 #if !defined(NWB_CAUSTIC_SPLAT_VIEW) \
     || !defined(NWB_CAUSTIC_SPLAT_PUSH) \
     || !defined(NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH) \
@@ -58,7 +64,7 @@ void nwbCausticSplat(const float3 worldPos, const float3 flux){
 
     // Receiver identity is validated in world space so the tolerance follows scene scale and grazing-angle gradients.
     const float sceneDepth = NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH.Load(int3(baseTexel, 0)).r;
-    if(sceneDepth >= 0.999999)
+    if(sceneDepth >= NWB_SCENE_BACKGROUND_DEPTH)
         return;
 
     const float3 sceneWorldPos = NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION.Load(int3(baseTexel, 0)).xyz;
@@ -81,7 +87,7 @@ void nwbCausticSplat(const float3 worldPos, const float3 flux){
     const int2 t01 = baseTexel + int2(0, 1);
     const int2 t11 = baseTexel + int2(1, 1);
 
-    for(uint channel = 0u; channel < 3u; ++channel){
+    for(uint channel = 0u; channel < NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT; ++channel){
         const float fluxChannel = flux[channel];
         nwbCausticAccumulate(t00, channel, nwbCausticFluxToFixedPoint(fluxChannel * w00));
         nwbCausticAccumulate(t10, channel, nwbCausticFluxToFixedPoint(fluxChannel * w10));

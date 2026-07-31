@@ -64,7 +64,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     // Background: fully LIT (white) for every slot -- the multiplicative identity the resolve carries and the value the
     // upsample writes for a background full-res pixel, so the two agree at the geometry/background edge. Same depth
-    // threshold as the SW trace (NWB_SW_SHADOW_BACKGROUND_DEPTH == the HW full-res trace's 0.999999).
+    // threshold as the SW trace (NWB_SW_SHADOW_BACKGROUND_DEPTH aliases the HW full-res threshold).
     if(NwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.depthSlot).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH){
         for(uint i = 0u; i < lightCount; ++i){
             const float slot = g_NwbSceneLights[i].params.z;

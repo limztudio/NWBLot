@@ -11,6 +11,8 @@
 
 
 #include "binding_slots.h"
+#include "constants.h"
+#include "../scene/binding_slots.h"
 #include "shadow_heap_resources.slangi"
 
 
@@ -54,7 +56,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const int3 texel = int3(int2(pixel), 0);
 
     // Background (no geometry) is fully lit; the lighting pass ignores it anyway.
-    if(NwbHeapSampledImage2D(g_NwbShadowRqPushConstants.depthSlot).Load(texel).r >= 0.999999){
+    if(NwbHeapSampledImage2D(g_NwbShadowRqPushConstants.depthSlot).Load(texel).r >= NWB_SCENE_BACKGROUND_DEPTH){
         for(uint slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot)
             g_NwbShadowVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
         return;

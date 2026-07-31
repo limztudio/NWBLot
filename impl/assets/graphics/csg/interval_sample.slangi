@@ -135,9 +135,9 @@ void nwbCsgMarkReceiverSurfaceEvent(
 #endif
 
 float nwbCsgIntervalSampleSafeHomogeneousW(const float w){
-    if(abs(w) >= 0.000001)
+    if(abs(w) >= NWB_CSG_HOMOGENEOUS_W_EPSILON)
         return w;
-    return w < 0.0 ? -0.000001 : 0.000001;
+    return w < 0.0 ? -NWB_CSG_HOMOGENEOUS_W_EPSILON : NWB_CSG_HOMOGENEOUS_W_EPSILON;
 }
 
 float3 nwbCsgIntervalSampleClipToWorldPosition(const float4 clipPosition){
@@ -171,7 +171,7 @@ float3 nwbCsgIntervalSamplePixelDepthToWorldPosition(const uint2 pixel, const fl
 
 float3 nwbCsgIntervalSampleNormalizeOr(const float3 value, const float3 fallback){
     const float lengthSquared = dot(value, value);
-    if(lengthSquared <= 0.000001 || !isfinite(lengthSquared))
+    if(lengthSquared <= NWB_CSG_INTERVAL_SAMPLE_NORMALIZATION_LENGTH_SQUARED_EPSILON || !isfinite(lengthSquared))
         return fallback;
     return value * rsqrt(lengthSquared);
 }
@@ -214,7 +214,7 @@ void nwbCsgSelectNearestIntervalCap(inout NwbCsgIntervalCapPixel result, const N
 NwbCsgIntervalCapPixel nwbCsgSampleNearestRemovedIntervalCapAtPixel(const uint2 outputPixel, const uint2 intervalPixel){
     NwbCsgIntervalCapPixel result;
     result.visible = false;
-    result.depth = 1e30;
+    result.depth = NWB_CSG_INVALID_DISTANCE;
     result.normal = float3(0.0, 0.0, 1.0);
     result.worldPosition = float3(0.0, 0.0, 0.0);
     result.receiverIndex = 0u;

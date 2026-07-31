@@ -19,6 +19,7 @@
 
 
 #include "binding_slots.h"
+#include "../raytrace/constants.h"
 #include "shadow_heap_resources.slangi"
 
 // The deferred selector itself is a global UniformBuffer heap entry supplied by the dispatch push block.  The opaque
@@ -68,7 +69,7 @@ half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, c
     // traversal casts their colored shadow). We never commit them, so traversal continues past a transparent occluder
     // to any opaque occluder behind it. A committed triangle hit therefore means an opaque occluder blocks the light.
     RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
-    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, 0xFFu, ray);
+    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray);
     // Drain the non-opaque (transparent) candidates without committing any of them; opaque occluders never reach
     // this loop (the intersector commits them and ends the search). The body is intentionally empty.
     while(query.Proceed()){

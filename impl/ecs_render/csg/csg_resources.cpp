@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/kernel/renderer_private.h>
 
+#include <impl/assets/graphics/csg/constants.h>
+
 #include <global/algorithm.h>
 
 
@@ -22,7 +24,7 @@ namespace __hidden_csg_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_MinClipWForWorkRegion = 0.000001f;
+static constexpr f32 s_MinClipWForWorkRegion = static_cast<f32>(NWB_CSG_HOMOGENEOUS_W_EPSILON);
 static constexpr i32 s_WorkRegionPixelPadding = 2;
 
 namespace CsgClipCutterResolveResult{

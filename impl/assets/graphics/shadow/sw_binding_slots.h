@@ -6,6 +6,10 @@
 #define NWB_GRAPHICS_SHADOW_SW_BINDING_SLOTS_H
 
 
+#include "constants.h"
+#include "../scene/binding_slots.h"
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -124,7 +128,7 @@
 
 // G-buffer background/validity depth: a depth at or above this is the cleared background (no geometry), so it is fully
 // lit and casts no candidate ray. The gbuffer concern's nwbSwShadowIsBackground and every pass share this definition.
-#define NWB_SW_SHADOW_BACKGROUND_DEPTH 0.999999
+#define NWB_SW_SHADOW_BACKGROUND_DEPTH NWB_SCENE_BACKGROUND_DEPTH
 
 // Two opaque samples seed/reset temporal history without shimmer. Once an accepted history is available, the trace
 // drops to the smaller runtime budget below while the reproject-merge still validates every current sample.

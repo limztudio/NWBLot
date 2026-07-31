@@ -5,6 +5,7 @@
 #include "resolve_binding_slots.h"
 #include "splat_constants.slangi"
 #include "../bindless/bindless_heap_uint_array.slangi"
+#include "../scene/binding_slots.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -73,7 +74,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const uint stage = g_NwbCausticResolvePushConstants.stage;
 
     // Edge-aware upsample to the full-resolution irradiance buffer.
-    if(stage == 2u){
+    if(stage == NWB_CAUSTIC_RESOLVE_STAGE_UPSAMPLE){
         const uint2 pixel = dispatchThreadID.xy;
         if(pixel.x >= g_NwbCausticResolvePushConstants.width || pixel.y >= g_NwbCausticResolvePushConstants.height)
             return;
@@ -81,7 +82,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const int fw = (int)g_NwbCausticResolvePushConstants.width;
         const int fh = (int)g_NwbCausticResolvePushConstants.height;
         const int2 fullTexel = int2(pixel);
-        if(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.depthSlot).Load(int3(fullTexel, 0)).r >= 0.999999){
+        if(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.depthSlot).Load(int3(fullTexel, 0)).r >= NWB_SCENE_BACKGROUND_DEPTH){
             g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
             return;
         }
@@ -128,7 +129,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const bool inBounds = (pixel.x < g_NwbCausticResolvePushConstants.halfWidth && pixel.y < g_NwbCausticResolvePushConstants.halfHeight);
 
     // Sum 2x2 flux and divide by the corresponding half-res receiver area to preserve average irradiance.
-    if(stage == 0u){
+    if(stage == NWB_CAUSTIC_RESOLVE_STAGE_PREPARE_DOWNSAMPLE){
         if(inBounds){
             if(!nwbCausticResolveValidAtHalf(texel)){
                 g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
@@ -142,9 +143,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     [unroll] for(int ox = 0; ox < 2; ++ox){
                         const int2 fpx = int2(min(base.x + ox, fw - 1), min(base.y + oy, fh - 1));
                         flux += float3(
-                            (float)NwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, 0, 0)).r,
-                            (float)NwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, 1, 0)).r,
-                            (float)NwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, 2, 0)).r
+                            (float)NwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, NWB_CAUSTIC_ACCUMULATOR_CHANNEL_RED, 0)).r,
+                            (float)NwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, NWB_CAUSTIC_ACCUMULATOR_CHANNEL_GREEN, 0)).r,
+                            (float)NwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, NWB_CAUSTIC_ACCUMULATOR_CHANNEL_BLUE, 0)).r
                         );
                     }
                 }
@@ -155,6 +156,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         }
         return;
     }
+
+    if(stage != NWB_CAUSTIC_RESOLVE_STAGE_WAVELET)
+        return;
 
     const int step = (int)max(g_NwbCausticResolvePushConstants.stepWidth, 1u);
 

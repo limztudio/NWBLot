@@ -16,6 +16,7 @@
 // expressions plus NWB_GI_HIT_SHADOW_RAYS before this include.
 
 
+#include "constants.h"
 #include "../scene/buffer.slangi"
 #include "../scene/lighting.slangi"
 #include "../common/math.slangi"
@@ -77,7 +78,7 @@ float3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
     {
         float bestNdotl = 0.0;
         float3 dominantLightDir = float3(0.0, 1.0, 0.0);
-        uint dominantLightIndex = 0xFFFFFFFFu;
+        uint dominantLightIndex = NWB_GI_INVALID_LIGHT_INDEX;
         for(uint i = 0u; i < lightCount; ++i){
             const NwbSceneLight light = g_NwbSceneLights[i];
             float3 lv;
@@ -92,9 +93,13 @@ float3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
                 dominantLightIndex = i;
             }
         }
-        if(dominantLightIndex != 0xFFFFFFFFu && bestNdotl > 0.0){
-            const float shadowTMax = 1.0e4;
-            const NwbGiTraceHit shadowHit = nwbGiTraceClosest(hit.worldPos + facingNormal * 0.001, dominantLightDir, 0.001, shadowTMax);
+        if(dominantLightIndex != NWB_GI_INVALID_LIGHT_INDEX && bestNdotl > 0.0){
+            const NwbGiTraceHit shadowHit = nwbGiTraceClosest(
+                hit.worldPos + facingNormal * NWB_GI_TRACE_RAY_MIN_DISTANCE,
+                dominantLightDir,
+                NWB_GI_TRACE_RAY_MIN_DISTANCE,
+                NWB_GI_TRACE_RAY_MAX_DISTANCE
+            );
             if(shadowHit.hit)
                 irradiance *= 0.0; // fully shadowed by the dominant-light occlusion ray
         }

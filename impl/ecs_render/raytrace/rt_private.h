@@ -18,6 +18,7 @@
 #include <impl/assets/graphics/caustic/photon_push_constants.h>
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 #include <impl/assets/graphics/caustic/names.h>
+#include <impl/assets/graphics/raytrace/constants.h>
 #include <impl/assets/graphics/bvh/binding_slots.h>
 #include <impl/assets/graphics/bvh/constants.h>
 #include <impl/assets/graphics/bvh/names.h>
@@ -44,7 +45,7 @@ inline constexpr f32 s_RayTracingFiniteInfinity = 1e30f;
 // The reconstructed mesh index buffer stores one u32 index for each corner of every traced triangle.
 inline constexpr u32 s_RayTracingTriangleIndexCount = 3u;
 // Each hardware instance mask is an eight-bit field; this selects every instance for traces that do not filter.
-inline constexpr u32 s_RayTracingAllInstanceMask = static_cast<u32>(Limit<u8>::s_Max);
+inline constexpr u32 s_RayTracingAllInstanceMask = NWB_RAY_TRACING_ALL_INSTANCE_MASK;
 // Distinct geometry buffers registered in the descriptor heap for each mesh on the two trace backends.
 inline constexpr u32 s_HardwareRayTracingMeshBufferCount = 3u;
 inline constexpr u32 s_SoftwareRayTracingMeshBufferCount = 4u;
@@ -330,7 +331,7 @@ struct ShadowResolvePushConstants{
     u32 halfWidth = 0u;      // HALF-res width (PREPARE/WAVELET dispatch dim)
     u32 halfHeight = 0u;     // HALF-res height
     u32 stepWidth = 1u;      // a-trous dilation for this wavelet pass (1,2,4,8,16), in HALF-res texels
-    u32 stage = 0u;          // 0 = PREPARE, 1 = WAVELET (half-res), 2 = UPSAMPLE (-> full-res visibility)
+    u32 stage = NWB_SHADOW_RESOLVE_STAGE_PREPARE; // PREPARE, WAVELET (half-res), or UPSAMPLE (-> full-res visibility)
     u32 lightSlotStart = 0u; // first active shadow slot to process
     u32 lightSlotCount = 0u; // number of contiguous active slots to process
     u32 momentsValid = 0u;   // 1 = the MOMENTS SRV holds this-frame integrated temporal moments (the merge ran this frame)
@@ -356,9 +357,9 @@ static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 21u, "ShadowRe
 // Shadow resolve stages, kept in lockstep with shadow_resolve_cs.slang's pushConstants.stage switch.
 namespace ShadowResolveStage{
     enum Enum : u32{
-        Prepare = 0u,
-        Wavelet = 1u,
-        Upsample = 2u,
+        Prepare = NWB_SHADOW_RESOLVE_STAGE_PREPARE,
+        Wavelet = NWB_SHADOW_RESOLVE_STAGE_WAVELET,
+        Upsample = NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE,
     };
 };
 
@@ -436,7 +437,7 @@ struct CausticResolvePushConstants{
     u32 halfHeight = 0u;        // HALF-res height
     f32 causticIntensity = 0.f; // exposure, applied once during the PREPARE-pass area-normalize
     u32 stepWidth = 1u;         // a-trous dilation for this wavelet pass (1,2,4), in HALF-res texels
-    u32 stage = 0u;             // 0 = PREPARE+DOWNSAMPLE, 1 = WAVELET (half-res), 2 = UPSAMPLE (-> full-res irradiance)
+    u32 stage = NWB_CAUSTIC_RESOLVE_STAGE_PREPARE_DOWNSAMPLE; // PREPARE+DOWNSAMPLE, WAVELET (half-res), or UPSAMPLE (-> full-res irradiance)
     u32 pad = 0u;               // completes the preserved first 32-byte scalar block
     u32 worldPositionSlot = 0u; // SampledImage: full-res world-position G-buffer
     u32 depthSlot = 0u;         // SampledImage: full-res depth G-buffer
@@ -474,9 +475,9 @@ static_assert(NWB_SURFEL_CONVERGED_SAMPLE_COUNT >= 1u && NWB_SURFEL_CONVERGED_SA
 // Caustic resolve stages, kept in lockstep with caustic_resolve_cs.slang's pushConstants.stage switch.
 namespace CausticResolveStage{
     enum Enum : u32{
-        PrepareDownsample = 0u,
-        Wavelet = 1u,
-        Upsample = 2u,
+        PrepareDownsample = NWB_CAUSTIC_RESOLVE_STAGE_PREPARE_DOWNSAMPLE,
+        Wavelet = NWB_CAUSTIC_RESOLVE_STAGE_WAVELET,
+        Upsample = NWB_CAUSTIC_RESOLVE_STAGE_UPSAMPLE,
     };
 };
 

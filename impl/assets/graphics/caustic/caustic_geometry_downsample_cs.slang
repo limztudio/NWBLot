@@ -4,6 +4,7 @@
 
 #include "resolve_binding_slots.h"
 #include "../bindless/bindless_heap.slangi"
+#include "../scene/binding_slots.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,7 +51,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const float3 world = NwbHeapSampledImage2D(g_NwbCausticGeometryDownsamplePushConstants.worldPositionSlot).Load(int3(full, 0)).xyz;
     const float depth = NwbHeapSampledImage2D(g_NwbCausticGeometryDownsamplePushConstants.depthSlot).Load(int3(full, 0)).r;
-    const float validity = (depth >= 0.999999) ? 0.0 : 1.0; // background (no receiver) -> 0
+    const float validity = (depth >= NWB_SCENE_BACKGROUND_DEPTH) ? 0.0 : 1.0; // background (no receiver) -> 0
     NwbHeapStorageImage2DFloat4(g_NwbCausticGeometryDownsamplePushConstants.outputStorageSlot)[halfTexel] = float4(world, validity);
 }
 

@@ -59,9 +59,9 @@ uint2 nwbCsgIntervalPeelWorkExtent(){
 }
 
 float nwbCsgSafeHomogeneousW(const float w){
-    if(abs(w) >= 0.000001)
+    if(abs(w) >= NWB_CSG_HOMOGENEOUS_W_EPSILON)
         return w;
-    return w < 0.0 ? -0.000001 : 0.000001;
+    return w < 0.0 ? -NWB_CSG_HOMOGENEOUS_W_EPSILON : NWB_CSG_HOMOGENEOUS_W_EPSILON;
 }
 
 float3 nwbCsgClipToWorldPosition(const float4 clipPosition){
@@ -89,10 +89,10 @@ uint nwbCsgPackIntervalId(const uint receiverIndex){
 
 NwbCsgIntervalPeelEntry nwbCsgInvalidIntervalPeelEntry(){
     NwbCsgIntervalPeelEntry entry;
-    entry.frontDepth = 1e30;
-    entry.backDepth = 1e30;
-    entry.frontLinearDepth = 1e30;
-    entry.backLinearDepth = 1e30;
+    entry.frontDepth = NWB_CSG_INVALID_DISTANCE;
+    entry.backDepth = NWB_CSG_INVALID_DISTANCE;
+    entry.frontLinearDepth = NWB_CSG_INVALID_DISTANCE;
+    entry.backLinearDepth = NWB_CSG_INVALID_DISTANCE;
     entry.backCapNormal = float3(0.0, 0.0, 0.0);
     entry.id = 0u;
     return entry;
@@ -115,7 +115,7 @@ bool nwbCsgIntersectRaySlab(
     inout float inOutMinT,
     inout float inOutMaxT
 ){
-    if(abs(direction) <= 0.000001)
+    if(abs(direction) <= NWB_CSG_RAY_PARALLEL_DIRECTION_EPSILON)
         return origin >= minBound && origin <= maxBound;
 
     const float invDirection = 1.0 / direction;
@@ -150,8 +150,8 @@ bool nwbCsgFindReceiverRayRange(
     const float3 localBegin = nwbCsgTransformWorldToReceiverLocal(rayBegin, receiverRange);
     const float3 localEnd = nwbCsgTransformWorldToReceiverLocal(rayEnd, receiverRange);
     const float3 localRay = localEnd - localBegin;
-    const float3 minBounds = receiverRange.localBounds.minBounds - float3(0.001);
-    const float3 maxBounds = receiverRange.localBounds.maxBounds + float3(0.001);
+    const float3 minBounds = receiverRange.localBounds.minBounds - float3(NWB_CSG_BOUNDS_EPSILON);
+    const float3 maxBounds = receiverRange.localBounds.maxBounds + float3(NWB_CSG_BOUNDS_EPSILON);
 
     return nwbCsgIntersectRaySlab(localBegin.x, localRay.x, minBounds.x, maxBounds.x, outBeginT, outEndT)
         && nwbCsgIntersectRaySlab(localBegin.y, localRay.y, minBounds.y, maxBounds.y, outBeginT, outEndT)

@@ -22,6 +22,11 @@
 // active shadow slots [lightSlotStart, lightSlotStart+lightSlotCount) carried in the push constants.
 #define NWB_SHADOW_RESOLVE_SET 0
 
+// NwbShadowResolvePushConstants.stage values. The C++ dispatch and shader branch both consume this ABI.
+#define NWB_SHADOW_RESOLVE_STAGE_PREPARE 0u
+#define NWB_SHADOW_RESOLVE_STAGE_WAVELET 1u
+#define NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE 2u
+
 // The sampled-image slot numbers below are retained as the sparse local-layout ABI map; do not renumber the gaps.
 // Geometry downsample and soft resolve now fetch those logical reads from the global heap through push-constant slots.
 // Geometry downsample also gets its scene camera through the target-generation resource-slot cbuffer, so its local

@@ -111,6 +111,9 @@ inline constexpr StringView s_ManifestDumpDetailModeKey = "dump_detail_mode";
 inline constexpr StringView s_ManifestArtifactStrategyKey = "artifact_strategy";
 inline constexpr StringView s_ManifestHandlerLifetimeKey = "handler_lifetime";
 inline constexpr StringView s_ManifestFormatValue = "nwb-crash-package-v1";
+inline constexpr StringView s_ManifestDumpDetailModeFullValue = "full";
+inline constexpr StringView s_ManifestDumpDetailModeSmallValue = "small";
+inline constexpr StringView s_ManifestHandlerLifetimeClientIpcValue = "client_ipc_lifetime";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

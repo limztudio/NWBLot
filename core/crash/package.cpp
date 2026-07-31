@@ -45,6 +45,15 @@ static bool WriteCrashTextFile(const ::Path<ArenaT>& path, const CrashStringT<Ar
     return WriteTextFile(path, AStringView(text.data(), text.size()));
 }
 
+template<typename ArenaT>
+static void AppendManifestPropertyPrefix(CrashStringT<ArenaT>& out, const StringView key, const bool isFirst){
+    if(!isFirst)
+        out += ",\n";
+    out += "  \"";
+    out += key;
+    out += "\": ";
+}
+
 static const char* ArtifactStrategyName(const CrashRequest& request){
     switch(request.platform){
     case PlatformKind::Windows:
@@ -63,57 +72,63 @@ static CrashStringT<ArenaT> BuildManifest(ArenaT& arena, const CrashRequest& req
     CrashStringT<ArenaT> manifest{arena};
     manifest.reserve(s_ManifestReserveBytes);
     manifest += "{\n";
-    manifest += "  \"format\": \"";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestFormatKey, true);
+    manifest += '"';
     manifest += PackageNames::s_ManifestFormatValue;
-    manifest += "\",\n";
-    manifest += "  \"crash_id\": ";
+    manifest += '"';
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestCrashIdKey, false);
     AppendJsonQuotedText(manifest, request.crashId);
-    manifest += ",\n  \"application\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestApplicationKey, false);
     AppendJsonQuotedText(manifest, request.applicationName);
-    manifest += ",\n  \"version\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestVersionKey, false);
     AppendJsonQuotedText(manifest, request.versionText);
-    manifest += ",\n  \"build_id\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestBuildIdKey, false);
     AppendJsonQuotedText(manifest, request.buildId);
-    manifest += ",\n  \"abi\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestAbiKey, false);
     AppendJsonQuotedText(manifest, request.abi);
-    manifest += ",\n  \"platform\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestPlatformKey, false);
     AppendJsonQuotedText(manifest, PlatformKindName(request.platform));
-    manifest += ",\n  \"reason_kind\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestReasonKindKey, false);
     AppendJsonQuotedText(manifest, ReasonKindName(request.reasonKind));
-    manifest += ",\n  \"reason_code\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestReasonCodeKey, false);
     AppendUnsignedText(manifest, request.reasonCode);
-    manifest += ",\n  \"process_id\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestProcessIdKey, false);
     AppendUnsignedText(manifest, request.processId);
-    manifest += ",\n  \"thread_id\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestThreadIdKey, false);
     AppendUnsignedText(manifest, request.threadId);
-    manifest += ",\n  \"has_exception_context\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestHasExceptionContextKey, false);
     manifest += request.exceptionPointers ? "true" : "false";
-    manifest += ",\n  \"fault_address\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestFaultAddressKey, false);
     AppendUnsignedText(manifest, request.faultAddress);
-    manifest += ",\n  \"instruction_pointer\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestInstructionPointerKey, false);
     AppendUnsignedText(manifest, request.instructionPointer);
-    manifest += ",\n  \"stack_pointer\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestStackPointerKey, false);
     AppendUnsignedText(manifest, request.stackPointer);
-    manifest += ",\n  \"frame_pointer\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestFramePointerKey, false);
     AppendUnsignedText(manifest, request.framePointer);
-    manifest += ",\n  \"event\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestEventKey, false);
     AppendJsonQuotedText(manifest, request.event);
-    manifest += ",\n  \"trigger_category\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerCategoryKey, false);
     AppendJsonQuotedText(manifest, request.triggerCategory);
-    manifest += ",\n  \"trigger_expression\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerExpressionKey, false);
     AppendJsonQuotedText(manifest, request.triggerExpression);
-    manifest += ",\n  \"trigger_message\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerMessageKey, false);
     AppendJsonQuotedText(manifest, request.triggerMessage);
-    manifest += ",\n  \"trigger_file\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerFileKey, false);
     AppendJsonQuotedText(manifest, request.triggerFile);
-    manifest += ",\n  \"trigger_line\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestTriggerLineKey, false);
     AppendUnsignedText(manifest, request.triggerLine);
-    manifest += ",\n  \"dump_detail_mode\": ";
-    AppendJsonQuotedText(manifest, request.dumpDetailMode == DumpDetailMode::Full ? "full" : "small");
-    manifest += ",\n  \"artifact_strategy\": ";
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestDumpDetailModeKey, false);
+    AppendJsonQuotedText(
+        manifest,
+        request.dumpDetailMode == DumpDetailMode::Full
+            ? PackageNames::s_ManifestDumpDetailModeFullValue
+            : PackageNames::s_ManifestDumpDetailModeSmallValue
+    );
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestArtifactStrategyKey, false);
     AppendJsonQuotedText(manifest, ArtifactStrategyName(request));
-    manifest += ",\n  \"handler_lifetime\": ";
-    AppendJsonQuotedText(manifest, "client_ipc_lifetime");
+    AppendManifestPropertyPrefix(manifest, PackageNames::s_ManifestHandlerLifetimeKey, false);
+    AppendJsonQuotedText(manifest, PackageNames::s_ManifestHandlerLifetimeClientIpcValue);
     manifest += "\n}\n";
     return manifest;
 }
@@ -230,7 +245,11 @@ static CrashStringT<ArenaT> BuildArtifactStrategyText(ArenaT& arena, const Crash
     CrashStringT<ArenaT> text{arena};
     text += "strategy=";
     text += ArtifactStrategyName(request);
-    text += "\nhandler_lifetime=client_ipc_lifetime\n";
+    text += '\n';
+    text += PackageNames::s_ManifestHandlerLifetimeKey;
+    text += '=';
+    text += PackageNames::s_ManifestHandlerLifetimeClientIpcValue;
+    text += '\n';
     switch(request.platform){
     case PlatformKind::Windows:
         text += "detail=external handler writes a Windows minidump from outside the crashing process\n";

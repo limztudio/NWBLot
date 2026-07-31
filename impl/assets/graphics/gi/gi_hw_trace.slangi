@@ -19,6 +19,7 @@
 
 
 #include "hw_binding_slots.h"
+#include "../raytrace/constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"
 #include "../bindless/bindless_heap_rt.slangi"
@@ -125,7 +126,7 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     ray.TMax = tMax;
 
     RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
-    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, 0xFFu, ray);
+    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray);
     query.Proceed();   // FORCE_OPAQUE + triangle-only -> commits the nearest at once, returns false
     if(query.CommittedStatus() != COMMITTED_TRIANGLE_HIT)
         return closest;

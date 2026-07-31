@@ -6,6 +6,10 @@
 #define NWB_GRAPHICS_SHADOW_RAY_SETUP_SLANGI
 
 
+#include "constants.h"
+#include "../scene/binding_slots.h"
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -22,21 +26,23 @@ bool nwbShadowBuildLightRay(
     out float outTEnd
 ){
     outDirection = float3(0.0, 1.0, 0.0);
-    outTMin = 0.001;
+    outTMin = NWB_SHADOW_RAY_MIN_DISTANCE;
     outTEnd = 0.0;
 
     float tMax;
-    if(light.params.y < 0.5){
+    if(light.params.y < NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX){
         // Directional lights use their constant angular source radius; zero keeps the exact hard-shadow axis.
         outDirection = nwbShadowJitterCone(normalize(light.direction.xyz), light.params2.x, jitter);
-        tMax = 1.0e7;
+        tMax = NWB_SHADOW_DIRECTIONAL_RAY_MAX_DISTANCE;
     }
     else{
         const float3 delta = light.position.xyz - worldPosition;
         tMax = length(delta);
-        const float3 centerDir = (tMax > 1.0e-5) ? (delta / tMax) : float3(0.0, 1.0, 0.0);
+        const float3 centerDir = (tMax > NWB_SHADOW_LIGHT_DIRECTION_EPSILON) ? (delta / tMax) : float3(0.0, 1.0, 0.0);
         // A punctual source sphere subtends asin(radius / distance); the center distance remains the trace extent.
-        const float sinHalf = (tMax > 1.0e-5) ? min(light.params2.y / tMax, 0.999) : 0.0;
+        const float sinHalf = (tMax > NWB_SHADOW_LIGHT_DIRECTION_EPSILON)
+            ? min(light.params2.y / tMax, NWB_SHADOW_POINT_LIGHT_SINE_HALF_ANGLE_MAX)
+            : 0.0;
         outDirection = nwbShadowJitterCone(centerDir, asin(sinHalf), jitter);
     }
 
@@ -44,7 +50,7 @@ bool nwbShadowBuildLightRay(
     if(dot(normal, outDirection) <= 0.0)
         return false;
 
-    outTEnd = tMax - 0.002;
+    outTEnd = tMax - NWB_SHADOW_RAY_END_DISTANCE_BIAS;
     return outTEnd > outTMin;
 }
 

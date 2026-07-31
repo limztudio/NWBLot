@@ -177,7 +177,7 @@ public:
             return false;
 
         ::Path<SymbolArena> outputPath = executableDirectory / executableName;
-        outputPath.replace_extension(NWB_TEXT(".namesym"));
+        outputPath.replace_extension(AStringView(NameSymbols::s_FileExtension));
         return writeFile(outputPath);
     }
 

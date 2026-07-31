@@ -3,6 +3,7 @@
 
 
 #include "shadow_resolve_binding_slots.h"
+#include "constants.h"
 #include "sw_binding_slots.h" // NWB_SW_SHADOW_SOFT_FACTOR -- the half-res downscale, shared with the trace + resolve.
 #include "shadow_heap_resources.slangi"
 #include "../common/math.slangi"
@@ -62,7 +63,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     );
 
     const float depth = NwbHeapSampledImage2D(g_NwbShadowGeometryDownsamplePushConstants.depthSlot).Load(int3(full, 0)).r;
-    if(depth >= 0.999999){
+    if(depth >= NWB_SCENE_BACKGROUND_DEPTH){
         // Background (no receiver): validity 0. Normal/distance are irrelevant (the resolve skips invalid taps).
         g_NwbShadowGeometryOutput[halfTexel] = float4(0.0, 0.0, 0.0, 0.0);
         return;

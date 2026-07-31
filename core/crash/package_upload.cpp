@@ -27,7 +27,8 @@ namespace Detail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_AuthorizationBearerPrefixLength = sizeof("Authorization: Bearer ") - 1u;
+inline constexpr StringView s_AuthorizationBearerPrefix = "Authorization: Bearer ";
+inline constexpr usize s_AuthorizationBearerPrefixLength = s_AuthorizationBearerPrefix.size();
 inline constexpr long s_CurlOptionEnabled = 1L;
 inline constexpr long s_CrashUploadConnectTimeoutMilliseconds = 1000L;
 inline constexpr long s_CrashUploadTimeoutMilliseconds = 5000L;
@@ -155,7 +156,7 @@ static bool UploadPackage(
     CrashStringT<ArenaT> authorizationHeader{arena};
     if(!crashUploadToken.empty()){
         authorizationHeader.reserve(crashUploadToken.size() + s_AuthorizationBearerPrefixLength);
-        authorizationHeader += "Authorization: Bearer ";
+        authorizationHeader += s_AuthorizationBearerPrefix;
         authorizationHeader += crashUploadToken;
         headers = curl_slist_append(headers, authorizationHeader.c_str());
         if(!headers){

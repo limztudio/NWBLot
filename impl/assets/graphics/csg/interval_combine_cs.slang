@@ -36,7 +36,7 @@ NwbCsgRemovedIntervalEntry nwbCsgInvalidRemovedIntervalEntry(){
     entry.depth = float4(0.0, 0.0, 0.0, 0.0);
     entry.capNormal = float4(0.0, 0.0, 0.0, 0.0);
     entry.data = uint4(0u, 0u, 0u, 0u);
-    entry.sortDepth = 1e30;
+    entry.sortDepth = NWB_CSG_INVALID_DISTANCE;
     return entry;
 }
 
@@ -82,7 +82,7 @@ uint2 nwbCsgIntervalCombineWorkExtent(){
 
 uint nwbCsgIntervalCombineIdReceiverIndex(const uint id){
     const uint receiverBits = id & NWB_CSG_RECEIVER_INDEX_MASK;
-    return receiverBits == 0u ? 0xffffffffu : receiverBits - 1u;
+    return receiverBits == 0u ? NWB_CSG_INVALID_RECEIVER_INDEX : receiverBits - 1u;
 }
 
 uint nwbCsgIntervalCombineReceiverSpanFlagsToRemovedFlags(const uint spanFlags){
@@ -156,12 +156,12 @@ void nwbCsgIntervalCombineAppendCandidate(
     const float2 cutterLinearDepth = cutterDepth.zw;
     const float removedEnterLinearDepth = max(spanDepth.x, cutterLinearDepth.x);
     const float removedExitLinearDepth = min(spanDepth.y, cutterLinearDepth.y);
-    if(removedExitLinearDepth <= removedEnterLinearDepth + 0.000001)
+    if(removedExitLinearDepth <= removedEnterLinearDepth + NWB_CSG_INTERVAL_OVERLAP_EPSILON)
         return;
 
     const bool backCapVisible =
-        cutterLinearDepth.y + 0.000001 >= spanDepth.x
-        && cutterLinearDepth.y <= spanDepth.y + 0.000001
+        cutterLinearDepth.y + NWB_CSG_INTERVAL_OVERLAP_EPSILON >= spanDepth.x
+        && cutterLinearDepth.y <= spanDepth.y + NWB_CSG_INTERVAL_OVERLAP_EPSILON
     ;
     const uint entryFlags = backCapVisible ? NWB_CSG_REMOVED_INTERVAL_BACK_CAP_VISIBLE_FLAG : 0u;
     const float2 cutterHardwareDepth = cutterDepth.xy;

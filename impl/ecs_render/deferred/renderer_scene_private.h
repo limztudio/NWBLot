@@ -8,6 +8,7 @@
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 
 #include <core/ecs/world.h>
+#include <impl/assets/graphics/scene/binding_slots.h>
 #include <impl/ecs_scene/module.h>
 
 
@@ -32,8 +33,8 @@ inline constexpr f32 s_CausticSlotDisabled = -2.f;
 // SceneLightGpuData::params.y carries static_cast<f32>(LightType::Enum) (Directional=0, Point=1, Spot=2). These
 // thresholds decode the integer-typed light type back from its float packing: a half-way bound between adjacent
 // integer values absorbs any quantization noise from the float round-trip.
-inline constexpr f32 s_LightTypeDirectionalMax = 0.5f;
-inline constexpr f32 s_LightTypePointMax = 1.5f;
+inline constexpr f32 s_LightTypeDirectionalMax = static_cast<f32>(NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX);
+inline constexpr f32 s_LightTypePointMax = static_cast<f32>(NWB_SCENE_LIGHT_TYPE_POINT_MAX);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

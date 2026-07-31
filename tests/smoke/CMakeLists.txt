@@ -5,6 +5,18 @@ if(Python3_Interpreter_FOUND)
     # builds remain below the legacy MAX_PATH limit.
     set(_nwb_smoke_asset_cache_directory "${PROJECT_SOURCE_DIR}/__build_obj/c/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}")
 
+    # Capture points sample the early, mid, and late states of animated smoke scenes.
+    set(_nwb_smoke_capture_early_settle_seconds "0.75")
+    set(_nwb_smoke_capture_mid_settle_seconds "2.0")
+    set(_nwb_smoke_capture_late_settle_seconds "3.25")
+    set(_nwb_caustic_sphere_capture_settle_seconds "3.0")
+    set(_nwb_skinned_caustic_capture_late_settle_seconds "4.0")
+
+    # CTest budgets include process startup and orderly teardown around the script timeout.
+    set(_nwb_window_capture_smoke_ctest_timeout_seconds 60)
+    set(_nwb_skinning_culling_benchmark_script_timeout_seconds 240)
+    set(_nwb_skinning_culling_benchmark_ctest_timeout_seconds 300)
+
     add_test(
         NAME nwb_launcher_unit
         COMMAND
@@ -48,7 +60,7 @@ if(Python3_Interpreter_FOUND)
         set_tests_properties("${TEST_NAME}" PROPERTIES
             RESOURCE_LOCK nwb_display
             SKIP_RETURN_CODE 77
-            TIMEOUT 60
+            TIMEOUT ${_nwb_window_capture_smoke_ctest_timeout_seconds}
         )
     endfunction()
 
@@ -186,7 +198,7 @@ if(Python3_Interpreter_FOUND)
             "NWB Transparent CSG Smoke"
             "--expect-transparent-multi"
             "--expect-transparent-csg"
-            "--settle-seconds" "0.75"
+            "--settle-seconds" "${_nwb_smoke_capture_early_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -199,7 +211,7 @@ if(Python3_Interpreter_FOUND)
             "NWB Transparent CSG Smoke"
             "--expect-transparent-multi"
             "--expect-transparent-csg"
-            "--settle-seconds" "2.0"
+            "--settle-seconds" "${_nwb_smoke_capture_mid_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -212,7 +224,7 @@ if(Python3_Interpreter_FOUND)
             "NWB Transparent CSG Smoke"
             "--expect-transparent-multi"
             "--expect-transparent-csg"
-            "--settle-seconds" "3.25"
+            "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -233,7 +245,7 @@ if(Python3_Interpreter_FOUND)
             "$<TARGET_FILE:nwb_caustic_sphere_smoke>"
             "${_nwb_transparent_multi_runtime_root}"
             "NWB Caustic Sphere Smoke"
-            "--settle-seconds" "3.0"
+            "--settle-seconds" "${_nwb_caustic_sphere_capture_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -387,7 +399,7 @@ if(Python3_Interpreter_FOUND)
             "$<TARGET_FILE:nwb_csg_skinned_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
             "NWB Skinned CSG Smoke"
-            "--settle-seconds" "0.75"
+            "--settle-seconds" "${_nwb_smoke_capture_early_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -398,7 +410,7 @@ if(Python3_Interpreter_FOUND)
             "$<TARGET_FILE:nwb_csg_skinned_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
             "NWB Skinned CSG Smoke"
-            "--settle-seconds" "2.0"
+            "--settle-seconds" "${_nwb_smoke_capture_mid_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -409,7 +421,7 @@ if(Python3_Interpreter_FOUND)
             "$<TARGET_FILE:nwb_csg_skinned_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
             "NWB Skinned CSG Smoke"
-            "--settle-seconds" "3.25"
+            "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -436,7 +448,7 @@ if(Python3_Interpreter_FOUND)
             "$<TARGET_FILE:nwb_csg_skinned_sphere_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
             "NWB Skinned Sphere CSG Smoke"
-            "--settle-seconds" "0.75"
+            "--settle-seconds" "${_nwb_smoke_capture_early_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -447,7 +459,7 @@ if(Python3_Interpreter_FOUND)
             "$<TARGET_FILE:nwb_csg_skinned_sphere_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
             "NWB Skinned Sphere CSG Smoke"
-            "--settle-seconds" "2.0"
+            "--settle-seconds" "${_nwb_smoke_capture_mid_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -458,7 +470,7 @@ if(Python3_Interpreter_FOUND)
             "$<TARGET_FILE:nwb_csg_skinned_sphere_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
             "NWB Skinned Sphere CSG Smoke"
-            "--settle-seconds" "3.25"
+            "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -486,7 +498,7 @@ if(Python3_Interpreter_FOUND)
             "$<TARGET_FILE:nwb_csg_skinned_transparent_sphere_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
             "NWB Transparent Skinned Sphere CSG Smoke"
-            "--settle-seconds" "0.75"
+            "--settle-seconds" "${_nwb_smoke_capture_early_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -497,7 +509,7 @@ if(Python3_Interpreter_FOUND)
             "$<TARGET_FILE:nwb_csg_skinned_transparent_sphere_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
             "NWB Transparent Skinned Sphere CSG Smoke"
-            "--settle-seconds" "2.0"
+            "--settle-seconds" "${_nwb_smoke_capture_mid_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -508,7 +520,7 @@ if(Python3_Interpreter_FOUND)
             "$<TARGET_FILE:nwb_csg_skinned_transparent_sphere_visible_smoke>"
             "${_nwb_csg_skinned_visible_runtime_root}"
             "NWB Transparent Skinned Sphere CSG Smoke"
-            "--settle-seconds" "3.25"
+            "--settle-seconds" "${_nwb_smoke_capture_late_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -578,14 +590,14 @@ if(Python3_Interpreter_FOUND)
                 "${CMAKE_CURRENT_LIST_DIR}/runtime_log_smoke.py"
                 "--executable" "$<TARGET_FILE:nwb_skinning_culling_benchmark>"
                 "--working-directory" "${_nwb_skinning_culling_runtime_root}"
-                "--timeout" "240"
+                "--timeout" "${_nwb_skinning_culling_benchmark_script_timeout_seconds}"
                 ${_nwb_skinning_culling_logserver_args}
                 "--expect-log-message" "SkinningCullingBenchmark: completed"
         )
         set_tests_properties(nwb_skinning_culling_benchmark PROPERTIES
             RESOURCE_LOCK nwb_display
             SKIP_RETURN_CODE 77
-            TIMEOUT 300
+            TIMEOUT ${_nwb_skinning_culling_benchmark_ctest_timeout_seconds}
         )
 
         # Skinned-glass caustic validation: a SKINNED refractor whose skeleton pose deforms every frame, over an opaque
@@ -627,7 +639,7 @@ if(Python3_Interpreter_FOUND)
             "$<TARGET_FILE:nwb_skinned_caustic_smoke>"
             "${_nwb_skinning_culling_runtime_root}"
             "NWB Skinned Caustic Smoke"
-            "--settle-seconds" "0.75"
+            "--settle-seconds" "${_nwb_smoke_capture_early_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -637,7 +649,7 @@ if(Python3_Interpreter_FOUND)
             "$<TARGET_FILE:nwb_skinned_caustic_smoke>"
             "${_nwb_skinning_culling_runtime_root}"
             "NWB Skinned Caustic Smoke"
-            "--settle-seconds" "2.0"
+            "--settle-seconds" "${_nwb_smoke_capture_mid_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )
@@ -647,7 +659,7 @@ if(Python3_Interpreter_FOUND)
             "$<TARGET_FILE:nwb_skinned_caustic_smoke>"
             "${_nwb_skinning_culling_runtime_root}"
             "NWB Skinned Caustic Smoke"
-            "--settle-seconds" "4.0"
+            "--settle-seconds" "${_nwb_skinned_caustic_capture_late_settle_seconds}"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
         )

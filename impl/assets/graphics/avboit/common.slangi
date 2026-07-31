@@ -10,6 +10,7 @@
 
 
 #include "constants.h"
+#include "../scene/binding_slots.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -111,7 +112,7 @@ float nwbAvboitSelfOcclusionSliceBias(){
 }
 
 uint nwbAvboitVirtualSliceFromDepth(float depth){
-    const float clampedDepth = clamp(depth, 0.0, 0.999999);
+    const float clampedDepth = clamp(depth, 0.0, NWB_SCENE_BACKGROUND_DEPTH);
     return min(uint(floor(clampedDepth * float(nwbAvboitVirtualSliceCount()))), nwbAvboitVirtualSliceCount() - 1u);
 }
 
@@ -153,7 +154,7 @@ float2 nwbAvboitFullUvFromFragCoord(float2 fragCoord){
 uint2 nwbAvboitLowPixelFromFragCoord(float2 fragCoord){
     const float2 fullSize = max(float2(float(nwbAvboitFullWidth()), float(nwbAvboitFullHeight())), float2(1.0));
     const uint2 lowSize = uint2(nwbAvboitLowWidth(), nwbAvboitLowHeight());
-    const float2 normalized = clamp(fragCoord / fullSize, float2(0.0), float2(0.999999));
+    const float2 normalized = clamp(fragCoord / fullSize, float2(0.0), float2(NWB_AVBOIT_UV_MAX));
     return min(uint2(normalized * float2(lowSize)), lowSize - uint2(1u));
 }
 

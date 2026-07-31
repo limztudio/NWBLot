@@ -3,6 +3,7 @@
 
 
 #include "shadow_resolve_binding_slots.h"
+#include "constants.h"
 #include "sw_binding_slots.h"
 #include "shadow_heap_resources.slangi"
 #include "../scene/binding_slots.h"
@@ -198,13 +199,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const uint slotEnd = min(slotStart + g_NwbShadowResolvePushConstants.lightSlotCount, NWB_SCENE_SHADOW_SLOT_COUNT);
 
     // Guided edge-aware upsample.
-    if(stage == 2u){
+    if(stage == NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE){
         const uint2 pixel = dispatchThreadID.xy;
         if(pixel.x >= g_NwbShadowResolvePushConstants.width || pixel.y >= g_NwbShadowResolvePushConstants.height)
             return;
 
         const int2 fullTexel = int2(pixel);
-        const bool background = NwbHeapSampledImage2D(g_NwbShadowResolvePushConstants.depthSlot).Load(int3(fullTexel, 0)).r >= 0.999999;
+        const bool background = NwbHeapSampledImage2D(g_NwbShadowResolvePushConstants.depthSlot).Load(int3(fullTexel, 0)).r >= NWB_SCENE_BACKGROUND_DEPTH;
 
         const int hw = (int)g_NwbShadowResolvePushConstants.halfWidth;
         const int hh = (int)g_NwbShadowResolvePushConstants.halfHeight;
@@ -281,7 +282,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const int2 texel = int2(pixel);
     const bool inBounds = (pixel.x < g_NwbShadowResolvePushConstants.halfWidth && pixel.y < g_NwbShadowResolvePushConstants.halfHeight);
 
-    if(stage == 0u){
+    if(stage == NWB_SHADOW_RESOLVE_STAGE_PREPARE){
         if(inBounds){
             const bool valid = nwbShadowResolveValidAtHalf(texel);
             for(uint slot = slotStart; slot < slotEnd; ++slot){
@@ -291,6 +292,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         }
         return;
     }
+
+    if(stage != NWB_SHADOW_RESOLVE_STAGE_WAVELET)
+        return;
 
     const int step = (int)max(g_NwbShadowResolvePushConstants.stepWidth, 1u);
 

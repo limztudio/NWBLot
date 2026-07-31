@@ -94,7 +94,7 @@ void nwbSceneResolveLight(NwbSceneLight light, float3 worldPosition, out float3 
     const half3 baseRadiance = half3(clamp(light.colorIntensity.xyz, float3(0.0), float3(1.5))) * half(min(max(light.colorIntensity.w, 0.0), 2.0));
     const float lightType = light.params.y;
 
-    if(lightType < 0.5){
+    if(lightType < NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX){
         lightVector = nwbSafeNormalize(light.direction.xyz, float3(0.0, 0.0, -1.0));
         radiance = baseRadiance;
         return;
@@ -109,7 +109,7 @@ void nwbSceneResolveLight(NwbSceneLight light, float3 worldPosition, out float3 
     half attenuation = half(saturate(1.0 - length(toLight) / range));
     attenuation *= attenuation;
 
-    if(lightType > 1.5){
+    if(lightType > NWB_SCENE_LIGHT_TYPE_POINT_MAX){
         const float innerConeCos = light.position.w;
         const float outerConeCos = light.direction.w;
         const float3 emission = nwbSafeNormalize(light.direction.xyz, float3(0.0, 0.0, -1.0));

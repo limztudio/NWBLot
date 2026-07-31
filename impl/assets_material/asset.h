@@ -152,7 +152,7 @@ namespace MaterialLayoutFieldType{
     };
 };
 
-inline constexpr u32 s_MaterialLayoutFieldComponentsPerValueType = 4u;
+inline constexpr u32 s_MaterialLayoutFieldComponentsPerValueType = NWB_MATERIAL_TYPED_VALUE_COMPONENT_COUNT;
 inline constexpr u32 s_MaterialLayoutFieldFirstTypeId = static_cast<u32>(MaterialLayoutFieldType::Bool);
 inline constexpr u32 s_MaterialParameterFirstValueTypeId = static_cast<u32>(MaterialParameterValueType::Bool);
 static_assert(

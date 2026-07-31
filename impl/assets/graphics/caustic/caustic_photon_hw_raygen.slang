@@ -3,6 +3,7 @@
 
 
 #include "caustic_hw_common.slangi"
+#include "../raytrace/constants.h"
 // The shared transport: the photon struct, the emission aim, the per-photon stratified hash jitter, the iterative bounce loop. It declares
 // the backend hook nwbCausticTraceClosest, defined below over a single TraceRay per segment. Pulled in ONLY here
 // (not the closest-hit/miss) so the hook + TraceRay live solely in the raygen, keeping recursion at 1.
@@ -33,7 +34,7 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     p.hit = 0u;
     p.isRefractive = 0u;
 
-    TraceRay(NwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, 0xFFu, 0u, 0u, 0u, ray, p);
+    TraceRay(NwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RAY_TRACING_ALL_INSTANCE_MASK, 0u, 0u, 0u, ray, p);
 
     NwbCausticHit hit;
     hit.hit = (p.hit != 0u);

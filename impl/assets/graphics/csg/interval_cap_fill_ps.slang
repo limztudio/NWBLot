@@ -64,7 +64,7 @@ struct NwbCsgIntervalCapFillPixelOutput{
 
 half3 nwbCsgCapFillEncodeNormal(const float3 normal){
     const float lengthSquared = dot(normal, normal);
-    const float3 normalVector = lengthSquared > 0.000001
+    const float3 normalVector = lengthSquared > NWB_CSG_CAP_NORMALIZATION_LENGTH_SQUARED_EPSILON
         ? normal * rsqrt(lengthSquared)
         : float3(0.0, 0.0, 1.0)
     ;

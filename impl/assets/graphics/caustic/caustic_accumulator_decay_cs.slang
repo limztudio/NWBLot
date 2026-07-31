@@ -42,7 +42,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // One layer per RGB flux channel. Multiply the fixed-point integer by decayFactor and write it back (truncation to
     // uint is the intended EMA quantization -- values below 1/decay eventually fall to 0, so a stale sparkle fades out).
     [unroll]
-    for(uint layer = 0u; layer < 3u; ++layer){
+    for(uint layer = 0u; layer < NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT; ++layer){
         const uint3 coord = uint3(texel, layer);
         const uint value = NwbHeapStorageImage2DArrayUint(g_NwbCausticAccumulatorDecayPushConstants.accumulatorStorageSlot)[coord];
         NwbHeapStorageImage2DArrayUint(g_NwbCausticAccumulatorDecayPushConstants.accumulatorStorageSlot)[coord] = (uint)((float)value * decayFactor);

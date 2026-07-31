@@ -26,12 +26,19 @@ namespace __hidden_bind{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr u64 s_MaterialParameterKeyHashLowWordMask = 0xffffffffull;
+static constexpr u32 s_MaterialParameterKeyHashHighWordBitShift = 32u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct MaterialTypedValueData{
     UInt4 meta = {};
     UInt4 data = {};
 };
 static_assert(
-    sizeof(MaterialTypedValueData) == sizeof(u32) * 8u,
+    sizeof(MaterialTypedValueData) == sizeof(u32) * NWB_MATERIAL_TYPED_VALUE_RECORD_WORD_COUNT,
     "MaterialTypedValueData layout must stay stable for typed value parsing"
 );
 static_assert(alignof(MaterialTypedValueData) >= alignof(UInt4), "MaterialTypedValueData must stay SIMD-aligned");
@@ -80,12 +87,16 @@ static bool ReadMaterialParameterToken(const AStringView text, usize& inOutCurso
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool SplitMaterialParameterTokens(const AStringView text, AStringView (&outTokens)[4], u32& outTokenCount){
+static bool SplitMaterialParameterTokens(
+    const AStringView text,
+    AStringView (&outTokens)[NWB_MATERIAL_TYPED_VALUE_COMPONENT_COUNT],
+    u32& outTokenCount
+){
     outTokenCount = 0u;
     usize cursor = 0u;
     AStringView token;
     while(ReadMaterialParameterToken(text, cursor, token)){
-        if(outTokenCount >= 4u)
+        if(outTokenCount >= NWB_MATERIAL_TYPED_VALUE_COMPONENT_COUNT)
             return false;
 
         outTokens[outTokenCount] = token;
@@ -206,7 +217,14 @@ static bool ParseMaterialParameterToken(const AStringView token, const MaterialP
     case MaterialParameterValueType::Bool:
         return ParseMaterialBoolToken(token, outValue);
     case MaterialParameterValueType::Char:
-        return ParseMaterialParameterSignedToken(begin, end, -128, 127, NWB_MATERIAL_TYPED_BYTE_MASK, outValue);
+        return ParseMaterialParameterSignedToken(
+            begin,
+            end,
+            static_cast<i64>(Limit<i8>::s_Min),
+            static_cast<i64>(Limit<i8>::s_Max),
+            NWB_MATERIAL_TYPED_BYTE_MASK,
+            outValue
+        );
     case MaterialParameterValueType::UChar:
         return ParseMaterialParameterUnsignedToken(begin, end, static_cast<u64>(Limit<u8>::s_Max), outValue);
     case MaterialParameterValueType::Short:
@@ -294,7 +312,7 @@ static bool StoreMaterialTypedValueComponent(
     const u32 componentIndex,
     const u32 value
 ){
-    if(componentIndex >= 4u)
+    if(componentIndex >= NWB_MATERIAL_TYPED_VALUE_COMPONENT_COUNT)
         return false;
 
     switch(valueType){
@@ -337,7 +355,7 @@ static bool BuildMaterialTypedValueData(
     if(!ParseMaterialParameterTypeText(typeText, valueType, componentCount))
         return false;
 
-    AStringView tokens[4];
+    AStringView tokens[NWB_MATERIAL_TYPED_VALUE_COMPONENT_COUNT];
     u32 tokenCount = 0u;
     if(!SplitMaterialParameterTokens(argsText, tokens, tokenCount))
         return false;
@@ -353,8 +371,8 @@ static bool BuildMaterialTypedValueData(
     }
 
     const u64 keyHash = ComputeMaterialBindParameterKeyHash(key.view());
-    outParameter.meta.x = static_cast<u32>(keyHash & 0xffffffffull);
-    outParameter.meta.y = static_cast<u32>(keyHash >> 32u);
+    outParameter.meta.x = static_cast<u32>(keyHash & s_MaterialParameterKeyHashLowWordMask);
+    outParameter.meta.y = static_cast<u32>(keyHash >> s_MaterialParameterKeyHashHighWordBitShift);
     outParameter.meta.z = static_cast<u32>(valueType);
     outParameter.meta.w = componentCount;
     return true;
@@ -413,7 +431,7 @@ static bool ParseMaterialBindBlockClass(
 
 static UInt4U ToMaterialTypedLayoutDefaultValue(const MaterialTypedValueData& parameter){
     UInt4U result = {};
-    for(u32 i = 0u; i < 4u; ++i)
+    for(u32 i = 0u; i < NWB_MATERIAL_TYPED_VALUE_COMPONENT_COUNT; ++i)
         result.raw[i] = parameter.data.raw[i];
     return result;
 }

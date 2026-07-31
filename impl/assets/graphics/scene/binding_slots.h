@@ -21,6 +21,14 @@
 #define NWB_SCENE_LIGHT_RECORD_FLOAT_COUNT 20u
 #define NWB_SCENE_MAX_LIGHTS 64u
 
+// NwbSceneLight.params.y packs the LightType enum into a float. These midpoint thresholds are shared by CPU scene
+// preparation and every shader that decodes directional, point, and spot light behavior.
+#define NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX 0.5
+#define NWB_SCENE_LIGHT_TYPE_POINT_MAX 1.5
+
+// Cleared G-buffer depth at or above this threshold has no scene receiver.
+#define NWB_SCENE_BACKGROUND_DEPTH 0.999999
+
 // Colored shadows store per-light float3 transmittance in a Texture2DArray with one layer per shadow slot.
 // A bounded pool of slots is assigned per frame to the most important lights (the shadow-slot allocator);
 // lights without a slot stay fully lit. The shadow producers (hardware RayQuery / software fallback) and the lighting

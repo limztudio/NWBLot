@@ -67,6 +67,17 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend class RendererAvboitSystem;
     friend class RendererRayTracingSystem;
 
+private:
+    // This is deliberately diagnostic-only: lifecycle ownership remains below in RendererSystem, while the
+    // transition-only report lets the opt-in Vulkan smoke prove which accepted-history branch actually ran.
+    enum class LaggedLightingReport : u8{
+        Unreported,
+        NoDedicatedAsyncCompute,
+        BootstrapAccepted,
+        ActiveHistoryAccepted,
+        CurrentFrameFallbackAccepted,
+    };
+
 public:
     using ShaderPathResolveCallback = RendererShaderPathResolveCallback;
 
@@ -99,7 +110,12 @@ public:
     void setFrameLaggedAsyncLightingEnabled(const bool enabled)noexcept{
         if(m_frameLaggedAsyncLightingEnabled == enabled)
             return;
+        // Preserve a one-shot proof when the opt-in mode is explicitly turned off: the next accepted normal frame
+        // confirms that the renderer returned to its established current-frame path instead of merely planning it.
+        m_laggedLightingCurrentFrameFallbackPending = m_frameLaggedAsyncLightingEnabled && !enabled;
         m_frameLaggedAsyncLightingEnabled = enabled;
+        m_laggedLightingReport = LaggedLightingReport::Unreported;
+        m_laggedLightingReportGeneration = 0u;
         resetLaggedLightingHistoryTracking();
         resetLaggedLightingStashStateHandoffs();
     }
@@ -119,6 +135,7 @@ private:
     void resetLaggedLightingStashStateHandoffs()noexcept;
     void invalidateLaggedLightingHistorySubmission()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
+    void reportLaggedLightingTransition(LaggedLightingReport report, u64 targetGeneration);
     [[nodiscard]] Core::Alloc::GlobalArena& arena()noexcept{ return m_arena; }
     [[nodiscard]] Core::ECS::World& world()noexcept{ return m_world; }
     [[nodiscard]] Core::Graphics& graphics()noexcept{ return m_graphics; }
@@ -261,6 +278,9 @@ private:
     bool m_preparedHasTransparentRenderers = false;
     bool m_preparedShadowVisibilityReady = false;
     bool m_frameLaggedAsyncLightingEnabled = false;
+    LaggedLightingReport m_laggedLightingReport = LaggedLightingReport::Unreported;
+    u64 m_laggedLightingReportGeneration = 0u;
+    bool m_laggedLightingCurrentFrameFallbackPending = false;
     bool m_laggedLightingHistoryValid = false;
     Core::QueueSubmissionToken m_laggedLightingHistorySubmissionToken;
     // Deferred target creation increments this identity for every target generation. It prevents a recycled descriptor

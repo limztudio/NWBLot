@@ -87,8 +87,37 @@ static constexpr AStringView s_GroundMaterialPath = "project/smoke/transparent_m
 static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_multi/center_receiver");
 #endif
 
+#if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
+// The target-hardware runner sends F1 only after it observes an accepted history. Keeping the toggle in the smoke
+// project makes the fallback -> re-bootstrap transition deterministic without adding a renderer test control.
+class FrameLaggedAsyncLightingToggleInputHandler final : public NWB::Core::IInputEventHandler{
+public:
+    bool keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)override{
+        static_cast<void>(scancode);
+        static_cast<void>(mods);
+        if(key != NWB::Core::Key::F1)
+            return false;
+        if(action == NWB::Core::InputAction::Press)
+            m_toggleRequested = true;
+        return true;
+    }
+
+    [[nodiscard]] bool consumeToggleRequest(){
+        const bool requested = m_toggleRequested;
+        m_toggleRequested = false;
+        return requested;
+    }
+
+
+private:
+    bool m_toggleRequested = false;
+};
+#endif
+
 [[nodiscard]] static const tchar* TransparentMultiFpsLabel(){
-#if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
+#if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
+    return NWB_TEXT("FrameLaggedAsyncLightingSmokeProject");
+#elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     return NWB_TEXT("TransparentCsgSmokeProject");
 #elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
     return NWB_TEXT("CausticSphereSmokeProject");
@@ -242,6 +271,17 @@ private:
 #endif
 
         AddSmokeRenderSystems(*world, context);
+#if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
+        auto* const rendererSystem = world->getSystem<NWB::Impl::RendererSystem>();
+        if(!rendererSystem){
+            NWB_LOGGER_FATAL(NWB_TEXT("FrameLaggedAsyncLightingSmokeProject initialization failed: renderer system is missing"));
+            throw RuntimeException("FrameLaggedAsyncLightingSmokeProject initialization failed");
+        }
+        rendererSystem->setFrameLaggedAsyncLightingEnabled(true);
+        NWB_LOGGER_ESSENTIAL_INFO(
+            NWB_TEXT("FrameLaggedAsyncLightingSmoke: requested frame-lagged async lighting; F1 toggles the current-frame fallback")
+        );
+#endif
         if(!world->getSystem<NWB::Impl::MeshSystem>()){
             NWB_LOGGER_FATAL(NWB_TEXT("TransparentMultiSmokeProject initialization failed: mesh system is missing"));
             throw RuntimeException("TransparentMultiSmokeProject initialization failed");
@@ -267,6 +307,9 @@ public:
 
     virtual ~TransparentMultiSmokeProject()override{
         m_context.input.removeHandler(m_arrowYawInput); // idempotent backstop if onShutdown was skipped (dispatcher outlives us)
+#if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
+        m_context.input.removeHandler(m_frameLaggedAsyncLightingToggleInput);
+#endif
         destroyWorld();
     }
 
@@ -282,6 +325,11 @@ public:
         // The dispatcher visits handlers back-to-front, so addHandlerToBack gives this diagnostic scrubber first crack
         // at the arrow keys; it consumes only Left/Right and passes everything else through.
         m_context.input.addHandlerToBack(m_arrowYawInput);
+#if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
+        // The target-hardware harness presses F1 only after an accepted history is observed. It then proves the
+        // normal current-frame fallback and the following bootstrap without exposing a renderer-only test switch.
+        m_context.input.addHandlerToBack(m_frameLaggedAsyncLightingToggleInput);
+#endif
 
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraTargetY, s_CameraStartDepth, 0.0f);
         // Shadow-check key light: a single directional source makes the transparent CSG tetrahedra cast a readable
@@ -418,6 +466,9 @@ public:
 
     virtual void onShutdown()override{
         m_context.input.removeHandler(m_arrowYawInput);
+#if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
+        m_context.input.removeHandler(m_frameLaggedAsyncLightingToggleInput);
+#endif
         destroyWorld();
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: shutdown"));
     }
@@ -426,6 +477,18 @@ public:
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
+#if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
+        if(m_frameLaggedAsyncLightingToggleInput.consumeToggleRequest()){
+            auto* const rendererSystem = m_world->getSystem<NWB::Impl::RendererSystem>();
+            NWB_FATAL_ASSERT_MSG(rendererSystem, NWB_TEXT("FrameLaggedAsyncLightingSmokeProject renderer system disappeared"));
+            m_frameLaggedAsyncLightingEnabled = !m_frameLaggedAsyncLightingEnabled;
+            rendererSystem->setFrameLaggedAsyncLightingEnabled(m_frameLaggedAsyncLightingEnabled);
+            if(m_frameLaggedAsyncLightingEnabled)
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FrameLaggedAsyncLightingSmoke: F1 re-enabled frame-lagged async lighting"));
+            else
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FrameLaggedAsyncLightingSmoke: F1 requested current-frame fallback"));
+        }
+#endif
         // Yaw selection, in priority order:
         //  1. NWB_TRANSPARENT_MULTI_SPIN_ANGLE env freeze -- pins one orientation for deterministic A/B captures.
         //  2. Manual arrow-key scrub -- the moment Left/Right is touched, auto-spin latches off so the user can park
@@ -501,6 +564,10 @@ private:
     NWB::Core::ECS::EntityID m_opaqueRightShape = {};
     NWB::Tests::Smoke::YawSpinController m_sceneYaw;
     ArrowYawInputHandler m_arrowYawInput;
+#if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
+    FrameLaggedAsyncLightingToggleInputHandler m_frameLaggedAsyncLightingToggleInput;
+    bool m_frameLaggedAsyncLightingEnabled = true;
+#endif
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     NWB::Core::ECS::EntityID m_csgReceiver = {};
     NWB::Core::ECS::EntityID m_csgCutter = {};
@@ -523,7 +590,9 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 
 const tchar* NWB::QueryProjectWindowTitle(){
-#if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
+#if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
+    return NWB_TEXT("NWB Frame Lagged Async Lighting Smoke");
+#elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     return NWB_TEXT("NWB Transparent CSG Smoke");
 #elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
     return NWB_TEXT("NWB Caustic Sphere Smoke");

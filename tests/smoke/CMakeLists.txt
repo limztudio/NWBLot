@@ -38,6 +38,15 @@ if(Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/../ab/async_shadow_m4/run.py"
             "--self-test"
     )
+    # Parser/state-machine coverage for the opt-in target-hardware lagged-lighting smoke. The actual run remains
+    # manual because it requires a dedicated Vulkan compute family plus an interactive native window.
+    add_test(
+        NAME nwb_frame_lagged_async_lighting_harness_unit
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_LIST_DIR}/../ab/frame_lagged_async_lighting/run.py"
+            "--self-test"
+    )
 
     function(nwb_add_window_capture_smoke TEST_NAME OUTPUT_NAME EXECUTABLE_PATH WORKING_DIRECTORY WINDOW_TITLE)
         if(TARGET nwb_logserver)
@@ -124,6 +133,20 @@ if(Python3_Interpreter_FOUND)
         )
         nwb_configure_runtime_smoke_target(nwb_transparent_multi_sw_smoke "${_nwb_transparent_multi_runtime_root}")
 
+        # Opt-in target-hardware smoke. It intentionally shares the transparent-multi scene and cooked assets, but
+        # turns on frame-lagged lighting at startup and exposes an F1 transition back to normal current-frame lighting.
+        nwb_declare_executable(nwb_frame_lagged_async_lighting_smoke)
+        target_sources(nwb_frame_lagged_async_lighting_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
+        )
+        target_compile_definitions(nwb_frame_lagged_async_lighting_smoke PRIVATE
+            NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE=1
+        )
+        nwb_configure_runtime_smoke_target(
+            nwb_frame_lagged_async_lighting_smoke
+            "${_nwb_transparent_multi_runtime_root}"
+        )
+
         file(GLOB_RECURSE _nwb_transparent_multi_asset_inputs
             CONFIGURE_DEPENDS
             LIST_DIRECTORIES false
@@ -154,6 +177,7 @@ if(Python3_Interpreter_FOUND)
         add_custom_target(nwb_transparent_multi_smoke_assets DEPENDS "${_nwb_transparent_multi_asset_stamp}")
         add_dependencies(nwb_transparent_multi_smoke nwb_transparent_multi_smoke_assets)
         add_dependencies(nwb_transparent_multi_sw_smoke nwb_transparent_multi_smoke_assets)
+        add_dependencies(nwb_frame_lagged_async_lighting_smoke nwb_transparent_multi_smoke_assets)
 
         nwb_declare_executable(nwb_transparent_csg_smoke)
         target_sources(nwb_transparent_csg_smoke PRIVATE

@@ -202,6 +202,42 @@ RendererSystem::RendererSystem(
 RendererSystem::~RendererSystem(){}
 
 
+void RendererSystem::reportLaggedLightingTransition(const LaggedLightingReport report, const u64 targetGeneration){
+    if(m_laggedLightingReport == report && m_laggedLightingReportGeneration == targetGeneration)
+        return;
+
+    m_laggedLightingReport = report;
+    m_laggedLightingReportGeneration = targetGeneration;
+    switch(report){
+    case LaggedLightingReport::Unreported:
+        break;
+    case LaggedLightingReport::NoDedicatedAsyncCompute:
+        NWB_LOGGER_ESSENTIAL_INFO(
+            NWB_TEXT("RendererSystem: frame-lagged async lighting fallback accepted (no dedicated AsyncCompute lane, target generation {})"),
+            targetGeneration
+        );
+        break;
+    case LaggedLightingReport::BootstrapAccepted:
+        NWB_LOGGER_ESSENTIAL_INFO(
+            NWB_TEXT("RendererSystem: frame-lagged async lighting bootstrap accepted (target generation {})"),
+            targetGeneration
+        );
+        break;
+    case LaggedLightingReport::ActiveHistoryAccepted:
+        NWB_LOGGER_ESSENTIAL_INFO(
+            NWB_TEXT("RendererSystem: frame-lagged async lighting active history accepted (target generation {})"),
+            targetGeneration
+        );
+        break;
+    case LaggedLightingReport::CurrentFrameFallbackAccepted:
+        NWB_LOGGER_ESSENTIAL_INFO(
+            NWB_TEXT("RendererSystem: frame-lagged async lighting current-frame fallback accepted (target generation {})"),
+            targetGeneration
+        );
+        break;
+    }
+}
+
 void RendererSystem::resetLaggedLightingStashStateHandoffs()noexcept{
     m_laggedLightingStashInputStateHandoff.reset();
     m_laggedLightingStashStateHandoff.reset();
@@ -2891,6 +2927,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_raytracingSystem.confirmShadowVisibilitySubmission(fallbackSubmissionToken);
         m_raytracingSystem.confirmSurfelGiSubmission(fallbackSubmissionToken);
         m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
+        if(m_frameLaggedAsyncLightingEnabled){
+            reportLaggedLightingTransition(
+                LaggedLightingReport::NoDedicatedAsyncCompute,
+                deferredTargets.laggedLightingHistory.generation
+            );
+        }
+        else if(m_laggedLightingCurrentFrameFallbackPending){
+            reportLaggedLightingTransition(
+                LaggedLightingReport::CurrentFrameFallbackAccepted,
+                deferredTargets.laggedLightingHistory.generation
+            );
+            m_laggedLightingCurrentFrameFallbackPending = false;
+        }
         return;
     }
 
@@ -3201,6 +3250,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 failAsyncRenderRecovery();
                 return;
             }
+            if(laggedAsyncLightingSchedule){
+                reportLaggedLightingTransition(
+                    LaggedLightingReport::ActiveHistoryAccepted,
+                    deferredTargets.laggedLightingHistory.generation
+                );
+            }
 
             break;
         }
@@ -3235,6 +3290,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             if(!asyncFrameTiming.confirmEndSubmission(true)){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm async frame critical-path timing"));
                 asyncFrameTiming.discard();
+            }
+            if(m_laggedLightingCurrentFrameFallbackPending){
+                reportLaggedLightingTransition(
+                    LaggedLightingReport::CurrentFrameFallbackAccepted,
+                    deferredTargets.laggedLightingHistory.generation
+                );
+                m_laggedLightingCurrentFrameFallbackPending = false;
             }
 
             break;
@@ -3382,6 +3444,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
                     m_laggedLightingHistorySubmissionToken = stashSubmissionToken;
                     m_laggedLightingHistoryValid = true;
+                    if(!laggedAsyncLightingSchedule){
+                        reportLaggedLightingTransition(
+                            LaggedLightingReport::BootstrapAccepted,
+                            deferredTargets.laggedLightingHistory.generation
+                        );
+                    }
                 }
             }
         }

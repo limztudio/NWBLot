@@ -38,6 +38,15 @@ namespace CommandQueue = NWB::Core::CommandQueue;
 }
 
 
+void ExpectSubmissionToken(
+    const NWB::Core::QueueSubmissionToken& actual,
+    const NWB::Core::QueueSubmissionToken& expected
+){
+    EXPECT_EQ(actual.queue, expected.queue);
+    EXPECT_EQ(actual.value, expected.value);
+}
+
+
 void ExpectSubmissionBatch(
     const FrameExecutionPlan& plan,
     const FrameExecutionSubmissionBatch::Enum batchID,
@@ -806,6 +815,190 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateResolvesAcceptedDependenciesA
     submissions.acceptSubmission(FrameExecutionPacket::AsyncLaggedLightingStash, stashToken);
     ASSERT_NE(submissions.asyncRecoveryWaitToken(), nullptr);
     EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, 77u);
+}
+
+
+TEST(EcsGraphics, FrameExecutionPlanSubmissionStateUsesBootstrapStashAsNextFrameHistoryWait){
+    // RendererSystem owns the persistent history-token lifetime. This plan-only test makes the two-frame handoff
+    // explicit: bootstrap's accepted stash becomes active lighting's external history dependency on the next frame.
+    const FrameExecutionPlan bootstrapPlan(FrameExecutionPlanInput{
+        true,
+        true,
+        true,
+        false,
+        false,
+    });
+    FrameExecutionPlanSubmissionState bootstrapSubmissions(bootstrapPlan);
+    NWB::Core::QueueSubmissionToken waitTokens[FrameExecutionPlan::s_MaxSubmissionWaits] = {};
+    NWB::Core::QueueSubmissionDesc submitDesc;
+
+    ASSERT_TRUE(bootstrapSubmissions.prepareSubmission(
+        FrameExecutionPacket::GraphicsPrefix,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    EXPECT_EQ(submitDesc.waitTokenCount, 0u);
+    const NWB::Core::QueueSubmissionToken bootstrapPrefixToken{ CommandQueue::Graphics, 11u };
+    bootstrapSubmissions.acceptSubmission(FrameExecutionPacket::GraphicsPrefix, bootstrapPrefixToken);
+
+    ASSERT_TRUE(bootstrapSubmissions.prepareSubmission(
+        FrameExecutionPacket::AsyncRayEffects,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
+    ExpectSubmissionToken(waitTokens[0], bootstrapPrefixToken);
+    const NWB::Core::QueueSubmissionToken bootstrapRayEffectsToken{ CommandQueue::Compute, 22u };
+    bootstrapSubmissions.acceptSubmission(FrameExecutionPacket::AsyncRayEffects, bootstrapRayEffectsToken);
+
+    ASSERT_TRUE(bootstrapSubmissions.prepareSubmission(
+        FrameExecutionPacket::GraphicsEffects,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
+    ExpectSubmissionToken(waitTokens[0], bootstrapPrefixToken);
+    const NWB::Core::QueueSubmissionToken bootstrapEffectsToken{ CommandQueue::Graphics, 33u };
+    bootstrapSubmissions.acceptSubmission(FrameExecutionPacket::GraphicsEffects, bootstrapEffectsToken);
+
+    ASSERT_TRUE(bootstrapSubmissions.prepareSubmission(
+        FrameExecutionPacket::DeferredLighting,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 2u);
+    ExpectSubmissionToken(waitTokens[0], bootstrapEffectsToken);
+    ExpectSubmissionToken(waitTokens[1], bootstrapRayEffectsToken);
+    const NWB::Core::QueueSubmissionToken bootstrapLightingToken{ CommandQueue::Compute, 44u };
+    bootstrapSubmissions.acceptSubmission(FrameExecutionPacket::DeferredLighting, bootstrapLightingToken);
+
+    ASSERT_TRUE(bootstrapSubmissions.prepareSubmission(
+        FrameExecutionPacket::DeferredComposite,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
+    ExpectSubmissionToken(waitTokens[0], bootstrapLightingToken);
+    const NWB::Core::QueueSubmissionToken bootstrapCompositeToken{ CommandQueue::Compute, 55u };
+    bootstrapSubmissions.acceptSubmission(FrameExecutionPacket::DeferredComposite, bootstrapCompositeToken);
+
+    ASSERT_TRUE(bootstrapSubmissions.prepareSubmission(
+        FrameExecutionPacket::GraphicsPresent,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
+    ExpectSubmissionToken(waitTokens[0], bootstrapCompositeToken);
+    const NWB::Core::QueueSubmissionToken bootstrapPresentToken{ CommandQueue::Graphics, 66u };
+    bootstrapSubmissions.acceptSubmission(FrameExecutionPacket::GraphicsPresent, bootstrapPresentToken);
+
+    ASSERT_TRUE(bootstrapSubmissions.prepareSubmission(
+        FrameExecutionPacket::AsyncLaggedLightingStash,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
+    ExpectSubmissionToken(waitTokens[0], bootstrapPresentToken);
+    const NWB::Core::QueueSubmissionToken bootstrapStashToken{ CommandQueue::Compute, 77u };
+    bootstrapSubmissions.acceptSubmission(FrameExecutionPacket::AsyncLaggedLightingStash, bootstrapStashToken);
+
+    const FrameExecutionPlan activePlan(FrameExecutionPlanInput{
+        true,
+        true,
+        true,
+        true,
+        false,
+    });
+    FrameExecutionExternalWaitTokens activeExternalWaitTokens;
+    activeExternalWaitTokens.tokens[static_cast<usize>(FrameExecutionExternalWait::LaggedLightingHistory)] =
+        bootstrapStashToken
+    ;
+    FrameExecutionPlanSubmissionState activeSubmissions(activePlan, activeExternalWaitTokens);
+
+    ASSERT_TRUE(activeSubmissions.prepareSubmission(
+        FrameExecutionPacket::GraphicsPrefix,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    EXPECT_EQ(submitDesc.waitTokenCount, 0u);
+    const NWB::Core::QueueSubmissionToken activePrefixToken{ CommandQueue::Graphics, 101u };
+    activeSubmissions.acceptSubmission(FrameExecutionPacket::GraphicsPrefix, activePrefixToken);
+
+    ASSERT_TRUE(activeSubmissions.prepareSubmission(
+        FrameExecutionPacket::AsyncRayEffects,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
+    ExpectSubmissionToken(waitTokens[0], activePrefixToken);
+    const NWB::Core::QueueSubmissionToken activeRayEffectsToken{ CommandQueue::Compute, 102u };
+    activeSubmissions.acceptSubmission(FrameExecutionPacket::AsyncRayEffects, activeRayEffectsToken);
+
+    ASSERT_TRUE(activeSubmissions.prepareSubmission(
+        FrameExecutionPacket::GraphicsEffects,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
+    ExpectSubmissionToken(waitTokens[0], activePrefixToken);
+    const NWB::Core::QueueSubmissionToken activeEffectsToken{ CommandQueue::Graphics, 103u };
+    activeSubmissions.acceptSubmission(FrameExecutionPacket::GraphicsEffects, activeEffectsToken);
+
+    EXPECT_EQ(activePlan.laneForWork(FrameExecutionWork::DeferredLighting), RenderLane::Graphics);
+    ASSERT_TRUE(activeSubmissions.prepareSubmission(
+        FrameExecutionPacket::DeferredLighting,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 2u);
+    ExpectSubmissionToken(waitTokens[0], activeEffectsToken);
+    ExpectSubmissionToken(waitTokens[1], bootstrapStashToken);
+    EXPECT_NE(waitTokens[1].value, activeRayEffectsToken.value);
+    const NWB::Core::QueueSubmissionToken activeLightingToken{ CommandQueue::Graphics, 104u };
+    activeSubmissions.acceptSubmission(FrameExecutionPacket::DeferredLighting, activeLightingToken);
+
+    ASSERT_TRUE(activeSubmissions.prepareSubmission(
+        FrameExecutionPacket::DeferredComposite,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
+    ExpectSubmissionToken(waitTokens[0], activeLightingToken);
+    const NWB::Core::QueueSubmissionToken activeCompositeToken{ CommandQueue::Graphics, 105u };
+    activeSubmissions.acceptSubmission(FrameExecutionPacket::DeferredComposite, activeCompositeToken);
+
+    ASSERT_TRUE(activeSubmissions.prepareSubmission(
+        FrameExecutionPacket::GraphicsPresent,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 2u);
+    ExpectSubmissionToken(waitTokens[0], activeCompositeToken);
+    ExpectSubmissionToken(waitTokens[1], activeRayEffectsToken);
+    const NWB::Core::QueueSubmissionToken activePresentToken{ CommandQueue::Graphics, 106u };
+    activeSubmissions.acceptSubmission(FrameExecutionPacket::GraphicsPresent, activePresentToken);
+
+    ASSERT_TRUE(activeSubmissions.prepareSubmission(
+        FrameExecutionPacket::AsyncLaggedLightingStash,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
+    ExpectSubmissionToken(waitTokens[0], activePresentToken);
 }
 
 

@@ -281,7 +281,6 @@ private:
     LaggedLightingReport m_laggedLightingReport = LaggedLightingReport::Unreported;
     u64 m_laggedLightingReportGeneration = 0u;
     bool m_laggedLightingCurrentFrameFallbackPending = false;
-    bool m_laggedLightingHistoryValid = false;
     Core::QueueSubmissionToken m_laggedLightingHistorySubmissionToken;
     // Deferred target creation increments this identity for every target generation. It prevents a recycled descriptor
     // slot or allocator address from making a freshly recreated history look accepted.

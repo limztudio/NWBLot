@@ -244,7 +244,6 @@ void RendererSystem::resetLaggedLightingStashStateHandoffs()noexcept{
 }
 
 void RendererSystem::invalidateLaggedLightingHistorySubmission()noexcept{
-    m_laggedLightingHistoryValid = false;
     m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
 }
 
@@ -1062,7 +1061,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         dedicatedAsyncCompute,
         m_frameLaggedAsyncLightingEnabled,
         laggedLightingHistoryResourcesReady,
-        m_laggedLightingHistoryValid && m_laggedLightingHistorySubmissionToken.valid(),
+        m_laggedLightingHistorySubmissionToken.valid(),
         hasTransparentRenderers,
     };
     const ECSRenderDetail::FrameExecutionPlan frameExecutionPlan(frameExecutionPlanInput);
@@ -2913,10 +2912,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const ECSRenderDetail::FrameExecutionSubmissionBatchPlan& batchPlan =
             frameExecutionPlan.submissionBatch(batch)
         ;
-        if(batchPlan.packetCount == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame execution submission batch has no packets"));
-            return {};
-        }
+        NWB_ASSERT(batchPlan.packetCount > 0u);
 
         Core::QueueSubmissionToken lastSubmissionToken;
         for(u8 packetIndex = 0u; packetIndex < batchPlan.packetCount; ++packetIndex){
@@ -2937,11 +2933,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             asyncFrameTiming.discard();
             return false;
         }
-        if(waitToken && !waitToken->valid()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async recovery join received an invalid Compute submission token"));
-            asyncFrameTiming.discard();
-            return false;
-        }
+        NWB_ASSERT(!waitToken || waitToken->valid());
 
         const bool retireTiming = asyncFrameTiming.needsRetirement();
         if(retireTiming)
@@ -3449,7 +3441,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     }
 
                     m_laggedLightingHistorySubmissionToken = stashSubmissionToken;
-                    m_laggedLightingHistoryValid = true;
                     if(!laggedAsyncLightingSchedule){
                         reportLaggedLightingTransition(
                             LaggedLightingReport::BootstrapAccepted,

@@ -288,16 +288,10 @@ public:
         NWB_ASSERT(packetID != FrameExecutionPacket::kCount);
         return packetID;
     }
-    // Topology-mode consumers inspect the resolved packet rather than retaining parallel plan-state booleans.
-    [[nodiscard]] const FrameExecutionPacketPlan& packetPlanForWork(
-        const FrameExecutionWork::Enum work
-    )const noexcept{
-        return packet(packetForWork(work));
-    }
     [[nodiscard]] Core::RenderLane::Enum laneForWork(const FrameExecutionWork::Enum work)const noexcept{
         NWB_ASSERT(work < FrameExecutionWork::kCount);
         NWB_ASSERT(hasWork(work));
-        return packetPlanForWork(work).lane;
+        return packet(packetForWork(work)).lane;
     }
     [[nodiscard]] bool workRunsOnLane(
         const FrameExecutionWork::Enum work,

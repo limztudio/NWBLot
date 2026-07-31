@@ -665,6 +665,18 @@ public:
     [[nodiscard]] Core::QueueSubmissionToken token(const FrameExecutionPacket::Enum packet)const noexcept{
         return m_packetTokens[static_cast<usize>(packet)];
     }
+    // RendererSystem owns each batch's rollback action, while this state owns the accepted-token boundary that
+    // distinguishes a rejected first packet from a later rejection after the batch has already begun.
+    [[nodiscard]] bool batchHasAcceptedPacket(
+        const FrameExecutionSubmissionBatch::Enum batch
+    )const noexcept{
+        const FrameExecutionSubmissionBatchPlan& batchPlan = m_plan.submissionBatch(batch);
+        for(u8 packetIndex = 0u; packetIndex < batchPlan.packetCount; ++packetIndex){
+            if(token(batchPlan.packets[packetIndex]).valid())
+                return true;
+        }
+        return false;
+    }
     // A null result means no accepted AsyncCompute packet is outstanding, so failure recovery has no queue join to
     // submit. A non-null token is always the latest accepted packet on the ordered Compute lane, which also covers
     // every earlier accepted Compute packet on that lane.

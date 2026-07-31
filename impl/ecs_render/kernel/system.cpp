@@ -1070,6 +1070,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ECSRenderDetail::FrameExecutionWork::RayEffects,
         Core::RenderLane::AsyncCompute
     );
+    const bool recordsAsyncEffectsTiming = frameExecutionPlan.hasWork(
+        ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming
+    );
     const bool laggedAsyncLightingSchedule = frameExecutionPlan.workWaitsForExternalToken(
         ECSRenderDetail::FrameExecutionWork::DeferredLighting,
         ECSRenderDetail::FrameExecutionExternalWait::LaggedLightingHistory
@@ -1150,8 +1153,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(postGbufferNormalizeCommandList);
     NWB_ASSERT(shadowVisibilityCommandList);
     NWB_ASSERT(asyncRecoveryCommandList);
-    NWB_ASSERT(!asyncShadowSchedule || asyncEffectsTimingBeginCommandList);
-    NWB_ASSERT(!asyncShadowSchedule || asyncEffectsTimingEndCommandList);
+    NWB_ASSERT(!recordsAsyncEffectsTiming || asyncEffectsTimingBeginCommandList);
+    NWB_ASSERT(!recordsAsyncEffectsTiming || asyncEffectsTimingEndCommandList);
     NWB_ASSERT(m_causticsCommandList);
     NWB_ASSERT(causticsCommandList);
     NWB_ASSERT(m_surfelGiCommandList);
@@ -1929,8 +1932,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     bool causticsCommandListReady = false;
     bool surfelGiCommandListReady = false;
     bool avboitCommandListReady = false;
-    bool asyncEffectsTimingBeginCommandListReady = !asyncShadowSchedule;
-    if(asyncShadowSchedule){
+    bool asyncEffectsTimingBeginCommandListReady = !recordsAsyncEffectsTiming;
+    if(recordsAsyncEffectsTiming){
         ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
             frameExecutionTimingTickets,
             ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming
@@ -2196,7 +2199,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    if(asyncShadowSchedule){
+    if(recordsAsyncEffectsTiming){
         bool asyncEffectsTimingEndCommandListReady = false;
         {
             ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
@@ -2878,19 +2881,35 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame execution packet has no recorded command list"));
             return {};
         }
+        // Timed packets reject a missing command buffer through their ticket. Keep execution-only packets equally
+        // strict so a future plan entry cannot turn an absent list into a synchronization-only submission.
+        for(usize commandListIndex = 0u;
+            commandListIndex < packetCommandLists.commandListCount;
+            ++commandListIndex
+        ){
+            Core::CommandList* const commandList = packetCommandLists.commandLists[commandListIndex];
+            if(!commandList || !commandList->hasCommandBuffer()){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: execution-only frame packet has no recorded command list"));
+                return {};
+            }
+        }
         return executePlannedFramePacket(
             packet,
             packetCommandLists.commandLists,
             packetCommandLists.commandListCount
         );
     };
-    const auto submitRecordedFrameBatch = [&](
-        const ECSRenderDetail::FrameExecutionSubmissionBatch::Enum batch,
-        ECSRenderDetail::FrameExecutionPacket::Enum* const failedPacket
-    ) -> Core::QueueSubmissionToken {
-        if(failedPacket)
-            *failedPacket = ECSRenderDetail::FrameExecutionPacket::kCount;
-
+    // Packet timing identity is declarative. Route ordinary and execution-only packets through their plan flag so a
+    // later execution-only work item cannot accidentally require a timing ticket at its call site.
+    const auto dispatchRecordedFramePacket = [&](const ECSRenderDetail::FrameExecutionPacket::Enum packet)
+        -> Core::QueueSubmissionToken {
+        return frameExecutionPlan.packet(packet).recordsTiming
+            ? submitRecordedFramePacket(packet)
+            : executeRecordedFramePacket(packet)
+        ;
+    };
+    const auto dispatchRecordedFrameBatch = [&](const ECSRenderDetail::FrameExecutionSubmissionBatch::Enum batch)
+        -> Core::QueueSubmissionToken {
         const ECSRenderDetail::FrameExecutionSubmissionBatchPlan& batchPlan =
             frameExecutionPlan.submissionBatch(batch)
         ;
@@ -2902,46 +2921,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         Core::QueueSubmissionToken lastSubmissionToken;
         for(u8 packetIndex = 0u; packetIndex < batchPlan.packetCount; ++packetIndex){
             const ECSRenderDetail::FrameExecutionPacket::Enum packet = batchPlan.packets[packetIndex];
-            lastSubmissionToken = submitRecordedFramePacket(packet);
-            if(!lastSubmissionToken.valid()){
-                if(failedPacket)
-                    *failedPacket = packet;
+            lastSubmissionToken = dispatchRecordedFramePacket(packet);
+            if(!lastSubmissionToken.valid())
                 return {};
-            }
         }
         return lastSubmissionToken;
     };
-
-    if(!asyncShadowSchedule){
-        // The unsupported/disabled-lane fallback retains the established one ordered Graphics submission exactly.
-        const Core::QueueSubmissionToken fallbackSubmissionToken = submitRecordedFrameBatch(
-            ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsFallback,
-            nullptr
-        );
-        if(!fallbackSubmissionToken.valid()){
-            discardRenderPackets();
-            return;
-        }
-
-        frameTiming.reset();
-        m_raytracingSystem.confirmShadowVisibilitySubmission(fallbackSubmissionToken);
-        m_raytracingSystem.confirmSurfelGiSubmission(fallbackSubmissionToken);
-        m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-        if(m_frameLaggedAsyncLightingEnabled){
-            reportLaggedLightingTransition(
-                LaggedLightingReport::NoDedicatedAsyncCompute,
-                deferredTargets.laggedLightingHistory.generation
-            );
-        }
-        else if(m_laggedLightingCurrentFrameFallbackPending){
-            reportLaggedLightingTransition(
-                LaggedLightingReport::CurrentFrameFallbackAccepted,
-                deferredTargets.laggedLightingHistory.generation
-            );
-            m_laggedLightingCurrentFrameFallbackPending = false;
-        }
-        return;
-    }
 
     const auto submitAsyncRecoveryJoin = [&](const Core::QueueSubmissionToken* waitToken) -> bool {
         // A rejected dependent packet can leave accepted AsyncCompute work in flight. All remaining cross-lane
@@ -3028,11 +3013,40 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             frameExecutionPlan.submissionBatchID(submissionBatchIndex)
         ;
         switch(submissionBatch){
+        case ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsFallback:{
+            // The plan emits the same one-packet Graphics batch used by the established fallback. Keep its
+            // acceptance-dependent timing and temporal commits here with the other batch-specific lifecycle work.
+            const Core::QueueSubmissionToken fallbackSubmissionToken = dispatchRecordedFrameBatch(
+                ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsFallback
+            );
+            if(!fallbackSubmissionToken.valid()){
+                discardRenderPackets();
+                return;
+            }
+
+            frameTiming.reset();
+            m_raytracingSystem.confirmShadowVisibilitySubmission(fallbackSubmissionToken);
+            m_raytracingSystem.confirmSurfelGiSubmission(fallbackSubmissionToken);
+            m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
+            if(m_frameLaggedAsyncLightingEnabled){
+                reportLaggedLightingTransition(
+                    LaggedLightingReport::NoDedicatedAsyncCompute,
+                    deferredTargets.laggedLightingHistory.generation
+                );
+            }
+            else if(m_laggedLightingCurrentFrameFallbackPending){
+                reportLaggedLightingTransition(
+                    LaggedLightingReport::CurrentFrameFallbackAccepted,
+                    deferredTargets.laggedLightingHistory.generation
+                );
+                m_laggedLightingCurrentFrameFallbackPending = false;
+            }
+            return;
+        }
         case ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPrefix:{
             // Distinct queues submit the Graphics producer first. The following Compute producer waits on this batch.
-            const Core::QueueSubmissionToken prefixSubmissionToken = submitRecordedFrameBatch(
-                ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPrefix,
-                nullptr
+            const Core::QueueSubmissionToken prefixSubmissionToken = dispatchRecordedFrameBatch(
+                ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPrefix
             );
             if(!prefixSubmissionToken.valid()){
                 discardRenderPackets();
@@ -3045,9 +3059,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         case ECSRenderDetail::FrameExecutionSubmissionBatch::AsyncRayEffects:{
             // Shadow, caustic producer, and Compute-only surfel GI share one accepted Compute packet. Graphics effects
             // remain independent, and Graphics final waits for both packet branches.
-            const Core::QueueSubmissionToken shadowSubmissionToken = submitRecordedFrameBatch(
-                ECSRenderDetail::FrameExecutionSubmissionBatch::AsyncRayEffects,
-                nullptr
+            const Core::QueueSubmissionToken shadowSubmissionToken = dispatchRecordedFrameBatch(
+                ECSRenderDetail::FrameExecutionSubmissionBatch::AsyncRayEffects
             );
             if(!shadowSubmissionToken.valid()){
                 discardTimingTickets();
@@ -3190,20 +3203,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         case ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsEffects:{
             // The plan keeps either the one-packet Graphics path or the five-packet AVBOIT chain together. Its
             // declared order retains the required Graphics -> Compute alternation without a renderer-side sequence.
-            const ECSRenderDetail::FrameExecutionSubmissionBatchPlan& graphicsEffectsBatch =
-                frameExecutionPlan.submissionBatch(ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsEffects)
-            ;
-            NWB_ASSERT(graphicsEffectsBatch.packetCount > 0u);
-            ECSRenderDetail::FrameExecutionPacket::Enum failedGraphicsEffectsPacket;
-            const Core::QueueSubmissionToken graphicsEffectsSubmissionToken = submitRecordedFrameBatch(
-                ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsEffects,
-                &failedGraphicsEffectsPacket
+            const Core::QueueSubmissionToken graphicsEffectsSubmissionToken = dispatchRecordedFrameBatch(
+                ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsEffects
             );
             if(!graphicsEffectsSubmissionToken.valid()){
                 discardTimingTickets();
-                // Before the batch's first packet is accepted, the graphics-effects CPU state is still recoverable.
-                // After that point existing accepted packet state determines the recovery path.
-                if(failedGraphicsEffectsPacket == graphicsEffectsBatch.packets[0u])
+                // Before this batch accepts a packet, its CPU state is still recoverable. Once it has started,
+                // FrameExecutionPlanSubmissionState owns the accepted-token boundary used by the recovery path.
+                if(!frameExecutionSubmissionState.batchHasAcceptedPacket(
+                    ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsEffects
+                ))
                     restoreUnacceptedGraphicsEffectsCpuState();
                 if(!recoverPendingAsyncComputeSubmission())
                     failAsyncRenderRecovery();
@@ -3216,9 +3225,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             // The normal dedicated path keeps lighting/composite behind the producer on AsyncCompute. Once the optional
             // history is accepted, Graphics waits only for the previous stash and shades current G-buffer data in parallel
             // with this frame's producer; AVBOIT stays entirely on Graphics in that mode to avoid queueing behind the producer.
-            const Core::QueueSubmissionToken lightingSubmissionToken = submitRecordedFrameBatch(
-                ECSRenderDetail::FrameExecutionSubmissionBatch::DeferredLighting,
-                nullptr
+            const Core::QueueSubmissionToken lightingSubmissionToken = dispatchRecordedFrameBatch(
+                ECSRenderDetail::FrameExecutionSubmissionBatch::DeferredLighting
             );
             if(!lightingSubmissionToken.valid()){
                 discardTimingTickets();
@@ -3262,9 +3270,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         case ECSRenderDetail::FrameExecutionSubmissionBatch::DeferredComposite:{
             // The selected lane orders composite after lighting. Its token remains the presentation dependency in both modes;
             // in the lagged mode that is simply a Graphics-to-Graphics order edge while AsyncCompute continues the producer.
-            const Core::QueueSubmissionToken compositeSubmissionToken = submitRecordedFrameBatch(
-                ECSRenderDetail::FrameExecutionSubmissionBatch::DeferredComposite,
-                nullptr
+            const Core::QueueSubmissionToken compositeSubmissionToken = dispatchRecordedFrameBatch(
+                ECSRenderDetail::FrameExecutionSubmissionBatch::DeferredComposite
             );
             if(!compositeSubmissionToken.valid()){
                 discardTimingTickets();
@@ -3278,9 +3285,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             // History removes the producer from the current lighting dependency, not from the frame-lifetime dependency. The
             // final Graphics packet still waits for this frame's Async producer before the next frame can rewrite shared scene
             // inputs; that preserves the existing cross-frame resource contract while exposing the useful overlap above.
-            const Core::QueueSubmissionToken finalSubmissionToken = submitRecordedFrameBatch(
-                ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPresent,
-                nullptr
+            const Core::QueueSubmissionToken finalSubmissionToken = dispatchRecordedFrameBatch(
+                ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPresent
             );
             if(!finalSubmissionToken.valid()){
                 if(!recoverPendingAsyncComputeSubmission())
@@ -3410,7 +3416,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 resetLaggedLightingStashStateHandoffs();
             }
             else{
-                const Core::QueueSubmissionToken stashSubmissionToken = executeRecordedFramePacket(
+                const Core::QueueSubmissionToken stashSubmissionToken = dispatchRecordedFramePacket(
                     ECSRenderDetail::FrameExecutionPacket::AsyncLaggedLightingStash
                 );
                 if(!stashSubmissionToken.valid()){

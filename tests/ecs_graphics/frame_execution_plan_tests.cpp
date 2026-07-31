@@ -679,6 +679,74 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsRouteSplitWorkAndKeepTimingBra
 }
 
 
+TEST(EcsGraphics, FrameExecutionPlanSubmissionStateAcceptsPlannedGraphicsFallbackBatch){
+    const FrameExecutionPlan plan(FrameExecutionPlanInput{
+        false,
+        true,
+        true,
+        true,
+        true,
+    });
+    const FrameExecutionPacket::Enum fallbackPackets[] = {
+        FrameExecutionPacket::GraphicsFallback,
+    };
+    ExpectSubmissionBatch(
+        plan,
+        FrameExecutionSubmissionBatch::GraphicsFallback,
+        fallbackPackets,
+        LengthOf(fallbackPackets)
+    );
+
+    FrameExecutionPlanSubmissionState submissions(plan);
+    NWB::Core::QueueSubmissionToken waitTokens[FrameExecutionPlan::s_MaxSubmissionWaits] = {};
+    NWB::Core::QueueSubmissionDesc submitDesc;
+    ASSERT_TRUE(submissions.prepareSubmission(
+        FrameExecutionPacket::GraphicsFallback,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    EXPECT_EQ(submitDesc.waitTokenCount, 0u);
+
+    const NWB::Core::QueueSubmissionToken fallbackToken{ CommandQueue::Graphics, 11u };
+    submissions.acceptSubmission(FrameExecutionPacket::GraphicsFallback, fallbackToken);
+    ExpectSubmissionToken(
+        submissions.token(FrameExecutionPacket::GraphicsFallback),
+        fallbackToken
+    );
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken(), nullptr);
+}
+
+
+TEST(EcsGraphics, FrameExecutionPlanSubmissionStateTracksAcceptedPacketsByBatch){
+    const FrameExecutionPlan plan(FrameExecutionPlanInput{
+        true,
+        false,
+        false,
+        false,
+        true,
+    });
+    FrameExecutionPlanSubmissionState submissions(plan);
+
+    EXPECT_FALSE(submissions.batchHasAcceptedPacket(FrameExecutionSubmissionBatch::GraphicsEffects));
+    submissions.acceptSubmission(
+        FrameExecutionPacket::GraphicsPrefix,
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 11u }
+    );
+    submissions.acceptSubmission(
+        FrameExecutionPacket::AsyncRayEffects,
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Compute, 22u }
+    );
+    EXPECT_FALSE(submissions.batchHasAcceptedPacket(FrameExecutionSubmissionBatch::GraphicsEffects));
+
+    submissions.acceptSubmission(
+        FrameExecutionPacket::GraphicsAvboitPre,
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 33u }
+    );
+    EXPECT_TRUE(submissions.batchHasAcceptedPacket(FrameExecutionSubmissionBatch::GraphicsEffects));
+}
+
+
 TEST(EcsGraphics, FrameExecutionPlanSubmissionStateResolvesAcceptedDependenciesAndAsyncRecoveryToken){
     const FrameExecutionPlan plan(FrameExecutionPlanInput{
         true,

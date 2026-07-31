@@ -20,6 +20,8 @@ using FrameExecutionPlan = NWB::Impl::ECSRenderDetail::FrameExecutionPlan;
 using FrameExecutionPlanInput = NWB::Impl::ECSRenderDetail::FrameExecutionPlanInput;
 using FrameExecutionPlanSubmissionState = NWB::Impl::ECSRenderDetail::FrameExecutionPlanSubmissionState;
 namespace FrameExecutionPacket = NWB::Impl::ECSRenderDetail::FrameExecutionPacket;
+namespace FrameExecutionTimingTicket = NWB::Impl::ECSRenderDetail::FrameExecutionTimingTicket;
+namespace FrameExecutionWork = NWB::Impl::ECSRenderDetail::FrameExecutionWork;
 namespace RenderLane = NWB::Core::RenderLane;
 namespace CommandQueue = NWB::Core::CommandQueue;
 
@@ -136,6 +138,135 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
         FrameExecutionPacket::AsyncRayEffects
     );
     EXPECT_EQ(laggedPlan.packet(FrameExecutionPacket::AsyncLaggedLightingStash).lane, RenderLane::AsyncCompute);
+}
+
+
+TEST(EcsGraphics, FrameExecutionPlanAssignsRecordedWorkAndTimingToPlanPackets){
+    const FrameExecutionPlan fallbackPlan(FrameExecutionPlanInput{
+        false,
+        true,
+        true,
+        true,
+        true,
+    });
+
+    EXPECT_EQ(
+        fallbackPlan.packetForWork(FrameExecutionWork::GraphicsPrefix),
+        FrameExecutionPacket::GraphicsFallback
+    );
+    EXPECT_EQ(
+        fallbackPlan.packetForWork(FrameExecutionWork::RayEffects),
+        FrameExecutionPacket::GraphicsFallback
+    );
+    EXPECT_EQ(
+        fallbackPlan.packetForWork(FrameExecutionWork::AvboitRaster),
+        FrameExecutionPacket::GraphicsFallback
+    );
+    EXPECT_EQ(
+        fallbackPlan.packet(FrameExecutionPacket::GraphicsFallback).timingTicket,
+        FrameExecutionTimingTicket::Frame
+    );
+    EXPECT_FALSE(fallbackPlan.hasWork(FrameExecutionWork::AsyncEffectsTiming));
+    EXPECT_FALSE(fallbackPlan.hasWork(FrameExecutionWork::AvboitDepthWarp));
+
+    const FrameExecutionPlan splitPlan(FrameExecutionPlanInput{
+        true,
+        true,
+        true,
+        false,
+        true,
+    });
+
+    EXPECT_EQ(
+        splitPlan.packetForWork(FrameExecutionWork::GraphicsPrefix),
+        FrameExecutionPacket::GraphicsPrefix
+    );
+    EXPECT_EQ(
+        splitPlan.packetForWork(FrameExecutionWork::RayEffects),
+        FrameExecutionPacket::AsyncRayEffects
+    );
+    EXPECT_EQ(
+        splitPlan.packetForWork(FrameExecutionWork::Caustics),
+        FrameExecutionPacket::AsyncRayEffects
+    );
+    EXPECT_EQ(
+        splitPlan.packetForWork(FrameExecutionWork::SurfelGi),
+        FrameExecutionPacket::AsyncRayEffects
+    );
+    EXPECT_EQ(
+        splitPlan.packetForWork(FrameExecutionWork::AvboitRaster),
+        FrameExecutionPacket::GraphicsAvboitPre
+    );
+    EXPECT_EQ(
+        splitPlan.packetForWork(FrameExecutionWork::AsyncEffectsTiming),
+        FrameExecutionPacket::GraphicsAvboitPre
+    );
+    EXPECT_EQ(
+        splitPlan.packetForWork(FrameExecutionWork::AvboitDepthWarp),
+        FrameExecutionPacket::AsyncAvboitDepthWarp
+    );
+    EXPECT_EQ(
+        splitPlan.packetForWork(FrameExecutionWork::AvboitExtinction),
+        FrameExecutionPacket::GraphicsAvboitExtinction
+    );
+    EXPECT_EQ(
+        splitPlan.packetForWork(FrameExecutionWork::AvboitIntegration),
+        FrameExecutionPacket::AsyncAvboitIntegration
+    );
+    EXPECT_EQ(
+        splitPlan.packetForWork(FrameExecutionWork::AvboitAccumulation),
+        FrameExecutionPacket::GraphicsAvboitAccumulation
+    );
+    EXPECT_EQ(
+        splitPlan.packet(FrameExecutionPacket::GraphicsPrefix).timingTicket,
+        FrameExecutionTimingTicket::Prefix
+    );
+    EXPECT_EQ(
+        splitPlan.packet(FrameExecutionPacket::AsyncRayEffects).timingTicket,
+        FrameExecutionTimingTicket::RayEffects
+    );
+    EXPECT_EQ(
+        splitPlan.packet(FrameExecutionPacket::GraphicsAvboitPre).timingTicket,
+        FrameExecutionTimingTicket::AvboitPre
+    );
+    EXPECT_EQ(
+        splitPlan.packet(FrameExecutionPacket::AsyncAvboitIntegration).timingTicket,
+        FrameExecutionTimingTicket::AvboitIntegration
+    );
+    EXPECT_EQ(
+        splitPlan.packet(FrameExecutionPacket::DeferredLighting).timingTicket,
+        FrameExecutionTimingTicket::DeferredLighting
+    );
+    EXPECT_EQ(
+        splitPlan.packet(FrameExecutionPacket::AsyncLaggedLightingStash).timingTicket,
+        FrameExecutionTimingTicket::None
+    );
+
+    const FrameExecutionPlan laggedPlan(FrameExecutionPlanInput{
+        true,
+        true,
+        true,
+        true,
+        true,
+    });
+
+    EXPECT_EQ(
+        laggedPlan.packetForWork(FrameExecutionWork::AvboitRaster),
+        FrameExecutionPacket::GraphicsEffects
+    );
+    EXPECT_EQ(
+        laggedPlan.packetForWork(FrameExecutionWork::AsyncEffectsTiming),
+        FrameExecutionPacket::GraphicsEffects
+    );
+    EXPECT_FALSE(laggedPlan.hasWork(FrameExecutionWork::AvboitDepthWarp));
+    EXPECT_EQ(
+        laggedPlan.packet(FrameExecutionPacket::GraphicsEffects).timingTicket,
+        FrameExecutionTimingTicket::Effects
+    );
+    EXPECT_EQ(
+        laggedPlan.packet(FrameExecutionPacket::DeferredLighting).timingTicket,
+        FrameExecutionTimingTicket::DeferredLighting
+    );
 }
 
 

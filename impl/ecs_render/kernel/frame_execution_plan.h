@@ -48,6 +48,51 @@ namespace FrameExecutionPacket{
 };
 
 
+// A recorded workload can share a submission packet with other work. Keep that mapping declarative with the
+// packet graph so recording, timing, and submission cannot drift into separate topology decisions.
+namespace FrameExecutionWork{
+    enum Enum : u8{
+        GraphicsPrefix,
+        RayEffects,
+        Caustics,
+        SurfelGi,
+        AvboitRaster,
+        AsyncEffectsTiming,
+        AvboitDepthWarp,
+        AvboitExtinction,
+        AvboitIntegration,
+        AvboitAccumulation,
+        DeferredLighting,
+        DeferredComposite,
+        GraphicsPresent,
+        LaggedLightingStash,
+
+        kCount,
+    };
+};
+
+
+// Ticket identities remain local to RendererSystem because they own per-frame query reservations. The plan owns
+// only the stable assignment from a logical submission packet to the ticket that records and confirms it.
+namespace FrameExecutionTimingTicket{
+    enum Enum : u8{
+        None,
+        Frame,
+        Prefix,
+        RayEffects,
+        Effects,
+        AvboitPre,
+        AvboitDepthWarp,
+        AvboitExtinction,
+        AvboitIntegration,
+        AvboitAccumulation,
+        DeferredLighting,
+        DeferredComposite,
+        GraphicsPresent,
+    };
+};
+
+
 struct FrameExecutionPlanInput{
     bool dedicatedAsyncCompute = false;
     bool frameLaggedAsyncLightingEnabled = false;
@@ -61,8 +106,14 @@ struct FrameExecutionPacketPlan{
     Core::RenderLane::Enum lane = Core::RenderLane::Graphics;
     FrameExecutionPacket::Enum waitPackets[2] = {};
     u8 waitPacketCount = 0u;
+    FrameExecutionTimingTicket::Enum timingTicket = FrameExecutionTimingTicket::None;
     bool enabled = false;
     bool waitsForLaggedLightingHistory = false;
+};
+
+
+struct FrameExecutionWorkPlan{
+    FrameExecutionPacket::Enum packet = FrameExecutionPacket::kCount;
 };
 
 
@@ -92,34 +143,54 @@ public:
 
         if(!m_usesDedicatedAsyncCompute){
             enablePacket(FrameExecutionPacket::GraphicsFallback, Core::RenderLane::Graphics);
+            assignWork(FrameExecutionWork::GraphicsPrefix, FrameExecutionPacket::GraphicsFallback);
+            assignWork(FrameExecutionWork::RayEffects, FrameExecutionPacket::GraphicsFallback);
+            assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::GraphicsFallback);
+            assignWork(FrameExecutionWork::SurfelGi, FrameExecutionPacket::GraphicsFallback);
+            assignWork(FrameExecutionWork::AvboitRaster, FrameExecutionPacket::GraphicsFallback);
+            assignWork(FrameExecutionWork::DeferredLighting, FrameExecutionPacket::GraphicsFallback);
+            assignWork(FrameExecutionWork::DeferredComposite, FrameExecutionPacket::GraphicsFallback);
+            assignWork(FrameExecutionWork::GraphicsPresent, FrameExecutionPacket::GraphicsFallback);
             return;
         }
 
         enablePacket(FrameExecutionPacket::GraphicsPrefix, Core::RenderLane::Graphics);
+        assignWork(FrameExecutionWork::GraphicsPrefix, FrameExecutionPacket::GraphicsPrefix);
         enablePacket(FrameExecutionPacket::AsyncRayEffects, Core::RenderLane::AsyncCompute);
         addPacketWait(FrameExecutionPacket::AsyncRayEffects, FrameExecutionPacket::GraphicsPrefix);
+        assignWork(FrameExecutionWork::RayEffects, FrameExecutionPacket::AsyncRayEffects);
+        assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::AsyncRayEffects);
+        assignWork(FrameExecutionWork::SurfelGi, FrameExecutionPacket::AsyncRayEffects);
 
         FrameExecutionPacket::Enum graphicsEffectsCompletionPacket = FrameExecutionPacket::GraphicsEffects;
         if(m_usesAsyncAvboit){
             enablePacket(FrameExecutionPacket::GraphicsAvboitPre, Core::RenderLane::Graphics);
             addPacketWait(FrameExecutionPacket::GraphicsAvboitPre, FrameExecutionPacket::GraphicsPrefix);
+            assignWork(FrameExecutionWork::AvboitRaster, FrameExecutionPacket::GraphicsAvboitPre);
+            assignWork(FrameExecutionWork::AsyncEffectsTiming, FrameExecutionPacket::GraphicsAvboitPre);
 
             enablePacket(FrameExecutionPacket::AsyncAvboitDepthWarp, Core::RenderLane::AsyncCompute);
             addPacketWait(FrameExecutionPacket::AsyncAvboitDepthWarp, FrameExecutionPacket::GraphicsAvboitPre);
+            assignWork(FrameExecutionWork::AvboitDepthWarp, FrameExecutionPacket::AsyncAvboitDepthWarp);
 
             enablePacket(FrameExecutionPacket::GraphicsAvboitExtinction, Core::RenderLane::Graphics);
             addPacketWait(FrameExecutionPacket::GraphicsAvboitExtinction, FrameExecutionPacket::AsyncAvboitDepthWarp);
+            assignWork(FrameExecutionWork::AvboitExtinction, FrameExecutionPacket::GraphicsAvboitExtinction);
 
             enablePacket(FrameExecutionPacket::AsyncAvboitIntegration, Core::RenderLane::AsyncCompute);
             addPacketWait(FrameExecutionPacket::AsyncAvboitIntegration, FrameExecutionPacket::GraphicsAvboitExtinction);
+            assignWork(FrameExecutionWork::AvboitIntegration, FrameExecutionPacket::AsyncAvboitIntegration);
 
             enablePacket(FrameExecutionPacket::GraphicsAvboitAccumulation, Core::RenderLane::Graphics);
             addPacketWait(FrameExecutionPacket::GraphicsAvboitAccumulation, FrameExecutionPacket::AsyncAvboitIntegration);
+            assignWork(FrameExecutionWork::AvboitAccumulation, FrameExecutionPacket::GraphicsAvboitAccumulation);
             graphicsEffectsCompletionPacket = FrameExecutionPacket::GraphicsAvboitAccumulation;
         }
         else{
             enablePacket(FrameExecutionPacket::GraphicsEffects, Core::RenderLane::Graphics);
             addPacketWait(FrameExecutionPacket::GraphicsEffects, FrameExecutionPacket::GraphicsPrefix);
+            assignWork(FrameExecutionWork::AvboitRaster, FrameExecutionPacket::GraphicsEffects);
+            assignWork(FrameExecutionWork::AsyncEffectsTiming, FrameExecutionPacket::GraphicsEffects);
         }
 
         const Core::RenderLane::Enum deferredLane = m_usesLaggedAsyncLighting
@@ -128,6 +199,7 @@ public:
         ;
         enablePacket(FrameExecutionPacket::DeferredLighting, deferredLane);
         addPacketWait(FrameExecutionPacket::DeferredLighting, graphicsEffectsCompletionPacket);
+        assignWork(FrameExecutionWork::DeferredLighting, FrameExecutionPacket::DeferredLighting);
         if(m_usesLaggedAsyncLighting)
             mutablePacket(FrameExecutionPacket::DeferredLighting).waitsForLaggedLightingHistory = true;
         else
@@ -135,15 +207,18 @@ public:
 
         enablePacket(FrameExecutionPacket::DeferredComposite, deferredLane);
         addPacketWait(FrameExecutionPacket::DeferredComposite, FrameExecutionPacket::DeferredLighting);
+        assignWork(FrameExecutionWork::DeferredComposite, FrameExecutionPacket::DeferredComposite);
 
         enablePacket(FrameExecutionPacket::GraphicsPresent, Core::RenderLane::Graphics);
         addPacketWait(FrameExecutionPacket::GraphicsPresent, FrameExecutionPacket::DeferredComposite);
+        assignWork(FrameExecutionWork::GraphicsPresent, FrameExecutionPacket::GraphicsPresent);
         if(m_usesLaggedAsyncLighting)
             addPacketWait(FrameExecutionPacket::GraphicsPresent, FrameExecutionPacket::AsyncRayEffects);
 
         if(m_capturesLaggedLightingHistory){
             enablePacket(FrameExecutionPacket::AsyncLaggedLightingStash, Core::RenderLane::AsyncCompute);
             addPacketWait(FrameExecutionPacket::AsyncLaggedLightingStash, FrameExecutionPacket::GraphicsPresent);
+            assignWork(FrameExecutionWork::LaggedLightingStash, FrameExecutionPacket::AsyncLaggedLightingStash);
         }
     }
 
@@ -163,16 +238,40 @@ public:
     [[nodiscard]] const FrameExecutionPacketPlan& packet(const FrameExecutionPacket::Enum packet)const noexcept{
         return m_packets[static_cast<usize>(packet)];
     }
+    [[nodiscard]] const FrameExecutionWorkPlan& work(const FrameExecutionWork::Enum work)const noexcept{
+        return m_workPlans[static_cast<usize>(work)];
+    }
+    [[nodiscard]] bool hasWork(const FrameExecutionWork::Enum work)const noexcept{
+        return this->work(work).packet != FrameExecutionPacket::kCount;
+    }
+    [[nodiscard]] FrameExecutionPacket::Enum packetForWork(const FrameExecutionWork::Enum work)const noexcept{
+        const FrameExecutionPacket::Enum packetID = this->work(work).packet;
+        NWB_ASSERT(packetID != FrameExecutionPacket::kCount);
+        return packetID;
+    }
 
 
 private:
     [[nodiscard]] FrameExecutionPacketPlan& mutablePacket(const FrameExecutionPacket::Enum packet)noexcept{
         return m_packets[static_cast<usize>(packet)];
     }
+    [[nodiscard]] FrameExecutionWorkPlan& mutableWork(const FrameExecutionWork::Enum work)noexcept{
+        return m_workPlans[static_cast<usize>(work)];
+    }
     void enablePacket(const FrameExecutionPacket::Enum packetID, const Core::RenderLane::Enum lane)noexcept{
         FrameExecutionPacketPlan& packetPlan = mutablePacket(packetID);
         packetPlan.lane = lane;
+        packetPlan.timingTicket = timingTicketForPacket(packetID);
         packetPlan.enabled = true;
+    }
+    void assignWork(
+        const FrameExecutionWork::Enum work,
+        const FrameExecutionPacket::Enum packetID
+    )noexcept{
+        NWB_ASSERT(packet(packetID).enabled);
+        FrameExecutionWorkPlan& workPlan = mutableWork(work);
+        NWB_ASSERT(workPlan.packet == FrameExecutionPacket::kCount);
+        workPlan.packet = packetID;
     }
     void addPacketWait(
         const FrameExecutionPacket::Enum consumerPacket,
@@ -184,10 +283,47 @@ private:
         NWB_ASSERT(consumerPlan.waitPacketCount < s_MaxPacketWaits);
         consumerPlan.waitPackets[consumerPlan.waitPacketCount++] = producerPacket;
     }
+    [[nodiscard]] static FrameExecutionTimingTicket::Enum timingTicketForPacket(
+        const FrameExecutionPacket::Enum packet
+    )noexcept{
+        switch(packet){
+        case FrameExecutionPacket::GraphicsFallback:
+            return FrameExecutionTimingTicket::Frame;
+        case FrameExecutionPacket::GraphicsPrefix:
+            return FrameExecutionTimingTicket::Prefix;
+        case FrameExecutionPacket::AsyncRayEffects:
+            return FrameExecutionTimingTicket::RayEffects;
+        case FrameExecutionPacket::GraphicsEffects:
+            return FrameExecutionTimingTicket::Effects;
+        case FrameExecutionPacket::GraphicsAvboitPre:
+            return FrameExecutionTimingTicket::AvboitPre;
+        case FrameExecutionPacket::AsyncAvboitDepthWarp:
+            return FrameExecutionTimingTicket::AvboitDepthWarp;
+        case FrameExecutionPacket::GraphicsAvboitExtinction:
+            return FrameExecutionTimingTicket::AvboitExtinction;
+        case FrameExecutionPacket::AsyncAvboitIntegration:
+            return FrameExecutionTimingTicket::AvboitIntegration;
+        case FrameExecutionPacket::GraphicsAvboitAccumulation:
+            return FrameExecutionTimingTicket::AvboitAccumulation;
+        case FrameExecutionPacket::DeferredLighting:
+            return FrameExecutionTimingTicket::DeferredLighting;
+        case FrameExecutionPacket::DeferredComposite:
+            return FrameExecutionTimingTicket::DeferredComposite;
+        case FrameExecutionPacket::GraphicsPresent:
+            return FrameExecutionTimingTicket::GraphicsPresent;
+        case FrameExecutionPacket::AsyncLaggedLightingStash:
+            return FrameExecutionTimingTicket::None;
+        case FrameExecutionPacket::kCount:
+            break;
+        }
+        NWB_ASSERT(false);
+        return FrameExecutionTimingTicket::None;
+    }
 
 
 private:
     FrameExecutionPacketPlan m_packets[FrameExecutionPacket::kCount] = {};
+    FrameExecutionWorkPlan m_workPlans[FrameExecutionWork::kCount] = {};
     bool m_usesDedicatedAsyncCompute = false;
     bool m_usesLaggedAsyncLighting = false;
     bool m_capturesLaggedLightingHistory = false;

@@ -1088,31 +1088,123 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingSubmissionTicket lightingTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket compositeTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket finalTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket* const prefixTimingTicketForPacket = asyncShadowSchedule ? &prefixTimingTicket : &renderTimingTicket;
-    Core::GpuTimingSubmissionTicket* const shadowTimingTicketForPacket = asyncShadowSchedule ? &shadowTimingTicket : &renderTimingTicket;
-    Core::GpuTimingSubmissionTicket* const effectsTimingTicketForPacket = asyncShadowSchedule ? &effectsTimingTicket : &renderTimingTicket;
-    // On a dedicated lane, either caustic producer shares the accepted Compute submission with shadow visibility.
-    Core::GpuTimingSubmissionTicket* const causticsTimingTicketForPacket = asyncCausticsSchedule
-        ? shadowTimingTicketForPacket
-        : effectsTimingTicketForPacket
+    // Ticket lifetimes remain local because they own this frame's query reservations. Their topology assignment is
+    // declarative, however: recorded work first resolves to a plan packet, then that packet resolves to its ticket.
+    const auto timingTicketForPacket = [&frameExecutionPlan,
+        &renderTimingTicket,
+        &prefixTimingTicket,
+        &shadowTimingTicket,
+        &effectsTimingTicket,
+        &avboitPreTimingTicket,
+        &avboitDepthWarpTimingTicket,
+        &avboitExtinctionTimingTicket,
+        &avboitIntegrationTimingTicket,
+        &avboitAccumulateTimingTicket,
+        &lightingTimingTicket,
+        &compositeTimingTicket,
+        &finalTimingTicket
+    ](
+        const ECSRenderDetail::FrameExecutionPacket::Enum packet
+    ) -> Core::GpuTimingSubmissionTicket* {
+        switch(frameExecutionPlan.packet(packet).timingTicket){
+        case ECSRenderDetail::FrameExecutionTimingTicket::Frame:
+            return &renderTimingTicket;
+        case ECSRenderDetail::FrameExecutionTimingTicket::Prefix:
+            return &prefixTimingTicket;
+        case ECSRenderDetail::FrameExecutionTimingTicket::RayEffects:
+            return &shadowTimingTicket;
+        case ECSRenderDetail::FrameExecutionTimingTicket::Effects:
+            return &effectsTimingTicket;
+        case ECSRenderDetail::FrameExecutionTimingTicket::AvboitPre:
+            return &avboitPreTimingTicket;
+        case ECSRenderDetail::FrameExecutionTimingTicket::AvboitDepthWarp:
+            return &avboitDepthWarpTimingTicket;
+        case ECSRenderDetail::FrameExecutionTimingTicket::AvboitExtinction:
+            return &avboitExtinctionTimingTicket;
+        case ECSRenderDetail::FrameExecutionTimingTicket::AvboitIntegration:
+            return &avboitIntegrationTimingTicket;
+        case ECSRenderDetail::FrameExecutionTimingTicket::AvboitAccumulation:
+            return &avboitAccumulateTimingTicket;
+        case ECSRenderDetail::FrameExecutionTimingTicket::DeferredLighting:
+            return &lightingTimingTicket;
+        case ECSRenderDetail::FrameExecutionTimingTicket::DeferredComposite:
+            return &compositeTimingTicket;
+        case ECSRenderDetail::FrameExecutionTimingTicket::GraphicsPresent:
+            return &finalTimingTicket;
+        case ECSRenderDetail::FrameExecutionTimingTicket::None:
+            return nullptr;
+        }
+        NWB_ASSERT(false);
+        return nullptr;
+    };
+    const auto timingTicketForWork = [&frameExecutionPlan, &timingTicketForPacket](
+        const ECSRenderDetail::FrameExecutionWork::Enum work
+    ) -> Core::GpuTimingSubmissionTicket* {
+        return timingTicketForPacket(frameExecutionPlan.packetForWork(work));
+    };
+    Core::GpuTimingSubmissionTicket* const prefixTimingTicketForPacket = timingTicketForWork(
+        ECSRenderDetail::FrameExecutionWork::GraphicsPrefix
+    );
+    Core::GpuTimingSubmissionTicket* const shadowTimingTicketForPacket = timingTicketForWork(
+        ECSRenderDetail::FrameExecutionWork::RayEffects
+    );
+    Core::GpuTimingSubmissionTicket* const effectsTimingTicketForPacket = timingTicketForWork(
+        ECSRenderDetail::FrameExecutionWork::AvboitRaster
+    );
+    Core::GpuTimingSubmissionTicket* const causticsTimingTicketForPacket = timingTicketForWork(
+        ECSRenderDetail::FrameExecutionWork::Caustics
+    );
+    Core::GpuTimingSubmissionTicket* const surfelGiTimingTicketForPacket = timingTicketForWork(
+        ECSRenderDetail::FrameExecutionWork::SurfelGi
+    );
+    Core::GpuTimingSubmissionTicket* const avboitPreTimingTicketForPacket = effectsTimingTicketForPacket;
+    Core::GpuTimingSubmissionTicket* const lightingTimingTicketForPacket = timingTicketForWork(
+        ECSRenderDetail::FrameExecutionWork::DeferredLighting
+    );
+    Core::GpuTimingSubmissionTicket* const compositeTimingTicketForPacket = timingTicketForWork(
+        ECSRenderDetail::FrameExecutionWork::DeferredComposite
+    );
+    Core::GpuTimingSubmissionTicket* const finalTimingTicketForPacket = timingTicketForWork(
+        ECSRenderDetail::FrameExecutionWork::GraphicsPresent
+    );
+    Core::GpuTimingSubmissionTicket* const asyncEffectsTimingTicketForPacket = asyncShadowSchedule
+        ? timingTicketForWork(ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming)
+        : nullptr
     ;
-    Core::GpuTimingSubmissionTicket* const surfelGiTimingTicketForPacket = asyncSurfelGiSchedule
-        ? shadowTimingTicketForPacket
-        : effectsTimingTicketForPacket
+    Core::GpuTimingSubmissionTicket* const avboitDepthWarpTimingTicketForPacket = asyncAvboitSchedule
+        ? timingTicketForWork(ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp)
+        : nullptr
     ;
-    Core::GpuTimingSubmissionTicket* const avboitPreTimingTicketForPacket = asyncAvboitSchedule
-        ? &avboitPreTimingTicket
-        : effectsTimingTicketForPacket
+    Core::GpuTimingSubmissionTicket* const avboitExtinctionTimingTicketForPacket = asyncAvboitSchedule
+        ? timingTicketForWork(ECSRenderDetail::FrameExecutionWork::AvboitExtinction)
+        : nullptr
     ;
-    Core::GpuTimingSubmissionTicket* const lightingTimingTicketForPacket = asyncShadowSchedule
-        ? &lightingTimingTicket
-        : &renderTimingTicket
+    Core::GpuTimingSubmissionTicket* const avboitIntegrationTimingTicketForPacket = asyncAvboitSchedule
+        ? timingTicketForWork(ECSRenderDetail::FrameExecutionWork::AvboitIntegration)
+        : nullptr
     ;
-    Core::GpuTimingSubmissionTicket* const compositeTimingTicketForPacket = asyncShadowSchedule
-        ? &compositeTimingTicket
-        : &renderTimingTicket
+    Core::GpuTimingSubmissionTicket* const avboitAccumulateTimingTicketForPacket = asyncAvboitSchedule
+        ? timingTicketForWork(ECSRenderDetail::FrameExecutionWork::AvboitAccumulation)
+        : nullptr
     ;
-    Core::GpuTimingSubmissionTicket* const finalTimingTicketForPacket = asyncShadowSchedule ? &finalTimingTicket : &renderTimingTicket;
+    NWB_ASSERT(
+        prefixTimingTicketForPacket
+        && shadowTimingTicketForPacket
+        && effectsTimingTicketForPacket
+        && causticsTimingTicketForPacket
+        && surfelGiTimingTicketForPacket
+        && lightingTimingTicketForPacket
+        && compositeTimingTicketForPacket
+        && finalTimingTicketForPacket
+    );
+    if(asyncShadowSchedule)
+        NWB_ASSERT(asyncEffectsTimingTicketForPacket);
+    if(asyncAvboitSchedule){
+        NWB_ASSERT(avboitDepthWarpTimingTicketForPacket);
+        NWB_ASSERT(avboitExtinctionTimingTicketForPacket);
+        NWB_ASSERT(avboitIntegrationTimingTicketForPacket);
+        NWB_ASSERT(avboitAccumulateTimingTicketForPacket);
+    }
     // This scope crosses two synchronously-waited Graphics jobs, so it cannot live in either worker's scratch
     // arena. The fallback owns it directly; the dedicated schedule uses the acceptance-aware transaction below.
     Optional<Core::GpuTimingMeasure> frameTiming;
@@ -1785,7 +1877,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     bool avboitCommandListReady = false;
     bool asyncEffectsTimingBeginCommandListReady = !asyncShadowSchedule;
     if(asyncShadowSchedule){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*avboitPreTimingTicketForPacket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*asyncEffectsTimingTicketForPacket);
         asyncEffectsTimingBeginCommandList->open();
         if(asyncEffectsTimingBeginCommandList->hasCommandBuffer()){
             asyncEffectsTiming.emplace(
@@ -2038,7 +2130,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(asyncShadowSchedule){
         bool asyncEffectsTimingEndCommandListReady = false;
         {
-            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*avboitPreTimingTicketForPacket);
+            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*asyncEffectsTimingTicketForPacket);
             asyncEffectsTimingEndCommandList->open();
             if(asyncEffectsTimingEndCommandList->hasCommandBuffer()){
                 if(asyncEffectsTiming){
@@ -2083,9 +2175,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             &deferredTargets,
             asyncAvboitDepthWarpCommandList,
             &avboitDepthWarpCommandListReady,
-            &avboitDepthWarpTimingTicket
+            avboitDepthWarpTimingTicketForPacket
         ](){
-            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(avboitDepthWarpTimingTicket);
+            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*avboitDepthWarpTimingTicketForPacket);
             asyncAvboitDepthWarpCommandList->open(&m_avboitDepthWarpInputStateHandoff);
             if(!asyncAvboitDepthWarpCommandList->hasCommandBuffer())
                 return;
@@ -2127,9 +2219,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             csgFrameState,
             avboitExtinctionCommandList,
             &avboitExtinctionCommandListReady,
-            &avboitExtinctionTimingTicket
+            avboitExtinctionTimingTicketForPacket
         ](){
-            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(avboitExtinctionTimingTicket);
+            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*avboitExtinctionTimingTicketForPacket);
             avboitExtinctionCommandList->open(&m_avboitExtinctionInputStateHandoff);
             if(!avboitExtinctionCommandList->hasCommandBuffer())
                 return;
@@ -2182,9 +2274,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             &deferredTargets,
             asyncAvboitIntegrationCommandList,
             &avboitIntegrationCommandListReady,
-            &avboitIntegrationTimingTicket
+            avboitIntegrationTimingTicketForPacket
         ](){
-            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(avboitIntegrationTimingTicket);
+            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*avboitIntegrationTimingTicketForPacket);
             asyncAvboitIntegrationCommandList->open(&m_avboitIntegrationInputStateHandoff);
             if(!asyncAvboitIntegrationCommandList->hasCommandBuffer())
                 return;
@@ -2226,9 +2318,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             csgFrameState,
             avboitAccumulateCommandList,
             &avboitAccumulateCommandListReady,
-            &avboitAccumulateTimingTicket
+            avboitAccumulateTimingTicketForPacket
         ](){
-            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(avboitAccumulateTimingTicket);
+            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*avboitAccumulateTimingTicketForPacket);
             avboitAccumulateCommandList->open(&m_avboitAccumulationInputStateHandoff);
             if(!avboitAccumulateCommandList->hasCommandBuffer())
                 return;
@@ -2645,7 +2737,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         };
         const Core::QueueSubmissionToken fallbackSubmissionToken = submitPlannedFramePacket(
             ECSRenderDetail::FrameExecutionPacket::GraphicsFallback,
-            renderTimingTicket,
+            *prefixTimingTicketForPacket,
             commandLists,
             LengthOf(commandLists)
         );
@@ -2752,7 +2844,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     };
     const Core::QueueSubmissionToken prefixSubmissionToken = submitPlannedFramePacket(
         ECSRenderDetail::FrameExecutionPacket::GraphicsPrefix,
-        prefixTimingTicket,
+        *prefixTimingTicketForPacket,
         prefixCommandLists,
         LengthOf(prefixCommandLists)
     );
@@ -2771,7 +2863,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         asyncComputeCommandLists[asyncComputeCommandListCount++] = surfelGiCommandList;
     const Core::QueueSubmissionToken shadowSubmissionToken = submitPlannedFramePacket(
         ECSRenderDetail::FrameExecutionPacket::AsyncRayEffects,
-        shadowTimingTicket,
+        *shadowTimingTicketForPacket,
         asyncComputeCommandLists,
         asyncComputeCommandListCount
     );
@@ -2989,7 +3081,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         };
         const Core::QueueSubmissionToken avboitPreSubmissionToken = submitPlannedFramePacket(
             ECSRenderDetail::FrameExecutionPacket::GraphicsAvboitPre,
-            avboitPreTimingTicket,
+            *avboitPreTimingTicketForPacket,
             avboitPreCommandLists,
             LengthOf(avboitPreCommandLists)
         );
@@ -3010,7 +3102,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         Core::CommandList* avboitDepthWarpCommandLists[] = { asyncAvboitDepthWarpCommandList };
         const Core::QueueSubmissionToken avboitDepthWarpSubmissionToken = submitPlannedFramePacket(
             ECSRenderDetail::FrameExecutionPacket::AsyncAvboitDepthWarp,
-            avboitDepthWarpTimingTicket,
+            *avboitDepthWarpTimingTicketForPacket,
             avboitDepthWarpCommandLists,
             LengthOf(avboitDepthWarpCommandLists)
         );
@@ -3028,7 +3120,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         Core::CommandList* avboitExtinctionCommandLists[] = { avboitExtinctionCommandList };
         const Core::QueueSubmissionToken avboitExtinctionSubmissionToken = submitPlannedFramePacket(
             ECSRenderDetail::FrameExecutionPacket::GraphicsAvboitExtinction,
-            avboitExtinctionTimingTicket,
+            *avboitExtinctionTimingTicketForPacket,
             avboitExtinctionCommandLists,
             LengthOf(avboitExtinctionCommandLists)
         );
@@ -3046,7 +3138,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         Core::CommandList* avboitIntegrationCommandLists[] = { asyncAvboitIntegrationCommandList };
         const Core::QueueSubmissionToken avboitIntegrationSubmissionToken = submitPlannedFramePacket(
             ECSRenderDetail::FrameExecutionPacket::AsyncAvboitIntegration,
-            avboitIntegrationTimingTicket,
+            *avboitIntegrationTimingTicketForPacket,
             avboitIntegrationCommandLists,
             LengthOf(avboitIntegrationCommandLists)
         );
@@ -3062,7 +3154,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         Core::CommandList* avboitAccumulateCommandLists[] = { avboitAccumulateCommandList };
         avboitFinalSubmissionToken = submitPlannedFramePacket(
             ECSRenderDetail::FrameExecutionPacket::GraphicsAvboitAccumulation,
-            avboitAccumulateTimingTicket,
+            *avboitAccumulateTimingTicketForPacket,
             avboitAccumulateCommandLists,
             LengthOf(avboitAccumulateCommandLists)
         );
@@ -3087,7 +3179,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         effectsCommandLists[effectsCommandListCount++] = asyncEffectsTimingEndCommandList;
         avboitFinalSubmissionToken = submitPlannedFramePacket(
             ECSRenderDetail::FrameExecutionPacket::GraphicsEffects,
-            effectsTimingTicket,
+            *effectsTimingTicketForPacket,
             effectsCommandLists,
             effectsCommandListCount
         );
@@ -3108,7 +3200,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* lightingCommandLists[] = { deferredLightingCommandList };
     const Core::QueueSubmissionToken lightingSubmissionToken = submitPlannedFramePacket(
         ECSRenderDetail::FrameExecutionPacket::DeferredLighting,
-        lightingTimingTicket,
+        *lightingTimingTicketForPacket,
         lightingCommandLists,
         LengthOf(lightingCommandLists)
     );
@@ -3150,7 +3242,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* compositeCommandLists[] = { deferredCompositeCommandList };
     const Core::QueueSubmissionToken compositeSubmissionToken = submitPlannedFramePacket(
         ECSRenderDetail::FrameExecutionPacket::DeferredComposite,
-        compositeTimingTicket,
+        *compositeTimingTicketForPacket,
         compositeCommandLists,
         LengthOf(compositeCommandLists)
     );
@@ -3166,7 +3258,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* finalCommandLists[] = { deferredPresentCommandList };
     const Core::QueueSubmissionToken finalSubmissionToken = submitPlannedFramePacket(
         ECSRenderDetail::FrameExecutionPacket::GraphicsPresent,
-        finalTimingTicket,
+        *finalTimingTicketForPacket,
         finalCommandLists,
         LengthOf(finalCommandLists)
     );

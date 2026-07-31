@@ -2732,9 +2732,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // Keep submission topology declarative: the per-frame state resolves accepted predecessors and retains the
-    // newest accepted lane token for recovery. The renderer still owns every acceptance-dependent state commit and
-    // recovery decision below.
+    // Keep submission topology declarative: the per-frame state resolves accepted predecessors and exposes the
+    // outstanding AsyncCompute recovery edge. The renderer still owns every acceptance-dependent state commit and
+    // recovery lifecycle decision below.
     ECSRenderDetail::FrameExecutionPlanSubmissionState frameExecutionSubmissionState(
         frameExecutionPlan,
         m_laggedLightingHistorySubmissionToken
@@ -2935,13 +2935,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(asyncFrameTiming.needsRetirement())
             submitAsyncRecoveryJoin(nullptr);
     };
-    const auto recoverAcceptedAsyncComputeSubmission = [&](const Core::QueueSubmissionToken submissionToken) -> bool {
-        return submitAsyncRecoveryJoin(&submissionToken);
-    };
-    const auto recoverLatestAsyncComputeSubmission = [&]() -> bool {
-        return recoverAcceptedAsyncComputeSubmission(
-            frameExecutionSubmissionState.latestAcceptedToken(Core::RenderLane::AsyncCompute)
-        );
+    const auto recoverPendingAsyncComputeSubmission = [&]() -> bool {
+        const Core::QueueSubmissionToken* const waitToken = frameExecutionSubmissionState.asyncRecoveryWaitToken();
+        return !waitToken || submitAsyncRecoveryJoin(waitToken);
     };
     const auto failAsyncRenderRecovery = [&](){
         if(m_asyncRenderRecoveryFailed)
@@ -3022,7 +3018,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 discardTimingTickets();
                 restoreUnacceptedGraphicsEffectsCpuState();
                 m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-                if(!recoverLatestAsyncComputeSubmission())
+                if(!recoverPendingAsyncComputeSubmission())
                     failAsyncRenderRecovery();
                 // The accepted producer state could not be retained, so continuing would require guessing its next layout.
                 failAsyncRenderRecovery();
@@ -3061,7 +3057,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 discardTimingTickets();
                 restoreUnacceptedGraphicsEffectsCpuState();
                 m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-                recoverLatestAsyncComputeSubmission();
+                recoverPendingAsyncComputeSubmission();
                 // Without a retained Compute-side scratch snapshot the next packet cannot safely restore its layouts, even
                 // after the accepted Compute work has been joined.
                 failAsyncRenderRecovery();
@@ -3085,7 +3081,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 )){
                     discardTimingTickets();
                     restoreGraphicsEffectsCpuState();
-                    recoverLatestAsyncComputeSubmission();
+                    recoverPendingAsyncComputeSubmission();
                     failAsyncRenderRecovery();
                     return;
                 }
@@ -3114,7 +3110,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 )){
                     discardTimingTickets();
                     restoreUnacceptedGraphicsEffectsCpuState();
-                    recoverLatestAsyncComputeSubmission();
+                    recoverPendingAsyncComputeSubmission();
                     failAsyncRenderRecovery();
                     return;
                 }
@@ -3140,7 +3136,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 // After that point existing accepted packet state determines the recovery path.
                 if(failedGraphicsEffectsPacket == graphicsEffectsBatch.packets[0u])
                     restoreUnacceptedGraphicsEffectsCpuState();
-                if(!recoverLatestAsyncComputeSubmission())
+                if(!recoverPendingAsyncComputeSubmission())
                     failAsyncRenderRecovery();
                 return;
             }
@@ -3157,7 +3153,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             );
             if(!lightingSubmissionToken.valid()){
                 discardTimingTickets();
-                if(!recoverLatestAsyncComputeSubmission())
+                if(!recoverPendingAsyncComputeSubmission())
                     failAsyncRenderRecovery();
                 return;
             }
@@ -3179,7 +3175,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             );
             if(!lightingReturnStatesReady){
                 discardTimingTickets();
-                if(!recoverLatestAsyncComputeSubmission())
+                if(!recoverPendingAsyncComputeSubmission())
                     failAsyncRenderRecovery();
                 // The accepted lighting packet replaced the producer layouts, so a failed retained snapshot is terminal.
                 failAsyncRenderRecovery();
@@ -3197,7 +3193,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             );
             if(!compositeSubmissionToken.valid()){
                 discardTimingTickets();
-                if(!recoverLatestAsyncComputeSubmission())
+                if(!recoverPendingAsyncComputeSubmission())
                     failAsyncRenderRecovery();
                 return;
             }
@@ -3212,7 +3208,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 nullptr
             );
             if(!finalSubmissionToken.valid()){
-                if(!recoverLatestAsyncComputeSubmission())
+                if(!recoverPendingAsyncComputeSubmission())
                     failAsyncRenderRecovery();
                 return;
             }
@@ -3356,7 +3352,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                         )
                     ;
                     if(!stashReturnStatesReady){
-                        if(!recoverLatestAsyncComputeSubmission())
+                        if(!recoverPendingAsyncComputeSubmission())
                             failAsyncRenderRecovery();
                         // The accepted copy changed the producer-image layouts. Without an exported next-frame state,
                         // reusing either the history or the live output would require guessing.

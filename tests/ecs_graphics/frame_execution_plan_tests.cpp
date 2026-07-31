@@ -554,7 +554,7 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsRouteSplitWorkAndKeepTimingBra
 }
 
 
-TEST(EcsGraphics, FrameExecutionPlanSubmissionStateResolvesAcceptedDependenciesAndRecoveryToken){
+TEST(EcsGraphics, FrameExecutionPlanSubmissionStateResolvesAcceptedDependenciesAndAsyncRecoveryToken){
     const FrameExecutionPlan plan(FrameExecutionPlanInput{
         true,
         true,
@@ -567,6 +567,8 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateResolvesAcceptedDependenciesA
     NWB::Core::QueueSubmissionToken waitTokens[FrameExecutionPlan::s_MaxSubmissionWaits] = {};
     NWB::Core::QueueSubmissionDesc submitDesc;
 
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken(), nullptr);
+
     EXPECT_TRUE(submissions.prepareSubmission(
         FrameExecutionPacket::GraphicsPrefix,
         submitDesc,
@@ -577,6 +579,7 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateResolvesAcceptedDependenciesA
 
     const NWB::Core::QueueSubmissionToken prefixToken{ CommandQueue::Graphics, 11u };
     submissions.acceptSubmission(FrameExecutionPacket::GraphicsPrefix, prefixToken);
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken(), nullptr);
     EXPECT_TRUE(submissions.prepareSubmission(
         FrameExecutionPacket::AsyncRayEffects,
         submitDesc,
@@ -589,6 +592,8 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateResolvesAcceptedDependenciesA
 
     const NWB::Core::QueueSubmissionToken rayEffectsToken{ CommandQueue::Compute, 22u };
     submissions.acceptSubmission(FrameExecutionPacket::AsyncRayEffects, rayEffectsToken);
+    ASSERT_NE(submissions.asyncRecoveryWaitToken(), nullptr);
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, 22u);
     EXPECT_TRUE(submissions.prepareSubmission(
         FrameExecutionPacket::GraphicsEffects,
         submitDesc,
@@ -611,8 +616,9 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateResolvesAcceptedDependenciesA
     EXPECT_EQ(waitTokens[0].value, 33u);
     EXPECT_EQ(waitTokens[1].queue, CommandQueue::Compute);
     EXPECT_EQ(waitTokens[1].value, 71u);
-    EXPECT_EQ(submissions.latestAcceptedToken(RenderLane::Graphics).value, 33u);
-    EXPECT_EQ(submissions.latestAcceptedToken(RenderLane::AsyncCompute).value, 22u);
+    ASSERT_NE(submissions.asyncRecoveryWaitToken(), nullptr);
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->queue, CommandQueue::Compute);
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, 22u);
 
     const NWB::Core::QueueSubmissionToken lightingToken{ CommandQueue::Graphics, 44u };
     submissions.acceptSubmission(FrameExecutionPacket::DeferredLighting, lightingToken);
@@ -650,7 +656,69 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateResolvesAcceptedDependenciesA
 
     const NWB::Core::QueueSubmissionToken stashToken{ CommandQueue::Compute, 77u };
     submissions.acceptSubmission(FrameExecutionPacket::AsyncLaggedLightingStash, stashToken);
-    EXPECT_EQ(submissions.latestAcceptedToken(RenderLane::AsyncCompute).value, 77u);
+    ASSERT_NE(submissions.asyncRecoveryWaitToken(), nullptr);
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, 77u);
+}
+
+
+TEST(EcsGraphics, FrameExecutionPlanSubmissionStateAsyncRecoveryTracksNewestAcceptedComputePacket){
+    const FrameExecutionPlan plan(FrameExecutionPlanInput{
+        true,
+        false,
+        false,
+        false,
+        true,
+    });
+    FrameExecutionPlanSubmissionState submissions(plan);
+
+    submissions.acceptSubmission(
+        FrameExecutionPacket::GraphicsPrefix,
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 11u }
+    );
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken(), nullptr);
+
+    submissions.acceptSubmission(
+        FrameExecutionPacket::AsyncRayEffects,
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Compute, 22u }
+    );
+    ASSERT_NE(submissions.asyncRecoveryWaitToken(), nullptr);
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, 22u);
+
+    submissions.acceptSubmission(
+        FrameExecutionPacket::GraphicsAvboitPre,
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 33u }
+    );
+    ASSERT_NE(submissions.asyncRecoveryWaitToken(), nullptr);
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, 22u);
+
+    submissions.acceptSubmission(
+        FrameExecutionPacket::AsyncAvboitDepthWarp,
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Compute, 44u }
+    );
+    ASSERT_NE(submissions.asyncRecoveryWaitToken(), nullptr);
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, 44u);
+
+    submissions.acceptSubmission(
+        FrameExecutionPacket::GraphicsAvboitExtinction,
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 55u }
+    );
+    submissions.acceptSubmission(
+        FrameExecutionPacket::AsyncAvboitIntegration,
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Compute, 66u }
+    );
+    ASSERT_NE(submissions.asyncRecoveryWaitToken(), nullptr);
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, 66u);
+
+    submissions.acceptSubmission(
+        FrameExecutionPacket::GraphicsAvboitAccumulation,
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 77u }
+    );
+    submissions.acceptSubmission(
+        FrameExecutionPacket::DeferredLighting,
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Compute, 88u }
+    );
+    ASSERT_NE(submissions.asyncRecoveryWaitToken(), nullptr);
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, 88u);
 }
 
 

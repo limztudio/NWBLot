@@ -501,8 +501,8 @@ private:
 
 
 // Mutable, per-frame execution state for a FrameExecutionPlan. It resolves the plan's predecessor edges into
-// accepted submission tokens and retains the most recent accepted token per lane for recovery joins. The renderer
-// still decides when to recover; this object only preserves the exact completion edge that recovery must join.
+// accepted submission tokens and retains the newest accepted AsyncCompute edge for recovery. The renderer still
+// owns recovery lifecycle handling, while this state decides whether an accepted Compute packet remains to join.
 class FrameExecutionPlanSubmissionState final{
 public:
     explicit FrameExecutionPlanSubmissionState(
@@ -565,14 +565,18 @@ public:
         NWB_ASSERT(!m_packetTokens[packetIndex].valid());
         m_packetTokens[packetIndex] = submissionToken;
         const Core::RenderLane::Enum lane = m_plan.packet(packet).lane;
-        m_latestLaneTokens[static_cast<usize>(lane)] = submissionToken;
+        if(lane == Core::RenderLane::AsyncCompute)
+            m_asyncRecoveryWaitToken = submissionToken;
     }
 
     [[nodiscard]] Core::QueueSubmissionToken token(const FrameExecutionPacket::Enum packet)const noexcept{
         return m_packetTokens[static_cast<usize>(packet)];
     }
-    [[nodiscard]] Core::QueueSubmissionToken latestAcceptedToken(const Core::RenderLane::Enum lane)const noexcept{
-        return m_latestLaneTokens[static_cast<usize>(lane)];
+    // A null result means no accepted AsyncCompute packet is outstanding, so failure recovery has no queue join to
+    // submit. A non-null token is always the latest accepted packet on the ordered Compute lane, which also covers
+    // every earlier accepted Compute packet on that lane.
+    [[nodiscard]] const Core::QueueSubmissionToken* asyncRecoveryWaitToken()const noexcept{
+        return m_asyncRecoveryWaitToken.valid() ? &m_asyncRecoveryWaitToken : nullptr;
     }
 
 
@@ -580,7 +584,7 @@ private:
     const FrameExecutionPlan& m_plan;
     Core::QueueSubmissionToken m_laggedLightingHistoryToken;
     Core::QueueSubmissionToken m_packetTokens[FrameExecutionPacket::kCount] = {};
-    Core::QueueSubmissionToken m_latestLaneTokens[Core::RenderLane::kCount] = {};
+    Core::QueueSubmissionToken m_asyncRecoveryWaitToken;
 };
 
 

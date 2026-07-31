@@ -22,6 +22,7 @@ using FrameExecutionPacketCommandLists = NWB::Impl::ECSRenderDetail::FrameExecut
 using FrameExecutionWorkCommandListBinding = NWB::Impl::ECSRenderDetail::FrameExecutionWorkCommandListBinding;
 using FrameExecutionPlanSubmissionState = NWB::Impl::ECSRenderDetail::FrameExecutionPlanSubmissionState;
 namespace FrameExecutionPacket = NWB::Impl::ECSRenderDetail::FrameExecutionPacket;
+namespace FrameExecutionSubmissionBatch = NWB::Impl::ECSRenderDetail::FrameExecutionSubmissionBatch;
 namespace FrameExecutionWork = NWB::Impl::ECSRenderDetail::FrameExecutionWork;
 namespace RenderLane = NWB::Core::RenderLane;
 namespace CommandQueue = NWB::Core::CommandQueue;
@@ -31,6 +32,57 @@ namespace CommandQueue = NWB::Core::CommandQueue;
 // these plan-only tests independent from a graphics device.
 [[nodiscard]] NWB::Core::CommandList* TestCommandList(const usize identity){
     return reinterpret_cast<NWB::Core::CommandList*>(identity);
+}
+
+
+void ExpectSubmissionBatch(
+    const FrameExecutionPlan& plan,
+    const FrameExecutionSubmissionBatch::Enum batchID,
+    const FrameExecutionPacket::Enum* const expectedPackets,
+    const usize expectedPacketCount
+){
+    const auto& batch = plan.submissionBatch(batchID);
+    ASSERT_EQ(batch.packetCount, expectedPacketCount);
+    for(usize packetIndex = 0u; packetIndex < expectedPacketCount; ++packetIndex)
+        EXPECT_EQ(batch.packets[packetIndex], expectedPackets[packetIndex]);
+}
+
+
+void ExpectSubmissionBatchOrder(
+    const FrameExecutionPlan& plan,
+    const FrameExecutionSubmissionBatch::Enum* const expectedBatches,
+    const usize expectedBatchCount
+){
+    ASSERT_EQ(plan.submissionBatchCount(), expectedBatchCount);
+    for(usize batchIndex = 0u; batchIndex < expectedBatchCount; ++batchIndex)
+        EXPECT_EQ(plan.submissionBatchID(batchIndex), expectedBatches[batchIndex]);
+}
+
+
+void ExpectSubmissionBatchesResolvePacketDependencies(const FrameExecutionPlan& plan){
+    bool scheduledPackets[FrameExecutionPacket::kCount] = {};
+    for(usize batchIndex = 0u; batchIndex < plan.submissionBatchCount(); ++batchIndex){
+        const auto& batch = plan.submissionBatch(plan.submissionBatchID(batchIndex));
+        for(u8 packetIndex = 0u; packetIndex < batch.packetCount; ++packetIndex){
+            const FrameExecutionPacket::Enum packet = batch.packets[packetIndex];
+            const auto& packetPlan = plan.packet(packet);
+            EXPECT_TRUE(packetPlan.enabled);
+            EXPECT_FALSE(scheduledPackets[static_cast<usize>(packet)]);
+            for(u8 waitPacketIndex = 0u; waitPacketIndex < packetPlan.waitPacketCount; ++waitPacketIndex){
+                EXPECT_TRUE(scheduledPackets[static_cast<usize>(packetPlan.waitPackets[waitPacketIndex])]);
+            }
+            scheduledPackets[static_cast<usize>(packet)] = true;
+        }
+    }
+    for(usize packetIndex = 0u; packetIndex < FrameExecutionPacket::kCount; ++packetIndex){
+        const FrameExecutionPacket::Enum packet = static_cast<FrameExecutionPacket::Enum>(packetIndex);
+        if(packet == FrameExecutionPacket::AsyncLaggedLightingStash)
+            EXPECT_FALSE(scheduledPackets[packetIndex]);
+        else if(plan.packet(packet).enabled)
+            EXPECT_TRUE(scheduledPackets[packetIndex]);
+        else
+            EXPECT_FALSE(scheduledPackets[packetIndex]);
+    }
 }
 
 
@@ -146,6 +198,97 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
         FrameExecutionPacket::AsyncRayEffects
     );
     EXPECT_EQ(laggedPlan.packet(FrameExecutionPacket::AsyncLaggedLightingStash).lane, RenderLane::AsyncCompute);
+}
+
+
+TEST(EcsGraphics, FrameExecutionPlanOwnsOrderedSubmissionBatches){
+    const FrameExecutionSubmissionBatch::Enum fallbackBatches[] = {
+        FrameExecutionSubmissionBatch::GraphicsFallback,
+    };
+    const FrameExecutionPacket::Enum fallbackPackets[] = {
+        FrameExecutionPacket::GraphicsFallback,
+    };
+    const FrameExecutionPlan fallbackPlan(FrameExecutionPlanInput{
+        false,
+        true,
+        true,
+        true,
+        true,
+    });
+    ExpectSubmissionBatchOrder(fallbackPlan, fallbackBatches, LengthOf(fallbackBatches));
+    ExpectSubmissionBatch(
+        fallbackPlan,
+        FrameExecutionSubmissionBatch::GraphicsFallback,
+        fallbackPackets,
+        LengthOf(fallbackPackets)
+    );
+    ExpectSubmissionBatchesResolvePacketDependencies(fallbackPlan);
+
+    const FrameExecutionSubmissionBatch::Enum dedicatedBatches[] = {
+        FrameExecutionSubmissionBatch::GraphicsPrefix,
+        FrameExecutionSubmissionBatch::AsyncRayEffects,
+        FrameExecutionSubmissionBatch::GraphicsEffects,
+        FrameExecutionSubmissionBatch::DeferredLighting,
+        FrameExecutionSubmissionBatch::DeferredComposite,
+        FrameExecutionSubmissionBatch::GraphicsPresent,
+    };
+    const FrameExecutionPacket::Enum opaqueEffectsPackets[] = {
+        FrameExecutionPacket::GraphicsEffects,
+    };
+    const FrameExecutionPlan opaquePlan(FrameExecutionPlanInput{
+        true,
+        false,
+        false,
+        false,
+        false,
+    });
+    ExpectSubmissionBatchOrder(opaquePlan, dedicatedBatches, LengthOf(dedicatedBatches));
+    ExpectSubmissionBatch(
+        opaquePlan,
+        FrameExecutionSubmissionBatch::GraphicsEffects,
+        opaqueEffectsPackets,
+        LengthOf(opaqueEffectsPackets)
+    );
+    ExpectSubmissionBatchesResolvePacketDependencies(opaquePlan);
+
+    const FrameExecutionPacket::Enum asyncAvboitEffectsPackets[] = {
+        FrameExecutionPacket::GraphicsAvboitPre,
+        FrameExecutionPacket::AsyncAvboitDepthWarp,
+        FrameExecutionPacket::GraphicsAvboitExtinction,
+        FrameExecutionPacket::AsyncAvboitIntegration,
+        FrameExecutionPacket::GraphicsAvboitAccumulation,
+    };
+    const FrameExecutionPlan asyncAvboitPlan(FrameExecutionPlanInput{
+        true,
+        true,
+        true,
+        false,
+        true,
+    });
+    ExpectSubmissionBatchOrder(asyncAvboitPlan, dedicatedBatches, LengthOf(dedicatedBatches));
+    ExpectSubmissionBatch(
+        asyncAvboitPlan,
+        FrameExecutionSubmissionBatch::GraphicsEffects,
+        asyncAvboitEffectsPackets,
+        LengthOf(asyncAvboitEffectsPackets)
+    );
+    ExpectSubmissionBatchesResolvePacketDependencies(asyncAvboitPlan);
+
+    const FrameExecutionPlan laggedPlan(FrameExecutionPlanInput{
+        true,
+        true,
+        true,
+        true,
+        true,
+    });
+    ExpectSubmissionBatchOrder(laggedPlan, dedicatedBatches, LengthOf(dedicatedBatches));
+    ExpectSubmissionBatch(
+        laggedPlan,
+        FrameExecutionSubmissionBatch::GraphicsEffects,
+        opaqueEffectsPackets,
+        LengthOf(opaqueEffectsPackets)
+    );
+    ExpectSubmissionBatchesResolvePacketDependencies(laggedPlan);
 }
 
 

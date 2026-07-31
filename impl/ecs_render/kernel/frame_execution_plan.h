@@ -48,6 +48,23 @@ namespace FrameExecutionPacket{
 };
 
 
+// Submission batches preserve the renderer's accepted packet order without making RendererSystem restate every
+// topology-specific packet sequence. RendererSystem retains the per-batch temporal and state-handoff decisions.
+namespace FrameExecutionSubmissionBatch{
+    enum Enum : u8{
+        GraphicsFallback,
+        GraphicsPrefix,
+        AsyncRayEffects,
+        GraphicsEffects,
+        DeferredLighting,
+        DeferredComposite,
+        GraphicsPresent,
+
+        kCount,
+    };
+};
+
+
 // A recorded workload can share a submission packet with other work. Keep that mapping declarative with the
 // packet graph so recording, timing, and submission cannot drift into separate topology decisions.
 namespace FrameExecutionWork{
@@ -93,6 +110,14 @@ struct FrameExecutionPacketPlan{
 };
 
 
+// The current widest batch is the five-packet async AVBOIT chain. Keep the storage bounded by the full packet set
+// so a future topology can regroup packets without silently changing the plan's fixed-capacity contract.
+struct FrameExecutionSubmissionBatchPlan{
+    FrameExecutionPacket::Enum packets[FrameExecutionPacket::kCount] = {};
+    u8 packetCount = 0u;
+};
+
+
 struct FrameExecutionWorkPlan{
     FrameExecutionPacket::Enum packet = FrameExecutionPacket::kCount;
 };
@@ -132,6 +157,7 @@ public:
             assignWork(FrameExecutionWork::DeferredLighting, FrameExecutionPacket::GraphicsFallback);
             assignWork(FrameExecutionWork::DeferredComposite, FrameExecutionPacket::GraphicsFallback);
             assignWork(FrameExecutionWork::GraphicsPresent, FrameExecutionPacket::GraphicsFallback);
+            configureSubmissionBatches();
             return;
         }
 
@@ -205,6 +231,7 @@ public:
             addPacketWait(FrameExecutionPacket::AsyncLaggedLightingStash, FrameExecutionPacket::GraphicsPresent);
             assignWork(FrameExecutionWork::LaggedLightingStash, FrameExecutionPacket::AsyncLaggedLightingStash);
         }
+        configureSubmissionBatches();
     }
 
 
@@ -233,6 +260,16 @@ public:
         const FrameExecutionPacket::Enum packetID = this->work(work).packet;
         NWB_ASSERT(packetID != FrameExecutionPacket::kCount);
         return packetID;
+    }
+    [[nodiscard]] usize submissionBatchCount()const noexcept{ return m_submissionBatchCount; }
+    [[nodiscard]] FrameExecutionSubmissionBatch::Enum submissionBatchID(const usize batchIndex)const noexcept{
+        NWB_ASSERT(batchIndex < m_submissionBatchCount);
+        return m_submissionBatchOrder[batchIndex];
+    }
+    [[nodiscard]] const FrameExecutionSubmissionBatchPlan& submissionBatch(
+        const FrameExecutionSubmissionBatch::Enum batch
+    )const noexcept{
+        return m_submissionBatches[static_cast<usize>(batch)];
     }
 
 
@@ -272,9 +309,99 @@ private:
         NWB_ASSERT(consumerPlan.waitPacketCount < s_MaxPacketWaits);
         consumerPlan.waitPackets[consumerPlan.waitPacketCount++] = producerPacket;
     }
+    void appendSubmissionPacket(
+        const FrameExecutionSubmissionBatch::Enum batch,
+        const FrameExecutionPacket::Enum packetID
+    )noexcept{
+        NWB_ASSERT(packet(packetID).enabled);
+        const usize batchIndex = static_cast<usize>(batch);
+        FrameExecutionSubmissionBatchPlan& batchPlan = m_submissionBatches[batchIndex];
+        if(batchPlan.packetCount == 0u){
+            NWB_ASSERT(m_submissionBatchCount < FrameExecutionSubmissionBatch::kCount);
+            m_submissionBatchOrder[m_submissionBatchCount++] = batch;
+        }
+        else
+            NWB_ASSERT(m_submissionBatchOrder[m_submissionBatchCount - 1u] == batch);
+
+        const usize packetIndex = static_cast<usize>(packetID);
+        NWB_ASSERT(!m_submissionPacketScheduled[packetIndex]);
+        const FrameExecutionPacketPlan& packetPlan = packet(packetID);
+        for(u8 waitPacketIndex = 0u; waitPacketIndex < packetPlan.waitPacketCount; ++waitPacketIndex){
+            const FrameExecutionPacket::Enum waitPacket = packetPlan.waitPackets[waitPacketIndex];
+            NWB_ASSERT(m_submissionPacketScheduled[static_cast<usize>(waitPacket)]);
+        }
+        NWB_ASSERT(batchPlan.packetCount < FrameExecutionPacket::kCount);
+        batchPlan.packets[batchPlan.packetCount++] = packetID;
+        m_submissionPacketScheduled[packetIndex] = true;
+    }
+    void configureSubmissionBatches()noexcept{
+        if(usesGraphicsFallback()){
+            appendSubmissionPacket(
+                FrameExecutionSubmissionBatch::GraphicsFallback,
+                FrameExecutionPacket::GraphicsFallback
+            );
+            return;
+        }
+
+        appendSubmissionPacket(
+            FrameExecutionSubmissionBatch::GraphicsPrefix,
+            FrameExecutionPacket::GraphicsPrefix
+        );
+        appendSubmissionPacket(
+            FrameExecutionSubmissionBatch::AsyncRayEffects,
+            FrameExecutionPacket::AsyncRayEffects
+        );
+        if(m_usesAsyncAvboit){
+            appendSubmissionPacket(
+                FrameExecutionSubmissionBatch::GraphicsEffects,
+                FrameExecutionPacket::GraphicsAvboitPre
+            );
+            appendSubmissionPacket(
+                FrameExecutionSubmissionBatch::GraphicsEffects,
+                FrameExecutionPacket::AsyncAvboitDepthWarp
+            );
+            appendSubmissionPacket(
+                FrameExecutionSubmissionBatch::GraphicsEffects,
+                FrameExecutionPacket::GraphicsAvboitExtinction
+            );
+            appendSubmissionPacket(
+                FrameExecutionSubmissionBatch::GraphicsEffects,
+                FrameExecutionPacket::AsyncAvboitIntegration
+            );
+            appendSubmissionPacket(
+                FrameExecutionSubmissionBatch::GraphicsEffects,
+                FrameExecutionPacket::GraphicsAvboitAccumulation
+            );
+        }
+        else{
+            appendSubmissionPacket(
+                FrameExecutionSubmissionBatch::GraphicsEffects,
+                FrameExecutionPacket::GraphicsEffects
+            );
+        }
+        appendSubmissionPacket(
+            FrameExecutionSubmissionBatch::DeferredLighting,
+            FrameExecutionPacket::DeferredLighting
+        );
+        appendSubmissionPacket(
+            FrameExecutionSubmissionBatch::DeferredComposite,
+            FrameExecutionPacket::DeferredComposite
+        );
+        appendSubmissionPacket(
+            FrameExecutionSubmissionBatch::GraphicsPresent,
+            FrameExecutionPacket::GraphicsPresent
+        );
+
+        // The optional history copy is recorded only after Graphics presentation accepts, so it intentionally stays
+        // outside the ordinary pre-recorded submission batches and retains its explicit lifecycle handling.
+    }
 private:
     FrameExecutionPacketPlan m_packets[FrameExecutionPacket::kCount] = {};
     FrameExecutionWorkPlan m_workPlans[FrameExecutionWork::kCount] = {};
+    FrameExecutionSubmissionBatchPlan m_submissionBatches[FrameExecutionSubmissionBatch::kCount] = {};
+    FrameExecutionSubmissionBatch::Enum m_submissionBatchOrder[FrameExecutionSubmissionBatch::kCount] = {};
+    bool m_submissionPacketScheduled[FrameExecutionPacket::kCount] = {};
+    usize m_submissionBatchCount = 0u;
     bool m_usesDedicatedAsyncCompute = false;
     bool m_usesLaggedAsyncLighting = false;
     bool m_capturesLaggedLightingHistory = false;

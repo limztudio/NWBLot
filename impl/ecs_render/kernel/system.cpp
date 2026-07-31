@@ -2799,11 +2799,39 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             packetCommandLists.commandListCount
         );
     };
+    const auto submitRecordedFrameBatch = [&](
+        const ECSRenderDetail::FrameExecutionSubmissionBatch::Enum batch,
+        ECSRenderDetail::FrameExecutionPacket::Enum* const failedPacket
+    ) -> Core::QueueSubmissionToken {
+        if(failedPacket)
+            *failedPacket = ECSRenderDetail::FrameExecutionPacket::kCount;
+
+        const ECSRenderDetail::FrameExecutionSubmissionBatchPlan& batchPlan =
+            frameExecutionPlan.submissionBatch(batch)
+        ;
+        if(batchPlan.packetCount == 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame execution submission batch has no packets"));
+            return {};
+        }
+
+        Core::QueueSubmissionToken lastSubmissionToken;
+        for(u8 packetIndex = 0u; packetIndex < batchPlan.packetCount; ++packetIndex){
+            const ECSRenderDetail::FrameExecutionPacket::Enum packet = batchPlan.packets[packetIndex];
+            lastSubmissionToken = submitRecordedFramePacket(packet);
+            if(!lastSubmissionToken.valid()){
+                if(failedPacket)
+                    *failedPacket = packet;
+                return {};
+            }
+        }
+        return lastSubmissionToken;
+    };
 
     if(!asyncShadowSchedule){
         // The unsupported/disabled-lane fallback retains the established one ordered Graphics submission exactly.
-        const Core::QueueSubmissionToken fallbackSubmissionToken = submitRecordedFramePacket(
-            ECSRenderDetail::FrameExecutionPacket::GraphicsFallback
+        const Core::QueueSubmissionToken fallbackSubmissionToken = submitRecordedFrameBatch(
+            ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsFallback,
+            nullptr
         );
         if(!fallbackSubmissionToken.valid()){
             discardRenderPackets();
@@ -2896,320 +2924,313 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_graphics.requestDeviceRecreation();
     };
 
-    // Distinct queues: submit the Graphics producer first, then run shadow, either caustic producer, and compute-only
-    // surfel GI in one accepted Compute packet. Graphics effects remain independent, and Graphics final waits for both
-    // packets.
-    const Core::QueueSubmissionToken prefixSubmissionToken = submitRecordedFramePacket(
-        ECSRenderDetail::FrameExecutionPacket::GraphicsPrefix
-    );
-    if(!prefixSubmissionToken.valid()){
-        discardRenderPackets();
-        return;
-    }
-    asyncFrameTiming.confirmBeginSubmission();
+    // Iterate the topology's ordered batches. The plan determines packet order and grouping; these cases retain only
+    // the acceptance-dependent temporal commits, rollback, and resource-state handoff work owned by RendererSystem.
+    for(usize submissionBatchIndex = 0u;
+        submissionBatchIndex < frameExecutionPlan.submissionBatchCount();
+        ++submissionBatchIndex
+    ){
+        const ECSRenderDetail::FrameExecutionSubmissionBatch::Enum submissionBatch =
+            frameExecutionPlan.submissionBatchID(submissionBatchIndex)
+        ;
+        switch(submissionBatch){
+        case ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPrefix:{
+            // Distinct queues submit the Graphics producer first. The following Compute producer waits on this batch.
+            const Core::QueueSubmissionToken prefixSubmissionToken = submitRecordedFrameBatch(
+                ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPrefix,
+                nullptr
+            );
+            if(!prefixSubmissionToken.valid()){
+                discardRenderPackets();
+                return;
+            }
+            asyncFrameTiming.confirmBeginSubmission();
 
-    const Core::QueueSubmissionToken shadowSubmissionToken = submitRecordedFramePacket(
-        ECSRenderDetail::FrameExecutionPacket::AsyncRayEffects
-    );
-    if(!shadowSubmissionToken.valid()){
-        discardTimingTickets();
-        restoreShadowCpuState();
-        restoreEffectsCpuState();
-        m_raytracingSystem.discardSoftShadowTemporalHistory();
-        m_raytracingSystem.discardSurfelResourceInitialization();
-        m_shadowComputeBaseStateHandoff.reset();
-        m_shadowComputeInputStateHandoff.reset();
-        m_shadowVisibilityStateHandoff.reset();
-        m_shadowVisibilityLightingStateHandoff.reset();
-        m_causticsComputeBaseStateHandoff.reset();
-        m_causticsComputeInputStateHandoff.reset();
-        m_causticsStateHandoff.reset();
-        m_causticIrradianceLightingStateHandoff.reset();
-        m_surfelGiComputeBaseStateHandoff.reset();
-        m_surfelGiComputeInputStateHandoff.reset();
-        m_surfelGiStateHandoff.reset();
-        m_surfelIrradianceLightingStateHandoff.reset();
-        m_deferredLightingBaseStateHandoff.reset();
-        m_deferredLightingInputStateHandoff.reset();
-        m_deferredLightingStateHandoff.reset();
-        m_avboitLightingStateHandoff.reset();
-        m_avboitCompositeStateHandoff.reset();
-        m_opaqueColorCompositeStateHandoff.reset();
-        m_deferredCompositeBaseStateHandoff.reset();
-        m_deferredCompositeInputStateHandoff.reset();
-        m_deferredCompositeStateHandoff.reset();
-        m_compositeColorPresentStateHandoff.reset();
-        m_deferredPresentBaseStateHandoff.reset();
-        m_deferredPresentInputStateHandoff.reset();
-        m_deferredPresentStateHandoff.reset();
-        m_avboitPreStateHandoff.reset();
-        m_avboitDepthWarpInputStateHandoff.reset();
-        m_avboitDepthWarpStateHandoff.reset();
-        m_avboitExtinctionInputStateHandoff.reset();
-        m_avboitExtinctionStateHandoff.reset();
-        m_avboitIntegrationInputStateHandoff.reset();
-        m_avboitIntegrationStateHandoff.reset();
-        m_avboitAccumulationInputStateHandoff.reset();
-        m_avboitStateHandoff.reset();
-        retireAsyncFrameTiming();
-        return;
-    }
-
-    // The Compute command buffer is now committed. Retain only its private scratch/history state for the next
-    // Compute use: shared G-buffer and scene inputs must always come from this frame's Graphics prefix rather than
-    // allowing a prior Compute handoff to overwrite their current state during the next fan-in.
-    m_raytracingSystem.confirmShadowVisibilitySubmission(shadowSubmissionToken);
-    m_raytracingSystem.confirmSurfelGiSubmission(shadowSubmissionToken);
-    m_raytracingSystem.finalizeSurfelResourceInitialization();
-
-    // Preserve the current producer state as soon as its shared Compute packet is accepted. If a later Graphics or
-    // lighting submission is rejected, the next frame can still reopen these exclusive results on AsyncCompute.
-    const bool producerReturnStatesReady =
-        m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
-            m_shadowVisibilityStateHandoff,
-            deferredTargets.shadowVisibility.get()
-        )
-        && (!asyncCausticsSchedule || m_causticIrradianceReturnStateHandoff.buildTextureSubset(
-            m_causticsStateHandoff,
-            deferredTargets.causticIrradiance.get()
-        ))
-        && (!asyncSurfelGiSchedule || m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
-            m_surfelGiStateHandoff,
-            deferredTargets.surfelIrradiance.get()
-        ))
-    ;
-    if(!producerReturnStatesReady){
-        discardTimingTickets();
-        restoreUnacceptedGraphicsEffectsCpuState();
-        m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-        if(!recoverLatestAsyncComputeSubmission())
-            failAsyncRenderRecovery();
-        // The accepted producer state could not be retained, so continuing would require guessing its next layout.
-        failAsyncRenderRecovery();
-        return;
-    }
-    Core::Texture* const shadowComputeScratchTextures[] = {
-        deferredTargets.shadowCoarseTransmittance.get(),
-        deferredTargets.shadowSoftHalfA.get(),
-        deferredTargets.shadowSoftHalfB.get(),
-        deferredTargets.shadowSoftGeometry.get(),
-        deferredTargets.shadowSoftGeometryPrev.get(),
-        deferredTargets.shadowHistA.get(),
-        deferredTargets.shadowHistB.get(),
-        deferredTargets.shadowMomentsA.get(),
-        deferredTargets.shadowMomentsB.get(),
-        deferredTargets.transparentSoftHalf.get(),
-        deferredTargets.transparentHistA.get(),
-        deferredTargets.transparentHistB.get(),
-        deferredTargets.transparentMomentsA.get(),
-        deferredTargets.transparentMomentsB.get(),
-    };
-    Core::Buffer* const shadowComputeScratchBuffers[] = {
-        m_rayTracingState.m_swShadowEdgeStatsBuffer.get(),
-        m_rayTracingState.m_swShadowEdgeStatsReadback.get(),
-        m_rayTracingState.m_swShadowEdgeCounterBuffer.get(),
-        m_rayTracingState.m_swShadowEdgeListBuffer.get(),
-        m_rayTracingState.m_swShadowIndirectArgsBuffer.get(),
-    };
-    if(!m_shadowComputePersistentStateHandoff.buildResourceSubset(
-        m_shadowVisibilityStateHandoff,
-        shadowComputeScratchTextures,
-        LengthOf(shadowComputeScratchTextures),
-        shadowComputeScratchBuffers,
-        LengthOf(shadowComputeScratchBuffers)
-    )){
-        discardTimingTickets();
-        restoreUnacceptedGraphicsEffectsCpuState();
-        m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-        recoverLatestAsyncComputeSubmission();
-        // Without a retained Compute-side scratch snapshot the next packet cannot safely restore its layouts, even
-        // after the accepted Compute work has been joined.
-        failAsyncRenderRecovery();
-        return;
-    }
-    m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-
-    if(asyncCausticsSchedule){
-        Core::Texture* const causticsComputeScratchTextures[] = {
-            deferredTargets.causticAccumulator.get(),
-            deferredTargets.causticHistory.get(),
-            deferredTargets.causticResolveHalf.get(),
-            deferredTargets.causticResolveGeometry.get(),
-        };
-        if(!m_causticsComputePersistentStateHandoff.buildResourceSubset(
-            m_causticsStateHandoff,
-            causticsComputeScratchTextures,
-            LengthOf(causticsComputeScratchTextures),
-            nullptr,
-            0u
-        )){
-            discardTimingTickets();
-            restoreGraphicsEffectsCpuState();
-            recoverLatestAsyncComputeSubmission();
-            failAsyncRenderRecovery();
-            return;
+            break;
         }
-    }
+        case ECSRenderDetail::FrameExecutionSubmissionBatch::AsyncRayEffects:{
+            // Shadow, caustic producer, and Compute-only surfel GI share one accepted Compute packet. Graphics effects
+            // remain independent, and Graphics final waits for both packet branches.
+            const Core::QueueSubmissionToken shadowSubmissionToken = submitRecordedFrameBatch(
+                ECSRenderDetail::FrameExecutionSubmissionBatch::AsyncRayEffects,
+                nullptr
+            );
+            if(!shadowSubmissionToken.valid()){
+                discardTimingTickets();
+                restoreShadowCpuState();
+                restoreEffectsCpuState();
+                m_raytracingSystem.discardSoftShadowTemporalHistory();
+                m_raytracingSystem.discardSurfelResourceInitialization();
+                m_shadowComputeBaseStateHandoff.reset();
+                m_shadowComputeInputStateHandoff.reset();
+                m_shadowVisibilityStateHandoff.reset();
+                m_shadowVisibilityLightingStateHandoff.reset();
+                m_causticsComputeBaseStateHandoff.reset();
+                m_causticsComputeInputStateHandoff.reset();
+                m_causticsStateHandoff.reset();
+                m_causticIrradianceLightingStateHandoff.reset();
+                m_surfelGiComputeBaseStateHandoff.reset();
+                m_surfelGiComputeInputStateHandoff.reset();
+                m_surfelGiStateHandoff.reset();
+                m_surfelIrradianceLightingStateHandoff.reset();
+                m_deferredLightingBaseStateHandoff.reset();
+                m_deferredLightingInputStateHandoff.reset();
+                m_deferredLightingStateHandoff.reset();
+                m_avboitLightingStateHandoff.reset();
+                m_avboitCompositeStateHandoff.reset();
+                m_opaqueColorCompositeStateHandoff.reset();
+                m_deferredCompositeBaseStateHandoff.reset();
+                m_deferredCompositeInputStateHandoff.reset();
+                m_deferredCompositeStateHandoff.reset();
+                m_compositeColorPresentStateHandoff.reset();
+                m_deferredPresentBaseStateHandoff.reset();
+                m_deferredPresentInputStateHandoff.reset();
+                m_deferredPresentStateHandoff.reset();
+                m_avboitPreStateHandoff.reset();
+                m_avboitDepthWarpInputStateHandoff.reset();
+                m_avboitDepthWarpStateHandoff.reset();
+                m_avboitExtinctionInputStateHandoff.reset();
+                m_avboitExtinctionStateHandoff.reset();
+                m_avboitIntegrationInputStateHandoff.reset();
+                m_avboitIntegrationStateHandoff.reset();
+                m_avboitAccumulationInputStateHandoff.reset();
+                m_avboitStateHandoff.reset();
+                retireAsyncFrameTiming();
+                return;
+            }
 
-    if(asyncSurfelGiSchedule){
-        Core::Texture* const surfelGiComputeScratchTextures[] = {
-            deferredTargets.surfelIrradianceHalf.get(),
-        };
-        Core::Buffer* const surfelGiComputeScratchBuffers[] = {
-            m_rayTracingState.m_surfelPoolBuffer.get(),
-            m_rayTracingState.m_surfelCellHeadBuffer.get(),
-            m_rayTracingState.m_surfelCounterBuffer.get(),
-            m_rayTracingState.m_surfelTraceIndirectArgsBuffer.get(),
-            m_rayTracingState.m_surfelFreeListBuffer.get(),
-            m_rayTracingState.m_surfelPoolSnapshotBuffer.get(),
-            m_rayTracingState.m_surfelCellHeadSnapshotBuffer.get(),
-            m_rayTracingState.m_surfelCounterReadback.get(),
-        };
-        if(!m_surfelGiComputePersistentStateHandoff.buildResourceSubset(
-            m_surfelGiStateHandoff,
-            surfelGiComputeScratchTextures,
-            LengthOf(surfelGiComputeScratchTextures),
-            surfelGiComputeScratchBuffers,
-            LengthOf(surfelGiComputeScratchBuffers)
-        )){
-            discardTimingTickets();
-            restoreUnacceptedGraphicsEffectsCpuState();
-            recoverLatestAsyncComputeSubmission();
-            failAsyncRenderRecovery();
-            return;
-        }
-    }
+            // The Compute command buffer is now committed. Retain only its private scratch/history state for the next
+            // Compute use: shared G-buffer and scene inputs must always come from this frame's Graphics prefix rather than
+            // allowing a prior Compute handoff to overwrite their current state during the next fan-in.
+            m_raytracingSystem.confirmShadowVisibilitySubmission(shadowSubmissionToken);
+            m_raytracingSystem.confirmSurfelGiSubmission(shadowSubmissionToken);
+            m_raytracingSystem.finalizeSurfelResourceInitialization();
 
-    // The initial AVBOIT raster packet is independent of the shadow packet after prefix. Its two compute kernels are
-    // then serialized only with their adjacent raster consumers: Graphics pre -> Compute warp -> Graphics extinction
-    // -> Compute integration -> Graphics accumulation. This preserves every AVBOIT data dependency while leaving the
-    // initial raster work free to overlap the longer shadow/caustic/surfel packet.
-    Core::QueueSubmissionToken avboitFinalSubmissionToken;
-    if(asyncAvboitSchedule){
-        const Core::QueueSubmissionToken avboitPreSubmissionToken = submitRecordedFramePacket(
-            ECSRenderDetail::FrameExecutionPacket::GraphicsAvboitPre
-        );
-        if(!avboitPreSubmissionToken.valid()){
-            discardTimingTickets();
-            restoreUnacceptedGraphicsEffectsCpuState();
-            if(!recoverLatestAsyncComputeSubmission())
+            // Preserve the current producer state as soon as its shared Compute packet is accepted. If a later Graphics or
+            // lighting submission is rejected, the next frame can still reopen these exclusive results on AsyncCompute.
+            const bool producerReturnStatesReady =
+                m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
+                    m_shadowVisibilityStateHandoff,
+                    deferredTargets.shadowVisibility.get()
+                )
+                && (!asyncCausticsSchedule || m_causticIrradianceReturnStateHandoff.buildTextureSubset(
+                    m_causticsStateHandoff,
+                    deferredTargets.causticIrradiance.get()
+                ))
+                && (!asyncSurfelGiSchedule || m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
+                    m_surfelGiStateHandoff,
+                    deferredTargets.surfelIrradiance.get()
+                ))
+            ;
+            if(!producerReturnStatesReady){
+                discardTimingTickets();
+                restoreUnacceptedGraphicsEffectsCpuState();
+                m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
+                if(!recoverLatestAsyncComputeSubmission())
+                    failAsyncRenderRecovery();
+                // The accepted producer state could not be retained, so continuing would require guessing its next layout.
                 failAsyncRenderRecovery();
-            return;
-        }
+                return;
+            }
+            Core::Texture* const shadowComputeScratchTextures[] = {
+                deferredTargets.shadowCoarseTransmittance.get(),
+                deferredTargets.shadowSoftHalfA.get(),
+                deferredTargets.shadowSoftHalfB.get(),
+                deferredTargets.shadowSoftGeometry.get(),
+                deferredTargets.shadowSoftGeometryPrev.get(),
+                deferredTargets.shadowHistA.get(),
+                deferredTargets.shadowHistB.get(),
+                deferredTargets.shadowMomentsA.get(),
+                deferredTargets.shadowMomentsB.get(),
+                deferredTargets.transparentSoftHalf.get(),
+                deferredTargets.transparentHistA.get(),
+                deferredTargets.transparentHistB.get(),
+                deferredTargets.transparentMomentsA.get(),
+                deferredTargets.transparentMomentsB.get(),
+            };
+            Core::Buffer* const shadowComputeScratchBuffers[] = {
+                m_rayTracingState.m_swShadowEdgeStatsBuffer.get(),
+                m_rayTracingState.m_swShadowEdgeStatsReadback.get(),
+                m_rayTracingState.m_swShadowEdgeCounterBuffer.get(),
+                m_rayTracingState.m_swShadowEdgeListBuffer.get(),
+                m_rayTracingState.m_swShadowIndirectArgsBuffer.get(),
+            };
+            if(!m_shadowComputePersistentStateHandoff.buildResourceSubset(
+                m_shadowVisibilityStateHandoff,
+                shadowComputeScratchTextures,
+                LengthOf(shadowComputeScratchTextures),
+                shadowComputeScratchBuffers,
+                LengthOf(shadowComputeScratchBuffers)
+            )){
+                discardTimingTickets();
+                restoreUnacceptedGraphicsEffectsCpuState();
+                m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
+                recoverLatestAsyncComputeSubmission();
+                // Without a retained Compute-side scratch snapshot the next packet cannot safely restore its layouts, even
+                // after the accepted Compute work has been joined.
+                failAsyncRenderRecovery();
+                return;
+            }
+            m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
 
-        const Core::QueueSubmissionToken avboitDepthWarpSubmissionToken = submitRecordedFramePacket(
-            ECSRenderDetail::FrameExecutionPacket::AsyncAvboitDepthWarp
-        );
-        if(!avboitDepthWarpSubmissionToken.valid()){
-            discardTimingTickets();
-            if(!recoverLatestAsyncComputeSubmission())
-                failAsyncRenderRecovery();
-            return;
-        }
-        const Core::QueueSubmissionToken avboitExtinctionSubmissionToken = submitRecordedFramePacket(
-            ECSRenderDetail::FrameExecutionPacket::GraphicsAvboitExtinction
-        );
-        if(!avboitExtinctionSubmissionToken.valid()){
-            discardTimingTickets();
-            if(!recoverLatestAsyncComputeSubmission())
-                failAsyncRenderRecovery();
-            return;
-        }
+            if(asyncCausticsSchedule){
+                Core::Texture* const causticsComputeScratchTextures[] = {
+                    deferredTargets.causticAccumulator.get(),
+                    deferredTargets.causticHistory.get(),
+                    deferredTargets.causticResolveHalf.get(),
+                    deferredTargets.causticResolveGeometry.get(),
+                };
+                if(!m_causticsComputePersistentStateHandoff.buildResourceSubset(
+                    m_causticsStateHandoff,
+                    causticsComputeScratchTextures,
+                    LengthOf(causticsComputeScratchTextures),
+                    nullptr,
+                    0u
+                )){
+                    discardTimingTickets();
+                    restoreGraphicsEffectsCpuState();
+                    recoverLatestAsyncComputeSubmission();
+                    failAsyncRenderRecovery();
+                    return;
+                }
+            }
 
-        const Core::QueueSubmissionToken avboitIntegrationSubmissionToken = submitRecordedFramePacket(
-            ECSRenderDetail::FrameExecutionPacket::AsyncAvboitIntegration
-        );
-        if(!avboitIntegrationSubmissionToken.valid()){
-            discardTimingTickets();
-            if(!recoverLatestAsyncComputeSubmission())
-                failAsyncRenderRecovery();
-            return;
-        }
-        avboitFinalSubmissionToken = submitRecordedFramePacket(
-            ECSRenderDetail::FrameExecutionPacket::GraphicsAvboitAccumulation
-        );
-        if(!avboitFinalSubmissionToken.valid()){
-            discardTimingTickets();
-            if(!recoverLatestAsyncComputeSubmission())
-                failAsyncRenderRecovery();
-            return;
-        }
-    }
-    else{
-        avboitFinalSubmissionToken = submitRecordedFramePacket(
-            ECSRenderDetail::FrameExecutionPacket::GraphicsEffects
-        );
-        if(!avboitFinalSubmissionToken.valid()){
-            discardTimingTickets();
-            restoreUnacceptedGraphicsEffectsCpuState();
-            if(!recoverLatestAsyncComputeSubmission())
-                failAsyncRenderRecovery();
-            return;
-        }
-    }
+            if(asyncSurfelGiSchedule){
+                Core::Texture* const surfelGiComputeScratchTextures[] = {
+                    deferredTargets.surfelIrradianceHalf.get(),
+                };
+                Core::Buffer* const surfelGiComputeScratchBuffers[] = {
+                    m_rayTracingState.m_surfelPoolBuffer.get(),
+                    m_rayTracingState.m_surfelCellHeadBuffer.get(),
+                    m_rayTracingState.m_surfelCounterBuffer.get(),
+                    m_rayTracingState.m_surfelTraceIndirectArgsBuffer.get(),
+                    m_rayTracingState.m_surfelFreeListBuffer.get(),
+                    m_rayTracingState.m_surfelPoolSnapshotBuffer.get(),
+                    m_rayTracingState.m_surfelCellHeadSnapshotBuffer.get(),
+                    m_rayTracingState.m_surfelCounterReadback.get(),
+                };
+                if(!m_surfelGiComputePersistentStateHandoff.buildResourceSubset(
+                    m_surfelGiStateHandoff,
+                    surfelGiComputeScratchTextures,
+                    LengthOf(surfelGiComputeScratchTextures),
+                    surfelGiComputeScratchBuffers,
+                    LengthOf(surfelGiComputeScratchBuffers)
+                )){
+                    discardTimingTickets();
+                    restoreUnacceptedGraphicsEffectsCpuState();
+                    recoverLatestAsyncComputeSubmission();
+                    failAsyncRenderRecovery();
+                    return;
+                }
+            }
 
-    // The normal dedicated path keeps lighting/composite behind the producer on AsyncCompute. Once the optional
-    // history is accepted, Graphics waits only for the previous stash and shades current G-buffer data in parallel
-    // with this frame's producer; AVBOIT stays entirely on Graphics in that mode to avoid queueing behind the producer.
-    const Core::QueueSubmissionToken lightingSubmissionToken = submitRecordedFramePacket(
-        ECSRenderDetail::FrameExecutionPacket::DeferredLighting
-    );
-    if(!lightingSubmissionToken.valid()){
-        discardTimingTickets();
-        if(!recoverLatestAsyncComputeSubmission())
-            failAsyncRenderRecovery();
-        return;
-    }
-    if(laggedAsyncLightingSchedule)
-        deferredTargets.laggedLightingHistory.slotsUploaded = true;
-    const bool lightingReturnStatesReady = laggedAsyncLightingSchedule || (
-        m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
-            m_deferredLightingStateHandoff,
-            deferredTargets.shadowVisibility.get()
-        )
-        && (!asyncCausticsSchedule || m_causticIrradianceReturnStateHandoff.buildTextureSubset(
-            m_deferredLightingStateHandoff,
-            deferredTargets.causticIrradiance.get()
-        ))
-        && (!asyncSurfelGiSchedule || m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
-            m_deferredLightingStateHandoff,
-            deferredTargets.surfelIrradiance.get()
-        ))
-    );
-    if(!lightingReturnStatesReady){
-        discardTimingTickets();
-        if(!recoverLatestAsyncComputeSubmission())
-            failAsyncRenderRecovery();
-        // The accepted lighting packet replaced the producer layouts, so a failed retained snapshot is terminal.
-        failAsyncRenderRecovery();
-        return;
-    }
+            break;
+        }
+        case ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsEffects:{
+            // The plan keeps either the one-packet Graphics path or the five-packet AVBOIT chain together. Its
+            // declared order retains the required Graphics -> Compute alternation without a renderer-side sequence.
+            const ECSRenderDetail::FrameExecutionSubmissionBatchPlan& graphicsEffectsBatch =
+                frameExecutionPlan.submissionBatch(ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsEffects)
+            ;
+            NWB_ASSERT(graphicsEffectsBatch.packetCount > 0u);
+            ECSRenderDetail::FrameExecutionPacket::Enum failedGraphicsEffectsPacket;
+            const Core::QueueSubmissionToken graphicsEffectsSubmissionToken = submitRecordedFrameBatch(
+                ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsEffects,
+                &failedGraphicsEffectsPacket
+            );
+            if(!graphicsEffectsSubmissionToken.valid()){
+                discardTimingTickets();
+                // Before the batch's first packet is accepted, the graphics-effects CPU state is still recoverable.
+                // After that point existing accepted packet state determines the recovery path.
+                if(failedGraphicsEffectsPacket == graphicsEffectsBatch.packets[0u])
+                    restoreUnacceptedGraphicsEffectsCpuState();
+                if(!recoverLatestAsyncComputeSubmission())
+                    failAsyncRenderRecovery();
+                return;
+            }
 
-    // The selected lane orders composite after lighting. Its token remains the presentation dependency in both modes;
-    // in the lagged mode that is simply a Graphics-to-Graphics order edge while AsyncCompute continues the producer.
-    const Core::QueueSubmissionToken compositeSubmissionToken = submitRecordedFramePacket(
-        ECSRenderDetail::FrameExecutionPacket::DeferredComposite
-    );
-    if(!compositeSubmissionToken.valid()){
-        discardTimingTickets();
-        if(!recoverLatestAsyncComputeSubmission())
-            failAsyncRenderRecovery();
-        return;
-    }
-    // History removes the producer from the current lighting dependency, not from the frame-lifetime dependency. The
-    // final Graphics packet still waits for this frame's Async producer before the next frame can rewrite shared scene
-    // inputs; that preserves the existing cross-frame resource contract while exposing the useful overlap above.
-    const Core::QueueSubmissionToken finalSubmissionToken = submitRecordedFramePacket(
-        ECSRenderDetail::FrameExecutionPacket::GraphicsPresent
-    );
-    if(!finalSubmissionToken.valid()){
-        if(!recoverLatestAsyncComputeSubmission())
-            failAsyncRenderRecovery();
-        return;
-    }
-    if(!asyncFrameTiming.confirmEndSubmission(true)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm async frame critical-path timing"));
-        asyncFrameTiming.discard();
+            break;
+        }
+        case ECSRenderDetail::FrameExecutionSubmissionBatch::DeferredLighting:{
+            // The normal dedicated path keeps lighting/composite behind the producer on AsyncCompute. Once the optional
+            // history is accepted, Graphics waits only for the previous stash and shades current G-buffer data in parallel
+            // with this frame's producer; AVBOIT stays entirely on Graphics in that mode to avoid queueing behind the producer.
+            const Core::QueueSubmissionToken lightingSubmissionToken = submitRecordedFrameBatch(
+                ECSRenderDetail::FrameExecutionSubmissionBatch::DeferredLighting,
+                nullptr
+            );
+            if(!lightingSubmissionToken.valid()){
+                discardTimingTickets();
+                if(!recoverLatestAsyncComputeSubmission())
+                    failAsyncRenderRecovery();
+                return;
+            }
+            if(laggedAsyncLightingSchedule)
+                deferredTargets.laggedLightingHistory.slotsUploaded = true;
+            const bool lightingReturnStatesReady = laggedAsyncLightingSchedule || (
+                m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
+                    m_deferredLightingStateHandoff,
+                    deferredTargets.shadowVisibility.get()
+                )
+                && (!asyncCausticsSchedule || m_causticIrradianceReturnStateHandoff.buildTextureSubset(
+                    m_deferredLightingStateHandoff,
+                    deferredTargets.causticIrradiance.get()
+                ))
+                && (!asyncSurfelGiSchedule || m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
+                    m_deferredLightingStateHandoff,
+                    deferredTargets.surfelIrradiance.get()
+                ))
+            );
+            if(!lightingReturnStatesReady){
+                discardTimingTickets();
+                if(!recoverLatestAsyncComputeSubmission())
+                    failAsyncRenderRecovery();
+                // The accepted lighting packet replaced the producer layouts, so a failed retained snapshot is terminal.
+                failAsyncRenderRecovery();
+                return;
+            }
+
+            break;
+        }
+        case ECSRenderDetail::FrameExecutionSubmissionBatch::DeferredComposite:{
+            // The selected lane orders composite after lighting. Its token remains the presentation dependency in both modes;
+            // in the lagged mode that is simply a Graphics-to-Graphics order edge while AsyncCompute continues the producer.
+            const Core::QueueSubmissionToken compositeSubmissionToken = submitRecordedFrameBatch(
+                ECSRenderDetail::FrameExecutionSubmissionBatch::DeferredComposite,
+                nullptr
+            );
+            if(!compositeSubmissionToken.valid()){
+                discardTimingTickets();
+                if(!recoverLatestAsyncComputeSubmission())
+                    failAsyncRenderRecovery();
+                return;
+            }
+            break;
+        }
+        case ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPresent:{
+            // History removes the producer from the current lighting dependency, not from the frame-lifetime dependency. The
+            // final Graphics packet still waits for this frame's Async producer before the next frame can rewrite shared scene
+            // inputs; that preserves the existing cross-frame resource contract while exposing the useful overlap above.
+            const Core::QueueSubmissionToken finalSubmissionToken = submitRecordedFrameBatch(
+                ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPresent,
+                nullptr
+            );
+            if(!finalSubmissionToken.valid()){
+                if(!recoverLatestAsyncComputeSubmission())
+                    failAsyncRenderRecovery();
+                return;
+            }
+            if(!asyncFrameTiming.confirmEndSubmission(true)){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm async frame critical-path timing"));
+                asyncFrameTiming.discard();
+            }
+
+            break;
+        }
+        default:
+            NWB_ASSERT(false);
+            break;
+        }
     }
 
     if(captureLaggedLightingHistory){

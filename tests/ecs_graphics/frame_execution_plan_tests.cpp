@@ -18,6 +18,7 @@ namespace __hidden_ecs_graphics_frame_execution_plan_tests{
 
 using FrameExecutionPlan = NWB::Impl::ECSRenderDetail::FrameExecutionPlan;
 using FrameExecutionPlanInput = NWB::Impl::ECSRenderDetail::FrameExecutionPlanInput;
+using FrameExecutionLaneCommandListPair = NWB::Impl::ECSRenderDetail::FrameExecutionLaneCommandListPair;
 using FrameExecutionPacketCommandLists = NWB::Impl::ECSRenderDetail::FrameExecutionPacketCommandLists;
 using FrameExecutionWorkCommandListBinding = NWB::Impl::ECSRenderDetail::FrameExecutionWorkCommandListBinding;
 using FrameExecutionPlanSubmissionState = NWB::Impl::ECSRenderDetail::FrameExecutionPlanSubmissionState;
@@ -391,6 +392,92 @@ TEST(EcsGraphics, FrameExecutionPlanAssignsRecordedWorkAndTimingToPlanPackets){
     EXPECT_FALSE(laggedPlan.hasWork(FrameExecutionWork::AvboitDepthWarp));
     EXPECT_TRUE(laggedPlan.packet(FrameExecutionPacket::GraphicsEffects).recordsTiming);
     EXPECT_TRUE(laggedPlan.packet(FrameExecutionPacket::DeferredLighting).recordsTiming);
+}
+
+
+TEST(EcsGraphics, FrameExecutionPlanSelectsWorkCommandListFromResolvedLane){
+    NWB::Core::CommandList* const graphicsCommandList = TestCommandList(101u);
+    NWB::Core::CommandList* const asyncComputeCommandList = TestCommandList(102u);
+    const FrameExecutionLaneCommandListPair commandLists{
+        graphicsCommandList,
+        asyncComputeCommandList,
+    };
+
+    const FrameExecutionPlan fallbackPlan(FrameExecutionPlanInput{
+        false,
+        true,
+        true,
+        true,
+        true,
+    });
+    EXPECT_EQ(
+        fallbackPlan.commandListForWork(FrameExecutionWork::Caustics, commandLists),
+        graphicsCommandList
+    );
+    EXPECT_EQ(
+        fallbackPlan.commandListForWork(FrameExecutionWork::SurfelGi, commandLists),
+        graphicsCommandList
+    );
+    EXPECT_EQ(
+        fallbackPlan.commandListForWork(FrameExecutionWork::DeferredLighting, commandLists),
+        graphicsCommandList
+    );
+    EXPECT_EQ(
+        fallbackPlan.commandListForWork(FrameExecutionWork::DeferredComposite, commandLists),
+        graphicsCommandList
+    );
+    EXPECT_EQ(
+        fallbackPlan.commandListForWork(FrameExecutionWork::AsyncEffectsTiming, commandLists),
+        nullptr
+    );
+
+    const FrameExecutionPlan splitPlan(FrameExecutionPlanInput{
+        true,
+        false,
+        false,
+        false,
+        true,
+    });
+    EXPECT_EQ(
+        splitPlan.commandListForWork(FrameExecutionWork::Caustics, commandLists),
+        asyncComputeCommandList
+    );
+    EXPECT_EQ(
+        splitPlan.commandListForWork(FrameExecutionWork::SurfelGi, commandLists),
+        asyncComputeCommandList
+    );
+    EXPECT_EQ(
+        splitPlan.commandListForWork(FrameExecutionWork::DeferredLighting, commandLists),
+        asyncComputeCommandList
+    );
+    EXPECT_EQ(
+        splitPlan.commandListForWork(FrameExecutionWork::DeferredComposite, commandLists),
+        asyncComputeCommandList
+    );
+
+    const FrameExecutionPlan laggedPlan(FrameExecutionPlanInput{
+        true,
+        true,
+        true,
+        true,
+        true,
+    });
+    EXPECT_EQ(
+        laggedPlan.commandListForWork(FrameExecutionWork::Caustics, commandLists),
+        asyncComputeCommandList
+    );
+    EXPECT_EQ(
+        laggedPlan.commandListForWork(FrameExecutionWork::SurfelGi, commandLists),
+        asyncComputeCommandList
+    );
+    EXPECT_EQ(
+        laggedPlan.commandListForWork(FrameExecutionWork::DeferredLighting, commandLists),
+        graphicsCommandList
+    );
+    EXPECT_EQ(
+        laggedPlan.commandListForWork(FrameExecutionWork::DeferredComposite, commandLists),
+        graphicsCommandList
+    );
 }
 
 

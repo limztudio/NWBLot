@@ -123,6 +123,14 @@ struct FrameExecutionWorkPlan{
 };
 
 
+// RendererSystem owns the persistent command-list instances for both logical lanes. The plan resolves which one a
+// work item needs from its packet lane, so topology predicates do not become a second command-list routing table.
+struct FrameExecutionLaneCommandListPair{
+    Core::CommandList* graphics = nullptr;
+    Core::CommandList* asyncCompute = nullptr;
+};
+
+
 class FrameExecutionPlan final{
 public:
     static constexpr usize s_MaxPacketWaits = 2u;
@@ -260,6 +268,23 @@ public:
         const FrameExecutionPacket::Enum packetID = this->work(work).packet;
         NWB_ASSERT(packetID != FrameExecutionPacket::kCount);
         return packetID;
+    }
+    [[nodiscard]] Core::CommandList* commandListForWork(
+        const FrameExecutionWork::Enum work,
+        const FrameExecutionLaneCommandListPair& commandLists
+    )const noexcept{
+        if(work >= FrameExecutionWork::kCount || !hasWork(work))
+            return nullptr;
+
+        switch(packet(packetForWork(work)).lane){
+            case Core::RenderLane::Graphics:
+                return commandLists.graphics;
+            case Core::RenderLane::AsyncCompute:
+                return commandLists.asyncCompute;
+            default:
+                NWB_ASSERT(false);
+                return nullptr;
+        }
     }
     [[nodiscard]] usize submissionBatchCount()const noexcept{ return m_submissionBatchCount; }
     [[nodiscard]] FrameExecutionSubmissionBatch::Enum submissionBatchID(const usize batchIndex)const noexcept{

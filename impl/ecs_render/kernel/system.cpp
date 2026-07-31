@@ -1035,7 +1035,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // A history snapshot is captured after every opt-in frame, including the current-frame bootstrap. Once the
     // previous accepted snapshot exists this packet shades independently on Graphics while the producer runs on Async.
     const bool captureLaggedLightingHistory = frameExecutionPlan.capturesLaggedLightingHistory();
-    const bool deferredLightingAsyncSchedule = frameExecutionPlan.usesAsyncDeferredLighting();
     const bool hardwareShadowSupported =
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
         && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
@@ -1056,30 +1055,34 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* asyncRecoveryCommandList = m_asyncRecoveryCommandList.get();
     Core::CommandList* asyncEffectsTimingBeginCommandList = m_asyncEffectsTimingBeginCommandList.get();
     Core::CommandList* asyncEffectsTimingEndCommandList = m_asyncEffectsTimingEndCommandList.get();
-    Core::CommandList* graphicsCausticsCommandList = m_causticsCommandList.get();
-    Core::CommandList* asyncCausticsCommandList = m_asyncCausticsCommandList.get();
-    Core::CommandList* causticsCommandList = asyncCausticsSchedule
-        ? asyncCausticsCommandList
-        : graphicsCausticsCommandList
-    ;
-    Core::CommandList* graphicsSurfelGiCommandList = m_surfelGiCommandList.get();
-    Core::CommandList* asyncSurfelGiCommandList = m_asyncSurfelGiCommandList.get();
-    Core::CommandList* surfelGiCommandList = asyncSurfelGiSchedule
-        ? asyncSurfelGiCommandList
-        : graphicsSurfelGiCommandList
-    ;
-    Core::CommandList* graphicsDeferredLightingCommandList = m_deferredLightingCommandList.get();
-    Core::CommandList* asyncDeferredLightingCommandList = m_asyncDeferredLightingCommandList.get();
-    Core::CommandList* deferredLightingCommandList = deferredLightingAsyncSchedule
-        ? asyncDeferredLightingCommandList
-        : graphicsDeferredLightingCommandList
-    ;
-    Core::CommandList* graphicsDeferredCompositeCommandList = m_deferredCompositeCommandList.get();
-    Core::CommandList* asyncDeferredCompositeCommandList = m_asyncDeferredCompositeCommandList.get();
-    Core::CommandList* deferredCompositeCommandList = deferredLightingAsyncSchedule
-        ? asyncDeferredCompositeCommandList
-        : graphicsDeferredCompositeCommandList
-    ;
+    Core::CommandList* const causticsCommandList = frameExecutionPlan.commandListForWork(
+        ECSRenderDetail::FrameExecutionWork::Caustics,
+        ECSRenderDetail::FrameExecutionLaneCommandListPair{
+            m_causticsCommandList.get(),
+            m_asyncCausticsCommandList.get(),
+        }
+    );
+    Core::CommandList* const surfelGiCommandList = frameExecutionPlan.commandListForWork(
+        ECSRenderDetail::FrameExecutionWork::SurfelGi,
+        ECSRenderDetail::FrameExecutionLaneCommandListPair{
+            m_surfelGiCommandList.get(),
+            m_asyncSurfelGiCommandList.get(),
+        }
+    );
+    Core::CommandList* const deferredLightingCommandList = frameExecutionPlan.commandListForWork(
+        ECSRenderDetail::FrameExecutionWork::DeferredLighting,
+        ECSRenderDetail::FrameExecutionLaneCommandListPair{
+            m_deferredLightingCommandList.get(),
+            m_asyncDeferredLightingCommandList.get(),
+        }
+    );
+    Core::CommandList* const deferredCompositeCommandList = frameExecutionPlan.commandListForWork(
+        ECSRenderDetail::FrameExecutionWork::DeferredComposite,
+        ECSRenderDetail::FrameExecutionLaneCommandListPair{
+            m_deferredCompositeCommandList.get(),
+            m_asyncDeferredCompositeCommandList.get(),
+        }
+    );
     Core::CommandList* asyncLaggedLightingStashCommandList = m_asyncLaggedLightingStashCommandList.get();
     Core::CommandList* avboitCommandList = m_avboitCommandList.get();
     Core::CommandList* asyncAvboitDepthWarpCommandList = m_asyncAvboitDepthWarpCommandList.get();
@@ -1096,17 +1099,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(asyncRecoveryCommandList);
     NWB_ASSERT(!asyncShadowSchedule || asyncEffectsTimingBeginCommandList);
     NWB_ASSERT(!asyncShadowSchedule || asyncEffectsTimingEndCommandList);
-    NWB_ASSERT(graphicsCausticsCommandList);
-    NWB_ASSERT(!asyncCausticsSchedule || asyncCausticsCommandList);
+    NWB_ASSERT(m_causticsCommandList);
     NWB_ASSERT(causticsCommandList);
-    NWB_ASSERT(graphicsSurfelGiCommandList);
-    NWB_ASSERT(!asyncSurfelGiSchedule || asyncSurfelGiCommandList);
+    NWB_ASSERT(m_surfelGiCommandList);
     NWB_ASSERT(surfelGiCommandList);
-    NWB_ASSERT(graphicsDeferredLightingCommandList);
-    NWB_ASSERT(!deferredLightingAsyncSchedule || asyncDeferredLightingCommandList);
+    NWB_ASSERT(m_deferredLightingCommandList);
     NWB_ASSERT(deferredLightingCommandList);
-    NWB_ASSERT(graphicsDeferredCompositeCommandList);
-    NWB_ASSERT(!deferredLightingAsyncSchedule || asyncDeferredCompositeCommandList);
+    NWB_ASSERT(m_deferredCompositeCommandList);
     NWB_ASSERT(deferredCompositeCommandList);
     NWB_ASSERT(!captureLaggedLightingHistory || asyncLaggedLightingStashCommandList);
     NWB_ASSERT(avboitCommandList);

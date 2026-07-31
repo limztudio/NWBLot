@@ -1034,7 +1034,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ECSRenderDetail::FrameExecutionWork::RayEffects,
         Core::RenderLane::AsyncCompute
     );
-    const bool laggedAsyncLightingSchedule = frameExecutionPlan.usesLaggedAsyncLighting();
+    const bool laggedAsyncLightingSchedule = frameExecutionPlan.packetPlanForWork(
+        ECSRenderDetail::FrameExecutionWork::DeferredLighting
+    ).waitsForLaggedLightingHistory;
     // A history snapshot is captured after every opt-in frame, including the current-frame bootstrap. Once the
     // previous accepted snapshot exists this packet shades independently on Graphics while the producer runs on Async.
     const bool captureLaggedLightingHistory = frameExecutionPlan.hasWork(

@@ -139,23 +139,23 @@ public:
 
 public:
     explicit FrameExecutionPlan(const FrameExecutionPlanInput& input){
-        m_usesDedicatedAsyncCompute = input.dedicatedAsyncCompute;
-        m_capturesLaggedLightingHistory =
+        const bool usesDedicatedAsyncCompute = input.dedicatedAsyncCompute;
+        const bool capturesLaggedLightingHistory =
             input.dedicatedAsyncCompute
             && input.frameLaggedAsyncLightingEnabled
         ;
-        m_usesLaggedAsyncLighting =
-            m_capturesLaggedLightingHistory
+        const bool usesLaggedAsyncLighting =
+            capturesLaggedLightingHistory
             && input.laggedLightingHistoryReady
             && input.laggedLightingHistoryAccepted
         ;
-        m_usesAsyncAvboit =
+        const bool usesAsyncAvboit =
             input.dedicatedAsyncCompute
             && input.hasTransparentRenderers
-            && !m_usesLaggedAsyncLighting
+            && !usesLaggedAsyncLighting
         ;
 
-        if(!m_usesDedicatedAsyncCompute){
+        if(!usesDedicatedAsyncCompute){
             enablePacket(FrameExecutionPacket::GraphicsFallback, Core::RenderLane::Graphics);
             assignWork(FrameExecutionWork::GraphicsPrefix, FrameExecutionPacket::GraphicsFallback);
             assignWork(FrameExecutionWork::RayEffects, FrameExecutionPacket::GraphicsFallback);
@@ -178,7 +178,7 @@ public:
         assignWork(FrameExecutionWork::SurfelGi, FrameExecutionPacket::AsyncRayEffects);
 
         FrameExecutionPacket::Enum graphicsEffectsCompletionPacket = FrameExecutionPacket::GraphicsEffects;
-        if(m_usesAsyncAvboit){
+        if(usesAsyncAvboit){
             enablePacket(FrameExecutionPacket::GraphicsAvboitPre, Core::RenderLane::Graphics);
             addPacketWait(FrameExecutionPacket::GraphicsAvboitPre, FrameExecutionPacket::GraphicsPrefix);
             assignWork(FrameExecutionWork::AvboitRaster, FrameExecutionPacket::GraphicsAvboitPre);
@@ -208,14 +208,14 @@ public:
             assignWork(FrameExecutionWork::AsyncEffectsTiming, FrameExecutionPacket::GraphicsEffects);
         }
 
-        const Core::RenderLane::Enum deferredLane = m_usesLaggedAsyncLighting
+        const Core::RenderLane::Enum deferredLane = usesLaggedAsyncLighting
             ? Core::RenderLane::Graphics
             : Core::RenderLane::AsyncCompute
         ;
         enablePacket(FrameExecutionPacket::DeferredLighting, deferredLane);
         addPacketWait(FrameExecutionPacket::DeferredLighting, graphicsEffectsCompletionPacket);
         assignWork(FrameExecutionWork::DeferredLighting, FrameExecutionPacket::DeferredLighting);
-        if(m_usesLaggedAsyncLighting)
+        if(usesLaggedAsyncLighting)
             mutablePacket(FrameExecutionPacket::DeferredLighting).waitsForLaggedLightingHistory = true;
         else
             addPacketWait(FrameExecutionPacket::DeferredLighting, FrameExecutionPacket::AsyncRayEffects);
@@ -227,10 +227,10 @@ public:
         enablePacket(FrameExecutionPacket::GraphicsPresent, Core::RenderLane::Graphics);
         addPacketWait(FrameExecutionPacket::GraphicsPresent, FrameExecutionPacket::DeferredComposite);
         assignWork(FrameExecutionWork::GraphicsPresent, FrameExecutionPacket::GraphicsPresent);
-        if(m_usesLaggedAsyncLighting)
+        if(usesLaggedAsyncLighting)
             addPacketWait(FrameExecutionPacket::GraphicsPresent, FrameExecutionPacket::AsyncRayEffects);
 
-        if(m_capturesLaggedLightingHistory){
+        if(capturesLaggedLightingHistory){
             enablePacket(
                 FrameExecutionPacket::AsyncLaggedLightingStash,
                 Core::RenderLane::AsyncCompute,
@@ -244,9 +244,6 @@ public:
 
 
 public:
-    [[nodiscard]] bool usesDedicatedAsyncCompute()const noexcept{ return m_usesDedicatedAsyncCompute; }
-    [[nodiscard]] bool usesLaggedAsyncLighting()const noexcept{ return m_usesLaggedAsyncLighting; }
-    [[nodiscard]] bool usesGraphicsFallback()const noexcept{ return !m_usesDedicatedAsyncCompute; }
     [[nodiscard]] const FrameExecutionPacketPlan& packet(const FrameExecutionPacket::Enum packet)const noexcept{
         return m_packets[static_cast<usize>(packet)];
     }
@@ -261,10 +258,16 @@ public:
         NWB_ASSERT(packetID != FrameExecutionPacket::kCount);
         return packetID;
     }
+    // Topology-mode consumers inspect the resolved packet rather than retaining parallel plan-state booleans.
+    [[nodiscard]] const FrameExecutionPacketPlan& packetPlanForWork(
+        const FrameExecutionWork::Enum work
+    )const noexcept{
+        return packet(packetForWork(work));
+    }
     [[nodiscard]] Core::RenderLane::Enum laneForWork(const FrameExecutionWork::Enum work)const noexcept{
         NWB_ASSERT(work < FrameExecutionWork::kCount);
         NWB_ASSERT(hasWork(work));
-        return packet(packetForWork(work)).lane;
+        return packetPlanForWork(work).lane;
     }
     [[nodiscard]] bool workRunsOnLane(
         const FrameExecutionWork::Enum work,
@@ -363,7 +366,7 @@ private:
         m_submissionPacketScheduled[packetIndex] = true;
     }
     void configureSubmissionBatches()noexcept{
-        if(usesGraphicsFallback()){
+        if(packet(FrameExecutionPacket::GraphicsFallback).enabled){
             appendSubmissionPacket(
                 FrameExecutionSubmissionBatch::GraphicsFallback,
                 FrameExecutionPacket::GraphicsFallback
@@ -379,7 +382,7 @@ private:
             FrameExecutionSubmissionBatch::AsyncRayEffects,
             FrameExecutionPacket::AsyncRayEffects
         );
-        if(m_usesAsyncAvboit){
+        if(hasWork(FrameExecutionWork::AvboitDepthWarp)){
             appendSubmissionPacket(
                 FrameExecutionSubmissionBatch::GraphicsEffects,
                 FrameExecutionPacket::GraphicsAvboitPre
@@ -430,10 +433,6 @@ private:
     FrameExecutionSubmissionBatch::Enum m_submissionBatchOrder[FrameExecutionSubmissionBatch::kCount] = {};
     bool m_submissionPacketScheduled[FrameExecutionPacket::kCount] = {};
     usize m_submissionBatchCount = 0u;
-    bool m_usesDedicatedAsyncCompute = false;
-    bool m_usesLaggedAsyncLighting = false;
-    bool m_capturesLaggedLightingHistory = false;
-    bool m_usesAsyncAvboit = false;
 };
 
 

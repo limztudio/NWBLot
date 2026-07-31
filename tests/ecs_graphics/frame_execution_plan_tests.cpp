@@ -96,12 +96,11 @@ TEST(EcsGraphics, FrameExecutionPlanKeepsGraphicsFallbackAsOnePacket){
         true,
     });
 
-    EXPECT_TRUE(plan.usesGraphicsFallback());
-    EXPECT_FALSE(plan.usesDedicatedAsyncCompute());
-    EXPECT_FALSE(plan.usesLaggedAsyncLighting());
+    EXPECT_TRUE(plan.packet(FrameExecutionPacket::GraphicsFallback).enabled);
+    EXPECT_FALSE(plan.workRunsOnLane(FrameExecutionWork::RayEffects, RenderLane::AsyncCompute));
+    EXPECT_FALSE(plan.packetPlanForWork(FrameExecutionWork::DeferredLighting).waitsForLaggedLightingHistory);
     EXPECT_FALSE(plan.hasWork(FrameExecutionWork::LaggedLightingStash));
     EXPECT_FALSE(plan.workRunsOnLane(FrameExecutionWork::AvboitDepthWarp, RenderLane::AsyncCompute));
-    EXPECT_TRUE(plan.packet(FrameExecutionPacket::GraphicsFallback).enabled);
     EXPECT_EQ(plan.packet(FrameExecutionPacket::GraphicsFallback).lane, RenderLane::Graphics);
     EXPECT_FALSE(plan.packet(FrameExecutionPacket::GraphicsPrefix).enabled);
     EXPECT_FALSE(plan.packet(FrameExecutionPacket::AsyncRayEffects).enabled);
@@ -118,8 +117,8 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
         false,
     });
 
-    EXPECT_TRUE(opaquePlan.usesDedicatedAsyncCompute());
-    EXPECT_FALSE(opaquePlan.usesLaggedAsyncLighting());
+    EXPECT_TRUE(opaquePlan.workRunsOnLane(FrameExecutionWork::RayEffects, RenderLane::AsyncCompute));
+    EXPECT_FALSE(opaquePlan.packetPlanForWork(FrameExecutionWork::DeferredLighting).waitsForLaggedLightingHistory);
     EXPECT_FALSE(opaquePlan.hasWork(FrameExecutionWork::LaggedLightingStash));
     EXPECT_FALSE(opaquePlan.workRunsOnLane(FrameExecutionWork::AvboitDepthWarp, RenderLane::AsyncCompute));
     EXPECT_TRUE(opaquePlan.packet(FrameExecutionPacket::GraphicsEffects).enabled);
@@ -143,8 +142,7 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
         true,
     });
 
-    EXPECT_TRUE(bootstrapPlan.usesDedicatedAsyncCompute());
-    EXPECT_FALSE(bootstrapPlan.usesLaggedAsyncLighting());
+    EXPECT_TRUE(bootstrapPlan.workRunsOnLane(FrameExecutionWork::RayEffects, RenderLane::AsyncCompute));
     EXPECT_TRUE(bootstrapPlan.hasWork(FrameExecutionWork::LaggedLightingStash));
     EXPECT_TRUE(bootstrapPlan.workRunsOnLane(FrameExecutionWork::AvboitDepthWarp, RenderLane::AsyncCompute));
     EXPECT_EQ(bootstrapPlan.packet(FrameExecutionPacket::AsyncRayEffects).lane, RenderLane::AsyncCompute);
@@ -165,7 +163,7 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
         bootstrapPlan.packet(FrameExecutionPacket::DeferredLighting).waitPackets[1],
         FrameExecutionPacket::AsyncRayEffects
     );
-    EXPECT_FALSE(bootstrapPlan.packet(FrameExecutionPacket::DeferredLighting).waitsForLaggedLightingHistory);
+    EXPECT_FALSE(bootstrapPlan.packetPlanForWork(FrameExecutionWork::DeferredLighting).waitsForLaggedLightingHistory);
     EXPECT_TRUE(bootstrapPlan.packet(FrameExecutionPacket::AsyncLaggedLightingStash).enabled);
 
     const FrameExecutionPlan laggedPlan(FrameExecutionPlanInput{
@@ -176,8 +174,7 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
         true,
     });
 
-    EXPECT_TRUE(laggedPlan.usesDedicatedAsyncCompute());
-    EXPECT_TRUE(laggedPlan.usesLaggedAsyncLighting());
+    EXPECT_TRUE(laggedPlan.workRunsOnLane(FrameExecutionWork::RayEffects, RenderLane::AsyncCompute));
     EXPECT_TRUE(laggedPlan.hasWork(FrameExecutionWork::LaggedLightingStash));
     EXPECT_FALSE(laggedPlan.workRunsOnLane(FrameExecutionWork::AvboitDepthWarp, RenderLane::AsyncCompute));
     EXPECT_TRUE(laggedPlan.packet(FrameExecutionPacket::GraphicsEffects).enabled);
@@ -188,7 +185,7 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
         laggedPlan.packet(FrameExecutionPacket::DeferredLighting).waitPackets[0],
         FrameExecutionPacket::GraphicsEffects
     );
-    EXPECT_TRUE(laggedPlan.packet(FrameExecutionPacket::DeferredLighting).waitsForLaggedLightingHistory);
+    EXPECT_TRUE(laggedPlan.packetPlanForWork(FrameExecutionWork::DeferredLighting).waitsForLaggedLightingHistory);
     EXPECT_EQ(laggedPlan.packet(FrameExecutionPacket::GraphicsPresent).waitPacketCount, 2u);
     EXPECT_EQ(
         laggedPlan.packet(FrameExecutionPacket::GraphicsPresent).waitPackets[0],

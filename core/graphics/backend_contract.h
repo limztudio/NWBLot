@@ -68,12 +68,6 @@ concept DeviceApi = requires(
     usize* rowPitch,
     const BufferDesc& bufferDesc,
     Buffer* buffer,
-    u32* tileCount,
-    PackedMipDesc* packedMipDesc,
-    TileShape* tileShape,
-    u32* subresourceTilingCount,
-    SubresourceTiling* subresourceTilings,
-    const TextureTilesMapping* tileMappings,
     const ShaderDesc& shaderDesc,
     const void* binary,
     const ShaderSpecialization* specializationConstants,
@@ -110,8 +104,6 @@ concept DeviceApi = requires(
     { device.createStagingTexture(textureDesc, CpuAccessMode::Read) }->SameAs<StagingTextureHandle>;
     { device.mapStagingTexture(stagingTexture, textureSlice, CpuAccessMode::Read, rowPitch) }->SameAs<void*>;
     device.unmapStagingTexture(stagingTexture);
-    device.getTextureTiling(texture, tileCount, packedMipDesc, tileShape, subresourceTilingCount, subresourceTilings);
-    device.updateTextureTileMappings(texture, tileMappings, u32{}, CommandQueue::Graphics);
 
     { device.createBuffer(bufferDesc) }->SameAs<BufferHandle>;
     { device.mapBuffer(buffer, CpuAccessMode::Write) }->SameAs<void*>;

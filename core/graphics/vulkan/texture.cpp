@@ -1325,10 +1325,6 @@ StagingTexture::~StagingTexture(){
 
 
 TextureHandle Device::createTexture(const TextureDesc& d){
-    if(d.isTiled){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create tiled texture: virtual/tiled resources are not supported by this backend"));
-        return nullptr;
-    }
     __hidden_vulkan_texture::TextureCreateMetadata metadata;
     if(!__hidden_vulkan_texture::ValidateTextureCreateDesc(d, NWB_TEXT("create texture"), true, metadata))
         return nullptr;
@@ -1356,8 +1352,8 @@ TextureHandle Device::createTexture(const TextureDesc& d){
         return nullptr;
     }
 
-    // Texture retains m_imageInfo for sparse-format queries, but Vulkan consumed its queue-family pointer during
-    // creation. Clear the transient pointer so the retained metadata cannot dangle into this stack frame.
+    // Vulkan consumed the queue-family pointer during creation. Clear the transient pointer so the retained
+    // image metadata cannot dangle into this stack frame.
     texture->m_imageInfo.queueFamilyIndexCount = 0u;
     texture->m_imageInfo.pQueueFamilyIndices = nullptr;
 

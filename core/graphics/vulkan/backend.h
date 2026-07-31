@@ -33,7 +33,6 @@ class Texture;
 class StagingTexture;
 using PipelineRenderingFormatVector = Vector<VkFormat, Alloc::ScratchArena>;
 using PipelineColorBlendAttachmentVector = Vector<VkPipelineColorBlendAttachmentState, Alloc::ScratchArena>;
-using SparseImageMemoryRequirementsVector = Vector<VkSparseImageMemoryRequirements, Alloc::ScratchArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -339,15 +338,6 @@ VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
 CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type);
 VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout);
 bool BuildPipelineRenderingInfo(const FramebufferInfo& fbinfo, const tchar* operationName, VkPipelineRenderingCreateInfo& outRenderingInfo, PipelineRenderingFormatVector& outColorFormats);
-
-inline void GetImageSparseMemoryRequirements(VkDevice device, VkImage image, SparseImageMemoryRequirementsVector& outRequirements){
-    uint32_t sparseReqCount = 0;
-    vkGetImageSparseMemoryRequirements(device, image, &sparseReqCount, nullptr);
-
-    outRequirements.resize(sparseReqCount);
-    if(sparseReqCount > 0)
-        vkGetImageSparseMemoryRequirements(device, image, &sparseReqCount, outRequirements.data());
-}
 
 template<typename T>
 constexpr T MakeVkStruct(VkStructureType sType){
@@ -750,7 +740,6 @@ public:
         usize localWaitCount = 0u,
         bool* outSubmissionAccepted = nullptr
     );
-    void updateTextureTileMappings(Texture* texture, const TextureTilesMapping* tileMappings, u32 numTileMappings);
     void updateLastFinishedID();
 
     void waitForIdle();
@@ -1086,7 +1075,6 @@ private:
 
     bool m_managed = true; // if true, owns the VkImage or VMA allocation
     bool m_keepInitialStateKnown = false;
-    u64 m_tileByteSize = 0; // for sparse/tiled resources
 
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
@@ -2366,8 +2354,6 @@ public:
     [[nodiscard]] StagingTextureHandle createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess);
     void* mapStagingTexture(StagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch);
     void unmapStagingTexture(StagingTexture* tex);
-    void getTextureTiling(Texture* texture, u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum, SubresourceTiling* subresourceTilings);
-    void updateTextureTileMappings(Texture* texture, const TextureTilesMapping* tileMappings, u32 numTileMappings, CommandQueue::Enum executionQueue = CommandQueue::Graphics);
     [[nodiscard]] BufferHandle createBuffer(const BufferDesc& d);
     void* mapBuffer(Buffer* buffer, CpuAccessMode::Enum);
     void unmapBuffer(Buffer* buffer);

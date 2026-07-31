@@ -38,7 +38,6 @@ namespace Feature{
         SinglePassStereo,
         Spheres,
         VariableRateShading,
-        VirtualResources,
         WaveLaneCountMinMax,
         CooperativeVectorInferencing,
         CooperativeVectorTraining,

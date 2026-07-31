@@ -140,7 +140,6 @@ struct TextureDesc{
     // Indicates that the texture is created with no backing memory,
     // and memory is bound to the texture later using bindTextureMemory.
     bool isVirtual = false;
-    bool isTiled = false;
 
     bool useClearValue = false;
 
@@ -251,48 +250,6 @@ inline constexpr auto s_AllSubresources = TextureSubresourceSet(0, TextureSubres
 typedef GraphicsBackend::Handle<Texture> TextureHandle;
 
 typedef GraphicsBackend::Handle<StagingTexture> StagingTextureHandle;
-
-struct TiledTextureCoordinate{
-    u16 mipLevel = 0;
-    u16 arrayLevel = 0;
-    u32 x = 0;
-    u32 y = 0;
-    u32 z = 0;
-};
-struct TiledTextureRegion{
-    u32 tilesNum = 0;
-    u32 width = 0;
-    u32 height = 0;
-    u32 depth = 0;
-};
-
-struct TextureTilesMapping{
-    TiledTextureCoordinate* tiledTextureCoordinates = nullptr;
-    TiledTextureRegion* tiledTextureRegions = nullptr;
-    u64* byteOffsets = nullptr;
-    u32 numTextureRegions = 0;
-    Heap* heap = nullptr;
-};
-
-struct PackedMipDesc{
-    u32 numStandardMips = 0;
-    u32 numPackedMips = 0;
-    u32 numTilesForPackedMips = 0;
-    u32 startTileIndexInOverallResource = 0;
-};
-
-struct TileShape{
-    u32 widthInTexels = 0;
-    u32 heightInTexels = 0;
-    u32 depthInTexels = 0;
-};
-
-struct SubresourceTiling{
-    u32 widthInTiles = 0;
-    u32 heightInTiles = 0;
-    u32 depthInTiles = 0;
-    u32 startTileIndexInOverallResource = 0;
-};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Input Layout

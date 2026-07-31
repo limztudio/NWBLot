@@ -101,10 +101,6 @@ inline constexpr usize s_ParallelInputLayoutThreshold = 128;
 inline constexpr usize s_InputLayoutGrainSize = 64;
 inline constexpr usize s_ParallelConvertThreshold = 256;
 inline constexpr usize s_ConvertGrainSize = 64;
-inline constexpr usize s_ParallelTileCountThreshold = 128;
-inline constexpr usize s_TileCountGrainSize = 16;
-inline constexpr usize s_ParallelTileMappingThreshold = 128;
-inline constexpr usize s_TileMappingGrainSize = 8;
 inline constexpr usize s_ParallelGeometryThreshold = 256;
 inline constexpr usize s_GeometryGrainSize = 64;
 inline constexpr usize s_ParallelTlasInstanceThreshold = 1024;
@@ -122,7 +118,6 @@ inline constexpr u32 s_InstanceFieldMask24Bit = 0x00FFFFFF;
 inline constexpr usize s_GraphicsPipelineScratchArenaBytes = 2048;
 inline constexpr usize s_DescriptorBindingScratchArenaBytes = 4096;
 inline constexpr usize s_RayTracingScratchArenaBytes = 4096;
-inline constexpr usize s_SparseTextureBindScratchArenaBytes = 8192;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

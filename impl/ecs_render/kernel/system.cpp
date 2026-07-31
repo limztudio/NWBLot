@@ -32,6 +32,24 @@ namespace ECSRenderDetail{
 // switch case, or failure-path cleanup list in RendererSystem.
 class FrameExecutionPlanTimingTickets final{
 public:
+    // Work IDs are already the plan's single source of packet ownership. Keep a recording scope keyed by that same
+    // ID so RendererSystem never needs a parallel list of per-work ticket pointers.
+    class WorkRecordingScope final : NoCopy{
+    public:
+        WorkRecordingScope(
+            FrameExecutionPlanTimingTickets& timingTickets,
+            const FrameExecutionWork::Enum work
+        )
+            : m_recordingScope(timingTickets.requiredTicketForWork(work))
+        {}
+
+
+    private:
+        Core::GpuTimingSubmissionTicket::RecordingScope m_recordingScope;
+    };
+
+
+public:
     explicit FrameExecutionPlanTimingTickets(
         const FrameExecutionPlan& plan,
         Core::GpuTimingRecorder& recorder
@@ -73,6 +91,13 @@ public:
 
 
 private:
+    [[nodiscard]] Core::GpuTimingSubmissionTicket& requiredTicketForWork(
+        const FrameExecutionWork::Enum work
+    )noexcept{
+        Core::GpuTimingSubmissionTicket* const timingTicket = ticketForWork(work);
+        NWB_ASSERT(timingTicket);
+        return *timingTicket;
+    }
     const FrameExecutionPlan& m_plan;
     Optional<Core::GpuTimingSubmissionTicket> m_tickets[FrameExecutionPacket::kCount] = {};
 };
@@ -1149,79 +1174,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         frameExecutionPlan,
         m_graphics.gpuTiming()
     );
-    const auto timingTicketForPacket = [&frameExecutionTimingTickets](
-        const ECSRenderDetail::FrameExecutionPacket::Enum packet
-    ) -> Core::GpuTimingSubmissionTicket* {
-        return frameExecutionTimingTickets.ticketForPacket(packet);
-    };
-    const auto timingTicketForWork = [&frameExecutionTimingTickets](
-        const ECSRenderDetail::FrameExecutionWork::Enum work
-    ) -> Core::GpuTimingSubmissionTicket* {
-        return frameExecutionTimingTickets.ticketForWork(work);
-    };
-    Core::GpuTimingSubmissionTicket* const prefixTimingTicketForPacket = timingTicketForWork(
-        ECSRenderDetail::FrameExecutionWork::GraphicsPrefix
-    );
-    Core::GpuTimingSubmissionTicket* const shadowTimingTicketForPacket = timingTicketForWork(
-        ECSRenderDetail::FrameExecutionWork::RayEffects
-    );
-    Core::GpuTimingSubmissionTicket* const effectsTimingTicketForPacket = timingTicketForWork(
-        ECSRenderDetail::FrameExecutionWork::AvboitRaster
-    );
-    Core::GpuTimingSubmissionTicket* const causticsTimingTicketForPacket = timingTicketForWork(
-        ECSRenderDetail::FrameExecutionWork::Caustics
-    );
-    Core::GpuTimingSubmissionTicket* const surfelGiTimingTicketForPacket = timingTicketForWork(
-        ECSRenderDetail::FrameExecutionWork::SurfelGi
-    );
-    Core::GpuTimingSubmissionTicket* const avboitPreTimingTicketForPacket = effectsTimingTicketForPacket;
-    Core::GpuTimingSubmissionTicket* const lightingTimingTicketForPacket = timingTicketForWork(
-        ECSRenderDetail::FrameExecutionWork::DeferredLighting
-    );
-    Core::GpuTimingSubmissionTicket* const compositeTimingTicketForPacket = timingTicketForWork(
-        ECSRenderDetail::FrameExecutionWork::DeferredComposite
-    );
-    Core::GpuTimingSubmissionTicket* const finalTimingTicketForPacket = timingTicketForWork(
-        ECSRenderDetail::FrameExecutionWork::GraphicsPresent
-    );
-    Core::GpuTimingSubmissionTicket* const asyncEffectsTimingTicketForPacket = asyncShadowSchedule
-        ? timingTicketForWork(ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming)
-        : nullptr
-    ;
-    Core::GpuTimingSubmissionTicket* const avboitDepthWarpTimingTicketForPacket = asyncAvboitSchedule
-        ? timingTicketForWork(ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp)
-        : nullptr
-    ;
-    Core::GpuTimingSubmissionTicket* const avboitExtinctionTimingTicketForPacket = asyncAvboitSchedule
-        ? timingTicketForWork(ECSRenderDetail::FrameExecutionWork::AvboitExtinction)
-        : nullptr
-    ;
-    Core::GpuTimingSubmissionTicket* const avboitIntegrationTimingTicketForPacket = asyncAvboitSchedule
-        ? timingTicketForWork(ECSRenderDetail::FrameExecutionWork::AvboitIntegration)
-        : nullptr
-    ;
-    Core::GpuTimingSubmissionTicket* const avboitAccumulateTimingTicketForPacket = asyncAvboitSchedule
-        ? timingTicketForWork(ECSRenderDetail::FrameExecutionWork::AvboitAccumulation)
-        : nullptr
-    ;
-    NWB_ASSERT(
-        prefixTimingTicketForPacket
-        && shadowTimingTicketForPacket
-        && effectsTimingTicketForPacket
-        && causticsTimingTicketForPacket
-        && surfelGiTimingTicketForPacket
-        && lightingTimingTicketForPacket
-        && compositeTimingTicketForPacket
-        && finalTimingTicketForPacket
-    );
-    if(asyncShadowSchedule)
-        NWB_ASSERT(asyncEffectsTimingTicketForPacket);
-    if(asyncAvboitSchedule){
-        NWB_ASSERT(avboitDepthWarpTimingTicketForPacket);
-        NWB_ASSERT(avboitExtinctionTimingTicketForPacket);
-        NWB_ASSERT(avboitIntegrationTimingTicketForPacket);
-        NWB_ASSERT(avboitAccumulateTimingTicketForPacket);
-    }
     // This scope crosses two synchronously-waited Graphics jobs, so it cannot live in either worker's scratch
     // arena. The fallback owns it directly; the dedicated schedule uses the acceptance-aware transaction below.
     Optional<Core::GpuTimingMeasure> frameTiming;
@@ -1320,9 +1272,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         asyncShadowSchedule,
         &meshViewSetupReady,
         &meshViewSetupCommandListReady,
-        prefixTimingTicketForPacket
+        &frameExecutionTimingTickets
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*prefixTimingTicketForPacket);
+        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+            frameExecutionTimingTickets,
+            ECSRenderDetail::FrameExecutionWork::GraphicsPrefix
+        );
         meshViewSetupCommandList->open(&m_shadowPrepareStateHandoff);
         if(!meshViewSetupCommandList->hasCommandBuffer())
             return;
@@ -1374,9 +1329,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         sceneShadingSetupCommandList,
         &sceneShadingSetupReady,
         &sceneShadingSetupCommandListReady,
-        prefixTimingTicketForPacket
+        &frameExecutionTimingTickets
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*prefixTimingTicketForPacket);
+        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+            frameExecutionTimingTickets,
+            ECSRenderDetail::FrameExecutionWork::GraphicsPrefix
+        );
         sceneShadingSetupCommandList->open(&m_shadowPrepareStateHandoff);
         if(!sceneShadingSetupCommandList->hasCommandBuffer())
             return;
@@ -1395,9 +1353,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredClearCommandList,
         &deferredClearCommandListReady,
         asyncSurfelGiSchedule,
-        prefixTimingTicketForPacket
+        &frameExecutionTimingTickets
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*prefixTimingTicketForPacket);
+        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+            frameExecutionTimingTickets,
+            ECSRenderDetail::FrameExecutionWork::GraphicsPrefix
+        );
         deferredClearCommandList->open(&m_shadowPrepareStateHandoff);
         if(!deferredClearCommandList->hasCommandBuffer())
             return;
@@ -1472,9 +1433,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &device,
         gbufferCommandList,
         &gbufferCommandListReady,
-        prefixTimingTicketForPacket
+        &frameExecutionTimingTickets
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*prefixTimingTicketForPacket);
+        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+            frameExecutionTimingTickets,
+            ECSRenderDetail::FrameExecutionWork::GraphicsPrefix
+        );
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
         Core::CommandList* commandList = gbufferCommandList;
         commandList->open(&m_frameSetupStateFanInHandoff);
@@ -1627,9 +1591,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &postGbufferNormalizeCommandListReady,
         &asyncPrefixTiming,
         asyncShadowSchedule,
-        prefixTimingTicketForPacket
+        &frameExecutionTimingTickets
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*prefixTimingTicketForPacket);
+        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+            frameExecutionTimingTickets,
+            ECSRenderDetail::FrameExecutionWork::GraphicsPrefix
+        );
         postGbufferNormalizeCommandList->open(&m_gbufferStateHandoff);
         if(!postGbufferNormalizeCommandList->hasCommandBuffer())
             return;
@@ -1883,7 +1850,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     bool avboitCommandListReady = false;
     bool asyncEffectsTimingBeginCommandListReady = !asyncShadowSchedule;
     if(asyncShadowSchedule){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*asyncEffectsTimingTicketForPacket);
+        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+            frameExecutionTimingTickets,
+            ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming
+        );
         asyncEffectsTimingBeginCommandList->open();
         if(asyncEffectsTimingBeginCommandList->hasCommandBuffer()){
             asyncEffectsTiming.emplace(
@@ -1909,9 +1879,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         shadowVisibilityCommandList,
         &shadowVisibilityCommandListReady,
         asyncShadowSchedule,
-        shadowTimingTicketForPacket
+        &frameExecutionTimingTickets
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*shadowTimingTicketForPacket);
+        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+            frameExecutionTimingTickets,
+            ECSRenderDetail::FrameExecutionWork::RayEffects
+        );
         shadowVisibilityCommandList->open(
             asyncShadowSchedule
                 ? &m_shadowComputeInputStateHandoff
@@ -1969,9 +1942,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         causticsCommandList,
         &causticsCommandListReady,
         asyncCausticsSchedule,
-        causticsTimingTicketForPacket
+        &frameExecutionTimingTickets
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*causticsTimingTicketForPacket);
+        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+            frameExecutionTimingTickets,
+            ECSRenderDetail::FrameExecutionWork::Caustics
+        );
         causticsCommandList->open(
             asyncCausticsSchedule
                 ? &m_causticsComputeInputStateHandoff
@@ -2008,9 +1984,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         surfelGiCommandList,
         &surfelGiCommandListReady,
         asyncSurfelGiSchedule,
-        surfelGiTimingTicketForPacket
+        &frameExecutionTimingTickets
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*surfelGiTimingTicketForPacket);
+        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+            frameExecutionTimingTickets,
+            ECSRenderDetail::FrameExecutionWork::SurfelGi
+        );
         surfelGiCommandList->open(
             asyncSurfelGiSchedule
                 ? &m_surfelGiComputeInputStateHandoff
@@ -2056,9 +2035,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         asyncAvboitSchedule,
         avboitCommandList,
         &avboitCommandListReady,
-        avboitPreTimingTicketForPacket
+        &frameExecutionTimingTickets
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*avboitPreTimingTicketForPacket);
+        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+            frameExecutionTimingTickets,
+            ECSRenderDetail::FrameExecutionWork::AvboitRaster
+        );
         avboitCommandList->open(&m_postGbufferNormalizedStateHandoff);
         if(!avboitCommandList->hasCommandBuffer())
             return;
@@ -2136,7 +2118,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(asyncShadowSchedule){
         bool asyncEffectsTimingEndCommandListReady = false;
         {
-            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*asyncEffectsTimingTicketForPacket);
+            ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+                frameExecutionTimingTickets,
+                ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming
+            );
             asyncEffectsTimingEndCommandList->open();
             if(asyncEffectsTimingEndCommandList->hasCommandBuffer()){
                 if(asyncEffectsTiming){
@@ -2181,9 +2166,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             &deferredTargets,
             asyncAvboitDepthWarpCommandList,
             &avboitDepthWarpCommandListReady,
-            avboitDepthWarpTimingTicketForPacket
+            &frameExecutionTimingTickets
         ](){
-            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*avboitDepthWarpTimingTicketForPacket);
+            ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+                frameExecutionTimingTickets,
+                ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp
+            );
             asyncAvboitDepthWarpCommandList->open(&m_avboitDepthWarpInputStateHandoff);
             if(!asyncAvboitDepthWarpCommandList->hasCommandBuffer())
                 return;
@@ -2225,9 +2213,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             csgFrameState,
             avboitExtinctionCommandList,
             &avboitExtinctionCommandListReady,
-            avboitExtinctionTimingTicketForPacket
+            &frameExecutionTimingTickets
         ](){
-            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*avboitExtinctionTimingTicketForPacket);
+            ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+                frameExecutionTimingTickets,
+                ECSRenderDetail::FrameExecutionWork::AvboitExtinction
+            );
             avboitExtinctionCommandList->open(&m_avboitExtinctionInputStateHandoff);
             if(!avboitExtinctionCommandList->hasCommandBuffer())
                 return;
@@ -2280,9 +2271,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             &deferredTargets,
             asyncAvboitIntegrationCommandList,
             &avboitIntegrationCommandListReady,
-            avboitIntegrationTimingTicketForPacket
+            &frameExecutionTimingTickets
         ](){
-            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*avboitIntegrationTimingTicketForPacket);
+            ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+                frameExecutionTimingTickets,
+                ECSRenderDetail::FrameExecutionWork::AvboitIntegration
+            );
             asyncAvboitIntegrationCommandList->open(&m_avboitIntegrationInputStateHandoff);
             if(!asyncAvboitIntegrationCommandList->hasCommandBuffer())
                 return;
@@ -2324,9 +2318,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             csgFrameState,
             avboitAccumulateCommandList,
             &avboitAccumulateCommandListReady,
-            avboitAccumulateTimingTicketForPacket
+            &frameExecutionTimingTickets
         ](){
-            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*avboitAccumulateTimingTicketForPacket);
+            ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+                frameExecutionTimingTickets,
+                ECSRenderDetail::FrameExecutionWork::AvboitAccumulation
+            );
             avboitAccumulateCommandList->open(&m_avboitAccumulationInputStateHandoff);
             if(!avboitAccumulateCommandList->hasCommandBuffer())
                 return;
@@ -2449,9 +2446,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredLightingCommandList,
         &deferredLightingCommandListReady,
         laggedAsyncLightingSchedule,
-        lightingTimingTicketForPacket
+        &frameExecutionTimingTickets
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*lightingTimingTicketForPacket);
+        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+            frameExecutionTimingTickets,
+            ECSRenderDetail::FrameExecutionWork::DeferredLighting
+        );
         deferredLightingCommandList->open(&m_deferredLightingInputStateHandoff);
         if(!deferredLightingCommandList->hasCommandBuffer())
             return;
@@ -2536,9 +2536,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &deferredTargets,
         deferredCompositeCommandList,
         &deferredCompositeCommandListReady,
-        compositeTimingTicketForPacket
+        &frameExecutionTimingTickets
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*compositeTimingTicketForPacket);
+        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+            frameExecutionTimingTickets,
+            ECSRenderDetail::FrameExecutionWork::DeferredComposite
+        );
         deferredCompositeCommandList->open(&m_deferredCompositeInputStateHandoff);
         if(!deferredCompositeCommandList->hasCommandBuffer())
             return;
@@ -2608,9 +2611,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &asyncFinalTiming,
         &deferredPresentCommandListReady,
         asyncShadowSchedule,
-        finalTimingTicketForPacket
+        &frameExecutionTimingTickets
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*finalTimingTicketForPacket);
+        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+            frameExecutionTimingTickets,
+            ECSRenderDetail::FrameExecutionWork::GraphicsPresent
+        );
         deferredPresentCommandList->open(&m_deferredPresentInputStateHandoff);
         if(!deferredPresentCommandList->hasCommandBuffer())
             return;
@@ -2663,94 +2669,36 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
 
     // Record jobs can run in parallel, but packet membership must retain the established submission order. Append the
-    // already-recorded lists on this thread rather than letting worker completion order choose it. The plan resolves
-    // every logical work item to its packet, including the single-packet Graphics fallback.
+    // already-recorded lists on this thread rather than letting worker completion order choose it. This one ordered
+    // binding table is the renderer-side declaration for ordinary frame work; the plan routes each enabled entry to
+    // its packet, including the single-packet Graphics fallback. The lagged-history stash remains below because it is
+    // only recorded after presentation is accepted.
     ECSRenderDetail::FrameExecutionPacketCommandLists frameExecutionCommandLists(frameExecutionPlan);
-    const auto appendRecordedWorkCommandList = [&](
-        const ECSRenderDetail::FrameExecutionWork::Enum work,
-        Core::CommandList* const commandList
-    ) -> bool {
-        if(frameExecutionCommandLists.appendForWork(work, commandList))
-            return true;
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to append recorded work to its frame execution packet"));
-        return false;
+    const ECSRenderDetail::FrameExecutionWorkCommandListBinding recordedFrameWorkCommandLists[] = {
+        { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, meshViewSetupCommandList },
+        { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, sceneShadingSetupCommandList },
+        { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, deferredClearCommandList },
+        { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, gbufferCommandList },
+        { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, postGbufferNormalizeCommandList },
+        { ECSRenderDetail::FrameExecutionWork::RayEffects, shadowVisibilityCommandList },
+        { ECSRenderDetail::FrameExecutionWork::Caustics, causticsCommandList },
+        { ECSRenderDetail::FrameExecutionWork::SurfelGi, surfelGiCommandList },
+        { ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming, asyncEffectsTimingBeginCommandList },
+        { ECSRenderDetail::FrameExecutionWork::AvboitRaster, avboitCommandList },
+        { ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming, asyncEffectsTimingEndCommandList },
+        { ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp, asyncAvboitDepthWarpCommandList },
+        { ECSRenderDetail::FrameExecutionWork::AvboitExtinction, avboitExtinctionCommandList },
+        { ECSRenderDetail::FrameExecutionWork::AvboitIntegration, asyncAvboitIntegrationCommandList },
+        { ECSRenderDetail::FrameExecutionWork::AvboitAccumulation, avboitAccumulateCommandList },
+        { ECSRenderDetail::FrameExecutionWork::DeferredLighting, deferredLightingCommandList },
+        { ECSRenderDetail::FrameExecutionWork::DeferredComposite, deferredCompositeCommandList },
+        { ECSRenderDetail::FrameExecutionWork::GraphicsPresent, deferredPresentCommandList },
     };
-    if(
-        !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, meshViewSetupCommandList)
-        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, sceneShadingSetupCommandList)
-        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, deferredClearCommandList)
-        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, gbufferCommandList)
-        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, postGbufferNormalizeCommandList)
-        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::RayEffects, shadowVisibilityCommandList)
-        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::Caustics, causticsCommandList)
-        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::SurfelGi, surfelGiCommandList)
-    ){
-        discardRenderPackets();
-        return;
-    }
-    if(frameExecutionPlan.hasWork(ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming)){
-        if(!appendRecordedWorkCommandList(
-            ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming,
-            asyncEffectsTimingBeginCommandList
-        )){
-            discardRenderPackets();
-            return;
-        }
-    }
-    if(!appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::AvboitRaster, avboitCommandList)){
-        discardRenderPackets();
-        return;
-    }
-    if(frameExecutionPlan.hasWork(ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming)){
-        if(!appendRecordedWorkCommandList(
-            ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming,
-            asyncEffectsTimingEndCommandList
-        )){
-            discardRenderPackets();
-            return;
-        }
-    }
-    if(frameExecutionPlan.hasWork(ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp)){
-        if(!appendRecordedWorkCommandList(
-            ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp,
-            asyncAvboitDepthWarpCommandList
-        )){
-            discardRenderPackets();
-            return;
-        }
-    }
-    if(frameExecutionPlan.hasWork(ECSRenderDetail::FrameExecutionWork::AvboitExtinction)){
-        if(!appendRecordedWorkCommandList(
-            ECSRenderDetail::FrameExecutionWork::AvboitExtinction,
-            avboitExtinctionCommandList
-        )){
-            discardRenderPackets();
-            return;
-        }
-    }
-    if(frameExecutionPlan.hasWork(ECSRenderDetail::FrameExecutionWork::AvboitIntegration)){
-        if(!appendRecordedWorkCommandList(
-            ECSRenderDetail::FrameExecutionWork::AvboitIntegration,
-            asyncAvboitIntegrationCommandList
-        )){
-            discardRenderPackets();
-            return;
-        }
-    }
-    if(frameExecutionPlan.hasWork(ECSRenderDetail::FrameExecutionWork::AvboitAccumulation)){
-        if(!appendRecordedWorkCommandList(
-            ECSRenderDetail::FrameExecutionWork::AvboitAccumulation,
-            avboitAccumulateCommandList
-        )){
-            discardRenderPackets();
-            return;
-        }
-    }
-    if(
-        !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::DeferredLighting, deferredLightingCommandList)
-        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::DeferredComposite, deferredCompositeCommandList)
-        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::GraphicsPresent, deferredPresentCommandList)
-    ){
+    if(!frameExecutionCommandLists.appendPlannedWorkCommandLists(
+        recordedFrameWorkCommandLists,
+        LengthOf(recordedFrameWorkCommandLists)
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to collect recorded work for the frame execution plan"));
         discardRenderPackets();
         return;
     }
@@ -2822,7 +2770,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const ECSRenderDetail::FrameExecutionPacketCommandListRange packetCommandLists =
             frameExecutionCommandLists.commandLists(packet)
         ;
-        Core::GpuTimingSubmissionTicket* const timingTicket = timingTicketForPacket(packet);
+        Core::GpuTimingSubmissionTicket* const timingTicket = frameExecutionTimingTickets.ticketForPacket(packet);
         if(!timingTicket || packetCommandLists.commandListCount == 0u){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame execution packet has no timing ticket or recorded command list"));
             if(timingTicket)
@@ -3361,7 +3309,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_laggedLightingStashInputStateHandoff.reset();
                 m_laggedLightingStashStateHandoff.reset();
             }
-            else if(!appendRecordedWorkCommandList(
+            else if(!frameExecutionCommandLists.appendForWork(
                 ECSRenderDetail::FrameExecutionWork::LaggedLightingStash,
                 asyncLaggedLightingStashCommandList
             )){

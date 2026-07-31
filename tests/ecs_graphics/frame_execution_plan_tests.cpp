@@ -19,6 +19,7 @@ namespace __hidden_ecs_graphics_frame_execution_plan_tests{
 using FrameExecutionPlan = NWB::Impl::ECSRenderDetail::FrameExecutionPlan;
 using FrameExecutionPlanInput = NWB::Impl::ECSRenderDetail::FrameExecutionPlanInput;
 using FrameExecutionPacketCommandLists = NWB::Impl::ECSRenderDetail::FrameExecutionPacketCommandLists;
+using FrameExecutionWorkCommandListBinding = NWB::Impl::ECSRenderDetail::FrameExecutionWorkCommandListBinding;
 using FrameExecutionPlanSubmissionState = NWB::Impl::ECSRenderDetail::FrameExecutionPlanSubmissionState;
 namespace FrameExecutionPacket = NWB::Impl::ECSRenderDetail::FrameExecutionPacket;
 namespace FrameExecutionWork = NWB::Impl::ECSRenderDetail::FrameExecutionWork;
@@ -277,19 +278,23 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsKeepsFallbackOrderAndRejectsAb
     EXPECT_FALSE(commandLists.appendForWork(FrameExecutionWork::GraphicsPrefix, nullptr));
     EXPECT_FALSE(commandLists.appendForWork(FrameExecutionWork::AsyncEffectsTiming, TestCommandList(13u)));
     EXPECT_EQ(commandLists.commandLists(FrameExecutionPacket::GraphicsFallback).commandListCount, 0u);
-    for(usize prefixListIndex = 0u; prefixListIndex < 5u; ++prefixListIndex){
-        ASSERT_TRUE(commandLists.appendForWork(
-            FrameExecutionWork::GraphicsPrefix,
-            recordedLists[prefixListIndex]
-        ));
-    }
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::RayEffects, recordedLists[5u]));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::Caustics, recordedLists[6u]));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::SurfelGi, recordedLists[7u]));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::AvboitRaster, recordedLists[8u]));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::DeferredLighting, recordedLists[9u]));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::DeferredComposite, recordedLists[10u]));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::GraphicsPresent, recordedLists[11u]));
+    const FrameExecutionWorkCommandListBinding bindings[] = {
+        { FrameExecutionWork::GraphicsPrefix, recordedLists[0u] },
+        { FrameExecutionWork::GraphicsPrefix, recordedLists[1u] },
+        { FrameExecutionWork::GraphicsPrefix, recordedLists[2u] },
+        { FrameExecutionWork::GraphicsPrefix, recordedLists[3u] },
+        { FrameExecutionWork::GraphicsPrefix, recordedLists[4u] },
+        { FrameExecutionWork::RayEffects, recordedLists[5u] },
+        { FrameExecutionWork::Caustics, recordedLists[6u] },
+        { FrameExecutionWork::SurfelGi, recordedLists[7u] },
+        // Fallback does not create this work, so a complete binding table can retain its optional entry.
+        { FrameExecutionWork::AsyncEffectsTiming, TestCommandList(13u) },
+        { FrameExecutionWork::AvboitRaster, recordedLists[8u] },
+        { FrameExecutionWork::DeferredLighting, recordedLists[9u] },
+        { FrameExecutionWork::DeferredComposite, recordedLists[10u] },
+        { FrameExecutionWork::GraphicsPresent, recordedLists[11u] },
+    };
+    ASSERT_TRUE(commandLists.appendPlannedWorkCommandLists(bindings, LengthOf(bindings)));
 
     const auto fallbackLists = commandLists.commandLists(FrameExecutionPacket::GraphicsFallback);
     ASSERT_EQ(fallbackLists.commandListCount, LengthOf(recordedLists));
@@ -329,20 +334,23 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsRouteSplitWorkAndKeepTimingBra
     NWB::Core::CommandList* const present = TestCommandList(34u);
     NWB::Core::CommandList* const stash = TestCommandList(35u);
 
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::GraphicsPrefix, prefix));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::RayEffects, shadow));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::Caustics, caustics));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::SurfelGi, surfelGi));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::AsyncEffectsTiming, timingBegin));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::AvboitRaster, avboitRaster));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::AsyncEffectsTiming, timingEnd));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::AvboitDepthWarp, depthWarp));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::AvboitExtinction, extinction));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::AvboitIntegration, integration));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::AvboitAccumulation, accumulation));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::DeferredLighting, lighting));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::DeferredComposite, composite));
-    ASSERT_TRUE(commandLists.appendForWork(FrameExecutionWork::GraphicsPresent, present));
+    const FrameExecutionWorkCommandListBinding bindings[] = {
+        { FrameExecutionWork::GraphicsPrefix, prefix },
+        { FrameExecutionWork::RayEffects, shadow },
+        { FrameExecutionWork::Caustics, caustics },
+        { FrameExecutionWork::SurfelGi, surfelGi },
+        { FrameExecutionWork::AsyncEffectsTiming, timingBegin },
+        { FrameExecutionWork::AvboitRaster, avboitRaster },
+        { FrameExecutionWork::AsyncEffectsTiming, timingEnd },
+        { FrameExecutionWork::AvboitDepthWarp, depthWarp },
+        { FrameExecutionWork::AvboitExtinction, extinction },
+        { FrameExecutionWork::AvboitIntegration, integration },
+        { FrameExecutionWork::AvboitAccumulation, accumulation },
+        { FrameExecutionWork::DeferredLighting, lighting },
+        { FrameExecutionWork::DeferredComposite, composite },
+        { FrameExecutionWork::GraphicsPresent, present },
+    };
+    ASSERT_TRUE(commandLists.appendPlannedWorkCommandLists(bindings, LengthOf(bindings)));
 
     const auto prefixLists = commandLists.commandLists(FrameExecutionPacket::GraphicsPrefix);
     ASSERT_EQ(prefixLists.commandListCount, 1u);
@@ -393,9 +401,7 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsRouteSplitWorkAndKeepTimingBra
         true,
     });
     FrameExecutionPacketCommandLists laggedCommandLists(laggedPlan);
-    ASSERT_TRUE(laggedCommandLists.appendForWork(FrameExecutionWork::AsyncEffectsTiming, timingBegin));
-    ASSERT_TRUE(laggedCommandLists.appendForWork(FrameExecutionWork::AvboitRaster, avboitRaster));
-    ASSERT_TRUE(laggedCommandLists.appendForWork(FrameExecutionWork::AsyncEffectsTiming, timingEnd));
+    ASSERT_TRUE(laggedCommandLists.appendPlannedWorkCommandLists(bindings, LengthOf(bindings)));
     EXPECT_FALSE(laggedCommandLists.appendForWork(FrameExecutionWork::AvboitDepthWarp, depthWarp));
     const auto graphicsEffectsLists = laggedCommandLists.commandLists(FrameExecutionPacket::GraphicsEffects);
     ASSERT_EQ(graphicsEffectsLists.commandListCount, 3u);

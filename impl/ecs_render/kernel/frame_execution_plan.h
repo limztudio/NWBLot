@@ -291,6 +291,14 @@ struct FrameExecutionPacketCommandListRange{
 };
 
 
+// RendererSystem owns the actual command lists, while the plan owns their work-to-packet routing. Supplying these
+// bindings in recording order keeps optional topology work out of the renderer's submission assembly branches.
+struct FrameExecutionWorkCommandListBinding{
+    FrameExecutionWork::Enum work = FrameExecutionWork::kCount;
+    Core::CommandList* commandList = nullptr;
+};
+
+
 class FrameExecutionPacketCommandLists final{
 public:
     // Graphics fallback currently contains the largest packet: twelve lists. Keep this constrained collector
@@ -305,6 +313,26 @@ public:
 
 
 public:
+    // Disabled work is intentionally skipped: callers can declare the complete canonical recording order once,
+    // including command lists that are only instantiated by a split topology.
+    [[nodiscard]] bool appendPlannedWorkCommandLists(
+        const FrameExecutionWorkCommandListBinding* const bindings,
+        const usize bindingCount
+    )noexcept{
+        if(bindingCount > 0u && !bindings)
+            return false;
+
+        for(usize bindingIndex = 0u; bindingIndex < bindingCount; ++bindingIndex){
+            const FrameExecutionWorkCommandListBinding& binding = bindings[bindingIndex];
+            if(binding.work >= FrameExecutionWork::kCount)
+                return false;
+            if(!m_plan.hasWork(binding.work))
+                continue;
+            if(!appendForPacket(m_plan.packetForWork(binding.work), binding.commandList))
+                return false;
+        }
+        return true;
+    }
     [[nodiscard]] bool appendForWork(
         const FrameExecutionWork::Enum work,
         Core::CommandList* const commandList

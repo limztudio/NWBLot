@@ -5,7 +5,7 @@
 #include "project.h"
 
 #include <core/ecs/module.h>
-#include <core/graphics/backend_selection.h>
+#include <core/graphics/vulkan/backend_context.h>
 #include <core/graphics/module.h>
 #include <core/telemetry/frame_graph_registry.h>
 #include <impl/assets/graphics/bindless/runtime_abi.h>

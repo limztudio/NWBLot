@@ -14,7 +14,7 @@
 
 #include <core/assets/ref.h>
 #include <core/ecs/world.h>
-#include <core/graphics/backend_selection.h>
+#include <core/graphics/vulkan/backend_context.h>
 #include <core/graphics/module.h>
 #include <core/telemetry/frame_graph_registry.h>
 #include <impl/assets_material/asset.h>

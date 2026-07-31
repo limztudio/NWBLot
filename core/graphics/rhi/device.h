@@ -33,7 +33,6 @@ namespace Feature{
         RayTracingClusters,
         RayTracingOpacityMicromap,
         RayTracingPipeline,
-        SamplerFeedback,
         ShaderExecutionReordering,
         ShaderSpecializations,
         SinglePassStereo,

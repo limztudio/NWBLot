@@ -3,7 +3,7 @@
 
 
 #include "module.h"
-#include "backend_selection.h"
+#include "vulkan/backend_context.h"
 
 #include <core/common/log.h>
 #include <core/telemetry/session.h>
@@ -464,7 +464,7 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
     if(
         static_cast<i32>(m_swapChainState.backBufferWidth) != static_cast<i32>(width)
         || static_cast<i32>(m_swapChainState.backBufferHeight) != static_cast<i32>(height)
-        || (m_swapChainState.vsyncEnabled != m_requestedVSync && GraphicsBackend::s_ResizeSwapChainOnVSyncChange)
+        || m_swapChainState.vsyncEnabled != m_requestedVSync
     ){
         backBufferResizing();
 
@@ -536,10 +536,6 @@ void Graphics::removeRenderPass(IRenderPass& pass){
 
 const tchar* Graphics::getRendererString()const{
     return m_backend->getRendererString();
-}
-
-GraphicsAPI::Enum Graphics::getGraphicsAPI()const{
-    return GraphicsBackend::s_Api;
 }
 
 void Graphics::reportLiveObjects()const{

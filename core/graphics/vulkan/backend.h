@@ -1132,30 +1132,6 @@ private:
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Sampler Feedback Texture
-
-
-class SamplerFeedbackTexture final : public RefCounter<GraphicsResource>, NoCopy{
-    friend class Device;
-
-
-public:
-    SamplerFeedbackTexture(const VulkanContext& context);
-    ~SamplerFeedbackTexture() = default;
-
-
-public:
-    [[nodiscard]] const SamplerFeedbackTextureDesc& getDescription()const{ return m_desc; }
-    TextureHandle getPairedTexture(){ return m_pairedTexture; }
-
-
-private:
-    SamplerFeedbackTextureDesc m_desc;
-    TextureHandle m_pairedTexture;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Sampler
 
 
@@ -2165,10 +2141,6 @@ public:
     void writeTexture(Texture* dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch = 0);
     void resolveTexture(Texture* dest, const TextureSubresourceSet& dstSubresources, Texture* src, const TextureSubresourceSet& srcSubresources);
 
-    void clearSamplerFeedbackTexture(SamplerFeedbackTexture* texture);
-    void decodeSamplerFeedbackTexture(Buffer* buffer, SamplerFeedbackTexture* texture, Format::Enum format);
-    void setSamplerFeedbackTextureState(SamplerFeedbackTexture* texture, ResourceStates::Mask stateBits);
-
     void setPushConstants(const void* data, usize byteSize);
 
     void setGraphicsState(const GraphicsState& state);
@@ -2396,8 +2368,6 @@ public:
     void unmapStagingTexture(StagingTexture* tex);
     void getTextureTiling(Texture* texture, u32* numTiles, PackedMipDesc* desc, TileShape* tileShape, u32* subresourceTilingsNum, SubresourceTiling* subresourceTilings);
     void updateTextureTileMappings(Texture* texture, const TextureTilesMapping* tileMappings, u32 numTileMappings, CommandQueue::Enum executionQueue = CommandQueue::Graphics);
-    [[nodiscard]] SamplerFeedbackTextureHandle createSamplerFeedbackTexture(Texture* pairedTexture, const SamplerFeedbackTextureDesc& desc);
-    [[nodiscard]] SamplerFeedbackTextureHandle createSamplerFeedbackForNativeTexture(ObjectType objectType, Object texture, Texture* pairedTexture);
     [[nodiscard]] BufferHandle createBuffer(const BufferDesc& d);
     void* mapBuffer(Buffer* buffer, CpuAccessMode::Enum);
     void unmapBuffer(Buffer* buffer);

@@ -23,10 +23,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace GraphicsAPI{
-    enum Enum : u8;
-};
-
 namespace GraphicsBackend{
     class BackendContext;
     using Backend = BackendContext;
@@ -34,7 +30,6 @@ namespace GraphicsBackend{
     class Heap;
     class Texture;
     class StagingTexture;
-    class SamplerFeedbackTexture;
     class Buffer;
     class Shader;
     class ShaderLibrary;
@@ -67,7 +62,6 @@ namespace GraphicsBackend{
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Heap)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Texture)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(StagingTexture)
-    NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(SamplerFeedbackTexture)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Buffer)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(Shader)
     NWB_DECLARE_GRAPHICS_REFCOUNT_HOOKS(ShaderLibrary)
@@ -100,7 +94,6 @@ using Device = GraphicsBackend::Device;
 using Heap = GraphicsBackend::Heap;
 using Texture = GraphicsBackend::Texture;
 using StagingTexture = GraphicsBackend::StagingTexture;
-using SamplerFeedbackTexture = GraphicsBackend::SamplerFeedbackTexture;
 using InputLayout = GraphicsBackend::InputLayout;
 using Buffer = GraphicsBackend::Buffer;
 using Shader = GraphicsBackend::Shader;

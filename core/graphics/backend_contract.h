@@ -66,7 +66,6 @@ concept DeviceApi = requires(
     Heap* heap,
     const TextureSlice& textureSlice,
     usize* rowPitch,
-    const SamplerFeedbackTextureDesc& samplerFeedbackDesc,
     const BufferDesc& bufferDesc,
     Buffer* buffer,
     u32* tileCount,
@@ -113,8 +112,6 @@ concept DeviceApi = requires(
     device.unmapStagingTexture(stagingTexture);
     device.getTextureTiling(texture, tileCount, packedMipDesc, tileShape, subresourceTilingCount, subresourceTilings);
     device.updateTextureTileMappings(texture, tileMappings, u32{}, CommandQueue::Graphics);
-    { device.createSamplerFeedbackTexture(texture, samplerFeedbackDesc) }->SameAs<SamplerFeedbackTextureHandle>;
-    { device.createSamplerFeedbackForNativeTexture(ObjectType{}, nativeObject, texture) }->SameAs<SamplerFeedbackTextureHandle>;
 
     { device.createBuffer(bufferDesc) }->SameAs<BufferHandle>;
     { device.mapBuffer(buffer, CpuAccessMode::Write) }->SameAs<void*>;
@@ -179,7 +176,6 @@ concept CommandListApi = requires(
     Texture* texture,
     StagingTexture* stagingTexture,
     Buffer* buffer,
-    SamplerFeedbackTexture* samplerFeedbackTexture,
     Framebuffer& framebuffer,
     RayTracingAccelStruct* accelStruct,
     RayTracingOpacityMicromap* opacityMicromap,
@@ -243,9 +239,6 @@ concept CommandListApi = requires(
     commandList.clearBufferUInt(buffer, u32{});
     commandList.copyBuffer(buffer, u64{}, buffer, u64{}, u64{});
 
-    commandList.clearSamplerFeedbackTexture(samplerFeedbackTexture);
-    commandList.decodeSamplerFeedbackTexture(buffer, samplerFeedbackTexture, Format::R8_UINT);
-    commandList.setSamplerFeedbackTextureState(samplerFeedbackTexture, ResourceStates::UnorderedAccess);
     commandList.setPushConstants(data, usize{});
 
     commandList.setGraphicsState(graphicsState);

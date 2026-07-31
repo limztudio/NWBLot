@@ -26,7 +26,7 @@
 #include <core/alloc/job.h>
 #include <core/graphics/module.h>
 #include <core/graphics/api.h>
-#include <core/graphics/backend_selection.h>
+#include <core/graphics/vulkan/backend_context.h>
 #include <core/perf/timing.h>
 #include <impl/assets/graphics/avboit/constants.h>
 #include <impl/assets/graphics/bindless/runtime_abi.h>

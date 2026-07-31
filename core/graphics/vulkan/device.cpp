@@ -1256,8 +1256,6 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
         }
         return true;
     }
-    case Feature::SamplerFeedback:
-        return false;
     case Feature::VirtualResources:
         return false;
     case Feature::ConstantBufferRanges:

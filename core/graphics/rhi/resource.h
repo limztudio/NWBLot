@@ -294,25 +294,6 @@ struct SubresourceTiling{
     u32 startTileIndexInOverallResource = 0;
 };
 
-namespace SamplerFeedbackFormat{
-    enum Enum : u8{
-        MinMipOpaque = 0x0,
-        MipRegionUsedOpaque = 0x1,
-    };
-};
-
-struct SamplerFeedbackTextureDesc{
-    u32 samplerFeedbackMipRegionX = 0;
-    u32 samplerFeedbackMipRegionY = 0;
-    u32 samplerFeedbackMipRegionZ = 0;
-    ResourceStates::Mask initialState = ResourceStates::Unknown;
-    SamplerFeedbackFormat::Enum samplerFeedbackFormat = SamplerFeedbackFormat::MinMipOpaque;
-    bool keepInitialState = false;
-};
-
-typedef GraphicsBackend::Handle<SamplerFeedbackTexture> SamplerFeedbackTextureHandle;
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Input Layout
 

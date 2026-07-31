@@ -26,8 +26,8 @@ NwbMeshRasterVertex main(NwbMeshEmulationVertexInput input){
     return nwbMeshBuildRasterVertex(
         input.position,
         input.color,
-        float3(input.normal.xyz),
-        float4(input.tangent),
+        input.normal.xyz,
+        input.tangent,
         input.uv0,
         input.worldPosition
     );

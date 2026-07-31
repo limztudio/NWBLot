@@ -22,7 +22,7 @@
 struct NwbMeshGBufferOutput{
     [[vk::location(NWB_MESH_GBUFFER_BASE_COLOR_LOCATION)]] half4 baseColor : SV_Target0;
     [[vk::location(NWB_MESH_GBUFFER_NORMAL_LOCATION)]] half4 normal : SV_Target1;
-    [[vk::location(NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION)]] float4 worldPosition : SV_Target2;
+    [[vk::location(NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION)]] half4 worldPosition : SV_Target2;
 #if NWB_CSG_ENABLED
     float depth : SV_Depth;
 #endif
@@ -30,7 +30,7 @@ struct NwbMeshGBufferOutput{
 
 static half4 outGBufferBaseColor;
 static half4 outGBufferNormal;
-static float4 outGBufferWorldPosition;
+static half4 outGBufferWorldPosition;
 
 NwbMeshGBufferOutput nwbBuildMeshGBufferOutput(){
     NwbMeshGBufferOutput output;
@@ -141,7 +141,7 @@ float3 nwbMeshCameraToSurfaceDirection(const float3 worldPosition){
 void nwbWriteMeshGBufferParams(half3 baseColor, float3 normal, float3 worldPosition, half param0, half param1){
     outGBufferBaseColor = half4(clamp(baseColor, half3(0.0h), half3(1.0h)), half(float(nwbMeshShadingModelId())));
     outGBufferNormal = half4(nwbGBufferEncodeNormal(normal), half(param0));
-    outGBufferWorldPosition = float4(worldPosition, param1);
+    outGBufferWorldPosition = half4(half3(worldPosition), param1);
 }
 
 

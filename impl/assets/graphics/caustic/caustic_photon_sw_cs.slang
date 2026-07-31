@@ -212,7 +212,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
                     const NwbRayTraceVertexAttrib a0 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase);
                     const NwbRayTraceVertexAttrib a1 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
                     const NwbRayTraceVertexAttrib a2 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
-                    const float3 objectShadingNormal = a0.normal * triangleHit.w + a1.normal * triangleHit.u + a2.normal * triangleHit.v;
+                    const float3 objectShadingNormal = float3(a0.normal) * triangleHit.w + float3(a1.normal) * triangleHit.u + float3(a2.normal) * triangleHit.v;
 
                     // The interpolated SHADING normal in world space (inverse-transpose of object->world). This is the
                     // bend normal (smooth across the mesh -> smooth caustic) AND the surface-dispatch normal.

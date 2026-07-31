@@ -95,8 +95,8 @@ NwbMeshRasterVertex nwbMeshBuildRasterVertex(const NwbMeshGeneratedVertex genera
     return nwbMeshBuildRasterVertex(
         generatedVertex.position,
         nwbMeshGeneratedVertexColor(generatedVertex),
-        float3(nwbMeshGeneratedVertexNormal(generatedVertex).xyz),
-        float4(nwbMeshGeneratedVertexTangent(generatedVertex)),
+        nwbMeshGeneratedVertexNormal(generatedVertex).xyz,
+        nwbMeshGeneratedVertexTangent(generatedVertex),
         generatedVertex.uv0,
         generatedVertex.worldPosition
     );

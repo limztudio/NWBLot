@@ -74,7 +74,7 @@ uint nwbMeshFrameViewHeapSlot(){
 // Per-triangle-corner normal + uv0, in the shared 16-byte ray-trace attribute layout. GI needs these inputs to
 // evaluate the material surface hook exactly through its declared contract rather than inferring an interface field.
 struct NwbGiHwVertexAttrib{
-    float3 normal;
+    half3 normal;
     float2 uv0;
 };
 
@@ -82,10 +82,10 @@ NwbGiHwVertexAttrib nwbGiHwLoadVertexAttrib(const uint attributeSlot, const uint
     // attributeSlot is a non-uniform global heap slot; NwbHeapRawBuffer() applies the required decoration per load.
     const uint4 packed = NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u);
     NwbGiHwVertexAttrib attrib;
-    attrib.normal = float3(
+    attrib.normal = half3(float3(
         nwbUnpackHalf2x16(packed.x),
         nwbUnpackHalf2x16(packed.y).x
-    );
+    ));
     attrib.uv0 = asfloat(packed.zw);
     return attrib;
 }
@@ -152,7 +152,7 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     const NwbGiHwVertexAttrib a0 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase);
     const NwbGiHwVertexAttrib a1 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
     const NwbGiHwVertexAttrib a2 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
-    const float3 objectShadingNormal = a0.normal * weights.x + a1.normal * weights.y + a2.normal * weights.z;
+    const float3 objectShadingNormal = float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z;
 
     NwbShadowHit surfaceHit;
     surfaceHit.meshInstanceIndex = material.meshInstanceIndex;

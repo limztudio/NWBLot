@@ -170,7 +170,7 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
                 const NwbRayTraceVertexAttrib a0 = nwbGiSwLoadVertexAttrib(material.attributeSlot, attributeBase);
                 const NwbRayTraceVertexAttrib a1 = nwbGiSwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
                 const NwbRayTraceVertexAttrib a2 = nwbGiSwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
-                const float3 objectShadingNormal = a0.normal * triHit.w + a1.normal * triHit.u + a2.normal * triHit.v;
+                const float3 objectShadingNormal = float3(a0.normal) * triHit.w + float3(a1.normal) * triHit.u + float3(a2.normal) * triHit.v;
 
                 NwbShadowHit surfaceHit;
                 surfaceHit.meshInstanceIndex = material.meshInstanceIndex;

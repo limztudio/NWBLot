@@ -91,7 +91,8 @@ half3 nwbBxdfCausticIrradiance(int2 pixel){
 
 
 void nwbSceneResolveLight(NwbSceneLight light, float3 worldPosition, out float3 lightVector, out half3 radiance){
-    const half3 baseRadiance = half3(clamp(light.colorIntensity.xyz, float3(0.0), float3(1.5))) * half(min(max(light.colorIntensity.w, 0.0), 2.0));
+    const half3 baseRadiance = clamp(half3(light.colorIntensity.xyz), half3(0.0h), half3(1.5h))
+        * clamp(half(light.colorIntensity.w), half(0.0h), half(2.0h));
     const float lightType = light.params.y;
 
     if(lightType < NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX){

@@ -10,7 +10,7 @@
 
 struct NwbCsgRemovedIntervalEntry{
     float4 depth;
-    float4 capNormal;
+    half4 capNormal;
     uint4 data;
     float sortDepth;
 };
@@ -34,7 +34,7 @@ struct NwbCsgRemovedIntervalEntry{
 NwbCsgRemovedIntervalEntry nwbCsgInvalidRemovedIntervalEntry(){
     NwbCsgRemovedIntervalEntry entry;
     entry.depth = float4(0.0, 0.0, 0.0, 0.0);
-    entry.capNormal = float4(0.0, 0.0, 0.0, 0.0);
+    entry.capNormal = half4(0.0h, 0.0h, 0.0h, 0.0h);
     entry.data = uint4(0u, 0u, 0u, 0u);
     entry.sortDepth = NWB_CSG_INVALID_DISTANCE;
     return entry;
@@ -168,7 +168,7 @@ void nwbCsgIntervalCombineAppendCandidate(
 
     NwbCsgRemovedIntervalEntry entry;
     entry.depth = float4(cutterHardwareDepth.x, cutterHardwareDepth.y, removedEnterLinearDepth, removedExitLinearDepth);
-    entry.capNormal = g_NwbCsgBackCapNormal.Load(intervalTexel);
+    entry.capNormal = half4(g_NwbCsgBackCapNormal.Load(intervalTexel));
     entry.data = uint4(receiverIndex, entryFlags, spanIndex, intervalIndex);
     entry.sortDepth = backCapVisible ? cutterLinearDepth.y : removedEnterLinearDepth;
 
@@ -197,7 +197,7 @@ void nwbCsgIntervalCombineWriteEntries(
         const uint3 texel = uint3(pixel, layerIndex);
         const NwbCsgRemovedIntervalEntry entry = entries[layerIndex];
         g_NwbCsgRemovedIntervalDepth[texel] = entry.depth;
-        g_NwbCsgRemovedIntervalCapNormal[texel] = entry.capNormal;
+        g_NwbCsgRemovedIntervalCapNormal[texel] = float4(entry.capNormal);
         g_NwbCsgRemovedIntervalData[texel] = entry.data;
     }
 

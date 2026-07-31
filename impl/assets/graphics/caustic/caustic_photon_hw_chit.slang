@@ -40,7 +40,7 @@ void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttri
         const NwbRayTraceVertexAttrib a0 = nwbCausticHwLoadVertexAttrib(material.attributeSlot, attributeBase);
         const NwbRayTraceVertexAttrib a1 = nwbCausticHwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
         const NwbRayTraceVertexAttrib a2 = nwbCausticHwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
-        const float3 objectShadingNormal = a0.normal * weights.x + a1.normal * weights.y + a2.normal * weights.z;
+        const float3 objectShadingNormal = float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z;
 
         // The interpolated SHADING normal in world space (inverse-transpose of object->world == mul(n,
         // (float3x3)WorldToObject3x4()) == the SW nwbSwBvhTransformNormal). The bend normal AND the surface

@@ -151,12 +151,12 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
                 const NwbRayTraceVertexAttrib a0 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase);
                 const NwbRayTraceVertexAttrib a1 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
                 const NwbRayTraceVertexAttrib a2 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
-                const float smoothNormalWeight = nwbShadowSmoothNormalWeight(a0.normal, a1.normal, a2.normal);
+                const float smoothNormalWeight = nwbShadowSmoothNormalWeight(float3(a0.normal), float3(a1.normal), float3(a2.normal));
 
                 // Interpolate the object-space normal, then transform it to world space (the surface contract) with
                 // the inverse-transpose of object->world carried in the instance's world->object rows, so a
                 // non-identity instance rotation/scale matches the rasterizer's world-space normal.
-                const float3 objectNormal = a0.normal * triangleHit.w + a1.normal * triangleHit.u + a2.normal * triangleHit.v;
+                const float3 objectNormal = float3(a0.normal) * triangleHit.w + float3(a1.normal) * triangleHit.u + float3(a2.normal) * triangleHit.v;
 
                 NwbShadowHit hit;
                 hit.meshInstanceIndex = material.meshInstanceIndex;

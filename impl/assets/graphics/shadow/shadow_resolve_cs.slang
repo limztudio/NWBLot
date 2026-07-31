@@ -286,8 +286,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         if(inBounds){
             const bool valid = nwbShadowResolveValidAtHalf(texel);
             for(uint slot = slotStart; slot < slotEnd; ++slot){
-                const float3 vis = valid ? NwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.softHalfSlot).Load(int4(texel, slot, 0)).rgb : float3(1.0, 1.0, 1.0);
-                g_NwbShadowResolveOutput[uint3(pixel, slot)] = float4(vis, 1.0);
+                const half3 vis = valid
+                    ? half3(NwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.softHalfSlot).Load(int4(texel, slot, 0)).rgb)
+                    : half3(1.0h, 1.0h, 1.0h)
+                ;
+                g_NwbShadowResolveOutput[uint3(pixel, slot)] = float4(float3(vis), 1.0);
             }
         }
         return;

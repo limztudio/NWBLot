@@ -15,7 +15,7 @@ struct NwbCsgIntervalPeelEntry{
     float backDepth;
     float frontLinearDepth;
     float backLinearDepth;
-    float3 backCapNormal;
+    half3 backCapNormal;
     uint id;
 };
 
@@ -93,7 +93,7 @@ NwbCsgIntervalPeelEntry nwbCsgInvalidIntervalPeelEntry(){
     entry.backDepth = NWB_CSG_INVALID_DISTANCE;
     entry.frontLinearDepth = NWB_CSG_INVALID_DISTANCE;
     entry.backLinearDepth = NWB_CSG_INVALID_DISTANCE;
-    entry.backCapNormal = float3(0.0, 0.0, 0.0);
+    entry.backCapNormal = half3(0.0h, 0.0h, 0.0h);
     entry.id = 0u;
     return entry;
 }
@@ -240,7 +240,7 @@ bool nwbCsgFindCutterIntervalOnRay(
                 outEntry.frontLinearDepth = min(frontLinearDepth, backLinearDepth);
                 outEntry.backLinearDepth = max(frontLinearDepth, backLinearDepth);
                 const float3 viewFacingFallback = normalize(rayBegin - rayEnd);
-                outEntry.backCapNormal = nwbCsgFlippedCutterWorldNormal(backWorldPosition, cutter, viewFacingFallback);
+                outEntry.backCapNormal = half3(nwbCsgFlippedCutterWorldNormal(backWorldPosition, cutter, viewFacingFallback));
                 outEntry.id = nwbCsgPackIntervalId(receiverIndex);
                 return outEntry.backLinearDepth >= outEntry.frontLinearDepth && outEntry.id != 0u;
             }
@@ -292,7 +292,7 @@ void nwbCsgWriteIntervalPeelEntries(
         if(entry.id == 0u)
             continue;
 
-        g_NwbCsgBackCapNormal[texel] = float4(entry.backCapNormal, 1.0);
+        g_NwbCsgBackCapNormal[texel] = float4(float3(entry.backCapNormal), 1.0);
         g_NwbCsgIntervalDepth[texel] = float4(entry.frontDepth, entry.backDepth, entry.frontLinearDepth, entry.backLinearDepth);
         g_NwbCsgIntervalId[texel] = entry.id;
     }

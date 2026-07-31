@@ -1030,22 +1030,36 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         hasTransparentRenderers,
     };
     const ECSRenderDetail::FrameExecutionPlan frameExecutionPlan(frameExecutionPlanInput);
-    const bool asyncShadowSchedule = frameExecutionPlan.usesDedicatedAsyncCompute();
+    const bool asyncShadowSchedule = frameExecutionPlan.workRunsOnLane(
+        ECSRenderDetail::FrameExecutionWork::RayEffects,
+        Core::RenderLane::AsyncCompute
+    );
     const bool laggedAsyncLightingSchedule = frameExecutionPlan.usesLaggedAsyncLighting();
     // A history snapshot is captured after every opt-in frame, including the current-frame bootstrap. Once the
     // previous accepted snapshot exists this packet shades independently on Graphics while the producer runs on Async.
-    const bool captureLaggedLightingHistory = frameExecutionPlan.capturesLaggedLightingHistory();
+    const bool captureLaggedLightingHistory = frameExecutionPlan.hasWork(
+        ECSRenderDetail::FrameExecutionWork::LaggedLightingStash
+    );
     const bool hardwareShadowSupported =
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
         && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
     ;
     // vkCmdTraceRaysKHR is valid from a command pool supporting VK_QUEUE_COMPUTE_BIT. The dedicated AsyncCompute lane
     // is selected from such a family, so both the software and hardware caustic producers can share its packet.
-    const bool asyncCausticsSchedule = frameExecutionPlan.usesAsyncCaustics();
-    const bool asyncSurfelGiSchedule = frameExecutionPlan.usesAsyncSurfelGi();
+    const bool asyncCausticsSchedule = frameExecutionPlan.workRunsOnLane(
+        ECSRenderDetail::FrameExecutionWork::Caustics,
+        Core::RenderLane::AsyncCompute
+    );
+    const bool asyncSurfelGiSchedule = frameExecutionPlan.workRunsOnLane(
+        ECSRenderDetail::FrameExecutionWork::SurfelGi,
+        Core::RenderLane::AsyncCompute
+    );
     // AVBOIT alternates Graphics raster passes with two pure dispatches. Only split it when transparent work exists;
     // a clear-only frame remains one Graphics packet and avoids needless cross-lane submissions.
-    const bool asyncAvboitSchedule = frameExecutionPlan.usesAsyncAvboit();
+    const bool asyncAvboitSchedule = frameExecutionPlan.workRunsOnLane(
+        ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp,
+        Core::RenderLane::AsyncCompute
+    );
     Core::CommandList* meshViewSetupCommandList = m_meshViewSetupCommandList.get();
     Core::CommandList* sceneShadingSetupCommandList = m_sceneShadingSetupCommandList.get();
     Core::CommandList* deferredClearCommandList = m_deferredClearCommandList.get();

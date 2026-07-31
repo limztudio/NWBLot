@@ -99,8 +99,8 @@ TEST(EcsGraphics, FrameExecutionPlanKeepsGraphicsFallbackAsOnePacket){
     EXPECT_TRUE(plan.usesGraphicsFallback());
     EXPECT_FALSE(plan.usesDedicatedAsyncCompute());
     EXPECT_FALSE(plan.usesLaggedAsyncLighting());
-    EXPECT_FALSE(plan.capturesLaggedLightingHistory());
-    EXPECT_FALSE(plan.usesAsyncAvboit());
+    EXPECT_FALSE(plan.hasWork(FrameExecutionWork::LaggedLightingStash));
+    EXPECT_FALSE(plan.workRunsOnLane(FrameExecutionWork::AvboitDepthWarp, RenderLane::AsyncCompute));
     EXPECT_TRUE(plan.packet(FrameExecutionPacket::GraphicsFallback).enabled);
     EXPECT_EQ(plan.packet(FrameExecutionPacket::GraphicsFallback).lane, RenderLane::Graphics);
     EXPECT_FALSE(plan.packet(FrameExecutionPacket::GraphicsPrefix).enabled);
@@ -120,8 +120,8 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
 
     EXPECT_TRUE(opaquePlan.usesDedicatedAsyncCompute());
     EXPECT_FALSE(opaquePlan.usesLaggedAsyncLighting());
-    EXPECT_FALSE(opaquePlan.capturesLaggedLightingHistory());
-    EXPECT_FALSE(opaquePlan.usesAsyncAvboit());
+    EXPECT_FALSE(opaquePlan.hasWork(FrameExecutionWork::LaggedLightingStash));
+    EXPECT_FALSE(opaquePlan.workRunsOnLane(FrameExecutionWork::AvboitDepthWarp, RenderLane::AsyncCompute));
     EXPECT_TRUE(opaquePlan.packet(FrameExecutionPacket::GraphicsEffects).enabled);
     EXPECT_FALSE(opaquePlan.packet(FrameExecutionPacket::GraphicsAvboitPre).enabled);
     EXPECT_EQ(opaquePlan.packet(FrameExecutionPacket::DeferredLighting).lane, RenderLane::AsyncCompute);
@@ -145,8 +145,8 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
 
     EXPECT_TRUE(bootstrapPlan.usesDedicatedAsyncCompute());
     EXPECT_FALSE(bootstrapPlan.usesLaggedAsyncLighting());
-    EXPECT_TRUE(bootstrapPlan.capturesLaggedLightingHistory());
-    EXPECT_TRUE(bootstrapPlan.usesAsyncAvboit());
+    EXPECT_TRUE(bootstrapPlan.hasWork(FrameExecutionWork::LaggedLightingStash));
+    EXPECT_TRUE(bootstrapPlan.workRunsOnLane(FrameExecutionWork::AvboitDepthWarp, RenderLane::AsyncCompute));
     EXPECT_EQ(bootstrapPlan.packet(FrameExecutionPacket::AsyncRayEffects).lane, RenderLane::AsyncCompute);
     EXPECT_EQ(bootstrapPlan.packet(FrameExecutionPacket::AsyncRayEffects).waitPacketCount, 1u);
     EXPECT_EQ(
@@ -178,8 +178,8 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
 
     EXPECT_TRUE(laggedPlan.usesDedicatedAsyncCompute());
     EXPECT_TRUE(laggedPlan.usesLaggedAsyncLighting());
-    EXPECT_TRUE(laggedPlan.capturesLaggedLightingHistory());
-    EXPECT_FALSE(laggedPlan.usesAsyncAvboit());
+    EXPECT_TRUE(laggedPlan.hasWork(FrameExecutionWork::LaggedLightingStash));
+    EXPECT_FALSE(laggedPlan.workRunsOnLane(FrameExecutionWork::AvboitDepthWarp, RenderLane::AsyncCompute));
     EXPECT_TRUE(laggedPlan.packet(FrameExecutionPacket::GraphicsEffects).enabled);
     EXPECT_FALSE(laggedPlan.packet(FrameExecutionPacket::GraphicsAvboitPre).enabled);
     EXPECT_EQ(laggedPlan.packet(FrameExecutionPacket::DeferredLighting).lane, RenderLane::Graphics);
@@ -410,6 +410,9 @@ TEST(EcsGraphics, FrameExecutionPlanSelectsWorkCommandListFromResolvedLane){
         true,
         true,
     });
+    EXPECT_EQ(fallbackPlan.laneForWork(FrameExecutionWork::Caustics), RenderLane::Graphics);
+    EXPECT_TRUE(fallbackPlan.workRunsOnLane(FrameExecutionWork::Caustics, RenderLane::Graphics));
+    EXPECT_FALSE(fallbackPlan.workRunsOnLane(FrameExecutionWork::Caustics, RenderLane::AsyncCompute));
     EXPECT_EQ(
         fallbackPlan.commandListForWork(FrameExecutionWork::Caustics, commandLists),
         graphicsCommandList
@@ -438,6 +441,11 @@ TEST(EcsGraphics, FrameExecutionPlanSelectsWorkCommandListFromResolvedLane){
         false,
         true,
     });
+    EXPECT_EQ(splitPlan.laneForWork(FrameExecutionWork::RayEffects), RenderLane::AsyncCompute);
+    EXPECT_TRUE(splitPlan.workRunsOnLane(FrameExecutionWork::Caustics, RenderLane::AsyncCompute));
+    EXPECT_TRUE(splitPlan.workRunsOnLane(FrameExecutionWork::SurfelGi, RenderLane::AsyncCompute));
+    EXPECT_TRUE(splitPlan.workRunsOnLane(FrameExecutionWork::DeferredLighting, RenderLane::AsyncCompute));
+    EXPECT_TRUE(splitPlan.workRunsOnLane(FrameExecutionWork::DeferredComposite, RenderLane::AsyncCompute));
     EXPECT_EQ(
         splitPlan.commandListForWork(FrameExecutionWork::Caustics, commandLists),
         asyncComputeCommandList
@@ -462,6 +470,11 @@ TEST(EcsGraphics, FrameExecutionPlanSelectsWorkCommandListFromResolvedLane){
         true,
         true,
     });
+    EXPECT_TRUE(laggedPlan.workRunsOnLane(FrameExecutionWork::Caustics, RenderLane::AsyncCompute));
+    EXPECT_TRUE(laggedPlan.workRunsOnLane(FrameExecutionWork::SurfelGi, RenderLane::AsyncCompute));
+    EXPECT_EQ(laggedPlan.laneForWork(FrameExecutionWork::DeferredLighting), RenderLane::Graphics);
+    EXPECT_TRUE(laggedPlan.workRunsOnLane(FrameExecutionWork::DeferredComposite, RenderLane::Graphics));
+    EXPECT_TRUE(laggedPlan.workRunsOnLane(FrameExecutionWork::LaggedLightingStash, RenderLane::AsyncCompute));
     EXPECT_EQ(
         laggedPlan.commandListForWork(FrameExecutionWork::Caustics, commandLists),
         asyncComputeCommandList

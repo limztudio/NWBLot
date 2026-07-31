@@ -246,14 +246,6 @@ public:
 public:
     [[nodiscard]] bool usesDedicatedAsyncCompute()const noexcept{ return m_usesDedicatedAsyncCompute; }
     [[nodiscard]] bool usesLaggedAsyncLighting()const noexcept{ return m_usesLaggedAsyncLighting; }
-    [[nodiscard]] bool capturesLaggedLightingHistory()const noexcept{ return m_capturesLaggedLightingHistory; }
-    [[nodiscard]] bool usesAsyncAvboit()const noexcept{ return m_usesAsyncAvboit; }
-    [[nodiscard]] bool usesAsyncRayEffects()const noexcept{ return m_usesDedicatedAsyncCompute; }
-    [[nodiscard]] bool usesAsyncDeferredLighting()const noexcept{
-        return m_usesDedicatedAsyncCompute && !m_usesLaggedAsyncLighting;
-    }
-    [[nodiscard]] bool usesAsyncCaustics()const noexcept{ return usesAsyncRayEffects(); }
-    [[nodiscard]] bool usesAsyncSurfelGi()const noexcept{ return usesAsyncRayEffects(); }
     [[nodiscard]] bool usesGraphicsFallback()const noexcept{ return !m_usesDedicatedAsyncCompute; }
     [[nodiscard]] const FrameExecutionPacketPlan& packet(const FrameExecutionPacket::Enum packet)const noexcept{
         return m_packets[static_cast<usize>(packet)];
@@ -269,6 +261,17 @@ public:
         NWB_ASSERT(packetID != FrameExecutionPacket::kCount);
         return packetID;
     }
+    [[nodiscard]] Core::RenderLane::Enum laneForWork(const FrameExecutionWork::Enum work)const noexcept{
+        NWB_ASSERT(work < FrameExecutionWork::kCount);
+        NWB_ASSERT(hasWork(work));
+        return packet(packetForWork(work)).lane;
+    }
+    [[nodiscard]] bool workRunsOnLane(
+        const FrameExecutionWork::Enum work,
+        const Core::RenderLane::Enum lane
+    )const noexcept{
+        return work < FrameExecutionWork::kCount && hasWork(work) && laneForWork(work) == lane;
+    }
     [[nodiscard]] Core::CommandList* commandListForWork(
         const FrameExecutionWork::Enum work,
         const FrameExecutionLaneCommandListPair& commandLists
@@ -276,7 +279,7 @@ public:
         if(work >= FrameExecutionWork::kCount || !hasWork(work))
             return nullptr;
 
-        switch(packet(packetForWork(work)).lane){
+        switch(laneForWork(work)){
             case Core::RenderLane::Graphics:
                 return commandLists.graphics;
             case Core::RenderLane::AsyncCompute:

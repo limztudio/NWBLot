@@ -32,19 +32,28 @@ bool ShaderAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
         return false;
     }
 
-    const Core::Assets::AssetBytes& bytecode = static_cast<const Shader&>(asset).bytecode();
-    switch(ShaderBinaryPayload::ValidateBytecode(bytecode)){
-    case ShaderBinaryPayload::BytecodeValidationFailure::None:
+    const Shader& shader = static_cast<const Shader&>(asset);
+    const Core::Assets::AssetBytes& bytecode = shader.bytecode();
+    switch(ShaderBinaryPayload::EncodeAssetPayload(AStringView(shader.entryPoint()), bytecode, outBinary)){
+    case ShaderBinaryPayload::AssetPayloadFailure::None:
         break;
-    case ShaderBinaryPayload::BytecodeValidationFailure::InvalidSize:
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: invalid bytecode size"));
+    case ShaderBinaryPayload::AssetPayloadFailure::InvalidHeader:
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: invalid shader payload header"));
         return false;
-    case ShaderBinaryPayload::BytecodeValidationFailure::InvalidMagic:
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: invalid SPIR-V magic"));
+    case ShaderBinaryPayload::AssetPayloadFailure::UnsupportedVersion:
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: unsupported shader payload version"));
+        return false;
+    case ShaderBinaryPayload::AssetPayloadFailure::InvalidEntryPoint:
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: shader entry point is empty or too long"));
+        return false;
+    case ShaderBinaryPayload::AssetPayloadFailure::InvalidBytecode:
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: invalid SPIR-V bytecode"));
+        return false;
+    case ShaderBinaryPayload::AssetPayloadFailure::OutputSizeOverflow:
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: shader payload size overflow"));
         return false;
     }
 
-    outBinary = bytecode;
     return true;
 }
 

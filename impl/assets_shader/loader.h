@@ -105,7 +105,7 @@ template<typename ShaderPathResolver>
 
     const Shader& shaderAsset = static_cast<const Shader&>(*loadedAsset);
     const Core::Assets::AssetBytes& shaderBinary = shaderAsset.bytecode();
-    if(shaderBinary.empty() || (shaderBinary.size() & 3u) != 0u){
+    if(shaderAsset.entryPoint().empty() || shaderBinary.empty() || (shaderBinary.size() & 3u) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: shader '{}' has invalid bytecode"), ownerName, StringConvert(shaderVirtualPath.c_str()));
         return false;
     }
@@ -113,6 +113,7 @@ template<typename ShaderPathResolver>
     Core::ShaderDesc shaderDesc(shaderBinary.get_allocator().arena());
     shaderDesc.setShaderType(shaderType);
     shaderDesc.setDebugName(debugName);
+    shaderDesc.setEntryName(AStringView(shaderAsset.entryPoint()));
 
     auto& device = graphics.getDevice();
     outShader = device.createShader(shaderDesc, shaderBinary.data(), shaderBinary.size());

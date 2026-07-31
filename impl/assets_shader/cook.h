@@ -116,7 +116,7 @@ public:
         CookString name;
         ACompactString stage;
         ACompactString archiveStage;
-        CookString targetProfile;
+        ACompactString targetProfile;
         CookString entryPoint;
         CookString source;
 
@@ -127,7 +127,6 @@ public:
 
         explicit ShaderEntry(CookArena& memoryArena)
             : name(memoryArena)
-            , targetProfile(memoryArena)
             , entryPoint("main", memoryArena)
             , source(memoryArena)
             , includeRoots(memoryArena)

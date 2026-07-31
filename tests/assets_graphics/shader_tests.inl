@@ -278,6 +278,31 @@ static bool WriteStandaloneShaderProbe(const Path& assetRoot){
     return WriteTextFile(assetRoot / "shaders" / "standalone_ps.slang", s_StandaloneShaderProbeSource);
 }
 
+static constexpr AStringView s_ExactEntryPointShaderProbeSource = R"NWB_SLANG(struct NwbExactEntryPointPixelOutput{
+    float4 color : SV_Target0;
+};
+
+NwbExactEntryPointPixelOutput MainCase(){
+    NwbExactEntryPointPixelOutput output;
+    output.color = float4(1.0, 1.0, 1.0, 1.0);
+    return output;
+}
+
+)NWB_SLANG";
+
+static bool WriteExactEntryPointShaderProbe(const Path& assetRoot){
+    if(!WriteTextFile(
+        assetRoot / "shaders" / "exact_entry_point_ps.nwb",
+        "shader asset;\n\n"
+        "asset.stage = \"ps\";\n"
+        "asset.target_profile = \"spirv_1_5\";\n"
+        "asset.entry_point = \"MainCase\";\n"
+    ))
+        return false;
+
+    return WriteTextFile(assetRoot / "shaders" / "exact_entry_point_ps.slang", s_ExactEntryPointShaderProbeSource);
+}
+
 TEST(AssetsGraphics, ShaderCookWithoutMaterialBindIncludes){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -312,6 +337,86 @@ TEST(AssetsGraphics, ShaderCookWithoutMaterialBindIncludes){
             Name("ps"),
             sourceChecksum
         ));
+    }
+
+    EXPECT_EQ(logger.errorCount(), 0u);
+
+    ErrorCode errorCode;
+    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+}
+
+TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    Path root(testArena.arena);
+    Path outputDirectory(testArena.arena);
+    EXPECT_TRUE(PrepareAssetsGraphicsCookCase(
+        testArena,
+        "shader_cook_exact_entry_point",
+        root,
+        outputDirectory
+    ));
+
+    const Path assetRoot = root / "assets";
+    EXPECT_TRUE(WriteExactEntryPointShaderProbe(assetRoot));
+
+    const bool cooked = CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot });
+    EXPECT_TRUE(cooked);
+    if(cooked){
+        const Name shaderVirtualPath = NWB::Core::ShaderArchive::buildVirtualPathName(
+            Name("project/shaders/exact_entry_point_ps"),
+            NWB::Core::ShaderArchive::s_DefaultVariant,
+            Name("ps")
+        );
+        UniquePtr<NWB::Core::Assets::IAsset> loadedShader;
+        EXPECT_TRUE(LoadCookedAsset<NWB::Impl::ShaderAssetCodec>(
+            testArena,
+            outputDirectory,
+            shaderVirtualPath,
+            loadedShader
+        ));
+        if(loadedShader){
+            const NWB::Impl::Shader& shader = static_cast<const NWB::Impl::Shader&>(*loadedShader);
+            EXPECT_EQ(AStringView(shader.entryPoint()), "MainCase");
+
+            NWB::Core::GraphicsString resolvedEntryPoint(testArena.arena);
+            NWB::Core::GraphicsVector<u32> words(testArena.arena);
+            words.resize(shader.bytecode().size() / sizeof(u32));
+            NWB_MEMCPY(words.data(), shader.bytecode().size(), shader.bytecode().data(), shader.bytecode().size());
+            EXPECT_EQ(NWB::Core::ResolveSpirvEntryPointName(
+                    words.data(),
+                    words.size(),
+                    AStringView(shader.entryPoint()),
+                    NWB::Core::ShaderType::Pixel,
+                    resolvedEntryPoint
+                ), NWB::Core::SpirvEntryPointLookupResult::Found);
+            EXPECT_EQ(resolvedEntryPoint, "MainCase");
+            EXPECT_EQ(NWB::Core::ResolveSpirvEntryPointName(
+                    words.data(),
+                    words.size(),
+                    "main",
+                    NWB::Core::ShaderType::Pixel,
+                    resolvedEntryPoint
+                ), NWB::Core::SpirvEntryPointLookupResult::NotFound);
+            EXPECT_TRUE(resolvedEntryPoint.empty());
+
+            NWB::Impl::ShaderAssetCodec codec;
+            NWB::Core::Assets::AssetBytes serializedShader = MakeAssetBytes(testArena);
+            EXPECT_TRUE(codec.serialize(shader, serializedShader));
+            UniquePtr<NWB::Core::Assets::IAsset> reserializedShader;
+            EXPECT_TRUE(codec.deserialize(
+                testArena.arena,
+                shaderVirtualPath,
+                serializedShader,
+                reserializedShader
+            ));
+            if(reserializedShader){
+                const NWB::Impl::Shader& decodedShader = static_cast<const NWB::Impl::Shader&>(*reserializedShader);
+                EXPECT_EQ(AStringView(decodedShader.entryPoint()), "MainCase");
+            }
+        }
     }
 
     EXPECT_EQ(logger.errorCount(), 0u);

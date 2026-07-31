@@ -831,6 +831,20 @@ static bool RoundTripMaterialAssetCodec(
     return deserialized && static_cast<bool>(outLoadedAsset);
 }
 
+static void SetGeneratedMaterialAvboitPixelShaders(NWB::Impl::Material& material){
+    NWB::Core::Assets::AssetRef<NWB::Impl::Shader> accumulatePixelShader;
+    accumulatePixelShader.virtualPath = Name("generated/avboit_accumulate_ps/project/materials/test_material");
+    material.setAvboitAccumulatePixelShader(accumulatePixelShader);
+
+    NWB::Core::Assets::AssetRef<NWB::Impl::Shader> occupancyPixelShader;
+    occupancyPixelShader.virtualPath = Name("generated/avboit_occupancy_ps/project/materials/test_material");
+    material.setAvboitOccupancyPixelShader(occupancyPixelShader);
+
+    NWB::Core::Assets::AssetRef<NWB::Impl::Shader> extinctionPixelShader;
+    extinctionPixelShader.virtualPath = Name("generated/avboit_extinction_ps/project/materials/test_material");
+    material.setAvboitExtinctionPixelShader(extinctionPixelShader);
+}
+
 TEST(AssetsGraphics, MaterialBindHalfTypedLayoutValues){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -1017,17 +1031,6 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     EXPECT_FALSE(material.refractive());
     EXPECT_EQ(material.materialInterface(), Name("project/material_interfaces/test_surface"));
 
-    NWB::Impl::Material transparentMaterial(testArena.arena);
-    EXPECT_TRUE(BuildMaterialFromBindAndMeta(
-        s_MinimalMaterialBindSource,
-        s_TransparentMaterialMeta,
-        "material_meta_explicit_transparent",
-        testArena,
-        transparentMaterial,
-        scratchArena
-    ));
-    EXPECT_TRUE(transparentMaterial.transparent());
-
     NWB::Impl::Material twoSidedMaterial(testArena.arena);
     EXPECT_TRUE(BuildMaterialFromBindAndMeta(
         s_MinimalMaterialBindSource,
@@ -1041,19 +1044,42 @@ TEST(AssetsGraphics, MaterialMetadataInterfaceAndBlockParameters){
     EXPECT_FALSE(twoSidedMaterial.transparent());
     EXPECT_FALSE(twoSidedMaterial.refractive());
 
+    EXPECT_EQ(logger.errorCount(), 0u);
+}
+
+TEST(AssetsGraphics, MaterialCookRejectsMissingAvboitPixelShaders){
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
+
+    NWB::Impl::Material transparentMaterial(testArena.arena);
+    EXPECT_FALSE(BuildMaterialFromBindAndMeta(
+        s_MinimalMaterialBindSource,
+        s_TransparentMaterialMeta,
+        "material_cook_missing_avboit_transparent",
+        testArena,
+        transparentMaterial,
+        scratchArena
+    ));
+
     NWB::Impl::Material refractiveMaterial(testArena.arena);
-    EXPECT_TRUE(BuildMaterialFromBindAndMeta(
+    EXPECT_FALSE(BuildMaterialFromBindAndMeta(
         s_MinimalMaterialBindSource,
         s_RefractiveMaterialMeta,
-        "material_meta_explicit_refractive",
+        "material_cook_missing_avboit_refractive",
         testArena,
         refractiveMaterial,
         scratchArena
     ));
-    EXPECT_TRUE(refractiveMaterial.transparent());
-    EXPECT_TRUE(refractiveMaterial.refractive());
 
-    EXPECT_EQ(logger.errorCount(), 0u);
+    EXPECT_EQ(logger.errorCount(), 2u);
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
+        "AVBOIT pixel shaders must be present if and only if it is transparent"
+    )));
+#endif
 }
 
 TEST(AssetsGraphics, MaterialMetadataRejectsMissingShaderVariant){
@@ -1237,10 +1263,40 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
         if(!built)
             return;
 
-        material.setTransparent(true);
-        material.setRefractive(true);
-
         NWB::Impl::MaterialAssetCodec codec;
+        material.setRefractive(true);
+        EXPECT_TRUE(NWB::Impl::HasValidMaterialAvboitPixelShaderContract(
+            material.transparent(),
+            material.avboitAccumulatePixelShader(),
+            material.avboitOccupancyPixelShader(),
+            material.avboitExtinctionPixelShader()
+        ));
+        UniquePtr<NWB::Core::Assets::IAsset> opaqueRefractiveLoadedAsset;
+        if(RoundTripMaterialAssetCodec(testArena, codec, material, opaqueRefractiveLoadedAsset)){
+            const NWB::Impl::Material& opaqueRefractiveMaterial =
+                static_cast<const NWB::Impl::Material&>(*opaqueRefractiveLoadedAsset);
+            EXPECT_FALSE(opaqueRefractiveMaterial.transparent());
+            EXPECT_TRUE(opaqueRefractiveMaterial.refractive());
+            EXPECT_TRUE(NWB::Impl::HasValidMaterialAvboitPixelShaderContract(
+                opaqueRefractiveMaterial.transparent(),
+                opaqueRefractiveMaterial.avboitAccumulatePixelShader(),
+                opaqueRefractiveMaterial.avboitOccupancyPixelShader(),
+                opaqueRefractiveMaterial.avboitExtinctionPixelShader()
+            ));
+        }
+
+        material.setTransparent(true);
+
+#if defined(NWB_FINAL)
+        NWB::Core::Assets::AssetBytes invalidBinary = MakeAssetBytes(testArena);
+        EXPECT_FALSE(codec.serialize(material, invalidBinary));
+        EXPECT_TRUE(invalidBinary.empty());
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
+            "AVBOIT pixel shaders must be present if and only if the material is transparent"
+        )));
+#endif
+
+        SetGeneratedMaterialAvboitPixelShaders(material);
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         if(RoundTripMaterialAssetCodec(testArena, codec, material, loadedAsset)){
             const NWB::Impl::Material& loadedMaterial = static_cast<const NWB::Impl::Material&>(*loadedAsset);
@@ -1292,7 +1348,11 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
             CheckMixedHalfMaterialTypedLayoutAndBlockBytes(loadedMixedHalfMaterial);
         }
 
+#if defined(NWB_FINAL)
+        EXPECT_EQ(logger.errorCount(), 1u);
+#else
         EXPECT_EQ(logger.errorCount(), 0u);
+#endif
     }
 
 #if defined(NWB_FINAL)
@@ -1326,10 +1386,24 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
         ));
         CheckCodecRejectsBinary(testArena, codec, material.virtualPath(), byteSizeMismatchBinary);
 
-        EXPECT_EQ(logger.errorCount(), 2u);
+        constexpr usize s_AvboitPixelShaderBinaryBytes = sizeof(u32) + sizeof(NameHash);
+        ASSERT_GE(binary.size(), s_AvboitPixelShaderBinaryBytes * 3u);
+        const usize occupancyPresenceOffset = binary.size() - s_AvboitPixelShaderBinaryBytes * 2u;
+        NWB::Core::Assets::AssetBytes missingOccupancyBinary = binary;
+        EXPECT_TRUE(OverwritePOD(missingOccupancyBinary, occupancyPresenceOffset, static_cast<u32>(0u)));
+        missingOccupancyBinary.erase(
+            missingOccupancyBinary.begin() + occupancyPresenceOffset + sizeof(u32),
+            missingOccupancyBinary.begin() + occupancyPresenceOffset + s_AvboitPixelShaderBinaryBytes
+        );
+        CheckCodecRejectsBinary(testArena, codec, material.virtualPath(), missingOccupancyBinary);
+
+        EXPECT_EQ(logger.errorCount(), 3u);
         EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("typed layout hash mismatch")));
         EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
             "typed block byte count does not match typed layout"
+        )));
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
+            "AVBOIT pixel shaders must be present if and only if the material is transparent"
         )));
     }
 #endif

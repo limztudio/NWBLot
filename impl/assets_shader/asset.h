@@ -26,15 +26,18 @@ public:
 
 public:
     explicit Shader(Core::Assets::AssetArena& arena)
-        : m_bytecode(arena)
+        : m_entryPoint(arena)
+        , m_bytecode(arena)
     {}
     Shader(Core::Assets::AssetArena& arena, const Name& virtualPath)
         : Core::Assets::TypedAsset<Shader>(virtualPath)
+        , m_entryPoint(arena)
         , m_bytecode(arena)
     {}
 
 
 public:
+    [[nodiscard]] const Core::Assets::AssetString& entryPoint()const{ return m_entryPoint; }
     [[nodiscard]] const Core::Assets::AssetBytes& bytecode()const{ return m_bytecode; }
 
 public:
@@ -42,6 +45,7 @@ public:
 
 
 private:
+    Core::Assets::AssetString m_entryPoint;
     Core::Assets::AssetBytes m_bytecode;
 };
 

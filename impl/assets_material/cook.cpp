@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "cook.h"
 #include "cook_private.h"
 
 
@@ -197,6 +198,17 @@ bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMat
     outMaterial.setTransparent(materialEntry.transparent);
     outMaterial.setTwoSided(materialEntry.twoSided);
     outMaterial.setRefractive(materialEntry.refractive);
+    if(!HasValidMaterialAvboitPixelShaderContract(
+        outMaterial.transparent(),
+        outMaterial.avboitAccumulatePixelShader(),
+        outMaterial.avboitOccupancyPixelShader(),
+        outMaterial.avboitExtinctionPixelShader()
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' AVBOIT pixel shaders must be present if and only if it is transparent")
+            , StringConvert(materialEntry.virtualPath.c_str())
+        );
+        return false;
+    }
     outMaterial.setTypedLayout(
         materialEntry.typedLayoutHash,
         materialEntry.typedLayoutBlocks,
@@ -388,6 +400,15 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     }
     if(material.shaderVariant().empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader variant is empty"));
+        return false;
+    }
+    if(!HasValidMaterialAvboitPixelShaderContract(
+        material.transparent(),
+        material.avboitAccumulatePixelShader(),
+        material.avboitOccupancyPixelShader(),
+        material.avboitExtinctionPixelShader()
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: AVBOIT pixel shaders must be present if and only if the material is transparent"));
         return false;
     }
     if(material.typedLayoutHash() == 0u){

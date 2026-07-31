@@ -397,6 +397,12 @@ TEST(AssetsGraphics, TransparentMaterialCookUsesViewDependentSurface){
                 material.avboitExtinctionPixelShader().virtualPath,
                 Name("generated/avboit_extinction_ps/project/materials/test_material")
             );
+            EXPECT_TRUE(NWB::Impl::HasValidMaterialAvboitPixelShaderContract(
+                material.transparent(),
+                material.avboitAccumulatePixelShader(),
+                material.avboitOccupancyPixelShader(),
+                material.avboitExtinctionPixelShader()
+            ));
         }
 
         NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);

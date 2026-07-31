@@ -4,6 +4,8 @@
 
 #include "report.h"
 
+#include <global/type_properties.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -37,7 +39,7 @@ static constexpr usize s_JsonReportReserveBytes = 1024u;
 
 template<typename... Args>
 void AppendFormat(AString<TelemetryArena>& out, AFormatString<Args...> fmt, Args&&... args){
-    std::vformat_to(std::back_inserter(out), fmt.get(), std::make_format_args<AFormatContext>(args...));
+    std::vformat_to(BackInserter(out), fmt.get(), std::make_format_args<AFormatContext>(args...));
 }
 
 [[nodiscard]] usize EventKindBucket(const Telemetry::EventKind::Enum kind)noexcept{

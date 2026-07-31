@@ -28,6 +28,33 @@ class Shader;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// AVBOIT uses a per-material pixel shader for each transparent pass. These references are a single atomic contract:
+// a transparent material needs all three pass shaders, while an opaque material must not carry any of them.
+[[nodiscard]] inline bool HasValidMaterialAvboitPixelShaderContract(
+    const bool transparent,
+    const Core::Assets::AssetRef<Shader>& accumulatePixelShader,
+    const Core::Assets::AssetRef<Shader>& occupancyPixelShader,
+    const Core::Assets::AssetRef<Shader>& extinctionPixelShader
+){
+    if(transparent){
+        return
+            accumulatePixelShader.valid()
+            && occupancyPixelShader.valid()
+            && extinctionPixelShader.valid()
+        ;
+    }
+
+    return
+        !accumulatePixelShader.valid()
+        && !occupancyPixelShader.valid()
+        && !extinctionPixelShader.valid()
+    ;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace MaterialParameterValueType{
     enum Enum : u32{
         None = 0,

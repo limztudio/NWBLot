@@ -20,7 +20,6 @@
 import argparse
 import glob
 import os
-import shlex
 import shutil
 import subprocess
 import sys
@@ -30,11 +29,12 @@ def log(message):
     print("[namesym] {}".format(message), flush=True)
 
 
-# Resolve the CMake executable the same way launcher.py does: CMAKE_COMMAND overrides everything, otherwise fall back to
-# the bare "cmake"/"ctest" on PATH. The project's CMake lives in a local Python venv that is not on PATH, so honoring
-# CMAKE_COMMAND lets the namesym target drive it without each caller having to edit the tree.
+# Resolve the CMake executable the same way launcher.py does: CMAKE_COMMAND is one executable path, so retain it as
+# one argv item even when the path contains spaces. The project's CMake lives in a local Python venv that is not on
+# PATH, so honoring CMAKE_COMMAND lets the namesym target drive it without each caller having to edit the tree.
 def resolve_cmake_command():
-    return shlex.split(os.environ.get("CMAKE_COMMAND", "")) or ["cmake"]
+    cmake_command = os.environ.get("CMAKE_COMMAND")
+    return [cmake_command] if cmake_command else ["cmake"]
 
 
 def resolve_ctest_command():

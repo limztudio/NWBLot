@@ -8,7 +8,7 @@
 
 #include <core/alloc/general.h>
 
-#include <algorithm>
+#include <global/algorithm.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -114,7 +114,7 @@ public:
         for(const auto& symbol : m_symbols)
             records.push_back(SymbolRecordView{ symbol.first, &symbol.second });
 
-        std::sort(
+        Sort(
             records.begin(),
             records.end(),
             [](const SymbolRecordView& lhs, const SymbolRecordView& rhs){

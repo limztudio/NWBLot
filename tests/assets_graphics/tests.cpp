@@ -410,7 +410,7 @@ NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
     return nwbMakeMeshSurface(
-        materialBindConstantsValid ? surface.base_color.rgb : float3(1.0, 0.0, 1.0),
+        materialBindConstantsValid ? half3(surface.base_color.rgb) : half3(1.0h, 0.0h, 1.0h),
         inNormal
     );
 }
@@ -422,7 +422,7 @@ NwbMeshSurface nwbMaterialSurface(){
 static constexpr AStringView s_ViewDependentTransparentMaterialSurfaceSource = R"NWB_SLANG(NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
-    NwbMeshSurface result = nwbMakeMeshSurface(surface.base_color.rgb, inNormal);
+    NwbMeshSurface result = nwbMakeMeshSurface(half3(surface.base_color.rgb), inNormal);
     result.renderCoverage = half(saturate(dot(inIncidentDirection, inNormal) * 0.5 + 0.5));
     return result;
 }
@@ -440,7 +440,7 @@ NwbMeshSurface nwbMaterialSurface(){
         inUv0,
         0.0
     );
-    return nwbMakeMeshSurface(surface.base_color.rgb * fixtureColor.rgb, inNormal);
+    return nwbMakeMeshSurface(half3(surface.base_color.rgb * fixtureColor.rgb), inNormal);
 }
 
 )NWB_SLANG";
@@ -467,7 +467,7 @@ NwbMeshSurface nwbMaterialSurface(){
         float(surface.base_color.z)
     );
     return nwbMakeMeshSurface(
-        materialBindConstantsValid ? baseColor : float3(1.0, 0.0, 1.0),
+        materialBindConstantsValid ? half3(baseColor) : half3(1.0h, 0.0h, 1.0h),
         inNormal
     );
 }
@@ -497,7 +497,7 @@ NwbMeshSurface nwbMaterialSurface(){
         float(surface.signed_words.y) / 32767.0
     );
     return nwbMakeMeshSurface(
-        materialBindConstantsValid ? baseColor : float3(1.0, 0.0, 1.0),
+        materialBindConstantsValid ? half3(baseColor) : half3(1.0h, 0.0h, 1.0h),
         inNormal
     );
 }
@@ -511,7 +511,7 @@ static constexpr AStringView s_OtherMaterialBindShaderProbeSource = R"NWB_SLANG(
 NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
-    return nwbMakeMeshSurface(surface.base_color.rgb, inNormal);
+    return nwbMakeMeshSurface(half3(surface.base_color.rgb), inNormal);
 }
 
 )NWB_SLANG";
@@ -696,6 +696,7 @@ asset.parameters = {
 
 )NWB_META";
 
+#if defined(NWB_FINAL)
 static constexpr AStringView s_RefractiveMaterialMeta = R"NWB_META(material asset;
 
 asset.interface = "project/material_interfaces/test_surface.bind";
@@ -717,6 +718,8 @@ asset.parameters = {
 };
 
 )NWB_META";
+
+#endif
 
 #if defined(NWB_FINAL)
 static constexpr AStringView s_ExplicitTransparentMaterialMeta = R"NWB_META(material asset;

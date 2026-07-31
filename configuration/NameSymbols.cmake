@@ -64,7 +64,8 @@ function(nwb_add_name_symbol_target)
     # testbed scene never exercises. On a headless host these ctest runs skip (warned, not fatal) and only the cook
     # sidecar is produced. --expect-sidecar surfaces a capture that silently produced nothing.
     add_custom_target(nwb_namesym
-        COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/configuration/generate_name_symbols.py"
+        COMMAND "${CMAKE_COMMAND}" -E env "CMAKE_COMMAND=${CMAKE_COMMAND}"
+            "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/configuration/generate_name_symbols.py"
             --source-dir "${PROJECT_SOURCE_DIR}"
             --configure-preset "${_namesym_configure_preset}"
             --build-preset "${_namesym_platform_prefix}-$<CONFIG>"

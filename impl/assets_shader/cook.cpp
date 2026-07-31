@@ -89,7 +89,8 @@ static constexpr AStringView s_SpirvBaselineCapabilities[]{
     "spvMinLod",
     "spvFragmentFullyCoveredEXT",
 };
-static constexpr usize s_BaseCompilerArgumentCount = 15u + sizeof(s_SpirvBaselineCapabilities) / sizeof(s_SpirvBaselineCapabilities[0]) * 2u;
+static constexpr usize s_BaseCompilerArgumentCount = 16u + sizeof(s_SpirvBaselineCapabilities) / sizeof(s_SpirvBaselineCapabilities[0]) * 2u;
+static constexpr usize s_MaxTargetProfileCapabilityCount = 1u;
 
 struct NormalizedDependencyRootAlias{
     Path root;
@@ -151,6 +152,27 @@ static bool TryMapStageToSlangStage(const AStringView stage, AStringView& outSta
     }
 
     outStage = {};
+    return false;
+}
+
+static bool TryMapTargetProfileToSlangArguments(
+    const AStringView targetProfile,
+    AStringView& outSlangProfile,
+    AStringView& outSlangCapability
+){
+    outSlangProfile = {};
+    outSlangCapability = {};
+
+    if(targetProfile == "spirv_1_5"){
+        outSlangProfile = targetProfile;
+        return true;
+    }
+    if(targetProfile == "spirv_1_5+spvrayquerykhr"){
+        outSlangProfile = "spirv_1_5";
+        outSlangCapability = "spvRayQueryKHR";
+        return true;
+    }
+
     return false;
 }
 
@@ -431,6 +453,13 @@ public:
             return false;
         }
 
+        AStringView slangTargetProfile;
+        AStringView targetProfileCapability;
+        if(!TryMapTargetProfileToSlangArguments(request.targetProfile, slangTargetProfile, targetProfileCapability)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Unsupported shader target profile '{}' in entry '{}'"), StringConvert(request.targetProfile), StringConvert(request.shaderName));
+            return false;
+        }
+
         Path diagnosticsPath = request.outputPath;
         diagnosticsPath += ".diag";
         RemoveFileBestEffort(request.outputPath);
@@ -440,7 +469,12 @@ public:
 
         Alloc::ScratchArena argumentArena(AssetsShaderArenaScope::s_CompilerArgumentsArena);
         ScratchVector<ScratchString> arguments(argumentArena);
-        arguments.reserve(s_BaseCompilerArgumentCount + static_cast<usize>(request.includeDirectories.size()) * 2u + static_cast<usize>(request.defineCount));
+        arguments.reserve(
+            s_BaseCompilerArgumentCount
+            + s_MaxTargetProfileCapabilityCount * 2u
+            + static_cast<usize>(request.includeDirectories.size()) * 2u
+            + static_cast<usize>(request.defineCount)
+        );
         PushCompilerArgument(argumentArena, arguments, AStringView(NWB_SLANGC_EXECUTABLE));
 
         ScratchString sourcePathText = PathToString<char>(argumentArena, request.sourcePath);
@@ -448,8 +482,16 @@ public:
         PushCompilerArgument(argumentArena, arguments, "-target");
         PushCompilerArgument(argumentArena, arguments, "spirv");
         PushCompilerArgument(argumentArena, arguments, "-emit-spirv-directly");
+        // The runtime pipeline selects the authored entry-point identifier, so retain its exact spelling in SPIR-V.
+        PushCompilerArgument(argumentArena, arguments, "-fvk-use-entrypoint-name");
+        PushCompilerArgument(argumentArena, arguments, "-warnings-as-errors");
+        PushCompilerArgument(argumentArena, arguments, "all");
         PushCompilerArgument(argumentArena, arguments, "-profile");
-        PushCompilerArgument(argumentArena, arguments, request.targetProfile);
+        PushCompilerArgument(argumentArena, arguments, slangTargetProfile);
+        if(!targetProfileCapability.empty()){
+            PushCompilerArgument(argumentArena, arguments, "-capability");
+            PushCompilerArgument(argumentArena, arguments, targetProfileCapability);
+        }
         for(const AStringView capability : s_SpirvBaselineCapabilities){
             PushCompilerArgument(argumentArena, arguments, "-capability");
             PushCompilerArgument(argumentArena, arguments, capability);
@@ -501,11 +543,12 @@ public:
 
         ScratchString diagnostics{argumentArena};
         if(ReadDiagnostics(diagnosticsPath, diagnostics) && !diagnostics.empty()){
-            NWB_LOGGER_WARNING(NWB_TEXT("Shader compiler emitted diagnostics for '{}' (variant '{}') :\n{}")
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader compiler emitted unexpected diagnostics for '{}' (variant '{}') :\n{}")
                 , StringConvert(request.shaderName)
                 , StringConvert(request.variantName)
                 , StringConvert(diagnostics)
             );
+            return false;
         }
 
         ErrorCode errorCode;
@@ -1141,8 +1184,21 @@ bool ShaderCook::parseShaderMeta(
     if(!__hidden_cook::ParseCompactStringField(nwbFilePath, asset, "stage", outEntry.stage))
         return false;
     outEntry.archiveStage = outEntry.stage;
-    if(!__hidden_cook::ParseStringField(nwbFilePath, asset, "target_profile", outEntry.targetProfile))
+    if(!__hidden_cook::ParseCompactStringField(nwbFilePath, asset, "target_profile", outEntry.targetProfile))
         return false;
+    AStringView slangTargetProfile;
+    AStringView targetProfileCapability;
+    if(!__hidden_cook::TryMapTargetProfileToSlangArguments(
+        outEntry.targetProfile.view(),
+        slangTargetProfile,
+        targetProfileCapability
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported target_profile '{}'"),
+            PathToString<tchar>(nwbFilePath),
+            StringConvert(outEntry.targetProfile.c_str())
+        );
+        return false;
+    }
     if(!__hidden_cook::ParseStringField(nwbFilePath, asset, "entry_point", outEntry.entryPoint))
         return false;
     if(outEntry.entryPoint.empty()){
@@ -1507,7 +1563,7 @@ bool ShaderCook::computeSourceChecksum(
     u64& outChecksum,
     Alloc::ScratchArena& scratchArena
 ){
-    static constexpr AStringView s_ChecksumVersionTag = "shader-source-v1";
+    static constexpr AStringView s_ChecksumVersionTag = "shader-source-v2";
     const u8 newlineByte = '\n';
 
     outChecksum = FNV64_OFFSET_BASIS;
@@ -1521,7 +1577,7 @@ bool ShaderCook::computeSourceChecksum(
     appendChecksumLine(AStringView(entry.name));
     appendChecksumLine(entry.stage.view());
     appendChecksumLine(entry.archiveStage.view());
-    appendChecksumLine(AStringView(entry.targetProfile));
+    appendChecksumLine(entry.targetProfile.view());
     appendChecksumLine(AStringView(entry.entryPoint));
     appendChecksumLine(variantSignature);
     if(entry.implicitDefines.size() <= 1u){

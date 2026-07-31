@@ -473,6 +473,15 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     if(!readOptionalAvboitPixelShader(NWB_TEXT("extinction"), m_avboitExtinctionPixelShader))
         return false;
+    if(!HasValidMaterialAvboitPixelShaderContract(
+        m_transparent,
+        m_avboitAccumulatePixelShader,
+        m_avboitOccupancyPixelShader,
+        m_avboitExtinctionPixelShader
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: AVBOIT pixel shaders must be present if and only if the material is transparent"));
+        return false;
+    }
 
     if(cursor != binary.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: trailing bytes detected"));

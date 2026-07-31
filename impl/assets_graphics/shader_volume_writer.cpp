@@ -234,7 +234,7 @@ static bool GetVariantBytecode(
     const ShaderCook::ShaderCompilerRequest compileRequest = {
         entry.name,
         entry.stage.view(),
-        AStringView(entry.targetProfile),
+        entry.targetProfile.view(),
         entry.entryPoint,
         variantName,
         compileDefines.data(),
@@ -314,7 +314,7 @@ static u64 BuildShaderVariantCookKeyHash(
     const u64 sourceChecksum,
     const u64 bytecodeChecksum
 ){
-    static constexpr u32 s_ShaderVariantCookKeyVersion = 1u;
+    static constexpr u32 s_ShaderVariantCookKeyVersion = 2u;
     u64 hash = FNV64_OFFSET_BASIS;
     Fnv64AppendValue(hash, s_ShaderVariantCookKeyVersion);
     Fnv64AppendValue(hash, virtualPathHash);
@@ -355,6 +355,7 @@ bool AppendPreparedShadersToManifest(
         return false;
 
     Core::GraphicsBytes cookedBytecode{cookArena};
+    Core::GraphicsBytes shaderAssetPayload{cookArena};
     ShaderCook::CookVector<ShaderCook::DefineCombo> defineCombinations{ cookArena };
     shaderIndexRecords.clear();
 
@@ -436,8 +437,20 @@ bool AppendPreparedShadersToManifest(
                 sourceChecksum,
                 bytecodeChecksum
             );
-            if(!Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, virtualPath, cookedBytecode, cookKeyHash)){
-                NWB_LOGGER_ERROR(NWB_TEXT("Failed to append shader bytecode '{}' to manifest"), StringConvert(virtualPath.c_str()));
+            const ShaderBinaryPayload::AssetPayloadFailure::Enum payloadFailure = ShaderBinaryPayload::EncodeAssetPayload(
+                AStringView(entry.entryPoint),
+                cookedBytecode,
+                shaderAssetPayload
+            );
+            if(payloadFailure != ShaderBinaryPayload::AssetPayloadFailure::None){
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to package shader payload '{}' (failure {})")
+                    , StringConvert(virtualPath.c_str())
+                    , static_cast<u32>(payloadFailure)
+                );
+                return false;
+            }
+            if(!Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, virtualPath, shaderAssetPayload, cookKeyHash)){
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to append shader payload '{}' to manifest"), StringConvert(virtualPath.c_str()));
                 return false;
             }
 

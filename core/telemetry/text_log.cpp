@@ -5,6 +5,7 @@
 #include "text_log.h"
 
 #include <global/binary.h>
+#include <global/type_properties.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,7 +32,7 @@ namespace __hidden_telemetry_text_log{
 
 template<typename Out>
 static void AppendUtf8Text(Out& outText, const TStringView message){
-    auto inserter = std::back_inserter(outText);
+    auto inserter = BackInserter(outText);
     BasicStringDetail::WriteConvertedText<char>(inserter, message);
 }
 

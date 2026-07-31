@@ -89,6 +89,17 @@ namespace FrameExecutionWork{
 };
 
 
+// A packet can wait on a token produced outside the current plan. Keep those edges alongside packet-to-packet
+// dependencies so submission preparation does not maintain a separate topology predicate for each external source.
+namespace FrameExecutionExternalWait{
+    enum Enum : u8{
+        LaggedLightingHistory,
+
+        kCount,
+    };
+};
+
+
 struct FrameExecutionPlanInput{
     bool dedicatedAsyncCompute = false;
     bool frameLaggedAsyncLightingEnabled = false;
@@ -102,11 +113,12 @@ struct FrameExecutionPacketPlan{
     Core::RenderLane::Enum lane = Core::RenderLane::Graphics;
     FrameExecutionPacket::Enum waitPackets[2] = {};
     u8 waitPacketCount = 0u;
+    FrameExecutionExternalWait::Enum externalWaits[FrameExecutionExternalWait::kCount] = {};
+    u8 externalWaitCount = 0u;
     bool enabled = false;
     // An enabled packet receives a timing ticket indexed by its packet ID unless it is explicitly execution-only.
     // This avoids a second packet-to-ticket registry that must be updated whenever the topology grows.
     bool recordsTiming = false;
-    bool waitsForLaggedLightingHistory = false;
 };
 
 
@@ -123,6 +135,21 @@ struct FrameExecutionWorkPlan{
 };
 
 
+// RendererSystem owns the lifetime of history submissions. It supplies their latest accepted tokens as external
+// dependencies for this frame; the plan decides which packet, if any, consumes each one.
+struct FrameExecutionExternalWaitTokens{
+    Core::QueueSubmissionToken tokens[FrameExecutionExternalWait::kCount] = {};
+
+
+    [[nodiscard]] const Core::QueueSubmissionToken& token(
+        const FrameExecutionExternalWait::Enum externalWait
+    )const noexcept{
+        NWB_ASSERT(externalWait < FrameExecutionExternalWait::kCount);
+        return tokens[static_cast<usize>(externalWait)];
+    }
+};
+
+
 // RendererSystem owns the persistent command-list instances for both logical lanes. The plan resolves which one a
 // work item needs from its packet lane, so topology predicates do not become a second command-list routing table.
 struct FrameExecutionLaneCommandListPair{
@@ -134,7 +161,7 @@ struct FrameExecutionLaneCommandListPair{
 class FrameExecutionPlan final{
 public:
     static constexpr usize s_MaxPacketWaits = 2u;
-    static constexpr usize s_MaxSubmissionWaits = s_MaxPacketWaits + 1u;
+    static constexpr usize s_MaxSubmissionWaits = s_MaxPacketWaits + FrameExecutionExternalWait::kCount;
 
 
 public:
@@ -216,7 +243,10 @@ public:
         addPacketWait(FrameExecutionPacket::DeferredLighting, graphicsEffectsCompletionPacket);
         assignWork(FrameExecutionWork::DeferredLighting, FrameExecutionPacket::DeferredLighting);
         if(usesLaggedAsyncLighting)
-            mutablePacket(FrameExecutionPacket::DeferredLighting).waitsForLaggedLightingHistory = true;
+            addExternalWait(
+                FrameExecutionPacket::DeferredLighting,
+                FrameExecutionExternalWait::LaggedLightingHistory
+            );
         else
             addPacketWait(FrameExecutionPacket::DeferredLighting, FrameExecutionPacket::AsyncRayEffects);
 
@@ -274,6 +304,26 @@ public:
         const Core::RenderLane::Enum lane
     )const noexcept{
         return work < FrameExecutionWork::kCount && hasWork(work) && laneForWork(work) == lane;
+    }
+    [[nodiscard]] bool packetWaitsForExternalToken(
+        const FrameExecutionPacket::Enum packetID,
+        const FrameExecutionExternalWait::Enum externalWait
+    )const noexcept{
+        const FrameExecutionPacketPlan& packetPlan = packet(packetID);
+        for(u8 waitIndex = 0u; waitIndex < packetPlan.externalWaitCount; ++waitIndex){
+            if(packetPlan.externalWaits[waitIndex] == externalWait)
+                return true;
+        }
+        return false;
+    }
+    [[nodiscard]] bool workWaitsForExternalToken(
+        const FrameExecutionWork::Enum work,
+        const FrameExecutionExternalWait::Enum externalWait
+    )const noexcept{
+        return work < FrameExecutionWork::kCount
+            && hasWork(work)
+            && packetWaitsForExternalToken(packetForWork(work), externalWait)
+        ;
     }
     [[nodiscard]] Core::CommandList* commandListForWork(
         const FrameExecutionWork::Enum work,
@@ -339,6 +389,16 @@ private:
         NWB_ASSERT(packet(producerPacket).enabled);
         NWB_ASSERT(consumerPlan.waitPacketCount < s_MaxPacketWaits);
         consumerPlan.waitPackets[consumerPlan.waitPacketCount++] = producerPacket;
+    }
+    void addExternalWait(
+        const FrameExecutionPacket::Enum consumerPacket,
+        const FrameExecutionExternalWait::Enum externalWait
+    )noexcept{
+        FrameExecutionPacketPlan& consumerPlan = mutablePacket(consumerPacket);
+        NWB_ASSERT(consumerPlan.enabled);
+        NWB_ASSERT(externalWait < FrameExecutionExternalWait::kCount);
+        NWB_ASSERT(consumerPlan.externalWaitCount < FrameExecutionExternalWait::kCount);
+        consumerPlan.externalWaits[consumerPlan.externalWaitCount++] = externalWait;
     }
     void appendSubmissionPacket(
         const FrameExecutionSubmissionBatch::Enum batch,
@@ -534,10 +594,10 @@ class FrameExecutionPlanSubmissionState final{
 public:
     explicit FrameExecutionPlanSubmissionState(
         const FrameExecutionPlan& plan,
-        const Core::QueueSubmissionToken laggedLightingHistoryToken = {}
+        const FrameExecutionExternalWaitTokens& externalWaitTokens = {}
     )noexcept
         : m_plan(plan)
-        , m_laggedLightingHistoryToken(laggedLightingHistoryToken)
+        , m_externalWaitTokens(externalWaitTokens)
     {}
 
 
@@ -553,7 +613,7 @@ public:
         NWB_ASSERT(packetPlan.enabled);
         const usize requiredWaitTokenCount =
             static_cast<usize>(packetPlan.waitPacketCount)
-            + (packetPlan.waitsForLaggedLightingHistory ? 1u : 0u)
+            + static_cast<usize>(packetPlan.externalWaitCount)
         ;
         if(
             !packetPlan.enabled
@@ -570,10 +630,16 @@ public:
                 return false;
             waitTokens[waitTokenCount++] = waitToken;
         }
-        if(packetPlan.waitsForLaggedLightingHistory){
-            if(!m_laggedLightingHistoryToken.valid())
+        for(u8 externalWaitIndex = 0u;
+            externalWaitIndex < packetPlan.externalWaitCount;
+            ++externalWaitIndex
+        ){
+            const Core::QueueSubmissionToken& externalWaitToken = m_externalWaitTokens.token(
+                packetPlan.externalWaits[externalWaitIndex]
+            );
+            if(!externalWaitToken.valid())
                 return false;
-            waitTokens[waitTokenCount++] = m_laggedLightingHistoryToken;
+            waitTokens[waitTokenCount++] = externalWaitToken;
         }
         if(waitTokenCount > 0u)
             submitDesc.setWaitTokens(waitTokens, waitTokenCount);
@@ -609,7 +675,7 @@ public:
 
 private:
     const FrameExecutionPlan& m_plan;
-    Core::QueueSubmissionToken m_laggedLightingHistoryToken;
+    FrameExecutionExternalWaitTokens m_externalWaitTokens;
     Core::QueueSubmissionToken m_packetTokens[FrameExecutionPacket::kCount] = {};
     Core::QueueSubmissionToken m_asyncRecoveryWaitToken;
 };

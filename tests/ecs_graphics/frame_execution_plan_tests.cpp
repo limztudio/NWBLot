@@ -22,9 +22,11 @@ using FrameExecutionLaneCommandListPair = NWB::Impl::ECSRenderDetail::FrameExecu
 using FrameExecutionPacketCommandLists = NWB::Impl::ECSRenderDetail::FrameExecutionPacketCommandLists;
 using FrameExecutionWorkCommandListBinding = NWB::Impl::ECSRenderDetail::FrameExecutionWorkCommandListBinding;
 using FrameExecutionPlanSubmissionState = NWB::Impl::ECSRenderDetail::FrameExecutionPlanSubmissionState;
+using FrameExecutionExternalWaitTokens = NWB::Impl::ECSRenderDetail::FrameExecutionExternalWaitTokens;
 namespace FrameExecutionPacket = NWB::Impl::ECSRenderDetail::FrameExecutionPacket;
 namespace FrameExecutionSubmissionBatch = NWB::Impl::ECSRenderDetail::FrameExecutionSubmissionBatch;
 namespace FrameExecutionWork = NWB::Impl::ECSRenderDetail::FrameExecutionWork;
+namespace FrameExecutionExternalWait = NWB::Impl::ECSRenderDetail::FrameExecutionExternalWait;
 namespace RenderLane = NWB::Core::RenderLane;
 namespace CommandQueue = NWB::Core::CommandQueue;
 
@@ -98,7 +100,10 @@ TEST(EcsGraphics, FrameExecutionPlanKeepsGraphicsFallbackAsOnePacket){
 
     EXPECT_TRUE(plan.packet(FrameExecutionPacket::GraphicsFallback).enabled);
     EXPECT_FALSE(plan.workRunsOnLane(FrameExecutionWork::RayEffects, RenderLane::AsyncCompute));
-    EXPECT_FALSE(plan.packetPlanForWork(FrameExecutionWork::DeferredLighting).waitsForLaggedLightingHistory);
+    EXPECT_FALSE(plan.workWaitsForExternalToken(
+        FrameExecutionWork::DeferredLighting,
+        FrameExecutionExternalWait::LaggedLightingHistory
+    ));
     EXPECT_FALSE(plan.hasWork(FrameExecutionWork::LaggedLightingStash));
     EXPECT_FALSE(plan.workRunsOnLane(FrameExecutionWork::AvboitDepthWarp, RenderLane::AsyncCompute));
     EXPECT_EQ(plan.packet(FrameExecutionPacket::GraphicsFallback).lane, RenderLane::Graphics);
@@ -118,7 +123,10 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
     });
 
     EXPECT_TRUE(opaquePlan.workRunsOnLane(FrameExecutionWork::RayEffects, RenderLane::AsyncCompute));
-    EXPECT_FALSE(opaquePlan.packetPlanForWork(FrameExecutionWork::DeferredLighting).waitsForLaggedLightingHistory);
+    EXPECT_FALSE(opaquePlan.workWaitsForExternalToken(
+        FrameExecutionWork::DeferredLighting,
+        FrameExecutionExternalWait::LaggedLightingHistory
+    ));
     EXPECT_FALSE(opaquePlan.hasWork(FrameExecutionWork::LaggedLightingStash));
     EXPECT_FALSE(opaquePlan.workRunsOnLane(FrameExecutionWork::AvboitDepthWarp, RenderLane::AsyncCompute));
     EXPECT_TRUE(opaquePlan.packet(FrameExecutionPacket::GraphicsEffects).enabled);
@@ -163,7 +171,10 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
         bootstrapPlan.packet(FrameExecutionPacket::DeferredLighting).waitPackets[1],
         FrameExecutionPacket::AsyncRayEffects
     );
-    EXPECT_FALSE(bootstrapPlan.packetPlanForWork(FrameExecutionWork::DeferredLighting).waitsForLaggedLightingHistory);
+    EXPECT_FALSE(bootstrapPlan.workWaitsForExternalToken(
+        FrameExecutionWork::DeferredLighting,
+        FrameExecutionExternalWait::LaggedLightingHistory
+    ));
     EXPECT_TRUE(bootstrapPlan.packet(FrameExecutionPacket::AsyncLaggedLightingStash).enabled);
 
     const FrameExecutionPlan laggedPlan(FrameExecutionPlanInput{
@@ -185,7 +196,15 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
         laggedPlan.packet(FrameExecutionPacket::DeferredLighting).waitPackets[0],
         FrameExecutionPacket::GraphicsEffects
     );
-    EXPECT_TRUE(laggedPlan.packetPlanForWork(FrameExecutionWork::DeferredLighting).waitsForLaggedLightingHistory);
+    EXPECT_EQ(laggedPlan.packet(FrameExecutionPacket::DeferredLighting).externalWaitCount, 1u);
+    EXPECT_EQ(
+        laggedPlan.packet(FrameExecutionPacket::DeferredLighting).externalWaits[0],
+        FrameExecutionExternalWait::LaggedLightingHistory
+    );
+    EXPECT_TRUE(laggedPlan.workWaitsForExternalToken(
+        FrameExecutionWork::DeferredLighting,
+        FrameExecutionExternalWait::LaggedLightingHistory
+    ));
     EXPECT_EQ(laggedPlan.packet(FrameExecutionPacket::GraphicsPresent).waitPacketCount, 2u);
     EXPECT_EQ(
         laggedPlan.packet(FrameExecutionPacket::GraphicsPresent).waitPackets[0],
@@ -659,10 +678,42 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateResolvesAcceptedDependenciesA
         true,
         false,
     });
-    const NWB::Core::QueueSubmissionToken laggedHistoryToken{ CommandQueue::Compute, 71u };
-    FrameExecutionPlanSubmissionState submissions(plan, laggedHistoryToken);
+    FrameExecutionExternalWaitTokens externalWaitTokens;
+    externalWaitTokens.tokens[static_cast<usize>(FrameExecutionExternalWait::LaggedLightingHistory)] =
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Compute, 71u }
+    ;
+    FrameExecutionPlanSubmissionState submissions(plan, externalWaitTokens);
     NWB::Core::QueueSubmissionToken waitTokens[FrameExecutionPlan::s_MaxSubmissionWaits] = {};
     NWB::Core::QueueSubmissionDesc submitDesc;
+
+    // The plan's external edge must reject submission until RendererSystem provides an accepted history token.
+    FrameExecutionPlanSubmissionState missingExternalWaitSubmissions(plan);
+    EXPECT_TRUE(missingExternalWaitSubmissions.prepareSubmission(
+        FrameExecutionPacket::GraphicsPrefix,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    missingExternalWaitSubmissions.acceptSubmission(
+        FrameExecutionPacket::GraphicsPrefix,
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 1u }
+    );
+    EXPECT_TRUE(missingExternalWaitSubmissions.prepareSubmission(
+        FrameExecutionPacket::GraphicsEffects,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    missingExternalWaitSubmissions.acceptSubmission(
+        FrameExecutionPacket::GraphicsEffects,
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 2u }
+    );
+    EXPECT_FALSE(missingExternalWaitSubmissions.prepareSubmission(
+        FrameExecutionPacket::DeferredLighting,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
 
     EXPECT_EQ(submissions.asyncRecoveryWaitToken(), nullptr);
 

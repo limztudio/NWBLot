@@ -1034,9 +1034,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ECSRenderDetail::FrameExecutionWork::RayEffects,
         Core::RenderLane::AsyncCompute
     );
-    const bool laggedAsyncLightingSchedule = frameExecutionPlan.packetPlanForWork(
-        ECSRenderDetail::FrameExecutionWork::DeferredLighting
-    ).waitsForLaggedLightingHistory;
+    const bool laggedAsyncLightingSchedule = frameExecutionPlan.workWaitsForExternalToken(
+        ECSRenderDetail::FrameExecutionWork::DeferredLighting,
+        ECSRenderDetail::FrameExecutionExternalWait::LaggedLightingHistory
+    );
     // A history snapshot is captured after every opt-in frame, including the current-frame bootstrap. Once the
     // previous accepted snapshot exists this packet shades independently on Graphics while the producer runs on Async.
     const bool captureLaggedLightingHistory = frameExecutionPlan.hasWork(
@@ -2747,12 +2748,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // Keep submission topology declarative: the per-frame state resolves accepted predecessors and exposes the
-    // outstanding AsyncCompute recovery edge. The renderer still owns every acceptance-dependent state commit and
-    // recovery lifecycle decision below.
+    // Keep submission topology declarative: the per-frame state resolves accepted predecessor and external-token
+    // edges, then exposes the outstanding AsyncCompute recovery edge. The renderer still owns every
+    // acceptance-dependent state commit and recovery lifecycle decision below.
+    ECSRenderDetail::FrameExecutionExternalWaitTokens frameExecutionExternalWaitTokens;
+    frameExecutionExternalWaitTokens.tokens[static_cast<usize>(
+        ECSRenderDetail::FrameExecutionExternalWait::LaggedLightingHistory
+    )] = m_laggedLightingHistorySubmissionToken;
     ECSRenderDetail::FrameExecutionPlanSubmissionState frameExecutionSubmissionState(
         frameExecutionPlan,
-        m_laggedLightingHistorySubmissionToken
+        frameExecutionExternalWaitTokens
     );
     const auto submitPlannedFramePacket = [&](
         const ECSRenderDetail::FrameExecutionPacket::Enum packet,

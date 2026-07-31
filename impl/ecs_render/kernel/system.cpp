@@ -201,6 +201,212 @@ RendererSystem::RendererSystem(
 }
 RendererSystem::~RendererSystem(){}
 
+
+void RendererSystem::resetLaggedLightingStashStateHandoffs()noexcept{
+    m_laggedLightingStashInputStateHandoff.reset();
+    m_laggedLightingStashStateHandoff.reset();
+}
+
+void RendererSystem::invalidateLaggedLightingHistorySubmission()noexcept{
+    m_laggedLightingHistoryValid = false;
+    m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
+}
+
+void RendererSystem::resetLaggedLightingHistoryTracking()noexcept{
+    invalidateLaggedLightingHistorySubmission();
+    m_laggedLightingHistoryGeneration = 0u;
+}
+
+void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
+    // Target replacement invalidates retained Compute scratch state and producer returns because the backing images
+    // have changed. Frame-prefix handoffs are intentionally excluded: the preparation path owns those separately.
+    m_shadowComputeBaseStateHandoff.reset();
+    m_shadowComputeInputStateHandoff.reset();
+    m_shadowComputePersistentStateHandoff.reset();
+    m_shadowVisibilityStateHandoff.reset();
+    m_shadowVisibilityLightingStateHandoff.reset();
+    m_shadowVisibilityReturnStateHandoff.reset();
+    m_causticsComputeBaseStateHandoff.reset();
+    m_causticsComputeInputStateHandoff.reset();
+    m_causticsComputePersistentStateHandoff.reset();
+    m_causticsStateHandoff.reset();
+    m_causticIrradianceLightingStateHandoff.reset();
+    m_causticIrradianceReturnStateHandoff.reset();
+    m_surfelGiComputeBaseStateHandoff.reset();
+    m_surfelGiComputeInputStateHandoff.reset();
+    m_surfelGiComputePersistentStateHandoff.reset();
+    m_surfelGiStateHandoff.reset();
+    m_surfelIrradianceLightingStateHandoff.reset();
+    m_surfelIrradianceReturnStateHandoff.reset();
+    m_deferredLightingBaseStateHandoff.reset();
+    m_deferredLightingInputStateHandoff.reset();
+    m_deferredLightingStateHandoff.reset();
+    m_avboitLightingStateHandoff.reset();
+    m_avboitCompositeStateHandoff.reset();
+    m_opaqueColorCompositeStateHandoff.reset();
+    m_deferredCompositeBaseStateHandoff.reset();
+    m_deferredCompositeInputStateHandoff.reset();
+    m_deferredCompositeStateHandoff.reset();
+    m_compositeColorPresentStateHandoff.reset();
+    m_deferredPresentBaseStateHandoff.reset();
+    m_deferredPresentInputStateHandoff.reset();
+    m_deferredPresentStateHandoff.reset();
+    resetLaggedLightingStashStateHandoffs();
+    m_avboitPreStateHandoff.reset();
+    m_avboitDepthWarpInputStateHandoff.reset();
+    m_avboitDepthWarpStateHandoff.reset();
+    m_avboitExtinctionInputStateHandoff.reset();
+    m_avboitExtinctionStateHandoff.reset();
+    m_avboitIntegrationInputStateHandoff.reset();
+    m_avboitIntegrationStateHandoff.reset();
+    m_avboitAccumulationInputStateHandoff.reset();
+    m_avboitStateHandoff.reset();
+}
+
+void RendererSystem::resetInvalidatedResourceStateHandoffs()noexcept{
+    // Full resource invalidation also abandons the preparation and frame-prefix handoffs, unlike a target-generation
+    // replacement which can still rely on the owning preparation path to recreate those states.
+    m_shadowPrepareStateHandoff.reset();
+    m_meshViewSetupStateHandoff.reset();
+    m_sceneShadingSetupStateHandoff.reset();
+    m_deferredClearStateHandoff.reset();
+    m_frameSetupStateFanInHandoff.reset();
+    m_gbufferStateHandoff.reset();
+    m_postGbufferNormalizedStateHandoff.reset();
+    resetTargetGenerationStateHandoffs();
+}
+
+void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
+    // A fresh recording discards only the previous frame's transient handoffs. Accepted Compute-local scratch and
+    // producer-return state remains available for the next fan-in.
+    m_meshViewSetupStateHandoff.reset();
+    m_sceneShadingSetupStateHandoff.reset();
+    m_deferredClearStateHandoff.reset();
+    m_frameSetupStateFanInHandoff.reset();
+    m_gbufferStateHandoff.reset();
+    m_postGbufferNormalizedStateHandoff.reset();
+    m_shadowComputeBaseStateHandoff.reset();
+    m_shadowComputeInputStateHandoff.reset();
+    m_shadowVisibilityStateHandoff.reset();
+    m_shadowVisibilityLightingStateHandoff.reset();
+    m_causticsComputeBaseStateHandoff.reset();
+    m_causticsComputeInputStateHandoff.reset();
+    m_causticsStateHandoff.reset();
+    m_causticIrradianceLightingStateHandoff.reset();
+    m_surfelGiComputeBaseStateHandoff.reset();
+    m_surfelGiComputeInputStateHandoff.reset();
+    m_surfelGiStateHandoff.reset();
+    m_surfelIrradianceLightingStateHandoff.reset();
+    m_deferredLightingBaseStateHandoff.reset();
+    m_deferredLightingInputStateHandoff.reset();
+    m_deferredLightingStateHandoff.reset();
+    m_avboitLightingStateHandoff.reset();
+    m_avboitCompositeStateHandoff.reset();
+    m_opaqueColorCompositeStateHandoff.reset();
+    m_deferredCompositeBaseStateHandoff.reset();
+    m_deferredCompositeInputStateHandoff.reset();
+    m_deferredCompositeStateHandoff.reset();
+    m_compositeColorPresentStateHandoff.reset();
+    m_deferredPresentBaseStateHandoff.reset();
+    m_deferredPresentInputStateHandoff.reset();
+    m_deferredPresentStateHandoff.reset();
+    resetLaggedLightingStashStateHandoffs();
+    m_avboitPreStateHandoff.reset();
+    m_avboitDepthWarpInputStateHandoff.reset();
+    m_avboitDepthWarpStateHandoff.reset();
+    m_avboitExtinctionInputStateHandoff.reset();
+    m_avboitExtinctionStateHandoff.reset();
+    m_avboitIntegrationInputStateHandoff.reset();
+    m_avboitIntegrationStateHandoff.reset();
+    m_avboitAccumulationInputStateHandoff.reset();
+    m_avboitStateHandoff.reset();
+}
+
+void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
+    // No submission accepted this frame, so discard its recorded prefix and downstream state while retaining only the
+    // cross-frame Compute handoffs that belonged to an earlier accepted producer. Caustic producer inputs deliberately
+    // remain outside this set, matching the established recovery path.
+    m_meshViewSetupStateHandoff.reset();
+    m_sceneShadingSetupStateHandoff.reset();
+    m_deferredClearStateHandoff.reset();
+    m_frameSetupStateFanInHandoff.reset();
+    m_gbufferStateHandoff.reset();
+    m_postGbufferNormalizedStateHandoff.reset();
+    m_shadowComputeBaseStateHandoff.reset();
+    m_shadowComputeInputStateHandoff.reset();
+    m_shadowVisibilityStateHandoff.reset();
+    m_shadowVisibilityLightingStateHandoff.reset();
+    m_causticsStateHandoff.reset();
+    m_causticIrradianceLightingStateHandoff.reset();
+    m_surfelGiComputeBaseStateHandoff.reset();
+    m_surfelGiComputeInputStateHandoff.reset();
+    m_surfelGiStateHandoff.reset();
+    m_surfelIrradianceLightingStateHandoff.reset();
+    m_deferredLightingBaseStateHandoff.reset();
+    m_deferredLightingInputStateHandoff.reset();
+    m_deferredLightingStateHandoff.reset();
+    m_avboitLightingStateHandoff.reset();
+    m_avboitCompositeStateHandoff.reset();
+    m_opaqueColorCompositeStateHandoff.reset();
+    m_deferredCompositeBaseStateHandoff.reset();
+    m_deferredCompositeInputStateHandoff.reset();
+    m_deferredCompositeStateHandoff.reset();
+    m_compositeColorPresentStateHandoff.reset();
+    m_deferredPresentBaseStateHandoff.reset();
+    m_deferredPresentInputStateHandoff.reset();
+    m_deferredPresentStateHandoff.reset();
+    resetLaggedLightingStashStateHandoffs();
+    m_avboitPreStateHandoff.reset();
+    m_avboitDepthWarpInputStateHandoff.reset();
+    m_avboitDepthWarpStateHandoff.reset();
+    m_avboitExtinctionInputStateHandoff.reset();
+    m_avboitExtinctionStateHandoff.reset();
+    m_avboitIntegrationInputStateHandoff.reset();
+    m_avboitIntegrationStateHandoff.reset();
+    m_avboitAccumulationInputStateHandoff.reset();
+    m_avboitStateHandoff.reset();
+}
+
+void RendererSystem::resetRejectedAsyncRayEffectsStateHandoffs()noexcept{
+    // The Graphics prefix is already accepted when this submission is attempted. Preserve its state and every prior
+    // producer return while discarding the unaccepted effects branch and all downstream work that depends on it.
+    m_shadowComputeBaseStateHandoff.reset();
+    m_shadowComputeInputStateHandoff.reset();
+    m_shadowVisibilityStateHandoff.reset();
+    m_shadowVisibilityLightingStateHandoff.reset();
+    m_causticsComputeBaseStateHandoff.reset();
+    m_causticsComputeInputStateHandoff.reset();
+    m_causticsStateHandoff.reset();
+    m_causticIrradianceLightingStateHandoff.reset();
+    m_surfelGiComputeBaseStateHandoff.reset();
+    m_surfelGiComputeInputStateHandoff.reset();
+    m_surfelGiStateHandoff.reset();
+    m_surfelIrradianceLightingStateHandoff.reset();
+    m_deferredLightingBaseStateHandoff.reset();
+    m_deferredLightingInputStateHandoff.reset();
+    m_deferredLightingStateHandoff.reset();
+    m_avboitLightingStateHandoff.reset();
+    m_avboitCompositeStateHandoff.reset();
+    m_opaqueColorCompositeStateHandoff.reset();
+    m_deferredCompositeBaseStateHandoff.reset();
+    m_deferredCompositeInputStateHandoff.reset();
+    m_deferredCompositeStateHandoff.reset();
+    m_compositeColorPresentStateHandoff.reset();
+    m_deferredPresentBaseStateHandoff.reset();
+    m_deferredPresentInputStateHandoff.reset();
+    m_deferredPresentStateHandoff.reset();
+    m_avboitPreStateHandoff.reset();
+    m_avboitDepthWarpInputStateHandoff.reset();
+    m_avboitDepthWarpStateHandoff.reset();
+    m_avboitExtinctionInputStateHandoff.reset();
+    m_avboitExtinctionStateHandoff.reset();
+    m_avboitIntegrationInputStateHandoff.reset();
+    m_avboitIntegrationStateHandoff.reset();
+    m_avboitAccumulationInputStateHandoff.reset();
+    m_avboitStateHandoff.reset();
+}
+
+
 bool RendererSystem::validateResources(const u32 width, const u32 height, const u32 sampleCount){
     static_cast<void>(sampleCount);
     m_raytracingSystem.logCapabilityOnce();
@@ -218,51 +424,8 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
     if(!targetsReady){
         // Target-generation replacement invalidates every retained Compute scratch state and the visibility ownership
         // return. The new image can be claimed by its first Compute use without a stale handoff.
-        m_shadowComputeBaseStateHandoff.reset();
-        m_shadowComputeInputStateHandoff.reset();
-        m_shadowComputePersistentStateHandoff.reset();
-        m_shadowVisibilityStateHandoff.reset();
-        m_shadowVisibilityLightingStateHandoff.reset();
-        m_shadowVisibilityReturnStateHandoff.reset();
-        m_causticsComputeBaseStateHandoff.reset();
-        m_causticsComputeInputStateHandoff.reset();
-        m_causticsComputePersistentStateHandoff.reset();
-        m_causticsStateHandoff.reset();
-        m_causticIrradianceLightingStateHandoff.reset();
-        m_causticIrradianceReturnStateHandoff.reset();
-        m_surfelGiComputeBaseStateHandoff.reset();
-        m_surfelGiComputeInputStateHandoff.reset();
-        m_surfelGiComputePersistentStateHandoff.reset();
-        m_surfelGiStateHandoff.reset();
-        m_surfelIrradianceLightingStateHandoff.reset();
-        m_deferredLightingBaseStateHandoff.reset();
-        m_deferredLightingInputStateHandoff.reset();
-        m_deferredLightingStateHandoff.reset();
-        m_avboitLightingStateHandoff.reset();
-        m_avboitCompositeStateHandoff.reset();
-        m_opaqueColorCompositeStateHandoff.reset();
-        m_deferredCompositeBaseStateHandoff.reset();
-        m_deferredCompositeInputStateHandoff.reset();
-        m_compositeColorPresentStateHandoff.reset();
-        m_deferredPresentBaseStateHandoff.reset();
-        m_deferredPresentInputStateHandoff.reset();
-        m_deferredPresentStateHandoff.reset();
-        m_laggedLightingStashInputStateHandoff.reset();
-        m_laggedLightingStashStateHandoff.reset();
-        m_laggedLightingHistoryValid = false;
-        m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
-        m_laggedLightingHistoryGeneration = 0u;
-        m_surfelIrradianceReturnStateHandoff.reset();
-        m_avboitPreStateHandoff.reset();
-        m_avboitDepthWarpInputStateHandoff.reset();
-        m_avboitDepthWarpStateHandoff.reset();
-        m_avboitExtinctionInputStateHandoff.reset();
-        m_avboitExtinctionStateHandoff.reset();
-        m_avboitIntegrationInputStateHandoff.reset();
-        m_avboitIntegrationStateHandoff.reset();
-        m_avboitAccumulationInputStateHandoff.reset();
-        m_avboitStateHandoff.reset();
-        m_deferredCompositeStateHandoff.reset();
+        resetTargetGenerationStateHandoffs();
+        resetLaggedLightingHistoryTracking();
         targetsReady = m_deferredSystem.createDeferredFrameTargets(width, height);
     }
     if(!targetsReady)
@@ -295,55 +458,7 @@ void RendererSystem::invalidateResources(){
     m_preparedCsgFrameStateValid = false;
     m_preparedHasTransparentRenderers = false;
     m_preparedShadowVisibilityReady = false;
-    m_shadowPrepareStateHandoff.reset();
-    m_meshViewSetupStateHandoff.reset();
-    m_sceneShadingSetupStateHandoff.reset();
-    m_deferredClearStateHandoff.reset();
-    m_frameSetupStateFanInHandoff.reset();
-    m_gbufferStateHandoff.reset();
-    m_postGbufferNormalizedStateHandoff.reset();
-    m_shadowComputeBaseStateHandoff.reset();
-    m_shadowComputeInputStateHandoff.reset();
-    m_shadowComputePersistentStateHandoff.reset();
-    m_shadowVisibilityStateHandoff.reset();
-    m_shadowVisibilityLightingStateHandoff.reset();
-    m_shadowVisibilityReturnStateHandoff.reset();
-    m_causticsComputeBaseStateHandoff.reset();
-    m_causticsComputeInputStateHandoff.reset();
-    m_causticsComputePersistentStateHandoff.reset();
-    m_causticsStateHandoff.reset();
-    m_causticIrradianceLightingStateHandoff.reset();
-    m_causticIrradianceReturnStateHandoff.reset();
-    m_surfelGiComputeBaseStateHandoff.reset();
-    m_surfelGiComputeInputStateHandoff.reset();
-    m_surfelGiComputePersistentStateHandoff.reset();
-    m_surfelGiStateHandoff.reset();
-    m_surfelIrradianceLightingStateHandoff.reset();
-    m_surfelIrradianceReturnStateHandoff.reset();
-    m_deferredLightingBaseStateHandoff.reset();
-    m_deferredLightingInputStateHandoff.reset();
-    m_deferredLightingStateHandoff.reset();
-    m_avboitLightingStateHandoff.reset();
-    m_avboitCompositeStateHandoff.reset();
-    m_opaqueColorCompositeStateHandoff.reset();
-    m_deferredCompositeBaseStateHandoff.reset();
-    m_deferredCompositeInputStateHandoff.reset();
-    m_deferredCompositeStateHandoff.reset();
-    m_compositeColorPresentStateHandoff.reset();
-    m_deferredPresentBaseStateHandoff.reset();
-    m_deferredPresentInputStateHandoff.reset();
-    m_deferredPresentStateHandoff.reset();
-    m_laggedLightingStashInputStateHandoff.reset();
-    m_laggedLightingStashStateHandoff.reset();
-    m_avboitPreStateHandoff.reset();
-    m_avboitDepthWarpInputStateHandoff.reset();
-    m_avboitDepthWarpStateHandoff.reset();
-    m_avboitExtinctionInputStateHandoff.reset();
-    m_avboitExtinctionStateHandoff.reset();
-    m_avboitIntegrationInputStateHandoff.reset();
-    m_avboitIntegrationStateHandoff.reset();
-    m_avboitAccumulationInputStateHandoff.reset();
-    m_avboitStateHandoff.reset();
+    resetInvalidatedResourceStateHandoffs();
     m_meshViewSetupCommandList.reset();
     m_sceneShadingSetupCommandList.reset();
     m_deferredClearCommandList.reset();
@@ -369,9 +484,7 @@ void RendererSystem::invalidateResources(){
     m_deferredCompositeCommandList.reset();
     m_deferredPresentCommandList.reset();
     m_shadowPrepareCommandList.reset();
-    m_laggedLightingHistoryValid = false;
-    m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
-    m_laggedLightingHistoryGeneration = 0u;
+    resetLaggedLightingHistoryTracking();
     m_asyncRenderRecoveryFailed = false;
     // The descriptor-buffer TLAS descriptor owns a retained acceleration-structure handle until its in-flight-frame
     // quarantine matures. Retire it before RendererRayTracingState releases the current TLAS so resource invalidation
@@ -901,17 +1014,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(m_laggedLightingHistoryGeneration != historyGeneration){
             // A resize/recreate can recycle descriptor slots and allocator addresses while replacing the images.
             // The validated target generation guarantees a fresh history starts with a current-frame seed.
-            m_laggedLightingHistoryValid = false;
-            m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
-            m_laggedLightingStashInputStateHandoff.reset();
-            m_laggedLightingStashStateHandoff.reset();
+            invalidateLaggedLightingHistorySubmission();
+            resetLaggedLightingStashStateHandoffs();
             m_laggedLightingHistoryGeneration = historyGeneration;
         }
     }
     else{
-        m_laggedLightingHistoryValid = false;
-        m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
-        m_laggedLightingHistoryGeneration = 0u;
+        resetLaggedLightingHistoryTracking();
     }
     const ECSRenderDetail::FrameExecutionPlanInput frameExecutionPlanInput{
         dedicatedAsyncCompute,
@@ -1007,48 +1116,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(!asyncAvboitSchedule || avboitAccumulateCommandList);
     NWB_ASSERT(deferredPresentCommandList);
 
-    m_meshViewSetupStateHandoff.reset();
-    m_sceneShadingSetupStateHandoff.reset();
-    m_deferredClearStateHandoff.reset();
-    m_frameSetupStateFanInHandoff.reset();
-    m_gbufferStateHandoff.reset();
-    m_postGbufferNormalizedStateHandoff.reset();
-    m_shadowComputeBaseStateHandoff.reset();
-    m_shadowComputeInputStateHandoff.reset();
-    m_shadowVisibilityStateHandoff.reset();
-    m_shadowVisibilityLightingStateHandoff.reset();
-    m_causticsComputeBaseStateHandoff.reset();
-    m_causticsComputeInputStateHandoff.reset();
-    m_causticsStateHandoff.reset();
-    m_causticIrradianceLightingStateHandoff.reset();
-    m_surfelGiComputeBaseStateHandoff.reset();
-    m_surfelGiComputeInputStateHandoff.reset();
-    m_surfelGiStateHandoff.reset();
-    m_surfelIrradianceLightingStateHandoff.reset();
-    m_deferredLightingBaseStateHandoff.reset();
-    m_deferredLightingInputStateHandoff.reset();
-    m_deferredLightingStateHandoff.reset();
-    m_avboitLightingStateHandoff.reset();
-    m_avboitCompositeStateHandoff.reset();
-    m_opaqueColorCompositeStateHandoff.reset();
-    m_deferredCompositeBaseStateHandoff.reset();
-    m_deferredCompositeInputStateHandoff.reset();
-    m_deferredCompositeStateHandoff.reset();
-    m_compositeColorPresentStateHandoff.reset();
-    m_deferredPresentBaseStateHandoff.reset();
-    m_deferredPresentInputStateHandoff.reset();
-    m_deferredPresentStateHandoff.reset();
-    m_laggedLightingStashInputStateHandoff.reset();
-    m_laggedLightingStashStateHandoff.reset();
-    m_avboitPreStateHandoff.reset();
-    m_avboitDepthWarpInputStateHandoff.reset();
-    m_avboitDepthWarpStateHandoff.reset();
-    m_avboitExtinctionInputStateHandoff.reset();
-    m_avboitExtinctionStateHandoff.reset();
-    m_avboitIntegrationInputStateHandoff.reset();
-    m_avboitIntegrationStateHandoff.reset();
-    m_avboitAccumulationInputStateHandoff.reset();
-    m_avboitStateHandoff.reset();
+    resetFrameRecordingStateHandoffs();
     m_raytracingSystem.discardSoftShadowTemporalHistory();
 
     // Recording a packet can advance CPU mirrors (temporal phases, readback cadence, and the AVBOIT clear latch)
@@ -1209,46 +1277,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         restorePostGbufferPacketCpuState();
         m_raytracingSystem.discardSoftShadowTemporalHistory();
         m_raytracingSystem.discardSurfelResourceInitialization();
-        m_meshViewSetupStateHandoff.reset();
-        m_sceneShadingSetupStateHandoff.reset();
-        m_deferredClearStateHandoff.reset();
-        m_frameSetupStateFanInHandoff.reset();
-        m_gbufferStateHandoff.reset();
-        m_postGbufferNormalizedStateHandoff.reset();
-        m_shadowComputeBaseStateHandoff.reset();
-        m_shadowComputeInputStateHandoff.reset();
-        m_shadowVisibilityStateHandoff.reset();
-        m_shadowVisibilityLightingStateHandoff.reset();
-        m_causticsStateHandoff.reset();
-        m_causticIrradianceLightingStateHandoff.reset();
-        m_surfelGiComputeBaseStateHandoff.reset();
-        m_surfelGiComputeInputStateHandoff.reset();
-        m_surfelGiStateHandoff.reset();
-        m_surfelIrradianceLightingStateHandoff.reset();
-        m_deferredLightingBaseStateHandoff.reset();
-        m_deferredLightingInputStateHandoff.reset();
-        m_deferredLightingStateHandoff.reset();
-        m_avboitLightingStateHandoff.reset();
-        m_avboitCompositeStateHandoff.reset();
-        m_opaqueColorCompositeStateHandoff.reset();
-        m_deferredCompositeBaseStateHandoff.reset();
-        m_deferredCompositeInputStateHandoff.reset();
-        m_deferredCompositeStateHandoff.reset();
-        m_compositeColorPresentStateHandoff.reset();
-        m_deferredPresentBaseStateHandoff.reset();
-        m_deferredPresentInputStateHandoff.reset();
-        m_deferredPresentStateHandoff.reset();
-        m_laggedLightingStashInputStateHandoff.reset();
-        m_laggedLightingStashStateHandoff.reset();
-        m_avboitPreStateHandoff.reset();
-        m_avboitDepthWarpInputStateHandoff.reset();
-        m_avboitDepthWarpStateHandoff.reset();
-        m_avboitExtinctionInputStateHandoff.reset();
-        m_avboitExtinctionStateHandoff.reset();
-        m_avboitIntegrationInputStateHandoff.reset();
-        m_avboitIntegrationStateHandoff.reset();
-        m_avboitAccumulationInputStateHandoff.reset();
-        m_avboitStateHandoff.reset();
+        resetAbandonedFrameStateHandoffs();
     };
 
     // Mesh-view and scene-shading uploads plus the non-CSG deferred-target clear have no shared CPU or GPU outputs.
@@ -2961,40 +2990,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 restoreEffectsCpuState();
                 m_raytracingSystem.discardSoftShadowTemporalHistory();
                 m_raytracingSystem.discardSurfelResourceInitialization();
-                m_shadowComputeBaseStateHandoff.reset();
-                m_shadowComputeInputStateHandoff.reset();
-                m_shadowVisibilityStateHandoff.reset();
-                m_shadowVisibilityLightingStateHandoff.reset();
-                m_causticsComputeBaseStateHandoff.reset();
-                m_causticsComputeInputStateHandoff.reset();
-                m_causticsStateHandoff.reset();
-                m_causticIrradianceLightingStateHandoff.reset();
-                m_surfelGiComputeBaseStateHandoff.reset();
-                m_surfelGiComputeInputStateHandoff.reset();
-                m_surfelGiStateHandoff.reset();
-                m_surfelIrradianceLightingStateHandoff.reset();
-                m_deferredLightingBaseStateHandoff.reset();
-                m_deferredLightingInputStateHandoff.reset();
-                m_deferredLightingStateHandoff.reset();
-                m_avboitLightingStateHandoff.reset();
-                m_avboitCompositeStateHandoff.reset();
-                m_opaqueColorCompositeStateHandoff.reset();
-                m_deferredCompositeBaseStateHandoff.reset();
-                m_deferredCompositeInputStateHandoff.reset();
-                m_deferredCompositeStateHandoff.reset();
-                m_compositeColorPresentStateHandoff.reset();
-                m_deferredPresentBaseStateHandoff.reset();
-                m_deferredPresentInputStateHandoff.reset();
-                m_deferredPresentStateHandoff.reset();
-                m_avboitPreStateHandoff.reset();
-                m_avboitDepthWarpInputStateHandoff.reset();
-                m_avboitDepthWarpStateHandoff.reset();
-                m_avboitExtinctionInputStateHandoff.reset();
-                m_avboitExtinctionStateHandoff.reset();
-                m_avboitIntegrationInputStateHandoff.reset();
-                m_avboitIntegrationStateHandoff.reset();
-                m_avboitAccumulationInputStateHandoff.reset();
-                m_avboitStateHandoff.reset();
+                resetRejectedAsyncRayEffectsStateHandoffs();
                 retireAsyncFrameTiming();
                 return;
             }
@@ -3249,8 +3245,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         );
         if(!stashInputReady){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged lighting-history capture skipped because its source state was unavailable"));
-            m_laggedLightingHistoryValid = false;
-            m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
+            invalidateLaggedLightingHistorySubmission();
         }
         else{
             asyncLaggedLightingStashCommandList->open(&m_laggedLightingStashInputStateHandoff);
@@ -3325,20 +3320,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
             if(!stashRecorded){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record lagged lighting-history capture; reverting to current-frame lighting"));
-                m_laggedLightingHistoryValid = false;
-                m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
-                m_laggedLightingStashInputStateHandoff.reset();
-                m_laggedLightingStashStateHandoff.reset();
+                invalidateLaggedLightingHistorySubmission();
+                resetLaggedLightingStashStateHandoffs();
             }
             else if(!frameExecutionCommandLists.appendForWork(
                 ECSRenderDetail::FrameExecutionWork::LaggedLightingStash,
                 asyncLaggedLightingStashCommandList
             )){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to append lagged lighting-history capture to its frame packet; reverting to current-frame lighting"));
-                m_laggedLightingHistoryValid = false;
-                m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
-                m_laggedLightingStashInputStateHandoff.reset();
-                m_laggedLightingStashStateHandoff.reset();
+                invalidateLaggedLightingHistorySubmission();
+                resetLaggedLightingStashStateHandoffs();
             }
             else{
                 const Core::QueueSubmissionToken stashSubmissionToken = executeRecordedFramePacket(
@@ -3346,10 +3337,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 );
                 if(!stashSubmissionToken.valid()){
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged lighting-history capture submission was rejected; reverting to current-frame lighting"));
-                    m_laggedLightingHistoryValid = false;
-                    m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
-                    m_laggedLightingStashInputStateHandoff.reset();
-                    m_laggedLightingStashStateHandoff.reset();
+                    invalidateLaggedLightingHistorySubmission();
+                    resetLaggedLightingStashStateHandoffs();
                 }
                 else{
                     const bool stashReturnStatesReady =

@@ -100,11 +100,8 @@ public:
         if(m_frameLaggedAsyncLightingEnabled == enabled)
             return;
         m_frameLaggedAsyncLightingEnabled = enabled;
-        m_laggedLightingHistoryValid = false;
-        m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
-        m_laggedLightingHistoryGeneration = 0u;
-        m_laggedLightingStashInputStateHandoff.reset();
-        m_laggedLightingStashStateHandoff.reset();
+        resetLaggedLightingHistoryTracking();
+        resetLaggedLightingStashStateHandoffs();
     }
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept{ return m_frameLaggedAsyncLightingEnabled; }
 
@@ -112,6 +109,16 @@ private:
     [[nodiscard]] bool ensureFrameCommandLists();
     [[nodiscard]] bool prepareGpuTimingScopes();
     [[nodiscard]] bool recordShadowPrepareCommandList(DeferredFrameTargets& deferredTargets);
+    // These reset groups deliberately remain lifecycle-specific. Some handoffs retain accepted AsyncCompute scratch
+    // or producer return state across frames, while unsubmitted work must be discarded before the next recording pass.
+    void resetTargetGenerationStateHandoffs()noexcept;
+    void resetInvalidatedResourceStateHandoffs()noexcept;
+    void resetFrameRecordingStateHandoffs()noexcept;
+    void resetAbandonedFrameStateHandoffs()noexcept;
+    void resetRejectedAsyncRayEffectsStateHandoffs()noexcept;
+    void resetLaggedLightingStashStateHandoffs()noexcept;
+    void invalidateLaggedLightingHistorySubmission()noexcept;
+    void resetLaggedLightingHistoryTracking()noexcept;
     [[nodiscard]] Core::Alloc::GlobalArena& arena()noexcept{ return m_arena; }
     [[nodiscard]] Core::ECS::World& world()noexcept{ return m_world; }
     [[nodiscard]] Core::Graphics& graphics()noexcept{ return m_graphics; }

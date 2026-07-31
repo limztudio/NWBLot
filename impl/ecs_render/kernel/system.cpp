@@ -9,11 +9,79 @@
 
 #include <impl/ecs_scene/components.h>
 
+#include <core/graphics/gpu_timing.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ECSRenderDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Each timed packet owns one query-reservation ticket. Packet identity is the only registry key, so adding a normal
+// packet to FrameExecutionPlan automatically creates, resolves, and discards its ticket without a matching variable,
+// switch case, or failure-path cleanup list in RendererSystem.
+class FrameExecutionPlanTimingTickets final{
+public:
+    explicit FrameExecutionPlanTimingTickets(
+        const FrameExecutionPlan& plan,
+        Core::GpuTimingRecorder& recorder
+    )
+        : m_plan(plan)
+    {
+        for(usize packetIndex = 0u; packetIndex < FrameExecutionPacket::kCount; ++packetIndex){
+            const FrameExecutionPacket::Enum packet = static_cast<FrameExecutionPacket::Enum>(packetIndex);
+            const FrameExecutionPacketPlan& packetPlan = m_plan.packet(packet);
+            if(packetPlan.enabled && packetPlan.recordsTiming)
+                m_tickets[packetIndex].emplace(recorder);
+        }
+    }
+
+
+public:
+    [[nodiscard]] Core::GpuTimingSubmissionTicket* ticketForPacket(
+        const FrameExecutionPacket::Enum packet
+    )noexcept{
+        const FrameExecutionPacketPlan& packetPlan = m_plan.packet(packet);
+        if(!packetPlan.enabled || !packetPlan.recordsTiming)
+            return nullptr;
+
+        Optional<Core::GpuTimingSubmissionTicket>& timingTicket = m_tickets[static_cast<usize>(packet)];
+        NWB_ASSERT(timingTicket.has_value());
+        return timingTicket ? &timingTicket.value() : nullptr;
+    }
+    [[nodiscard]] Core::GpuTimingSubmissionTicket* ticketForWork(
+        const FrameExecutionWork::Enum work
+    )noexcept{
+        return m_plan.hasWork(work) ? ticketForPacket(m_plan.packetForWork(work)) : nullptr;
+    }
+    void discardAll()noexcept{
+        for(Optional<Core::GpuTimingSubmissionTicket>& timingTicket : m_tickets){
+            if(timingTicket)
+                timingTicket->discard();
+        }
+    }
+
+
+private:
+    const FrameExecutionPlan& m_plan;
+    Optional<Core::GpuTimingSubmissionTicket> m_tickets[FrameExecutionPacket::kCount] = {};
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1076,71 +1144,20 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     // The Graphics-only fallback keeps its established one-ticket, one-submission timing transaction. A dedicated
     // AsyncCompute lane instead owns one ticket per accepted packet so no timestamp reservation can straddle queues.
-    Core::GpuTimingSubmissionTicket renderTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket prefixTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket shadowTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket effectsTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket avboitPreTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket avboitDepthWarpTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket avboitExtinctionTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket avboitIntegrationTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket avboitAccumulateTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket lightingTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket compositeTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket finalTimingTicket(m_graphics.gpuTiming());
-    // Ticket lifetimes remain local because they own this frame's query reservations. Their topology assignment is
-    // declarative, however: recorded work first resolves to a plan packet, then that packet resolves to its ticket.
-    const auto timingTicketForPacket = [&frameExecutionPlan,
-        &renderTimingTicket,
-        &prefixTimingTicket,
-        &shadowTimingTicket,
-        &effectsTimingTicket,
-        &avboitPreTimingTicket,
-        &avboitDepthWarpTimingTicket,
-        &avboitExtinctionTimingTicket,
-        &avboitIntegrationTimingTicket,
-        &avboitAccumulateTimingTicket,
-        &lightingTimingTicket,
-        &compositeTimingTicket,
-        &finalTimingTicket
-    ](
+    // The packet-keyed collection supplies those local ticket lifetimes without duplicating the plan's packet list.
+    ECSRenderDetail::FrameExecutionPlanTimingTickets frameExecutionTimingTickets(
+        frameExecutionPlan,
+        m_graphics.gpuTiming()
+    );
+    const auto timingTicketForPacket = [&frameExecutionTimingTickets](
         const ECSRenderDetail::FrameExecutionPacket::Enum packet
     ) -> Core::GpuTimingSubmissionTicket* {
-        switch(frameExecutionPlan.packet(packet).timingTicket){
-        case ECSRenderDetail::FrameExecutionTimingTicket::Frame:
-            return &renderTimingTicket;
-        case ECSRenderDetail::FrameExecutionTimingTicket::Prefix:
-            return &prefixTimingTicket;
-        case ECSRenderDetail::FrameExecutionTimingTicket::RayEffects:
-            return &shadowTimingTicket;
-        case ECSRenderDetail::FrameExecutionTimingTicket::Effects:
-            return &effectsTimingTicket;
-        case ECSRenderDetail::FrameExecutionTimingTicket::AvboitPre:
-            return &avboitPreTimingTicket;
-        case ECSRenderDetail::FrameExecutionTimingTicket::AvboitDepthWarp:
-            return &avboitDepthWarpTimingTicket;
-        case ECSRenderDetail::FrameExecutionTimingTicket::AvboitExtinction:
-            return &avboitExtinctionTimingTicket;
-        case ECSRenderDetail::FrameExecutionTimingTicket::AvboitIntegration:
-            return &avboitIntegrationTimingTicket;
-        case ECSRenderDetail::FrameExecutionTimingTicket::AvboitAccumulation:
-            return &avboitAccumulateTimingTicket;
-        case ECSRenderDetail::FrameExecutionTimingTicket::DeferredLighting:
-            return &lightingTimingTicket;
-        case ECSRenderDetail::FrameExecutionTimingTicket::DeferredComposite:
-            return &compositeTimingTicket;
-        case ECSRenderDetail::FrameExecutionTimingTicket::GraphicsPresent:
-            return &finalTimingTicket;
-        case ECSRenderDetail::FrameExecutionTimingTicket::None:
-            return nullptr;
-        }
-        NWB_ASSERT(false);
-        return nullptr;
+        return frameExecutionTimingTickets.ticketForPacket(packet);
     };
-    const auto timingTicketForWork = [&frameExecutionPlan, &timingTicketForPacket](
+    const auto timingTicketForWork = [&frameExecutionTimingTickets](
         const ECSRenderDetail::FrameExecutionWork::Enum work
     ) -> Core::GpuTimingSubmissionTicket* {
-        return timingTicketForPacket(frameExecutionPlan.packetForWork(work));
+        return frameExecutionTimingTickets.ticketForWork(work);
     };
     Core::GpuTimingSubmissionTicket* const prefixTimingTicketForPacket = timingTicketForWork(
         ECSRenderDetail::FrameExecutionWork::GraphicsPrefix
@@ -1215,19 +1232,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
     Optional<Core::GpuTimingMeasure> asyncEffectsTiming;
     Optional<Core::GpuTimingMeasure> asyncFinalTiming;
-    const auto discardTimingTickets = [&](){
-        renderTimingTicket.discard();
-        prefixTimingTicket.discard();
-        shadowTimingTicket.discard();
-        effectsTimingTicket.discard();
-        avboitPreTimingTicket.discard();
-        avboitDepthWarpTimingTicket.discard();
-        avboitExtinctionTimingTicket.discard();
-        avboitIntegrationTimingTicket.discard();
-        avboitAccumulateTimingTicket.discard();
-        lightingTimingTicket.discard();
-        compositeTimingTicket.discard();
-        finalTimingTicket.discard();
+    const auto discardTimingTickets = [&frameExecutionTimingTickets](){
+        frameExecutionTimingTickets.discardAll();
     };
     const auto discardRenderPackets = [&](){
         if(frameTiming){
@@ -2656,6 +2662,99 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
+    // Record jobs can run in parallel, but packet membership must retain the established submission order. Append the
+    // already-recorded lists on this thread rather than letting worker completion order choose it. The plan resolves
+    // every logical work item to its packet, including the single-packet Graphics fallback.
+    ECSRenderDetail::FrameExecutionPacketCommandLists frameExecutionCommandLists(frameExecutionPlan);
+    const auto appendRecordedWorkCommandList = [&](
+        const ECSRenderDetail::FrameExecutionWork::Enum work,
+        Core::CommandList* const commandList
+    ) -> bool {
+        if(frameExecutionCommandLists.appendForWork(work, commandList))
+            return true;
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to append recorded work to its frame execution packet"));
+        return false;
+    };
+    if(
+        !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, meshViewSetupCommandList)
+        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, sceneShadingSetupCommandList)
+        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, deferredClearCommandList)
+        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, gbufferCommandList)
+        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, postGbufferNormalizeCommandList)
+        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::RayEffects, shadowVisibilityCommandList)
+        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::Caustics, causticsCommandList)
+        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::SurfelGi, surfelGiCommandList)
+    ){
+        discardRenderPackets();
+        return;
+    }
+    if(frameExecutionPlan.hasWork(ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming)){
+        if(!appendRecordedWorkCommandList(
+            ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming,
+            asyncEffectsTimingBeginCommandList
+        )){
+            discardRenderPackets();
+            return;
+        }
+    }
+    if(!appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::AvboitRaster, avboitCommandList)){
+        discardRenderPackets();
+        return;
+    }
+    if(frameExecutionPlan.hasWork(ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming)){
+        if(!appendRecordedWorkCommandList(
+            ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming,
+            asyncEffectsTimingEndCommandList
+        )){
+            discardRenderPackets();
+            return;
+        }
+    }
+    if(frameExecutionPlan.hasWork(ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp)){
+        if(!appendRecordedWorkCommandList(
+            ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp,
+            asyncAvboitDepthWarpCommandList
+        )){
+            discardRenderPackets();
+            return;
+        }
+    }
+    if(frameExecutionPlan.hasWork(ECSRenderDetail::FrameExecutionWork::AvboitExtinction)){
+        if(!appendRecordedWorkCommandList(
+            ECSRenderDetail::FrameExecutionWork::AvboitExtinction,
+            avboitExtinctionCommandList
+        )){
+            discardRenderPackets();
+            return;
+        }
+    }
+    if(frameExecutionPlan.hasWork(ECSRenderDetail::FrameExecutionWork::AvboitIntegration)){
+        if(!appendRecordedWorkCommandList(
+            ECSRenderDetail::FrameExecutionWork::AvboitIntegration,
+            asyncAvboitIntegrationCommandList
+        )){
+            discardRenderPackets();
+            return;
+        }
+    }
+    if(frameExecutionPlan.hasWork(ECSRenderDetail::FrameExecutionWork::AvboitAccumulation)){
+        if(!appendRecordedWorkCommandList(
+            ECSRenderDetail::FrameExecutionWork::AvboitAccumulation,
+            avboitAccumulateCommandList
+        )){
+            discardRenderPackets();
+            return;
+        }
+    }
+    if(
+        !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::DeferredLighting, deferredLightingCommandList)
+        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::DeferredComposite, deferredCompositeCommandList)
+        || !appendRecordedWorkCommandList(ECSRenderDetail::FrameExecutionWork::GraphicsPresent, deferredPresentCommandList)
+    ){
+        discardRenderPackets();
+        return;
+    }
+
     // Keep submission topology declarative: the per-frame state resolves accepted predecessors and retains the
     // newest accepted lane token for recovery. The renderer still owns every acceptance-dependent state commit and
     // recovery decision below.
@@ -2718,28 +2817,45 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             frameExecutionSubmissionState.acceptSubmission(packet, submissionToken);
         return submissionToken;
     };
+    const auto submitRecordedFramePacket = [&](const ECSRenderDetail::FrameExecutionPacket::Enum packet)
+        -> Core::QueueSubmissionToken {
+        const ECSRenderDetail::FrameExecutionPacketCommandListRange packetCommandLists =
+            frameExecutionCommandLists.commandLists(packet)
+        ;
+        Core::GpuTimingSubmissionTicket* const timingTicket = timingTicketForPacket(packet);
+        if(!timingTicket || packetCommandLists.commandListCount == 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame execution packet has no timing ticket or recorded command list"));
+            if(timingTicket)
+                timingTicket->discard();
+            return {};
+        }
+        return submitPlannedFramePacket(
+            packet,
+            *timingTicket,
+            packetCommandLists.commandLists,
+            packetCommandLists.commandListCount
+        );
+    };
+    const auto executeRecordedFramePacket = [&](const ECSRenderDetail::FrameExecutionPacket::Enum packet)
+        -> Core::QueueSubmissionToken {
+        const ECSRenderDetail::FrameExecutionPacketCommandListRange packetCommandLists =
+            frameExecutionCommandLists.commandLists(packet)
+        ;
+        if(packetCommandLists.commandListCount == 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame execution packet has no recorded command list"));
+            return {};
+        }
+        return executePlannedFramePacket(
+            packet,
+            packetCommandLists.commandLists,
+            packetCommandLists.commandListCount
+        );
+    };
 
     if(!asyncShadowSchedule){
         // The unsupported/disabled-lane fallback retains the established one ordered Graphics submission exactly.
-        Core::CommandList* commandLists[] = {
-            meshViewSetupCommandList,
-            sceneShadingSetupCommandList,
-            deferredClearCommandList,
-            gbufferCommandList,
-            postGbufferNormalizeCommandList,
-            shadowVisibilityCommandList,
-            causticsCommandList,
-            surfelGiCommandList,
-            avboitCommandList,
-            deferredLightingCommandList,
-            deferredCompositeCommandList,
-            deferredPresentCommandList,
-        };
-        const Core::QueueSubmissionToken fallbackSubmissionToken = submitPlannedFramePacket(
-            ECSRenderDetail::FrameExecutionPacket::GraphicsFallback,
-            *prefixTimingTicketForPacket,
-            commandLists,
-            LengthOf(commandLists)
+        const Core::QueueSubmissionToken fallbackSubmissionToken = submitRecordedFramePacket(
+            ECSRenderDetail::FrameExecutionPacket::GraphicsFallback
         );
         if(!fallbackSubmissionToken.valid()){
             discardRenderPackets();
@@ -2835,18 +2951,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // Distinct queues: submit the Graphics producer first, then run shadow, either caustic producer, and compute-only
     // surfel GI in one accepted Compute packet. Graphics effects remain independent, and Graphics final waits for both
     // packets.
-    Core::CommandList* prefixCommandLists[] = {
-        meshViewSetupCommandList,
-        sceneShadingSetupCommandList,
-        deferredClearCommandList,
-        gbufferCommandList,
-        postGbufferNormalizeCommandList,
-    };
-    const Core::QueueSubmissionToken prefixSubmissionToken = submitPlannedFramePacket(
-        ECSRenderDetail::FrameExecutionPacket::GraphicsPrefix,
-        *prefixTimingTicketForPacket,
-        prefixCommandLists,
-        LengthOf(prefixCommandLists)
+    const Core::QueueSubmissionToken prefixSubmissionToken = submitRecordedFramePacket(
+        ECSRenderDetail::FrameExecutionPacket::GraphicsPrefix
     );
     if(!prefixSubmissionToken.valid()){
         discardRenderPackets();
@@ -2854,18 +2960,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
     asyncFrameTiming.confirmBeginSubmission();
 
-    Core::CommandList* asyncComputeCommandLists[3] = {};
-    usize asyncComputeCommandListCount = 0u;
-    asyncComputeCommandLists[asyncComputeCommandListCount++] = shadowVisibilityCommandList;
-    if(asyncCausticsSchedule)
-        asyncComputeCommandLists[asyncComputeCommandListCount++] = causticsCommandList;
-    if(asyncSurfelGiSchedule)
-        asyncComputeCommandLists[asyncComputeCommandListCount++] = surfelGiCommandList;
-    const Core::QueueSubmissionToken shadowSubmissionToken = submitPlannedFramePacket(
-        ECSRenderDetail::FrameExecutionPacket::AsyncRayEffects,
-        *shadowTimingTicketForPacket,
-        asyncComputeCommandLists,
-        asyncComputeCommandListCount
+    const Core::QueueSubmissionToken shadowSubmissionToken = submitRecordedFramePacket(
+        ECSRenderDetail::FrameExecutionPacket::AsyncRayEffects
     );
     if(!shadowSubmissionToken.valid()){
         discardTimingTickets();
@@ -2935,15 +3031,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ))
     ;
     if(!producerReturnStatesReady){
-        effectsTimingTicket.discard();
-        avboitPreTimingTicket.discard();
-        avboitDepthWarpTimingTicket.discard();
-        avboitExtinctionTimingTicket.discard();
-        avboitIntegrationTimingTicket.discard();
-        avboitAccumulateTimingTicket.discard();
-        lightingTimingTicket.discard();
-        compositeTimingTicket.discard();
-        finalTimingTicket.discard();
+        discardTimingTickets();
         restoreUnacceptedGraphicsEffectsCpuState();
         m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
         if(!recoverLatestAsyncComputeSubmission())
@@ -2982,15 +3070,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         shadowComputeScratchBuffers,
         LengthOf(shadowComputeScratchBuffers)
     )){
-        effectsTimingTicket.discard();
-        avboitPreTimingTicket.discard();
-        avboitDepthWarpTimingTicket.discard();
-        avboitExtinctionTimingTicket.discard();
-        avboitIntegrationTimingTicket.discard();
-        avboitAccumulateTimingTicket.discard();
-        lightingTimingTicket.discard();
-        compositeTimingTicket.discard();
-        finalTimingTicket.discard();
+        discardTimingTickets();
         restoreUnacceptedGraphicsEffectsCpuState();
         m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
         recoverLatestAsyncComputeSubmission();
@@ -3015,15 +3095,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             nullptr,
             0u
         )){
-            effectsTimingTicket.discard();
-            avboitPreTimingTicket.discard();
-            avboitDepthWarpTimingTicket.discard();
-            avboitExtinctionTimingTicket.discard();
-            avboitIntegrationTimingTicket.discard();
-            avboitAccumulateTimingTicket.discard();
-            lightingTimingTicket.discard();
-            compositeTimingTicket.discard();
-            finalTimingTicket.discard();
+            discardTimingTickets();
             restoreGraphicsEffectsCpuState();
             recoverLatestAsyncComputeSubmission();
             failAsyncRenderRecovery();
@@ -3052,15 +3124,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             surfelGiComputeScratchBuffers,
             LengthOf(surfelGiComputeScratchBuffers)
         )){
-            effectsTimingTicket.discard();
-            avboitPreTimingTicket.discard();
-            avboitDepthWarpTimingTicket.discard();
-            avboitExtinctionTimingTicket.discard();
-            avboitIntegrationTimingTicket.discard();
-            avboitAccumulateTimingTicket.discard();
-            lightingTimingTicket.discard();
-            compositeTimingTicket.discard();
-            finalTimingTicket.discard();
+            discardTimingTickets();
             restoreUnacceptedGraphicsEffectsCpuState();
             recoverLatestAsyncComputeSubmission();
             failAsyncRenderRecovery();
@@ -3074,119 +3138,61 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // initial raster work free to overlap the longer shadow/caustic/surfel packet.
     Core::QueueSubmissionToken avboitFinalSubmissionToken;
     if(asyncAvboitSchedule){
-        Core::CommandList* avboitPreCommandLists[] = {
-            asyncEffectsTimingBeginCommandList,
-            avboitCommandList,
-            asyncEffectsTimingEndCommandList,
-        };
-        const Core::QueueSubmissionToken avboitPreSubmissionToken = submitPlannedFramePacket(
-            ECSRenderDetail::FrameExecutionPacket::GraphicsAvboitPre,
-            *avboitPreTimingTicketForPacket,
-            avboitPreCommandLists,
-            LengthOf(avboitPreCommandLists)
+        const Core::QueueSubmissionToken avboitPreSubmissionToken = submitRecordedFramePacket(
+            ECSRenderDetail::FrameExecutionPacket::GraphicsAvboitPre
         );
         if(!avboitPreSubmissionToken.valid()){
-            finalTimingTicket.discard();
-            avboitDepthWarpTimingTicket.discard();
-            avboitExtinctionTimingTicket.discard();
-            avboitIntegrationTimingTicket.discard();
-            avboitAccumulateTimingTicket.discard();
-            lightingTimingTicket.discard();
-            compositeTimingTicket.discard();
+            discardTimingTickets();
             restoreUnacceptedGraphicsEffectsCpuState();
             if(!recoverLatestAsyncComputeSubmission())
                 failAsyncRenderRecovery();
             return;
         }
 
-        Core::CommandList* avboitDepthWarpCommandLists[] = { asyncAvboitDepthWarpCommandList };
-        const Core::QueueSubmissionToken avboitDepthWarpSubmissionToken = submitPlannedFramePacket(
-            ECSRenderDetail::FrameExecutionPacket::AsyncAvboitDepthWarp,
-            *avboitDepthWarpTimingTicketForPacket,
-            avboitDepthWarpCommandLists,
-            LengthOf(avboitDepthWarpCommandLists)
+        const Core::QueueSubmissionToken avboitDepthWarpSubmissionToken = submitRecordedFramePacket(
+            ECSRenderDetail::FrameExecutionPacket::AsyncAvboitDepthWarp
         );
         if(!avboitDepthWarpSubmissionToken.valid()){
-            finalTimingTicket.discard();
-            avboitExtinctionTimingTicket.discard();
-            avboitIntegrationTimingTicket.discard();
-            avboitAccumulateTimingTicket.discard();
-            lightingTimingTicket.discard();
-            compositeTimingTicket.discard();
+            discardTimingTickets();
             if(!recoverLatestAsyncComputeSubmission())
                 failAsyncRenderRecovery();
             return;
         }
-        Core::CommandList* avboitExtinctionCommandLists[] = { avboitExtinctionCommandList };
-        const Core::QueueSubmissionToken avboitExtinctionSubmissionToken = submitPlannedFramePacket(
-            ECSRenderDetail::FrameExecutionPacket::GraphicsAvboitExtinction,
-            *avboitExtinctionTimingTicketForPacket,
-            avboitExtinctionCommandLists,
-            LengthOf(avboitExtinctionCommandLists)
+        const Core::QueueSubmissionToken avboitExtinctionSubmissionToken = submitRecordedFramePacket(
+            ECSRenderDetail::FrameExecutionPacket::GraphicsAvboitExtinction
         );
         if(!avboitExtinctionSubmissionToken.valid()){
-            finalTimingTicket.discard();
-            avboitIntegrationTimingTicket.discard();
-            avboitAccumulateTimingTicket.discard();
-            lightingTimingTicket.discard();
-            compositeTimingTicket.discard();
+            discardTimingTickets();
             if(!recoverLatestAsyncComputeSubmission())
                 failAsyncRenderRecovery();
             return;
         }
 
-        Core::CommandList* avboitIntegrationCommandLists[] = { asyncAvboitIntegrationCommandList };
-        const Core::QueueSubmissionToken avboitIntegrationSubmissionToken = submitPlannedFramePacket(
-            ECSRenderDetail::FrameExecutionPacket::AsyncAvboitIntegration,
-            *avboitIntegrationTimingTicketForPacket,
-            avboitIntegrationCommandLists,
-            LengthOf(avboitIntegrationCommandLists)
+        const Core::QueueSubmissionToken avboitIntegrationSubmissionToken = submitRecordedFramePacket(
+            ECSRenderDetail::FrameExecutionPacket::AsyncAvboitIntegration
         );
         if(!avboitIntegrationSubmissionToken.valid()){
-            finalTimingTicket.discard();
-            avboitAccumulateTimingTicket.discard();
-            lightingTimingTicket.discard();
-            compositeTimingTicket.discard();
+            discardTimingTickets();
             if(!recoverLatestAsyncComputeSubmission())
                 failAsyncRenderRecovery();
             return;
         }
-        Core::CommandList* avboitAccumulateCommandLists[] = { avboitAccumulateCommandList };
-        avboitFinalSubmissionToken = submitPlannedFramePacket(
-            ECSRenderDetail::FrameExecutionPacket::GraphicsAvboitAccumulation,
-            *avboitAccumulateTimingTicketForPacket,
-            avboitAccumulateCommandLists,
-            LengthOf(avboitAccumulateCommandLists)
+        avboitFinalSubmissionToken = submitRecordedFramePacket(
+            ECSRenderDetail::FrameExecutionPacket::GraphicsAvboitAccumulation
         );
         if(!avboitFinalSubmissionToken.valid()){
-            finalTimingTicket.discard();
-            lightingTimingTicket.discard();
-            compositeTimingTicket.discard();
+            discardTimingTickets();
             if(!recoverLatestAsyncComputeSubmission())
                 failAsyncRenderRecovery();
             return;
         }
     }
     else{
-        Core::CommandList* effectsCommandLists[5] = {};
-        usize effectsCommandListCount = 0u;
-        effectsCommandLists[effectsCommandListCount++] = asyncEffectsTimingBeginCommandList;
-        if(!asyncCausticsSchedule)
-            effectsCommandLists[effectsCommandListCount++] = causticsCommandList;
-        if(!asyncSurfelGiSchedule)
-            effectsCommandLists[effectsCommandListCount++] = surfelGiCommandList;
-        effectsCommandLists[effectsCommandListCount++] = avboitCommandList;
-        effectsCommandLists[effectsCommandListCount++] = asyncEffectsTimingEndCommandList;
-        avboitFinalSubmissionToken = submitPlannedFramePacket(
-            ECSRenderDetail::FrameExecutionPacket::GraphicsEffects,
-            *effectsTimingTicketForPacket,
-            effectsCommandLists,
-            effectsCommandListCount
+        avboitFinalSubmissionToken = submitRecordedFramePacket(
+            ECSRenderDetail::FrameExecutionPacket::GraphicsEffects
         );
         if(!avboitFinalSubmissionToken.valid()){
-            finalTimingTicket.discard();
-            lightingTimingTicket.discard();
-            compositeTimingTicket.discard();
+            discardTimingTickets();
             restoreUnacceptedGraphicsEffectsCpuState();
             if(!recoverLatestAsyncComputeSubmission())
                 failAsyncRenderRecovery();
@@ -3197,16 +3203,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // The normal dedicated path keeps lighting/composite behind the producer on AsyncCompute. Once the optional
     // history is accepted, Graphics waits only for the previous stash and shades current G-buffer data in parallel
     // with this frame's producer; AVBOIT stays entirely on Graphics in that mode to avoid queueing behind the producer.
-    Core::CommandList* lightingCommandLists[] = { deferredLightingCommandList };
-    const Core::QueueSubmissionToken lightingSubmissionToken = submitPlannedFramePacket(
-        ECSRenderDetail::FrameExecutionPacket::DeferredLighting,
-        *lightingTimingTicketForPacket,
-        lightingCommandLists,
-        LengthOf(lightingCommandLists)
+    const Core::QueueSubmissionToken lightingSubmissionToken = submitRecordedFramePacket(
+        ECSRenderDetail::FrameExecutionPacket::DeferredLighting
     );
     if(!lightingSubmissionToken.valid()){
-        compositeTimingTicket.discard();
-        finalTimingTicket.discard();
+        discardTimingTickets();
         if(!recoverLatestAsyncComputeSubmission())
             failAsyncRenderRecovery();
         return;
@@ -3228,8 +3229,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ))
     );
     if(!lightingReturnStatesReady){
-        compositeTimingTicket.discard();
-        finalTimingTicket.discard();
+        discardTimingTickets();
         if(!recoverLatestAsyncComputeSubmission())
             failAsyncRenderRecovery();
         // The accepted lighting packet replaced the producer layouts, so a failed retained snapshot is terminal.
@@ -3239,15 +3239,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     // The selected lane orders composite after lighting. Its token remains the presentation dependency in both modes;
     // in the lagged mode that is simply a Graphics-to-Graphics order edge while AsyncCompute continues the producer.
-    Core::CommandList* compositeCommandLists[] = { deferredCompositeCommandList };
-    const Core::QueueSubmissionToken compositeSubmissionToken = submitPlannedFramePacket(
-        ECSRenderDetail::FrameExecutionPacket::DeferredComposite,
-        *compositeTimingTicketForPacket,
-        compositeCommandLists,
-        LengthOf(compositeCommandLists)
+    const Core::QueueSubmissionToken compositeSubmissionToken = submitRecordedFramePacket(
+        ECSRenderDetail::FrameExecutionPacket::DeferredComposite
     );
     if(!compositeSubmissionToken.valid()){
-        finalTimingTicket.discard();
+        discardTimingTickets();
         if(!recoverLatestAsyncComputeSubmission())
             failAsyncRenderRecovery();
         return;
@@ -3255,12 +3251,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // History removes the producer from the current lighting dependency, not from the frame-lifetime dependency. The
     // final Graphics packet still waits for this frame's Async producer before the next frame can rewrite shared scene
     // inputs; that preserves the existing cross-frame resource contract while exposing the useful overlap above.
-    Core::CommandList* finalCommandLists[] = { deferredPresentCommandList };
-    const Core::QueueSubmissionToken finalSubmissionToken = submitPlannedFramePacket(
-        ECSRenderDetail::FrameExecutionPacket::GraphicsPresent,
-        *finalTimingTicketForPacket,
-        finalCommandLists,
-        LengthOf(finalCommandLists)
+    const Core::QueueSubmissionToken finalSubmissionToken = submitRecordedFramePacket(
+        ECSRenderDetail::FrameExecutionPacket::GraphicsPresent
     );
     if(!finalSubmissionToken.valid()){
         if(!recoverLatestAsyncComputeSubmission())
@@ -3369,12 +3361,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_laggedLightingStashInputStateHandoff.reset();
                 m_laggedLightingStashStateHandoff.reset();
             }
+            else if(!appendRecordedWorkCommandList(
+                ECSRenderDetail::FrameExecutionWork::LaggedLightingStash,
+                asyncLaggedLightingStashCommandList
+            )){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to append lagged lighting-history capture to its frame packet; reverting to current-frame lighting"));
+                m_laggedLightingHistoryValid = false;
+                m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
+                m_laggedLightingStashInputStateHandoff.reset();
+                m_laggedLightingStashStateHandoff.reset();
+            }
             else{
-                Core::CommandList* stashCommandLists[] = { asyncLaggedLightingStashCommandList };
-                const Core::QueueSubmissionToken stashSubmissionToken = executePlannedFramePacket(
-                    ECSRenderDetail::FrameExecutionPacket::AsyncLaggedLightingStash,
-                    stashCommandLists,
-                    LengthOf(stashCommandLists)
+                const Core::QueueSubmissionToken stashSubmissionToken = executeRecordedFramePacket(
+                    ECSRenderDetail::FrameExecutionPacket::AsyncLaggedLightingStash
                 );
                 if(!stashSubmissionToken.valid()){
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged lighting-history capture submission was rejected; reverting to current-frame lighting"));

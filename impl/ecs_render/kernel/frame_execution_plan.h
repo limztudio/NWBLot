@@ -72,27 +72,6 @@ namespace FrameExecutionWork{
 };
 
 
-// Ticket identities remain local to RendererSystem because they own per-frame query reservations. The plan owns
-// only the stable assignment from a logical submission packet to the ticket that records and confirms it.
-namespace FrameExecutionTimingTicket{
-    enum Enum : u8{
-        None,
-        Frame,
-        Prefix,
-        RayEffects,
-        Effects,
-        AvboitPre,
-        AvboitDepthWarp,
-        AvboitExtinction,
-        AvboitIntegration,
-        AvboitAccumulation,
-        DeferredLighting,
-        DeferredComposite,
-        GraphicsPresent,
-    };
-};
-
-
 struct FrameExecutionPlanInput{
     bool dedicatedAsyncCompute = false;
     bool frameLaggedAsyncLightingEnabled = false;
@@ -106,8 +85,10 @@ struct FrameExecutionPacketPlan{
     Core::RenderLane::Enum lane = Core::RenderLane::Graphics;
     FrameExecutionPacket::Enum waitPackets[2] = {};
     u8 waitPacketCount = 0u;
-    FrameExecutionTimingTicket::Enum timingTicket = FrameExecutionTimingTicket::None;
     bool enabled = false;
+    // An enabled packet receives a timing ticket indexed by its packet ID unless it is explicitly execution-only.
+    // This avoids a second packet-to-ticket registry that must be updated whenever the topology grows.
+    bool recordsTiming = false;
     bool waitsForLaggedLightingHistory = false;
 };
 
@@ -216,7 +197,11 @@ public:
             addPacketWait(FrameExecutionPacket::GraphicsPresent, FrameExecutionPacket::AsyncRayEffects);
 
         if(m_capturesLaggedLightingHistory){
-            enablePacket(FrameExecutionPacket::AsyncLaggedLightingStash, Core::RenderLane::AsyncCompute);
+            enablePacket(
+                FrameExecutionPacket::AsyncLaggedLightingStash,
+                Core::RenderLane::AsyncCompute,
+                false
+            );
             addPacketWait(FrameExecutionPacket::AsyncLaggedLightingStash, FrameExecutionPacket::GraphicsPresent);
             assignWork(FrameExecutionWork::LaggedLightingStash, FrameExecutionPacket::AsyncLaggedLightingStash);
         }
@@ -258,11 +243,15 @@ private:
     [[nodiscard]] FrameExecutionWorkPlan& mutableWork(const FrameExecutionWork::Enum work)noexcept{
         return m_workPlans[static_cast<usize>(work)];
     }
-    void enablePacket(const FrameExecutionPacket::Enum packetID, const Core::RenderLane::Enum lane)noexcept{
+    void enablePacket(
+        const FrameExecutionPacket::Enum packetID,
+        const Core::RenderLane::Enum lane,
+        const bool recordsTiming = true
+    )noexcept{
         FrameExecutionPacketPlan& packetPlan = mutablePacket(packetID);
         packetPlan.lane = lane;
-        packetPlan.timingTicket = timingTicketForPacket(packetID);
         packetPlan.enabled = true;
+        packetPlan.recordsTiming = recordsTiming;
     }
     void assignWork(
         const FrameExecutionWork::Enum work,
@@ -283,44 +272,6 @@ private:
         NWB_ASSERT(consumerPlan.waitPacketCount < s_MaxPacketWaits);
         consumerPlan.waitPackets[consumerPlan.waitPacketCount++] = producerPacket;
     }
-    [[nodiscard]] static FrameExecutionTimingTicket::Enum timingTicketForPacket(
-        const FrameExecutionPacket::Enum packet
-    )noexcept{
-        switch(packet){
-        case FrameExecutionPacket::GraphicsFallback:
-            return FrameExecutionTimingTicket::Frame;
-        case FrameExecutionPacket::GraphicsPrefix:
-            return FrameExecutionTimingTicket::Prefix;
-        case FrameExecutionPacket::AsyncRayEffects:
-            return FrameExecutionTimingTicket::RayEffects;
-        case FrameExecutionPacket::GraphicsEffects:
-            return FrameExecutionTimingTicket::Effects;
-        case FrameExecutionPacket::GraphicsAvboitPre:
-            return FrameExecutionTimingTicket::AvboitPre;
-        case FrameExecutionPacket::AsyncAvboitDepthWarp:
-            return FrameExecutionTimingTicket::AvboitDepthWarp;
-        case FrameExecutionPacket::GraphicsAvboitExtinction:
-            return FrameExecutionTimingTicket::AvboitExtinction;
-        case FrameExecutionPacket::AsyncAvboitIntegration:
-            return FrameExecutionTimingTicket::AvboitIntegration;
-        case FrameExecutionPacket::GraphicsAvboitAccumulation:
-            return FrameExecutionTimingTicket::AvboitAccumulation;
-        case FrameExecutionPacket::DeferredLighting:
-            return FrameExecutionTimingTicket::DeferredLighting;
-        case FrameExecutionPacket::DeferredComposite:
-            return FrameExecutionTimingTicket::DeferredComposite;
-        case FrameExecutionPacket::GraphicsPresent:
-            return FrameExecutionTimingTicket::GraphicsPresent;
-        case FrameExecutionPacket::AsyncLaggedLightingStash:
-            return FrameExecutionTimingTicket::None;
-        case FrameExecutionPacket::kCount:
-            break;
-        }
-        NWB_ASSERT(false);
-        return FrameExecutionTimingTicket::None;
-    }
-
-
 private:
     FrameExecutionPacketPlan m_packets[FrameExecutionPacket::kCount] = {};
     FrameExecutionWorkPlan m_workPlans[FrameExecutionWork::kCount] = {};
@@ -328,6 +279,69 @@ private:
     bool m_usesLaggedAsyncLighting = false;
     bool m_capturesLaggedLightingHistory = false;
     bool m_usesAsyncAvboit = false;
+};
+
+
+// Recording stays in RendererSystem because it owns the resource-state handoffs, but the ordered command lists
+// submitted for each packet follow the plan's work mapping. A work item may append more than once: the async-effects
+// timing bracket deliberately contributes a begin and an end command list around its packet's other work.
+struct FrameExecutionPacketCommandListRange{
+    Core::CommandList* const* commandLists = nullptr;
+    usize commandListCount = 0u;
+};
+
+
+class FrameExecutionPacketCommandLists final{
+public:
+    // Graphics fallback currently contains the largest packet: twelve lists. Keep this constrained collector
+    // allocation-free and make any future packet-size increase explicit in the plan contract.
+    static constexpr usize s_MaxCommandListsPerPacket = 12u;
+
+
+public:
+    explicit FrameExecutionPacketCommandLists(const FrameExecutionPlan& plan)noexcept
+        : m_plan(plan)
+    {}
+
+
+public:
+    [[nodiscard]] bool appendForWork(
+        const FrameExecutionWork::Enum work,
+        Core::CommandList* const commandList
+    )noexcept{
+        if(!m_plan.hasWork(work))
+            return false;
+        return appendForPacket(m_plan.packetForWork(work), commandList);
+    }
+    [[nodiscard]] FrameExecutionPacketCommandListRange commandLists(
+        const FrameExecutionPacket::Enum packet
+    )const noexcept{
+        const usize packetIndex = static_cast<usize>(packet);
+        return FrameExecutionPacketCommandListRange{
+            m_commandLists[packetIndex],
+            m_commandListCounts[packetIndex],
+        };
+    }
+
+
+private:
+    [[nodiscard]] bool appendForPacket(
+        const FrameExecutionPacket::Enum packet,
+        Core::CommandList* const commandList
+    )noexcept{
+        if(!commandList || !m_plan.packet(packet).enabled)
+            return false;
+
+        const usize packetIndex = static_cast<usize>(packet);
+        usize& commandListCount = m_commandListCounts[packetIndex];
+        if(commandListCount >= s_MaxCommandListsPerPacket)
+            return false;
+        m_commandLists[packetIndex][commandListCount++] = commandList;
+        return true;
+    }
+    const FrameExecutionPlan& m_plan;
+    Core::CommandList* m_commandLists[FrameExecutionPacket::kCount][s_MaxCommandListsPerPacket] = {};
+    usize m_commandListCounts[FrameExecutionPacket::kCount] = {};
 };
 
 

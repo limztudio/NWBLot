@@ -794,8 +794,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async render recovery failed; rendering is suspended until resources are recreated"));
         return;
     }
-    const bool asyncShadowSchedule = device.isRenderLaneDedicated(Core::RenderLane::AsyncCompute);
-    const bool laggedAsyncLightingRequested = m_frameLaggedAsyncLightingEnabled && asyncShadowSchedule;
+    const bool dedicatedAsyncCompute = device.isRenderLaneDedicated(Core::RenderLane::AsyncCompute);
+    const bool laggedAsyncLightingRequested = m_frameLaggedAsyncLightingEnabled && dedicatedAsyncCompute;
     const bool laggedLightingHistoryResourcesReady = deferredTargets.laggedLightingHistory.valid();
     if(laggedAsyncLightingRequested && !laggedLightingHistoryResourcesReady){
         NWB_ASSERT(laggedLightingHistoryResourcesReady);
@@ -820,27 +820,31 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
         m_laggedLightingHistoryGeneration = 0u;
     }
-    const bool laggedAsyncLightingSchedule =
-        laggedAsyncLightingRequested
-        && laggedLightingHistoryResourcesReady
-        && m_laggedLightingHistoryValid
-        && m_laggedLightingHistorySubmissionToken.valid()
-    ;
+    const ECSRenderDetail::FrameExecutionPlanInput frameExecutionPlanInput{
+        dedicatedAsyncCompute,
+        m_frameLaggedAsyncLightingEnabled,
+        laggedLightingHistoryResourcesReady,
+        m_laggedLightingHistoryValid && m_laggedLightingHistorySubmissionToken.valid(),
+        hasTransparentRenderers,
+    };
+    const ECSRenderDetail::FrameExecutionPlan frameExecutionPlan(frameExecutionPlanInput);
+    const bool asyncShadowSchedule = frameExecutionPlan.usesDedicatedAsyncCompute();
+    const bool laggedAsyncLightingSchedule = frameExecutionPlan.usesLaggedAsyncLighting();
     // A history snapshot is captured after every opt-in frame, including the current-frame bootstrap. Once the
     // previous accepted snapshot exists this packet shades independently on Graphics while the producer runs on Async.
-    const bool captureLaggedLightingHistory = laggedAsyncLightingRequested;
-    const bool deferredLightingAsyncSchedule = asyncShadowSchedule && !laggedAsyncLightingSchedule;
+    const bool captureLaggedLightingHistory = frameExecutionPlan.capturesLaggedLightingHistory();
+    const bool deferredLightingAsyncSchedule = frameExecutionPlan.usesAsyncDeferredLighting();
     const bool hardwareShadowSupported =
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
         && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
     ;
     // vkCmdTraceRaysKHR is valid from a command pool supporting VK_QUEUE_COMPUTE_BIT. The dedicated AsyncCompute lane
     // is selected from such a family, so both the software and hardware caustic producers can share its packet.
-    const bool asyncCausticsSchedule = asyncShadowSchedule;
-    const bool asyncSurfelGiSchedule = asyncShadowSchedule;
+    const bool asyncCausticsSchedule = frameExecutionPlan.usesAsyncCaustics();
+    const bool asyncSurfelGiSchedule = frameExecutionPlan.usesAsyncSurfelGi();
     // AVBOIT alternates Graphics raster passes with two pure dispatches. Only split it when transparent work exists;
     // a clear-only frame remains one Graphics packet and avoids needless cross-lane submissions.
-    const bool asyncAvboitSchedule = asyncShadowSchedule && hasTransparentRenderers && !laggedAsyncLightingSchedule;
+    const bool asyncAvboitSchedule = frameExecutionPlan.usesAsyncAvboit();
     Core::CommandList* meshViewSetupCommandList = m_meshViewSetupCommandList.get();
     Core::CommandList* sceneShadingSetupCommandList = m_sceneShadingSetupCommandList.get();
     Core::CommandList* deferredClearCommandList = m_deferredClearCommandList.get();
@@ -2560,6 +2564,69 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
+    // Keep submission topology declarative: the per-frame state resolves accepted predecessors and retains the
+    // newest accepted lane token for recovery. The renderer still owns every acceptance-dependent state commit and
+    // recovery decision below.
+    ECSRenderDetail::FrameExecutionPlanSubmissionState frameExecutionSubmissionState(
+        frameExecutionPlan,
+        m_laggedLightingHistorySubmissionToken
+    );
+    const auto submitPlannedFramePacket = [&](
+        const ECSRenderDetail::FrameExecutionPacket::Enum packet,
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        Core::CommandList* const* commandLists,
+        const usize commandListCount
+    ) -> Core::QueueSubmissionToken {
+        Core::QueueSubmissionToken waitTokens[ECSRenderDetail::FrameExecutionPlan::s_MaxSubmissionWaits] = {};
+        Core::QueueSubmissionDesc submitDesc;
+        if(!frameExecutionSubmissionState.prepareSubmission(
+            packet,
+            submitDesc,
+            waitTokens,
+            LengthOf(waitTokens)
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame execution plan dependency was not accepted"));
+            timingTicket.discard();
+            return {};
+        }
+        const Core::QueueSubmissionToken submissionToken = timingTicket.submit(
+            device,
+            commandLists,
+            commandListCount,
+            frameExecutionPlan.packet(packet).lane,
+            submitDesc
+        );
+        if(submissionToken.valid())
+            frameExecutionSubmissionState.acceptSubmission(packet, submissionToken);
+        return submissionToken;
+    };
+    const auto executePlannedFramePacket = [&](
+        const ECSRenderDetail::FrameExecutionPacket::Enum packet,
+        Core::CommandList* const* commandLists,
+        const usize commandListCount
+    ) -> Core::QueueSubmissionToken {
+        Core::QueueSubmissionToken waitTokens[ECSRenderDetail::FrameExecutionPlan::s_MaxSubmissionWaits] = {};
+        Core::QueueSubmissionDesc submitDesc;
+        if(!frameExecutionSubmissionState.prepareSubmission(
+            packet,
+            submitDesc,
+            waitTokens,
+            LengthOf(waitTokens)
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame execution plan dependency was not accepted"));
+            return {};
+        }
+        const Core::QueueSubmissionToken submissionToken = device.executeCommandLists(
+            commandLists,
+            commandListCount,
+            frameExecutionPlan.packet(packet).lane,
+            submitDesc
+        );
+        if(submissionToken.valid())
+            frameExecutionSubmissionState.acceptSubmission(packet, submissionToken);
+        return submissionToken;
+    };
+
     if(!asyncShadowSchedule){
         // The unsupported/disabled-lane fallback retains the established one ordered Graphics submission exactly.
         Core::CommandList* commandLists[] = {
@@ -2576,12 +2643,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             deferredCompositeCommandList,
             deferredPresentCommandList,
         };
-        const Core::QueueSubmissionToken fallbackSubmissionToken = renderTimingTicket.submit(
-            device,
+        const Core::QueueSubmissionToken fallbackSubmissionToken = submitPlannedFramePacket(
+            ECSRenderDetail::FrameExecutionPacket::GraphicsFallback,
+            renderTimingTicket,
             commandLists,
-            12u,
-            Core::RenderLane::Graphics,
-            Core::QueueSubmissionDesc{}
+            LengthOf(commandLists)
         );
         if(!fallbackSubmissionToken.valid()){
             discardRenderPackets();
@@ -2659,6 +2725,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const auto recoverAcceptedAsyncComputeSubmission = [&](const Core::QueueSubmissionToken submissionToken) -> bool {
         return submitAsyncRecoveryJoin(&submissionToken);
     };
+    const auto recoverLatestAsyncComputeSubmission = [&]() -> bool {
+        return recoverAcceptedAsyncComputeSubmission(
+            frameExecutionSubmissionState.latestAcceptedToken(Core::RenderLane::AsyncCompute)
+        );
+    };
     const auto failAsyncRenderRecovery = [&](){
         if(m_asyncRenderRecoveryFailed)
             return;
@@ -2679,12 +2750,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         gbufferCommandList,
         postGbufferNormalizeCommandList,
     };
-    const Core::QueueSubmissionToken prefixSubmissionToken = prefixTimingTicket.submit(
-        device,
+    const Core::QueueSubmissionToken prefixSubmissionToken = submitPlannedFramePacket(
+        ECSRenderDetail::FrameExecutionPacket::GraphicsPrefix,
+        prefixTimingTicket,
         prefixCommandLists,
-        5u,
-        Core::RenderLane::Graphics,
-        Core::QueueSubmissionDesc{}
+        LengthOf(prefixCommandLists)
     );
     if(!prefixSubmissionToken.valid()){
         discardRenderPackets();
@@ -2692,8 +2762,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
     asyncFrameTiming.confirmBeginSubmission();
 
-    Core::QueueSubmissionDesc shadowSubmitDesc;
-    shadowSubmitDesc.setWaitTokens(&prefixSubmissionToken, 1u);
     Core::CommandList* asyncComputeCommandLists[3] = {};
     usize asyncComputeCommandListCount = 0u;
     asyncComputeCommandLists[asyncComputeCommandListCount++] = shadowVisibilityCommandList;
@@ -2701,12 +2769,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         asyncComputeCommandLists[asyncComputeCommandListCount++] = causticsCommandList;
     if(asyncSurfelGiSchedule)
         asyncComputeCommandLists[asyncComputeCommandListCount++] = surfelGiCommandList;
-    const Core::QueueSubmissionToken shadowSubmissionToken = shadowTimingTicket.submit(
-        device,
+    const Core::QueueSubmissionToken shadowSubmissionToken = submitPlannedFramePacket(
+        ECSRenderDetail::FrameExecutionPacket::AsyncRayEffects,
+        shadowTimingTicket,
         asyncComputeCommandLists,
-        asyncComputeCommandListCount,
-        Core::RenderLane::AsyncCompute,
-        shadowSubmitDesc
+        asyncComputeCommandListCount
     );
     if(!shadowSubmissionToken.valid()){
         discardTimingTickets();
@@ -2758,7 +2825,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_raytracingSystem.confirmShadowVisibilitySubmission(shadowSubmissionToken);
     m_raytracingSystem.confirmSurfelGiSubmission(shadowSubmissionToken);
     m_raytracingSystem.finalizeSurfelResourceInitialization();
-    Core::QueueSubmissionToken latestAsyncComputeSubmissionToken = shadowSubmissionToken;
 
     // Preserve the current producer state as soon as its shared Compute packet is accepted. If a later Graphics or
     // lighting submission is rejected, the next frame can still reopen these exclusive results on AsyncCompute.
@@ -2788,7 +2854,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         finalTimingTicket.discard();
         restoreUnacceptedGraphicsEffectsCpuState();
         m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-        if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+        if(!recoverLatestAsyncComputeSubmission())
             failAsyncRenderRecovery();
         // The accepted producer state could not be retained, so continuing would require guessing its next layout.
         failAsyncRenderRecovery();
@@ -2835,7 +2901,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         finalTimingTicket.discard();
         restoreUnacceptedGraphicsEffectsCpuState();
         m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-        recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken);
+        recoverLatestAsyncComputeSubmission();
         // Without a retained Compute-side scratch snapshot the next packet cannot safely restore its layouts, even
         // after the accepted Compute work has been joined.
         failAsyncRenderRecovery();
@@ -2867,7 +2933,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             compositeTimingTicket.discard();
             finalTimingTicket.discard();
             restoreGraphicsEffectsCpuState();
-            recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken);
+            recoverLatestAsyncComputeSubmission();
             failAsyncRenderRecovery();
             return;
         }
@@ -2904,7 +2970,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             compositeTimingTicket.discard();
             finalTimingTicket.discard();
             restoreUnacceptedGraphicsEffectsCpuState();
-            recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken);
+            recoverLatestAsyncComputeSubmission();
             failAsyncRenderRecovery();
             return;
         }
@@ -2921,12 +2987,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitCommandList,
             asyncEffectsTimingEndCommandList,
         };
-        const Core::QueueSubmissionToken avboitPreSubmissionToken = avboitPreTimingTicket.submit(
-            device,
+        const Core::QueueSubmissionToken avboitPreSubmissionToken = submitPlannedFramePacket(
+            ECSRenderDetail::FrameExecutionPacket::GraphicsAvboitPre,
+            avboitPreTimingTicket,
             avboitPreCommandLists,
-            3u,
-            Core::RenderLane::Graphics,
-            Core::QueueSubmissionDesc{}
+            LengthOf(avboitPreCommandLists)
         );
         if(!avboitPreSubmissionToken.valid()){
             finalTimingTicket.discard();
@@ -2937,20 +3002,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             lightingTimingTicket.discard();
             compositeTimingTicket.discard();
             restoreUnacceptedGraphicsEffectsCpuState();
-            if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+            if(!recoverLatestAsyncComputeSubmission())
                 failAsyncRenderRecovery();
             return;
         }
 
-        Core::QueueSubmissionDesc avboitDepthWarpSubmitDesc;
-        avboitDepthWarpSubmitDesc.setWaitTokens(&avboitPreSubmissionToken, 1u);
         Core::CommandList* avboitDepthWarpCommandLists[] = { asyncAvboitDepthWarpCommandList };
-        const Core::QueueSubmissionToken avboitDepthWarpSubmissionToken = avboitDepthWarpTimingTicket.submit(
-            device,
+        const Core::QueueSubmissionToken avboitDepthWarpSubmissionToken = submitPlannedFramePacket(
+            ECSRenderDetail::FrameExecutionPacket::AsyncAvboitDepthWarp,
+            avboitDepthWarpTimingTicket,
             avboitDepthWarpCommandLists,
-            1u,
-            Core::RenderLane::AsyncCompute,
-            avboitDepthWarpSubmitDesc
+            LengthOf(avboitDepthWarpCommandLists)
         );
         if(!avboitDepthWarpSubmissionToken.valid()){
             finalTimingTicket.discard();
@@ -2959,21 +3021,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitAccumulateTimingTicket.discard();
             lightingTimingTicket.discard();
             compositeTimingTicket.discard();
-            if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+            if(!recoverLatestAsyncComputeSubmission())
                 failAsyncRenderRecovery();
             return;
         }
-        latestAsyncComputeSubmissionToken = avboitDepthWarpSubmissionToken;
-
-        Core::QueueSubmissionDesc avboitExtinctionSubmitDesc;
-        avboitExtinctionSubmitDesc.setWaitTokens(&avboitDepthWarpSubmissionToken, 1u);
         Core::CommandList* avboitExtinctionCommandLists[] = { avboitExtinctionCommandList };
-        const Core::QueueSubmissionToken avboitExtinctionSubmissionToken = avboitExtinctionTimingTicket.submit(
-            device,
+        const Core::QueueSubmissionToken avboitExtinctionSubmissionToken = submitPlannedFramePacket(
+            ECSRenderDetail::FrameExecutionPacket::GraphicsAvboitExtinction,
+            avboitExtinctionTimingTicket,
             avboitExtinctionCommandLists,
-            1u,
-            Core::RenderLane::Graphics,
-            avboitExtinctionSubmitDesc
+            LengthOf(avboitExtinctionCommandLists)
         );
         if(!avboitExtinctionSubmissionToken.valid()){
             finalTimingTicket.discard();
@@ -2981,47 +3038,39 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitAccumulateTimingTicket.discard();
             lightingTimingTicket.discard();
             compositeTimingTicket.discard();
-            if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+            if(!recoverLatestAsyncComputeSubmission())
                 failAsyncRenderRecovery();
             return;
         }
 
-        Core::QueueSubmissionDesc avboitIntegrationSubmitDesc;
-        avboitIntegrationSubmitDesc.setWaitTokens(&avboitExtinctionSubmissionToken, 1u);
         Core::CommandList* avboitIntegrationCommandLists[] = { asyncAvboitIntegrationCommandList };
-        const Core::QueueSubmissionToken avboitIntegrationSubmissionToken = avboitIntegrationTimingTicket.submit(
-            device,
+        const Core::QueueSubmissionToken avboitIntegrationSubmissionToken = submitPlannedFramePacket(
+            ECSRenderDetail::FrameExecutionPacket::AsyncAvboitIntegration,
+            avboitIntegrationTimingTicket,
             avboitIntegrationCommandLists,
-            1u,
-            Core::RenderLane::AsyncCompute,
-            avboitIntegrationSubmitDesc
+            LengthOf(avboitIntegrationCommandLists)
         );
         if(!avboitIntegrationSubmissionToken.valid()){
             finalTimingTicket.discard();
             avboitAccumulateTimingTicket.discard();
             lightingTimingTicket.discard();
             compositeTimingTicket.discard();
-            if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+            if(!recoverLatestAsyncComputeSubmission())
                 failAsyncRenderRecovery();
             return;
         }
-        latestAsyncComputeSubmissionToken = avboitIntegrationSubmissionToken;
-
-        Core::QueueSubmissionDesc avboitAccumulateSubmitDesc;
-        avboitAccumulateSubmitDesc.setWaitTokens(&avboitIntegrationSubmissionToken, 1u);
         Core::CommandList* avboitAccumulateCommandLists[] = { avboitAccumulateCommandList };
-        avboitFinalSubmissionToken = avboitAccumulateTimingTicket.submit(
-            device,
+        avboitFinalSubmissionToken = submitPlannedFramePacket(
+            ECSRenderDetail::FrameExecutionPacket::GraphicsAvboitAccumulation,
+            avboitAccumulateTimingTicket,
             avboitAccumulateCommandLists,
-            1u,
-            Core::RenderLane::Graphics,
-            avboitAccumulateSubmitDesc
+            LengthOf(avboitAccumulateCommandLists)
         );
         if(!avboitFinalSubmissionToken.valid()){
             finalTimingTicket.discard();
             lightingTimingTicket.discard();
             compositeTimingTicket.discard();
-            if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+            if(!recoverLatestAsyncComputeSubmission())
                 failAsyncRenderRecovery();
             return;
         }
@@ -3036,19 +3085,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             effectsCommandLists[effectsCommandListCount++] = surfelGiCommandList;
         effectsCommandLists[effectsCommandListCount++] = avboitCommandList;
         effectsCommandLists[effectsCommandListCount++] = asyncEffectsTimingEndCommandList;
-        avboitFinalSubmissionToken = effectsTimingTicket.submit(
-            device,
+        avboitFinalSubmissionToken = submitPlannedFramePacket(
+            ECSRenderDetail::FrameExecutionPacket::GraphicsEffects,
+            effectsTimingTicket,
             effectsCommandLists,
-            effectsCommandListCount,
-            Core::RenderLane::Graphics,
-            Core::QueueSubmissionDesc{}
+            effectsCommandListCount
         );
         if(!avboitFinalSubmissionToken.valid()){
             finalTimingTicket.discard();
             lightingTimingTicket.discard();
             compositeTimingTicket.discard();
             restoreUnacceptedGraphicsEffectsCpuState();
-            if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+            if(!recoverLatestAsyncComputeSubmission())
                 failAsyncRenderRecovery();
             return;
         }
@@ -3057,32 +3105,22 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // The normal dedicated path keeps lighting/composite behind the producer on AsyncCompute. Once the optional
     // history is accepted, Graphics waits only for the previous stash and shades current G-buffer data in parallel
     // with this frame's producer; AVBOIT stays entirely on Graphics in that mode to avoid queueing behind the producer.
-    Core::QueueSubmissionToken lightingWaitTokens[2] = { avboitFinalSubmissionToken, Core::QueueSubmissionToken{} };
-    usize lightingWaitTokenCount = 1u;
-    if(laggedAsyncLightingSchedule)
-        lightingWaitTokens[lightingWaitTokenCount++] = m_laggedLightingHistorySubmissionToken;
-    Core::QueueSubmissionDesc lightingSubmitDesc;
-    lightingSubmitDesc.setWaitTokens(lightingWaitTokens, lightingWaitTokenCount);
     Core::CommandList* lightingCommandLists[] = { deferredLightingCommandList };
-    const Core::QueueSubmissionToken lightingSubmissionToken = lightingTimingTicket.submit(
-        device,
+    const Core::QueueSubmissionToken lightingSubmissionToken = submitPlannedFramePacket(
+        ECSRenderDetail::FrameExecutionPacket::DeferredLighting,
+        lightingTimingTicket,
         lightingCommandLists,
-        1u,
-        deferredLightingAsyncSchedule ? Core::RenderLane::AsyncCompute : Core::RenderLane::Graphics,
-        lightingSubmitDesc
+        LengthOf(lightingCommandLists)
     );
     if(!lightingSubmissionToken.valid()){
         compositeTimingTicket.discard();
         finalTimingTicket.discard();
-        if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+        if(!recoverLatestAsyncComputeSubmission())
             failAsyncRenderRecovery();
         return;
     }
     if(laggedAsyncLightingSchedule)
         deferredTargets.laggedLightingHistory.slotsUploaded = true;
-    if(deferredLightingAsyncSchedule)
-        latestAsyncComputeSubmissionToken = lightingSubmissionToken;
-
     const bool lightingReturnStatesReady = laggedAsyncLightingSchedule || (
         m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
             m_deferredLightingStateHandoff,
@@ -3100,7 +3138,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!lightingReturnStatesReady){
         compositeTimingTicket.discard();
         finalTimingTicket.discard();
-        if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+        if(!recoverLatestAsyncComputeSubmission())
             failAsyncRenderRecovery();
         // The accepted lighting packet replaced the producer layouts, so a failed retained snapshot is terminal.
         failAsyncRenderRecovery();
@@ -3110,41 +3148,30 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // The selected lane orders composite after lighting. Its token remains the presentation dependency in both modes;
     // in the lagged mode that is simply a Graphics-to-Graphics order edge while AsyncCompute continues the producer.
     Core::CommandList* compositeCommandLists[] = { deferredCompositeCommandList };
-    const Core::QueueSubmissionToken compositeSubmissionToken = compositeTimingTicket.submit(
-        device,
+    const Core::QueueSubmissionToken compositeSubmissionToken = submitPlannedFramePacket(
+        ECSRenderDetail::FrameExecutionPacket::DeferredComposite,
+        compositeTimingTicket,
         compositeCommandLists,
-        1u,
-        deferredLightingAsyncSchedule ? Core::RenderLane::AsyncCompute : Core::RenderLane::Graphics,
-        Core::QueueSubmissionDesc{}
+        LengthOf(compositeCommandLists)
     );
     if(!compositeSubmissionToken.valid()){
         finalTimingTicket.discard();
-        if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+        if(!recoverLatestAsyncComputeSubmission())
             failAsyncRenderRecovery();
         return;
     }
-    if(deferredLightingAsyncSchedule)
-        latestAsyncComputeSubmissionToken = compositeSubmissionToken;
-
     // History removes the producer from the current lighting dependency, not from the frame-lifetime dependency. The
     // final Graphics packet still waits for this frame's Async producer before the next frame can rewrite shared scene
     // inputs; that preserves the existing cross-frame resource contract while exposing the useful overlap above.
-    Core::QueueSubmissionToken finalWaitTokens[2] = { compositeSubmissionToken, Core::QueueSubmissionToken{} };
-    usize finalWaitTokenCount = 1u;
-    if(laggedAsyncLightingSchedule)
-        finalWaitTokens[finalWaitTokenCount++] = latestAsyncComputeSubmissionToken;
-    Core::QueueSubmissionDesc finalSubmitDesc;
-    finalSubmitDesc.setWaitTokens(finalWaitTokens, finalWaitTokenCount);
     Core::CommandList* finalCommandLists[] = { deferredPresentCommandList };
-    const Core::QueueSubmissionToken finalSubmissionToken = finalTimingTicket.submit(
-        device,
+    const Core::QueueSubmissionToken finalSubmissionToken = submitPlannedFramePacket(
+        ECSRenderDetail::FrameExecutionPacket::GraphicsPresent,
+        finalTimingTicket,
         finalCommandLists,
-        1u,
-        Core::RenderLane::Graphics,
-        finalSubmitDesc
+        LengthOf(finalCommandLists)
     );
     if(!finalSubmissionToken.valid()){
-        if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+        if(!recoverLatestAsyncComputeSubmission())
             failAsyncRenderRecovery();
         return;
     }
@@ -3251,14 +3278,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_laggedLightingStashStateHandoff.reset();
             }
             else{
-                Core::QueueSubmissionDesc stashSubmitDesc;
-                stashSubmitDesc.setWaitTokens(&finalSubmissionToken, 1u);
                 Core::CommandList* stashCommandLists[] = { asyncLaggedLightingStashCommandList };
-                const Core::QueueSubmissionToken stashSubmissionToken = device.executeCommandLists(
+                const Core::QueueSubmissionToken stashSubmissionToken = executePlannedFramePacket(
+                    ECSRenderDetail::FrameExecutionPacket::AsyncLaggedLightingStash,
                     stashCommandLists,
-                    1u,
-                    Core::RenderLane::AsyncCompute,
-                    stashSubmitDesc
+                    LengthOf(stashCommandLists)
                 );
                 if(!stashSubmissionToken.valid()){
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged lighting-history capture submission was rejected; reverting to current-frame lighting"));
@@ -3268,7 +3292,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     m_laggedLightingStashStateHandoff.reset();
                 }
                 else{
-                    latestAsyncComputeSubmissionToken = stashSubmissionToken;
                     const bool stashReturnStatesReady =
                         m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
                             m_laggedLightingStashStateHandoff,
@@ -3284,7 +3307,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                         )
                     ;
                     if(!stashReturnStatesReady){
-                        if(!recoverAcceptedAsyncComputeSubmission(latestAsyncComputeSubmissionToken))
+                        if(!recoverLatestAsyncComputeSubmission())
                             failAsyncRenderRecovery();
                         // The accepted copy changed the producer-image layouts. Without an exported next-frame state,
                         // reusing either the history or the live output would require guessing.

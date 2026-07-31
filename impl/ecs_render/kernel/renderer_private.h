@@ -8,6 +8,7 @@
 #include <impl/ecs_render/kernel/system.h>
 
 #include <impl/ecs_render/avboit/avboit.h>
+#include <impl/ecs_render/kernel/frame_execution_plan.h>
 #include <impl/ecs_render/material/material_typed_private.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>

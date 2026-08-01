@@ -1239,6 +1239,10 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
         return m_context.extensions.EXT_opacity_micromap && m_context.extensions.KHR_synchronization2;
     case Feature::RayTracingClusters:
         return m_context.extensions.NV_cluster_acceleration_structure;
+    case Feature::SamplerFeedback:
+    case Feature::VirtualResources:
+        // Retained only to preserve Feature enum ordinals for external callers. The corresponding systems are retired.
+        return false;
     case Feature::CooperativeVectorInferencing:
         return m_context.extensions.NV_cooperative_vector && m_context.coopVecFeatures.cooperativeVector;
     case Feature::CooperativeVectorTraining:

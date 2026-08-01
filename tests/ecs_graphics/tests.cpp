@@ -13,6 +13,7 @@
 
 #include <core/common/module.h>
 #include <core/ecs/module.h>
+#include <core/graphics/rhi/device.h>
 #include <core/mesh/classification.h>
 #include <impl/ecs_mesh/components.h>
 #include <impl/ecs_skeleton/components.h>
@@ -51,6 +52,15 @@ template<typename T>
 using Vector = NWB::Tests::TestVector<T>;
 
 inline constexpr Name s_ScratchArena("tests/ecs_graphics/scratch");
+
+
+TEST(EcsGraphics, FeatureCompatibilitySlotsKeepLegacyOrdinals){
+    EXPECT_EQ(static_cast<u32>(NWB::Core::Feature::SamplerFeedback), 13u);
+    EXPECT_EQ(static_cast<u32>(NWB::Core::Feature::ShaderExecutionReordering), 14u);
+    EXPECT_EQ(static_cast<u32>(NWB::Core::Feature::VirtualResources), 19u);
+    EXPECT_EQ(static_cast<u32>(NWB::Core::Feature::WaveLaneCountMinMax), 20u);
+    EXPECT_EQ(static_cast<u32>(NWB::Core::Feature::kCount), 23u);
+}
 
 
 TEST(EcsGraphics, RuntimeResourceNameBuilderMatchesFormattedSuffix){

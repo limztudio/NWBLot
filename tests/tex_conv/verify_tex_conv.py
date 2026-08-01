@@ -118,7 +118,8 @@ def main() -> int:
         text=True,
         capture_output=True,
     )
-    if overwrite.returncode == 0 or "Output already exists:" not in overwrite.stderr:
+    overwrite_output = f"{overwrite.stdout}\n{overwrite.stderr}"
+    if overwrite.returncode == 0 or "Output already exists:" not in overwrite_output:
         raise AssertionError("tex_conv did not protect an existing output without --force")
 
     forced = subprocess.run(

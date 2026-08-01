@@ -216,8 +216,17 @@ public:
         if(usesAsyncAvboit){
             enablePacket(FrameExecutionPacket::GraphicsAvboitPre, Core::RenderLane::Graphics);
             addPacketWait(FrameExecutionPacket::GraphicsAvboitPre, FrameExecutionPacket::GraphicsPrefix);
-            if(!usesAsyncCaustics)
+            if(!usesAsyncCaustics){
                 assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::GraphicsAvboitPre);
+                // The prior frame's Async stash reads the live caustic irradiance. Hardware caustics overwrite it
+                // from Graphics, so an active lagged frame must not start that producer until the accepted stash has
+                // finished. Software caustics remain ordered by their shared AsyncCompute queue.
+                if(usesLaggedAsyncLighting)
+                    addExternalWait(
+                        FrameExecutionPacket::GraphicsAvboitPre,
+                        FrameExecutionExternalWait::LaggedLightingHistory
+                    );
+            }
             assignWork(FrameExecutionWork::AvboitRaster, FrameExecutionPacket::GraphicsAvboitPre);
             assignWork(FrameExecutionWork::AsyncEffectsTiming, FrameExecutionPacket::GraphicsAvboitPre);
 
@@ -241,8 +250,16 @@ public:
         else{
             enablePacket(FrameExecutionPacket::GraphicsEffects, Core::RenderLane::Graphics);
             addPacketWait(FrameExecutionPacket::GraphicsEffects, FrameExecutionPacket::GraphicsPrefix);
-            if(!usesAsyncCaustics)
+            if(!usesAsyncCaustics){
                 assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::GraphicsEffects);
+                // See the corresponding GraphicsAvboitPre branch: the prior Async stash must complete before the
+                // Graphics hardware producer clears and rewrites its live irradiance image.
+                if(usesLaggedAsyncLighting)
+                    addExternalWait(
+                        FrameExecutionPacket::GraphicsEffects,
+                        FrameExecutionExternalWait::LaggedLightingHistory
+                    );
+            }
             assignWork(FrameExecutionWork::AvboitRaster, FrameExecutionPacket::GraphicsEffects);
             assignWork(FrameExecutionWork::AsyncEffectsTiming, FrameExecutionPacket::GraphicsEffects);
         }

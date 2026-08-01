@@ -243,6 +243,11 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         .setHeight(targets.height)
         .setFormat(targets.causticIrradianceFormat)
         .setInUAV(true)
+        // Hardware caustics run in the independent Graphics packet while normal deferred lighting samples this
+        // resolved output on AsyncCompute. The packet dependency supplies execution/memory ordering; concurrent
+        // sharing avoids an ownership round trip every frame and keeps both hardware and software producer routes
+        // valid on a device with distinct queue families.
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/caustic/irradiance")
     ;
     targets.causticIrradiance = graphics().createTexture(irradianceDesc);

@@ -1121,6 +1121,200 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneChainsConcurrentAvboitWork
 }
 
 
+// Hardware caustics can produce the resolved irradiance on Graphics while deferred lighting and the optional history
+// stash run on AsyncCompute. The output is intentionally concurrent, so timeline dependencies are sufficient and no
+// exclusive ownership release is required. Exercise both the bootstrap (lighting supplies the stash source) and the
+// active lagged path (the current Graphics producer supplies it directly).
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneLetsGraphicsCausticsFeedLightingAndLaggedStashThroughConcurrentIrradiance){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+
+    auto causticIrradiance = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    ASSERT_NE(causticIrradiance.get(), nullptr);
+    auto causticHistory = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    ASSERT_NE(causticHistory.get(), nullptr);
+
+    CommandListParameters computeParams;
+    computeParams.setRenderLane(RenderLane::AsyncCompute);
+    auto graphicsCaustics = device.createCommandList();
+    auto asyncLighting = device.createCommandList(computeParams);
+    auto bootstrapFinal = device.createCommandList();
+    auto bootstrapStash = device.createCommandList(computeParams);
+    auto activeGraphicsCaustics = device.createCommandList();
+    auto activeStash = device.createCommandList(computeParams);
+    ASSERT_NE(graphicsCaustics.get(), nullptr);
+    ASSERT_NE(asyncLighting.get(), nullptr);
+    ASSERT_NE(bootstrapFinal.get(), nullptr);
+    ASSERT_NE(bootstrapStash.get(), nullptr);
+    ASSERT_NE(activeGraphicsCaustics.get(), nullptr);
+    ASSERT_NE(activeStash.get(), nullptr);
+
+    CommandListResourceStateHandoff causticsState(asyncScope.arena());
+    CommandListResourceStateHandoff lightingState(asyncScope.arena());
+    CommandListResourceStateHandoff bootstrapCausticReturnState(asyncScope.arena());
+    CommandListResourceStateHandoff bootstrapStashState(asyncScope.arena());
+    CommandListResourceStateHandoff activeCausticsState(asyncScope.arena());
+    CommandListResourceStateHandoff activeStashState(asyncScope.arena());
+    graphicsCaustics->open();
+    graphicsCaustics->setTextureState(
+        causticIrradiance.get(),
+        s_AllSubresources,
+        ResourceStates::UnorderedAccess
+    );
+    graphicsCaustics->setTextureState(
+        causticIrradiance.get(),
+        s_AllSubresources,
+        ResourceStates::ShaderResource
+    );
+    graphicsCaustics->close(&causticsState);
+    ASSERT_TRUE(causticsState.valid());
+
+    asyncLighting->open(&causticsState);
+    ASSERT_TRUE(asyncLighting->hasCommandBuffer());
+    EXPECT_EQ(
+        asyncLighting->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u),
+        ResourceStates::ShaderResource
+    );
+    asyncLighting->close(&lightingState);
+    ASSERT_TRUE(lightingState.valid());
+    ASSERT_TRUE(bootstrapCausticReturnState.buildTextureSubset(
+        lightingState,
+        causticIrradiance.get()
+    ));
+
+    // Bootstrap consumes the live image in Async lighting, so the stash imports the post-lighting state.
+    bootstrapFinal->open();
+    bootstrapFinal->close();
+    ASSERT_TRUE(bootstrapFinal->hasCommandBuffer());
+    bootstrapStash->open(&bootstrapCausticReturnState);
+    EXPECT_EQ(
+        bootstrapStash->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u),
+        ResourceStates::ShaderResource
+    );
+    bootstrapStash->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::CopySource);
+    bootstrapStash->setTextureState(causticHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
+    bootstrapStash->commitBarriers();
+    const TextureSlice slice;
+    bootstrapStash->copyTexture(causticHistory.get(), slice, causticIrradiance.get(), slice);
+    bootstrapStash->close(&bootstrapStashState);
+    ASSERT_TRUE(bootstrapStashState.valid());
+
+    // Once history is accepted, Graphics lighting uses the immutable prior-frame image. The live caustic result now
+    // comes from the current Graphics producer, so the next stash must import that state rather than the old
+    // Async-lighting return state.
+    activeGraphicsCaustics->open();
+    activeGraphicsCaustics->setTextureState(
+        causticIrradiance.get(),
+        s_AllSubresources,
+        ResourceStates::UnorderedAccess
+    );
+    activeGraphicsCaustics->setTextureState(
+        causticIrradiance.get(),
+        s_AllSubresources,
+        ResourceStates::ShaderResource
+    );
+    activeGraphicsCaustics->close(&activeCausticsState);
+    ASSERT_TRUE(activeCausticsState.valid());
+
+    activeStash->open(&activeCausticsState);
+    EXPECT_EQ(
+        activeStash->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u),
+        ResourceStates::ShaderResource
+    );
+    activeStash->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::CopySource);
+    activeStash->setTextureState(causticHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
+    activeStash->commitBarriers();
+    activeStash->copyTexture(causticHistory.get(), slice, causticIrradiance.get(), slice);
+    activeStash->close(&activeStashState);
+    ASSERT_TRUE(activeStashState.valid());
+
+    CommandList* graphicsLists[] = { graphicsCaustics.get() };
+    const QueueSubmissionToken graphicsToken = device.executeCommandLists(
+        graphicsLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(graphicsToken.valid());
+
+    const QueueSubmissionDesc lightingSubmitDesc = QueueSubmissionDesc().setWaitTokens(&graphicsToken, 1u);
+    CommandList* lightingLists[] = { asyncLighting.get() };
+    const QueueSubmissionToken lightingToken = device.executeCommandLists(
+        lightingLists,
+        1u,
+        RenderLane::AsyncCompute,
+        lightingSubmitDesc
+    );
+    EXPECT_TRUE(lightingToken.valid());
+
+    const QueueSubmissionDesc bootstrapFinalSubmitDesc = QueueSubmissionDesc().setWaitTokens(&lightingToken, 1u);
+    CommandList* bootstrapFinalLists[] = { bootstrapFinal.get() };
+    const QueueSubmissionToken bootstrapFinalToken = device.executeCommandLists(
+        bootstrapFinalLists,
+        1u,
+        RenderLane::Graphics,
+        bootstrapFinalSubmitDesc
+    );
+    ASSERT_TRUE(bootstrapFinalToken.valid());
+
+    const QueueSubmissionDesc bootstrapStashSubmitDesc = QueueSubmissionDesc().setWaitTokens(&bootstrapFinalToken, 1u);
+    CommandList* bootstrapStashLists[] = { bootstrapStash.get() };
+    const QueueSubmissionToken bootstrapStashToken = device.executeCommandLists(
+        bootstrapStashLists,
+        1u,
+        RenderLane::AsyncCompute,
+        bootstrapStashSubmitDesc
+    );
+    ASSERT_TRUE(bootstrapStashToken.valid());
+
+    // This wait is the active-lagged plan's explicit cross-frame protection: do not overwrite the live image until
+    // the previous Async history copy has stopped reading it.
+    const QueueSubmissionDesc activeCausticsSubmitDesc = QueueSubmissionDesc().setWaitTokens(&bootstrapStashToken, 1u);
+    CommandList* activeCausticsLists[] = { activeGraphicsCaustics.get() };
+    const QueueSubmissionToken activeCausticsToken = device.executeCommandLists(
+        activeCausticsLists,
+        1u,
+        RenderLane::Graphics,
+        activeCausticsSubmitDesc
+    );
+    ASSERT_TRUE(activeCausticsToken.valid());
+
+    const QueueSubmissionDesc activeStashSubmitDesc = QueueSubmissionDesc().setWaitTokens(&activeCausticsToken, 1u);
+    CommandList* activeStashLists[] = { activeStash.get() };
+    const QueueSubmissionToken activeStashToken = device.executeCommandLists(
+        activeStashLists,
+        1u,
+        RenderLane::AsyncCompute,
+        activeStashSubmitDesc
+    );
+    EXPECT_TRUE(activeStashToken.valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // Deferred lighting and the logical composite now join the dedicated Compute lane after AVBOIT. The exclusive
 // ray-effect outputs therefore remain Compute-local through their only consumer; Graphics imports only the linear
 // composite image for presentation. This exercises the narrow handoffs and verifies that no Graphics acquire/release

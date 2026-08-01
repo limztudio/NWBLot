@@ -3248,10 +3248,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     m_deferredLightingStateHandoff,
                     deferredTargets.shadowVisibility.get()
                 )
-                && (!asyncCausticsSchedule || m_causticIrradianceReturnStateHandoff.buildTextureSubset(
+                // The bootstrap lighting pass consumes the live caustic irradiance whether its producer was the
+                // AsyncCompute software path or the Graphics hardware path. Retain that post-lighting layout for
+                // the history stash; the active lagged path instead sources its live image directly from the
+                // current producer below.
+                && m_causticIrradianceReturnStateHandoff.buildTextureSubset(
                     m_deferredLightingStateHandoff,
                     deferredTargets.causticIrradiance.get()
-                ))
+                )
                 && (!asyncSurfelGiSchedule || m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
                     m_deferredLightingStateHandoff,
                     deferredTargets.surfelIrradiance.get()
@@ -3324,9 +3328,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         // The capture imports the live producer results after their last current-frame consumer. In the bootstrap the
         // consumer was AsyncCompute lighting; in the active mode it was not touched by Graphics lighting at all. The
         // final Graphics token is the conservative read-complete edge in both cases, while AsyncCompute queue order
-        // already places this copy after the current producer submission.
+        // already places this copy after the current producer submission. In active mode the live caustic image
+        // comes directly from the current producer: hardware caustics ran on Graphics and therefore never populated
+        // the Async lighting return handoff.
+        const Core::CommandListResourceStateHandoff* const causticStashSource = laggedAsyncLightingSchedule
+            ? &m_causticIrradianceLightingStateHandoff
+            : &m_causticIrradianceReturnStateHandoff
+        ;
         const Core::CommandListResourceStateHandoff* const stashBranches[] = {
-            &m_causticIrradianceReturnStateHandoff,
+            causticStashSource,
             &m_surfelIrradianceReturnStateHandoff,
         };
         const bool stashInputReady = m_laggedLightingStashInputStateHandoff.buildFanIn(

@@ -497,6 +497,37 @@ TEST(EcsGraphics, FrameExecutionPlanKeepsHardwareCausticsInTheGraphicsOverlapPac
         FrameExecutionPacket::GraphicsEffects
     );
     EXPECT_TRUE(opaquePlan.workRunsOnLane(FrameExecutionWork::Caustics, RenderLane::Graphics));
+
+    const FrameExecutionPlan laggedPlan(FrameExecutionPlanInput{
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+    });
+    EXPECT_EQ(
+        laggedPlan.packetForWork(FrameExecutionWork::Caustics),
+        FrameExecutionPacket::GraphicsEffects
+    );
+    EXPECT_EQ(laggedPlan.packet(FrameExecutionPacket::GraphicsEffects).waitPacketCount, 1u);
+    EXPECT_EQ(
+        laggedPlan.packet(FrameExecutionPacket::GraphicsEffects).waitPackets[0],
+        FrameExecutionPacket::GraphicsPrefix
+    );
+    EXPECT_EQ(laggedPlan.packet(FrameExecutionPacket::GraphicsEffects).externalWaitCount, 1u);
+    EXPECT_EQ(
+        laggedPlan.packet(FrameExecutionPacket::GraphicsEffects).externalWaits[0],
+        FrameExecutionExternalWait::LaggedLightingHistory
+    );
+    EXPECT_TRUE(laggedPlan.workWaitsForExternalToken(
+        FrameExecutionWork::Caustics,
+        FrameExecutionExternalWait::LaggedLightingHistory
+    ));
+    EXPECT_TRUE(laggedPlan.workWaitsForExternalToken(
+        FrameExecutionWork::DeferredLighting,
+        FrameExecutionExternalWait::LaggedLightingHistory
+    ));
 }
 
 
@@ -968,13 +999,15 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateResolvesAcceptedDependenciesA
 
 TEST(EcsGraphics, FrameExecutionPlanSubmissionStateUsesBootstrapStashAsNextFrameHistoryWait){
     // RendererSystem owns the persistent history-token lifetime. This plan-only test makes the two-frame handoff
-    // explicit: bootstrap's accepted stash becomes active lighting's external history dependency on the next frame.
+    // explicit: bootstrap's accepted stash becomes both active lighting's history dependency and the Graphics
+    // hardware-caustic producer's protection against overwriting the Async history copy.
     const FrameExecutionPlan bootstrapPlan(FrameExecutionPlanInput{
         true,
         true,
         true,
         false,
         false,
+        true,
     });
     FrameExecutionPlanSubmissionState bootstrapSubmissions(bootstrapPlan);
     NWB::Core::QueueSubmissionToken waitTokens[FrameExecutionPlan::s_MaxSubmissionWaits] = {};
@@ -1063,6 +1096,7 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateUsesBootstrapStashAsNextFrame
         true,
         true,
         false,
+        true,
     });
     FrameExecutionExternalWaitTokens activeExternalWaitTokens;
     activeExternalWaitTokens.tokens[static_cast<usize>(FrameExecutionExternalWait::LaggedLightingHistory)] =
@@ -1097,8 +1131,9 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateUsesBootstrapStashAsNextFrame
         waitTokens,
         LengthOf(waitTokens)
     ));
-    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
+    ASSERT_EQ(submitDesc.waitTokenCount, 2u);
     ExpectSubmissionToken(waitTokens[0], activePrefixToken);
+    ExpectSubmissionToken(waitTokens[1], bootstrapStashToken);
     const NWB::Core::QueueSubmissionToken activeEffectsToken{ CommandQueue::Graphics, 103u };
     activeSubmissions.acceptSubmission(FrameExecutionPacket::GraphicsEffects, activeEffectsToken);
 

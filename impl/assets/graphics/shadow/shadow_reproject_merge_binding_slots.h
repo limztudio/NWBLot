@@ -56,9 +56,15 @@
 //    frames. 5 sigmas keeps same-region temporal averaging intact (noise stays inside the band) but rejects the umbra<->lit
 //    disagreement (~1.0, many sigmas out).
 #define NWB_SHADOW_TEMPORAL_GAMMA          5.0
-//  - ANTILAG: gate C temporal-gradient antilag strength. A large per-frame luma gradient (a hard swept shadow edge) scales
-//    the effective history length toward 0 so the blend snaps to the current sample instead of lagging.
+//  - ANTILAG: gate C temporal-gradient antilag strength. A large, spatially-supported per-frame luma gradient (a hard
+//    swept shadow edge) scales the effective history length toward 0 so the blend snaps to the current sample instead of
+//    lagging. Isolated Monte-Carlo misses retain their stable history instead of becoming blocky light leaks.
 #define NWB_SHADOW_TEMPORAL_ANTILAG        4.0
+// A current sample may reset history only when this many current 3x3 samples change from the previous temporal luma in
+// the same direction and by at least this fraction of the centre change. The centre itself supplies one vote, so two
+// neighbours must corroborate it. This preserves genuine swept edges while rejecting a solitary 1-SPP bright/dark miss.
+#define NWB_SHADOW_TEMPORAL_ANTILAG_SUPPORT_FRACTION 0.5
+#define NWB_SHADOW_TEMPORAL_ANTILAG_MIN_SUPPORT      3u
 //  - NOISE_SLACK: gate C noise floor, in std-devs of the CURRENT 3x3 spatial luma. Only the part of the per-frame temporal
 //    gradient that EXCEEDS this*sigma counts as a real swept edge. WITHOUT it the raw Monte-Carlo noise of a 1-2 spp trace
 //    reads as a "hard edge" at every penumbra pixel and collapses the history EVERY frame -> the accumulation never converges

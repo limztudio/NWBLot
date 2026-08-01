@@ -136,14 +136,24 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         }
 
         // Clamp history to the current neighbourhood.
+        const float lumaCur = nwbShadowMergeLuma(cur);
+        const float lumaHistRaw = nwbShadowMergeLuma(hist);
+        const float temporalDelta = lumaCur - lumaHistRaw;
+        const float temporalDeltaAbs = abs(temporalDelta);
         float3 mu = float3(0.0, 0.0, 0.0);
         float3 mu2 = float3(0.0, 0.0, 0.0);
         float lumaM1 = 0.0;
         float lumaM2 = 0.0;
         int cnt = 0;
+        uint temporalChangeSupport = 0u;
         [unroll] for(int dy = -1; dy <= 1; ++dy){
             [unroll] for(int dx = -1; dx <= 1; ++dx){
-                const int2 t = int2(clamp(texel.x + dx, 0, hw - 1), clamp(texel.y + dy, 0, hh - 1));
+                const int2 unclampedTap = texel + int2(dx, dy);
+                // Keep clamped taps for the original moments, but count each supporting pixel only once at image edges.
+                const bool supportTapInBounds =
+                    unclampedTap.x >= 0 && unclampedTap.y >= 0 && unclampedTap.x < hw && unclampedTap.y < hh
+                ;
+                const int2 t = int2(clamp(unclampedTap.x, 0, hw - 1), clamp(unclampedTap.y, 0, hh - 1));
                 if(NwbHeapSampledImage2D(g_NwbShadowMergePush.geometryCurrSlot).Load(int3(t, 0)).w <= 0.5)
                     continue;
                 const float3 s = NwbHeapSampledImage2DArray(g_NwbShadowMergePush.softTraceSlot).Load(int4(t, slot, 0)).rgb;
@@ -152,6 +162,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 const float sl = nwbShadowMergeLuma(s);
                 lumaM1 += sl;
                 lumaM2 += sl * sl;
+                const float tapDelta = sl - lumaHistRaw;
+                if(
+                    supportTapInBounds
+                    && temporalDeltaAbs > 0.0
+                    && tapDelta * temporalDelta > 0.0
+                    && abs(tapDelta) >= temporalDeltaAbs * NWB_SHADOW_TEMPORAL_ANTILAG_SUPPORT_FRACTION
+                )
+                    ++temporalChangeSupport;
                 ++cnt;
             }
         }
@@ -170,9 +188,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         }
 
         // Reduce history at temporal edges after removing local noise.
-        const float lumaCur = nwbShadowMergeLuma(cur);
         const float lumaHist = nwbShadowMergeLuma(histClamped);
-        const float edgeSignal = max(0.0, abs(lumaCur - lumaHist) - NWB_SHADOW_TEMPORAL_NOISE_SLACK * sigmaLuma);
+        const bool temporalChangeCoherent = temporalChangeSupport >= NWB_SHADOW_TEMPORAL_ANTILAG_MIN_SUPPORT;
+        const float edgeSignal = temporalChangeCoherent
+            ? max(0.0, abs(lumaCur - lumaHist) - NWB_SHADOW_TEMPORAL_NOISE_SLACK * sigmaLuma)
+            : 0.0
+        ;
         const float tempGrad = edgeSignal / max(max(lumaCur, lumaHist), 1e-3);
         const float nEff = n * saturate(1.0 - NWB_SHADOW_TEMPORAL_ANTILAG * tempGrad);
 

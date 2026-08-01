@@ -80,6 +80,7 @@ DEFAULT_FORBIDDEN_LOGS = (
     "async shadow ownership recovery failed",
     "cannot safely continue after an unresolved async shadow ownership release",
 )
+M4_PIXEL_CAPTURE_READY_LOG = "StressTestSmokeProject: M4 pixel capture ready after"
 
 
 class DedicatedComputeUnavailable(SmokeSkip):
@@ -130,6 +131,13 @@ class RunResult:
     forbidden_log_messages: List[str]
 
 
+@dataclass(frozen=True)
+class FrameLockedCapture:
+    capture_file: str
+    log_text: str
+    lane: LaneStatus
+
+
 def bool_from_log(value: str) -> bool:
     return value.lower() in ("true", "yes")
 
@@ -167,6 +175,27 @@ def wait_for_lane_status(
 
     detail = latest_log[-4000:]
     raise SmokeFailure(f"timed out waiting for Vulkan async-lane capability log\n{detail}")
+
+
+def wait_for_log_message(
+    process,
+    log_directory: Path,
+    log_baseline: Mapping[Path, int],
+    log_pattern: str,
+    message: str,
+    timeout_seconds: float,
+) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    latest_log = ""
+    while time.monotonic() < deadline:
+        ensure_process_running(process, f"while waiting for benchmark log message '{message}'")
+        latest_log = collect_log_delta(log_directory, log_baseline, log_pattern)
+        if message in latest_log:
+            return
+        time.sleep(0.1)
+
+    detail = latest_log[-4000:]
+    raise SmokeFailure(f"timed out waiting for benchmark log message '{message}'\n{detail}")
 
 
 def load_name_symbols(path: Optional[Path]) -> Dict[str, str]:
@@ -427,28 +456,39 @@ def find_forbidden_log_messages(log_text: str, needles: Sequence[str]) -> List[s
     return [needle for needle in needles if needle in log_text]
 
 
-def run_single_mode(
+def validate_lane_for_mode(mode: str, lane: LaneStatus) -> None:
+    if mode == "async" and not lane.effective:
+        raise DedicatedComputeUnavailable(
+            "async-shadow M4 skipped: the requested async lane did not resolve to a distinct compute-only family "
+            f"(graphics family {lane.graphics_family}, compute family {lane.compute_family})"
+        )
+    if mode == "async" and (not lane.requested or lane.graphics_family == lane.compute_family):
+        raise SmokeFailure(f"async benchmark did not create a distinct requested compute lane: {lane}")
+    if mode == "sync" and (lane.requested or lane.effective):
+        raise SmokeFailure(f"synchronous baseline unexpectedly enabled async compute: {lane}")
+
+
+def run_frame_locked_capture(
     args: argparse.Namespace,
     mode: str,
     executable: Path,
-    symbols: Mapping[str, str],
     capture_backend,
-) -> RunResult:
+) -> FrameLockedCapture:
+    """Capture a settled temporal frame after an identical number of world ticks in each mode."""
     if not executable.is_file():
         raise SmokeFailure(f"{mode} executable does not exist: {executable}")
 
-    timing_path = args.output_dir / f"{mode}.timing.txt"
-    log_path = args.output_dir / f"{mode}.log"
-    capture_path = args.output_dir / f"{mode}.bmp" if not args.skip_pixel_parity else None
-    for path in (timing_path, log_path, capture_path):
-        if path and path.exists():
+    capture_path = args.output_dir / f"{mode}.bmp"
+    capture_log_path = args.output_dir / f"{mode}.capture.log"
+    for path in (capture_path, capture_log_path):
+        if path.exists():
             path.unlink()
 
     launch_args = make_launch_args(args)
     environment = build_launch_environment(launch_args)
     environment["NWB_RENDER_UNFOCUSED"] = "1"
-    environment["NWB_GPU_TIMING_FILE"] = str(timing_path)
     environment["NWB_STRESS_TEST_SPIN_ANGLE"] = args.frozen_yaw
+    environment["NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME"] = str(args.pixel_capture_frames)
 
     logserver_process = None
     app_process = None
@@ -473,24 +513,101 @@ def run_single_mode(
             log_pattern,
             args.startup_timeout,
         )
-        if mode == "async" and not lane.effective:
-            raise DedicatedComputeUnavailable(
-                "async-shadow M4 skipped: the requested async lane did not resolve to a distinct compute-only family "
-                f"(graphics family {lane.graphics_family}, compute family {lane.compute_family})"
-            )
-        if mode == "async" and (not lane.requested or lane.graphics_family == lane.compute_family):
-            raise SmokeFailure(f"async benchmark did not create a distinct requested compute lane: {lane}")
-        if mode == "sync" and (lane.requested or lane.effective):
-            raise SmokeFailure(f"synchronous baseline unexpectedly enabled async compute: {lane}")
+        validate_lane_for_mode(mode, lane)
+
+        window = capture_backend.wait_for_window(app_process.pid, args.startup_timeout, args.window_title)
+        if not window:
+            raise SmokeFailure(f"{mode} benchmark did not expose the expected window '{args.window_title}'")
+
+        wait_for_log_message(
+            app_process,
+            log_directory,
+            log_baseline,
+            log_pattern,
+            M4_PIXEL_CAPTURE_READY_LOG,
+            args.startup_timeout,
+        )
+        wait_while_running(app_process, args.pixel_capture_settle_seconds, f"while settling {mode} frame-locked capture")
+        capture_result = capture_backend.capture_window(window, capture_path)
+        validate_capture_result(capture_result)
+    finally:
+        if app_process:
+            app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} frame-locked capture", args.window_title)
+        # Let client messages written during normal teardown land before stopping the server and reading its delta.
+        time.sleep(0.5)
+        if log_directory:
+            log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
+            capture_log_path.write_text(log_text, encoding="utf-8")
+        terminate_process(logserver_process, "benchmark logserver")
+
+    require_normal_testbed_exit(app_exit_code, app_exit_tail)
+    if not log_text:
+        raise SmokeFailure(f"{mode} frame-locked capture produced no captured logger output")
+
+    lane = parse_lane_status(log_text)
+    if not lane:
+        raise SmokeFailure(f"{mode} frame-locked capture lost its async-lane capability log during collection")
+    validate_lane_for_mode(mode, lane)
+    if M4_PIXEL_CAPTURE_READY_LOG not in log_text:
+        raise SmokeFailure(f"{mode} frame-locked capture ended before its capture-ready marker was logged")
+    if not capture_path.is_file():
+        raise SmokeFailure(f"{mode} frame-locked capture did not write a BMP")
+    return FrameLockedCapture(str(capture_path), log_text, lane)
+
+
+def run_single_mode(
+    args: argparse.Namespace,
+    mode: str,
+    executable: Path,
+    symbols: Mapping[str, str],
+    capture_backend,
+    frame_locked_capture: Optional[FrameLockedCapture],
+) -> RunResult:
+    if not executable.is_file():
+        raise SmokeFailure(f"{mode} executable does not exist: {executable}")
+
+    timing_path = args.output_dir / f"{mode}.timing.txt"
+    log_path = args.output_dir / f"{mode}.log"
+    for path in (timing_path, log_path):
+        if path.exists():
+            path.unlink()
+
+    launch_args = make_launch_args(args)
+    environment = build_launch_environment(launch_args)
+    environment["NWB_RENDER_UNFOCUSED"] = "1"
+    environment["NWB_GPU_TIMING_FILE"] = str(timing_path)
+    environment["NWB_STRESS_TEST_SPIN_ANGLE"] = args.frozen_yaw
+
+    logserver_process = None
+    app_process = None
+    log_directory: Optional[Path] = None
+    log_baseline: Mapping[Path, int] = {}
+    log_pattern = ""
+    app_exit_code = None
+    app_exit_tail = ""
+    measurement_log_text = ""
+    try:
+        logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(
+            launch_args, executable, environment
+        )
+        if not log_directory:
+            raise SmokeFailure("benchmark runner could not select a runtime-log directory")
+        app_process = launch_testbed(launch_args, executable, environment, log_port)
+
+        lane = wait_for_lane_status(
+            app_process,
+            log_directory,
+            log_baseline,
+            log_pattern,
+            args.startup_timeout,
+        )
+        validate_lane_for_mode(mode, lane)
 
         window = capture_backend.wait_for_window(app_process.pid, args.startup_timeout, args.window_title)
         if not window:
             raise SmokeFailure(f"{mode} benchmark did not expose the expected window '{args.window_title}'")
 
         wait_while_running(app_process, args.warmup_seconds, f"during {mode} warmup")
-        if capture_path:
-            capture_result = capture_backend.capture_window(window, capture_path)
-            validate_capture_result(capture_result)
         wait_while_running(app_process, args.measure_seconds, f"during {mode} measurement")
     finally:
         if app_process:
@@ -498,17 +615,27 @@ def run_single_mode(
         # Let client messages written during normal teardown land before stopping the server and reading its delta.
         time.sleep(0.5)
         if log_directory:
-            log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
-            log_path.write_text(log_text, encoding="utf-8")
+            measurement_log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
         terminate_process(logserver_process, "benchmark logserver")
 
     require_normal_testbed_exit(app_exit_code, app_exit_tail)
-    if not log_text:
+    if not measurement_log_text:
         raise SmokeFailure(f"{mode} benchmark produced no captured logger output")
 
-    lane = parse_lane_status(log_text)
+    lane = parse_lane_status(measurement_log_text)
     if not lane:
         raise SmokeFailure(f"{mode} benchmark lost its async-lane capability log during collection")
+    validate_lane_for_mode(mode, lane)
+    if frame_locked_capture:
+        log_text = (
+            "=== frame-locked pixel capture ===\n"
+            f"{frame_locked_capture.log_text}\n"
+            "=== timed benchmark ===\n"
+            f"{measurement_log_text}"
+        )
+    else:
+        log_text = measurement_log_text
+    log_path.write_text(log_text, encoding="utf-8")
     summaries = summarize_scopes(parse_timing_file(timing_path, symbols))
     forbidden = find_forbidden_log_messages(log_text, tuple(DEFAULT_FORBIDDEN_LOGS) + tuple(args.reject_log))
     return RunResult(
@@ -516,7 +643,7 @@ def run_single_mode(
         executable=str(executable),
         timing_file=str(timing_path),
         log_file=str(log_path),
-        capture_file=str(capture_path) if capture_path else None,
+        capture_file=frame_locked_capture.capture_file if frame_locked_capture else None,
         lane=lane,
         scopes=summaries,
         forbidden_log_messages=forbidden,
@@ -671,9 +798,21 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument("--async-namesym", type=Path, help="Optional name-symbol sidecar for an opt/fin async binary.")
     parser.add_argument("--window-title", default="NWB Async Shadow M4 Benchmark", help="Native window title used for capture and graceful exit.")
     parser.add_argument("--frozen-yaw", default="0.6", help="NWB_STRESS_TEST_SPIN_ANGLE used for deterministic A/B captures.")
-    parser.add_argument("--warmup-seconds", type=float, default=4.0, help="Settling time before each capture and measurement.")
+    parser.add_argument("--warmup-seconds", type=float, default=4.0, help="Settling time before each timed measurement.")
     parser.add_argument("--measure-seconds", type=float, default=12.0, help="Timing collection time per mode after warmup.")
     parser.add_argument("--startup-timeout", type=float, default=45.0, help="Timeout for device creation and window visibility.")
+    parser.add_argument(
+        "--pixel-capture-frames",
+        type=int,
+        default=96,
+        help="World ticks to render before the benchmark-only held-frame pixel capture.",
+    )
+    parser.add_argument(
+        "--pixel-capture-settle-seconds",
+        type=float,
+        default=0.75,
+        help="Additional time to let the held capture frame present before it is read back.",
+    )
     parser.add_argument("--minimum-samples", type=int, default=6, help="Minimum captured timing intervals required per rollout scope.")
     parser.add_argument("--minimum-overlap-ms", type=float, default=0.01, help="Minimum median shadow/effects overlap.")
     parser.add_argument(
@@ -711,6 +850,9 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     require_non_negative(parser, "--warmup-seconds", args.warmup_seconds)
     require_positive(parser, "--measure-seconds", args.measure_seconds)
     require_positive(parser, "--startup-timeout", args.startup_timeout)
+    if args.pixel_capture_frames <= 0:
+        parser.error("--pixel-capture-frames must be positive")
+    require_non_negative(parser, "--pixel-capture-settle-seconds", args.pixel_capture_settle_seconds)
     if args.minimum_samples <= 0:
         parser.error("--minimum-samples must be positive")
     require_non_negative(parser, "--minimum-overlap-ms", args.minimum_overlap_ms)
@@ -745,6 +887,10 @@ def build_test_bmp(path: Path, pixels: Sequence[Tuple[int, int, int]]) -> None:
 
 
 def run_self_test() -> int:
+    capture_args = parse_args(["--self-test"])
+    assert capture_args.pixel_capture_frames == 96
+    assert capture_args.pixel_capture_settle_seconds == 0.75
+
     lane = parse_lane_status(
         "Vulkan: async compute lane requested=true effective=true graphicsFamily=1 computeFamily=3 "
         "(dedicated compute family selected)"
@@ -808,12 +954,23 @@ def run(args: argparse.Namespace) -> int:
         # Run async first. A no-dedicated-compute host exits 77 before spending time on an A/B whose asynchronous half
         # would only exercise the intentional Graphics fallback.
         capture_backend = create_capture_backend()
+        async_capture = (
+            run_frame_locked_capture(args, "async", args.async_executable, capture_backend)
+            if not args.skip_pixel_parity
+            else None
+        )
         async_run = run_single_mode(
             args,
             "async",
             args.async_executable,
             load_name_symbols(args.async_namesym),
             capture_backend,
+            async_capture,
+        )
+        sync_capture = (
+            run_frame_locked_capture(args, "sync", args.sync_executable, capture_backend)
+            if not args.skip_pixel_parity
+            else None
         )
         sync_run = run_single_mode(
             args,
@@ -821,6 +978,7 @@ def run(args: argparse.Namespace) -> int:
             args.sync_executable,
             load_name_symbols(args.sync_namesym),
             capture_backend,
+            sync_capture,
         )
         json_path = args.output_dir / "m4_report.json"
         markdown_path = args.output_dir / "m4_report.md"

@@ -43,6 +43,7 @@ using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::CreateTintedModelEntity;
 using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
+using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
 using NWB::Tests::Smoke::ReadSmokeFrozenYawFromEnvironment;
 using NWB::Tests::Smoke::SetSmokeYawWindowTitle;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
@@ -130,6 +131,25 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;                  // clamp hu
 
 class StressTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
+    [[nodiscard]] static u32 m4PixelCaptureFreezeFrame(){
+#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
+        static const u32 s_captureFrame = [](){
+            f32 configuredFrame = 0.0f;
+            if(
+                !ReadSmokeEnvironmentF32("NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME", configuredFrame)
+                || !IsFinite(configuredFrame)
+                || configuredFrame < 1.0f
+            ){
+                return 0u;
+            }
+            return static_cast<u32>(Min(configuredFrame, 1000000.0f));
+        }();
+        return s_captureFrame;
+#else
+        return 0u;
+#endif
+    }
+
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("StressTestSmokeProject"));
 
@@ -339,6 +359,20 @@ public:
     }
 
     virtual bool onUpdate(const f32 delta)override{
+        const u32 captureFreezeFrame = m4PixelCaptureFreezeFrame();
+        if(captureFreezeFrame != 0u && m_m4RenderedFrameCount >= captureFreezeFrame){
+            if(!m_m4PixelCapturePaused){
+                // Hold the last submitted image for the external M4 harness. Both binaries therefore capture the same
+                // temporal frame index even when the dedicated-queue path produces more frames per wall-clock second.
+                NWB_LOGGER_ESSENTIAL_INFO(
+                    NWB_TEXT("StressTestSmokeProject: M4 pixel capture ready after {} rendered frames"),
+                    m_m4RenderedFrameCount
+                );
+                m_m4PixelCapturePaused = true;
+            }
+            return true;
+        }
+
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
@@ -349,6 +383,7 @@ public:
         spinCharacters();
         SetSmokeYawWindowTitle(m_context, m_yaw.yaw(), m_yaw.manualControl(), s_TwoPi);
         m_world->tick(safeDelta);
+        ++m_m4RenderedFrameCount;
         return true;
     }
 
@@ -366,6 +401,8 @@ private:
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("StressTestSmokeProject") };
     NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;
+    u32 m_m4RenderedFrameCount = 0u;
+    bool m_m4PixelCapturePaused = false;
 };
 
 

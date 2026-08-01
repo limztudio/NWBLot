@@ -5,7 +5,7 @@ This harness makes the M4 rollout decision repeatable on a Vulkan target that ex
 - `nwb_async_shadow_m4_sync_benchmark` explicitly disables the default async-lane request.
 - `nwb_async_shadow_m4_async_benchmark` retains the default `AsyncCompute` request.
 
-The runner rejects an async result if it silently resolves to the Graphics fallback. For a real dedicated lane, it collects the renderer's timestamp envelopes, checks measured `render.async_shadow_effects_overlap`, compares the `render.frame` Graphics critical path rather than summing queue work, captures a fixed-scene pixel A/B, and scans logs for ownership or Vulkan-validation failures.
+The runner rejects an async result if it silently resolves to the Graphics fallback. For a real dedicated lane, it collects the renderer's timestamp envelopes, checks measured `render.async_shadow_effects_overlap`, compares the `render.frame` Graphics critical path rather than summing queue work, captures a fixed-scene pixel A/B after the same number of rendered frames in each mode, and scans logs for ownership or Vulkan-validation failures.
 
 From the repository root, use the one-command launcher:
 
@@ -17,6 +17,15 @@ It configures the required test targets, builds both benchmarks and their cooked
 
 ```powershell
 python launcher.py async-shadow-m4 -- --measure-seconds 30
+```
+
+Pixel capture and timing run in separate processes. The capture process holds the benchmark after 96 rendered frames,
+so the sync and async images compare the same temporal-history phase even when the async path renders more frames per
+second. The timing process then runs normally, without that hold. Adjust the capture point only when investigating a
+specific temporal phase:
+
+```powershell
+python launcher.py async-shadow-m4 -- --pixel-capture-frames 128
 ```
 
 Build both benchmark targets and their cooked runtime assets. A debug or namesym build is simplest because timing scope names are readable. For an opt/final build, pass each generated `.namesym` sidecar to the runner.

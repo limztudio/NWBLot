@@ -209,6 +209,21 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const int2 fullTexel = int2(pixel);
         const bool background = NwbHeapSampledImage2D(g_NwbShadowResolvePushConstants.depthSlot).Load(int3(fullTexel, 0)).r >= NWB_SCENE_BACKGROUND_DEPTH;
 
+#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
+        // The caller barriers the opaque upsample before transparent read-modify-write.
+        const uint fold = g_NwbShadowResolvePushConstants.upsampleFold;
+#endif
+        // Background pixels have a fixed lit identity. Exit before loading G-buffer guidance that cannot affect it.
+        if(background){
+            for(uint slot = slotStart; slot < slotEnd; ++slot){
+#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
+                if(fold == 0u)
+#endif
+                    g_NwbShadowResolveVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
+            }
+            return;
+        }
+
         const int hw = (int)g_NwbShadowResolvePushConstants.halfWidth;
         const int hh = (int)g_NwbShadowResolvePushConstants.halfHeight;
         const float2 src = (float2(pixel) + 0.5) / float(NWB_SW_SHADOW_SOFT_FACTOR) - 0.5;
@@ -219,21 +234,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float centerDist = length(centerWorld - g_NwbShadowResolveSceneShading.cameraPosition.xyz);
         const float guidedEps = NWB_SHADOW_RESOLVE_GUIDED_EPS_FRAC * centerDist;
         const float guidedEpsSq = guidedEps * guidedEps;
-
-        // The opaque path is scalar and always overwrites. Keep transparent's fold branch out of its compiled variant.
-#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
-        // The caller barriers the opaque upsample before transparent read-modify-write.
-        const uint fold = g_NwbShadowResolvePushConstants.upsampleFold;
-#endif
-        if(background){
-            for(uint slot = slotStart; slot < slotEnd; ++slot){
-#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
-                if(fold == 0u)
-#endif
-                    g_NwbShadowResolveVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
-            }
-            return;
-        }
 
         // Geometry and regression guidance are identical for every light layer at this pixel. Build the compact 3x3
         // classification once, then retain the original tap order while each layer loads only its own visibility values.

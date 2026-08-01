@@ -270,33 +270,40 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float guidedVarG = max(sumG2 * guidedInvCount - guidedMeanG * guidedMeanG, 0.0);
 
         for(uint slot = slotStart; slot < slotEnd; ++slot){
-            NwbShadowResolveVisFVec sumP = (NwbShadowResolveVisFVec)0.0;
-            NwbShadowResolveVisFVec sumGP = (NwbShadowResolveVisFVec)0.0;
-            NwbShadowResolveVisFVec anySum = (NwbShadowResolveVisFVec)0.0;
-            [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
-                [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
-                    const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
-                    const uint tapBit = 1u << tapIndex;
-                    if((validTapMask & tapBit) == 0u)
-                        continue;
-                    const int2 tap = int2(clamp(baseTexel.x + dx, 0, hw - 1), clamp(baseTexel.y + dy, 0, hh - 1));
-                    const NwbShadowResolveVisFVec tapVis = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(tap, slot);
-                    anySum += tapVis;
-                    if((guidedTapMask & tapBit) == 0u)
-                        continue;
-                    const float g = guidedTapG[tapIndex];
-                    sumP += tapVis;
-                    sumGP += g * tapVis;
-                }
-            }
             NwbShadowResolveVisFVec result;
             if(hasGuidedTaps){
+                // The unguided fallback is unreachable here. Avoid loading and accumulating its taps; only
+                // guided samples contribute to the regression result.
+                NwbShadowResolveVisFVec sumP = (NwbShadowResolveVisFVec)0.0;
+                NwbShadowResolveVisFVec sumGP = (NwbShadowResolveVisFVec)0.0;
+                [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
+                    [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
+                        const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
+                        if((guidedTapMask & (1u << tapIndex)) == 0u)
+                            continue;
+                        const int2 tap = int2(clamp(baseTexel.x + dx, 0, hw - 1), clamp(baseTexel.y + dy, 0, hh - 1));
+                        const NwbShadowResolveVisFVec tapVis = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(tap, slot);
+                        const float g = guidedTapG[tapIndex];
+                        sumP += tapVis;
+                        sumGP += g * tapVis;
+                    }
+                }
                 const NwbShadowResolveVisFVec meanP = sumP * guidedInvCount;
                 const NwbShadowResolveVisFVec covGP = sumGP * guidedInvCount - guidedMeanG * meanP;
                 const NwbShadowResolveVisFVec a = covGP / (guidedVarG + guidedEpsSq);
                 result = clamp(meanP - a * guidedMeanG, (NwbShadowResolveVisFVec)0.0, (NwbShadowResolveVisFVec)1.0);
             }
             else{
+                NwbShadowResolveVisFVec anySum = (NwbShadowResolveVisFVec)0.0;
+                [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
+                    [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
+                        const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
+                        if((validTapMask & (1u << tapIndex)) == 0u)
+                            continue;
+                        const int2 tap = int2(clamp(baseTexel.x + dx, 0, hw - 1), clamp(baseTexel.y + dy, 0, hh - 1));
+                        anySum += (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(tap, slot);
+                    }
+                }
                 result = (anyCount > 0.0) ? (anySum / anyCount) : (NwbShadowResolveVisFVec)1.0;
             }
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB

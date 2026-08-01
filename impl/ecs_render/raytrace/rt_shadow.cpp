@@ -412,12 +412,12 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         commandList.commitBarriers();
 
         // Enable UAV barriers on the soft buffers + geometry cache for the resolve (mirror the SW soft block). The
-        // trace write of soft-A -> the resolve PREPARE / merge reads it; soft-B + geometry are the resolve scratch.
+        // trace write of soft-A -> the direct first wavelet / merge reads it; soft-B + geometry are resolve scratch.
         commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
         commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
         commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
         // Temporal accumulator buffers: enable UAV barriers so the merge's history/moments writes are ordered before the
-        // a-trous PREPARE reads the accumulated history as an SRV. No-op when temporal is off (the merge never dispatches).
+        // direct first a-trous wavelet reads the accumulated history as an SRV. No-op when temporal is off (no merge).
         if(rayTracingState().m_softShadowTemporalReady){
             commandList.setEnableUavBarriersForTexture(targets.shadowHistA.get(), true);
             commandList.setEnableUavBarriersForTexture(targets.shadowHistB.get(), true);

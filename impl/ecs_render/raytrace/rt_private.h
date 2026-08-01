@@ -337,7 +337,7 @@ struct ShadowResolvePushConstants{
     u32 halfWidth = 0u;      // HALF-res width (PREPARE/WAVELET dispatch dim)
     u32 halfHeight = 0u;     // HALF-res height
     u32 stepWidth = 1u;      // a-trous dilation for this wavelet pass (1,2,4,8,16), in HALF-res texels
-    u32 stage = NWB_SHADOW_RESOLVE_STAGE_PREPARE; // PREPARE, WAVELET (half-res), or UPSAMPLE (-> full-res visibility)
+    u32 stage = NWB_SHADOW_RESOLVE_STAGE_PREPARE; // optional PREPARE, WAVELET (half-res), or UPSAMPLE (-> full-res visibility)
     u32 lightSlotStart = 0u; // first active shadow slot to process
     u32 lightSlotCount = 0u; // number of contiguous active slots to process
     u32 momentsValid = 0u;   // 1 = the MOMENTS SRV holds this-frame integrated temporal moments (the merge ran this frame)
@@ -350,8 +350,8 @@ struct ShadowResolvePushConstants{
     u32 depthSlot = 0u;         // SampledImage: full-res G-buffer depth
     u32 worldPositionSlot = 0u; // SampledImage: full-res G-buffer world position
     u32 normalSlot = 0u;        // SampledImage: full-res G-buffer normal
-    u32 softHalfSlot = 0u;      // SampledImage2DArray: PREPARE source
-    u32 inputColorSlot = 0u;    // SampledImage2DArray: WAVELET / UPSAMPLE source
+    u32 softHalfSlot = 0u;      // SampledImage2DArray: optional PREPARE source
+    u32 inputColorSlot = 0u;    // SampledImage2DArray: direct-input WAVELET / UPSAMPLE source
     u32 momentsSlot = 0u;       // SampledImage2DArray: temporal moments (or non-temporal dummy)
     u32 outputStorageSlot = 0u; // StorageImage: half-res ping-pong output
     u32 visibilityStorageSlot = 0u; // StorageImage: full-res visibility upsample/fold output

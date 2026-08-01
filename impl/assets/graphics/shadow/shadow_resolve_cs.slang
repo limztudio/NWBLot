@@ -107,6 +107,8 @@ static const float s_NwbShadowResolveKernel[5] = { 1.0 / 16.0, 4.0 / 16.0, 6.0 /
 #define NWB_SHADOW_RESOLVE_GUIDED_RADIUS 1
 #define NWB_SHADOW_RESOLVE_GUIDED_EPS_FRAC 0.02
 #define NWB_SHADOW_RESOLVE_GUIDED_NORMAL_GATE 0.5
+#define NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE (2 * NWB_SHADOW_RESOLVE_GUIDED_RADIUS + 1)
+#define NWB_SHADOW_RESOLVE_GUIDED_TAP_COUNT (NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE)
 
 float nwbShadowResolveNormalWeightVec(const float3 centerNormal, const float2 tapOct){
     const float3 tn = nwbOctDecodeNormal(tapOct);
@@ -218,60 +220,96 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float guidedEps = NWB_SHADOW_RESOLVE_GUIDED_EPS_FRAC * centerDist;
         const float guidedEpsSq = guidedEps * guidedEps;
 
+        // The opaque path is scalar and always overwrites. Keep transparent's fold branch out of its compiled variant.
+#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
         // The caller barriers the opaque upsample before transparent read-modify-write.
         const uint fold = g_NwbShadowResolvePushConstants.upsampleFold;
-        for(uint slot = slotStart; slot < slotEnd; ++slot){
-            if(background){
+#endif
+        if(background){
+            for(uint slot = slotStart; slot < slotEnd; ++slot){
+#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
                 if(fold == 0u)
+#endif
                     g_NwbShadowResolveVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
-                continue;
             }
-            float sumG = 0.0;
-            float sumG2 = 0.0;
-            float3 sumP = float3(0.0, 0.0, 0.0);
-            float3 sumGP = float3(0.0, 0.0, 0.0);
-            float count = 0.0;
-            float3 anySum = float3(0.0, 0.0, 0.0);
-            float anyCount = 0.0;
+            return;
+        }
+
+        // Geometry and regression guidance are identical for every light layer at this pixel. Build the compact 3x3
+        // classification once, then retain the original tap order while each layer loads only its own visibility values.
+        uint validTapMask = 0u;
+        uint guidedTapMask = 0u;
+        float guidedTapG[NWB_SHADOW_RESOLVE_GUIDED_TAP_COUNT];
+        float sumG = 0.0;
+        float sumG2 = 0.0;
+        float guidedCount = 0.0;
+        float anyCount = 0.0;
+        [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
+            [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
+                const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
+                const uint tapBit = 1u << tapIndex;
+                const int2 tap = int2(clamp(baseTexel.x + dx, 0, hw - 1), clamp(baseTexel.y + dy, 0, hh - 1));
+                const float4 tapGeom = nwbShadowResolveGeomAtHalf(tap);
+                if(tapGeom.w <= 0.5)
+                    continue;
+                validTapMask |= tapBit;
+                anyCount += 1.0;
+                if(dot(centerNormal, nwbOctDecodeNormal(tapGeom.xy)) < NWB_SHADOW_RESOLVE_GUIDED_NORMAL_GATE)
+                    continue;
+                const float g = tapGeom.z - centerDist;
+                guidedTapMask |= tapBit;
+                guidedTapG[tapIndex] = g;
+                sumG += g;
+                sumG2 += g * g;
+                guidedCount += 1.0;
+            }
+        }
+        const bool hasGuidedTaps = guidedCount > 0.0;
+        const float guidedInvCount = hasGuidedTaps ? (1.0 / guidedCount) : 0.0;
+        const float guidedMeanG = sumG * guidedInvCount;
+        const float guidedVarG = max(sumG2 * guidedInvCount - guidedMeanG * guidedMeanG, 0.0);
+
+        for(uint slot = slotStart; slot < slotEnd; ++slot){
+            NwbShadowResolveVisFVec sumP = (NwbShadowResolveVisFVec)0.0;
+            NwbShadowResolveVisFVec sumGP = (NwbShadowResolveVisFVec)0.0;
+            NwbShadowResolveVisFVec anySum = (NwbShadowResolveVisFVec)0.0;
             [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
                 [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
+                    const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
+                    const uint tapBit = 1u << tapIndex;
+                    if((validTapMask & tapBit) == 0u)
+                        continue;
                     const int2 tap = int2(clamp(baseTexel.x + dx, 0, hw - 1), clamp(baseTexel.y + dy, 0, hh - 1));
-                    const float4 tapGeom = nwbShadowResolveGeomAtHalf(tap);
-                    if(tapGeom.w <= 0.5)
-                        continue;
-                    const float3 tapVis = NwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.inputColorSlot).Load(int4(tap, slot, 0)).rgb;
+                    const NwbShadowResolveVisFVec tapVis = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(tap, slot);
                     anySum += tapVis;
-                    anyCount += 1.0;
-                    if(dot(centerNormal, nwbOctDecodeNormal(tapGeom.xy)) < NWB_SHADOW_RESOLVE_GUIDED_NORMAL_GATE)
+                    if((guidedTapMask & tapBit) == 0u)
                         continue;
-                    const float g = tapGeom.z - centerDist;
-                    sumG += g;
-                    sumG2 += g * g;
+                    const float g = guidedTapG[tapIndex];
                     sumP += tapVis;
                     sumGP += g * tapVis;
-                    count += 1.0;
                 }
             }
-            float3 result;
-            if(count > 0.0){
-                const float invN = 1.0 / count;
-                const float meanG = sumG * invN;
-                const float3 meanP = sumP * invN;
-                const float varG = max(sumG2 * invN - meanG * meanG, 0.0);
-                const float3 covGP = sumGP * invN - meanG * meanP;
-                const float3 a = covGP / (varG + guidedEpsSq);
-                result = clamp(meanP - a * meanG, float3(0.0, 0.0, 0.0), float3(1.0, 1.0, 1.0));
+            NwbShadowResolveVisFVec result;
+            if(hasGuidedTaps){
+                const NwbShadowResolveVisFVec meanP = sumP * guidedInvCount;
+                const NwbShadowResolveVisFVec covGP = sumGP * guidedInvCount - guidedMeanG * meanP;
+                const NwbShadowResolveVisFVec a = covGP / (guidedVarG + guidedEpsSq);
+                result = clamp(meanP - a * guidedMeanG, (NwbShadowResolveVisFVec)0.0, (NwbShadowResolveVisFVec)1.0);
             }
             else{
-                result = (anyCount > 0.0) ? (anySum / anyCount) : float3(1.0, 1.0, 1.0);
+                result = (anyCount > 0.0) ? (anySum / anyCount) : (NwbShadowResolveVisFVec)1.0;
             }
+#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
             if(fold == 0u){
-                g_NwbShadowResolveVisibility[uint3(pixel, slot)] = float4(result, 1.0);
+                g_NwbShadowResolveVisibility[uint3(pixel, slot)] = nwbShadowResolveStore(result);
             }
             else{
                 const float3 prior = g_NwbShadowResolveVisibility[uint3(pixel, slot)].rgb;
                 g_NwbShadowResolveVisibility[uint3(pixel, slot)] = float4(prior * result, 1.0);
             }
+#else
+            g_NwbShadowResolveVisibility[uint3(pixel, slot)] = nwbShadowResolveStore(result);
+#endif
         }
         return;
     }

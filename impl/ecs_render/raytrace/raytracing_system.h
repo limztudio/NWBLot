@@ -175,28 +175,30 @@ private:
         u32 moments = 0u;
         u32 outputStorage = 0u;
     };
-    // Heap-only resolve dispatch description. The optional temporal override swaps PREPARE to accumulated history;
-    // no resource is represented by a pipeline-local descriptor object.
+    // Heap-only resolve dispatch description. The first wavelet reads the current trace or accumulated history directly,
+    // avoiding a redundant PREPARE copy; no resource is represented by a pipeline-local descriptor object.
     struct SoftShadowResolveDispatch{
         Core::ComputePipeline* pipeline = nullptr;
+        SoftShadowResolvePassResources firstWaveletResources;
         SoftShadowResolvePassResources outputHalfAResources;
         SoftShadowResolvePassResources outputHalfBResources;
         SoftShadowResolvePassResources upsampleResources;
-        SoftShadowResolvePassResources prepareOverrideResources;
         Core::Texture* visibilityTexture = nullptr;
         u32 visibilityStorage = 0u;
         u32 sceneShading = 0u;
-        bool usePrepareOverride = false;
+        bool temporalMomentsValid = false;
+        // Selects the source scratch target for the direct first wavelet. Subsequent passes ping-pong from it.
+        bool firstWaveletWritesHalfA = true;
         SoftShadowUpsampleFold::Enum fold = SoftShadowUpsampleFold::Overwrite;
         // A-trous wavelet pass count for this signal: opaque = NWB_SHADOW_RESOLVE_PASS_COUNT (1), the cheaper smooth transparent
-        // tint = NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT (1). MUST be ODD -- the ping-pong leaves the final result in soft-A
-        // (the fixed upsample set's input) only for an odd count; dispatchSoftShadowResolve asserts the parity. Defaulted to 1
-        // (= NWB_SHADOW_RESOLVE_PASS_COUNT, which this header does not include) and set explicitly at each build site.
+        // tint = NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT (1). MUST be ODD so the preselected upsample input remains the
+        // final ping-pong result; dispatchSoftShadowResolve asserts the parity. Defaulted to 1 (= the opaque constant, which
+        // this header does not include) and set explicitly at each build site.
         u32 waveletPassCount = 1u;
     };
-    // dispatchSoftShadowResolve runs the a-trous PREPARE -> N wavelet passes -> upsample for a CONTIGUOUS RANGE of shadow
-    // slots [slotStart, slotStart+slotCount), against heap slots + pipeline + fold in `dispatch`. The resolve shader loops the
-    // range per pixel, so one dispatch covers every active Texture2DArray layer (each layer independent), reducing
+    // dispatchSoftShadowResolve runs the direct-input a-trous N wavelet passes -> upsample for a CONTIGUOUS RANGE of shadow
+    // slots [slotStart, slotStart+slotCount), against heap slots + pipeline + fold in `dispatch`. The resolve shader loops
+    // the range per pixel, so one dispatch covers every active Texture2DArray layer (each layer independent), reducing
     // dispatch and barrier count. See SoftShadowResolveDispatch.
     void dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slotStart, u32 slotCount, const SoftShadowResolveDispatch& dispatch);
     // Backend-agnostic soft-shadow denoise + transparent fold, run AFTER whichever backend (SW BVH or HW RayQuery) wrote

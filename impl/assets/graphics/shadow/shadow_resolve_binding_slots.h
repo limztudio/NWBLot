@@ -11,9 +11,10 @@
 
 // Soft shadow RESOLVE: the spatial denoise + upsample of the half-res jittered visibility produced by the soft trace.
 // It runs an edge-avoiding a-trous wavelet at half-res as N ping-pong compute passes, bracketed by a geometry downsample
-// pre-pass + a bilateral upsample. Shadow-specific signal rules:
+// pre-pass + a bilateral upsample. The first wavelet reads the trace/temporal history directly; it does not need a
+// standalone copy pass. Shadow-specific signal rules:
 //  - the signal is a per-slot 0..1 VISIBILITY / colored transmittance, NOT irradiance, so ALL the caustic photon-
-//    density / area-Jacobian / exposure math is dropped: the PREPARE pass just copies the half-res traced visibility.
+//    density / area-Jacobian / exposure math is dropped: optional PREPARE is only a direct half-res visibility copy.
 //  - the MULTIPLICATIVE IDENTITY is 1.0 (fully LIT): background/invalid taps and the all-taps-rejected sentinel write
 //    1.0, never the caustic 0.0 (which is the ADDITIVE identity -- writing 0.0 here would leak black shadow).
 //  - the edge-stop adds a NORMAL term (dot of packed geometry normals) alongside the world-distance term, so the
@@ -22,7 +23,8 @@
 // active shadow slots [lightSlotStart, lightSlotStart+lightSlotCount) carried in the push constants.
 #define NWB_SHADOW_RESOLVE_SET 0
 
-// NwbShadowResolvePushConstants.stage values. The C++ dispatch and shader branch both consume this ABI.
+// NwbShadowResolvePushConstants.stage values. The C++ dispatch and shader branch both consume this ABI. PREPARE remains
+// available for diagnostic/compatibility paths, but the normal renderer goes straight to WAVELET to avoid a redundant copy.
 #define NWB_SHADOW_RESOLVE_STAGE_PREPARE 0u
 #define NWB_SHADOW_RESOLVE_STAGE_WAVELET 1u
 #define NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE 2u
@@ -32,8 +34,9 @@
 // Geometry downsample also gets its scene camera through the target-generation resource-slot cbuffer, so its local
 // layout contains only that cbuffer plus its geometry-cache UAV; resolve retains its own local scene CB.
 
-// The half-res soft visibility Texture2DArray (one layer per shadow slot). SRV role: read by PREPARE
-// (copy) + WAVELET (the previous pass's color, via the ping-pong -- see below). The FINAL upsample reads it too.
+// The half-res soft visibility Texture2DArray (one layer per shadow slot). SRV role: read by the optional PREPARE copy
+// and by WAVELET (the first pass reads the direct trace/history input; later passes read the ping-pong -- see below).
+// The final upsample reads the final ping-pong result too.
 #define NWB_SHADOW_RESOLVE_BINDING_SOFT_HALF 0
 // Half-res GEOMETRY CACHE SRV, produced once by the shadow geometry downsample pre-pass. RGBA16F packs the FOUR
 // values the shadow edge-stop needs into one texel (the full world position is NOT stored -- shadow needs only a
@@ -46,12 +49,12 @@
 // The G-buffer depth SRV: background pixels (no receiver) write the LIT identity (1.0), and background taps are
 // skipped by the wavelet. Consumed by the full-res UPSAMPLE's own centre pixel (the half-res passes use the cache).
 #define NWB_SHADOW_RESOLVE_BINDING_GBUFFER_DEPTH 2
-// The half-res ping-pong OUTPUT UAV for this pass. The C++ ping-pongs the two half-res buffers (soft-A / soft-B) as
-// (input,output) each pass; with an ODD pass count the FINAL WAVELET pass lands in soft-A, then the UPSAMPLE reads
-// soft-A and writes the FULL-res visibility.
+// The half-res ping-pong OUTPUT UAV for this pass. The direct-input first wavelet writes its selected scratch target,
+// then C++ ping-pongs soft-A / soft-B as (input,output) for later passes. With an ODD pass count, the final target is
+// predetermined per signal and the UPSAMPLE reads it to write the FULL-res visibility.
 #define NWB_SHADOW_RESOLVE_BINDING_OUTPUT 3
-// The previous pass's half-res color, read as an SRV (the OTHER ping-pong buffer). The PREPARE pass reads the
-// SOFT_HALF trace buffer instead (bound at slot 0); this slot is the wavelet's inter-pass input. Always bound.
+// The half-res color read by the WAVELET / UPSAMPLE. The first wavelet binds the direct trace/history source here;
+// later wavelets bind the other ping-pong buffer. Optional PREPARE reads SOFT_HALF instead. Always heap-selected.
 #define NWB_SHADOW_RESOLVE_BINDING_INPUT_COLOR 4
 // The FULL-res visibility Texture2DArray UAV (g_NwbSwShadowVisibility): the UPSAMPLE stage's output -- the same
 // image the deferred lighting samples. Only written by the UPSAMPLE stage (bound but unused on PREPARE/WAVELET).
@@ -103,15 +106,14 @@
 #define NWB_SHADOW_RESOLVE_CHANNELS_SCALAR 1
 #define NWB_SHADOW_RESOLVE_CHANNELS_RGB    3
 
-// A-trous wavelet pass count (the dispatch runs a PREPARE copy first, then this many wavelet passes at dilation 1<<pass).
-// One half-resolution dilation-1 pass provides the spatial denoise; temporal reproject-merge and the bilateral upsample
-// supply the remaining low-frequency reconstruction. It MUST stay odd so the final wavelet lands in soft-A, the upsample
-// input (see the dispatch static_assert).
+// A-trous wavelet pass count (the first pass reads the trace/history directly, then later passes ping-pong at dilation
+// 1<<pass). One half-resolution dilation-1 pass provides the spatial denoise; temporal reproject-merge and the bilateral
+// upsample supply the remaining low-frequency reconstruction. It MUST stay odd so each signal's preselected upsample input
+// remains its final ping-pong target (see the dispatch static_assert).
 #define NWB_SHADOW_RESOLVE_PASS_COUNT 1
 
 // A-trous wavelet pass count for the soft colored-transparent resolve. One pass preserves the low-contrast tint, which
-// wider filtering would spread thin across the penumbra. It MUST be odd so the final wavelet lands in soft-A, the fixed
-// upsample input.
+// wider filtering would spread thin across the penumbra. It MUST be odd so the preselected upsample input remains final.
 #define NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT 1
 
 // LDS (groupshared) tiling for the wavelet: passes with dilation stepWidth <= LDS_MAX_STEP cooperatively load the

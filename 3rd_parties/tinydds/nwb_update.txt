@@ -1,0 +1,5 @@
+package: tinydds
+version: Basis Universal snapshot 9bebe16726b3a61c8c213eeee3b7cffb462ef34e
+updated_utc: 2026-08-01T14:10:30Z
+source: https://github.com/BinomialLLC/basis_universal/tree/9bebe16726b3a61c8c213eeee3b7cffb462ef34e/encoder/3rdparty
+notes: tinydds single-header DDS reader/writer lifted out of Basis Universal. Retains Basis Universal's documented DDS/cubemap correctness patches; its implementation is compiled by basisu_gpu_texture.cpp.

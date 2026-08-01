@@ -410,6 +410,51 @@ TEST(Metascript, GenericDeclarationsAndReferences){
     EXPECT_EQ(indices->asList().size(), 3u);
 }
 
+TEST(Metascript, TextureConverterMetadataSchema){
+    DestinationArena arena;
+    Document document(arena.arena);
+    const AString source =
+        "texture asset;\n"
+        "asset.version = 1;\n"
+        "asset.format = \"uastc_ldr_4x4\";\n"
+        "asset.uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n"
+        "asset.color_space = \"srgb\";\n"
+        "asset.width = 7;\n"
+        "asset.height = 5;\n"
+        "asset.block_width = 4;\n"
+        "asset.block_height = 4;\n"
+        "asset.bytes_per_block = 16;\n"
+        "asset.payload_layout = \"mip_major_blocks\";\n"
+        "asset.mip_address_mode = \"clamp\";\n"
+        "asset.has_alpha = 1;\n"
+        "asset.mip_count = 3;\n"
+        "asset.data = \"checker.tex\";\n"
+        "asset.mips = [\n"
+        "    { \"level\": 0, \"width\": 7, \"height\": 5, \"blocks_x\": 2, \"blocks_y\": 2, \"offset_bytes\": 0, \"size_bytes\": 64 },\n"
+        "    { \"level\": 1, \"width\": 3, \"height\": 2, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 64, \"size_bytes\": 16 },\n"
+        "    { \"level\": 2, \"width\": 1, \"height\": 1, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 80, \"size_bytes\": 16 }\n"
+        "];\n"
+    ;
+
+    ASSERT_TRUE(document.parse(ViewOf(source)));
+    EXPECT_EQ(document.assetType(), LiteralView("texture"));
+    CheckStringField(document.asset(), LiteralView("format"), LiteralView("uastc_ldr_4x4"));
+    CheckStringField(document.asset(), LiteralView("color_space"), LiteralView("srgb"));
+    CheckStringField(document.asset(), LiteralView("data"), LiteralView("checker.tex"));
+
+    const Value* mips = FindTestField(document.asset(), LiteralView("mips"));
+    ASSERT_NE(mips, nullptr);
+    ASSERT_TRUE(mips->isList());
+    ASSERT_EQ(mips->asList().size(), 3u);
+
+    const Value& level0 = mips->asList()[0u];
+    ASSERT_TRUE(level0.isMap());
+    const Value* offset = FindTestField(level0, LiteralView("offset_bytes"));
+    ASSERT_NE(offset, nullptr);
+    ASSERT_TRUE(offset->isInteger());
+    EXPECT_EQ(offset->asInteger(), 0);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

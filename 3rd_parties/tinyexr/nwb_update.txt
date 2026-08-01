@@ -1,0 +1,5 @@
+package: tinyexr
+version: Basis Universal snapshot 9bebe16726b3a61c8c213eeee3b7cffb462ef34e
+updated_utc: 2026-08-01T14:10:30Z
+source: https://github.com/BinomialLLC/basis_universal/tree/9bebe16726b3a61c8c213eeee3b7cffb462ef34e/encoder/3rdparty
+notes: TinyEXR headers and its stream readers lifted out of Basis Universal. Retains the upstream Basis Universal UBSAN fixes documented in the header; the implementation is compiled by basisu_tinyexr.cpp against the shared top-level miniz package.

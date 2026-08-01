@@ -30,6 +30,9 @@ add_subdirectory(CLI11)
 add_subdirectory(cxxopts)
 add_subdirectory(tsl)
 add_subdirectory(miniz)
+add_subdirectory(qoi)
+add_subdirectory(tinyexr)
+add_subdirectory(tinydds)
 add_subdirectory(tinyxml2)
 add_subdirectory(nlohmann_json)
 add_subdirectory(rapidjson)
@@ -61,6 +64,8 @@ endforeach()
 
 # Radeon GPU Detective (RGD) in-process .rgd decoder + its vendored dependencies.
 add_subdirectory(zstd)                             # rdf's compression backend (flattened out of rdf/imported)
+add_subdirectory(basis_universal)                  # UASTC encoder; shares miniz/zstd and flattened image codecs
+nwb_match_engine_runtime(nwb_vendor_basis_universal)
 add_subdirectory(rdf)
 add_subdirectory(comgr)
 # system_info gates its rdf::ChunkFile / rdfChunkFile* Parse overloads (and the amdrdf link that supplies the

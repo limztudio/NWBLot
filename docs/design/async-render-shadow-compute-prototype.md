@@ -1,26 +1,25 @@
 # Async-render lane foundation, ray effects, hybrid-AVBOIT, deferred-lighting, and composite prototype
 
 **Status:** Phase-zero backend foundation, the M2 shadow-visibility schedule, M3 acceptance-aware timing and
-failure-injection coverage, the M5 software-caustics migration, M6 surfel-GI migration, M7 hardware
-`dispatchRays`-caustics migration, M8 hybrid AVBOIT migration, M9 deferred-lighting migration, and M10 deferred-
-composite migration are implemented
-behind the default best-effort async-compute request. The M4 target-hardware benchmark/validation harness is available;
-distinct-family pixel-parity and performance results, including the caustics, surfel-GI, AVBOIT, deferred-lighting,
-and composite slices, remain pending.
+failure-injection coverage, the M5 software-caustics migration, M6 surfel-GI migration, M8 hybrid AVBOIT migration,
+M9 deferred-lighting migration, and M10 deferred-composite migration are implemented behind the default best-effort
+async-compute request. The first M4 target-hardware capture exposed a hardware-caustics Compute critical-path
+regression and invalid Compute-side attachment barriers; the corrected topology and state handoffs await revalidation.
 
-When the default request resolves `AsyncCompute` to a dedicated Compute family, shadow visibility and either caustic producer
-join the same accepted Compute submission. Vulkan specifies `vkCmdTraceRaysKHR` for command pools that support
-`VK_QUEUE_COMPUTE_BIT`, which includes the selected dedicated Compute family. Surfel GI also joins that packet on both
-trace backends because its hardware variant uses inline `RayQuery` from an ordinary compute dispatch. Unsupported or
-disabled hardware retains the existing one-Graphics-submission topology exactly.
+When the default request resolves `AsyncCompute` to a dedicated Compute family, shadow visibility, software caustics,
+and surfel GI join the accepted Compute submission. Hardware `dispatchRays` caustics instead run in the independent
+Graphics support packet, where they overlap the Compute shadow/surfel work instead of extending its critical path.
+Surfel GI remains eligible on both trace backends because its hardware variant uses inline `RayQuery` from an ordinary
+compute dispatch. Unsupported or disabled hardware retains the existing one-Graphics-submission topology exactly.
 
 ## 0. Decision and boundary
 
 Before moving any rendering job, establish a two-lane foundation: a logical **Graphics** lane and a
 logical **AsyncCompute** lane, explicit cross-lane resource contracts, and acceptance-aware submission
 dependencies. The first job migration moves **only shadow visibility** onto a dedicated Compute queue. The next
-bounded migrations move both **software-caustics** and hardware **`dispatchRays` caustics** with it. The current
-bounded migration also adds **surfel GI** on both its software-BVH and inline-RayQuery trace backends. AVBOIT's
+bounded migration moves **software-caustics** with it, while hardware **`dispatchRays` caustics** remain in the
+independent Graphics support packet. The current bounded migration also adds **surfel GI** on both its software-BVH
+and inline-RayQuery trace backends. AVBOIT's
 depth-warp and integration dispatches now use the dedicated Compute lane, bracketed by the required Graphics raster
 phases. Deferred lighting and its logical composite now run on AsyncCompute after the AVBOIT chain; a small
 presentation-only raster pass remains on Graphics for the surface-format boundary.
@@ -180,11 +179,11 @@ The following phase-zero pieces are now in the backend behind the default best-e
 
 The renderer now consumes these primitives as follows:
 
-- `RendererSystem` creates shadow, caustics, and surfel-GI command lists for logical `AsyncCompute`; they become
-  Compute command lists only when the lane has a dedicated family. The caustics list is selected on both trace
-  backends: the hardware producer's `dispatchRays` command is valid on the selected `VK_QUEUE_COMPUTE_BIT` family.
-  Surfel GI is likewise selected on both trace backends because its hardware path uses inline RayQuery from a compute
-  pipeline. Otherwise the legacy Graphics batch remains unchanged.
+- `RendererSystem` creates shadow, software-caustics, and surfel-GI command lists for logical `AsyncCompute`; they
+  become Compute command lists only when the lane has a dedicated family. Hardware `dispatchRays` caustics stay in
+  the independent Graphics support packet, which overlaps the Compute shadow/surfel packet. Surfel GI is selected on
+  both trace backends because its hardware path uses inline RayQuery from a compute pipeline. Otherwise the legacy
+  Graphics batch remains unchanged.
 - The concurrent input inventory includes every G-buffer attachment (including albedo), scene-shading and light
   buffers, the deferred slot cbuffer, trace-context buffers, software-BVH inputs, mesh geometry, camera mesh-view
   data, caustic emission targets, surfel constants, and TLAS/BLAS backing allocations. The descriptor-buffer segments
@@ -293,7 +292,7 @@ compute-only family does not fail device selection and instead maps the lane to 
 
 | Hardware condition | Renderer behavior |
 |---|---|
-| Distinct Compute family available and async lane requested | Create that queue; run the shadow/caustic/surfel packet, AVBOIT's Graphics → Compute → Graphics hybrid chain, plus deferred-lighting and composite Compute dispatches. The presentation blit stays on Graphics. |
+| Distinct Compute family available and async lane requested | Create that queue; run the shadow/software-caustic/surfel packet in parallel with the Graphics hardware-caustic/AVBOIT support packet, then AVBOIT's dependent Graphics → Compute → Graphics hybrid chain, plus deferred-lighting and composite Compute dispatches. The presentation blit stays on Graphics. |
 | No distinct Compute family | Do not create an alias `Queue` for the Graphics `VkQueue`; retain the current single-Graphics schedule. |
 | Async lane explicitly disabled | Retain the current schedule regardless of hardware. |
 | Queue/device failure | Stop submitting dependent work, restore only unaccepted CPU state, repair ownership when possible, and make the next frame safe. |
@@ -542,8 +541,8 @@ deserves a separate proposal.
 ### M5 — Software-caustics migration (implemented; distinct-family validation pending)
 
 - On a dedicated AsyncCompute lane with no hardware ray-tracing support, append the ordinary-compute software-caustics
-  command list to the accepted Compute shadow submission. M7 later applies the same output/ownership contract to the
-  hardware `dispatchRays` producer.
+  command list to the accepted Compute shadow submission. Hardware `dispatchRays` caustics remain in the independent
+  Graphics support packet so their work overlaps rather than lengthens the Compute critical path.
 - Mark the extra Graphics-to-Compute read-only inputs — camera mesh-view data and caustic emission targets — concurrent.
   Keep temporal accumulator/resolve scratch Compute-private.
 - M9 keeps `causticIrradiance` on Compute through deferred lighting, together with `shadowVisibility`, instead of
@@ -567,25 +566,23 @@ caustic scenes. Extend performance analysis separately before claiming a new def
   Graphics preparation upload.
 - M9 keeps `surfelIrradiance` on Compute through deferred lighting alongside shadow and caustic outputs. A later
   dependent rejection retains accepted surfel temporal/readback state and joins accepted Compute work before reuse.
-- Bind periodic surfel counter readback to the accepted producer token, and cover the three-output
+- Bind periodic surfel counter readback to the accepted producer token, and cover the software-path three-output
   shadow/caustic/surfel Compute-local fan-in and reuse contract in the dedicated-family descriptor-buffer suite.
 
 **Gate:** on distinct Compute-family targets, run Vulkan validation and sync/async pixel parity on both software-BVH
 and inline-RayQuery surfel paths over cold start, temporal steady state, resize/recreation, GI-disabled frames, and
 first-use/reseed frames. Collect a separate critical-path/overlap analysis before revising the default policy.
 
-### M7 — Hardware dispatch-rays caustics migration (implemented; distinct-family validation pending)
+### M7 — Hardware dispatch-rays caustics migration (superseded by M4 topology correction)
 
-- Select the existing asynchronous caustics command list on every dedicated AsyncCompute lane, not only on the
-  no-hardware-ray-tracing fallback. Vulkan defines `vkCmdTraceRaysKHR` for command pools supporting
-  `VK_QUEUE_COMPUTE_BIT`, which is the required capability of the selected dedicated lane.
-- Import the normalized TLAS backing allocation and hardware corner-attribute buffers alongside the shared
-  material, emission, G-buffer, and camera inputs. These are concurrent Graphics/Compute inputs; the caustic
-  accumulator and resolve scratch remain Compute-private.
-- Keep the same Compute-local `causticIrradiance` result contract, timing ticket, and CPU temporal-state acceptance
-  boundary as the software producer; M9 removes the former Graphics ownership round trip.
-- Generalize the dedicated-family result fan-in/reuse probe because it validates the common result contract regardless
-  of which producer recorded it.
+- The original dedicated-Compute migration was valid for a `VK_QUEUE_COMPUTE_BIT` command pool but the first M4
+  capture made the cost visible: placing hardware caustics after async shadowing extended the Compute critical path
+  while producing little useful Graphics overlap.
+- Hardware `dispatchRays` caustics now record in the independent Graphics support packet. Their normalized TLAS,
+  corner-attribute, material, emission, G-buffer, and camera inputs remain concurrent, while the accumulator and
+  resolve scratch retain their existing per-producer state handoff contract.
+- The Graphics packet is independently accepted before its AVBOIT-dependent slices, preserving the caustic temporal
+  acceptance boundary; software caustics keep the existing Compute-local result/reuse contract.
 
 **Gate:** on a distinct Compute-family device supporting `VK_KHR_ray_tracing_pipeline`, run Vulkan validation and
 sync/async pixel parity over cold start, temporal steady state, resize/recreation, no-caustic-work frames, and
@@ -598,7 +595,8 @@ refractive caustic scenes. Collect a separate critical-path/overlap analysis bef
 - Mark AVBOIT's coverage, depth-warp, control, packed-extinction, overflow, and transmittance work resources as
   concurrent Graphics/Compute. The low-raster and accumulation attachments remain Graphics-only.
 - Submit the strict dependency chain `Graphics pre → Compute warp → Graphics extinction → Compute integration →
-  Graphics accumulation`; only the first Graphics packet remains independent of the shadow/caustic/surfel packet.
+  Graphics accumulation`; the first Graphics packet contains hardware caustics when available and remains independent
+  of the Async shadow/software-caustic/surfel packet.
 - Build narrow Compute input handoffs and Graphics fan-ins at both boundaries so a compute-only command list never
   imports unrelated exclusive Graphics state. A clear-only, no-transparency frame retains the one Graphics AVBOIT
   packet.

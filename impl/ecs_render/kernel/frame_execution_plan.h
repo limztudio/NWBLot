@@ -106,6 +106,9 @@ struct FrameExecutionPlanInput{
     bool laggedLightingHistoryReady = false;
     bool laggedLightingHistoryAccepted = false;
     bool hasTransparentRenderers = false;
+    // Hardware caustics use the Graphics support packet. This keeps vkCmdTraceRays work on the Graphics lane while
+    // it overlaps the dedicated Compute shadow/surfel producer; software caustics remain a Compute dispatch.
+    bool hardwareCaustics = false;
 };
 
 
@@ -181,6 +184,10 @@ public:
             && input.hasTransparentRenderers
             && !usesLaggedAsyncLighting
         ;
+        const bool usesAsyncCaustics =
+            input.dedicatedAsyncCompute
+            && !input.hardwareCaustics
+        ;
 
         if(!usesDedicatedAsyncCompute){
             enablePacket(FrameExecutionPacket::GraphicsFallback, Core::RenderLane::Graphics);
@@ -201,13 +208,16 @@ public:
         enablePacket(FrameExecutionPacket::AsyncRayEffects, Core::RenderLane::AsyncCompute);
         addPacketWait(FrameExecutionPacket::AsyncRayEffects, FrameExecutionPacket::GraphicsPrefix);
         assignWork(FrameExecutionWork::RayEffects, FrameExecutionPacket::AsyncRayEffects);
-        assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::AsyncRayEffects);
+        if(usesAsyncCaustics)
+            assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::AsyncRayEffects);
         assignWork(FrameExecutionWork::SurfelGi, FrameExecutionPacket::AsyncRayEffects);
 
         FrameExecutionPacket::Enum graphicsEffectsCompletionPacket = FrameExecutionPacket::GraphicsEffects;
         if(usesAsyncAvboit){
             enablePacket(FrameExecutionPacket::GraphicsAvboitPre, Core::RenderLane::Graphics);
             addPacketWait(FrameExecutionPacket::GraphicsAvboitPre, FrameExecutionPacket::GraphicsPrefix);
+            if(!usesAsyncCaustics)
+                assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::GraphicsAvboitPre);
             assignWork(FrameExecutionWork::AvboitRaster, FrameExecutionPacket::GraphicsAvboitPre);
             assignWork(FrameExecutionWork::AsyncEffectsTiming, FrameExecutionPacket::GraphicsAvboitPre);
 
@@ -231,6 +241,8 @@ public:
         else{
             enablePacket(FrameExecutionPacket::GraphicsEffects, Core::RenderLane::Graphics);
             addPacketWait(FrameExecutionPacket::GraphicsEffects, FrameExecutionPacket::GraphicsPrefix);
+            if(!usesAsyncCaustics)
+                assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::GraphicsEffects);
             assignWork(FrameExecutionWork::AvboitRaster, FrameExecutionPacket::GraphicsEffects);
             assignWork(FrameExecutionWork::AsyncEffectsTiming, FrameExecutionPacket::GraphicsEffects);
         }

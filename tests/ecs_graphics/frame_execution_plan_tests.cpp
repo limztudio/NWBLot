@@ -420,6 +420,86 @@ TEST(EcsGraphics, FrameExecutionPlanAssignsRecordedWorkAndTimingToPlanPackets){
 }
 
 
+TEST(EcsGraphics, FrameExecutionPlanKeepsHardwareCausticsInTheGraphicsOverlapPacket){
+    const FrameExecutionPlan plan(FrameExecutionPlanInput{
+        true,
+        false,
+        false,
+        false,
+        true,
+        true,
+    });
+
+    EXPECT_EQ(
+        plan.packetForWork(FrameExecutionWork::RayEffects),
+        FrameExecutionPacket::AsyncRayEffects
+    );
+    EXPECT_EQ(
+        plan.packetForWork(FrameExecutionWork::SurfelGi),
+        FrameExecutionPacket::AsyncRayEffects
+    );
+    EXPECT_EQ(
+        plan.packetForWork(FrameExecutionWork::Caustics),
+        FrameExecutionPacket::GraphicsAvboitPre
+    );
+    EXPECT_TRUE(plan.workRunsOnLane(FrameExecutionWork::Caustics, RenderLane::Graphics));
+    EXPECT_FALSE(plan.workRunsOnLane(FrameExecutionWork::Caustics, RenderLane::AsyncCompute));
+    EXPECT_EQ(
+        plan.packetForWork(FrameExecutionWork::AsyncEffectsTiming),
+        FrameExecutionPacket::GraphicsAvboitPre
+    );
+    EXPECT_EQ(plan.packet(FrameExecutionPacket::GraphicsAvboitPre).waitPacketCount, 1u);
+    EXPECT_EQ(
+        plan.packet(FrameExecutionPacket::GraphicsAvboitPre).waitPackets[0],
+        FrameExecutionPacket::GraphicsPrefix
+    );
+
+    FrameExecutionPacketCommandLists commandLists(plan);
+    NWB::Core::CommandList* const prefix = TestCommandList(201u);
+    NWB::Core::CommandList* const timingBegin = TestCommandList(202u);
+    NWB::Core::CommandList* const shadow = TestCommandList(203u);
+    NWB::Core::CommandList* const caustics = TestCommandList(204u);
+    NWB::Core::CommandList* const surfelGi = TestCommandList(205u);
+    NWB::Core::CommandList* const avboitRaster = TestCommandList(206u);
+    NWB::Core::CommandList* const timingEnd = TestCommandList(207u);
+    const FrameExecutionWorkCommandListBinding bindings[] = {
+        { FrameExecutionWork::GraphicsPrefix, prefix },
+        { FrameExecutionWork::AsyncEffectsTiming, timingBegin },
+        { FrameExecutionWork::RayEffects, shadow },
+        { FrameExecutionWork::Caustics, caustics },
+        { FrameExecutionWork::SurfelGi, surfelGi },
+        { FrameExecutionWork::AvboitRaster, avboitRaster },
+        { FrameExecutionWork::AsyncEffectsTiming, timingEnd },
+    };
+    ASSERT_TRUE(commandLists.appendPlannedWorkCommandLists(bindings, LengthOf(bindings)));
+
+    const auto rayEffectsLists = commandLists.commandLists(FrameExecutionPacket::AsyncRayEffects);
+    ASSERT_EQ(rayEffectsLists.commandListCount, 2u);
+    EXPECT_EQ(rayEffectsLists.commandLists[0], shadow);
+    EXPECT_EQ(rayEffectsLists.commandLists[1], surfelGi);
+    const auto graphicsSupportLists = commandLists.commandLists(FrameExecutionPacket::GraphicsAvboitPre);
+    ASSERT_EQ(graphicsSupportLists.commandListCount, 4u);
+    EXPECT_EQ(graphicsSupportLists.commandLists[0], timingBegin);
+    EXPECT_EQ(graphicsSupportLists.commandLists[1], caustics);
+    EXPECT_EQ(graphicsSupportLists.commandLists[2], avboitRaster);
+    EXPECT_EQ(graphicsSupportLists.commandLists[3], timingEnd);
+
+    const FrameExecutionPlan opaquePlan(FrameExecutionPlanInput{
+        true,
+        false,
+        false,
+        false,
+        false,
+        true,
+    });
+    EXPECT_EQ(
+        opaquePlan.packetForWork(FrameExecutionWork::Caustics),
+        FrameExecutionPacket::GraphicsEffects
+    );
+    EXPECT_TRUE(opaquePlan.workRunsOnLane(FrameExecutionWork::Caustics, RenderLane::Graphics));
+}
+
+
 TEST(EcsGraphics, FrameExecutionPlanSelectsWorkCommandListFromResolvedLane){
     NWB::Core::CommandList* const graphicsCommandList = TestCommandList(101u);
     NWB::Core::CommandList* const asyncComputeCommandList = TestCommandList(102u);
@@ -604,10 +684,10 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsRouteSplitWorkAndKeepTimingBra
 
     const FrameExecutionWorkCommandListBinding bindings[] = {
         { FrameExecutionWork::GraphicsPrefix, prefix },
+        { FrameExecutionWork::AsyncEffectsTiming, timingBegin },
         { FrameExecutionWork::RayEffects, shadow },
         { FrameExecutionWork::Caustics, caustics },
         { FrameExecutionWork::SurfelGi, surfelGi },
-        { FrameExecutionWork::AsyncEffectsTiming, timingBegin },
         { FrameExecutionWork::AvboitRaster, avboitRaster },
         { FrameExecutionWork::AsyncEffectsTiming, timingEnd },
         { FrameExecutionWork::AvboitDepthWarp, depthWarp },

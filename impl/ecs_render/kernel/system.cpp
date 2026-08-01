@@ -1064,12 +1064,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     else{
         resetLaggedLightingHistoryTracking();
     }
+    const bool hardwareShadowSupported =
+        m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
+        && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
+    ;
     const ECSRenderDetail::FrameExecutionPlanInput frameExecutionPlanInput{
         dedicatedAsyncCompute,
         m_frameLaggedAsyncLightingEnabled,
         laggedLightingHistoryResourcesReady,
         m_laggedLightingHistorySubmissionToken.valid(),
         hasTransparentRenderers,
+        hardwareShadowSupported,
     };
     const ECSRenderDetail::FrameExecutionPlan frameExecutionPlan(frameExecutionPlanInput);
     const bool asyncShadowSchedule = frameExecutionPlan.workRunsOnLane(
@@ -1088,12 +1093,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const bool captureLaggedLightingHistory = frameExecutionPlan.hasWork(
         ECSRenderDetail::FrameExecutionWork::LaggedLightingStash
     );
-    const bool hardwareShadowSupported =
-        m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
-        && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
-    ;
-    // vkCmdTraceRaysKHR is valid from a command pool supporting VK_QUEUE_COMPUTE_BIT. The dedicated AsyncCompute lane
-    // is selected from such a family, so both the software and hardware caustic producers can share its packet.
+    // Hardware caustics stay in the independent Graphics-support packet: their trace-rays workload overlaps Async
+    // shadow/surfel work instead of extending the Compute critical path. Software caustics remain Compute dispatches.
     const bool asyncCausticsSchedule = frameExecutionPlan.workRunsOnLane(
         ECSRenderDetail::FrameExecutionWork::Caustics,
         Core::RenderLane::AsyncCompute
@@ -1932,8 +1933,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const bool shadowVisibilityPrepared = m_preparedShadowVisibilityReady;
 
     // The shadow, caustics, surfel-GI, and AVBOIT packets own distinct outputs. Every shared input already has its
-    // common read state in the prelude, so the workers can record independently from the same snapshot. AVBOIT still
-    // executes after the ray-effect packets on Graphics; deferred lighting is its first GPU consumer.
+    // common read state in the prelude, so the workers can record independently from the same snapshot. The hardware
+    // caustic producer joins the Graphics AVBOIT-support packet to overlap the Async shadow/surfel packet; deferred
+    // lighting is their first GPU consumer.
     bool shadowVisibilityCommandListReady = false;
     bool causticsCommandListReady = false;
     bool surfelGiCommandListReady = false;
@@ -2150,8 +2152,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
         // Transparent CSG interval construction uses the opaque G-buffer framebuffer, whose automatic attachment
         // tracking temporarily makes normal/world-position render targets and depth a read-only depth attachment.
-        // Restore the normalized read inputs before the later deferred-lighting packet records from the merged state.
-        // Albedo deliberately remains a render target: deferred lighting transitions it for sampling.
+        // Restore every deferred-lighting input before the later Compute packet records from the merged state. A
+        // Compute-only command buffer cannot name color/depth attachment accesses as a local barrier source.
+        avboitCommandList->setTextureState(
+            deferredTargets.albedo.get(),
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource
+        );
         avboitCommandList->setTextureState(
             deferredTargets.normal.get(),
             ECSRenderDetail::s_FramebufferSubresources,
@@ -2420,7 +2427,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
             m_avboitSystem.renderAvboitAccumulatePass(
                 *avboitAccumulateCommandList,
-                deferredTargets.avboit,
+                deferredTargets,
                 csgFrameState
             );
             avboitAccumulateCommandList->close(&m_avboitStateHandoff);
@@ -2770,10 +2777,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, deferredClearCommandList },
         { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, gbufferCommandList },
         { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, postGbufferNormalizeCommandList },
+        { ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming, asyncEffectsTimingBeginCommandList },
         { ECSRenderDetail::FrameExecutionWork::RayEffects, shadowVisibilityCommandList },
         { ECSRenderDetail::FrameExecutionWork::Caustics, causticsCommandList },
         { ECSRenderDetail::FrameExecutionWork::SurfelGi, surfelGiCommandList },
-        { ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming, asyncEffectsTimingBeginCommandList },
         { ECSRenderDetail::FrameExecutionWork::AvboitRaster, avboitCommandList },
         { ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming, asyncEffectsTimingEndCommandList },
         { ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp, asyncAvboitDepthWarpCommandList },
@@ -3056,8 +3063,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             break;
         }
         case ECSRenderDetail::FrameExecutionSubmissionBatch::AsyncRayEffects:{
-            // Shadow, caustic producer, and Compute-only surfel GI share one accepted Compute packet. Graphics effects
-            // remain independent, and Graphics final waits for both packet branches.
+            // Shadow, software caustics when selected, and Compute-only surfel GI share one accepted Compute packet.
+            // Hardware caustics instead run in the independent Graphics-support packet; Graphics final waits for both
+            // packet branches.
             const Core::QueueSubmissionToken shadowSubmissionToken = dispatchRecordedFrameBatch(
                 ECSRenderDetail::FrameExecutionSubmissionBatch::AsyncRayEffects
             );

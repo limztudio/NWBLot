@@ -941,17 +941,35 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
     Vector<VkImageMemoryBarrier2, Alloc::ScratchArena> queueCompatibleImageBarriers{scratchArena};
     Vector<VkBufferMemoryBarrier2, Alloc::ScratchArena> queueCompatibleBufferBarriers{scratchArena};
     if(m_desc.queueType != CommandQueue::Graphics){
+        constexpr VkAccessFlags2 s_GraphicsAttachmentAccessMask =
+            VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT
+            | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT
+            | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+            | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+        ;
         const auto queueCompatibleStageMask = [](const VkPipelineStageFlags2 stageMask){
             return stageMask == VK_PIPELINE_STAGE_2_NONE
                 ? VK_PIPELINE_STAGE_2_NONE
                 : VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
             ;
         };
+        const auto makeSourceScopeQueueCompatible = [&](VkPipelineStageFlags2& stageMask, VkAccessFlags2& accessMask){
+            // A Compute/Copy command buffer cannot have produced an attachment access. Such a source can only be an
+            // imported Graphics handoff, whose producer is already ordered by the submission wait token. Vulkan does
+            // not allow an attachment access mask with a Compute-only ALL_COMMANDS expansion, so represent that
+            // cross-queue source with the empty local scope instead of emitting an invalid barrier.
+            if((accessMask & s_GraphicsAttachmentAccessMask) != 0u){
+                stageMask = VK_PIPELINE_STAGE_2_NONE;
+                accessMask = 0u;
+                return;
+            }
+            stageMask = queueCompatibleStageMask(stageMask);
+        };
 
         queueCompatibleMemoryBarriers.reserve(depInfo.memoryBarrierCount);
         for(u32 index = 0u; index < depInfo.memoryBarrierCount; ++index){
             VkMemoryBarrier2 barrier = depInfo.pMemoryBarriers[index];
-            barrier.srcStageMask = queueCompatibleStageMask(barrier.srcStageMask);
+            makeSourceScopeQueueCompatible(barrier.srcStageMask, barrier.srcAccessMask);
             barrier.dstStageMask = queueCompatibleStageMask(barrier.dstStageMask);
             queueCompatibleMemoryBarriers.push_back(barrier);
         }
@@ -960,7 +978,7 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
         queueCompatibleImageBarriers.reserve(depInfo.imageMemoryBarrierCount);
         for(u32 index = 0u; index < depInfo.imageMemoryBarrierCount; ++index){
             VkImageMemoryBarrier2 barrier = depInfo.pImageMemoryBarriers[index];
-            barrier.srcStageMask = queueCompatibleStageMask(barrier.srcStageMask);
+            makeSourceScopeQueueCompatible(barrier.srcStageMask, barrier.srcAccessMask);
             barrier.dstStageMask = queueCompatibleStageMask(barrier.dstStageMask);
             queueCompatibleImageBarriers.push_back(barrier);
         }
@@ -969,7 +987,7 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
         queueCompatibleBufferBarriers.reserve(depInfo.bufferMemoryBarrierCount);
         for(u32 index = 0u; index < depInfo.bufferMemoryBarrierCount; ++index){
             VkBufferMemoryBarrier2 barrier = depInfo.pBufferMemoryBarriers[index];
-            barrier.srcStageMask = queueCompatibleStageMask(barrier.srcStageMask);
+            makeSourceScopeQueueCompatible(barrier.srcStageMask, barrier.srcAccessMask);
             barrier.dstStageMask = queueCompatibleStageMask(barrier.dstStageMask);
             queueCompatibleBufferBarriers.push_back(barrier);
         }

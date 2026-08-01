@@ -384,9 +384,10 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
 
 void RendererAvboitSystem::renderAvboitAccumulatePass(
     Core::CommandList& commandList,
-    AvboitFrameTargets& avboitTargets,
+    DeferredFrameTargets& targets,
     const CsgFrameState& csgFrameState
 ){
+    AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
 
     // All accumulation variants sample the integrated Texture3D and both work buffers through the heap, so transition
@@ -409,6 +410,24 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
         &avboitTargets
     );
     commandList.endRenderPass();
+
+    // Deferred composite is a Compute pass. Return the two accumulation attachments and the read-only depth input
+    // to their common sampled state on Graphics so its Compute barrier never names unsupported attachment accesses.
+    commandList.setTextureState(
+        avboitTargets.accumColor.get(),
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::ShaderResource
+    );
+    commandList.setTextureState(
+        avboitTargets.accumExtinction.get(),
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::ShaderResource
+    );
+    commandList.setTextureState(
+        targets.depth.get(),
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::ShaderResource
+    );
 }
 
 void RendererAvboitSystem::renderAvboitPasses(
@@ -425,7 +444,7 @@ void RendererAvboitSystem::renderAvboitPasses(
     dispatchAvboitDepthWarp(commandList, avboitTargets);
     renderAvboitExtinctionPass(commandList, avboitTargets, csgFrameState);
     dispatchAvboitIntegration(commandList, avboitTargets);
-    renderAvboitAccumulatePass(commandList, avboitTargets, csgFrameState);
+    renderAvboitAccumulatePass(commandList, targets, csgFrameState);
 }
 
 void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets){

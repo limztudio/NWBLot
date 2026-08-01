@@ -187,9 +187,9 @@ private:
     Core::CommandListResourceStateHandoff m_shadowVisibilityStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityReturnStateHandoff;
-    // Both caustic producers can join the dedicated Compute lane. Their temporal scratch remains there; normal
-    // deferred lighting consumes the resolved irradiance on Compute, while the optional lagged path snapshots it for
-    // the next Graphics lighting packet.
+    // Software caustics retain their temporal scratch on the dedicated Compute lane. Hardware dispatch-rays caustics
+    // use the Graphics overlap packet; normal deferred lighting consumes either resolved irradiance on Compute, while
+    // the optional lagged path snapshots it for the next Graphics lighting packet.
     Core::CommandListResourceStateHandoff m_causticsComputeBaseStateHandoff;
     Core::CommandListResourceStateHandoff m_causticsComputeInputStateHandoff;
     Core::CommandListResourceStateHandoff m_causticsComputePersistentStateHandoff;
@@ -250,8 +250,8 @@ private:
     // envelope. They are submitted only on the dedicated async-shadow schedule.
     Core::CommandListHandle m_asyncEffectsTimingBeginCommandList;
     Core::CommandListHandle m_asyncEffectsTimingEndCommandList;
-    // Vulkan permits dispatchRays from a command pool with VK_QUEUE_COMPUTE_BIT support, so this sibling list serves
-    // both caustic producers on the dedicated AsyncCompute lane.
+    // Software caustics are ordinary Compute dispatches, so this sibling list serves the no-hardware-ray-tracing
+    // dedicated AsyncCompute path. Hardware dispatch-rays caustics stay on the Graphics overlap packet.
     Core::CommandListHandle m_asyncCausticsCommandList;
     Core::CommandListHandle m_causticsCommandList;
     // Surfel GI uses only compute dispatches on both its SW-BVH and HW-RayQuery branches, so a dedicated compute

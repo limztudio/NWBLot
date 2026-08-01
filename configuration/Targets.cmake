@@ -59,7 +59,7 @@ function(nwb_target_link_libraries_whole_archive target)
         # CMake's MSVC compiler predicate is false for clang++.
         if(WIN32)
             target_link_libraries(${target} PRIVATE ${library})
-            target_link_options(${target} PRIVATE "/WHOLEARCHIVE:$<TARGET_FILE:${library}>")
+            target_link_options(${target} PRIVATE "LINKER:/WHOLEARCHIVE:$<TARGET_FILE:${library}>")
         elseif(APPLE)
             target_link_libraries(${target} PRIVATE
                 "-Wl,-force_load,$<TARGET_FILE:${library}>"

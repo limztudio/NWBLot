@@ -353,6 +353,7 @@ public:
     }
 
     virtual void onShutdown()override{
+        m_context.graphics.setFrameSubmissionSuspended(false);
         m_context.input.removeHandler(m_arrowYawInput);
         destroyWorld();
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: shutdown"));
@@ -362,13 +363,14 @@ public:
         const u32 captureFreezeFrame = m4PixelCaptureFreezeFrame();
         if(captureFreezeFrame != 0u && m_m4RenderedFrameCount >= captureFreezeFrame){
             if(!m_m4PixelCapturePaused){
-                // Hold the last submitted image for the external M4 harness. Both binaries therefore capture the same
-                // temporal frame index even when the dedicated-queue path produces more frames per wall-clock second.
+                // Stop runFrame before publishing the marker. The external M4 harness can therefore settle and capture
+                // the last completed image without advancing temporal shadow/caustic history after this frame index.
+                m_context.graphics.setFrameSubmissionSuspended(true);
+                m_m4PixelCapturePaused = true;
                 NWB_LOGGER_ESSENTIAL_INFO(
-                    NWB_TEXT("StressTestSmokeProject: M4 pixel capture ready after {} rendered frames"),
+                    NWB_TEXT("StressTestSmokeProject: M4 pixel capture ready after {} rendered frames; render submission suspended"),
                     m_m4RenderedFrameCount
                 );
-                m_m4PixelCapturePaused = true;
             }
             return true;
         }

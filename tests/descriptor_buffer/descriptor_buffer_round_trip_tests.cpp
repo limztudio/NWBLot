@@ -203,6 +203,25 @@ TEST_F(DescriptorBufferRoundTripTest, DeviceRecreationRequestStopsTheCurrentGrap
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// An external pixel capture must be able to hold the last completed image without accidentally opening another frame.
+// The suspension still observes terminal device state so it cannot conceal a recovery/recreation request.
+TEST_F(DescriptorBufferRoundTripTest, FrameSubmissionSuspensionFreezesTheFrameClockWithoutMaskingDeviceRecreation){
+    HeadlessGraphicsScope captureScope;
+    ASSERT_TRUE(captureScope.initialize());
+
+    auto& graphics = captureScope.graphics();
+    const u64 frameIndex = graphics.getFrameIndex();
+    graphics.setFrameSubmissionSuspended(true);
+
+    EXPECT_TRUE(graphics.isFrameSubmissionSuspended());
+    EXPECT_TRUE(graphics.runFrame());
+    EXPECT_EQ(frameIndex, graphics.getFrameIndex());
+
+    graphics.requestDeviceRecreation();
+    EXPECT_FALSE(graphics.runFrame());
+}
+
+
 inline constexpr GpuTimingScopeDefinition s_FrameTimingPreambleScope("tests/frame_timing_preamble");
 inline constexpr GpuTimingScopeDefinition s_FrameTimingLateActivationScope("tests/frame_timing_late_activation");
 inline constexpr GpuTimingScopeDefinition s_SubmissionTicketScope("tests/timing_submission_ticket");

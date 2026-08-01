@@ -107,7 +107,11 @@ public:
     bool setAsyncComputeLaneEnabled(bool enabled);
     bool setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi);
     void setPipelineCacheDirectory(const Path& directory);
-    bool runFrame(){ return animateRenderPresent(); }
+    // Keeps the host update/event loop alive while preventing runFrame from recording, submitting, or presenting a
+    // new frame. This is useful when an external capture must sample the last completed temporal frame exactly.
+    void setFrameSubmissionSuspended(bool suspended)noexcept{ m_frameSubmissionSuspended = suspended; }
+    [[nodiscard]] bool isFrameSubmissionSuspended()const noexcept{ return m_frameSubmissionSuspended; }
+    bool runFrame();
     // A render pass uses this when an accepted cross-queue release cannot be recovered safely. The current graphics
     // generation then stops before another pass or presentation can use indeterminate ownership; its owner must
     // tear down and recreate the device/resources before resuming.
@@ -219,6 +223,7 @@ private:
     bool m_requestedVSync = false;
     bool m_instanceCreated = false;
     bool m_deviceRecreationRequested = false;
+    bool m_frameSubmissionSuspended = false;
 
     List<IRenderPass*, Alloc::GlobalArena> m_renderPasses;
     Timer m_previousFrameTimestamp = {};

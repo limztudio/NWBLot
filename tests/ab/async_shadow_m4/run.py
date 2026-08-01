@@ -81,6 +81,7 @@ DEFAULT_FORBIDDEN_LOGS = (
     "cannot safely continue after an unresolved async shadow ownership release",
 )
 M4_PIXEL_CAPTURE_READY_LOG = "StressTestSmokeProject: M4 pixel capture ready after"
+M4_PIXEL_CAPTURE_SUBMISSION_PAUSED_LOG = "render submission suspended"
 
 
 class DedicatedComputeUnavailable(SmokeSkip):
@@ -524,7 +525,7 @@ def run_frame_locked_capture(
             log_directory,
             log_baseline,
             log_pattern,
-            M4_PIXEL_CAPTURE_READY_LOG,
+            M4_PIXEL_CAPTURE_SUBMISSION_PAUSED_LOG,
             args.startup_timeout,
         )
         wait_while_running(app_process, args.pixel_capture_settle_seconds, f"while settling {mode} frame-locked capture")
@@ -550,6 +551,8 @@ def run_frame_locked_capture(
     validate_lane_for_mode(mode, lane)
     if M4_PIXEL_CAPTURE_READY_LOG not in log_text:
         raise SmokeFailure(f"{mode} frame-locked capture ended before its capture-ready marker was logged")
+    if M4_PIXEL_CAPTURE_SUBMISSION_PAUSED_LOG not in log_text:
+        raise SmokeFailure(f"{mode} frame-locked capture did not suspend submission at its capture-ready marker")
     if not capture_path.is_file():
         raise SmokeFailure(f"{mode} frame-locked capture did not write a BMP")
     return FrameLockedCapture(str(capture_path), log_text, lane)

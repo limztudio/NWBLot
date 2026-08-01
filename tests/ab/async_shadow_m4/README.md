@@ -19,10 +19,11 @@ It configures the required test targets, builds both benchmarks and their cooked
 python launcher.py async-shadow-m4 -- --measure-seconds 30
 ```
 
-Pixel capture and timing run in separate processes. The capture process holds the benchmark after 96 rendered frames,
-so the sync and async images compare the same temporal-history phase even when the async path renders more frames per
-second. The timing process then runs normally, without that hold. Adjust the capture point only when investigating a
-specific temporal phase:
+Pixel capture and timing run in separate processes. After 96 rendered frames, the capture process suspends new render
+submission while keeping its native event loop alive, so the sync and async images compare the same temporal-history
+phase even when the async path renders more frames per second. The runner waits for the explicit submission-suspended
+marker before it settles and captures the window. The timing process then runs normally, without that hold. Adjust the
+capture point only when investigating a specific temporal phase:
 
 ```powershell
 python launcher.py async-shadow-m4 -- --pixel-capture-frames 128

@@ -54,7 +54,10 @@ endfunction()
 
 function(nwb_target_link_libraries_whole_archive target)
     foreach(library IN LISTS ARGN)
-        if(MSVC)
+        # The Windows clang++ preset links directly with lld-link rather than through
+        # a GNU-style linker driver.  lld-link accepts the MSVC spelling even when
+        # CMake's MSVC compiler predicate is false for clang++.
+        if(WIN32)
             target_link_libraries(${target} PRIVATE ${library})
             target_link_options(${target} PRIVATE "/WHOLEARCHIVE:$<TARGET_FILE:${library}>")
         elseif(APPLE)

@@ -23,6 +23,12 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Retained as an opaque declaration so Graphics::getGraphicsAPI remains source-compatible for callers that include
+// the graphics module without the legacy backend-selection compatibility header.
+namespace GraphicsAPI{
+    enum Enum : u8;
+};
+
 namespace GraphicsBackend{
     class BackendContext;
     using Backend = BackendContext;

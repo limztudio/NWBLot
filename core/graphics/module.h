@@ -133,6 +133,8 @@ public:
     void removeRenderPass(IRenderPass& pass);
 
     [[nodiscard]] const tchar* getRendererString()const;
+    // Compatibility query: the renderer is Vulkan-only and this always returns GraphicsAPI::VULKAN.
+    [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const;
     [[nodiscard]] f64 getPreviousFrameTimestamp()const{ return DurationInSeconds<f64>(m_previousFrameTimestamp); }
     [[nodiscard]] u64 getFrameIndex()const{ return m_frameIndex; }
     [[nodiscard]] GpuTimingRecorder& gpuTiming(){ return m_gpuTiming; }

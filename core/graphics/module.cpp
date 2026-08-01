@@ -3,7 +3,7 @@
 
 
 #include "module.h"
-#include "vulkan/backend_context.h"
+#include "backend_selection.h"
 
 #include <core/common/log.h>
 #include <core/telemetry/session.h>
@@ -536,6 +536,10 @@ void Graphics::removeRenderPass(IRenderPass& pass){
 
 const tchar* Graphics::getRendererString()const{
     return m_backend->getRendererString();
+}
+
+GraphicsAPI::Enum Graphics::getGraphicsAPI()const{
+    return GraphicsBackend::s_Api;
 }
 
 void Graphics::reportLiveObjects()const{

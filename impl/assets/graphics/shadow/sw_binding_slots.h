@@ -132,11 +132,11 @@
 
 // Two opaque samples seed/reset temporal history without shimmer. Once an accepted history is available, the trace
 // drops to the smaller runtime budget below while the reproject-merge still validates every current sample.
-#define NWB_SW_SHADOW_SOFT_SPP 2u
-#define NWB_SW_SHADOW_SOFT_TEMPORAL_SPP 1u
+#define NWB_SW_SHADOW_SOFT_SPP 3u
+#define NWB_SW_SHADOW_SOFT_TEMPORAL_SPP 3u
 
 // One transparent sample converges after temporal RGB denoising.
-#define NWB_SW_SHADOW_TRANSPARENT_SPP 1u
+#define NWB_SW_SHADOW_TRANSPARENT_SPP 3u
 
 // Decorrelation salt for the transparent cone-jitter sequence.
 #define NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT 2654435761u

@@ -94,20 +94,28 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
     commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
     commandList.commitBarriers();
 
-    ShadowGeometryDownsamplePushConstants geometryPush;
-    geometryPush.width = targets.width;
-    geometryPush.height = targets.height;
-    geometryPush.halfWidth = softHalfWidth;
-    geometryPush.halfHeight = softHalfHeight;
-    geometryPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
-    geometryPush.normalSlot = targets.bindless.gbufferNormal.slot();
-    geometryPush.depthSlot = targets.bindless.gbufferDepth.slot();
-    geometryPush.outputStorageSlot = targets.bindless.shadowSoftGeometryStorage.slot();
-    geometryPush.sceneShadingSlot = targets.bindless.sceneShading.slot();
-    commandList.setComputeState(passState(rayTracingState().m_shadowGeometryDownsamplePipeline));
-    bindHeap(rayTracingState().m_shadowGeometryDownsamplePipeline);
-    commandList.setPushConstants(&geometryPush, sizeof(geometryPush));
-    commandList.dispatch(softGroupsX, softGroupsY, 1u);
+    {
+        Core::GpuTimingMeasure geometryTiming(
+            graphics().gpuTiming(),
+            RendererGpuTimingScope::s_ShadowGeometryDownsample,
+            graphics().getDevice(),
+            commandList
+        );
+        ShadowGeometryDownsamplePushConstants geometryPush;
+        geometryPush.width = targets.width;
+        geometryPush.height = targets.height;
+        geometryPush.halfWidth = softHalfWidth;
+        geometryPush.halfHeight = softHalfHeight;
+        geometryPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
+        geometryPush.normalSlot = targets.bindless.gbufferNormal.slot();
+        geometryPush.depthSlot = targets.bindless.gbufferDepth.slot();
+        geometryPush.outputStorageSlot = targets.bindless.shadowSoftGeometryStorage.slot();
+        geometryPush.sceneShadingSlot = targets.bindless.sceneShading.slot();
+        commandList.setComputeState(passState(rayTracingState().m_shadowGeometryDownsamplePipeline));
+        bindHeap(rayTracingState().m_shadowGeometryDownsamplePipeline);
+        commandList.setPushConstants(&geometryPush, sizeof(geometryPush));
+        commandList.dispatch(softGroupsX, softGroupsY, 1u);
+    }
 
     u32 slotRangeCount = 0u;
     for(u32 slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot){
@@ -171,8 +179,15 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
             targets.bindless.shadowHistAStorage.slot(), targets.bindless.shadowMomentsAStorage.slot()
         }
     ;
-    if(opaqueTemporalActive)
+    if(opaqueTemporalActive){
+        Core::GpuTimingMeasure opaqueTemporalTiming(
+            graphics().gpuTiming(),
+            RendererGpuTimingScope::s_ShadowOpaqueTemporal,
+            graphics().getDevice(),
+            commandList
+        );
         dispatchMerge(opaqueMerge);
+    }
 
     SoftShadowResolveDispatch opaqueDispatch;
     opaqueDispatch.pipeline = rayTracingState().m_shadowResolvePipeline.get();
@@ -204,40 +219,56 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
     opaqueDispatch.usePrepareOverride = opaqueTemporalActive;
     opaqueDispatch.fold = SoftShadowUpsampleFold::Overwrite;
     opaqueDispatch.waveletPassCount = static_cast<u32>(NWB_SHADOW_RESOLVE_PASS_COUNT);
-    dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, opaqueDispatch);
+    {
+        Core::GpuTimingMeasure opaqueResolveTiming(
+            graphics().gpuTiming(),
+            RendererGpuTimingScope::s_ShadowOpaqueResolve,
+            graphics().getDevice(),
+            commandList
+        );
+        dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, opaqueDispatch);
+    }
 
     if(rayTracingState().m_softTransparentReady){
-        // The transparent SW trace is shared by the HW and SW opaque paths, so stage its common traversal inputs.
-        transitionSwShadowTraversalResources(commandList);
-        commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-        commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.setEnableUavBarriersForTexture(targets.transparentSoftHalf.get(), true);
-        commandList.commitBarriers();
+        {
+            Core::GpuTimingMeasure transparentTraceTiming(
+                graphics().gpuTiming(),
+                RendererGpuTimingScope::s_ShadowTransparentTrace,
+                graphics().getDevice(),
+                commandList
+            );
+            // The transparent SW trace is shared by the HW and SW opaque paths, so stage its common traversal inputs.
+            transitionSwShadowTraversalResources(commandList);
+            commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+            commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+            commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+            commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+            commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+            commandList.setEnableUavBarriersForTexture(targets.transparentSoftHalf.get(), true);
+            commandList.commitBarriers();
 
-        SwShadowHeapPushConstants tracePush;
-        tracePush.width = targets.width;
-        tracePush.height = targets.height;
-        tracePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-        tracePush.frameIndex = frameIndex;
-        tracePush.softSampleCount = NWB_SW_SHADOW_TRANSPARENT_SPP;
-        tracePush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-        tracePush.materialContextSlotsHeapSlot = rayTracingState().m_shadowMaterialContextSlotsHeapHandle.slot();
-        tracePush.visibilityStorageSlot = targets.bindless.shadowVisibilityStorage.slot();
-        tracePush.coarseStorageSlot = targets.bindless.shadowCoarseTransmittanceStorage.slot();
-        tracePush.softHalfStorageSlot = targets.bindless.shadowSoftHalfAStorage.slot();
-        tracePush.transparentSoftHalfStorageSlot = targets.bindless.transparentSoftHalfStorage.slot();
-        tracePush.edgeStatsStorageSlot = rayTracingState().m_swShadowEdgeStatsHeapHandle.slot();
-        tracePush.edgeCounterStorageSlot = rayTracingState().m_swShadowEdgeCounterHeapHandle.slot();
-        tracePush.edgeListStorageSlot = rayTracingState().m_swShadowEdgeListHeapHandle.slot();
-        tracePush.indirectArgsStorageSlot = rayTracingState().m_swShadowIndirectArgsHeapHandle.slot();
-        commandList.setComputeState(passState(rayTracingState().m_swShadowTransparentSoftPipeline));
-        bindHeap(rayTracingState().m_swShadowTransparentSoftPipeline);
-        commandList.setPushConstants(&tracePush, sizeof(tracePush));
-        commandList.dispatch(softGroupsX, softGroupsY, 1u);
+            SwShadowHeapPushConstants tracePush;
+            tracePush.width = targets.width;
+            tracePush.height = targets.height;
+            tracePush.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
+            tracePush.frameIndex = frameIndex;
+            tracePush.softSampleCount = NWB_SW_SHADOW_TRANSPARENT_SPP;
+            tracePush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
+            tracePush.materialContextSlotsHeapSlot = rayTracingState().m_shadowMaterialContextSlotsHeapHandle.slot();
+            tracePush.visibilityStorageSlot = targets.bindless.shadowVisibilityStorage.slot();
+            tracePush.coarseStorageSlot = targets.bindless.shadowCoarseTransmittanceStorage.slot();
+            tracePush.softHalfStorageSlot = targets.bindless.shadowSoftHalfAStorage.slot();
+            tracePush.transparentSoftHalfStorageSlot = targets.bindless.transparentSoftHalfStorage.slot();
+            tracePush.edgeStatsStorageSlot = rayTracingState().m_swShadowEdgeStatsHeapHandle.slot();
+            tracePush.edgeCounterStorageSlot = rayTracingState().m_swShadowEdgeCounterHeapHandle.slot();
+            tracePush.edgeListStorageSlot = rayTracingState().m_swShadowEdgeListHeapHandle.slot();
+            tracePush.indirectArgsStorageSlot = rayTracingState().m_swShadowIndirectArgsHeapHandle.slot();
+            commandList.setComputeState(passState(rayTracingState().m_swShadowTransparentSoftPipeline));
+            bindHeap(rayTracingState().m_swShadowTransparentSoftPipeline);
+            commandList.setPushConstants(&tracePush, sizeof(tracePush));
+            commandList.dispatch(softGroupsX, softGroupsY, 1u);
+        }
 
         const bool transparentTemporalActive = rayTracingState().m_softTransparentTemporalReady;
         const __hidden_rt_softshadow::ShadowReprojectMergeHeapResources transparentMerge = frontIsA
@@ -252,8 +283,15 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
                 targets.bindless.transparentHistAStorage.slot(), targets.bindless.transparentMomentsAStorage.slot()
             }
         ;
-        if(transparentTemporalActive)
+        if(transparentTemporalActive){
+            Core::GpuTimingMeasure transparentTemporalTiming(
+                graphics().gpuTiming(),
+                RendererGpuTimingScope::s_ShadowTransparentTemporal,
+                graphics().getDevice(),
+                commandList
+            );
             dispatchMerge(transparentMerge);
+        }
 
         SoftShadowResolveDispatch transparentDispatch;
         transparentDispatch.pipeline = rayTracingState().m_shadowResolveRgbPipeline.get();
@@ -285,7 +323,15 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(Core:
         transparentDispatch.usePrepareOverride = transparentTemporalActive;
         transparentDispatch.fold = SoftShadowUpsampleFold::Multiply;
         transparentDispatch.waveletPassCount = static_cast<u32>(NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT);
-        dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, transparentDispatch);
+        {
+            Core::GpuTimingMeasure transparentResolveTiming(
+                graphics().gpuTiming(),
+                RendererGpuTimingScope::s_ShadowTransparentResolve,
+                graphics().getDevice(),
+                commandList
+            );
+            dispatchSoftShadowResolve(commandList, targets, 0u, slotRangeCount, transparentDispatch);
+        }
     }
 
     // Do not mutate the target-generation handles while the sibling caustics and surfel-GI workers can still validate

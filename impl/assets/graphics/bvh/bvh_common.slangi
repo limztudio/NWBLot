@@ -18,7 +18,9 @@
 // One node of a binary LBVH. For N primitives the flat node array holds (2N-1) nodes: internal nodes occupy
 // indices [0, N-1) and leaves [N-1, 2N-1); node 0 is the root. Internal nodes store child node indices in
 // leftChild/rightChild; a leaf sets NWB_BVH_LEAF_FLAG on leftChild and packs the primitive index in its low
-// bits, with rightChild holding the primitive count. 32 bytes / 2 float4 lanes (std430).
+// bits, with rightChild holding the primitive count. CPU-built scene nodes may set the high bit of rightChild as a
+// transparent-subtree tag, so traversal must decode rightChild through nwbBvhNodeRightChildIndex(). 32 bytes /
+// 2 float4 lanes (std430).
 struct NwbBvhNode{
     float3 aabbMin;
     uint leftChild;
@@ -55,6 +57,19 @@ bool nwbBvhNodeIsLeaf(const NwbBvhNode node){
 
 uint nwbBvhLeafPrimitive(const NwbBvhNode node){
     return node.leftChild & ~NWB_BVH_LEAF_FLAG;
+}
+
+// Preserve the all-bits invalid sentinel while stripping the CPU scene-BVH transparent-subtree tag from a valid
+// right-child link. Per-mesh GPU BVHs never set the tag, so this is also their identity decode.
+uint nwbBvhNodeRightChildIndex(const NwbBvhNode node){
+    return node.rightChild == NWB_BVH_INVALID
+        ? NWB_BVH_INVALID
+        : (node.rightChild & NWB_BVH_CHILD_INDEX_MASK)
+    ;
+}
+
+bool nwbBvhNodeContainsTransparentOccluder(const NwbBvhNode node){
+    return (node.rightChild & NWB_BVH_TRANSPARENT_SUBTREE_FLAG) != 0u;
 }
 
 // Count leading zero bits (0..32); firstbithigh returns -1 for zero, which this maps to 32.

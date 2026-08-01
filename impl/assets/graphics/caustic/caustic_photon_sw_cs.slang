@@ -237,7 +237,8 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
         }
         else{
             const NwbBvhNode leftNode = NwbHeapBvhNodes(material.nodeSlot)[node.leftChild];
-            const NwbBvhNode rightNode = NwbHeapBvhNodes(material.nodeSlot)[node.rightChild];
+            const uint right = nwbBvhNodeRightChildIndex(node);
+            const NwbBvhNode rightNode = NwbHeapBvhNodes(material.nodeSlot)[right];
             float tLeft;
             const bool hitLeft = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, 0.0, tLeft);
             float tRight;
@@ -246,7 +247,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
                 // Descend the nearer child; defer the farther. A full stack drops that farther subtree rather than
                 // corrupting traversal state.
                 if(tLeft <= tRight){
-                    if(stackPointer < NWB_CAUSTIC_SW_MESH_STACK_SIZE) stack[stackPointer++] = node.rightChild;
+                    if(stackPointer < NWB_CAUSTIC_SW_MESH_STACK_SIZE) stack[stackPointer++] = right;
                     node = leftNode;
                 }
                 else{
@@ -302,14 +303,15 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
         }
         else{
             const NwbBvhNode leftNode = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[node.leftChild];
-            const NwbBvhNode rightNode = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[node.rightChild];
+            const uint right = nwbBvhNodeRightChildIndex(node);
+            const NwbBvhNode rightNode = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[right];
             float tLeft;
             const bool hitLeft = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, leftNode.aabbMin, leftNode.aabbMax, 0.0, tLeft);
             float tRight;
             const bool hitRight = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, 0.0, tRight);
             if(hitLeft && hitRight){
                 if(tLeft <= tRight){
-                    if(stackPointer < NWB_CAUSTIC_SW_SCENE_STACK_SIZE) stack[stackPointer++] = node.rightChild;
+                    if(stackPointer < NWB_CAUSTIC_SW_SCENE_STACK_SIZE) stack[stackPointer++] = right;
                     node = leftNode;
                 }
                 else{

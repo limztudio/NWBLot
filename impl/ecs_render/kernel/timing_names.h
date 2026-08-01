@@ -38,6 +38,15 @@ inline constexpr Core::GpuTimingScopeDefinition s_AsyncFinal("render.async_final
 inline constexpr Core::GpuTimingScopeDefinition s_AsyncShadowEffectsOverlap("render.async_shadow_effects_overlap");
 inline constexpr Core::GpuTimingScopeDefinition s_DeferredClear("render.deferred_clear");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowVisibility("render.shadow_visibility");
+// Keep the aggregate shadow envelope for frame-level ranking, and publish its expensive compute phases separately so
+// a performance investigation can distinguish ray traversal from temporal filtering and reconstruction.
+inline constexpr Core::GpuTimingScopeDefinition s_ShadowOpaqueTrace("render.shadow_opaque_trace");
+inline constexpr Core::GpuTimingScopeDefinition s_ShadowGeometryDownsample("render.shadow_geometry_downsample");
+inline constexpr Core::GpuTimingScopeDefinition s_ShadowOpaqueTemporal("render.shadow_opaque_temporal");
+inline constexpr Core::GpuTimingScopeDefinition s_ShadowOpaqueResolve("render.shadow_opaque_resolve");
+inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentTrace("render.shadow_transparent_trace");
+inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentTemporal("render.shadow_transparent_temporal");
+inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentResolve("render.shadow_transparent_resolve");
 inline constexpr Core::GpuTimingScopeDefinition s_SwBvhSort("render.sw_bvh_sort");
 inline constexpr Core::GpuTimingScopeDefinition s_CausticPhotons("render.caustic_photons");
 inline constexpr Core::GpuTimingScopeDefinition s_CausticResolve("render.caustic_resolve");

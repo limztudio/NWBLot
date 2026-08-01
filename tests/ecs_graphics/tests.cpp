@@ -23,6 +23,7 @@
 #include <impl/ecs_render/material/material_typed_private.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
+#include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skin_types.h>
@@ -65,6 +66,55 @@ TEST(EcsGraphics, RuntimeResourceNameBuilderMatchesFormattedSuffix){
 
 
 using TestWorld = NWB::Tests::EcsTestWorld;
+
+TEST(EcsGraphics, SceneBvhTransparentSubtreeClassificationPropagatesToRoot){
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    using PrimitiveVector = ::Vector<NWB::Impl::SceneBvhPrimitiveCalculation, NWB::Core::Alloc::ScratchArena>;
+    using IndexVector = ::Vector<u32, NWB::Core::Alloc::ScratchArena>;
+    using NodeVector = ::Vector<NWB::Impl::SceneBvhNodeCalculation, NWB::Core::Alloc::ScratchArena>;
+
+    PrimitiveVector primitives{ scratchArena };
+    const bool transparent[] = { false, true, false };
+    for(u32 index = 0u; index < 3u; ++index){
+        NWB::Impl::SceneBvhPrimitiveCalculation primitive;
+        const f32 x = static_cast<f32>(index) * 2.0f;
+        primitive.aabbMin = VectorSet(x, 0.0f, 0.0f, 0.0f);
+        primitive.aabbMax = VectorSet(x + 1.0f, 1.0f, 1.0f, 0.0f);
+        primitive.centroid = VectorSet(x + 0.5f, 0.5f, 0.5f, 0.0f);
+        primitive.transparentOccluder = transparent[index];
+        primitives.push_back(primitive);
+    }
+
+    IndexVector indices{ scratchArena };
+    indices.push_back(0u);
+    indices.push_back(1u);
+    indices.push_back(2u);
+    NodeVector nodes{ scratchArena };
+    const u32 root = NWB::Impl::__hidden_raytracing_system::BuildSceneBvhNode(
+        indices.data(),
+        0u,
+        static_cast<u32>(indices.size()),
+        primitives.data(),
+        nodes
+    );
+
+    ASSERT_EQ(root, 0u);
+    ASSERT_EQ(nodes.size(), 5u);
+    EXPECT_TRUE(nodes[root].containsTransparentOccluder);
+    EXPECT_LT(nodes[root].leftChild, nodes.size());
+    EXPECT_LT(nodes[root].rightChild, nodes.size());
+
+    u32 transparentLeafCount = 0u;
+    for(const NWB::Impl::SceneBvhNodeCalculation& node : nodes){
+        if((node.leftChild & NWB_BVH_LEAF_FLAG) == 0u)
+            continue;
+        const u32 primitiveIndex = node.leftChild & ~NWB_BVH_LEAF_FLAG;
+        ASSERT_LT(primitiveIndex, primitives.size());
+        EXPECT_EQ(node.containsTransparentOccluder, primitives[primitiveIndex].transparentOccluder);
+        transparentLeafCount += node.containsTransparentOccluder ? 1u : 0u;
+    }
+    EXPECT_EQ(transparentLeafCount, 1u);
+}
 
 TEST(EcsGraphics, MeshViewWorldToClipMatrixKeepsVectorLanesIntact){
     const SIMDMatrix worldToClip = NWB::Impl::ECSRenderDetail::BuildWorldToClipMatrix(

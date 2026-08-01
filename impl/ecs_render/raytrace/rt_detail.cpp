@@ -129,7 +129,8 @@ void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& 
 // separating bin boundary (coincident centroids everywhere) it falls back to the count median, so the build never
 // produces an empty/degenerate split. Leaves store NWB_BVH_LEAF_FLAG | instanceIndex + the instance world AABB;
 // internal nodes store child node indices + the unioned box — the exact NwbBvhNode layout the per-mesh build
-// produces, so the GPU traversal is uniform across the scene BVH and every per-mesh BVH. `instanceLeafCost`
+// produces, so the GPU traversal is uniform across the scene BVH and every per-mesh BVH. The CPU-only node carries
+// whether its subtree has a transparent occluder; the packer later encodes that in rightChild's high bit. `instanceLeafCost`
 // weights each instance's leaf cost; in production this is the instance triangle count so a large instance biases
 // the tree like a large primitive would. When null, every instance counts uniformly (the self-test path).
 u32 BuildSceneBvhNode(
@@ -150,6 +151,7 @@ u32 BuildSceneBvhNode(
         node.aabbMax = primitiveBounds[instance].aabbMax;
         node.leftChild = BvhNodeIndex::LeafFlag | instance;
         node.rightChild = 1u;
+        node.containsTransparentOccluder = primitiveBounds[instance].transparentOccluder;
         return nodeIndex;
     }
 
@@ -302,6 +304,7 @@ u32 BuildSceneBvhNode(
     node.aabbMax = VectorMax(nodes[leftChild].aabbMax, nodes[rightChild].aabbMax);
     node.leftChild = leftChild;
     node.rightChild = rightChild;
+    node.containsTransparentOccluder = nodes[leftChild].containsTransparentOccluder || nodes[rightChild].containsTransparentOccluder;
     return nodeIndex;
 }
 

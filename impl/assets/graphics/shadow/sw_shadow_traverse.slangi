@@ -190,7 +190,7 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
         }
         else{
             const uint left = node.leftChild;
-            const uint right = node.rightChild;
+            const uint right = nwbBvhNodeRightChildIndex(node);
             const NwbBvhNode leftNode = NwbHeapBvhNodes(material.nodeSlot)[left];
             const NwbBvhNode rightNode = NwbHeapBvhNodes(material.nodeSlot)[right];
             const float tLeft = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax);
@@ -252,6 +252,10 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
     // intersect by its parent's entry-distance ranking, so the loop drops the per-node redundant re-test.
     {
         const NwbBvhNode root = NwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[nodeIndex];
+#if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
+        if(!nwbBvhNodeContainsTransparentOccluder(root))
+            return; // every scene leaf is opaque, so this compile-time transparent pass has no work
+#endif
         if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, root.aabbMin, root.aabbMax))
             return; // whole scene missed
     }
@@ -270,11 +274,33 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
         }
         else{
             const uint left = node.leftChild;
-            const uint right = node.rightChild;
+            const uint right = nwbBvhNodeRightChildIndex(node);
             const NwbBvhNode leftNode = NwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[left];
             const NwbBvhNode rightNode = NwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[right];
-            const float tLeft = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax);
-            const float tRight = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax);
+#if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
+            // The CPU scene-BVH packs this bit bottom-up. Pruning an opaque-only sibling before its slab test avoids
+            // the material fetch and per-mesh walk that the older leaf-only class filter would immediately discard.
+            const bool leftTransparent = nwbBvhNodeContainsTransparentOccluder(leftNode);
+            const bool rightTransparent = nwbBvhNodeContainsTransparentOccluder(rightNode);
+#endif
+            const float tLeft =
+#if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
+                leftTransparent
+                    ? nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax)
+                    : NWB_SW_SHADOW_AABB_MISS
+#else
+                nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax)
+#endif
+            ;
+            const float tRight =
+#if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
+                rightTransparent
+                    ? nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax)
+                    : NWB_SW_SHADOW_AABB_MISS
+#else
+                nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax)
+#endif
+            ;
             const bool leftMiss = (tLeft >= NWB_SW_SHADOW_AABB_MISS);
             const bool rightMiss = (tRight >= NWB_SW_SHADOW_AABB_MISS);
 

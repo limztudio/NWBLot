@@ -35,7 +35,7 @@ using MeshBufferSlotLookup = HashMap<
 // The scene-level caches below intentionally hash only canonical, fully initialized upload/build inputs. Raw
 // RayTracingInstanceDesc bytes include bitfields, and the temporary SIMD BVH values carry lanes that are not part of
 // the spatial build, so hash their semantic fields instead of their object representations.
-inline constexpr u32 s_SceneStaticCacheHashVersion = 1u;
+inline constexpr u32 s_SceneStaticCacheHashVersion = 2u;
 
 void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTracingInstanceDesc& instance){
     Fnv64AppendValue(inOutHash, instance.transform);
@@ -80,6 +80,7 @@ void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTracingIn
         Fnv64AppendValue(hash, instance.primitiveCount);
         Fnv64AppendValue(hash, aabbMin);
         Fnv64AppendValue(hash, aabbMax);
+        Fnv64AppendValue(hash, primitives[index].transparentOccluder);
     }
     return hash;
 }
@@ -885,6 +886,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         bvhPrimitive.aabbMin = worldMin;
         bvhPrimitive.aabbMax = worldMax;
         bvhPrimitive.centroid = VectorScale(VectorAdd(worldMin, worldMax), 0.5f);
+        bvhPrimitive.transparentOccluder = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
 
         instances.push_back(instance);
         instanceBvhPrimitives.push_back(bvhPrimitive);
@@ -914,13 +916,21 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         return true;
     }
 
-    // The topology key covers the exact world-space leaf bounds and world->object records the CPU SAH build consumes.
-    // Material changes use their own key below, so a surface edit does not needlessly rebuild the scene hierarchy.
+    // The topology key covers the exact world-space leaf bounds and world->object records the CPU SAH build consumes,
+    // plus the transparent class that the packed hierarchy tags for pruning. A material edit that changes only optical
+    // parameters still reuses the hierarchy; a class transition rebuilds it so transparent traversal never sees a
+    // stale subtree tag.
     const u64 sceneStaticHash = staticScene
         ? ComputeSceneSwBvhStaticSceneHash(instances, instanceBvhPrimitives)
         : 0u
     ;
     const usize requiredNodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
+    if(requiredNodeCount > static_cast<usize>(BvhNodeIndex::ChildIndexMask) + 1u){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software scene BVH requires {} nodes, exceeding the tagged child-index limit")
+            , static_cast<u64>(requiredNodeCount)
+        );
+        return false;
+    }
     const bool canReuseSceneBvh =
         staticScene
         && rayTracingState().m_sceneSwBvhStaticSceneHashValid
@@ -967,7 +977,10 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         for(const SceneBvhNodeCalculation& buildNode : buildNodes){
             NwbBvhNodeGpu node;
             StoreFloatInt(buildNode.aabbMin, buildNode.leftChild, &node.aabbMinLeftChild);
-            StoreFloatInt(buildNode.aabbMax, buildNode.rightChild, &node.aabbMaxRightChild);
+            const u32 taggedRightChild = buildNode.rightChild
+                | (buildNode.containsTransparentOccluder ? BvhNodeIndex::TransparentSubtreeFlag : 0u)
+            ;
+            StoreFloatInt(buildNode.aabbMax, taggedRightChild, &node.aabbMaxRightChild);
             nodes.push_back(node);
         }
 

@@ -139,6 +139,7 @@ struct SceneBvhPrimitiveCalculation{
     SIMDVector aabbMin = {};
     SIMDVector aabbMax = {};
     SIMDVector centroid = {};
+    bool transparentOccluder = false;
 };
 
 struct SceneBvhNodeCalculation{
@@ -146,6 +147,7 @@ struct SceneBvhNodeCalculation{
     SIMDVector aabbMax = {};
     u32 leftChild = 0u;
     u32 rightChild = 0u;
+    bool containsTransparentOccluder = false;
 };
 
 // CPU mirror of the shader NwbBvhBuildPushConstants (shared by the morton / topology / fit kernels).
@@ -174,6 +176,10 @@ static_assert(sizeof(BvhBuildPushConstants) == sizeof(u32) * 12u + sizeof(Float4
 namespace BvhNodeIndex{
     enum Mask : u32{
         LeafFlag = NWB_BVH_LEAF_FLAG,
+        // The scene-BVH packer tags rightChild with this bit when the node's subtree contains a transparent
+        // occluder. It shares the numeric bit with LeafFlag because it lives in the other child-link field.
+        TransparentSubtreeFlag = NWB_BVH_TRANSPARENT_SUBTREE_FLAG,
+        ChildIndexMask = NWB_BVH_CHILD_INDEX_MASK,
         Invalid = NWB_BVH_INVALID,
     };
 };

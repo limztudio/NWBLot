@@ -430,25 +430,33 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         // producer this frame, mutually exclusive with the no-RT software traversal).
         const u32 frameIndex = rayTracingState().m_softShadowFrameIndex++;
 
-        Core::ComputeState softState;
-        softState.setPipeline(rayTracingState().m_shadowSoftPipeline.get());
-        commandList.setComputeState(softState);
-        heap.bindCompute(commandList, *rayTracingState().m_shadowSoftPipeline.get(), rayTracingState().m_tlasHeapHandle);
+        {
+            Core::GpuTimingMeasure opaqueTraceTiming(
+                graphics().gpuTiming(),
+                RendererGpuTimingScope::s_ShadowOpaqueTrace,
+                graphics().getDevice(),
+                commandList
+            );
+            Core::ComputeState softState;
+            softState.setPipeline(rayTracingState().m_shadowSoftPipeline.get());
+            commandList.setComputeState(softState);
+            heap.bindCompute(commandList, *rayTracingState().m_shadowSoftPipeline.get(), rayTracingState().m_tlasHeapHandle);
 
-        ShadowRqSoftPushConstants softPush;
-        softPush.width = targets.width;
-        softPush.height = targets.height;
-        softPush.frameIndex = frameIndex;
-        softPush.softSampleCount = softShadowTemporalHistoryUsable()
-            ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP
-            : NWB_SW_SHADOW_SOFT_SPP;
-        softPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
-        softPush.normalSlot = targets.bindless.gbufferNormal.slot();
-        softPush.depthSlot = targets.bindless.gbufferDepth.slot();
-        softPush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-        softPush.visibilityStorageSlot = targets.bindless.shadowSoftHalfAStorage.slot();
-        commandList.setPushConstants(&softPush, sizeof(softPush));
-        commandList.dispatch(softGroupsX, softGroupsY, 1u);
+            ShadowRqSoftPushConstants softPush;
+            softPush.width = targets.width;
+            softPush.height = targets.height;
+            softPush.frameIndex = frameIndex;
+            softPush.softSampleCount = softShadowTemporalHistoryUsable()
+                ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP
+                : NWB_SW_SHADOW_SOFT_SPP;
+            softPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
+            softPush.normalSlot = targets.bindless.gbufferNormal.slot();
+            softPush.depthSlot = targets.bindless.gbufferDepth.slot();
+            softPush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
+            softPush.visibilityStorageSlot = targets.bindless.shadowSoftHalfAStorage.slot();
+            commandList.setPushConstants(&softPush, sizeof(softPush));
+            commandList.dispatch(softGroupsX, softGroupsY, 1u);
+        }
 
         // Preserve the UAV write boundary before the heap-selected resolve reads soft-A as an SRV.
         commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
@@ -468,25 +476,33 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
 
-    Core::ComputeState shadowState;
-    shadowState.setPipeline(rayTracingState().m_shadowPipeline.get());
-    commandList.setComputeState(shadowState);
-    heap.bindCompute(commandList, *rayTracingState().m_shadowPipeline.get(), rayTracingState().m_tlasHeapHandle);
-    // Soft shadow cone-jitter: advance the per-frame seed once here. A soft light samples inside its source cone; a
-    // zero-radius light jitters to the axis exactly and keeps the hard-shadow result.
-    ShadowRqPushConstants shadowPush;
-    shadowPush.frameIndex = rayTracingState().m_softShadowFrameIndex++;
-    shadowPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
-    shadowPush.normalSlot = targets.bindless.gbufferNormal.slot();
-    shadowPush.depthSlot = targets.bindless.gbufferDepth.slot();
-    shadowPush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-    shadowPush.visibilityStorageSlot = targets.bindless.shadowVisibilityStorage.slot();
-    commandList.setPushConstants(&shadowPush, sizeof(shadowPush));
-    commandList.dispatch(
-        DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)),
-        DivideUp(targets.height, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)),
-        1u
-    );
+    {
+        Core::GpuTimingMeasure opaqueTraceTiming(
+            graphics().gpuTiming(),
+            RendererGpuTimingScope::s_ShadowOpaqueTrace,
+            graphics().getDevice(),
+            commandList
+        );
+        Core::ComputeState shadowState;
+        shadowState.setPipeline(rayTracingState().m_shadowPipeline.get());
+        commandList.setComputeState(shadowState);
+        heap.bindCompute(commandList, *rayTracingState().m_shadowPipeline.get(), rayTracingState().m_tlasHeapHandle);
+        // Soft shadow cone-jitter: advance the per-frame seed once here. A soft light samples inside its source cone; a
+        // zero-radius light jitters to the axis exactly and keeps the hard-shadow result.
+        ShadowRqPushConstants shadowPush;
+        shadowPush.frameIndex = rayTracingState().m_softShadowFrameIndex++;
+        shadowPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
+        shadowPush.normalSlot = targets.bindless.gbufferNormal.slot();
+        shadowPush.depthSlot = targets.bindless.gbufferDepth.slot();
+        shadowPush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
+        shadowPush.visibilityStorageSlot = targets.bindless.shadowVisibilityStorage.slot();
+        commandList.setPushConstants(&shadowPush, sizeof(shadowPush));
+        commandList.dispatch(
+            DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)),
+            DivideUp(targets.height, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)),
+            1u
+        );
+    }
     return true;
 }
 
@@ -664,17 +680,25 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
 
             commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
-            SwShadowHeapPushConstants softTracePush = makePush();
-            softTracePush.width = targets.width;
-            softTracePush.height = targets.height;
-            softTracePush.frameIndex = frameIndex;
-            softTracePush.softSampleCount = softShadowTemporalHistoryUsable()
-                ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP
-                : NWB_SW_SHADOW_SOFT_SPP;
-            commandList.setComputeState(passState(rayTracingState().m_swShadowSoftOpaquePipeline));
-            bindPassHeap(rayTracingState().m_swShadowSoftOpaquePipeline);
-            commandList.setPushConstants(&softTracePush, sizeof(softTracePush));
-            commandList.dispatch(softGroupsX, softGroupsY, 1u);
+            {
+                Core::GpuTimingMeasure opaqueTraceTiming(
+                    graphics().gpuTiming(),
+                    RendererGpuTimingScope::s_ShadowOpaqueTrace,
+                    graphics().getDevice(),
+                    commandList
+                );
+                SwShadowHeapPushConstants softTracePush = makePush();
+                softTracePush.width = targets.width;
+                softTracePush.height = targets.height;
+                softTracePush.frameIndex = frameIndex;
+                softTracePush.softSampleCount = softShadowTemporalHistoryUsable()
+                    ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP
+                    : NWB_SW_SHADOW_SOFT_SPP;
+                commandList.setComputeState(passState(rayTracingState().m_swShadowSoftOpaquePipeline));
+                bindPassHeap(rayTracingState().m_swShadowSoftOpaquePipeline);
+                commandList.setPushConstants(&softTracePush, sizeof(softTracePush));
+                commandList.dispatch(softGroupsX, softGroupsY, 1u);
+            }
 
             // Preserve the UAV write boundary before the heap-selected resolve changes soft-A to ShaderResource.
             commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);

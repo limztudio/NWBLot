@@ -38,6 +38,13 @@ if(Python3_Interpreter_FOUND)
             "${CMAKE_CURRENT_LIST_DIR}/../ab/async_shadow_m4/run.py"
             "--self-test"
     )
+    add_test(
+        NAME nwb_async_shadow_m4_launcher_unit
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_LIST_DIR}/../ab/async_shadow_m4/launch.py"
+            "--self-test"
+    )
     # Parser/state-machine coverage for the opt-in target-hardware lagged-lighting smoke. The actual run remains
     # manual because it requires a dedicated Vulkan compute family plus an interactive native window.
     add_test(

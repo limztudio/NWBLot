@@ -21,6 +21,7 @@ DEFAULT_CONFIG = "dbg"
 DEFAULT_DOMAIN = "full"
 DEFAULT_BUILD_JOBS = "8"
 SMOKE_SCRIPT = Path("tests") / "smoke" / "launcher.py"
+ASYNC_SHADOW_M4_LAUNCH_SCRIPT = Path("tests") / "ab" / "async_shadow_m4" / "launch.py"
 PROFILE_LOGSERVER_TARGET = "nwb_logserver"
 PROFILE_LOGSERVER_EXECUTABLE = "logserver"
 PROFILE_LOG_ADDRESS = "http://localhost"
@@ -706,6 +707,14 @@ def smoke_script_command(args) -> int:
     return run_repo_script(SMOKE_SCRIPT, forwarded_args, echo=not is_help_request(forwarded_args))
 
 
+def async_shadow_m4_script_command(args) -> int:
+    forwarded_args = list(args.forwarded_args)
+    application_args = getattr(args, "application_args", [])
+    if application_args:
+        forwarded_args += ["--"] + list(application_args)
+    return run_repo_script(ASYNC_SHADOW_M4_LAUNCH_SCRIPT, forwarded_args, echo=not is_help_request(forwarded_args))
+
+
 def list_profiles_command(_args) -> int:
     print("runnable targets:", flush=True)
     print("  run testbed", flush=True)
@@ -715,7 +724,7 @@ def list_profiles_command(_args) -> int:
     return run_repo_script(SMOKE_SCRIPT, ["--profiles"], echo=False)
 
 
-def add_common_options(parser: argparse.ArgumentParser) -> None:
+def add_build_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--repo-root", type=Path, help="Repository root. Defaults to the directory containing launcher.py.")
     parser.add_argument("--platform", default=host_platform_name(), help="Output platform directory, such as windows/linux/darwin.")
     parser.add_argument("--arch", default=DEFAULT_ARCH, help="Output architecture directory.")
@@ -734,6 +743,10 @@ def add_common_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("-D", "--define", dest="defines", action="append", default=[], metavar="KEY=VALUE")
     parser.add_argument("--skip-build", action="store_true", help="Do not build before launching.")
     parser.add_argument("--dry-run", action="store_true", help="Print configure/build/launch commands without executing them.")
+
+
+def add_common_options(parser: argparse.ArgumentParser) -> None:
+    add_build_options(parser)
     parser.add_argument("--working-directory", type=Path, help="Override launch working directory.")
     parser.add_argument("--executable", type=Path, help="Override executable path.")
     parser.add_argument("--executable-name", help="Override executable base name when CMake metadata is unavailable.")
@@ -796,6 +809,13 @@ def make_parser() -> argparse.ArgumentParser:
     smoke_parser.add_argument("forwarded_args", nargs=argparse.REMAINDER)
     smoke_parser.set_defaults(handler=smoke_script_command)
 
+    async_shadow_m4_parser = subparsers.add_parser(
+        "async-shadow-m4",
+        help="Build and run the async-shadow M4 Vulkan-validation benchmark.",
+    )
+    async_shadow_m4_parser.add_argument("forwarded_args", nargs=argparse.REMAINDER)
+    async_shadow_m4_parser.set_defaults(handler=async_shadow_m4_script_command)
+
     profiles_parser = subparsers.add_parser("profiles", help="List built-in launch profiles.")
     profiles_parser.set_defaults(handler=list_profiles_command)
 
@@ -813,6 +833,8 @@ def split_application_args(argv: Sequence[str]) -> Tuple[List[str], List[str]]:
 def main(argv: Sequence[str]) -> int:
     if argv and argv[0] == "smoke":
         return run_repo_script(SMOKE_SCRIPT, argv[1:], echo=not is_help_request(argv[1:]))
+    if argv and argv[0] == "async-shadow-m4":
+        return run_repo_script(ASYNC_SHADOW_M4_LAUNCH_SCRIPT, argv[1:], echo=not is_help_request(argv[1:]))
 
     parser_args, application_args = split_application_args(argv)
     args = make_parser().parse_args(parser_args)

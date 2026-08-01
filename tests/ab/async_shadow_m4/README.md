@@ -7,6 +7,18 @@ This harness makes the M4 rollout decision repeatable on a Vulkan target that ex
 
 The runner rejects an async result if it silently resolves to the Graphics fallback. For a real dedicated lane, it collects the renderer's timestamp envelopes, checks measured `render.async_shadow_effects_overlap`, compares the `render.frame` Graphics critical path rather than summing queue work, captures a fixed-scene pixel A/B, and scans logs for ownership or Vulkan-validation failures.
 
+From the repository root, use the one-command launcher:
+
+```powershell
+python launcher.py async-shadow-m4
+```
+
+It configures the required test targets, builds both benchmarks and their cooked runtime assets, enables GPU validation, and writes a timestamped directory under `__artifacts`. The command returns `77` when the adapter has no distinct compute-only family. To adjust a `run.py` setting, pass it after `--`, for example:
+
+```powershell
+python launcher.py async-shadow-m4 -- --measure-seconds 30
+```
+
 Build both benchmark targets and their cooked runtime assets. A debug or namesym build is simplest because timing scope names are readable. For an opt/final build, pass each generated `.namesym` sidecar to the runner.
 
 ```bash

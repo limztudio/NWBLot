@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -99,6 +100,15 @@ class LauncherPlatformTests(unittest.TestCase):
         args = launcher.make_parser().parse_args(["run", "testbed", "--with-profile", "--profile-log-port", "8123"])
         self.assertTrue(args.with_profile)
         self.assertEqual(8123, args.profile_log_port)
+
+    def test_async_shadow_m4_shortcut_forwards_its_arguments(self):
+        with mock.patch.object(launcher, "run_repo_script", return_value=0) as run_repo_script:
+            self.assertEqual(0, launcher.main(["async-shadow-m4", "--dry-run"]))
+        run_repo_script.assert_called_once_with(
+            launcher.ASYNC_SHADOW_M4_LAUNCH_SCRIPT,
+            ["--dry-run"],
+            echo=True,
+        )
 
 
 if __name__ == "__main__":

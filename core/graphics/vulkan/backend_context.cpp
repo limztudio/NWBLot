@@ -365,7 +365,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL VulkanDebugCallback(
     const char* message = callbackData && callbackData->pMessage ? callbackData->pMessage : "";
     NWB_LOGGER_WARNING(
         NWB_TEXT("Vulkan debug: [severity={} types=0x{:x} id={} name='{}'] {}"),
-        DebugUtilsSeverityToString(severity),
+        StringConvert(DebugUtilsSeverityToString(severity)),
         static_cast<u32>(types),
         messageId,
         StringConvert(messageIdName),

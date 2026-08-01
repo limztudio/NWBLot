@@ -774,6 +774,25 @@ bool Graphics::shouldRenderUnfocused()const{
     return false;
 }
 
+bool Graphics::runFrame(){
+    if(!m_frameSubmissionSuspended)
+        return animateRenderPresent();
+
+    // Do not let a capture hold hide a device-loss/recreation request. No backend beginFrame, render, or present call
+    // is made here, so the last completed frame stays on screen while the platform loop remains responsive.
+    if(m_deviceRecreationRequested)
+        return false;
+
+    auto& device = getDevice();
+    if(device.isDeviceLost()){
+        requestDeviceRecreation();
+        return false;
+    }
+
+    YieldThread();
+    return true;
+}
+
 bool Graphics::animateRenderPresent(){
     if(m_deviceRecreationRequested)
         return false;

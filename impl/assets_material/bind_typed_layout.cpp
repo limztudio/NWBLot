@@ -449,7 +449,7 @@ static bool BuildMaterialTypedLayoutDefaultValue(
 ){
     outDefaultValue = {};
 
-    // Resource fields store an initially-zero global-heap slot word.  Their static fixture identity is carried by
+    // Resource fields store an initially-zero global-heap slot word. Their static resource identity is carried by
     // MaterialResourceReference and patched only after the renderer owns a live descriptor heap.
     if(IsMaterialLayoutResourceFieldType(fieldType))
         return true;
@@ -761,7 +761,7 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(
                 );
                 return false;
             }
-            // Static resource slots are fixed by the cooked fixture reference and are never material .nwb
+            // Static resource slots are fixed by the cooked resource reference and are never material .nwb
             // parameters.  Excluding them here prevents an authored uint value from being mistaken for a heap slot.
             if(IsMaterialLayoutResourceFieldType(field.fieldType))
                 continue;
@@ -1067,10 +1067,23 @@ bool BuildMaterialBindTypedLayoutImpl(
             outLayout.typedLayoutFields.push_back(field);
             if(IsMaterialLayoutResourceFieldType(fieldType)){
                 const MaterialResourceKind::Enum resourceKind = MaterialLayoutFieldResourceKind(fieldType);
-                const AStringView fixtureArgument = bindField.fixtureArgument();
-                const Name fixtureName(fixtureArgument);
-                if(!IsValidMaterialResourceKind(resourceKind) || !fixtureName || !IsKnownMaterialResourceFixture(resourceKind, fixtureArgument)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource field '{}.{}' has an invalid fixture for '{}'")
+                MaterialResourceSource::Enum resourceSource = MaterialResourceSource::None;
+                AStringView resourceNameText;
+                if(!bindField.resourceBinding(resourceSource, resourceNameText)){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource field '{}.{}' is missing a valid resource attribute for '{}'")
+                        , StringConvert(instance->name)
+                        , StringConvert(bindField.name)
+                        , StringConvert(contextName.c_str())
+                    );
+                    return false;
+                }
+                const Name resourceName(resourceNameText);
+                if(
+                    !IsValidMaterialResourceKind(resourceKind)
+                    || !resourceName
+                    || !IsSupportedMaterialResourceReference(resourceKind, resourceSource, resourceNameText)
+                ){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource field '{}.{}' has an invalid resource identity for '{}'")
                         , StringConvert(instance->name)
                         , StringConvert(bindField.name)
                         , StringConvert(contextName.c_str())
@@ -1089,8 +1102,9 @@ bool BuildMaterialBindTypedLayoutImpl(
                 MaterialResourceReference resourceReference;
                 resourceReference.blockName = block.blockName;
                 resourceReference.fieldName = field.fieldName;
-                resourceReference.fixtureName = fixtureName;
+                resourceReference.resourceName = resourceName;
                 resourceReference.resourceKind = resourceKind;
+                resourceReference.resourceSource = resourceSource;
                 resourceReference.constantByteOffset = blockConstantByteBegin + field.offset;
                 outLayout.resourceReferences.push_back(resourceReference);
             }

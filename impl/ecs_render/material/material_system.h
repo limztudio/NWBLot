@@ -37,10 +37,10 @@ public:
         MaterialTypedByteVector& outMutableDefaultTypedBytes
     );
     [[nodiscard]] bool createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
-    // Prepared-only lookup: creation and descriptor-backed fixture resolution belong to preparation.
+    // Prepared-only lookup: creation and descriptor-backed resource resolution belong to preparation.
     [[nodiscard]] bool findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
-    [[nodiscard]] bool resolveMaterialResourceFixtures(MaterialSurfaceInfo& materialInfo);
-    void releaseMaterialResourceFixtures();
+    [[nodiscard]] bool resolveMaterialResourceReferences(MaterialSurfaceInfo& materialInfo);
+    void releaseMaterialResourceReferences();
     [[nodiscard]] bool prepareVisibleMaterialSurfaceInfos();
     void prepareVisibleMaterialInstanceMutableCache();
     [[nodiscard]] bool createRendererPipeline(const MaterialSurfaceInfo& materialInfo, const MaterialPipelineKey& pipelineKey, Core::Framebuffer* framebuffer, MaterialPipelineResources*& outResources);

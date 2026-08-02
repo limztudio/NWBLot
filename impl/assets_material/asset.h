@@ -96,37 +96,113 @@ namespace MaterialResourceKind{
 }
 
 
-// The first material-authored resource slice deliberately exposes a tiny fixed fixture catalog instead of a general
-// image-asset pipeline.  These names are cooked into MaterialResourceReference records and resolved by the renderer
-// to stable global-heap descriptors.  Keep the contract here so cook, runtime loading, and renderer resolution agree.
-namespace MaterialResourceFixture{
+// A resource field's source is explicit in the cooked material. This keeps built-in descriptors and project texture
+// assets distinct even though both ultimately resolve to a global bindless slot at runtime.
+namespace MaterialResourceSource{
+    enum Enum : u32{
+        None = 0u,
+        Builtin = 1u,
+        TextureAsset = 2u,
+    };
+};
+
+[[nodiscard]] inline bool IsValidMaterialResourceSource(const MaterialResourceSource::Enum resourceSource){
+    return resourceSource == MaterialResourceSource::Builtin || resourceSource == MaterialResourceSource::TextureAsset;
+}
+
+
+// Built-in material resources are cooked into MaterialResourceReference records and resolved by the renderer to
+// stable global-heap descriptors.
+namespace MaterialBuiltinResource{
     inline constexpr AStringView s_CheckerRgba8 = "builtin/material_fixture/checker_rgba8";
     inline constexpr AStringView s_LinearClamp = "builtin/material_fixture/linear_clamp";
 };
 
-[[nodiscard]] inline bool IsKnownMaterialResourceFixture(
+inline constexpr AStringView s_MaterialProjectAssetPathPrefix = "project/";
+
+[[nodiscard]] inline bool IsMaterialTextureAssetReference(const AStringView resourceName){
+    if(
+        resourceName.size() <= s_MaterialProjectAssetPathPrefix.size()
+        || resourceName.substr(0u, s_MaterialProjectAssetPathPrefix.size()) != s_MaterialProjectAssetPathPrefix
+    )
+        return false;
+
+    usize componentBegin = s_MaterialProjectAssetPathPrefix.size();
+    for(usize index = componentBegin; index <= resourceName.size(); ++index){
+        if(index != resourceName.size() && resourceName[index] != '/')
+            continue;
+
+        const AStringView component = resourceName.substr(componentBegin, index - componentBegin);
+        if(component.empty() || component == "." || component == ".." || component.find('\\') != AStringView::npos)
+            return false;
+        componentBegin = index + 1u;
+    }
+    return true;
+}
+
+[[nodiscard]] inline bool IsKnownMaterialBuiltinResource(
     const MaterialResourceKind::Enum resourceKind,
-    const AStringView fixtureName
+    const AStringView resourceName
 ){
     switch(resourceKind){
     case MaterialResourceKind::SampledImage2D:
-        return fixtureName == MaterialResourceFixture::s_CheckerRgba8;
+        return resourceName == MaterialBuiltinResource::s_CheckerRgba8;
     case MaterialResourceKind::Sampler:
-        return fixtureName == MaterialResourceFixture::s_LinearClamp;
+        return resourceName == MaterialBuiltinResource::s_LinearClamp;
     default:
         return false;
     }
 }
 
-[[nodiscard]] inline bool IsKnownMaterialResourceFixture(
+[[nodiscard]] inline bool IsSupportedMaterialResourceReference(
     const MaterialResourceKind::Enum resourceKind,
-    const Name& fixtureName
+    const MaterialResourceSource::Enum resourceSource,
+    const AStringView resourceName
+){
+    switch(resourceSource){
+    case MaterialResourceSource::Builtin:
+        return IsKnownMaterialBuiltinResource(resourceKind, resourceName);
+    case MaterialResourceSource::TextureAsset:
+        return resourceKind == MaterialResourceKind::SampledImage2D && IsMaterialTextureAssetReference(resourceName);
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] inline bool IsKnownMaterialBuiltinResource(
+    MaterialResourceKind::Enum resourceKind,
+    const Name& resourceName
+);
+
+// Texture identities arrive from cooked payloads as Name hashes, so the loader cannot revalidate their original text
+// here. The explicit source kind still rejects an arbitrary sampled-image name from being reinterpreted as a built-in.
+[[nodiscard]] inline bool IsValidSerializedMaterialResourceReference(
+    const MaterialResourceKind::Enum resourceKind,
+    const MaterialResourceSource::Enum resourceSource,
+    const Name& resourceName
+){
+    if(!resourceName)
+        return false;
+
+    switch(resourceSource){
+    case MaterialResourceSource::Builtin:
+        return IsKnownMaterialBuiltinResource(resourceKind, resourceName);
+    case MaterialResourceSource::TextureAsset:
+        return resourceKind == MaterialResourceKind::SampledImage2D;
+    default:
+        return false;
+    }
+}
+
+[[nodiscard]] inline bool IsKnownMaterialBuiltinResource(
+    const MaterialResourceKind::Enum resourceKind,
+    const Name& resourceName
 ){
     switch(resourceKind){
     case MaterialResourceKind::SampledImage2D:
-        return fixtureName == Name(MaterialResourceFixture::s_CheckerRgba8);
+        return resourceName == Name(MaterialBuiltinResource::s_CheckerRgba8);
     case MaterialResourceKind::Sampler:
-        return fixtureName == Name(MaterialResourceFixture::s_LinearClamp);
+        return resourceName == Name(MaterialBuiltinResource::s_LinearClamp);
     default:
         return false;
     }
@@ -331,8 +407,9 @@ struct MaterialTypedLayoutField{
 struct MaterialResourceReference{
     Name blockName = NAME_NONE;
     Name fieldName = NAME_NONE;
-    Name fixtureName = NAME_NONE;
+    Name resourceName = NAME_NONE;
     MaterialResourceKind::Enum resourceKind = MaterialResourceKind::None;
+    MaterialResourceSource::Enum resourceSource = MaterialResourceSource::None;
     u32 constantByteOffset = 0u;
 };
 

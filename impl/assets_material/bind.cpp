@@ -54,9 +54,32 @@ AStringView MaterialBindField::defaultArgument()const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AStringView MaterialBindField::fixtureArgument()const{
+bool MaterialBindField::resourceBinding(
+    MaterialResourceSource::Enum& outResourceSource,
+    AStringView& outResourceName
+)const{
+    outResourceSource = MaterialResourceSource::None;
+    outResourceName = AStringView();
+
     const MaterialBindAttribute* attribute = findAttribute(__hidden_bind::s_FixtureAttribute);
-    return (attribute && attribute->arguments.size() == 1u) ? AStringView(attribute->arguments[0u]) : AStringView();
+    const MaterialBindAttribute* textureAssetAttribute = findAttribute(__hidden_bind::s_TextureAssetAttribute);
+    if((attribute == nullptr) == (textureAssetAttribute == nullptr))
+        return false;
+
+    if(textureAssetAttribute){
+        attribute = textureAssetAttribute;
+        outResourceSource = MaterialResourceSource::TextureAsset;
+    }
+    else
+        outResourceSource = MaterialResourceSource::Builtin;
+
+    if(attribute->arguments.size() != 1u || attribute->arguments[0u].empty()){
+        outResourceSource = MaterialResourceSource::None;
+        return false;
+    }
+
+    outResourceName = AStringView(attribute->arguments[0u]);
+    return true;
 }
 
 

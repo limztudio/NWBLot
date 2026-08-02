@@ -39,6 +39,7 @@ class CaptureResult:
     appears_blank: bool
     transparent_multi: "TransparentMultiAnalysis"
     transparent_csg: "TransparentCsgAnalysis"
+    texture_smoke: "TextureSmokeAnalysis"
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,13 @@ class TransparentCsgAnalysis:
     cut_region_pixels: int
     remaining_center_pixels: int
     remaining_region_pixels: int
+
+
+@dataclass(frozen=True)
+class TextureSmokeAnalysis:
+    red_pixels: int
+    green_pixels: int
+    blue_pixels: int
 
 
 def write_status(message):
@@ -410,6 +418,7 @@ def write_capture_rows(handle, width, height, rows_rgb, output_path):
     analysis = analyze_rgb_rows(rows_rgb)
     transparent_multi = analyze_transparent_multi_rows(rows_rgb)
     transparent_csg = analyze_transparent_csg_rows(rows_rgb)
+    texture_smoke = analyze_texture_smoke_rows(rows_rgb)
     return CaptureResult(
         handle,
         width,
@@ -418,6 +427,7 @@ def write_capture_rows(handle, width, height, rows_rgb, output_path):
         analysis.appears_blank,
         transparent_multi,
         transparent_csg,
+        texture_smoke,
     )
 
 
@@ -503,6 +513,21 @@ def analyze_transparent_csg_rows(rows_rgb):
         remaining_center_pixels,
         region_pixel_count(remaining_region),
     )
+
+
+def analyze_texture_smoke_rows(rows_rgb):
+    red_pixels = 0
+    green_pixels = 0
+    blue_pixels = 0
+    for row in rows_rgb:
+        for red, green, blue in row:
+            if red >= 72 and red >= green + 34 and red >= blue + 34:
+                red_pixels += 1
+            if green >= 72 and green >= red + 34 and green >= blue + 34:
+                green_pixels += 1
+            if blue >= 72 and blue >= red + 34 and blue >= green + 34:
+                blue_pixels += 1
+    return TextureSmokeAnalysis(red_pixels, green_pixels, blue_pixels)
 
 
 def estimate_background_rgb(rows_rgb, width, height):
@@ -1581,6 +1606,27 @@ def validate_transparent_csg_result(result):
         raise SmokeFailure(f"transparent CSG scene did not show the expected clipped center region ({observed})")
 
 
+def validate_texture_smoke_result(result):
+    analysis = result.texture_smoke
+    min_pixels = max(220, (result.width * result.height) // 4000)
+    missing = []
+    if analysis.red_pixels < min_pixels:
+        missing.append(f"red={analysis.red_pixels}")
+    if analysis.green_pixels < min_pixels:
+        missing.append(f"green={analysis.green_pixels}")
+    if analysis.blue_pixels < min_pixels:
+        missing.append(f"blue={analysis.blue_pixels}")
+
+    if missing:
+        observed = (
+            f"red={analysis.red_pixels}, "
+            f"green={analysis.green_pixels}, "
+            f"blue={analysis.blue_pixels}, "
+            f"min={min_pixels}"
+        )
+        raise SmokeFailure(f"texture smoke did not show all expected sampled color regions ({observed})")
+
+
 def validate_expected_log_messages(log_directory, log_baseline, log_pattern, required_needles, rejected_needles):
     if not required_needles and not rejected_needles:
         return
@@ -1603,6 +1649,8 @@ def capture_checked_window(args, backend, handle):
         validate_transparent_multi_result(result)
     if args.expect_transparent_csg:
         validate_transparent_csg_result(result)
+    if args.expect_texture_smoke:
+        validate_texture_smoke_result(result)
     return result
 
 
@@ -1671,6 +1719,11 @@ def parse_args(argv):
         help="Assert that the captured transparent center mesh contains a clipped CSG void.",
     )
     parser.add_argument(
+        "--expect-texture-smoke",
+        action="store_true",
+        help="Assert that the captured scene visibly samples the authored red, green, and blue texture pattern.",
+    )
+    parser.add_argument(
         "--software-vulkan",
         choices=("auto", "on", "off"),
         default="off",
@@ -1717,6 +1770,12 @@ def main(argv):
                 f"{status}; transparent CSG "
                 f"cut_void={analysis.cut_void_pixels}/{analysis.cut_region_pixels}, "
                 f"remaining_center={analysis.remaining_center_pixels}/{analysis.remaining_region_pixels}"
+            )
+        if args.expect_texture_smoke:
+            analysis = result.texture_smoke
+            status = (
+                f"{status}; sampled texture hues "
+                f"red={analysis.red_pixels}, green={analysis.green_pixels}, blue={analysis.blue_pixels}"
             )
         write_status(status)
         return 0

@@ -1690,13 +1690,15 @@ TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
         const NWB::Impl::MaterialResourceReference& samplerReference = material.resourceReferences()[1u];
         EXPECT_EQ(imageReference.blockName, Name("surface"));
         EXPECT_EQ(imageReference.fieldName, Name("base_color_map"));
-        EXPECT_EQ(imageReference.fixtureName, Name(NWB::Impl::MaterialResourceFixture::s_CheckerRgba8));
+        EXPECT_EQ(imageReference.resourceName, Name(NWB::Impl::MaterialBuiltinResource::s_CheckerRgba8));
         EXPECT_EQ(imageReference.resourceKind, NWB::Impl::MaterialResourceKind::SampledImage2D);
+        EXPECT_EQ(imageReference.resourceSource, NWB::Impl::MaterialResourceSource::Builtin);
         EXPECT_EQ(imageReference.constantByteOffset, 16u);
         EXPECT_EQ(samplerReference.blockName, Name("surface"));
         EXPECT_EQ(samplerReference.fieldName, Name("base_color_sampler"));
-        EXPECT_EQ(samplerReference.fixtureName, Name(NWB::Impl::MaterialResourceFixture::s_LinearClamp));
+        EXPECT_EQ(samplerReference.resourceName, Name(NWB::Impl::MaterialBuiltinResource::s_LinearClamp));
         EXPECT_EQ(samplerReference.resourceKind, NWB::Impl::MaterialResourceKind::Sampler);
+        EXPECT_EQ(samplerReference.resourceSource, NWB::Impl::MaterialResourceSource::Builtin);
         EXPECT_EQ(samplerReference.constantByteOffset, 20u);
 
         NWB::Impl::MaterialAssetCodec codec;
@@ -1704,9 +1706,11 @@ TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
         if(RoundTripMaterialAssetCodec(testArena, codec, material, loadedAsset)){
             const NWB::Impl::Material& loadedMaterial = static_cast<const NWB::Impl::Material&>(*loadedAsset);
             ASSERT_EQ(loadedMaterial.resourceReferences().size(), 2u);
-            EXPECT_EQ(loadedMaterial.resourceReferences()[0u].fixtureName, imageReference.fixtureName);
+            EXPECT_EQ(loadedMaterial.resourceReferences()[0u].resourceName, imageReference.resourceName);
+            EXPECT_EQ(loadedMaterial.resourceReferences()[0u].resourceSource, imageReference.resourceSource);
             EXPECT_EQ(loadedMaterial.resourceReferences()[0u].constantByteOffset, imageReference.constantByteOffset);
-            EXPECT_EQ(loadedMaterial.resourceReferences()[1u].fixtureName, samplerReference.fixtureName);
+            EXPECT_EQ(loadedMaterial.resourceReferences()[1u].resourceName, samplerReference.resourceName);
+            EXPECT_EQ(loadedMaterial.resourceReferences()[1u].resourceSource, samplerReference.resourceSource);
             EXPECT_EQ(loadedMaterial.resourceReferences()[1u].constantByteOffset, samplerReference.constantByteOffset);
         }
     }
@@ -1751,5 +1755,49 @@ TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+TEST(AssetsGraphics, MaterialBindTextureAssetResource){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
+    TestArena testArena;
+    NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
+    EXPECT_FALSE(NWB::Impl::IsSupportedMaterialResourceReference(
+        NWB::Impl::MaterialResourceKind::SampledImage2D,
+        NWB::Impl::MaterialResourceSource::Builtin,
+        "project/materials/smoke_pattern"
+    ));
+    EXPECT_TRUE(NWB::Impl::IsSupportedMaterialResourceReference(
+        NWB::Impl::MaterialResourceKind::SampledImage2D,
+        NWB::Impl::MaterialResourceSource::TextureAsset,
+        "project/materials/smoke_pattern"
+    ));
+
+    NWB::Impl::Material material(testArena.arena);
+    const bool built = BuildMaterialFromBindAndMeta(
+        s_StaticTextureAssetMaterialBindSource,
+        s_StaticResourceFixtureMaterialMeta,
+        "material_bind_texture_asset_resource",
+        testArena,
+        material,
+        scratchArena
+    );
+    ASSERT_TRUE(built);
+    ASSERT_EQ(material.resourceReferences().size(), 2u);
+    const NWB::Impl::MaterialResourceReference& imageReference = material.resourceReferences()[0u];
+    EXPECT_EQ(imageReference.resourceName, Name("project/materials/smoke_pattern"));
+    EXPECT_EQ(imageReference.resourceKind, NWB::Impl::MaterialResourceKind::SampledImage2D);
+    EXPECT_EQ(imageReference.resourceSource, NWB::Impl::MaterialResourceSource::TextureAsset);
+    EXPECT_EQ(imageReference.constantByteOffset, 16u);
+
+    NWB::Impl::MaterialAssetCodec codec;
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    ASSERT_TRUE(RoundTripMaterialAssetCodec(testArena, codec, material, loadedAsset));
+    const NWB::Impl::Material& loadedMaterial = static_cast<const NWB::Impl::Material&>(*loadedAsset);
+    ASSERT_EQ(loadedMaterial.resourceReferences().size(), 2u);
+    EXPECT_EQ(loadedMaterial.resourceReferences()[0u].resourceName, imageReference.resourceName);
+    EXPECT_EQ(loadedMaterial.resourceReferences()[0u].resourceSource, imageReference.resourceSource);
+    EXPECT_EQ(logger.errorCount(), 0u);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

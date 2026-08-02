@@ -59,6 +59,7 @@ void RendererMeshState::invalidateResources(){
 
 RendererMaterialState::RendererMaterialState(Core::Alloc::GlobalArena& arena)
     : m_surfaceInfos(0, Hasher<Name>(), EqualTo<Name>(), arena)
+    , m_resourceState(arena)
     , m_pipelines(0, MaterialPipelineKeyHasher(), MaterialPipelineKeyEqualTo(), arena)
     , m_instanceMutableCache(0, Hasher<Core::ECS::EntityID>(), EqualTo<Core::ECS::EntityID>(), arena)
     , m_loggedMaterialPaths(0, Hasher<Name>(), EqualTo<Name>(), arena)

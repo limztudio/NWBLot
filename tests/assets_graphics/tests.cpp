@@ -348,6 +348,29 @@ NwbFixtureRuntimeMaterial runtime;
 
 )NWB_BIND";
 
+static constexpr AStringView s_StaticTextureAssetMaterialBindSource = R"NWB_BIND([material_constant]
+struct NwbTextureAssetSurfaceMaterial{
+    [default("float4(1.0, 1.0, 1.0, 1.0)")]
+    float4 base_color;
+
+    [texture_asset("project/materials/smoke_pattern")]
+    texture2d base_color_map;
+
+    [fixture("builtin/material_fixture/linear_clamp")]
+    sampler base_color_sampler;
+};
+
+[material_mutable]
+struct NwbTextureAssetRuntimeMaterial{
+    [default("float(1.0)")]
+    float fade_alpha;
+};
+
+NwbTextureAssetSurfaceMaterial surface;
+NwbTextureAssetRuntimeMaterial runtime;
+
+)NWB_BIND";
+
 static constexpr AStringView s_StaticResourceFixtureMaterialMeta = R"NWB_META(material asset;
 
 asset.interface = "project/material_interfaces/test_surface.bind";
@@ -1670,4 +1693,3 @@ static bool FindShaderArchiveSourceChecksum(
 #include "mesh_cooker_tests.inl"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

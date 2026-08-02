@@ -1,0 +1,17 @@
+material asset;
+
+asset.interface = "project/shaders/texture_smoke_surface.bind";
+asset.surface = "project/shaders/texture_smoke.surface";
+asset.bxdf = "project/shaders/smoke_lambert.bxdf";
+asset.transparent = 0;
+asset.two_sided = 1;
+asset.refractive = 0;
+asset.shader_variant = "default";
+asset.parameters = {
+    "texture_surface": {
+        "base_color": "half4(1.0h, 1.0h, 1.0h, 1.0h)",
+    },
+    "texture_runtime": {
+        "color_tint": "half4(1.0h, 1.0h, 1.0h, 1.0h)",
+    },
+};

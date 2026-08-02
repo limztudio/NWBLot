@@ -1,0 +1,174 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <loader/project_entry.h>
+
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/graphics/module.h>
+#include <global/math/frame.h>
+#include <impl/ecs_scene/module.h>
+#include <impl/ecs_mesh/module.h>
+#include <impl/ecs_render/kernel/module.h>
+
+#include "smoke_project_helpers.h"
+#include "smoke_scene_helpers.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_texture_smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using NWB::Tests::Smoke::AddSmokeRenderSystems;
+using NWB::Tests::Smoke::CreateSmokeCamera;
+using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
+using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
+using NWB::Tests::Smoke::DestroySmokeRenderWorld;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr AStringView s_GroundPlaneMeshPath = "project/meshes/shadow_plane";
+static constexpr AStringView s_TexturedSphereMeshPath = "project/meshes/caustic_sphere";
+static constexpr AStringView s_WhiteGroundMaterialPath = "project/smoke/texture/materials/white_ground";
+static constexpr AStringView s_WhiteGroundMaterialInterface = "project/shaders/smoke_surface";
+static constexpr AStringView s_TextureMaterialPath = "project/smoke/texture/materials/pattern";
+static constexpr AStringView s_TextureMaterialInterface = "project/shaders/texture_smoke_surface";
+static constexpr AStringView s_TextureRuntimeTintParameter = "texture_runtime.color_tint";
+static constexpr f32 s_CameraHeight = 3.1f;
+static constexpr f32 s_CameraDistance = 5.7f;
+static constexpr f32 s_CameraPitch = 0.36f;
+static constexpr f32 s_DirectionalLightPitch = 0.82f;
+static constexpr f32 s_DirectionalLightYaw = 0.55f;
+static constexpr f32 s_DirectionalLightIntensity = 2.2f;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class TextureSmokeProject final : public NWB::IProjectEntryCallbacks{
+private:
+    static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
+        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("TextureSmokeProject"));
+        AddSmokeRenderSystems(*world, context);
+        if(!world->getSystem<NWB::Impl::MeshSystem>() || !world->getSystem<NWB::Impl::RendererSystem>()){
+            NWB_LOGGER_FATAL(NWB_TEXT("TextureSmokeProject initialization failed: required render systems are missing"));
+            throw RuntimeException("TextureSmokeProject initialization failed");
+        }
+        return world;
+    }
+
+    void destroyWorld(){
+        DestroySmokeRenderWorld(m_context, m_world);
+    }
+
+
+public:
+    explicit TextureSmokeProject(NWB::ProjectRuntimeContext& context)
+        : m_context(context)
+        , m_world(createWorldOrDie(context))
+    {}
+
+    virtual ~TextureSmokeProject()override{
+        destroyWorld();
+    }
+
+
+public:
+    virtual bool onStartup()override{
+        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(
+            *m_world,
+            s_CameraHeight,
+            s_CameraDistance,
+            s_CameraPitch
+        );
+        const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
+            *m_world,
+            s_DirectionalLightPitch,
+            s_DirectionalLightYaw,
+            0.0f,
+            Float4(1.0f, 1.0f, 1.0f, 1.0f),
+            s_DirectionalLightIntensity
+        );
+        static_cast<void>(directionalLight);
+
+        // A white diffuse receiver makes the textured sphere's direct shadow and colored indirect bounce readable.
+        // Keep the plane separate from the texture material so no pattern leaks onto the GI receiver itself.
+        m_whiteGround = CreateTintedStaticMeshEntity(
+            *m_world,
+            m_context.objectArena,
+            s_GroundPlaneMeshPath,
+            s_WhiteGroundMaterialPath,
+            s_WhiteGroundMaterialInterface,
+            Float4(1.0f, 1.0f, 1.0f, 1.0f),
+            Float4(0.0f, 0.0f, 0.0f, 0.0f),
+            Float4(3.0f, 1.0f, 3.0f, 0.0f)
+        );
+        // caustic_sphere is the smoke asset's dense, smooth, UV-mapped sphere.  It rests just above the receiver,
+        // where the white plane provides a clean read of the texture's colored irradiance after GI converges.
+        m_texturedSphere = CreateTintedStaticMeshEntity(
+            *m_world,
+            m_context.objectArena,
+            s_TexturedSphereMeshPath,
+            s_TextureMaterialPath,
+            s_TextureMaterialInterface,
+            Float4(1.0f, 1.0f, 1.0f, 1.0f),
+            Float4(0.0f, 1.02f, 0.15f, 0.0f),
+            Float4(1.0f, 1.0f, 1.0f, 0.0f),
+            s_TextureRuntimeTintParameter
+        );
+        NWB_FATAL_ASSERT_MSG(
+            activeCamera.valid() && m_whiteGround.valid() && m_texturedSphere.valid(),
+            NWB_TEXT("TextureSmokeProject failed to create the white receiver and textured sphere")
+        );
+
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TextureSmokeProject: white receiver + UV-mapped authored Texture2D sphere created"));
+        return true;
+    }
+
+    virtual void onShutdown()override{
+        destroyWorld();
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TextureSmokeProject: shutdown"));
+    }
+
+    virtual bool onUpdate(const f32 delta)override{
+        m_world->tick(delta);
+        return true;
+    }
+
+
+private:
+    NWB::ProjectRuntimeContext& m_context;
+    NotNullUniquePtr<NWB::Core::ECS::World> m_world;
+    NWB::Core::ECS::EntityID m_whiteGround = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Core::ECS::EntityID m_texturedSphere = NWB::Core::ECS::ENTITY_ID_INVALID;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
+    return { 1280, 900 };
+}
+
+const tchar* NWB::QueryProjectWindowTitle(){
+    return NWB_TEXT("NWB Texture Smoke");
+}
+
+UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
+    return MakeUnique<__hidden_texture_smoke::TextureSmokeProject>(context);
+}

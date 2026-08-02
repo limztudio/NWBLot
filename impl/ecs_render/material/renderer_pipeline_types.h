@@ -185,7 +185,7 @@ struct MaterialSurfaceInfo{
     // storage. Explicit opaque stage shaders have no hook, so clipping is deliberately disabled for them.
     bool csgCapSurfaceDispatchAvailable = false;
     bool csgCapSurfaceDispatchUnavailableLogged = false;
-    bool resourceFixturesResolved = false;
+    bool resourceReferencesResolved = false;
     // The dedicated refractive-caster classification flag, copied from the cooked Material. The RT instance
     // occluder record reads it. The refraction VALUES (refractionIor / shadowAbsorptionTint) are shader-side
     // (NwbMeshSurface), not here. Default false (not a refractive caster) -- a material declaring none is unchanged.

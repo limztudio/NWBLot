@@ -1,0 +1,29 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[material_constant]
+struct NwbTextureSmokeSurfaceMaterial{
+    [default("half4(1.0h, 1.0h, 1.0h, 1.0h)")]
+    half4 base_color;
+    // A project texture asset is resolved by the renderer through TextureAssetLoader and patched into this typed
+    // constant as a global Texture2D bindless slot.
+    [texture_asset("project/textures/smoke_pattern")]
+    texture2d base_color_map;
+    [fixture("builtin/material_fixture/linear_clamp")]
+    sampler base_color_sampler;
+};
+
+[material_mutable]
+struct NwbTextureSmokeRuntimeMaterial{
+    [default("half4(1.0h, 1.0h, 1.0h, 1.0h)")]
+    half4 color_tint;
+};
+
+// These instance names become shader accessor prefixes.  Keep them distinct from the shared smoke material so
+// aggregate shader modules can include both generated bind files without ambiguous helpers.
+NwbTextureSmokeSurfaceMaterial texture_surface;
+NwbTextureSmokeRuntimeMaterial texture_runtime;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

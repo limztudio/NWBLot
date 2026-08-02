@@ -1,0 +1,21 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The texture smoke must sample an authored cooked Texture asset, rather than the renderer's built-in checker
+// fixture. The CTest capture looks for all of this source pattern's saturated hue families.
+NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbTextureSmokeSurfaceMaterial surface = nwbMaterialBindLoadTextureSurface(instance);
+    const NwbTextureSmokeRuntimeMaterial runtime = nwbMaterialBindLoadTextureRuntime(instance);
+    const half4 sampledColor = half4(nwbMaterialBindLoadTextureSurfaceBaseColorMap(instance).SampleLevel(
+        nwbMaterialBindLoadTextureSurfaceBaseColorSampler(instance),
+        inUv0,
+        0.0
+    ));
+    const half3 baseColor = clamp(surface.base_color.rgb * runtime.color_tint.rgb * sampledColor.rgb, half3(0.0h), half3(1.0h));
+    return nwbMakeMeshSurface(baseColor, inNormal);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

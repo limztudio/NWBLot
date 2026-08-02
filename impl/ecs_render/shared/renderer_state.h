@@ -17,6 +17,7 @@
 #include <impl/assets/graphics/caustic/sw_binding_slots.h>
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 #include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
+#include <impl/assets_texture/loader.h>
 
 #include <global/generic.h>
 #include <global/containers.h>   // dynamic Vector storage for the per-frame SW distinct-mesh table
@@ -41,13 +42,19 @@ class RendererAvboitSystem;
 class RendererRayTracingSystem;
 
 
-// Device-lifetime backing resources for the first material-authored-resource slice. The fixture payloads are shared
-// by all materials, while each MaterialSurfaceInfo receives the matching global-heap slot word in its typed constants.
-struct RendererMaterialResourceFixtureState{
+// Device-lifetime backing resources for material-authored resources. Built-ins are shared by all materials, while
+// authored Texture2D asset paths are cached by identity. Each MaterialSurfaceInfo receives the matching global-heap
+// slot word in its typed constants.
+struct RendererMaterialResourceState{
     Core::TextureHandle checkerRgba8Texture;
     Core::SamplerHandle linearClampSampler;
     Core::GpuDescriptorHandle checkerRgba8HeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle linearClampHeapHandle = Core::GpuDescriptorHandle::invalid();
+    HashMap<Name, UniquePtr<TextureGpuResource>, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> textureAssetCache;
+
+    explicit RendererMaterialResourceState(Core::Alloc::GlobalArena& arena)
+        : textureAssetCache(0, Hasher<Name>(), EqualTo<Name>(), arena)
+    {}
 };
 
 
@@ -132,7 +139,7 @@ public:
 
 private:
     HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_surfaceInfos;
-    RendererMaterialResourceFixtureState m_resourceFixtures;
+    RendererMaterialResourceState m_resourceState;
     HashMap<MaterialPipelineKey, MaterialPipelineResources, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo, Core::Alloc::GlobalArena> m_pipelines;
     HashMap<Core::ECS::EntityID, MaterialInstanceMutableCacheEntry, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>, Core::Alloc::GlobalArena> m_instanceMutableCache;
     HashMap<Name, RenderPath::Enum, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_loggedMaterialPaths;

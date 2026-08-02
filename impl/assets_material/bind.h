@@ -92,7 +92,7 @@ struct MaterialBindField{
 
     [[nodiscard]] const MaterialBindAttribute* findAttribute(AStringView attributeName)const;
     [[nodiscard]] AStringView defaultArgument()const;
-    [[nodiscard]] AStringView fixtureArgument()const;
+    [[nodiscard]] bool resourceBinding(MaterialResourceSource::Enum& outResourceSource, AStringView& outResourceName)const;
 };
 
 struct MaterialBindStruct{

@@ -173,12 +173,20 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         const NWB::Impl::Material& fixtureMaterial = static_cast<const NWB::Impl::Material&>(*loadedFixtureAsset);
         ASSERT_EQ(fixtureMaterial.resourceReferences().size(), 2u);
         EXPECT_EQ(
-            fixtureMaterial.resourceReferences()[0u].fixtureName,
-            Name(NWB::Impl::MaterialResourceFixture::s_CheckerRgba8)
+            fixtureMaterial.resourceReferences()[0u].resourceName,
+            Name(NWB::Impl::MaterialBuiltinResource::s_CheckerRgba8)
         );
         EXPECT_EQ(
-            fixtureMaterial.resourceReferences()[1u].fixtureName,
-            Name(NWB::Impl::MaterialResourceFixture::s_LinearClamp)
+            fixtureMaterial.resourceReferences()[0u].resourceSource,
+            NWB::Impl::MaterialResourceSource::Builtin
+        );
+        EXPECT_EQ(
+            fixtureMaterial.resourceReferences()[1u].resourceName,
+            Name(NWB::Impl::MaterialBuiltinResource::s_LinearClamp)
+        );
+        EXPECT_EQ(
+            fixtureMaterial.resourceReferences()[1u].resourceSource,
+            NWB::Impl::MaterialResourceSource::Builtin
         );
     }
 

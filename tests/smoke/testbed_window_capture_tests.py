@@ -79,6 +79,19 @@ class ProcessOutputCaptureTests(unittest.TestCase):
             self.assertFalse(capture.path.exists())
 
 
+class TextureSmokeAnalysisTests(unittest.TestCase):
+    def test_texture_smoke_analysis_requires_each_primary_hue(self):
+        rows = [
+            [(240, 40, 40), (40, 230, 50), (45, 70, 238)],
+            [(230, 52, 52), (52, 220, 60), (50, 85, 228)],
+        ]
+        analysis = window_capture_smoke.analyze_texture_smoke_rows(rows)
+
+        self.assertEqual(analysis.red_pixels, 2)
+        self.assertEqual(analysis.green_pixels, 2)
+        self.assertEqual(analysis.blue_pixels, 2)
+
+
 class GracefulTerminationTests(unittest.TestCase):
     def test_linux_x11_helper_receives_testbed_window_title(self):
         result = mock.Mock(returncode=0)

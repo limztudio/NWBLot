@@ -1,7 +1,25 @@
-# Material-authored texture and sampler support — fixture delivery and follow-up scope
+# Material-authored texture and sampler support — historical fixture delivery plan
 
-**Status:** the fixture-backed static-resource slice is implemented. General texture/sampler
-asset import and arbitrary material asset references remain scoped follow-up work.
+**Status:** superseded. This document preserves the original fixture-only milestone and its design
+rationale. The implemented material path now distinguishes built-ins from project texture assets in
+the cooked resource metadata; it does not infer texture assets from fixture names or path prefixes.
+
+## Current implementation
+
+- `[fixture("builtin/material_fixture/checker_rgba8")] texture2d` and
+  `[fixture("builtin/material_fixture/linear_clamp")] sampler` remain explicit built-in resources.
+- `[texture_asset("project/path/to/texture")] texture2d` is an explicit project `Texture` asset
+  reference. It is valid only for a `texture2d` field in a `[material_constant]` block.
+- The cooked material records the resource kind, source (`Builtin` or `TextureAsset`), identity, and
+  constant-word offset. Material binaries use the current single `MTL7` layout and reject older or
+  malformed resource records.
+- `RendererMaterialSystem` lazily creates built-ins, loads `Texture` assets through
+  `TextureAssetLoader`, caches them by asset identity, registers their global bindless slots, and
+  releases both cache classes during renderer invalidation.
+- Texture cooking, UASTC payload validation, ASTC/RGBA8 upload selection, and the UV-mapped sphere
+  smoke scene are implemented separately in `impl/assets_texture` and `tests/smoke`.
+
+The remaining sections are the historical planning record for the original fixture milestone.
 
 ## 1. Goal
 

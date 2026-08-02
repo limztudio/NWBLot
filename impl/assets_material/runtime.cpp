@@ -272,12 +272,17 @@ static bool ReadMaterialTypedLayout(
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed material resource reference at index {}"), i);
             return false;
         }
+        if(resourceReferenceBinary.reserved != 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource reference at index {} has non-zero reserved bits"), i);
+            return false;
+        }
 
         MaterialResourceReference resourceReference;
         resourceReference.blockName = Name(resourceReferenceBinary.blockNameHash);
         resourceReference.fieldName = Name(resourceReferenceBinary.fieldNameHash);
-        resourceReference.fixtureName = Name(resourceReferenceBinary.fixtureNameHash);
+        resourceReference.resourceName = Name(resourceReferenceBinary.resourceNameHash);
         resourceReference.resourceKind = static_cast<MaterialResourceKind::Enum>(resourceReferenceBinary.resourceKind);
+        resourceReference.resourceSource = static_cast<MaterialResourceSource::Enum>(resourceReferenceBinary.resourceSource);
         resourceReference.constantByteOffset = resourceReferenceBinary.constantByteOffset;
         outResourceReferences.push_back(resourceReference);
     }

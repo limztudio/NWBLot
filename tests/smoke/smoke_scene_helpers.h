@@ -68,13 +68,14 @@ struct SmokeTintedEntitySetup{
 [[nodiscard]] inline bool ApplySmokeMaterialTint(
     Core::ECS::World& world,
     const SmokeTintedEntitySetup& setup,
-    const Float4& colorTint
+    const Float4& colorTint,
+    const AStringView tintParameterPath = "runtime.color_tint"
 ){
     return Impl::SetMaterialMutableHalf4(
         world,
         setup.entity,
         setup.materialInterface,
-        "runtime.color_tint",
+        tintParameterPath,
         colorTint
     );
 }
@@ -87,7 +88,8 @@ struct SmokeTintedEntitySetup{
     const AStringView materialInterfacePath,
     const Float4& colorTint,
     const Float4& position,
-    const Float4& scale
+    const Float4& scale,
+    const AStringView tintParameterPath = "runtime.color_tint"
 ){
     Core::Assets::AssetRef<Impl::Mesh> mesh;
     mesh.virtualPath = Name(meshPath);
@@ -103,7 +105,7 @@ struct SmokeTintedEntitySetup{
     auto& meshComponent = world.addComponent<Impl::MeshComponent>(setup.entity);
     meshComponent.mesh = mesh;
 
-    if(!ApplySmokeMaterialTint(world, setup, colorTint))
+    if(!ApplySmokeMaterialTint(world, setup, colorTint, tintParameterPath))
         return Core::ECS::ENTITY_ID_INVALID;
 
     return setup.entity;

@@ -49,6 +49,12 @@ SMOKE_SCENES = {
             "hw": SmokeExecutable("nwb_transparent_csg_smoke", "transparent_csg_smoke"),
         },
     ),
+    "texture": SmokeScene(
+        runtime="texture_smoke_runtime",
+        backends={
+            "hw": SmokeExecutable("nwb_texture_smoke", "texture_smoke"),
+        },
+    ),
     "caustic-sphere": SmokeScene(
         runtime="smoke_runtime",
         backends={

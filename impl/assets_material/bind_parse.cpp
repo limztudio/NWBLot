@@ -359,11 +359,14 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
     MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
     const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType);
     const MaterialResourceKind::Enum resourceKind = MaterialLayoutFieldResourceKind(resourceFieldType);
-    const AStringView requiredAttribute = isResourceField ? s_FixtureAttribute : s_DefaultAttribute;
-    bool foundRequiredAttribute = false;
+    u32 attributeCount = 0u;
 
     for(const MaterialBindAttribute& attribute : field.attributes){
-        if(attribute.name != requiredAttribute){
+        const bool supportedAttribute = isResourceField
+            ? attribute.name == s_FixtureAttribute || attribute.name == s_TextureAssetAttribute
+            : attribute.name == s_DefaultAttribute
+        ;
+        if(!supportedAttribute){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported attribute '{}'")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
@@ -372,34 +375,33 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
             );
             return false;
         }
-        if(foundRequiredAttribute){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' declares {} more than once")
+        ++attributeCount;
+        if(attributeCount > 1u){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare exactly one {} attribute")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
                 , StringConvert(field.name)
-                , StringConvert(requiredAttribute)
+                , isResourceField ? NWB_TEXT("resource") : NWB_TEXT("default")
             );
             return false;
         }
         if(attribute.arguments.size() != 1u || attribute.arguments[0].empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' {} attribute requires one non-empty string argument")
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' attribute '{}' requires one non-empty string argument")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
                 , StringConvert(field.name)
-                , StringConvert(requiredAttribute)
+                , StringConvert(attribute.name)
             );
             return false;
         }
-
-        foundRequiredAttribute = true;
     }
 
-    if(!foundRequiredAttribute){
+    if(attributeCount == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare a {} attribute")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(bindStruct.name)
             , StringConvert(field.name)
-            , StringConvert(requiredAttribute)
+            , isResourceField ? NWB_TEXT("resource") : NWB_TEXT("default")
         );
         return false;
     }
@@ -407,15 +409,24 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
     if(!isResourceField)
         return true;
 
-    const AStringView fixtureName = field.fixtureArgument();
-    if(IsKnownMaterialResourceFixture(resourceKind, fixtureName))
+    MaterialResourceSource::Enum resourceSource = MaterialResourceSource::None;
+    AStringView resourceName;
+    if(!field.resourceBinding(resourceSource, resourceName)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare exactly one valid resource attribute")
+            , PathToString<tchar>(bindFilePath)
+            , StringConvert(bindStruct.name)
+            , StringConvert(field.name)
+        );
+        return false;
+    }
+    if(IsSupportedMaterialResourceReference(resourceKind, resourceSource, resourceName))
         return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' fixture '{}' is not supported for resource type '{}'")
+    NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' resource '{}' is not supported for resource type '{}'")
         , PathToString<tchar>(bindFilePath)
         , StringConvert(bindStruct.name)
         , StringConvert(field.name)
-        , StringConvert(fixtureName)
+        , StringConvert(resourceName)
         , StringConvert(field.type)
     );
     return false;

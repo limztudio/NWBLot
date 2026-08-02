@@ -14,6 +14,9 @@
 #include <impl/assets_material/binary_payload.h>
 #include <impl/assets_shader/asset.h>
 #include <impl/assets_shader/cook.h>
+#include <impl/assets_texture/asset.h>
+#include <impl/assets_texture/binary_payload.h>
+#include <impl/assets_texture/cook.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 
 #include <core/assets/paths.h>
@@ -27,6 +30,7 @@
 #include <core/alloc/thread.h>
 #include <core/common/module.h>
 #include <core/mesh/classification.h>
+#include <core/metascript/parser.h>
 #include <core/filesystem/volume_session.h>
 #include <core/graphics/api.h>
 #include <core/graphics/shader_archive.h>
@@ -1650,6 +1654,7 @@ static bool FindShaderArchiveSourceChecksum(
 }
 
 #include "shader_tests.inl"
+#include "texture_tests.inl"
 #include "meshlet_ref_codec_tests.inl"
 #include "codec_tests.inl"
 

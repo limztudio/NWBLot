@@ -5,6 +5,7 @@ target_link_libraries(nwb_assets_graphics INTERFACE
     nwb_assets_model
     nwb_assets_material
     nwb_assets_shader
+    nwb_assets_texture
 )
 
 if(NWB_BUILD_RESOURCE_COOKER)

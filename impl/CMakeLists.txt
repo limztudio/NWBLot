@@ -1,4 +1,5 @@
 add_subdirectory(assets_shader)
+add_subdirectory(assets_texture)
 add_subdirectory(assets_csg)
 add_subdirectory(assets_material)
 add_subdirectory(assets_skeleton)

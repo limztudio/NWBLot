@@ -95,6 +95,7 @@ if(Python3_Interpreter_FOUND)
             nwb_assets_model
             nwb_assets_material
             nwb_assets_shader
+            nwb_assets_texture
         )
         target_link_libraries("${TARGET_NAME}" PRIVATE
             nwb_common

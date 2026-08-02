@@ -15,6 +15,13 @@ import time
 
 SKIP_EXIT_CODE = 77
 
+# The textured-GI smoke has a fixed camera and a white receiver plane.  This rectangle lies below the sphere
+# silhouette, inside its foreground opaque direct shadow.  Because the light is white and the receiver has no texture
+# or tint, a red value here can only come from the textured sphere's indirect diffuse bounce.
+TEXTURE_SMOKE_RECEIVER_REGION = (0.500, 0.660, 0.650, 0.800)
+TEXTURE_SMOKE_RECEIVER_MIN_RED = 36
+TEXTURE_SMOKE_RECEIVER_RED_CHROMA = 6
+
 
 class SmokeSkip(Exception):
     pass
@@ -68,6 +75,8 @@ class TextureSmokeAnalysis:
     red_pixels: int
     green_pixels: int
     blue_pixels: int
+    receiver_red_pixels: int
+    receiver_pixel_count: int
 
 
 def write_status(message):
@@ -519,6 +528,10 @@ def analyze_texture_smoke_rows(rows_rgb):
     red_pixels = 0
     green_pixels = 0
     blue_pixels = 0
+    height = len(rows_rgb)
+    width = len(rows_rgb[0]) if height else 0
+    receiver_region = normalized_region(width, height, *TEXTURE_SMOKE_RECEIVER_REGION)
+    receiver_red_pixels = 0
     for row in rows_rgb:
         for red, green, blue in row:
             if red >= 72 and red >= green + 34 and red >= blue + 34:
@@ -527,7 +540,24 @@ def analyze_texture_smoke_rows(rows_rgb):
                 green_pixels += 1
             if blue >= 72 and blue >= red + 34 and blue >= green + 34:
                 blue_pixels += 1
-    return TextureSmokeAnalysis(red_pixels, green_pixels, blue_pixels)
+
+    start_x, start_y, end_x, end_y = receiver_region
+    for y in range(start_y, end_y):
+        for red, green, blue in rows_rgb[y][start_x:end_x]:
+            if (
+                red >= TEXTURE_SMOKE_RECEIVER_MIN_RED
+                and red >= green + TEXTURE_SMOKE_RECEIVER_RED_CHROMA
+                and red >= blue + TEXTURE_SMOKE_RECEIVER_RED_CHROMA
+            ):
+                receiver_red_pixels += 1
+
+    return TextureSmokeAnalysis(
+        red_pixels,
+        green_pixels,
+        blue_pixels,
+        receiver_red_pixels,
+        region_pixel_count(receiver_region),
+    )
 
 
 def estimate_background_rgb(rows_rgb, width, height):
@@ -1609,6 +1639,7 @@ def validate_transparent_csg_result(result):
 def validate_texture_smoke_result(result):
     analysis = result.texture_smoke
     min_pixels = max(220, (result.width * result.height) // 4000)
+    min_receiver_red_pixels = max(512, analysis.receiver_pixel_count // 20)
     missing = []
     if analysis.red_pixels < min_pixels:
         missing.append(f"red={analysis.red_pixels}")
@@ -1616,15 +1647,18 @@ def validate_texture_smoke_result(result):
         missing.append(f"green={analysis.green_pixels}")
     if analysis.blue_pixels < min_pixels:
         missing.append(f"blue={analysis.blue_pixels}")
+    if analysis.receiver_red_pixels < min_receiver_red_pixels:
+        missing.append(f"receiver_red={analysis.receiver_red_pixels}")
 
     if missing:
         observed = (
             f"red={analysis.red_pixels}, "
             f"green={analysis.green_pixels}, "
             f"blue={analysis.blue_pixels}, "
-            f"min={min_pixels}"
+            f"receiver_red={analysis.receiver_red_pixels}/{analysis.receiver_pixel_count}, "
+            f"min={min_pixels}, receiver_min={min_receiver_red_pixels}"
         )
-        raise SmokeFailure(f"texture smoke did not show all expected sampled color regions ({observed})")
+        raise SmokeFailure(f"texture smoke did not show the expected sampled texture and receiver-side GI ({observed})")
 
 
 def validate_expected_log_messages(log_directory, log_baseline, log_pattern, required_needles, rejected_needles):
@@ -1775,7 +1809,8 @@ def main(argv):
             analysis = result.texture_smoke
             status = (
                 f"{status}; sampled texture hues "
-                f"red={analysis.red_pixels}, green={analysis.green_pixels}, blue={analysis.blue_pixels}"
+                f"red={analysis.red_pixels}, green={analysis.green_pixels}, blue={analysis.blue_pixels}; "
+                f"receiver red GI={analysis.receiver_red_pixels}/{analysis.receiver_pixel_count}"
             )
         write_status(status)
         return 0

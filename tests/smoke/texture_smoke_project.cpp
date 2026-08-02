@@ -45,9 +45,12 @@ static constexpr AStringView s_TextureRuntimeTintParameter = "texture_runtime.co
 static constexpr f32 s_CameraHeight = 3.1f;
 static constexpr f32 s_CameraDistance = 5.7f;
 static constexpr f32 s_CameraPitch = 0.36f;
-static constexpr f32 s_DirectionalLightPitch = 0.82f;
-static constexpr f32 s_DirectionalLightYaw = 0.55f;
-static constexpr f32 s_DirectionalLightIntensity = 2.2f;
+// A low, bright white key makes the opaque sphere cast a long direct shadow.  The nearby part of that shadow is the
+// unambiguous receiver-only location where the texture's red-dominant diffuse bounce is visible.
+static constexpr f32 s_DirectionalLightPitch = 0.48f;
+// Aim the shadow toward the foreground rather than hiding the receiver spill behind the sphere from the camera.
+static constexpr f32 s_DirectionalLightYaw = 2.2f;
+static constexpr f32 s_DirectionalLightIntensity = 2.0f;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -109,7 +112,7 @@ public:
             s_WhiteGroundMaterialInterface,
             Float4(1.0f, 1.0f, 1.0f, 1.0f),
             Float4(0.0f, 0.0f, 0.0f, 0.0f),
-            Float4(3.0f, 1.0f, 3.0f, 0.0f)
+            Float4(3.25f, 1.0f, 3.25f, 0.0f)
         );
         // caustic_sphere is the smoke asset's dense, smooth, UV-mapped sphere.  It rests just above the receiver,
         // where the white plane provides a clean read of the texture's colored irradiance after GI converges.
@@ -120,8 +123,8 @@ public:
             s_TextureMaterialPath,
             s_TextureMaterialInterface,
             Float4(1.0f, 1.0f, 1.0f, 1.0f),
-            Float4(0.0f, 1.02f, 0.15f, 0.0f),
-            Float4(1.0f, 1.0f, 1.0f, 0.0f),
+            Float4(0.0f, 1.16f, 0.15f, 0.0f),
+            Float4(1.1f, 1.1f, 1.1f, 0.0f),
             s_TextureRuntimeTintParameter
         );
         NWB_FATAL_ASSERT_MSG(

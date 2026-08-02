@@ -18,11 +18,20 @@ def png_chunk(kind: bytes, data: bytes) -> bytes:
 
 
 def texture_pixel(x: int, y: int) -> Tuple[int, int, int, int]:
+    # Make red the dominant reflected colour while retaining distinct green and blue texels.  A balanced checker
+    # averages to near-grey over a diffuse sphere, which makes a perfectly valid colored indirect bounce invisible on
+    # the white receiver.  This intentionally biased source is therefore a better end-to-end texture + GI fixture:
+    # its receiver-side spill must be red, while the minority green/blue texels still prove that real UV sampling is
+    # taking place rather than a constant-color fallback.
     palette = (
-        (232, 54, 54),
-        (52, 208, 98),
-        (54, 104, 242),
-        (238, 194, 48),
+        (244, 42, 42),
+        (244, 42, 42),
+        (244, 42, 42),
+        (244, 42, 42),
+        (240, 84, 42),
+        (240, 84, 42),
+        (52, 218, 104),
+        (56, 112, 246),
     )
     tile_size = 8
     if x % tile_size == 0 or y % tile_size == 0:

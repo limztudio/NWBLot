@@ -11,6 +11,9 @@ if(Python3_Interpreter_FOUND)
     set(_nwb_smoke_capture_late_settle_seconds "3.25")
     set(_nwb_caustic_sphere_capture_settle_seconds "3.0")
     set(_nwb_skinned_caustic_capture_late_settle_seconds "4.0")
+    # The texture smoke waits long enough for the persistent surfel field to pass its warm-up phases before its
+    # receiver-only colored-GI assertion samples the white plane.
+    set(_nwb_texture_smoke_capture_settle_seconds "6.0")
 
     # CTest budgets include process startup and orderly teardown around the script timeout.
     set(_nwb_window_capture_smoke_ctest_timeout_seconds 60)
@@ -376,6 +379,7 @@ if(Python3_Interpreter_FOUND)
                 "${_nwb_texture_smoke_runtime_root}"
                 "NWB Texture Smoke"
                 "--expect-texture-smoke"
+                "--settle-seconds" "${_nwb_texture_smoke_capture_settle_seconds}"
                 "--reject-log-message" "[ERROR]"
                 "--reject-log-message" "failed to resolve shader"
             )

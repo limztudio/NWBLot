@@ -91,6 +91,17 @@ class TextureSmokeAnalysisTests(unittest.TestCase):
         self.assertEqual(analysis.green_pixels, 2)
         self.assertEqual(analysis.blue_pixels, 2)
 
+    def test_texture_smoke_analysis_isolates_red_bounce_on_the_white_receiver(self):
+        rows = [[(210, 210, 210) for _ in range(100)] for _ in range(100)]
+        for y in range(68, 76):
+            for x in range(54, 62):
+                rows[y][x] = (104, 70, 68)
+
+        analysis = window_capture_smoke.analyze_texture_smoke_rows(rows)
+
+        self.assertEqual(analysis.receiver_pixel_count, 15 * 14)
+        self.assertEqual(analysis.receiver_red_pixels, 8 * 8)
+
 
 class GracefulTerminationTests(unittest.TestCase):
     def test_linux_x11_helper_receives_testbed_window_title(self):

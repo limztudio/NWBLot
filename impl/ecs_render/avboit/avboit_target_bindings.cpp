@@ -104,36 +104,21 @@ bool RendererAvboitSystem::registerAvboitFrameTargetDescriptors(
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT target bindings require the descriptor-buffer global heap"));
         return false;
     }
-    if(
-        !createdTargets.bindless.slotsBufferDescriptor.valid()
-        || createdTargets.bindless.slotsBufferDescriptor.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
-        || createdTargets.bindless.slotsUploaded
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT target bindings require an unuploaded shared deferred slot descriptor"));
-        return false;
-    }
-    if(
-        !avboitTargets.coverageBuffer
-        || !avboitTargets.depthWarpBuffer
-        || !avboitTargets.controlBuffer
-        || !avboitTargets.extinctionBuffer
-        || !avboitTargets.extinctionOverflowBuffer
-        || !avboitTargets.transmittanceTexture
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT target bindings require every work resource"));
-        return false;
-    }
-    if(
-        avboitTargets.coverageBufferDescriptor.valid()
-        || avboitTargets.depthWarpBufferDescriptor.valid()
-        || avboitTargets.controlBufferDescriptor.valid()
-        || avboitTargets.extinctionBufferDescriptor.valid()
-        || avboitTargets.extinctionOverflowBufferDescriptor.valid()
-        || avboitTargets.transmittanceTextureStorageDescriptor.valid()
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT target heap registrations already exist"));
-        return false;
-    }
+    NWB_ASSERT(createdTargets.bindless.slotsBufferDescriptor.valid());
+    NWB_ASSERT(createdTargets.bindless.slotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
+    NWB_ASSERT(!createdTargets.bindless.slotsUploaded);
+    NWB_ASSERT(avboitTargets.coverageBuffer);
+    NWB_ASSERT(avboitTargets.depthWarpBuffer);
+    NWB_ASSERT(avboitTargets.controlBuffer);
+    NWB_ASSERT(avboitTargets.extinctionBuffer);
+    NWB_ASSERT(avboitTargets.extinctionOverflowBuffer);
+    NWB_ASSERT(avboitTargets.transmittanceTexture);
+    NWB_ASSERT(!avboitTargets.coverageBufferDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.depthWarpBufferDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.controlBufferDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.extinctionBufferDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.extinctionOverflowBufferDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.transmittanceTextureStorageDescriptor.valid());
 
     const bool targetResourcesRegistered =
         __hidden_avboit_target_bindings::RegisterWorkBuffer(heap, avboitTargets.coverageBufferDescriptor, avboitTargets.coverageBuffer.get())

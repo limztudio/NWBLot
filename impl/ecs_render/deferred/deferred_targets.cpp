@@ -145,22 +145,11 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(DeferredFrameT
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred lighting/compositor requires the global descriptor heap"));
         return false;
     }
-    if(!deferredState().m_sampler){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred bindless resources require the deferred sampler"));
-        return false;
-    }
-    if(!avboitState().m_linearSampler){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred bindless resources require the AVBOIT linear sampler"));
-        return false;
-    }
-    if(!deferredState().m_sceneShadingBuffer || !deferredState().m_lightBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred bindless resources require the scene shading + light buffers"));
-        return false;
-    }
-    if(!targets.csgIntervalTargetsValid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred bindless resources require the CSG interval targets"));
-        return false;
-    }
+    NWB_ASSERT(deferredState().m_sampler);
+    NWB_ASSERT(avboitState().m_linearSampler);
+    NWB_ASSERT(deferredState().m_sceneShadingBuffer);
+    NWB_ASSERT(deferredState().m_lightBuffer);
+    NWB_ASSERT(targets.csgIntervalTargetsValid());
 
     auto registerTexture = [&heap](
         Core::GpuDescriptorHandle& handle,
@@ -486,15 +475,10 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
     if(history.valid())
         return true;
 
-    if(
-        !targets.bindless.valid()
-        || !targets.shadowVisibility
-        || !targets.causticIrradiance
-        || !targets.surfelIrradiance
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: lagged lighting history requires complete deferred targets"));
-        return false;
-    }
+    NWB_ASSERT(targets.bindless.valid());
+    NWB_ASSERT(targets.shadowVisibility);
+    NWB_ASSERT(targets.causticIrradiance);
+    NWB_ASSERT(targets.surfelIrradiance);
 
     resetLaggedLightingHistoryResources(targets);
 

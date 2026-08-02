@@ -269,6 +269,7 @@ bool EmitDeferredBxdfDispatchModule(
 bool EmitShadowTransmittanceDispatchModule(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
+    const MaterialCookVector<MaterialBindEntry>& materialBindEntries,
     const MaterialCookVector<MaterialCookEntry>& materialEntries,
     Path& outIncludeRoot,
     Core::Alloc::ScratchArena& scratchArena
@@ -276,6 +277,7 @@ bool EmitShadowTransmittanceDispatchModule(
     return __hidden_cook::EmitShadowTransmittanceDispatchModuleImpl(
         cacheDirectory,
         configurationSafeName,
+        materialBindEntries,
         materialEntries,
         outIncludeRoot,
         scratchArena

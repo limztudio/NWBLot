@@ -118,6 +118,7 @@ bool EmitDeferredBxdfDispatchModuleImpl(
 bool EmitShadowTransmittanceDispatchModuleImpl(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
+    const CookVector<MaterialBindEntry>& materialBindEntries,
     const CookVector<MaterialCookEntry>& materialEntries,
     Path& outIncludeRoot,
     ScratchArena& scratchArena

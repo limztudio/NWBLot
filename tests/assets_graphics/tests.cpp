@@ -456,6 +456,93 @@ static constexpr AStringView s_ViewDependentTransparentMaterialSurfaceSource = R
 
 )NWB_SLANG";
 
+static constexpr AStringView s_ShadowDispatchSharedSurfaceHelperSource = R"NWB_SLANG(#ifndef NWB_TEST_SHADOW_DISPATCH_SHARED_SURFACE_HELPER_SLANGI
+#define NWB_TEST_SHADOW_DISPATCH_SHARED_SURFACE_HELPER_SLANGI
+
+half3 nwbTestShadowDispatchSharedSurfaceColor(const half3 color){
+    return color;
+}
+
+#endif
+
+)NWB_SLANG";
+
+static constexpr AStringView s_ShadowDispatchFirstMaterialBindSource = R"NWB_BIND([material_constant]
+struct NwbShadowDispatchFirstSurfaceMaterial{
+    [default("half4(0.25h, 0.5h, 0.75h, 1.0h)")]
+    half4 base_color;
+};
+
+NwbShadowDispatchFirstSurfaceMaterial surface;
+
+)NWB_BIND";
+
+static constexpr AStringView s_ShadowDispatchSecondMaterialBindSource = R"NWB_BIND([material_constant]
+struct NwbShadowDispatchSecondSurfaceMaterial{
+    [default("half4(0.75h, 0.5h, 0.25h, 1.0h)")]
+    half4 base_color;
+};
+
+NwbShadowDispatchSecondSurfaceMaterial surface;
+
+)NWB_BIND";
+
+static constexpr AStringView s_ShadowDispatchFirstMaterialSurfaceSource = R"NWB_SLANG(#include "shadow_dispatch_shared_surface_helper.slangi"
+
+NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbShadowDispatchFirstSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    return nwbMakeMeshSurface(nwbTestShadowDispatchSharedSurfaceColor(surface.base_color.rgb), inNormal);
+}
+
+)NWB_SLANG";
+
+static constexpr AStringView s_ShadowDispatchSecondMaterialSurfaceSource = R"NWB_SLANG(#include "shadow_dispatch_shared_surface_helper.slangi"
+
+NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbShadowDispatchSecondSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    return nwbMakeMeshSurface(nwbTestShadowDispatchSharedSurfaceColor(surface.base_color.rgb), inNormal);
+}
+
+)NWB_SLANG";
+
+static constexpr AStringView s_ShadowDispatchFirstMaterialMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/shadow_dispatch_first.bind";
+asset.surface = "project/shaders/shadow_dispatch_first.surface";
+asset.bxdf = "project/shaders/shadow_dispatch.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
+asset.shader_variant = "default";
+
+asset.parameters = {
+    "surface": {
+        "base_color": "half4(0.25h, 0.5h, 0.75h, 1.0h)",
+    },
+};
+
+)NWB_META";
+
+static constexpr AStringView s_ShadowDispatchSecondMaterialMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/shadow_dispatch_second.bind";
+asset.surface = "project/shaders/shadow_dispatch_second.surface";
+asset.bxdf = "project/shaders/shadow_dispatch.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
+asset.shader_variant = "default";
+
+asset.parameters = {
+    "surface": {
+        "base_color": "half4(0.75h, 0.5h, 0.25h, 1.0h)",
+    },
+};
+
+)NWB_META";
+
 static constexpr AStringView s_StaticResourceFixtureShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
 #include "project/material_interfaces/test_surface.bind"
 

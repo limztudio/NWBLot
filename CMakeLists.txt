@@ -31,6 +31,9 @@ option(NWB_BUILD_TESTBED "Build the testbed app." ${WIN32})
 option(NWB_BUILD_TESTS "Build internal validation executables." OFF)
 option(NWB_ENABLE_WAYLAND "Build the native Wayland backend on Linux when dependencies are available." ${NWB_ENABLE_WAYLAND_DEFAULT})
 option(NWB_BUILDMODE "Generate build-mode Name symbol sidecars next to each variant output." OFF)
+if((WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NWB_BUILD_TESTBED AND NOT NWB_BUILD_LOADER)
+    message(FATAL_ERROR "NWB_BUILD_TESTBED requires NWB_BUILD_LOADER because Testbed uses the loader project-entry API.")
+endif()
 # DEBUG / TEST ONLY: compiles the deliberate GPU fault-injection hook (Device::debugTriggerGpuFault). At runtime,
 # NWB_DEBUG_GPU_FAULT_INJECTION=0 or unset disables it; any nonzero value is used as the faulting GPU address.
 # Off by default; never enable in shipping builds.

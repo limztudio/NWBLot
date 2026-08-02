@@ -351,6 +351,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     if(!EmitShadowTransmittanceDispatchModule(
         context.resolvedPaths.cacheDirectory,
         context.configurationSafeName,
+        graphicsMetadata.materialBindEntries,
         materialEntries,
         shadowTransmittanceIncludeRoot,
         context.scratchArena

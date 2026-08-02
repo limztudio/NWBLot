@@ -277,9 +277,9 @@ static constexpr AStringView s_ShadowTransmittanceSurfaceMacro = "nwbMaterialSur
 static constexpr AStringView s_ShadowTransmittanceModelPrefix = "nwbShadowSurfaceModel";
 static constexpr AStringView s_ShadowTransmittanceWrapperPrefix = "nwbShadowTransmittanceModel";
 
-// Per-id Slang namespace that isolates each material's `.bind` file-scope symbols in the dispatch module (the one
-// TU that concatenates multiple `.bind` files) so distinct interfaces' fixed-named layout constants/structs/
-// accessors do not collide; a `using namespace` then exposes them to the global-scope surface hook.
+// Per-interface Slang namespace that isolates each material `.bind` file-scope symbol in the dispatch module (the
+// one TU that concatenates multiple `.bind` files). The project-owned `.surface` fragment stays global so its guarded
+// helper includes retain their normal global ownership; generated aliases expose exactly that surface's bind API.
 static constexpr AStringView s_ShadowTransmittanceBindNamespacePrefix = "nwbShadowBindModel";
 
 static constexpr AStringView s_ShadowTransmittanceModuleSubPath = "shadow/generated/transmittance_dispatch.slangi";
@@ -327,9 +327,287 @@ static bool PrepareShadowTransmittanceIncludeRoot(const Path& includeRoot){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+using ShadowTransmittanceBindEntryLookup = HashMap<
+    Name,
+    const MaterialBindEntry*,
+    Hasher<Name>,
+    EqualTo<Name>,
+    ScratchArena
+>;
+
+using ShadowTransmittanceBindNamespaceLookup = HashMap<
+    Name,
+    u32,
+    Hasher<Name>,
+    EqualTo<Name>,
+    ScratchArena
+>;
+
+using ShadowTransmittanceBindAliasVector = Vector<ScratchString, ScratchArena>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static void AppendShadowTransmittanceBindUpperIdentifier(const AStringView text, ScratchString& inOutText){
+    const usize beginSize = inOutText.size();
+    for(const char ch : text)
+        inOutText += IsAsciiAlphaNumeric(ch) ? ToAsciiUpper(ch) : '_';
+    if(inOutText.size() == beginSize)
+        inOutText += "VALUE";
+}
+
+static void AppendShadowTransmittanceBindPascalIdentifier(const AStringView text, ScratchString& inOutText){
+    const usize beginSize = inOutText.size();
+    bool upperNext = true;
+    for(const char ch : text){
+        if(ch == '_'){
+            upperNext = true;
+            continue;
+        }
+
+        if(upperNext)
+            inOutText += ToAsciiUpper(ch);
+        else
+            inOutText += ch;
+        upperNext = false;
+    }
+    if(inOutText.size() == beginSize)
+        inOutText += "Value";
+}
+
+static ScratchString BuildShadowTransmittanceBindGeneratedSymbol(
+    ScratchArena& scratchArena,
+    const InitializerList<AStringView> nameSegments,
+    const AStringView suffix
+){
+    ScratchString symbol("NWB_MATERIAL_BIND_", scratchArena);
+    bool firstSegment = true;
+    for(const AStringView nameSegment : nameSegments){
+        if(!firstSegment)
+            symbol += '_';
+        AppendShadowTransmittanceBindUpperIdentifier(nameSegment, symbol);
+        firstSegment = false;
+    }
+    symbol += suffix;
+    return symbol;
+}
+
+static ScratchString BuildShadowTransmittanceBindAccessorName(
+    ScratchArena& scratchArena,
+    const InitializerList<AStringView> nameSegments
+){
+    ScratchString functionName("nwbMaterialBindLoad", scratchArena);
+    for(const AStringView nameSegment : nameSegments)
+        AppendShadowTransmittanceBindPascalIdentifier(nameSegment, functionName);
+    return functionName;
+}
+
+static void AppendShadowTransmittanceBindAlias(
+    const AStringView symbol,
+    const AStringView bindNamespace,
+    ScratchHashSet<ScratchString>& inOutSeenSymbols,
+    ShadowTransmittanceBindAliasVector& outAliasSymbols,
+    CookString& inOutSource,
+    ScratchArena& scratchArena
+){
+    ScratchString seenSymbol(symbol, scratchArena);
+    if(!inOutSeenSymbols.insert(Move(seenSymbol)).second)
+        return;
+
+    inOutSource += "#define ";
+    inOutSource += symbol;
+    inOutSource += ' ';
+    inOutSource += bindNamespace;
+    inOutSource += "::";
+    inOutSource += symbol;
+    inOutSource += '\n';
+
+    ScratchString aliasSymbol(symbol, scratchArena);
+    outAliasSymbols.push_back(Move(aliasSymbol));
+}
+
+static bool AppendShadowTransmittanceBindAliases(
+    const MaterialBindEntry& bindEntry,
+    const AStringView bindNamespace,
+    ScratchHashSet<ScratchString>& inOutSeenSymbols,
+    ShadowTransmittanceBindAliasVector& outAliasSymbols,
+    CookString& inOutSource,
+    ScratchArena& scratchArena
+){
+    inOutSeenSymbols.clear();
+    outAliasSymbols.clear();
+    outAliasSymbols.reserve(
+        static_cast<usize>(NameDetail::s_HashLaneCount) + 7u + bindEntry.structs.size() + bindEntry.instances.size() * 4u
+    );
+
+    for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
+        char laneDigits[TextDetail::s_DecimalTextBufferBytes] = {};
+        ScratchString suffix("INTERFACE_HASH_", scratchArena);
+        suffix += FormatDecimal(static_cast<usize>(lane), laneDigits);
+        const ScratchString symbol = BuildShadowTransmittanceBindGeneratedSymbol(scratchArena, {}, AStringView(suffix));
+        AppendShadowTransmittanceBindAlias(
+            AStringView(symbol),
+            bindNamespace,
+            inOutSeenSymbols,
+            outAliasSymbols,
+            inOutSource,
+            scratchArena
+        );
+    }
+
+    const AStringView layoutSymbols[] = {
+        "LAYOUT_HASH",
+        "BLOCK_COUNT",
+        "FIELD_COUNT",
+        "STORAGE_CONSTANT",
+        "STORAGE_MUTABLE",
+        "CONSTANT_BYTE_SIZE",
+        "MUTABLE_BYTE_SIZE"
+    };
+    for(const AStringView suffix : layoutSymbols){
+        const ScratchString symbol = BuildShadowTransmittanceBindGeneratedSymbol(scratchArena, {}, suffix);
+        AppendShadowTransmittanceBindAlias(
+            AStringView(symbol),
+            bindNamespace,
+            inOutSeenSymbols,
+            outAliasSymbols,
+            inOutSource,
+            scratchArena
+        );
+    }
+
+    for(const MaterialBindStruct& bindStruct : bindEntry.structs){
+        AppendShadowTransmittanceBindAlias(
+            AStringView(bindStruct.name),
+            bindNamespace,
+            inOutSeenSymbols,
+            outAliasSymbols,
+            inOutSource,
+            scratchArena
+        );
+    }
+
+    for(const MaterialBindInstance& instance : bindEntry.instances){
+        const MaterialBindStruct* bindStruct = bindEntry.findStruct(AStringView(instance.type));
+        if(!bindStruct){
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: interface '{}' instance '{}' has unknown type '{}'")
+                , StringConvert(bindEntry.virtualPath)
+                , StringConvert(instance.name)
+                , StringConvert(instance.type)
+            );
+            return false;
+        }
+
+        const AStringView instanceName(instance.name);
+        const AStringView blockSuffixes[] = { "_STORAGE", "_BYTE_OFFSET", "_BYTE_SIZE" };
+        for(const AStringView suffix : blockSuffixes){
+            const ScratchString symbol = BuildShadowTransmittanceBindGeneratedSymbol(
+                scratchArena,
+                { instanceName },
+                suffix
+            );
+            AppendShadowTransmittanceBindAlias(
+                AStringView(symbol),
+                bindNamespace,
+                inOutSeenSymbols,
+                outAliasSymbols,
+                inOutSource,
+                scratchArena
+            );
+        }
+
+        const ScratchString blockAccessor = BuildShadowTransmittanceBindAccessorName(scratchArena, { instanceName });
+        AppendShadowTransmittanceBindAlias(
+            AStringView(blockAccessor),
+            bindNamespace,
+            inOutSeenSymbols,
+            outAliasSymbols,
+            inOutSource,
+            scratchArena
+        );
+
+        for(const MaterialBindField& field : bindStruct->fields){
+            const AStringView fieldName(field.name);
+            const AStringView fieldSuffixes[] = { "_BYTE_OFFSET", "_KEY", "_DEFAULT" };
+            for(const AStringView suffix : fieldSuffixes){
+                const ScratchString symbol = BuildShadowTransmittanceBindGeneratedSymbol(
+                    scratchArena,
+                    { instanceName, fieldName },
+                    suffix
+                );
+                AppendShadowTransmittanceBindAlias(
+                    AStringView(symbol),
+                    bindNamespace,
+                    inOutSeenSymbols,
+                    outAliasSymbols,
+                    inOutSource,
+                    scratchArena
+                );
+            }
+
+            const ScratchString fieldAccessor = BuildShadowTransmittanceBindAccessorName(
+                scratchArena,
+                { instanceName, fieldName }
+            );
+            AppendShadowTransmittanceBindAlias(
+                AStringView(fieldAccessor),
+                bindNamespace,
+                inOutSeenSymbols,
+                outAliasSymbols,
+                inOutSource,
+                scratchArena
+            );
+        }
+    }
+
+    return true;
+}
+
+static void AppendShadowTransmittanceBindAliasUndefines(
+    const ShadowTransmittanceBindAliasVector& aliasSymbols,
+    CookString& inOutSource
+){
+    for(usize index = aliasSymbols.size(); index > 0u; ){
+        --index;
+        const ScratchString& symbol = aliasSymbols[index];
+        inOutSource += "#undef ";
+        inOutSource += AStringView(symbol);
+        inOutSource += '\n';
+    }
+}
+
+static bool BuildShadowTransmittanceBindEntryLookup(
+    const CookVector<MaterialBindEntry>& materialBindEntries,
+    ShadowTransmittanceBindEntryLookup& outLookup
+){
+    outLookup.clear();
+    outLookup.reserve(materialBindEntries.size());
+    for(const MaterialBindEntry& bindEntry : materialBindEntries){
+        const Name interfaceName(AStringView(bindEntry.virtualPath));
+        if(!interfaceName){
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: material bind interface path '{}' is invalid")
+                , StringConvert(bindEntry.virtualPath)
+            );
+            return false;
+        }
+        if(!outLookup.emplace(interfaceName, &bindEntry).second){
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: duplicate material bind interface '{}'"), StringConvert(bindEntry.virtualPath));
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool EmitShadowTransmittanceDispatchModuleImpl(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
+    const CookVector<MaterialBindEntry>& materialBindEntries,
     const CookVector<MaterialCookEntry>& materialEntries,
     Path& outIncludeRoot,
     ScratchArena& scratchArena
@@ -380,6 +658,53 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
         interfaceSlot = interfaceName;
     }
 
+    ShadowTransmittanceBindEntryLookup bindEntryLookup(
+        0,
+        Hasher<Name>(),
+        EqualTo<Name>(),
+        scratchArena
+    );
+    if(!BuildShadowTransmittanceBindEntryLookup(materialBindEntries, bindEntryLookup))
+        return false;
+
+    Vector<const MaterialBindEntry*, ScratchArena> bindEntryById(scratchArena);
+    Vector<u32, ScratchArena> bindNamespaceIdById(scratchArena);
+    if(anySurface){
+        bindEntryById.resize(surfaceById.size());
+        bindNamespaceIdById.resize(surfaceById.size());
+    }
+
+    ShadowTransmittanceBindNamespaceLookup bindNamespaceLookup(
+        0,
+        Hasher<Name>(),
+        EqualTo<Name>(),
+        scratchArena
+    );
+    bindNamespaceLookup.reserve(materialBindEntries.size());
+    for(usize id = 0u; id < surfaceById.size(); ++id){
+        if(surfaceById[id].empty())
+            continue;
+
+        const Name interfaceName(interfaceById[id]);
+        const auto bindEntryIt = bindEntryLookup.find(interfaceName);
+        if(bindEntryIt == bindEntryLookup.end()){
+            NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: model id {} references unknown material interface '{}'")
+                , id
+                , StringConvert(interfaceById[id])
+            );
+            return false;
+        }
+        bindEntryById[id] = bindEntryIt.value();
+
+        const auto namespaceIt = bindNamespaceLookup.find(interfaceName);
+        if(namespaceIt == bindNamespaceLookup.end()){
+            bindNamespaceIdById[id] = static_cast<u32>(id);
+            bindNamespaceLookup.emplace(interfaceName, static_cast<u32>(id));
+        }
+        else
+            bindNamespaceIdById[id] = namespaceIt.value();
+    }
+
     CookArena& arena = materialEntries.get_allocator().arena();
     CookString source(arena);
     source += "// Generated by AssetVolumeCooker from material `surface` declarations. Do not edit.\n";
@@ -393,42 +718,47 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
     // also points the material-constants buffers at its heap-selected context -- then this module; emitting the framework
     // include here instead would force a virtual engine/ path that the shader -I roots do not resolve.
 
-    // Per-id surface hook. This is the ONE translation unit that pulls MULTIPLE materials' `.bind` files together
-    // (the per-material G-buffer PS pulls only its own one `.bind`), and a generated `.bind` emits file-scope
-    // symbols with FIXED, non-interface-qualified names -- the layout constants (NWB_MATERIAL_BIND_LAYOUT_HASH /
-    // _BLOCK_COUNT / _FIELD_COUNT / _INTERFACE_HASH_n / per-field _KEY/_DEFAULT/_BYTE_OFFSET) are byte-identical
-    // names across ANY two distinct `.bind` files, so concatenating two distinct interfaces would redefine them.
-    // Isolation: wrap each id's `.bind` body in its own Slang namespace (nwbShadowBindModel<id>) so its file-scope
-    // symbols + structs + accessors are namespace-qualified and never collide across interfaces, then bring that
-    // namespace into scope with `using namespace` so the (global-scope) surface hook -- which references the bind
-    // accessors/structs by their fixed unqualified names -- still resolves them. The `.surface` is included at
-    // global scope (after the using) so any shared helper headers it pulls in stay global + guarded (one copy
-    // across ids); the surface's lookups for global framework symbols (nwbMeshLoadInstance / nwbMakeMeshSurface /
-    // inNormal) are unaffected. Two ids that share an interface collapse to one `.bind` body via its per-path
-    // include guard (the second namespace is empty); the shared interface's symbols stay reachable through the
-    // first id's `using`, so the shared-interface case keeps working. The surface hook itself is still renamed to
-    // a unique per-id name (nwbShadowSurfaceModel<id>) so multiple hooks coexist; the wrapper sets the trace
-    // material context from the hit + loads the surface-input statics (inlining nwbMaterialSurfaceAt) before
-    // invoking the renamed hook, then returns the hook's whole NwbMeshSurface (its optical params -- refractionIor /
-    // shadowAbsorptionTint -- plus base color / normal). The hook supplies only the params; the ENGINE integrates the shadow
-    // visibility over the true entry->exit volume path (per-crossing Fresnel + signed Beer-Lambert optical depth),
-    // since only the trace sees both faces of an occluder. There is no per-hit transmittance for the hook to own.
+    // Per-id surface hook. The dispatch is the one shader TU that needs multiple `.bind` interfaces. Each unique
+    // interface is emitted once in a private namespace; before a project-owned global surface fragment is included,
+    // aliases map its fixed generated bind API to that namespace, then are immediately removed. A global `using`
+    // directive cannot be used here: later interfaces may provide the same accessor names, while wrapping a surface
+    // in a namespace would move its guarded project helper includes away from their normal global scope.
+    ScratchHashSet<ScratchString> bindAliasSeenSymbols{
+        0,
+        Hasher<ScratchString>(),
+        EqualTo<ScratchString>(),
+        scratchArena
+    };
+    ShadowTransmittanceBindAliasVector bindAliasSymbols(scratchArena);
+    ScratchString bindNamespace(scratchArena);
     for(usize id = 0u; id < surfaceById.size(); ++id){
         if(surfaceById[id].empty())
             continue;
 
         char idText[TextDetail::s_DecimalTextBufferBytes] = {};
         const AStringView idView = FormatDecimal(static_cast<u32>(id), idText);
-        source += "namespace ";
-        source += s_ShadowTransmittanceBindNamespacePrefix;
-        source += idView;
-        source += "{\n#include \"";
-        source += interfaceById[id];
-        source += ".bind\"\n}\n";
-        source += "using namespace ";
-        source += s_ShadowTransmittanceBindNamespacePrefix;
-        source += idView;
-        source += ";\n";
+        const u32 bindNamespaceId = bindNamespaceIdById[id];
+        char bindNamespaceIdText[TextDetail::s_DecimalTextBufferBytes] = {};
+        const AStringView bindNamespaceIdView = FormatDecimal(bindNamespaceId, bindNamespaceIdText);
+        bindNamespace.clear();
+        bindNamespace += s_ShadowTransmittanceBindNamespacePrefix;
+        bindNamespace += bindNamespaceIdView;
+        if(bindNamespaceId == static_cast<u32>(id)){
+            source += "namespace ";
+            source += AStringView(bindNamespace);
+            source += "{\n#include \"";
+            source += interfaceById[id];
+            source += ".bind\"\n}\n";
+        }
+        if(!AppendShadowTransmittanceBindAliases(
+            *bindEntryById[id],
+            AStringView(bindNamespace),
+            bindAliasSeenSymbols,
+            bindAliasSymbols,
+            source,
+            scratchArena
+        ))
+            return false;
         source += "#define ";
         source += s_ShadowTransmittanceSurfaceMacro;
         source += ' ';
@@ -439,6 +769,7 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
         source += "\"\n#undef ";
         source += s_ShadowTransmittanceSurfaceMacro;
         source += "\n";
+        AppendShadowTransmittanceBindAliasUndefines(bindAliasSymbols, source);
         source += "NwbMeshSurface ";
         source += s_ShadowTransmittanceWrapperPrefix;
         source += idView;

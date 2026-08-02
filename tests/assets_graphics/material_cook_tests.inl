@@ -433,6 +433,82 @@ TEST(AssetsGraphics, TransparentMaterialCookUsesViewDependentSurface){
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
 }
 
+TEST(AssetsGraphics, ShadowTransmittanceDispatchIsolatesOverlappingBindApis){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    Path root(testArena.arena);
+    Path outputDirectory(testArena.arena);
+    ASSERT_TRUE(PrepareAssetsGraphicsCookCase(
+        testArena,
+        "shadow_transmittance_dispatch_overlapping_bind_apis",
+        root,
+        outputDirectory
+    ));
+
+    const Path assetRoot = root / "assets";
+    const bool assetsWritten =
+        WriteTextFile(
+            assetRoot / "material_interfaces" / "shadow_dispatch_first.bind",
+            s_ShadowDispatchFirstMaterialBindSource
+        )
+        && WriteTextFile(
+            assetRoot / "material_interfaces" / "shadow_dispatch_second.bind",
+            s_ShadowDispatchSecondMaterialBindSource
+        )
+        && WriteTextFile(
+            assetRoot / "shaders" / "shadow_dispatch_shared_surface_helper.slangi",
+            s_ShadowDispatchSharedSurfaceHelperSource
+        )
+        && WriteTextFile(
+            assetRoot / "shaders" / "shadow_dispatch_first.surface",
+            s_ShadowDispatchFirstMaterialSurfaceSource
+        )
+        && WriteTextFile(
+            assetRoot / "shaders" / "shadow_dispatch_second.surface",
+            s_ShadowDispatchSecondMaterialSurfaceSource
+        )
+        && WriteTextFile(assetRoot / "shaders" / "shadow_dispatch.bxdf", s_MaterialBindBxdfSource)
+        && WriteTextFile(
+            assetRoot / "materials" / "shadow_dispatch_first.nwb",
+            s_ShadowDispatchFirstMaterialMeta
+        )
+        && WriteTextFile(
+            assetRoot / "materials" / "shadow_dispatch_second.nwb",
+            s_ShadowDispatchSecondMaterialMeta
+        )
+    ;
+    ASSERT_TRUE(assetsWritten);
+
+    const Path engineAssetRoot = AssetsGraphicsTestRepoRoot(testArena) / "impl" / "assets";
+    const bool cooked = CookPreparedGraphicsAssetRoots(
+        testArena,
+        root,
+        outputDirectory,
+        { engineAssetRoot, assetRoot }
+    );
+    EXPECT_TRUE(cooked);
+    if(cooked){
+        const Path generatedDispatchPath =
+            root / "cache" / "tests" / "shadow_modules" / "shadow" / "generated" / "transmittance_dispatch.slangi"
+        ;
+        NWB::Impl::ShaderCook::CookString generatedDispatchSource(testArena.arena);
+        EXPECT_TRUE(ReadTextFile(generatedDispatchPath, generatedDispatchSource));
+        const AStringView generatedDispatch(generatedDispatchSource.data(), generatedDispatchSource.size());
+        EXPECT_FALSE(ContainsText(generatedDispatch, "using namespace nwbShadowBindModel"));
+        EXPECT_TRUE(ContainsText(
+            generatedDispatch,
+            "#define nwbMaterialBindLoadSurface nwbShadowBindModel"
+        ));
+        EXPECT_TRUE(ContainsText(generatedDispatch, "#undef nwbMaterialBindLoadSurface"));
+    }
+    EXPECT_EQ(logger.errorCount(), 0u);
+
+    ErrorCode errorCode;
+    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+}
+
 TEST(AssetsGraphics, MaterialRejectsMissingInterfaceCookIntegration){
 #if defined(NWB_FINAL)
     CapturingLogger logger;

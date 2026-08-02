@@ -216,6 +216,7 @@ struct GeneratedMaterialPixelShader{
 [[nodiscard]] bool EmitShadowTransmittanceDispatchModule(
     const Path& cacheDirectory,
     AStringView configurationSafeName,
+    const MaterialCookVector<MaterialBindEntry>& materialBindEntries,
     const MaterialCookVector<MaterialCookEntry>& materialEntries,
     Path& outIncludeRoot,
     Core::Alloc::ScratchArena& scratchArena

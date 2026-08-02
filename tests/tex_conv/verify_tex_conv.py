@@ -129,22 +129,25 @@ def main() -> int:
     metadata = metadata_path.read_text(encoding="utf-8")
     for fragment in (
         "texture asset;",
+        "asset.version = 1;",
         'asset.format = "uastc_ldr_4x4";',
         'asset.uastc_spec_revision = "b624c07ad3c659e7b0f0badcb36e9a6b8820a99d";',
         'asset.color_space = "srgb";',
+        'asset.dimension = "2d";',
+        "asset.depth = 1;",
         "asset.width = 7;",
         "asset.height = 5;",
         "asset.block_width = 4;",
         "asset.block_height = 4;",
         "asset.bytes_per_block = 16;",
-        'asset.payload_layout = "mip_major_blocks";',
+        'asset.payload_layout = "mip_major_slice_major_blocks";',
         'asset.mip_address_mode = "clamp";',
         "asset.has_alpha = 1;",
         "asset.mip_count = 3;",
         'asset.data = "checker.tex";',
-        '{ "level": 0, "width": 7, "height": 5, "blocks_x": 2, "blocks_y": 2, "offset_bytes": 0, "size_bytes": 64 }',
-        '{ "level": 1, "width": 3, "height": 2, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 64, "size_bytes": 16 }',
-        '{ "level": 2, "width": 1, "height": 1, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 80, "size_bytes": 16 }',
+        '{ "level": 0, "width": 7, "height": 5, "blocks_x": 2, "blocks_y": 2, "offset_bytes": 0, "size_bytes": 64, "slices": 1 }',
+        '{ "level": 1, "width": 3, "height": 2, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 64, "size_bytes": 16, "slices": 1 }',
+        '{ "level": 2, "width": 1, "height": 1, "blocks_x": 1, "blocks_y": 1, "offset_bytes": 80, "size_bytes": 16, "slices": 1 }',
     ):
         require_metadata_fragment(metadata, fragment)
 
@@ -212,7 +215,7 @@ def main() -> int:
         raise AssertionError("tex_conv --cube did not create the requested pair")
     cube_metadata = cube_metadata_path.read_text(encoding="utf-8")
     for fragment in (
-        "asset.version = 2;",
+        "asset.version = 1;",
         'asset.dimension = "cube";',
         "asset.depth = 1;",
         "asset.width = 2;",
@@ -251,7 +254,7 @@ def main() -> int:
         raise AssertionError("tex_conv --volume did not create the requested pair")
     volume_metadata = volume_metadata_path.read_text(encoding="utf-8")
     for fragment in (
-        "asset.version = 2;",
+        "asset.version = 1;",
         'asset.dimension = "volume";',
         "asset.depth = 3;",
         "asset.width = 4;",

@@ -65,7 +65,6 @@ static constexpr AStringView s_SizeBytesField = "size_bytes";
 
 static constexpr AStringView s_UastcLdr4x4Format = "uastc_ldr_4x4";
 static constexpr AStringView s_UastcSpecificationRevision = "b624c07ad3c659e7b0f0badcb36e9a6b8820a99d";
-static constexpr AStringView s_MipMajorBlocksPayloadLayout = "mip_major_blocks";
 static constexpr AStringView s_MipMajorSliceMajorBlocksPayloadLayout = "mip_major_slice_major_blocks";
 static constexpr AStringView s_ClampMipAddressMode = "clamp";
 static constexpr AStringView s_LinearColorSpace = "linear";
@@ -77,6 +76,7 @@ static constexpr AStringView s_TextureDataExtension = ".tex";
 static constexpr u32 s_UastcBlockWidth = 4u;
 static constexpr u32 s_UastcBlockHeight = 4u;
 static constexpr u32 s_UastcBytesPerBlock = 16u;
+static constexpr u32 s_TextureMetadataVersion = 1u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -326,7 +326,6 @@ template<typename IntegerT>
     const u32 height,
     const u32 depth,
     const u32 expectedMipCount,
-    const bool hasExplicitSliceCount,
     Texture::MipLevelVector& outMipLevels
 ){
     outMipLevels.clear();
@@ -366,27 +365,18 @@ template<typename IntegerT>
             );
             return false;
         }
-        if(hasExplicitSliceCount){
-            if(!Core::Assets::ValidateMetadataAssetFields(
-                nwbFilePath,
-                mipValue,
-                "Texture mip",
-                { s_LevelField, s_WidthField, s_HeightField, s_SlicesField, s_BlocksXField, s_BlocksYField, s_OffsetBytesField, s_SizeBytesField }
-            ))
-                return false;
-        }
-        else if(!Core::Assets::ValidateMetadataAssetFields(
+        if(!Core::Assets::ValidateMetadataAssetFields(
             nwbFilePath,
             mipValue,
             "Texture mip",
-            { s_LevelField, s_WidthField, s_HeightField, s_BlocksXField, s_BlocksYField, s_OffsetBytesField, s_SizeBytesField }
+            { s_LevelField, s_WidthField, s_HeightField, s_SlicesField, s_BlocksXField, s_BlocksYField, s_OffsetBytesField, s_SizeBytesField }
         ))
             return false;
 
         u32 level = 0u;
         u32 mipWidth = 0u;
         u32 mipHeight = 0u;
-        u32 sliceCount = 1u;
+        u32 sliceCount = 0u;
         u32 blockCountX = 0u;
         u32 blockCountY = 0u;
         u64 offsetBytes = 0u;
@@ -395,15 +385,13 @@ template<typename IntegerT>
             !ReadRequiredUnsignedField(nwbFilePath, mipValue, s_LevelField, 0u, Limit<u32>::s_Max, level)
             || !ReadRequiredUnsignedField(nwbFilePath, mipValue, s_WidthField, 1u, Limit<u32>::s_Max, mipWidth)
             || !ReadRequiredUnsignedField(nwbFilePath, mipValue, s_HeightField, 1u, Limit<u32>::s_Max, mipHeight)
+            || !ReadRequiredUnsignedField(nwbFilePath, mipValue, s_SlicesField, 1u, Limit<u32>::s_Max, sliceCount)
             || !ReadRequiredUnsignedField(nwbFilePath, mipValue, s_BlocksXField, 1u, Limit<u32>::s_Max, blockCountX)
             || !ReadRequiredUnsignedField(nwbFilePath, mipValue, s_BlocksYField, 1u, Limit<u32>::s_Max, blockCountY)
             || !ReadRequiredUnsignedField(nwbFilePath, mipValue, s_OffsetBytesField, static_cast<u64>(0u), Limit<u64>::s_Max, offsetBytes)
             || !ReadRequiredUnsignedField(nwbFilePath, mipValue, s_SizeBytesField, static_cast<u64>(1u), Limit<u64>::s_Max, sizeBytes)
         )
             return false;
-        if(hasExplicitSliceCount && !ReadRequiredUnsignedField(nwbFilePath, mipValue, s_SlicesField, 1u, Limit<u32>::s_Max, sliceCount))
-            return false;
-
         const u64 expectedBlockCountX = DivideUp(static_cast<u64>(expectedWidth), static_cast<u64>(s_UastcBlockWidth));
         const u64 expectedBlockCountY = DivideUp(static_cast<u64>(expectedHeight), static_cast<u64>(s_UastcBlockHeight));
         if(expectedBlockCountX > Limit<u32>::s_Max || expectedBlockCountY > Limit<u32>::s_Max){
@@ -523,58 +511,10 @@ bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
         return false;
     }
 
-    // Keep existing 2D assets byte-for-byte compatible with the original TEX1 payload. Cubemaps and volumes need
-    // their plane counts and base Z extent, so they use the explicit v2 record layout.
-    if(texture.dimension() == TextureDimension::Texture2D && texture.depth() == 1u){
-        Core::Assets::AssetVector<TextureBinaryPayload::MipLevelBinary> mipBinaries(outBinary.get_allocator().arena());
-        mipBinaries.reserve(texture.mipLevels().size());
-        for(const TextureMipLevel& mip : texture.mipLevels()){
-            TextureBinaryPayload::MipLevelBinary binaryMip;
-            binaryMip.width = mip.width;
-            binaryMip.height = mip.height;
-            binaryMip.blockCountX = mip.blockCountX;
-            binaryMip.blockCountY = mip.blockCountY;
-            binaryMip.offsetBytes = mip.offsetBytes;
-            binaryMip.sizeBytes = mip.sizeBytes;
-            mipBinaries.push_back(binaryMip);
-        }
-
-        usize reserveBytes = sizeof(TextureBinaryPayload::HeaderBinary);
-        if(
-            !AddBinaryRepeatedReserveBytes(reserveBytes, mipBinaries.size(), sizeof(TextureBinaryPayload::MipLevelBinary))
-            || !AddBinaryReserveBytes(reserveBytes, texture.uastcBlocks().size())
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetCodec::serialize failed: cooked payload size overflows"));
-            return false;
-        }
-
-        outBinary.clear();
-        outBinary.reserve(reserveBytes);
-
-        TextureBinaryPayload::HeaderBinary header;
-        header.colorSpace = static_cast<u32>(texture.colorSpace());
-        header.width = texture.width();
-        header.height = texture.height();
-        header.mipCount = static_cast<u32>(mipBinaries.size());
-        header.hasAlpha = texture.hasAlpha() ? 1u : 0u;
-        header.uastcByteCount = static_cast<u64>(texture.uastcBlocks().size());
-        AppendPOD(outBinary, header);
-        if(!Core::Assets::AppendVectorPayload(
-            outBinary,
-            mipBinaries,
-            NWB_TEXT("TextureAssetCodec::serialize"),
-            NWB_TEXT("mip levels")
-        ))
-            return false;
-
-        BinaryDetail::AppendBytesNoReserveUnchecked(outBinary, texture.uastcBlocks().data(), texture.uastcBlocks().size());
-        return true;
-    }
-
-    Core::Assets::AssetVector<TextureBinaryPayload::MipLevelBinaryV2> mipBinaries(outBinary.get_allocator().arena());
+    Core::Assets::AssetVector<TextureBinaryPayload::MipLevelBinary> mipBinaries(outBinary.get_allocator().arena());
     mipBinaries.reserve(texture.mipLevels().size());
     for(const TextureMipLevel& mip : texture.mipLevels()){
-        TextureBinaryPayload::MipLevelBinaryV2 binaryMip;
+        TextureBinaryPayload::MipLevelBinary binaryMip;
         binaryMip.width = mip.width;
         binaryMip.height = mip.height;
         binaryMip.sliceCount = mip.sliceCount;
@@ -585,9 +525,9 @@ bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
         mipBinaries.push_back(binaryMip);
     }
 
-    usize reserveBytes = sizeof(TextureBinaryPayload::HeaderBinaryV2);
+    usize reserveBytes = sizeof(TextureBinaryPayload::HeaderBinary);
     if(
-        !AddBinaryRepeatedReserveBytes(reserveBytes, mipBinaries.size(), sizeof(TextureBinaryPayload::MipLevelBinaryV2))
+        !AddBinaryRepeatedReserveBytes(reserveBytes, mipBinaries.size(), sizeof(TextureBinaryPayload::MipLevelBinary))
         || !AddBinaryReserveBytes(reserveBytes, texture.uastcBlocks().size())
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetCodec::serialize failed: cooked payload size overflows"));
@@ -597,7 +537,7 @@ bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     outBinary.clear();
     outBinary.reserve(reserveBytes);
 
-    TextureBinaryPayload::HeaderBinaryV2 header;
+    TextureBinaryPayload::HeaderBinary header;
     header.colorSpace = static_cast<u32>(texture.colorSpace());
     header.dimension = static_cast<u32>(texture.dimension());
     header.width = texture.width();
@@ -643,40 +583,8 @@ bool ParseTextureCookMetadata(
         );
         return false;
     }
-    u32 metadataVersion = 0u;
-    if(!ReadRequiredUnsignedField(nwbFilePath, asset, s_VersionField, 1u, 2u, metadataVersion))
-        return false;
-
-    const bool hasExplicitSliceCount = metadataVersion == 2u;
-    if(metadataVersion == 1u){
-        if(!Core::Assets::ValidateMetadataAssetFields(
-            nwbFilePath,
-            asset,
-            s_DiagnosticPrefix,
-            {
-                s_VersionField,
-                s_FormatField,
-                s_UastcSpecificationRevisionField,
-                s_ColorSpaceField,
-                s_WidthField,
-                s_HeightField,
-                s_BlockWidthField,
-                s_BlockHeightField,
-                s_BytesPerBlockField,
-                s_PayloadLayoutField,
-                s_MipAddressModeField,
-                s_HasAlphaField,
-                s_MipCountField,
-                s_DataField,
-                s_MipsField,
-            }
-        ))
-            return false;
-        outEntry.dimension = TextureDimension::Texture2D;
-        outEntry.depth = 1u;
-    }
-    else{
-        if(!Core::Assets::ValidateMetadataAssetFields(
+    if(
+        !Core::Assets::ValidateMetadataAssetFields(
             nwbFilePath,
             asset,
             s_DiagnosticPrefix,
@@ -699,14 +607,12 @@ bool ParseTextureCookMetadata(
                 s_DataField,
                 s_MipsField,
             }
-        ))
-            return false;
-        if(
-            !ReadTextureDimension(nwbFilePath, asset, outEntry.dimension)
-            || !ReadRequiredUnsignedField(nwbFilePath, asset, s_DepthField, 1u, Limit<u32>::s_Max, outEntry.depth)
         )
-            return false;
-    }
+        || !ReadExactUnsignedField(nwbFilePath, asset, s_VersionField, s_TextureMetadataVersion)
+        || !ReadTextureDimension(nwbFilePath, asset, outEntry.dimension)
+        || !ReadRequiredUnsignedField(nwbFilePath, asset, s_DepthField, 1u, Limit<u32>::s_Max, outEntry.depth)
+    )
+        return false;
 
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, outEntry.virtualPath, scratchArena))
         return false;
@@ -725,7 +631,7 @@ bool ParseTextureCookMetadata(
             nwbFilePath,
             asset,
             s_PayloadLayoutField,
-            hasExplicitSliceCount ? s_MipMajorSliceMajorBlocksPayloadLayout : s_MipMajorBlocksPayloadLayout
+            s_MipMajorSliceMajorBlocksPayloadLayout
         )
         || !ReadExactStringField(nwbFilePath, asset, s_MipAddressModeField, s_ClampMipAddressMode)
         || !ReadRequiredUnsignedField(nwbFilePath, asset, s_HasAlphaField, 0u, 1u, hasAlpha)
@@ -783,7 +689,6 @@ bool ParseTextureCookMetadata(
         outEntry.height,
         outEntry.depth,
         expectedMipCount,
-        hasExplicitSliceCount,
         outEntry.mipLevels
     ))
         return false;

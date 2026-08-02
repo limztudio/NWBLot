@@ -251,102 +251,8 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    usize prefixCursor = 0u;
-    TextureBinaryPayload::HeaderPrefix headerPrefix;
-    if(!Core::Assets::ReadMagicHeaderPayload(
-        binary,
-        prefixCursor,
-        headerPrefix,
-        TextureBinaryPayload::s_TextureMagic,
-        NWB_TEXT("Texture::loadBinary"),
-        NWB_TEXT("texture")
-    ))
-        return false;
-
-    if(headerPrefix.version == TextureBinaryPayload::s_TextureVersionV1){
-        usize cursor = 0u;
-        TextureBinaryPayload::HeaderBinary header;
-        if(!Core::Assets::ReadMagicHeaderPayload(
-            binary,
-            cursor,
-            header,
-            TextureBinaryPayload::s_TextureMagic,
-            NWB_TEXT("Texture::loadBinary"),
-            NWB_TEXT("texture")
-        ))
-            return false;
-
-        if(header.version != TextureBinaryPayload::s_TextureVersionV1){
-            NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: unsupported texture payload version"));
-            return false;
-        }
-        if(header.reserved != 0u || header.hasAlpha > 1u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: invalid texture payload flags"));
-            return false;
-        }
-        if(header.mipCount == 0u || header.uastcByteCount > Limit<usize>::s_Max){
-            NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: texture payload counts exceed runtime limits"));
-            return false;
-        }
-
-        Core::Assets::AssetVector<TextureBinaryPayload::MipLevelBinary> mipBinaries(m_mipLevels.get_allocator().arena());
-        if(!Core::Assets::ReadVectorPayload(
-            binary,
-            cursor,
-            header.mipCount,
-            mipBinaries,
-            NWB_TEXT("Texture::loadBinary"),
-            NWB_TEXT("mip levels")
-        ))
-            return false;
-
-        const usize uastcByteCount = static_cast<usize>(header.uastcByteCount);
-        if(!BinaryDetail::CanReadBytes(binary, cursor, uastcByteCount)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: UASTC payload is truncated"));
-            return false;
-        }
-
-        MipLevelVector mipLevels(m_mipLevels.get_allocator().arena());
-        mipLevels.reserve(mipBinaries.size());
-        for(const TextureBinaryPayload::MipLevelBinary& mipBinary : mipBinaries){
-            TextureMipLevel mip;
-            mip.width = mipBinary.width;
-            mip.height = mipBinary.height;
-            mip.blockCountX = mipBinary.blockCountX;
-            mip.blockCountY = mipBinary.blockCountY;
-            mip.offsetBytes = mipBinary.offsetBytes;
-            mip.sizeBytes = mipBinary.sizeBytes;
-            mip.sliceCount = 1u;
-            mipLevels.push_back(mip);
-        }
-
-        Core::Assets::AssetBytes uastcBlocks(m_uastcBlocks.get_allocator().arena());
-        uastcBlocks.resize(uastcByteCount);
-        if(!BinaryDetail::ReadBytes(binary, cursor, uastcBlocks.data(), uastcByteCount)){
-            NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: UASTC payload is malformed"));
-            return false;
-        }
-        if(!Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Texture::loadBinary")))
-            return false;
-
-        m_colorSpace = static_cast<TextureColorSpace::Enum>(header.colorSpace);
-        m_hasAlpha = header.hasAlpha != 0u;
-        m_width = header.width;
-        m_height = header.height;
-        m_dimension = TextureDimension::Texture2D;
-        m_depth = 1u;
-        m_mipLevels = Move(mipLevels);
-        m_uastcBlocks = Move(uastcBlocks);
-        return validatePayload();
-    }
-
-    if(headerPrefix.version != TextureBinaryPayload::s_TextureVersionV2){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: unsupported texture payload version"));
-        return false;
-    }
-
     usize cursor = 0u;
-    TextureBinaryPayload::HeaderBinaryV2 header;
+    TextureBinaryPayload::HeaderBinary header;
     if(!Core::Assets::ReadMagicHeaderPayload(
         binary,
         cursor,
@@ -357,7 +263,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
     ))
         return false;
     if(
-        header.version != TextureBinaryPayload::s_TextureVersionV2
+        header.version != TextureBinaryPayload::s_TextureVersion
         || header.reserved != 0u
         || header.hasAlpha > 1u
         || header.dimension > static_cast<u32>(Limit<u8>::s_Max)
@@ -375,7 +281,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    Core::Assets::AssetVector<TextureBinaryPayload::MipLevelBinaryV2> mipBinaries(m_mipLevels.get_allocator().arena());
+    Core::Assets::AssetVector<TextureBinaryPayload::MipLevelBinary> mipBinaries(m_mipLevels.get_allocator().arena());
     if(!Core::Assets::ReadVectorPayload(
         binary,
         cursor,
@@ -394,7 +300,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
 
     MipLevelVector mipLevels(m_mipLevels.get_allocator().arena());
     mipLevels.reserve(mipBinaries.size());
-    for(const TextureBinaryPayload::MipLevelBinaryV2& mipBinary : mipBinaries){
+    for(const TextureBinaryPayload::MipLevelBinary& mipBinary : mipBinaries){
         if(mipBinary.reserved != 0u){
             NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: invalid texture mip payload flags"));
             return false;

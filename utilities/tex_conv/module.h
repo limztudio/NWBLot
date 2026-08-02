@@ -20,6 +20,7 @@ NWB_TEX_CONV_BEGIN
 inline constexpr u32 s_UastcBlockWidth = 4u;
 inline constexpr u32 s_UastcBlockHeight = 4u;
 inline constexpr u32 s_UastcBytesPerBlock = 16u;
+inline constexpr u32 s_TextureMetadataVersion = 1u;
 inline constexpr AStringView s_UastcSpecificationRevision = "b624c07ad3c659e7b0f0badcb36e9a6b8820a99d";
 
 

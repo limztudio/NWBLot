@@ -8,26 +8,28 @@ static constexpr AStringView s_TextureTestMetadata =
     "asset.format = \"uastc_ldr_4x4\";\n"
     "asset.uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n"
     "asset.color_space = \"srgb\";\n"
+    "asset.dimension = \"2d\";\n"
+    "asset.depth = 1;\n"
     "asset.width = 7;\n"
     "asset.height = 5;\n"
     "asset.block_width = 4;\n"
     "asset.block_height = 4;\n"
     "asset.bytes_per_block = 16;\n"
-    "asset.payload_layout = \"mip_major_blocks\";\n"
+    "asset.payload_layout = \"mip_major_slice_major_blocks\";\n"
     "asset.mip_address_mode = \"clamp\";\n"
     "asset.has_alpha = 1;\n"
     "asset.mip_count = 3;\n"
     "asset.data = \"checker.tex\";\n"
     "asset.mips = [\n"
-    "    { \"level\": 0, \"width\": 7, \"height\": 5, \"blocks_x\": 2, \"blocks_y\": 2, \"offset_bytes\": 0, \"size_bytes\": 64 },\n"
-    "    { \"level\": 1, \"width\": 3, \"height\": 2, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 64, \"size_bytes\": 16 },\n"
-    "    { \"level\": 2, \"width\": 1, \"height\": 1, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 80, \"size_bytes\": 16 },\n"
+    "    { \"level\": 0, \"width\": 7, \"height\": 5, \"blocks_x\": 2, \"blocks_y\": 2, \"offset_bytes\": 0, \"size_bytes\": 64, \"slices\": 1 },\n"
+    "    { \"level\": 1, \"width\": 3, \"height\": 2, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 64, \"size_bytes\": 16, \"slices\": 1 },\n"
+    "    { \"level\": 2, \"width\": 1, \"height\": 1, \"blocks_x\": 1, \"blocks_y\": 1, \"offset_bytes\": 80, \"size_bytes\": 16, \"slices\": 1 },\n"
     "];\n"
 ;
 
 static constexpr AStringView s_TextureCubeTestMetadata =
     "texture asset;\n\n"
-    "asset.version = 2;\n"
+    "asset.version = 1;\n"
     "asset.format = \"uastc_ldr_4x4\";\n"
     "asset.uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n"
     "asset.color_space = \"srgb\";\n"
@@ -51,7 +53,7 @@ static constexpr AStringView s_TextureCubeTestMetadata =
 
 static constexpr AStringView s_TextureVolumeTestMetadata =
     "texture asset;\n\n"
-    "asset.version = 2;\n"
+    "asset.version = 1;\n"
     "asset.format = \"uastc_ldr_4x4\";\n"
     "asset.uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n"
     "asset.color_space = \"linear\";\n"
@@ -144,7 +146,10 @@ TEST(AssetsGraphics, TextureCodecRoundTripPreservesUastcMipPayload){
     EXPECT_TRUE(loadedTexture.hasAlpha());
     EXPECT_EQ(loadedTexture.width(), 7u);
     EXPECT_EQ(loadedTexture.height(), 5u);
+    EXPECT_EQ(loadedTexture.dimension(), NWB::Impl::TextureDimension::Texture2D);
+    EXPECT_EQ(loadedTexture.depth(), 1u);
     ASSERT_EQ(loadedTexture.mipLevels().size(), 3u);
+    EXPECT_EQ(loadedTexture.mipLevels()[0u].sliceCount, 1u);
     EXPECT_EQ(loadedTexture.mipLevels()[0u].sizeBytes, 64u);
     EXPECT_EQ(loadedTexture.mipLevels()[1u].offsetBytes, 64u);
     EXPECT_EQ(loadedTexture.mipLevels()[2u].offsetBytes, 80u);
@@ -178,7 +183,7 @@ TEST(AssetsGraphics, TextureCodecRoundTripsCubeAndVolumePayloads){
 
         NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
         ASSERT_TRUE(codec.serialize(cube, binary));
-        ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinaryV2) + 2u * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinaryV2) + 192u);
+        ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinary) + 2u * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinary) + 192u);
 
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         ASSERT_TRUE(codec.deserialize(testArena.arena, cube.virtualPath(), binary, loadedAsset));
@@ -208,7 +213,7 @@ TEST(AssetsGraphics, TextureCodecRoundTripsCubeAndVolumePayloads){
 
         NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
         ASSERT_TRUE(codec.serialize(volume, binary));
-        ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinaryV2) + 3u * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinaryV2) + 80u);
+        ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinary) + 3u * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinary) + 80u);
 
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         ASSERT_TRUE(codec.deserialize(testArena.arena, volume.virtualPath(), binary, loadedAsset));
@@ -270,7 +275,7 @@ TEST(AssetsGraphics, TextureCookerBuildsCookedAssetFromTexConverterMetadata){
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
-TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromV2Metadata){
+TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromCurrentMetadata){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -326,6 +331,37 @@ TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromV2Metadata){
     ErrorCode errorCode;
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
     EXPECT_EQ(logger.errorCount(), 0u);
+}
+
+TEST(AssetsGraphics, TextureCookerRejectsUnsupportedMetadataVersion){
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    AString metadata(s_TextureTestMetadata);
+    const usize versionPosition = metadata.find("asset.version = 1;");
+    ASSERT_NE(versionPosition, AString::npos);
+    metadata.replace(versionPosition, 18u, "asset.version = 2;");
+
+    NWB::Core::Metascript::Document document(testArena.arena);
+    ASSERT_TRUE(document.parse(AStringView(metadata.data(), metadata.size())));
+
+    const Path assetRoot = AssetsGraphicsTestCaseRoot(testArena, "texture_legacy_metadata") / "assets";
+    const Path metadataPath = assetRoot / "textures" / "checker.nwb";
+    NWB::Impl::TextureCookEntry entry(testArena.arena);
+    NWB::Core::Alloc::ScratchArena scratchArena(s_CodecScratchArena);
+    EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(
+        assetRoot,
+        "project",
+        metadataPath,
+        document,
+        entry,
+        scratchArena
+    ));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("outside the supported range")));
+#else
+#endif
 }
 
 TEST(AssetsGraphics, TextureCookerRejectsSidecarPathTraversal){

@@ -28,21 +28,19 @@ texture specification's LSB-first bit layout (revision
 b624c07ad3c659e7b0f0badcb36e9a6b8820a99d). Edge blocks are the normal clamped
 4x4 UASTC blocks produced by the encoder.
 
-2D assets retain the version-1 `mip_major_blocks` order: mip level 0 through the
-1x1 level. Cube and volume assets use version-2
-`mip_major_slice_major_blocks` order: each mip's cube faces or Z planes are
-contiguous before the next mip. Cube planes retain `+X, -X, +Y, -Y, +Z, -Z`
-order; volume planes retain ascending Z order. Volume mips reduce all three
-dimensions, including depth, until they reach 1×1×1.
+All texture assets use version 1 and the
+`mip_major_slice_major_blocks` order: each mip's planes are contiguous before
+the next mip. A 2D mip has one plane, cube planes retain `+X, -X, +Y, -Y, +Z,
+-Z` order, and volume planes retain ascending Z order. Volume mips reduce all
+three dimensions, including depth, until they reach 1×1×1.
 
 The sibling .nwb file is readable metascript metadata. It records:
 
-- the uastc_ldr_4x4 format, color space, base resolution, and (for version 2)
-  dimension and depth;
+- the uastc_ldr_4x4 format, color space, base resolution, dimension, and depth;
 - the 4x4 / 16-byte block layout;
 - the .tex basename and mip-major payload layout; and
-- for each mip, its dimensions, block grid, byte offset, byte size, and (for
-  version 2) plane count.
+- for each mip, its dimensions, block grid, byte offset, byte size, and plane
+  count.
 
 For example, a 7x5 source has three mips and its payload records 64 bytes at
 offset 0 for 7x5, then 16 bytes each for 3x2 and 1x1. The metadata's

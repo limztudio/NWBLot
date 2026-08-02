@@ -111,10 +111,8 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
         combinedMax = VectorMax(combinedMax, worldMax);
 
         NwbCausticEmissionTargetGpu target;
-        StoreFloat(worldMin, &target.aabbMin);
-        StoreFloat(worldMax, &target.aabbMax);
-        target.aabbMin.w = 0.f;
-        target.aabbMax.w = 0.f;
+        StoreFloat(VectorSetW(worldMin, 0.0f), &target.aabbMin);
+        StoreFloat(VectorSetW(worldMax, 0.0f), &target.aabbMax);
         targets.push_back(target);
     }
 

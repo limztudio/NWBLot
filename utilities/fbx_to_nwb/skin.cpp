@@ -66,12 +66,10 @@ JointMatrix ToJointMatrix(const ufbx_matrix& matrix){
     return result;
 }
 
-bool NearlyEqualJointMatrices(const JointMatrix& lhs, const JointMatrix& rhs){
+bool NearlyEqualJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs){
     const SIMDVector epsilon = VectorReplicate(s_JointMatrixRowEpsilon);
-    const SIMDMatrix lhsMatrix = LoadFloat(lhs);
-    const SIMDMatrix rhsMatrix = LoadFloat(rhs);
     for(usize rowIndex = 0u; rowIndex < s_JointMatrixRowCount; ++rowIndex){
-        if(!Vector4NearEqual(lhsMatrix.v[rowIndex], rhsMatrix.v[rowIndex], epsilon))
+        if(!Vector4NearEqual(lhs.v[rowIndex], rhs.v[rowIndex], epsilon))
             return false;
     }
     return true;
@@ -123,6 +121,7 @@ bool FindOrAddJoint(
     }
 
     const JointMatrix convertedMatrix = ToJointMatrix(inverseBind);
+    const SIMDMatrix convertedMatrixValue = LoadFloat(convertedMatrix);
     const ufbx_matrix bindPose = ufbx_matrix_invert(&inverseBind);
     if(!FiniteUfbxMatrix(bindPose)){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skin cluster bind pose matrix is not finite"));
@@ -134,7 +133,7 @@ bool FindOrAddJoint(
         const usize jointIndex = static_cast<usize>(foundJoint.value());
         NWB_ASSERT(jointIndex < context.inverseBindMatrices.size());
         NWB_ASSERT(jointIndex < context.bindPoseMatrices.size());
-        if(!NearlyEqualJointMatrices(context.inverseBindMatrices[jointIndex], convertedMatrix)){
+        if(!NearlyEqualJointMatrices(LoadFloat(context.inverseBindMatrices[jointIndex]), convertedMatrixValue)){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices")
                 , StringConvert(NodeDisplayName(cluster->bone_node))
             );

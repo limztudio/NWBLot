@@ -61,15 +61,20 @@ template<typename PositionAtT, typename VisitFaceNormalsT>
 
 template<typename CookEntryT>
 static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDesc& meshlet){
-    const auto positionAt = [&](const u32 localPositionIndex){
+    const u32 positionCount = MeshletPositionCount(meshlet);
+    NWB_ASSERT(positionCount <= s_MeshMaxMeshletVertices);
+    SIMDVector positions[s_MeshMaxMeshletVertices];
+    for(u32 localPositionIndex = 0u; localPositionIndex < positionCount; ++localPositionIndex){
         const MeshletPositionStreamRef& ref = entry.meshletPositionStreamRefs[meshlet.positionRefOffset + localPositionIndex];
-        return MakeMeshletPositionVector(LoadFloat(entry.positions[ref.position]));
+        positions[localPositionIndex] = MakeMeshletPositionVector(LoadFloat(entry.positions[ref.position]));
+    }
+
+    const auto positionAt = [&](const u32 localPositionIndex){
+        return positions[localPositionIndex];
     };
     const auto localPositionAt = [&](const u8 localVertexIndex){
         const MeshletLocalVertexRef& localVertexRef = entry.meshletLocalVertexRefs[meshlet.localVertexOffset + localVertexIndex];
-        const usize positionRefIndex = meshlet.positionRefOffset + localVertexRef.localDeformedPosition;
-        const MeshletPositionStreamRef& positionRef = entry.meshletPositionStreamRefs[positionRefIndex];
-        return MakeMeshletPositionVector(LoadFloat(entry.positions[positionRef.position]));
+        return positions[localVertexRef.localDeformedPosition];
     };
     const auto visitFaceNormals = [&](auto&& callback){
         for(u32 primitiveIndex = 0u; primitiveIndex < MeshletPrimitiveCount(meshlet); ++primitiveIndex){
@@ -84,7 +89,7 @@ static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDe
         }
     };
     const MeshletBoundsCalculation calculation = CalculateMeshletBounds(
-        MeshletPositionCount(meshlet),
+        positionCount,
         MeshletPrimitiveCount(meshlet),
         positionAt,
         visitFaceNormals

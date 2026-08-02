@@ -106,6 +106,7 @@ inline u32 ResolveSceneLights(
 
     const NWB::Impl::Scene::SceneViewBasis defaultBasis = NWB::Impl::Scene::BuildDefaultSceneViewBasis();
     NWB::Impl::Scene::SceneLight sceneLights[NWB_SCENE_MAX_LIGHTS];
+    f32 shadowImportance[NWB_SCENE_MAX_LIGHTS] = {};
     const usize gatheredCount = NWB::Impl::Scene::GatherSceneLights(world, defaultBasis, sceneLights, capacity);
 
     for(usize i = 0u; i < gatheredCount; ++i){
@@ -134,6 +135,20 @@ inline u32 ResolveSceneLights(
         ? LoadFloat(cameraView.transform->position)
         : VectorZero()
     ;
+    for(u32 i = 0u; i < lightCount; ++i){
+        const NWB::Impl::Scene::SceneLight& light = sceneLights[i];
+        shadowImportance[i] = ShadowSlotImportance(
+            LoadFloat(light.colorIntensity),
+            VectorSet(
+                light.range,
+                static_cast<f32>(light.type),
+                -1.0f,
+                light.enableCaustics ? s_CausticSlotUnassigned : s_CausticSlotDisabled
+            ),
+            LoadFloat(light.position),
+            cameraPosition
+        );
+    }
 
     const u32 slotCount = (lightCount < NWB_SCENE_SHADOW_SLOT_COUNT) ? lightCount : NWB_SCENE_SHADOW_SLOT_COUNT;
     for(u32 slot = 0u; slot < slotCount; ++slot){
@@ -142,12 +157,7 @@ inline u32 ResolveSceneLights(
         for(u32 i = 0u; i < lightCount; ++i){
             if(outLights[i].params.z >= 0.f)
                 continue;
-            const f32 importance = ShadowSlotImportance(
-                LoadFloat(outLights[i].colorIntensity),
-                LoadFloat(outLights[i].params),
-                LoadFloat(outLights[i].position),
-                cameraPosition
-            );
+            const f32 importance = shadowImportance[i];
             if(importance > bestImportance){
                 bestImportance = importance;
                 bestIndex = i;

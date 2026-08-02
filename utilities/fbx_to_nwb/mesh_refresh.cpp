@@ -57,6 +57,10 @@ struct StreamSortEntry{
     return FloatSortKey(lhs) == FloatSortKey(rhs);
 }
 
+[[nodiscard]] bool SameF32Bits(const f32 lhs, const f32 rhs){
+    return NWB_MEMCMP(&lhs, &rhs, sizeof(lhs)) == 0;
+}
+
 [[nodiscard]] bool LessValue(const Vec2& lhs, const Vec2& rhs){
     if(!SameF32(lhs.x, rhs.x))
         return LessF32(lhs.x, rhs.x);
@@ -81,6 +85,18 @@ struct StreamSortEntry{
     return LessF32(lhs.w, rhs.w);
 }
 
+[[nodiscard]] bool SameValue(const Vec2& lhs, const Vec2& rhs){
+    return SameF32Bits(lhs.x, rhs.x) && SameF32Bits(lhs.y, rhs.y);
+}
+
+[[nodiscard]] bool SameValue(const Vec3& lhs, const Vec3& rhs){
+    return SameF32Bits(lhs.x, rhs.x) && SameF32Bits(lhs.y, rhs.y) && SameF32Bits(lhs.z, rhs.z);
+}
+
+[[nodiscard]] bool SameValue(const Vec4& lhs, const Vec4& rhs){
+    return SameF32Bits(lhs.x, rhs.x) && SameF32Bits(lhs.y, rhs.y) && SameF32Bits(lhs.z, rhs.z) && SameF32Bits(lhs.w, rhs.w);
+}
+
 [[nodiscard]] bool LessValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs){
     for(usize i = 0u; i < s_MeshSkinInfluenceCount; ++i){
         if(lhs.joint[i] != rhs.joint[i])
@@ -93,30 +109,17 @@ struct StreamSortEntry{
     return false;
 }
 
-[[nodiscard]] bool SameVector2(const SIMDVector lhs, const SIMDVector rhs){
-    return Vector2EqualInt(lhs, rhs);
-}
-
-[[nodiscard]] bool SameVector3(const SIMDVector lhs, const SIMDVector rhs){
-    return Vector3EqualInt(lhs, rhs);
-}
-
-[[nodiscard]] bool SameVector4(const SIMDVector lhs, const SIMDVector rhs){
-    return Vector4EqualInt(lhs, rhs);
-}
-
 [[nodiscard]] bool SameValue(const MeshSkinInfluence& lhs, const MeshSkinInfluence& rhs){
     MeshSkinInfluenceEqual equal;
     return equal(lhs, rhs);
 }
 
-template<typename Value, typename SameValueT>
+template<typename Value>
 [[nodiscard]] bool DeduplicateStream(
     UtilityVector<Value>& stream,
     Core::Alloc::ThreadPool& threadPool,
     UtilityVector<u32>& outRemap,
-    const char* streamName,
-    SameValueT&& sameValue
+    const char* streamName
 ){
     outRemap.clear();
     outRemap.reserve(stream.size());
@@ -148,7 +151,7 @@ template<typename Value, typename SameValueT>
 
     usize uniqueCount = 0u;
     for(usize sortedIndex = 0u; sortedIndex < sortedEntries.size(); ++sortedIndex){
-        if(sortedIndex == 0u || !sameValue(sortedEntries[sortedIndex].value, sortedEntries[sortedIndex - 1u].value))
+        if(sortedIndex == 0u || !SameValue(sortedEntries[sortedIndex].value, sortedEntries[sortedIndex - 1u].value))
             ++uniqueCount;
     }
 
@@ -168,7 +171,7 @@ template<typename Value, typename SameValueT>
 
     u32 compactIndex = 0u;
     for(usize sortedIndex = 0u; sortedIndex < sortedEntries.size(); ++sortedIndex){
-        if(sortedIndex == 0u || !sameValue(sortedEntries[sortedIndex].value, sortedEntries[sortedIndex - 1u].value)){
+        if(sortedIndex == 0u || !SameValue(sortedEntries[sortedIndex].value, sortedEntries[sortedIndex - 1u].value)){
             if(compact.size() >= static_cast<usize>(s_MissingSourceStreamIndex)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize mesh: {} stream has too many unique values"), StringConvert(streamName));
                 return false;
@@ -250,28 +253,18 @@ template<typename Value, typename SameValueT>
     UtilityVector<u32> colorRemap;
     UtilityVector<u32> skinRemap(skinInfluences.size());
 
-    const auto sameVec2 = [](const Vec2& lhs, const Vec2& rhs){
-        return SameVector2(LoadFloat(lhs), LoadFloat(rhs));
-    };
-    const auto sameVec3 = [](const Vec3& lhs, const Vec3& rhs){
-        return SameVector3(LoadFloat(lhs), LoadFloat(rhs));
-    };
-    const auto sameVec4 = [](const Vec4& lhs, const Vec4& rhs){
-        return SameVector4(LoadFloat(lhs), LoadFloat(rhs));
-    };
-
     for(usize i = 0u; i < positionRemap.size(); ++i)
         positionRemap[i] = static_cast<u32>(i);
     for(usize i = 0u; i < skinRemap.size(); ++i)
         skinRemap[i] = static_cast<u32>(i);
 
-    if(!DeduplicateStream(mesh.normals, threadPool, normalRemap, "normal", sameVec3))
+    if(!DeduplicateStream(mesh.normals, threadPool, normalRemap, "normal"))
         return false;
-    if(!DeduplicateStream(mesh.tangents, threadPool, tangentRemap, "tangent", sameVec4))
+    if(!DeduplicateStream(mesh.tangents, threadPool, tangentRemap, "tangent"))
         return false;
-    if(!DeduplicateStream(mesh.uv0, threadPool, uv0Remap, "uv0", sameVec2))
+    if(!DeduplicateStream(mesh.uv0, threadPool, uv0Remap, "uv0"))
         return false;
-    if(!DeduplicateStream(mesh.colors, threadPool, colorRemap, "color", sameVec4))
+    if(!DeduplicateStream(mesh.colors, threadPool, colorRemap, "color"))
         return false;
 
     if(!RemapComponentRefs(mesh, positionRemap, normalRemap, tangentRemap, uv0Remap, colorRemap, skinRemap))
@@ -1121,27 +1114,17 @@ bool CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::Alloc::ThreadP
     UtilityVector<u32> colorRemap;
     UtilityVector<u32> skinRemap;
 
-    const auto sameVec2 = [](const Vec2& lhs, const Vec2& rhs){
-        return __hidden_mesh_refresh::SameVector2(LoadFloat(lhs), LoadFloat(rhs));
-    };
-    const auto sameVec3 = [](const Vec3& lhs, const Vec3& rhs){
-        return __hidden_mesh_refresh::SameVector3(LoadFloat(lhs), LoadFloat(rhs));
-    };
-    const auto sameVec4 = [](const Vec4& lhs, const Vec4& rhs){
-        return __hidden_mesh_refresh::SameVector4(LoadFloat(lhs), LoadFloat(rhs));
-    };
-
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.positions, threadPool, positionRemap, "position", sameVec3))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.positions, threadPool, positionRemap, "position"))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.normals, threadPool, normalRemap, "normal", sameVec3))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.normals, threadPool, normalRemap, "normal"))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.tangents, threadPool, tangentRemap, "tangent", sameVec4))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.tangents, threadPool, tangentRemap, "tangent"))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.uv0, threadPool, uv0Remap, "uv0", sameVec2))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.uv0, threadPool, uv0Remap, "uv0"))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.colors, threadPool, colorRemap, "color", sameVec4))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.colors, threadPool, colorRemap, "color"))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.skin, threadPool, skinRemap, "skin", __hidden_mesh_refresh::SameValue))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.skin, threadPool, skinRemap, "skin"))
         return false;
     if(!__hidden_mesh_refresh::RemapComponentRefs(mesh, positionRemap, normalRemap, tangentRemap, uv0Remap, colorRemap, skinRemap))
         return false;

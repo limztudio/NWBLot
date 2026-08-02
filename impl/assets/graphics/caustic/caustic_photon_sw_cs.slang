@@ -13,7 +13,6 @@
 [[vk::push_constant]]
 ConstantBuffer<NwbCausticPhotonPushConstants> g_NwbCausticSwPushConstants;
 
-// The shared scene-shading CB + light list are selected by the frame selector payload in the UniformBuffer heap.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed alias of the global UniformBuffer descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
@@ -24,8 +23,6 @@ ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapCaust
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbCausticSwBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbCausticSwBindlessResources.avboitSlots.w
 
-// The per-hit surface dispatch reads its typed words and mutable mesh-instance records through the heap-selected
-// material context above.
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbCausticSwMaterialContextSlots.sceneSlots.w;
 }
@@ -44,20 +41,12 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "../bvh/ray_vertex_attrib.slangi"
 #include "../common/math.slangi"
 
-// Global descriptor-heap accessors for per-mesh geometry. The material record carries the slots; this include provides
-// NwbHeapBvhNodes() for nodes and NwbHeapRawBuffer() for positions, indices, and attributes.
 #include "../bindless/bindless_heap_bvh.slangi"
 
-// The shadow trace's material-constants context (NwbShadowHit + the per-invocation accessors + the surface contract)
-// + the cook-generated per-hit surface dispatch (nwbShadowDispatchSurface), which #includes each transparent
-// material's .bind + .surface and routes by shadowTransmittanceModelId to return that occluder's optical params
-// (ior / transmission). The caustic closest-hit hook evaluates a refractive surface through the IDENTICAL dispatch
-// the shadow trace uses, so the two passes agree on a glass's optical params.
+// Caustics and shadows share per-hit surface dispatch.
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/transmittance_dispatch.slangi"
 
-// The shared caustic transport layer: the photon struct, the emission aim, the iterative bounce loop, the splat
-// math. It declares the backend closest-hit hook nwbCausticTraceClosest, defined below over this pass's BVH fetch.
 #include "caustic_trace.slangi"
 #include "light_pick.slangi"
 
@@ -65,8 +54,6 @@ uint nwbMeshFrameViewHeapSlot(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The software scene-instance table has its own structured record stride, but shares the global StorageBuffer
-// descriptor class with all other trace-context buffers. The b5 cbuffer supplies this table's uniform heap slot.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
@@ -77,12 +64,7 @@ StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> NwbHeapCausticSwInstances(c
     return g_NwbHeapCausticSwInstanceBuffers[slot];
 }
 
-// Per-mesh nodes, positions, indices, and attributes are read through descriptor-heap slots carried by the material
-// record. The shared backing buffers remain transitioned for those heap reads.
 
-// The caustic-specific producer inputs share the global heap's StorageBuffer / UniformBuffer tables with the trace
-// material context and mesh-frame view. Their slots are uniform for one dispatch and ride the photon push block, so
-// no NonUniformResourceIndex decoration is needed here.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed aliases of the global heap descriptor tables.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
@@ -119,7 +101,6 @@ struct NwbCausticSwTriangleHit{
     float w;
 };
 
-// Moller-Trumbore ray/triangle test (two-sided), reporting a hit strictly inside (tMin, tMax) with barycentrics.
 NwbCausticSwTriangleHit nwbCausticSwRayTriangle(const float3 origin, const float3 direction, const float tMin, const float tMax, const float3 v0, const float3 v1, const float3 v2){
     NwbCausticSwTriangleHit result;
     result.hit = false;
@@ -138,12 +119,7 @@ NwbCausticSwTriangleHit nwbCausticSwRayTriangle(const float3 origin, const float
 }
 
 NwbRayTraceVertexAttrib nwbCausticSwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
-    // attributeSlot is this mesh's per-corner attribute buffer's GLOBAL HEAP slot (carried on the instance material
-    // record, populated lockstep with the mesh in rt_swbvh.cpp). It is non-uniform across the wave -- each photon's ray
-    // hits a different mesh -- so the heap subscript MUST be NonUniformResourceIndex-tagged; NwbHeapRawBuffer() applies
-    // that internally and is re-invoked at each Load so the decoration is applied fresh at every descriptor access.
-    // One Load4 for the whole 16-byte attribute record (packed normal in .xy, uv0 in .zw) -- a single memory request
-    // instead of two dependent Load2s (bit-identical result, lower latency in the refractive-hit path).
+    // Per-mesh attribute slots are non-uniform heap indices.
     return nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u));
 }
 
@@ -151,32 +127,17 @@ NwbRayTraceVertexAttrib nwbCausticSwLoadVertexAttrib(const uint attributeSlot, c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-instance closest-hit refinement: push the world ray into the instance's object space, walk that mesh's
-// triangle BVH, and keep the NEAREST triangle crossing (smallest t). Updates the running closest hit in `closest`
-// (its .t is the current min). On a closer hit it records the world-space hit point, the interpolated SHADING world
-// normal (a0*w + a1*u + a2*v transformed by the inverse-transpose -- smooth across the mesh -> smooth caustic; the
-// HW closest-hit interpolates the SAME way for parity), the refractive flag, and -- for a refractive crossing -- the
-// optical params (ior / transmission) from the occluder's surface hook, evaluated through the SAME dispatch the
-// shadow trace uses.
+// Per-instance traversal refines the nearest triangle hit.
 void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, inout NwbCausticHit closest){
     const NwbSwBvhInstance instance = NwbHeapCausticSwInstances(g_NwbCausticSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbCausticSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
     const bool refractive = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u;
-    // This instance's per-mesh geometry (BVH nodes / indices / positions / attributes) is fetched from the global
-    // descriptor heap by the four per-buffer slots the material record carries (populated lockstep with the mesh in
-    // rt_swbvh.cpp). Each slot is NON-UNIFORM across the wave -- different photons' rays
-    // hit different meshes -- so its heap subscript must be NonUniformResourceIndex-tagged; NwbHeapBvhNodes() /
-    // NwbHeapRawBuffer() apply that internally and are re-invoked at EACH access below (never hoisted into a resource
-    // local) so the decoration is applied fresh at every subscript. Omitting it is undefined behaviour: a wave
-    // straddling a mesh boundary reads a DIFFERENT mesh's BVH/geometry for some lanes.
+    // Per-mesh geometry slots must remain non-uniform at every access.
     const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
     const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
     const float3 invDir = nwbBvhSafeInvDir(direction);
 
-    // FRONT-TO-BACK ordered descent. Keep the current node loaded; at an internal node descend the NEARER-entry child
-    // and defer the farther onto the stack (re-tested when popped, against the by-then-smaller closest.t). Processing
-    // near first shrinks closest.t sooner, so more far subtrees cull -> fewer triangle tests + refractive dispatches.
-    // The stack holds only deferred FAR children (<= tree depth).
+    // Near-first descent tightens closest.t before far-subtree tests.
     uint stack[NWB_CAUSTIC_SW_MESH_STACK_SIZE];
     uint stackPointer = 0u;
     NwbBvhNode node = NwbHeapBvhNodes(material.nodeSlot)[0u]; // per-mesh root
@@ -186,7 +147,6 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
         if(nwbBvhNodeIsLeaf(node)){
             const uint triangle = nwbBvhLeafPrimitive(node);
             const uint indexBase = triangle * 3u;
-            // The 3 triangle indices are contiguous -> one Load3 instead of three Loads (bit-identical, one request).
             const uint3 triIndices = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * 4u);
             const uint i0 = triIndices.x;
             const uint i1 = triIndices.y;
@@ -196,7 +156,6 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
             const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(i2 * 12u));
             const NwbCausticSwTriangleHit triangleHit = nwbCausticSwRayTriangle(origin, direction, tMin, closest.t, v0, v1, v2);
             if(triangleHit.hit){
-                // Closer than the running min -> adopt it.
                 closest.hit = true;
                 closest.t = triangleHit.t;
                 closest.isRefractive = refractive;
@@ -206,16 +165,12 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
                 closest.transmission = half3(1.0h, 1.0h, 1.0h);
 
                 if(refractive){
-                    // Evaluate this material's surface hook for its optical params, the SAME way the shadow trace
-                    // does (interpolated normal/uv0 + the material-constants context the instance record carries).
                     const uint attributeBase = triangle * 3u;
                     const NwbRayTraceVertexAttrib a0 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase);
                     const NwbRayTraceVertexAttrib a1 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
                     const NwbRayTraceVertexAttrib a2 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
                     const float3 objectShadingNormal = float3(a0.normal) * triangleHit.w + float3(a1.normal) * triangleHit.u + float3(a2.normal) * triangleHit.v;
 
-                    // The interpolated SHADING normal in world space (inverse-transpose of object->world). This is the
-                    // bend normal (smooth across the mesh -> smooth caustic) AND the surface-dispatch normal.
                     const float3 worldShadingNormal = nwbSafeNormalize(nwbSwBvhTransformNormal(instance, objectShadingNormal), float3(0.0, 0.0, 1.0));
                     closest.shadingNormal = worldShadingNormal;
 
@@ -244,8 +199,6 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
             float tRight;
             const bool hitRight = nwbBvhRayAabbT(origin, invDir, tMin, closest.t, rightNode.aabbMin, rightNode.aabbMax, 0.0, tRight);
             if(hitLeft && hitRight){
-                // Descend the nearer child; defer the farther. A full stack drops that farther subtree rather than
-                // corrupting traversal state.
                 if(tLeft <= tRight){
                     if(stackPointer < NWB_CAUSTIC_SW_MESH_STACK_SIZE) stack[stackPointer++] = right;
                     node = leftNode;
@@ -261,7 +214,6 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
             active = false; // both children culled -> pop
         }
 
-        // Pop the next deferred node that still survives the (now-smaller) closest.t cull; drain -> done.
         [loop] while(stackPointer > 0u){
             node = NwbHeapBvhNodes(material.nodeSlot)[stack[--stackPointer]];
             if(nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0)){
@@ -272,9 +224,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     }
 }
 
-// The SW backend's closest-hit hook: walk the software scene/instance BVH for every instance whose world AABB the
-// ray crosses, refining each with the exact per-mesh triangle traversal and keeping the nearest hit across all of
-// them. Mirrors nwbSwShadowOccluded's scene-BVH descent but tracks min-t instead of accumulating.
+// Software closest-hit refines scene-BVH candidates through mesh BVHs.
 NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin, float tMax){
     NwbCausticHit closest;
     closest.hit = false;
@@ -290,7 +240,6 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 
     const float3 invDir = nwbBvhSafeInvDir(direction);
 
-    // Near-first traversal avoids unnecessary mesh work without changing closest-hit results.
     uint stack[NWB_CAUSTIC_SW_SCENE_STACK_SIZE];
     uint stackPointer = 0u;
     NwbBvhNode node = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[0u]; // root
@@ -369,10 +318,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(!nwbCausticPickLight(photonIndex, light))
         return;
 
-    // Photons travel along the light's emission axis.
     const float3 lightDir = nwbSafeNormalize(-light.direction.xyz, float3(0.0, 0.0, -1.0));
 
-    // Hash target selection to decorrelate it from the photon grid.
     const uint targetIndex = nwbCausticHashU32(photonIndex) % g_NwbCausticSwPushConstants.emissionTargetCount;
     const NwbCausticEmissionTarget target = nwbCausticSwEmissionTargets()[targetIndex];
     const float3 targetAabbMin = target.aabbMin.xyz;

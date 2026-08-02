@@ -9,116 +9,54 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Soft shadow RESOLVE: the spatial denoise + upsample of the half-res jittered visibility produced by the soft trace.
-// It runs an edge-avoiding a-trous wavelet at half-res as N ping-pong compute passes, bracketed by a geometry downsample
-// pre-pass + a bilateral upsample. The first wavelet reads the trace/temporal history directly; it does not need a
-// standalone copy pass. Shadow-specific signal rules:
-//  - the signal is a per-slot 0..1 VISIBILITY / colored transmittance, NOT irradiance, so ALL the caustic photon-
-//    density / area-Jacobian / exposure math is dropped: optional PREPARE is only a direct half-res visibility copy.
-//  - the MULTIPLICATIVE IDENTITY is 1.0 (fully LIT): background/invalid taps and the all-taps-rejected sentinel write
-//    1.0, never the caustic 0.0 (which is the ADDITIVE identity -- writing 0.0 here would leak black shadow).
-//  - the edge-stop adds a NORMAL term (dot of packed geometry normals) alongside the world-distance term, so the
-//    penumbra never smooths across a surface-orientation crease the way a flat caustic on one receiver could.
-// Per-slot: the half-res visibility is a Texture2DArray (one layer per shadow slot); the resolve processes a range of
-// active shadow slots [lightSlotStart, lightSlotStart+lightSlotCount) carried in the push constants.
+// Soft resolve denoises half-resolution transmittance and upsamples slot ranges.
 #define NWB_SHADOW_RESOLVE_SET 0
 
-// NwbShadowResolvePushConstants.stage values. The C++ dispatch and shader branch both consume this ABI. PREPARE remains
-// available for diagnostic/compatibility paths, but the normal renderer goes straight to WAVELET to avoid a redundant copy.
+// Shared C++/shader resolve-stage ABI.
 #define NWB_SHADOW_RESOLVE_STAGE_PREPARE 0u
 #define NWB_SHADOW_RESOLVE_STAGE_WAVELET 1u
 #define NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE 2u
 
-// The sampled-image slot numbers below are retained as the sparse local-layout ABI map; do not renumber the gaps.
-// Geometry downsample and soft resolve now fetch those logical reads from the global heap through push-constant slots.
-// Geometry downsample also gets its scene camera through the target-generation resource-slot cbuffer, so its local
-// layout contains only that cbuffer plus its geometry-cache UAV; resolve retains its own local scene CB.
+// Sparse local slots are ABI gaps; reads are selected through global heap slots.
 
-// The half-res soft visibility Texture2DArray (one layer per shadow slot). SRV role: read by the optional PREPARE copy
-// and by WAVELET (the first pass reads the direct trace/history input; later passes read the ping-pong -- see below).
-// The final upsample reads the final ping-pong result too.
+// Half-resolution visibility/transmittance input.
 #define NWB_SHADOW_RESOLVE_BINDING_SOFT_HALF 0
-// Half-res GEOMETRY CACHE SRV, produced once by the shadow geometry downsample pre-pass. RGBA16F packs the FOUR
-// values the shadow edge-stop needs into one texel (the full world position is NOT stored -- shadow needs only a
-// discontinuity metric, not the area Jacobian the caustic derived from world spacing): .xy = the receiver normal
-// OCTAHEDRAL-packed to [-1,1]^2, .z = the WORLD-space distance from the camera (a linear, world-unit depth proxy --
-// robust to the RGBA16F mantissa unlike a [0,1] hyperbolic depth, and it needs no projection matrix, just the camera
-// position from the scene-shading CB), .w = receiver validity (1 = receiver, 0 = background). The wavelet + the
-// upsample read this single half-res texel per tap for the distance + normal edge-stops + the background skip.
+// Packed normal, camera distance, and receiver-validity edge-stop cache.
 #define NWB_SHADOW_RESOLVE_BINDING_GEOMETRY 1
-// The G-buffer depth SRV: background pixels (no receiver) write the LIT identity (1.0), and background taps are
-// skipped by the wavelet. Consumed by the full-res UPSAMPLE's own centre pixel (the half-res passes use the cache).
 #define NWB_SHADOW_RESOLVE_BINDING_GBUFFER_DEPTH 2
-// The half-res ping-pong OUTPUT UAV for this pass. The direct-input first wavelet writes its selected scratch target,
-// then C++ ping-pongs soft-A / soft-B as (input,output) for later passes. With an ODD pass count, the final target is
-// predetermined per signal and the UPSAMPLE reads it to write the FULL-res visibility.
+// Half-resolution ping-pong output.
 #define NWB_SHADOW_RESOLVE_BINDING_OUTPUT 3
-// The half-res color read by the WAVELET / UPSAMPLE. The first wavelet binds the direct trace/history source here;
-// later wavelets bind the other ping-pong buffer. Optional PREPARE reads SOFT_HALF instead. Always heap-selected.
 #define NWB_SHADOW_RESOLVE_BINDING_INPUT_COLOR 4
-// The FULL-res visibility Texture2DArray UAV (g_NwbSwShadowVisibility): the UPSAMPLE stage's output -- the same
-// image the deferred lighting samples. Only written by the UPSAMPLE stage (bound but unused on PREPARE/WAVELET).
+// Full-resolution visibility output sampled by deferred lighting.
 #define NWB_SHADOW_RESOLVE_BINDING_VISIBILITY 5
 
-// The TEMPORAL MOMENTS Texture2DArray SRV (the reproject-merge's moments-out: .x = integrated luma mean m1, .y =
-// integrated luma second-moment m2, .z = history length n). The WAVELET stage reads it to drive the SVGF variance-
-// coupled luminance edge-stop (variance = max(m2 - m1*m1, 0)) where history is long. Bound ONLY when temporal is live
-// (push.momentsValid == 1); the non-temporal / first-frame path binds a valid-but-unused dummy half-res array and the
-// shader guards every read behind momentsValid == 0 -> the SPATIAL variance fallback, so a dummy is never sampled.
+// Temporal moments input; ignored when momentsValid is false.
 #define NWB_SHADOW_RESOLVE_BINDING_MOMENTS 6
-// The FULL-res G-buffer world-position SRV (targets.worldPosition). The UPSAMPLE stage reads THIS output pixel's own
-// full-res world position as the joint-bilateral CENTRE (via the camera distance below) so two adjacent full-res
-// pixels straddling a geometry edge inside one half-res block pick DIFFERENT half-res taps -> the shadow terminator
-// snaps to the full-res silhouette instead of stair-stepping at the half-res block boundary. Bound on all sets.
 #define NWB_SHADOW_RESOLVE_BINDING_GBUFFER_WORLDPOS 7
-// The FULL-res G-buffer normal SRV (targets.normal), [0,1]-encoded (matching the traces' `n*2-1` decode). The
-// UPSAMPLE stage decodes it as the full-res bilateral centre normal for the per-tap normal edge-stop. Bound on all sets.
 #define NWB_SHADOW_RESOLVE_BINDING_GBUFFER_NORMAL 8
-// The scene-shading CB (m_sceneShadingBuffer; xyz = camera world position). The UPSAMPLE stage derives the full-res
-// centre's camera distance as length(centerWorld - cameraPosition) so its distance edge-stop is in the SAME world-unit
-// space as the half-res geometry cache's stored .z, keeping the wavelet + upsample distance metric consistent end-to-end.
 #define NWB_SHADOW_RESOLVE_BINDING_SCENE_SHADING 9
 
-// Shadow geometry downsample pre-pass (its own pipeline + binding layout): reads the full-res G-buffer world position
-// + normal + depth + scene-shading heap entry (for the camera position), writes the packed half-res geometry cache
-// above (octahedral normal + camera distance + validity).
+// Geometry downsample writes the packed half-resolution edge-stop cache.
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_SET 0
-// These three logical G-buffer slots likewise remain reserved while the downsample reads the target-generation heap.
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_WORLD_POSITION 0
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_NORMAL 1
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GBUFFER_DEPTH 2
-// This scene-shading ABI position carries the DeferredBindlessResourceSlots cbuffer whose avboitSlots.z selects the
-// uniform-buffer heap entry; retain the number rather than renumbering the geometry-output binding.
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_SCENE_SHADING 3
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_BINDLESS_RESOURCES NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_SCENE_SHADING
 #define NWB_SHADOW_GEOMETRY_DOWNSAMPLE_BINDING_GEOMETRY_OUTPUT 4
 
-// 8x8 = 64 threads per group (one thread per pixel), matching the caustic resolve + the SW traversal.
 #define NWB_SHADOW_RESOLVE_GROUP_SIZE 8
 
-// A-trous wavelet channel count. The resolve source (shadow_resolve_cs.slang) parameterizes ONLY its wavelet
-// accumulator + tap read/write by this: 1 = SCALAR (the soft OPAQUE grayscale visibility -- the default; keeps 1x ALU +
-// 1x LDS on the common path), 3 = RGB (the soft COLORED TRANSPARENT transmittance -- denoises color, the value edge-stop
-// uses the LUMA of the RGB delta). ONE source, TWO cooked pipelines (shadow_resolve_cs = scalar default, shadow_resolve_
-// rgb_cs = the =3 wrapper), so the common opaque path is never charged the 3x wavelet ALU/LDS for an identically-gray
-// signal while the transparent path denoises the colored penumbra. The kernel, edge-stops, LDS load/branch, and the
-// upsample (already RGB end-to-end) are shared; only the wavelet vector type + tap channel count differ.
+// Scalar opaque and RGB transparent wavelet variants share the resolve source.
 #define NWB_SHADOW_RESOLVE_CHANNELS_SCALAR 1
 #define NWB_SHADOW_RESOLVE_CHANNELS_RGB    3
 
-// A-trous wavelet pass count (the first pass reads the trace/history directly, then later passes ping-pong at dilation
-// 1<<pass). One half-resolution dilation-1 pass provides the spatial denoise; temporal reproject-merge and the bilateral
-// upsample supply the remaining low-frequency reconstruction. It MUST stay odd so each signal's preselected upsample input
-// remains its final ping-pong target (see the dispatch static_assert).
+// Must remain odd so the selected upsample input is final.
 #define NWB_SHADOW_RESOLVE_PASS_COUNT 1
 
-// A-trous wavelet pass count for the soft colored-transparent resolve. One pass preserves the low-contrast tint, which
-// wider filtering would spread thin across the penumbra. It MUST be odd so the preselected upsample input remains final.
 #define NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT 1
 
-// LDS (groupshared) tiling for the wavelet: passes with dilation stepWidth <= LDS_MAX_STEP cooperatively load the
-// group's tile + 2*stepWidth halo into groupshared ONCE, then tap from LDS. Larger-dilation passes tap the textures
-// directly. Tile side = GROUP_SIZE + 4*stepWidth; sized for the largest LDS-tiled step (8 + 4*4 = 24 -> 576 texels).
+// LDS tile covers the largest cooperatively loaded wavelet halo.
 #define NWB_SHADOW_RESOLVE_LDS_MAX_STEP 4
 #define NWB_SHADOW_RESOLVE_TILE_SIDE (NWB_SHADOW_RESOLVE_GROUP_SIZE + 4 * NWB_SHADOW_RESOLVE_LDS_MAX_STEP)
 #define NWB_SHADOW_RESOLVE_TILE_TEXELS (NWB_SHADOW_RESOLVE_TILE_SIDE * NWB_SHADOW_RESOLVE_TILE_SIDE)

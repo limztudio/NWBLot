@@ -9,13 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Engine-owned authoring header for a material's AVBOIT-accumulate pixel shader. It is the transparent-pass
-// twin of mesh/material_ps_authoring.slangi: a material's accumulate pixel shader includes this + its `.bind`
-// interface + its surface hook, and the engine owns the entry (the main below), the AVBOIT compositing math,
-// and the shaded-color path. The transparent fragment's color comes from the SAME per-material surface hook + BXDF
-// dispatch the opaque deferred path uses (nwbMaterialSurface -> NwbBxdfSurface -> nwbDeferredDispatchBxdf), so it
-// matches the colored shadow it casts. The AVBOIT accumulate targets + alpha / weighted-alpha / extinction math stay
-// owned by this header.
+// Engine-owned AVBOIT entry/compositing; materials provide the shared surface hook and BXDF.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,68 +19,34 @@
 #include "../scene/binding_slots.h"
 #include "../mesh/runtime_constants.h"
 
-// Keep the material-context override in scope before common.slangi brings in the AVBOIT draw push block.  The
-// target-generation selector is a UniformBuffer heap slot in that block, rather than a local AVBOIT CBV.
 #define NWB_MESH_MATERIAL_CONTEXT_PROVIDED
 #include "common.slangi"
 #define g_NwbDeferredBindlessResources NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES
 
-// The scene-shading cbuffer + light list are global-heap entries now (like the deferred lighting pass + the
-// screen-space shadow/caustic/GI inputs below): fetch them from the heap through this pass's per-frame resource-slot
-// cbuffer's two spare avboit lanes instead of a local set binding. scene/buffer.slangi (pulled in via
-// scene/lighting.slangi, below) reads these two slot expressions directly.
-// g_NwbDeferredBindlessResources is the heap-selected target payload and must be visible before
-// scene/lighting.slangi: its light walk expands the slot expressions inside that include.
+// Scene resources are selected through the target-generation heap payload.
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbDeferredBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbDeferredBindlessResources.avboitSlots.w
 
-// This transparent accumulate shades through the BXDF -> deferred lighting, but its fragments are NOT in the opaque
-// G-buffer the screen-space shadow visibility + caustic irradiance were produced from -- it passes the int2(-1,-1)
-// sentinel, so both already resolve to lit / no-caustic. Declaring those two SAMPLED_IMAGE resources anyway lands them
-// at their DEFAULT set 0 bindings 7/8, which THIS pass fills with material-context StructuredBuffers -- a descriptor-
-// type mismatch (VUID-VkGraphicsPipelineCreateInfo-layout-07990). This tells lighting.slangi to omit the declarations
-// and return the lit/black constants directly (behaviour-identical to the sentinel, minus the unused bindings).
+// Transparent fragments bypass opaque-G-buffer shadow/caustic sampling and omit conflicting local bindings.
 #define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
 #define NWB_SCENE_GI_SAMPLING_DISABLED
 
-// The AVBOIT draw push constant (g_NwbAvboitDraw, declared by avboit/common.slangi) carries the per-draw mesh
-// dispatch (nwbMeshDispatch[]) -- the same layout the rasterizer reads from its own per-draw push constant. The
-// material surface hook reads its typed `.bind` constants through nwbMeshShadingModelId() / nwbMeshInstanceIndex()
-// / nwbMeshMaterialConstantByteOffset() + nwbMeshLoadInstance(); declaring NWB_MESH_MATERIAL_CONTEXT_PROVIDED tells
-// gbuffer_io.slangi to NOT define those accessors (this header serves them from g_NwbAvboitDraw, below), so the
-// SAME authored hook evaluates identically here and in the rasterizer.
-// common.slangi declares g_NwbAvboitDraw (the per-draw push constant) + the AVBOIT helpers; scene/lighting.slangi
-// brings the scene light list + the engine shading model the BXDFs build on. gbuffer_io.slangi brings the mesh
-// pixel-input plumbing + the shared typed/instance buffers (g_NwbMaterialTypedWords / g_NwbMeshInstances /
-// NwbMeshInstanceData) the surface hook reads; NWB_MESH_MATERIAL_CONTEXT_PROVIDED (above) tells it NOT to declare
-// its own per-draw push constant or the material-context accessors -- this header serves those from g_NwbAvboitDraw.
+// AVBOIT draw push constants expose the same material context as rasterization.
 #include "../scene/lighting.slangi"
 #include "../mesh/gbuffer_io.slangi"
 
-// Per-draw material context from the AVBOIT draw push constant.
 #include "material_context_authoring.slangi"
 
-// The typed-word load families the generated .bind accessors build on, then the surface contract (NwbMeshSurface
-// / nwbMaterialSurface). The NWB_MESH_MATERIAL_CONTEXT_PROVIDED set above suppresses surface.slangi's
-// single-material nwbMaterialSurfaceAt (unused here); the AVBOIT main loads the surface-input statics + invokes
-// nwbMaterialSurface() directly. Finally the BXDF surface type + the cook-generated BXDF dispatch
-// (nwbDeferredDispatchBxdf), the same module lighting_cs.slang pulls, so the transparent fragment is shaded by
-// the material's own BXDF by its shading-model id.
 #include "../mesh/material_typed_accessors.slangi"
 #include "../mesh/surface.slangi"
 #include "../deferred/bxdf_surface.slangi"
-// The cook-generated dispatch lives in its OWN include root (deferredBxdfIncludeRoot), not under engine/graphics,
-// so it is included by its include-root-relative path (exactly as lighting_cs.slang does) -- NOT a `../` path,
-// which would (mis)resolve under engine/graphics where the generated file does not exist.
+// Generated BXDF dispatch resolves from its own include root.
 #include "deferred/generated/bxdf_dispatch.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// All accumulation variants sample their target-generation transmittance volume and linear sampler through the
-// persistent heap. This keeps CSG's descriptor-buffer graphics tail on the same resource/sampler contract.
-// The depth-warp/control work buffers are selected through nwbAvboitDepthWarp()/nwbAvboitControl() as well.
 
 Texture3D<float4> nwbAvboitTransmittanceTexture(){
     return NwbHeapSampledImage3D(g_NwbDeferredBindlessResources.avboitSlots.x);
@@ -117,20 +77,13 @@ struct NwbAvboitAccumulatePixelOutput{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Engine-owned AVBOIT-accumulate pixel-shader entry. Mirrors the G-buffer pixel shader: the engine owns the
-// entry, the surface load, and the compositing; each material provides ONLY a surface hook, nwbMaterialSurface().
-// The hook fills the surface from the interpolated pixel inputs + this material's typed `.bind` constants; the
-// engine builds a NwbBxdfSurface from it and shades it through the material's BXDF, then runs the AVBOIT math.
 NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     NwbMeshSurfaceInputs surfaceInputs;
     surfaceInputs.color = input.color;
-    // Keep the half raster payload through interpolation, then promote directional data at the shading boundary.
     surfaceInputs.normal = float3(input.normal);
     surfaceInputs.tangent = float4(input.tangent);
     surfaceInputs.uv0 = input.uv0;
     surfaceInputs.worldPosition = input.worldPosition.xyz;
-    // Match the G-buffer plus occupancy/extinction surface inputs: every raster pass supplies the same mesh-frame
-    // camera-to-surface incident ray to an authored hook.
     surfaceInputs.incidentDirection = nwbMeshCameraToSurfaceDirection(input.worldPosition.xyz);
     nwbLoadMeshSurfaceInputs(surfaceInputs);
 #if NWB_CSG_ENABLED
@@ -138,18 +91,13 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
         discard;
 #endif
 
-    // The material's surface hook decides the per-pixel surface (base color + normal + BXDF params) the same way
-    // the G-buffer pixel shader does, AND the AVBOIT opacity (surface.renderCoverage). Run it before the alpha gate so the
-    // accumulate color-weight uses the SAME shader-decided alpha the occupancy/extinction passes built the volume
-    // from -- an opaque material leaves the default 1.0, a transparent material's hook sets it.
+    // Surface coverage must match occupancy and extinction.
     const NwbMeshSurface surface = nwbMaterialSurface();
 
     const half alpha = half(clamp(surface.renderCoverage, 0.0, 1.0));
     if(alpha <= half(0.0))
         discard;
 
-    // volumeTransmittance is the AVBOIT self-occlusion volume sample (NOT the material's transmittance): it is the
-    // accumulated front-to-back transmittance up to this fragment, used to weight its color contribution.
     const half volumeTransmittance = nwbAvboitLinearBiasedTransmittance(input.position.xy, input.position.z);
     const half weightedAlpha = alpha * volumeTransmittance;
 
@@ -164,10 +112,7 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     bxdfSurface.isBackground = false;
     bxdfSurface.indirectIrradiance = nwbBxdfIndirectIrradiance(bxdfSurface.worldPosition, bxdfSurface.normal);
 
-    // Shade through the material's own BXDF, by its shading-model id. Pass the negative-pixel sentinel: a
-    // transparent fragment is not in the opaque G-buffer the screen-space shadow visibility was traced from, so
-    // nwbBxdfLightTransmittance skips shadow sampling and treats every light as fully visible for the material's
-    // project BXDF evaluation.
+    // Negative pixel bypasses opaque-G-buffer shadow sampling.
     const half3 shadedColor = clamp(
         nwbDeferredDispatchBxdf(bxdfSurface.shadingModel, bxdfSurface, int2(-1, -1)),
         half3(0.0h),

@@ -27,13 +27,10 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Each timed packet owns one query-reservation ticket. Packet identity is the only registry key, so adding a normal
-// packet to FrameExecutionPlan automatically creates, resolves, and discards its ticket without a matching variable,
-// switch case, or failure-path cleanup list in RendererSystem.
+// Timed packets own tickets keyed by their declarative work identity.
 class FrameExecutionPlanTimingTickets final{
 public:
-    // Work IDs are already the plan's single source of packet ownership. Keep a recording scope keyed by that same
-    // ID so RendererSystem never needs a parallel list of per-work ticket pointers.
+    // Keep timing scope ownership keyed by the plan work ID.
     class WorkRecordingScope final : NoCopy{
     public:
         WorkRecordingScope(
@@ -253,8 +250,7 @@ void RendererSystem::resetLaggedLightingHistoryTracking()noexcept{
 }
 
 void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
-    // Target replacement invalidates retained Compute scratch state and producer returns because the backing images
-    // have changed. Frame-prefix handoffs are intentionally excluded: the preparation path owns those separately.
+    // Replaced targets invalidate retained compute-local state.
     m_shadowComputeBaseStateHandoff.reset();
     m_shadowComputeInputStateHandoff.reset();
     m_shadowComputePersistentStateHandoff.reset();
@@ -299,8 +295,7 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
 }
 
 void RendererSystem::resetInvalidatedResourceStateHandoffs()noexcept{
-    // Full resource invalidation also abandons the preparation and frame-prefix handoffs, unlike a target-generation
-    // replacement which can still rely on the owning preparation path to recreate those states.
+    // Full invalidation also drops preparation and prefix handoffs.
     m_shadowPrepareStateHandoff.reset();
     m_meshViewSetupStateHandoff.reset();
     m_sceneShadingSetupStateHandoff.reset();
@@ -312,8 +307,7 @@ void RendererSystem::resetInvalidatedResourceStateHandoffs()noexcept{
 }
 
 void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
-    // A fresh recording discards only the previous frame's transient handoffs. Accepted Compute-local scratch and
-    // producer-return state remains available for the next fan-in.
+    // Preserve accepted compute-local state across fresh recordings.
     m_meshViewSetupStateHandoff.reset();
     m_sceneShadingSetupStateHandoff.reset();
     m_deferredClearStateHandoff.reset();
@@ -358,9 +352,7 @@ void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
 }
 
 void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
-    // No submission accepted this frame, so discard its recorded prefix and downstream state while retaining only the
-    // cross-frame Compute handoffs that belonged to an earlier accepted producer. Caustic producer inputs deliberately
-    // remain outside this set, matching the established recovery path.
+    // Rejected frames keep only cross-frame state from earlier accepted producers.
     m_meshViewSetupStateHandoff.reset();
     m_sceneShadingSetupStateHandoff.reset();
     m_deferredClearStateHandoff.reset();
@@ -403,8 +395,7 @@ void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
 }
 
 void RendererSystem::resetRejectedAsyncRayEffectsStateHandoffs()noexcept{
-    // The Graphics prefix is already accepted when this submission is attempted. Preserve its state and every prior
-    // producer return while discarding the unaccepted effects branch and all downstream work that depends on it.
+    // Preserve accepted Graphics prefix state when downstream effects reject.
     m_shadowComputeBaseStateHandoff.reset();
     m_shadowComputeInputStateHandoff.reset();
     m_shadowVisibilityStateHandoff.reset();
@@ -457,8 +448,7 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
     DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
     bool targetsReady = deferredTargets.valid() && deferredTargets.width == width && deferredTargets.height == height;
     if(!targetsReady){
-        // Target-generation replacement invalidates every retained Compute scratch state and the visibility ownership
-        // return. The new image can be claimed by its first Compute use without a stale handoff.
+        // New targets invalidate stale compute scratch and visibility returns.
         resetTargetGenerationStateHandoffs();
         resetLaggedLightingHistoryTracking();
         targetsReady = m_deferredSystem.createDeferredFrameTargets(width, height);
@@ -521,36 +511,22 @@ void RendererSystem::invalidateResources(){
     m_shadowPrepareCommandList.reset();
     resetLaggedLightingHistoryTracking();
     m_asyncRenderRecoveryFailed = false;
-    // The descriptor-buffer TLAS descriptor owns a retained acceleration-structure handle until its in-flight-frame
-    // quarantine matures. Retire it before RendererRayTracingState releases the current TLAS so resource invalidation
-    // cannot strand a descriptor-buffer block (or its retained AS) until device shutdown.
+    // Retire heap-retained TLAS resources before releasing their backing state.
     if(m_rayTracingState.m_tlasHeapHandle.valid()){
         auto& device = m_graphics.getDevice();
         device.getDescriptorHeap().free(m_rayTracingState.m_tlasHeapHandle);
     }
-    // The persistent caustic-emission and trace material-context heap descriptors retain their backing buffers just
-    // like the TLAS descriptor. Retire them while the device heap is still live, before RendererRayTracingState
-    // releases those buffers below.
     m_raytracingSystem.releaseCausticEmissionTargetHeapHandle();
     m_raytracingSystem.releaseRayTraceMaterialContextHeapHandles();
     m_raytracingSystem.releaseSwBvhScratchHeapHandles();
     m_raytracingSystem.releaseSurfelGiHeapHandles();
-    // Deferred target generations own ordinary image/sampler heap slots. Release those handles while both the target
-    // resources and the device heap are still live; RendererDeferredState then drops the remaining resource handles.
     m_deferredSystem.resetDeferredFrameTargets();
-    // Mesh geometry heap descriptors retain their backing buffers independently of the MeshResources cache. Retire
-    // them before clearing that cache so descriptor slots are eventually recycled after the in-flight quarantine.
     m_meshSystem.releaseAllMeshGeometryHeapHandles();
     m_meshSystem.releaseMeshFrameHeapHandles();
     m_meshState.invalidateResources();
-    // Material resource descriptors retain built-ins and cached Texture2D assets just like other heap
-    // residents. Retire them while the heap is live, then leave cached CPU material info with its unpatched
-    // constant bytes so the next device generation can resolve fresh slots.
     m_materialSystem.releaseMaterialResourceReferences();
     m_materialState.invalidateResources();
     m_drawState.invalidateResources();
-    // CSG's persistent clip descriptors retain their receiver/cutter buffers, so retire them before the CSG state
-    // releases those buffers and its slot cbuffer.
     m_csgSystem.releaseCsgClipContextHeapHandles();
     m_csgState.invalidateResources();
     m_deferredState.invalidateResources();
@@ -897,9 +873,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     )
         return false;
 
-    // Transparent preparation can grow shared instance and material buffers, which invalidates all mesh
-    // heap registrations. Refresh opaque descriptors after the final possible grow so render only consumes prepared
-    // resources.
+    // Refresh mesh descriptors after transparent preparation can grow shared buffers.
     if(
         m_preparedHasTransparentRenderers
         && !m_materialSystem.prepareMaterialPassResources(
@@ -931,16 +905,12 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
 
     auto& device = m_graphics.getDevice();
 
-    // The preparation list owns the first upload of this target generation's descriptor-slot payload. It also clears a
-    // new surfel pool on the Graphics fallback; the dedicated Compute packet owns that clear when async is active.
+    // Preparation uploads target slots and initializes surfels on the Graphics fallback.
     const bool deferredBindlessSlotsWereUploaded = deferredTargets.bindless.slotsUploaded;
     m_raytracingSystem.discardSurfelResourceInitialization();
     Core::GpuTimingSubmissionTicket shadowPrepareTimingTicket(m_graphics.gpuTiming());
     const auto discardShadowPrepare = [&](){
-        // Scene-cache keys are advanced while recording the preparation command list. If that list is abandoned or
-        // rejected, a capacity grow may already have replaced the backing resource even though its build/upload never
-        // reached the GPU. Do not restore the old key in that case: it could describe the retired resource rather than
-        // the new, uninitialized one. Force one conservative rebuild after every failed preparation submission.
+        // Failed preparation forces a safe cache rebuild; a previous key may name retired storage.
         m_rayTracingState.m_tlasStaticSceneHashValid = false;
         m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
         m_rayTracingState.m_hwShadowMaterialContextHashValid = false;
@@ -986,14 +956,10 @@ bool RendererSystem::recordShadowPrepareCommandList(DeferredFrameTargets& deferr
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
 
     m_shadowPrepareCommandList->open();
-    // The software-shadow trace selects its G-buffer heap descriptors through the target-generation slot cbuffer. It
-    // runs before deferred lighting, so make the cbuffer resident on the ordered shadow-preparation command list first.
     const bool deferredBindlessResourcesUploaded = m_deferredSystem.uploadDeferredBindlessFrameResources(
         *m_shadowPrepareCommandList,
         deferredTargets
     );
-    // Surfel GI resources are prepared inside prepareShadowVisibilityResources, after the ray-tracing scene
-    // structures are resident, so the producer can run on the same frame without startup latency.
     const bool shadowResourcesPrepared = deferredBindlessResourcesUploaded
         && m_raytracingSystem.prepareShadowVisibilityResources(
             *m_shadowPrepareCommandList,
@@ -1002,14 +968,11 @@ bool RendererSystem::recordShadowPrepareCommandList(DeferredFrameTargets& deferr
             m_preparedShadowVisibilityReady
         )
     ;
-    // Scene/material gathers can replace a capacity-grown buffer and therefore its heap slot. Upload the completed
-    // five-slot indirection only after the full shadow/GI/caustic preparation path has settled on this frame's
-    // resource generations, but before the command list that will dispatch their heap-selected passes is submitted.
+    // Upload final slot indirection after all capacity growth settles.
     const bool traceMaterialContextUploaded = shadowResourcesPrepared
         && m_raytracingSystem.uploadRayTraceMaterialContextSlots(*m_shadowPrepareCommandList)
     ;
-    // This submission precedes render on Graphics. Preserve its final resource state so the first render
-    // command buffer never falls back to Unknown/UNDEFINED for preparation outputs.
+    // Preserve preparation output state for the first render list.
     m_shadowPrepareCommandList->close(&m_shadowPrepareStateHandoff);
     return traceMaterialContextUploaded && m_shadowPrepareStateHandoff.valid();
 }
@@ -1024,8 +987,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     NWB_ASSERT(m_preparedCsgFrameStateValid);
     NWB_ASSERT(m_shadowPrepareStateHandoff.valid());
-    // AVBOIT can record before deferred lighting, so its heap-selected resources must have been uploaded by the
-    // ordered shadow-preparation packet rather than relying on deferred lighting's otherwise-idempotent upload.
     NWB_ASSERT(deferredTargets.bindless.slotsUploaded);
 
     const CsgFrameState csgFrameState = m_preparedCsgFrameState;
@@ -1054,8 +1015,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(laggedAsyncLightingRequested){
         const u64 historyGeneration = deferredTargets.laggedLightingHistory.generation;
         if(m_laggedLightingHistoryGeneration != historyGeneration){
-            // A resize/recreate can recycle descriptor slots and allocator addresses while replacing the images.
-            // The validated target generation guarantees a fresh history starts with a current-frame seed.
+            // Target generations prevent history from using recycled slots after resize.
             invalidateLaggedLightingHistorySubmission();
             resetLaggedLightingStashStateHandoffs();
             m_laggedLightingHistoryGeneration = historyGeneration;
@@ -1088,13 +1048,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ECSRenderDetail::FrameExecutionWork::DeferredLighting,
         ECSRenderDetail::FrameExecutionExternalWait::LaggedLightingHistory
     );
-    // A history snapshot is captured after every opt-in frame, including the current-frame bootstrap. Once the
-    // previous accepted snapshot exists this packet shades independently on Graphics while the producer runs on Async.
+    // Accepted history enables Graphics lighting to overlap the async producer.
     const bool captureLaggedLightingHistory = frameExecutionPlan.hasWork(
         ECSRenderDetail::FrameExecutionWork::LaggedLightingStash
     );
-    // Hardware caustics stay in the independent Graphics-support packet: their trace-rays workload overlaps Async
-    // shadow/surfel work instead of extending the Compute critical path. Software caustics remain Compute dispatches.
+    // Hardware caustics remain on Graphics while software caustics use Compute.
     const bool asyncCausticsSchedule = frameExecutionPlan.workRunsOnLane(
         ECSRenderDetail::FrameExecutionWork::Caustics,
         Core::RenderLane::AsyncCompute
@@ -1103,8 +1061,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ECSRenderDetail::FrameExecutionWork::SurfelGi,
         Core::RenderLane::AsyncCompute
     );
-    // AVBOIT alternates Graphics raster passes with two pure dispatches. Only split it when transparent work exists;
-    // a clear-only frame remains one Graphics packet and avoids needless cross-lane submissions.
+    // Split AVBOIT only when transparent work needs its compute stages.
     const bool asyncAvboitSchedule = frameExecutionPlan.workRunsOnLane(
         ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp,
         Core::RenderLane::AsyncCompute
@@ -1181,9 +1138,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     resetFrameRecordingStateHandoffs();
     m_raytracingSystem.discardSoftShadowTemporalHistory();
 
-    // Recording a packet can advance CPU mirrors (temporal phases, readback cadence, and the AVBOIT clear latch)
-    // before the recorded command buffers have reached their owning queues. Preserve them so every rejection path below can
-    // make the following frame record the same GPU work again instead of treating an abandoned packet as completed.
+    // Preserve CPU mirrors so rejected recordings can be retried exactly.
     struct PostGbufferPacketCpuState{
         bool avboitTargetsNeedClear = true;
         bool deferredBindlessSlotsUploaded = false;
@@ -1237,8 +1192,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_rayTracingState.m_surfelCountReadbackPendingSubmissionUnconfirmed,
     };
     const auto restorePrefixCpuState = [&](){
-        // The G-buffer writer updates its CPU upload mirrors while recording. Its writes did not reach the device if
-        // this packet batch is abandoned, so force both uploads on the retry rather than restoring stale byte caches.
+        // Rejected G-buffer recording invalidates CPU upload mirrors.
         m_drawState.m_meshViewGpuDataValid = false;
         m_deferredState.m_sceneShadingGpuDataValid = false;
         m_deferredState.m_lightGpuDataValid = false;
@@ -1281,8 +1235,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         restoreSurfelGiCpuState();
         restoreGraphicsEffectsCpuState();
     };
-    // Any producer that joined the accepted Compute packet owns its temporal/readback state. A later Graphics-effects
-    // rejection must restore only work that has not crossed that acceptance boundary.
+    // Accepted compute work owns its temporal and readback state.
     const auto restoreUnacceptedGraphicsEffectsCpuState = [&](){
         if(!asyncCausticsSchedule)
             restoreCausticsCpuState();
@@ -1297,19 +1250,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         restoreEffectsCpuState();
     };
 
-    // The Graphics-only fallback keeps its established one-ticket, one-submission timing transaction. A dedicated
-    // AsyncCompute lane instead owns one ticket per accepted packet so no timestamp reservation can straddle queues.
-    // The packet-keyed collection supplies those local ticket lifetimes without duplicating the plan's packet list.
+    // Dedicated queues use one timing ticket per accepted packet.
     ECSRenderDetail::FrameExecutionPlanTimingTickets frameExecutionTimingTickets(
         frameExecutionPlan,
         m_graphics.gpuTiming()
     );
-    // This scope crosses two synchronously-waited Graphics jobs, so it cannot live in either worker's scratch
-    // arena. The fallback owns it directly; the dedicated schedule uses the acceptance-aware transaction below.
     Optional<Core::GpuTimingMeasure> frameTiming;
-    // The dedicated schedule keeps render.frame as an end-to-end Graphics-timeline critical path. Its endpoint is
-    // committed only after Graphics final accepts; a rejected later packet records a non-publishing recovery end so
-    // the accepted prefix timestamp never leaks into a later frame's query pool.
+    // Publish the dedicated frame endpoint only after Graphics final accepts.
     Core::GpuTimingFrameTransaction asyncFrameTiming(m_graphics.gpuTiming());
     Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
     Optional<Core::GpuTimingMeasure> asyncEffectsTiming;
@@ -1342,10 +1289,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         resetAbandonedFrameStateHandoffs();
     };
 
-    // Mesh-view and scene-shading uploads plus the non-CSG deferred-target clear have no shared CPU or GPU outputs.
-    // Record them from the completed shadow-preparation snapshot on sibling workers, then merge their disjoint final
-    // states before the opaque producer gathers its CSG work region from the freshly cached mesh-view data. The CSG
-    // interval clear stays with that producer because its rect is not known until after the gather.
+    // Record independent uploads/clears in parallel; CSG clear waits for its gathered rect.
     const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(deferredTargets.framebuffer->getFramebufferInfo());
     bool meshViewSetupReady = false;
     bool sceneShadingSetupReady = false;
@@ -1375,8 +1319,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
         bool asyncFrameTimingStarted = true;
         if(!asyncShadowSchedule){
-            // Graphics has already reset every timer-query pool in the frame preamble, before shadow preparation and
-            // every other render pass. The legacy whole-frame scope remains valid only for the one-submit fallback.
             frameTiming.emplace(
                 m_graphics.gpuTiming(),
                 RendererGpuTimingScope::s_Frame,
@@ -1402,8 +1344,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
 
         const bool meshViewReady = m_meshSystem.updateMeshViewBuffer(*meshViewSetupCommandList, meshViewAspectRatio);
-        // A split timing scope must close its debug marker on the same list that opened it. Its end timestamp is
-        // deliberately deferred to the ordered deferred-composite packet below.
+        // Close this split scope here; deferred composite records its endpoint.
         if(frameTiming)
             frameTiming->finishMarker();
         meshViewSetupCommandList->close(&m_meshViewSetupStateHandoff);
@@ -1454,9 +1395,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!deferredClearCommandList->hasCommandBuffer())
             return;
 
-        // CSG interval clearing is intentionally deferred to the opaque packet: its work rect is calculated from
-        // the freshly gathered CSG receiver data. The remaining deferred targets are independent of both setup
-        // uploads and can record here in parallel.
+        // CSG clear waits for its gathered receiver rect.
         m_deferredSystem.clearDeferredTargets(
             *deferredClearCommandList,
             deferredTargets,
@@ -1654,8 +1593,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         commandList->endRenderPass();
 
-        // The opaque producer exports its final tracked state after close-time keepInitialState restores. The next
-        // packet is a normalization prelude; it imports this snapshot before the four independent workers record.
+        // Sibling workers import the opaque producer's exported state.
         commandList->close(&m_gbufferStateHandoff);
         if(!m_gbufferStateHandoff.valid())
             return;
@@ -1672,8 +1610,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // Normalize every G-buffer/trace input shared by the sibling packets once. The four workers import the exact
-    // same snapshot below, so none can record a stale transition from the opaque producer's final state.
+    // Normalize shared inputs before sibling workers import the same snapshot.
     bool postGbufferNormalizeCommandListReady = false;
     const Core::Graphics::JobHandle postGbufferNormalizeRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
@@ -1714,9 +1651,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // The Compute packet must not import the broad post-G-buffer snapshot: it also carries exclusive Graphics-only
-    // caustic/GI/AVBOIT resources. Select only the shader-visible shadow inputs, then merge the Compute-only scratch
-    // state and last frame's Graphics -> Compute visibility release.
+    // Compute imports only shared shadow inputs plus retained compute-local state.
     if(asyncShadowSchedule){
         Core::Alloc::ScratchArena shadowInputScratchArena(RendererArenaScope::s_RenderArena);
         Vector<Core::Texture*, Core::Alloc::ScratchArena> shadowInputTextures{ shadowInputScratchArena };
@@ -1782,11 +1717,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    // Both caustic producers use cross-lane read-only trace inputs plus their emission target list and camera view.
-    // The software producer reads its software-BVH mesh tables; the hardware producer reads the TLAS and corner
-    // attributes through its descriptor-buffer material context. Their accumulator/resolve scratch is private to
-    // Compute and the lighting-facing irradiance is deliberately excluded here: it comes from the prior Graphics ->
-    // Compute ownership return.
+    // Both caustic producers import trace inputs; private scratch stays on Compute.
     if(asyncCausticsSchedule){
         Core::Alloc::ScratchArena causticsInputScratchArena(RendererArenaScope::s_RenderArena);
         Vector<Core::Texture*, Core::Alloc::ScratchArena> causticsInputTextures{ causticsInputScratchArena };
@@ -1814,8 +1745,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         appendBuffer(m_rayTracingState.m_causticEmissionTargetBuffer.get());
         appendBuffer(m_drawState.m_meshViewBuffer.get());
         if(hardwareShadowSupported){
-            // setAccelStructState tracks the TLAS through this backing allocation. The hardware photon closest-hit
-            // shader also fetches the flat corner attributes by heap slot.
             if(m_rayTracingState.m_tlas)
                 appendBuffer(m_rayTracingState.m_tlas->getBackingBuffer());
             for(Core::Buffer* buffer : m_rayTracingState.m_shadowMeshAttributeBuffers)
@@ -1861,10 +1790,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    // Surfel GI is compute-only on both trace backends: its HW variant uses inline RayQuery inside dispatch, rather
-    // than dispatchRays. Import the current Graphics-produced G-buffer/trace selectors and retain only the private
-    // field/snapshot/readback state from the last accepted Compute packet. The lighting-facing irradiance arrives via
-    // the explicit Graphics -> Compute return handoff instead of the broad prefix snapshot.
+    // Surfel GI stays compute-only; import current G-buffer inputs and retained field state.
     if(asyncSurfelGiSchedule){
         Core::Alloc::ScratchArena surfelGiInputScratchArena(RendererArenaScope::s_RenderArena);
         Vector<Core::Texture*, Core::Alloc::ScratchArena> surfelGiInputTextures{ surfelGiInputScratchArena };
@@ -1932,10 +1858,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     const bool shadowVisibilityPrepared = m_preparedShadowVisibilityReady;
 
-    // The shadow, caustics, surfel-GI, and AVBOIT packets own distinct outputs. Every shared input already has its
-    // common read state in the prelude, so the workers can record independently from the same snapshot. The hardware
-    // caustic producer joins the Graphics AVBOIT-support packet to overlap the Async shadow/surfel packet; deferred
-    // lighting is their first GPU consumer.
+    // Independent effect packets share normalized inputs and converge at deferred lighting.
     bool shadowVisibilityCommandListReady = false;
     bool causticsCommandListReady = false;
     bool surfelGiCommandListReady = false;
@@ -1997,8 +1920,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
         bool shadowVisibilityWritten = false;
         if(shadowVisibilityPrepared && hardwareShadowSupported){
-            // The HW opaque trace feeds the soft denoise chain when available. Transparent shadow stays on the
-            // software path, with a hybrid multiply fallback when the colored soft fold was not prepared.
             shadowVisibilityWritten = m_raytracingSystem.renderShadowVisibility(*shadowVisibilityCommandList, deferredTargets);
             if(!shadowVisibilityWritten)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
@@ -2010,8 +1931,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         else if(shadowVisibilityPrepared){
             shadowVisibilityWritten = m_raytracingSystem.renderGpuBvhShadowVisibility(*shadowVisibilityCommandList, deferredTargets);
         }
-        // Deferred lighting samples visibility every frame, so retain the all-lit fallback whenever neither backend
-        // emitted it rather than exposing the previous frame's contents.
+        // Retain all-lit visibility when no shadow producer records.
         if(!shadowVisibilityWritten)
             m_raytracingSystem.clearShadowVisibility(*shadowVisibilityCommandList, deferredTargets);
 
@@ -2048,8 +1968,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!causticsCommandList->hasCommandBuffer())
             return;
 
-        // Black is the additive identity for caustics. Keep that valid no-op input even when no refractive scene
-        // work was prepared or the selected producer fails to record.
+        // Retain black caustics when no producer records.
         m_raytracingSystem.clearCausticTargets(*causticsCommandList, deferredTargets);
         if(shadowVisibilityPrepared){
             if(hardwareShadowSupported){
@@ -2103,8 +2022,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(asyncSurfelGiSchedule)
             m_raytracingSystem.clearSurfelIrradiance(*surfelGiCommandList, deferredTargets);
 
-        // Spawn -> hash build -> trace -> resolve remains one ordered packet, so its persistent surfel buffers never
-        // become visible to another worker halfway through their per-frame update.
+        // Surfel field updates remain in one ordered packet.
         if(!m_raytracingSystem.renderSurfelGi(*surfelGiCommandList, deferredTargets))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel GI render pass failed"));
 
@@ -2137,8 +2055,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!avboitCommandList->hasCommandBuffer())
             return;
 
-        // A no-transparency frame can still need one clear to retire the previous frame's accumulation. Record an
-        // otherwise empty, valid packet as well so deferred lighting always imports the four-branch fan-in snapshot.
+        // Preserve the fan-in packet for clear-only transparency frames.
         if(hasTransparentRenderers || m_avboitState.m_targetsNeedClear){
             m_avboitSystem.clearAvboitTargets(*avboitCommandList, deferredTargets.avboit);
             m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
@@ -2150,10 +2067,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_avboitSystem.renderAvboitPasses(*avboitCommandList, deferredTargets, csgFrameState);
         }
 
-        // Transparent CSG interval construction uses the opaque G-buffer framebuffer, whose automatic attachment
-        // tracking temporarily makes normal/world-position render targets and depth a read-only depth attachment.
-        // Restore every deferred-lighting input before the later Compute packet records from the merged state. A
-        // Compute-only command buffer cannot name color/depth attachment accesses as a local barrier source.
+        // Restore G-buffer inputs after transparent CSG attachment tracking.
         avboitCommandList->setTextureState(
             deferredTargets.albedo.get(),
             ECSRenderDetail::s_FramebufferSubresources,
@@ -2236,9 +2150,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
 
     if(asyncAvboitSchedule){
-        // The depth-warp dispatch imports only resources it can legally access from a compute-only queue. The
-        // AVBOIT work buffers and selector cbuffer are concurrent; the full Graphics snapshot remains available to
-        // the raster extinction stage through the subsequent fan-in.
+        // Depth warp imports only resources legal on a compute-only queue.
         Core::Buffer* const avboitDepthWarpInputBuffers[] = {
             deferredTargets.avboit.coverageBuffer.get(),
             deferredTargets.avboit.depthWarpBuffer.get(),
@@ -2447,9 +2359,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    // Keep the deferred-lighting import deliberately narrow. In the default path the three ray-effect results remain
-    // exclusively on AsyncCompute through their only consumer. The lagged path deliberately omits those live outputs:
-    // its history textures restore to Common and are gated by the last accepted stash token instead.
+    // Lighting imports live effects only on the default path; lagged mode uses accepted history.
     Core::Texture* const deferredLightingBaseTextures[] = {
         deferredTargets.albedo.get(),
         deferredTargets.normal.get(),
@@ -2533,9 +2443,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // Deferred lighting consumes the ray-effect outputs after AVBOIT has finished touching the shared G-buffer. The
-    // normal dedicated path stays on AsyncCompute; once a history snapshot is accepted the opt-in path instead uses
-    // Graphics and only reads the immutable prior-frame ray-effect images.
+    // Lagged lighting reads immutable history on Graphics; default lighting consumes live effects.
     bool deferredLightingCommandListReady = false;
     const Core::Graphics::JobHandle deferredLightingRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
@@ -2735,8 +2643,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         );
 
         bool asyncFrameTimingEnded = true;
-        // This endpoint completes the legacy one-submission frame scope and records the dedicated path's deferred
-        // critical-path endpoint. The latter is not published until Graphics presentation accepts below.
+        // Publish the dedicated timing endpoint only after presentation accepts.
         if(frameTiming)
             frameTiming->finishTiming(*deferredPresentCommandList);
         if(asyncShadowSchedule && deferredPresentRecorded){
@@ -2765,11 +2672,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // Record jobs can run in parallel, but packet membership must retain the established submission order. Append the
-    // already-recorded lists on this thread rather than letting worker completion order choose it. This one ordered
-    // binding table is the renderer-side declaration for ordinary frame work; the plan routes each enabled entry to
-    // its packet, including the single-packet Graphics fallback. The lagged-history stash remains below because it is
-    // only recorded after presentation is accepted.
+    // Preserve declarative packet order after parallel recording.
     ECSRenderDetail::FrameExecutionPacketCommandLists frameExecutionCommandLists(frameExecutionPlan);
     const ECSRenderDetail::FrameExecutionWorkCommandListBinding recordedFrameWorkCommandLists[] = {
         { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, meshViewSetupCommandList },
@@ -2800,9 +2703,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // Keep submission topology declarative: the per-frame state resolves accepted predecessor and external-token
-    // edges, then exposes the outstanding AsyncCompute recovery edge. The renderer still owns every
-    // acceptance-dependent state commit and recovery lifecycle decision below.
+    // The plan resolves dependency edges; RendererSystem owns acceptance and recovery state.
     ECSRenderDetail::FrameExecutionExternalWaitTokens frameExecutionExternalWaitTokens;
     frameExecutionExternalWaitTokens.tokens[static_cast<usize>(
         ECSRenderDetail::FrameExecutionExternalWait::LaggedLightingHistory
@@ -2894,8 +2795,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame execution packet has no recorded command list"));
             return {};
         }
-        // Timed packets reject a missing command buffer through their ticket. Keep execution-only packets equally
-        // strict so a future plan entry cannot turn an absent list into a synchronization-only submission.
+        // Reject missing command buffers for timed and execution-only packets.
         for(usize commandListIndex = 0u;
             commandListIndex < packetCommandLists.commandListCount;
             ++commandListIndex
@@ -2912,8 +2812,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             packetCommandLists.commandListCount
         );
     };
-    // Packet timing identity is declarative. Route ordinary and execution-only packets through their plan flag so a
-    // later execution-only work item cannot accidentally require a timing ticket at its call site.
+    // Plan flags distinguish timed and execution-only packets.
     const auto dispatchRecordedFramePacket = [&](const ECSRenderDetail::FrameExecutionPacket::Enum packet)
         -> Core::QueueSubmissionToken {
         return frameExecutionPlan.packet(packet).recordsTiming
@@ -2939,9 +2838,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     };
 
     const auto submitAsyncRecoveryJoin = [&](const Core::QueueSubmissionToken* waitToken) -> bool {
-        // A rejected dependent packet can leave accepted AsyncCompute work in flight. All remaining cross-lane
-        // resources are concurrently shared, so a Graphics join establishes execution order and retires the frame
-        // timestamp without attempting an unnecessary queue-family ownership repair.
+        // Join accepted async work after rejection without queue-family ownership repair.
         if(device.isDeviceLost()){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async recovery join skipped because the graphics device is lost"));
             asyncFrameTiming.discard();
@@ -3004,13 +2901,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return;
         m_asyncRenderRecoveryFailed = true;
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: cannot safely continue after an unresolved async Compute recovery join; requesting device recreation"));
-        // The Graphics owner performs orderly teardown/recreation after this frame returns, rather than invalidating
-        // resources while accepted Compute work may still be in flight.
+        // Defer device recreation until accepted compute work cannot be invalidated.
         m_graphics.requestDeviceRecreation();
     };
 
-    // Iterate the topology's ordered batches. The plan determines packet order and grouping; these cases retain only
-    // the acceptance-dependent temporal commits, rollback, and resource-state handoff work owned by RendererSystem.
+    // The plan owns packet order; these cases own acceptance-dependent state.
     for(usize submissionBatchIndex = 0u;
         submissionBatchIndex < frameExecutionPlan.submissionBatchCount();
         ++submissionBatchIndex
@@ -3020,8 +2915,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ;
         switch(submissionBatch){
         case ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsFallback:{
-            // The plan emits the same one-packet Graphics batch used by the established fallback. Keep its
-            // acceptance-dependent timing and temporal commits here with the other batch-specific lifecycle work.
             const Core::QueueSubmissionToken fallbackSubmissionToken = dispatchRecordedFrameBatch(
                 ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsFallback
             );
@@ -3050,7 +2943,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return;
         }
         case ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPrefix:{
-            // Distinct queues submit the Graphics producer first. The following Compute producer waits on this batch.
+            // Compute waits for the Graphics producer on distinct queues.
             const Core::QueueSubmissionToken prefixSubmissionToken = dispatchRecordedFrameBatch(
                 ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPrefix
             );
@@ -3063,9 +2956,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             break;
         }
         case ECSRenderDetail::FrameExecutionSubmissionBatch::AsyncRayEffects:{
-            // Shadow, software caustics when selected, and Compute-only surfel GI share one accepted Compute packet.
-            // Hardware caustics instead run in the independent Graphics-support packet; Graphics final waits for both
-            // packet branches.
+            // Shadow, software caustics, and surfel GI share Compute; hardware caustics stay on Graphics.
             const Core::QueueSubmissionToken shadowSubmissionToken = dispatchRecordedFrameBatch(
                 ECSRenderDetail::FrameExecutionSubmissionBatch::AsyncRayEffects
             );
@@ -3080,15 +2971,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 return;
             }
 
-            // The Compute command buffer is now committed. Retain only its private scratch/history state for the next
-            // Compute use: shared G-buffer and scene inputs must always come from this frame's Graphics prefix rather than
-            // allowing a prior Compute handoff to overwrite their current state during the next fan-in.
+            // Retain only private compute scratch; shared inputs come from next frame's prefix.
             m_raytracingSystem.confirmShadowVisibilitySubmission(shadowSubmissionToken);
             m_raytracingSystem.confirmSurfelGiSubmission(shadowSubmissionToken);
             m_raytracingSystem.finalizeSurfelResourceInitialization();
 
-            // Preserve the current producer state as soon as its shared Compute packet is accepted. If a later Graphics or
-            // lighting submission is rejected, the next frame can still reopen these exclusive results on AsyncCompute.
+            // Retain accepted producer state for recovery after later rejection.
             const bool producerReturnStatesReady =
                 m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
                     m_shadowVisibilityStateHandoff,
@@ -3109,7 +2997,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
                 if(!recoverPendingAsyncComputeSubmission())
                     failAsyncRenderRecovery();
-                // The accepted producer state could not be retained, so continuing would require guessing its next layout.
+                // Missing accepted producer state leaves no safe next layout.
                 failAsyncRenderRecovery();
                 return;
             }
@@ -3147,8 +3035,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 restoreUnacceptedGraphicsEffectsCpuState();
                 m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
                 recoverPendingAsyncComputeSubmission();
-                // Without a retained Compute-side scratch snapshot the next packet cannot safely restore its layouts, even
-                // after the accepted Compute work has been joined.
+                // Missing compute scratch leaves no safe layout restoration.
                 failAsyncRenderRecovery();
                 return;
             }
@@ -3208,15 +3095,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             break;
         }
         case ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsEffects:{
-            // The plan keeps either the one-packet Graphics path or the five-packet AVBOIT chain together. Its
-            // declared order retains the required Graphics -> Compute alternation without a renderer-side sequence.
             const Core::QueueSubmissionToken graphicsEffectsSubmissionToken = dispatchRecordedFrameBatch(
                 ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsEffects
             );
             if(!graphicsEffectsSubmissionToken.valid()){
                 discardTimingTickets();
-                // Before this batch accepts a packet, its CPU state is still recoverable. Once it has started,
-                // FrameExecutionPlanSubmissionState owns the accepted-token boundary used by the recovery path.
+                // Accepted-token tracking starts when this batch begins.
                 if(!frameExecutionSubmissionState.batchHasAcceptedPacket(
                     ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsEffects
                 ))
@@ -3229,9 +3113,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             break;
         }
         case ECSRenderDetail::FrameExecutionSubmissionBatch::DeferredLighting:{
-            // The normal dedicated path keeps lighting/composite behind the producer on AsyncCompute. Once the optional
-            // history is accepted, Graphics waits only for the previous stash and shades current G-buffer data in parallel
-            // with this frame's producer; AVBOIT stays entirely on Graphics in that mode to avoid queueing behind the producer.
+            // Accepted history lets Graphics light current G-buffer data beside the async producer.
             const Core::QueueSubmissionToken lightingSubmissionToken = dispatchRecordedFrameBatch(
                 ECSRenderDetail::FrameExecutionSubmissionBatch::DeferredLighting
             );
@@ -3248,10 +3130,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     m_deferredLightingStateHandoff,
                     deferredTargets.shadowVisibility.get()
                 )
-                // The bootstrap lighting pass consumes the live caustic irradiance whether its producer was the
-                // AsyncCompute software path or the Graphics hardware path. Retain that post-lighting layout for
-                // the history stash; the active lagged path instead sources its live image directly from the
-                // current producer below.
+                // Bootstrap uses live caustics; active lagged mode uses the producer image directly.
                 && m_causticIrradianceReturnStateHandoff.buildTextureSubset(
                     m_deferredLightingStateHandoff,
                     deferredTargets.causticIrradiance.get()
@@ -3265,7 +3144,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 discardTimingTickets();
                 if(!recoverPendingAsyncComputeSubmission())
                     failAsyncRenderRecovery();
-                // The accepted lighting packet replaced the producer layouts, so a failed retained snapshot is terminal.
+                // Lost post-lighting state leaves no safe producer layout.
                 failAsyncRenderRecovery();
                 return;
             }
@@ -3279,8 +3158,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             break;
         }
         case ECSRenderDetail::FrameExecutionSubmissionBatch::DeferredComposite:{
-            // The selected lane orders composite after lighting. Its token remains the presentation dependency in both modes;
-            // in the lagged mode that is simply a Graphics-to-Graphics order edge while AsyncCompute continues the producer.
+            // Composite remains the presentation dependency in either mode.
             const Core::QueueSubmissionToken compositeSubmissionToken = dispatchRecordedFrameBatch(
                 ECSRenderDetail::FrameExecutionSubmissionBatch::DeferredComposite
             );
@@ -3293,9 +3171,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             break;
         }
         case ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPresent:{
-            // History removes the producer from the current lighting dependency, not from the frame-lifetime dependency. The
-            // final Graphics packet still waits for this frame's Async producer before the next frame can rewrite shared scene
-            // inputs; that preserves the existing cross-frame resource contract while exposing the useful overlap above.
+            // History overlaps current lighting but preserves the frame-lifetime producer dependency.
             const Core::QueueSubmissionToken finalSubmissionToken = dispatchRecordedFrameBatch(
                 ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPresent
             );
@@ -3325,12 +3201,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
 
     if(captureLaggedLightingHistory){
-        // The capture imports the live producer results after their last current-frame consumer. In the bootstrap the
-        // consumer was AsyncCompute lighting; in the active mode it was not touched by Graphics lighting at all. The
-        // final Graphics token is the conservative read-complete edge in both cases, while AsyncCompute queue order
-        // already places this copy after the current producer submission. In active mode the live caustic image
-        // comes directly from the current producer: hardware caustics ran on Graphics and therefore never populated
-        // the Async lighting return handoff.
+        // Capture waits for the final read-complete edge before copying live producer outputs.
         const Core::CommandListResourceStateHandoff* const causticStashSource = laggedAsyncLightingSchedule
             ? &m_causticIrradianceLightingStateHandoff
             : &m_causticIrradianceReturnStateHandoff
@@ -3459,8 +3330,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     if(!stashReturnStatesReady){
                         if(!recoverPendingAsyncComputeSubmission())
                             failAsyncRenderRecovery();
-                        // The accepted copy changed the producer-image layouts. Without an exported next-frame state,
-                        // reusing either the history or the live output would require guessing.
+                        // Lost retained copy state leaves no safe producer layout.
                         failAsyncRenderRecovery();
                         return;
                     }

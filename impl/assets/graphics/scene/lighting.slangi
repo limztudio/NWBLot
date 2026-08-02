@@ -12,51 +12,31 @@
 #include "../common/math.slangi"
 #include "buffer.slangi"
 
-// Surfel GI gather (world-hashed surfel lookup) is included below, inside the NWB_SCENE_GI_SAMPLING_DISABLED
-// guard, so the surfel pool/hash/params bindings are only declared where the deferred pass binds them.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Debug toggle for the visual gate: when 1, nwbBxdfCausticIrradiance returns a small constant grey instead of
-// sampling the buffer, so the additive caustic path can be confirmed (every receiver brightens additively and
-// uniformly) without a producer running. Default 0 samples the (black-cleared) buffer = additive no-op.
+// Test-only caustic path override.
 #ifndef NWB_CAUSTIC_DEBUG_FORCE_GREY
 #define NWB_CAUSTIC_DEBUG_FORCE_GREY 0
 #endif
 
-// Per-light shadow visibility: half3 transmittance (1 = lit, 0 = fully shadowed, tinted by colored
-// transparent occluders), one Texture2DArray layer per shadow slot. The shadow producers write a light's
-// transmittance into its slot layer; a light's slot index lives in its light record (params.z).
-// Additive caustic irradiance (RGBA16F, screen space): the focused light the caustic producer splats onto opaque
-// receivers, already tinted by the glass it passed through. Unlike the multiplicative per-light shadow visibility
-// this is a single screen-space buffer (all caustic lights accumulate into it) and is ADDED to the lit color
-// pre-tonemap. Cleared to black each frame -- black is the additive identity, so an unwritten buffer is a no-op.
+// Per-light transmittance and black-cleared additive caustic irradiance.
 #if !defined(NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED)
 #if !defined(NWB_SCENE_SHADOW_VISIBILITY_RESOURCE) || !defined(NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE)
 #error "Renderer screen-space shadow and caustic inputs require global descriptor-heap aliases"
 #endif
 #endif
 
-// The surfel GI gather is NOT done here. It runs once per pixel in a dedicated COMPUTE resolve pass
-// (surfel_resolve_cs) into a screen-space irradiance texture, which the deferred-lighting harness samples
-// (lighting_framework.slangi's nwbBxdfLoadSurface). That keeps the read-write surfel pool off the lighting compute
-// shader (compute-only, like the caustic accumulator), eliminating the frames-in-flight pool race. nwbBxdfIndirectIrradiance
-// below is the hemiAmbient FALLBACK the AVBOIT transparent path (no G-buffer -> no resolve) and null coverage use.
+// Dedicated resolve keeps the writable surfel pool off deferred lighting.
 
-// 1 (white) = lit, 0 = shadowed, tint = colored transmittance. Reads the light's shadow-slot layer; a light
-// with no slot (params.z < 0 -- the clear default, or a light the slot allocator did not reach) is fully lit.
+// Shadow slots store colored transmittance; absent slots are fully lit.
 half3 nwbBxdfLightTransmittance(int2 pixel, uint lightIndex){
 #ifdef NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
-    // No screen-space shadow-visibility buffer bound in this pass (e.g. the AVBOIT transparent accumulate, whose
-    // fragments are not in the opaque G-buffer the visibility was traced from): every light is fully lit. Omitting the
-    // declaration + this read keeps the pass from declaring an unused SAMPLED_IMAGE at a default slot its set-0 layout
-    // fills with a StructuredBuffer (a descriptor-type mismatch). Behaviour-identical to the negative-pixel sentinel.
     return half3(1.0h, 1.0h, 1.0h);
 #else
-    // Negative pixel = "skip screen-space shadow sampling" sentinel for the forward / AVBOIT transparent pass
-    // (transparent fragments are not in the opaque G-buffer the visibility was traced from) -- treat as lit.
+    // Negative pixels bypass opaque-G-buffer shadow sampling.
     if(pixel.x < 0)
         return half3(1.0h, 1.0h, 1.0h);
 
@@ -68,15 +48,11 @@ half3 nwbBxdfLightTransmittance(int2 pixel, uint lightIndex){
 #endif
 }
 
-// Additive caustic irradiance at the receiver pixel (scene-referred, pre-tonemap). Black = no caustic. The
-// negative-pixel sentinel (forward / AVBOIT transparent fragments, which are not in the opaque G-buffer the
-// producer splats onto) returns zero so the additive term drops out, mirroring nwbBxdfLightTransmittance.
+// Black is the additive caustic no-op; negative pixels bypass opaque-G-buffer sampling.
 half3 nwbBxdfCausticIrradiance(int2 pixel){
 #if NWB_CAUSTIC_DEBUG_FORCE_GREY
     return half3(0.15h, 0.15h, 0.15h);
 #elif defined(NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED)
-    // No caustic-irradiance buffer bound in this pass (see nwbBxdfLightTransmittance): no additive caustic (black is
-    // the additive identity). Behaviour-identical to the negative-pixel sentinel below, minus the unused binding.
     return half3(0.0h, 0.0h, 0.0h);
 #else
     if(pixel.x < 0)
@@ -105,8 +81,6 @@ void nwbSceneResolveLight(NwbSceneLight light, float3 worldPosition, out float3 
     lightVector = nwbSafeNormalize(toLight, float3(0.0, 0.0, -1.0));
 
     const float range = max(light.params.x, 0.0001);
-    // attenuation + cone smoothstep are bounded [0,1] falloff weights that only ever scale the already-half radiance,
-    // so they are kept half (mobile register pressure / bandwidth) while the underlying direction math stays float.
     half attenuation = half(saturate(1.0 - length(toLight) / range));
     attenuation *= attenuation;
 
@@ -152,12 +126,7 @@ half3 nwbSceneShadeLight(NwbSceneLight light, half3 baseColor, float3 normalVect
     return diffuse + specularColor + rimColor + frameCue + backLightCue;
 }
 
-// hemiAmbient: the outside-the-volume / GI-disabled ambient fallback. Project-tunable via two preprocessor
-// constants (define them before this header is included):
-//   NWB_GI_HEMI_AMBIENT_SKY     -- the sky-facing (normal.z > 0) ambient term (default a cool grey-blue).
-//   NWB_GI_HEMI_AMBIENT_GROUND  -- the ground-facing (normal.z < 0) ambient term (default a dark cool).
-// Returned when the surface is outside the probe grid OR when NWB_SCENE_GI_SAMPLING_DISABLED is defined (the AVBOIT
-// transparent accumulate path, which does not bind the atlases).
+// Configurable hemispherical ambient fallback.
 #ifndef NWB_GI_HEMI_AMBIENT_SKY
 #define NWB_GI_HEMI_AMBIENT_SKY half3(0.045h, 0.055h, 0.075h)
 #endif
@@ -169,10 +138,7 @@ half3 nwbGiHemiAmbient(float3 normalVector){
     return lerp(NWB_GI_HEMI_AMBIENT_GROUND, NWB_GI_HEMI_AMBIENT_SKY, skyAmount);
 }
 
-// Fallback indirect irradiance: the hemispherical ambient term. The OPAQUE deferred path OVERRIDES this per pixel by
-// sampling the resolved surfel-irradiance texture (lighting_framework.slangi's nwbBxdfLoadSurface); this function is
-// what the AVBOIT transparent path (whose fragments are not in the opaque G-buffer the resolve ran over) and any
-// null-coverage fallback use. worldPosition is unused (kept for the signature the cook-generated dispatch threads).
+// Transparent and null-coverage indirect-light fallback.
 half3 nwbBxdfIndirectIrradiance(float3 worldPosition, float3 normalVector){
     return nwbGiHemiAmbient(normalVector);
 }
@@ -181,11 +147,7 @@ half3 nwbBxdfIndirectIrradiance(float3 worldPosition, float3 normalVector){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// indirectIrradiance is the surface's precomputed indirect term (the opaque deferred path resolves it once per pixel
-// from the surfel-irradiance texture in nwbBxdfLoadSurface; the AVBOIT transparent path passes the hemiAmbient
-// fallback). It is threaded IN rather than recomputed here, so the whole-surface model reads the same value the BXDF
-// contract exposes as surface.indirectIrradiance -- and, critically, the deferred path never re-gathers the surfel
-// pool from the pixel shader (that is what the resolve pass decoupled to kill the frames-in-flight race).
+// The caller supplies resolved indirect irradiance; never re-gather the surfel pool here.
 half3 nwbSceneApplyLighting(half3 baseColor, float3 normal, float4 tangent, float3 worldPosition, int2 pixel, half3 indirectIrradiance){
     const float3 normalVector = nwbSafeNormalize(normal, float3(0.0, 0.0, 1.0));
     const float3 tangentVector = nwbFrameOrthonormalTangent(tangent.xyz, normalVector);
@@ -201,15 +163,10 @@ half3 nwbSceneApplyLighting(half3 baseColor, float3 normal, float4 tangent, floa
     half3 litColor = baseColor * indirectIrradiance;
     const uint lightCount = nwbSceneLightCount();
     for(uint i = 0u; i < lightCount; ++i){
-        // Per-light colored transmittance (1 = lit, 0 = shadowed, tint = colored transparent occluder);
-        // a light without a shadow slot reads white (fully lit).
         const half3 transmittance = nwbBxdfLightTransmittance(pixel, i);
         litColor += transmittance * nwbSceneShadeLight(g_NwbSceneLights[i], baseColor, normalVector, tangentVector, bitangentVector, viewVector, ndotv, worldPosition);
     }
 
-    // Additive caustic, scene-referred and pre-tonemap: a focused caustic is real incident irradiance and must
-    // roll off through the same Reinhard tonemap as direct light (so it can saturate toward white). Multiply by
-    // baseColor to reflect it off the receiver albedo; the glass tint already rides inside the irradiance.
     litColor += nwbBxdfCausticIrradiance(pixel) * baseColor;
 
     return litColor / (litColor + half3(0.65h));

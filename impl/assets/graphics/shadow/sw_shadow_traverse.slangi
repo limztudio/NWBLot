@@ -11,24 +11,17 @@
 
 #include "sw_binding_slots.h"
 
-// The traversal filters occluders to ONE class chosen at COMPILE time: each pass kernel that traces #defines
-// NWB_SW_SHADOW_OCCLUDER before including this concern (see sw_binding_slots.h for the class list + rationale). A missing
-// define is a build error rather than a silent all-class trace, so a new pass must state its class explicitly.
+// Each tracing pass chooses its occluder class at compile time.
 #ifndef NWB_SW_SHADOW_OCCLUDER
 #error "each software-shadow trace pass must #define NWB_SW_SHADOW_OCCLUDER before including sw_shadow_traverse.slangi"
 #endif
 
-// Route the surface hook's typed words + mutable mesh-instance records through the global heap. The uniform slots live
-// in the b8 trace-material cbuffer declared by sw_shadow_gbuffer.slangi; establish this complete mesh-frame route
-// before shadow_surface.slangi causes material_typed_bindings.slangi to be included.
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbSwShadowMaterialContextSlots.sceneSlots.w;
 }
 uint nwbMeshFrameInstanceHeapSlot(){
     return g_NwbSwShadowMaterialContextSlots.materialSlots.x;
 }
-// The material surface contract never reads mesh-view data during a shadow ray. Keep the view bindless to avoid a
-// phantom local view cbuffer while providing a valid helper for incidental include-time references.
 uint nwbMeshFrameViewHeapSlot(){
     return 0u;
 }
@@ -37,42 +30,29 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "sw_shadow_intersect.slangi"
 #include "sw_shadow_geometry.slangi"
 
-// The shadow trace's material-constants context (NwbShadowHit + the per-invocation accessors + the surface contract +
-// the engine-side shadow physics helpers the trace calls) + the cook-generated per-hit surface dispatch
 // (nwbShadowDispatchSurface), which routes by shadowTransmittanceModelId to return each occluder's optical params.
 #include "shadow_surface.slangi"
 #include "shadow/generated/transmittance_dispatch.slangi"
 
-// Per-crossing integration + finalize (NwbShadowVisibilityAccumulator / nwbShadowIntegrateCrossing /
-// nwbShadowFinalizeVisibility), pulled in after the surface helpers it depends on.
-// The traversal threads one accumulator by reference and the per-light entry finalizes it.
 #include "shadow_integrate.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Below this per-channel transmittance the occluder ray is effectively fully blocked; traversal stops early.
 #define NWB_SW_SHADOW_TRANSMITTANCE_EPSILON 1e-3
 
-// Instance count of the software scene BVH this frame. Each pass declares its own push-constant struct, but every tracing
-// pass names it g_NwbSwShadowPush and carries an `instanceCount` field, so the shared traversal reads it uniformly.
 uint nwbSwShadowInstanceCount(){
     return g_NwbSwShadowPush.instanceCount;
 }
 
 
-// Per-instance occlusion: push the world ray into the instance's object space, then walk that mesh's
-// triangle BVH. Each transparent triangle folds one surface crossing into the shared running accumulator; an opaque
-// triangle zeroes the transmittance and stops the traversal.
+// Per-instance traversal accumulates transparent crossings and stops on opaque hits.
 void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout NwbShadowVisibilityAccumulator acc){
     const NwbSwBvhInstance instance = NwbHeapSwShadowSceneInstances(g_NwbSwShadowMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbSwShadowMaterialContextSlots.sceneSlots.z)[instanceIndex];
     const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
-    // COMPILE-TIME occluder-class filter (see sw_binding_slots.h): OPAQUE passes skip transparent occluders (a binary
-    // blocker mask); TRANSPARENT passes skip opaque occluders (the opaque shadow already comes from the HW mask or the
-    // opaque prepass, so tracing opaque here would only redundantly re-darken -- and skipping it avoids the opaque
-    // meshes' triangle BVHs). ALL traces both. Baked per pass, so there is no runtime mode branch.
+    // Compile-time class filter avoids runtime traversal branching.
 #if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
     if(transparent)
         return;
@@ -80,41 +60,19 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     if(!transparent)
         return;
 #endif
-    // This instance's per-mesh geometry (BVH nodes / indices / positions / attributes) is fetched from the global
-    // descriptor heap by the four per-buffer slots the material record carries (populated lockstep with the mesh in
-    // rt_swbvh.cpp). Each slot is NON-UNIFORM across the wave -- different invocations'
-    // rays hit different meshes -- so its heap subscript must be NonUniformResourceIndex-tagged; NwbHeapBvhNodes() /
-    // NwbHeapRawBuffer() apply that internally and are re-invoked at EACH access below (never hoisted into a resource
-    // local) so the decoration is applied fresh at every subscript. Omitting it is undefined behaviour: on a wave that
-    // straddles a mesh-shadow boundary the hardware can read a DIFFERENT mesh's BVH/geometry for some lanes, which
-    // culls real occluder hits there and leaves an under-occluded (bright) wave-tile-aligned band.
+    // Per-mesh heap indices are non-uniform and must be decorated at every access.
     const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
     const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
     const float3 invDir = nwbSwShadowSafeInvDir(direction);
 
-    // Front-to-back traversal ranks the two children by ray-entry distance, descends the near child inline, and pushes
-    // only the far child. The opaque `return` and near-zero-transmittance early-out therefore fire before irrelevant
-    // farther subtrees. The stack holds one deferred far node per internal node, allowing a deeper tree.
+    // Near-first traversal defers only far children for early exits.
     //
-    // Order-independence (pure perf, never a quality change): the integrator (shadow_integrate.slangi::
-    // nwbShadowIntegrateCrossing + nwbShadowFinalizeVisibility) bins crossings PER OCCLUDER and the finalize SORTS
-    // each bin's hit distances before pairing them into chords, so the result depends only on the SET of crossings
-    // found in [tMin,tMax] -- never their visit order. An opaque hit stops the walk when its triangle is tested, and a
-    // transparent trace still collects every crossing. The far child's deferral is bounded
-    // by the same [tMin,tMax] slab test, so the miss set is identical. tMax is NOT narrowed: a transparent
-    // occluder's crossing cannot bound later occluders, so narrowing it would drop real crossings and change the
-    // result. The accept/reject decision stays with nwbSwShadowRayAabbEntryT (miss -> NWB_SW_SHADOW_AABB_MISS ->
-    // sorts last -> never the near child), so dropped boxes are misses.
+    // Crossing integration is order-independent; never narrow tMax for transparent occluders.
     uint stack[NWB_SW_SHADOW_MESH_STACK_SIZE];
     uint stackPointer = 0u;
     uint nodeIndex = 0u; // per-mesh root
 
-    // Only the ROOT can fail the slab test. Every other node the loop reaches -- the near child descended inline or the
-    // far child popped from the stack -- was already proven to intersect by its parent's entry-distance ranking
-    // (nwbSwShadowRayAabbEntryT), whose accept/reject is byte-identical to nwbSwShadowRayAabb (same slab math, same
-    // padding -- "the miss set is identical"). Testing the root once up front lets the loop drop a redundant full slab
-    // test on every visited node. The internal-node branch still tests BOTH children (their tight boxes can both miss a
-    // padded parent), so the accept/reject set is unchanged; only the per-node redundant re-test is removed.
+    // Child nodes are prevalidated by parent ranking; test only the root at loop entry.
     {
         const NwbBvhNode root = NwbHeapBvhNodes(material.nodeSlot)[nodeIndex];
         if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, root.aabbMin, root.aabbMax))
@@ -123,15 +81,10 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
 
     while(true){
         const NwbBvhNode node = NwbHeapBvhNodes(material.nodeSlot)[nodeIndex];
-        // No loop-top box test: this node is the pre-proven root or a parent-ranked child (see above).
 
         if(nwbBvhNodeIsLeaf(node)){
             const uint triangle = nwbBvhLeafPrimitive(node);
             const uint indexBase = triangle * 3u;
-            // One Load3 (a single 12-byte / 3-u32 transaction) fetches the whole index triple, instead of three
-            // separate Load() calls (three transactions over the same 12 contiguous bytes). Same bytes, 1/3 the
-            // fetch traffic -- the index buffer is laid out as back-to-back u32 triples so the three values are
-            // exactly the words a ByteAddressBuffer.Load3 reads.
             const uint3 indices = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * 4u);
             const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.x * 12u));
             const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.y * 12u));
@@ -139,23 +92,15 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
             const NwbSwShadowTriangleHit triangleHit = nwbSwShadowRayTriangle(origin, direction, tMin, tMax, v0, v1, v2);
             if(triangleHit.hit){
                 if(!transparent){
-                    // Opaque occluder: light is fully blocked, stop the whole traversal.
                     acc.transmittance = half3(0.0h, 0.0h, 0.0h);
                     return;
                 }
-                // Transparent occluder: evaluate this material's surface hook for its optical params and integrate
-                // this surface crossing into the running visibility, then keep tracing for further occluders. The
-                // hook reads the interpolated normal/uv0 + the material-constants context carried by the instance
-                // record; dispatched by shadowTransmittanceModelId.
                 const uint attributeBase = triangle * 3u;
                 const NwbRayTraceVertexAttrib a0 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase);
                 const NwbRayTraceVertexAttrib a1 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
                 const NwbRayTraceVertexAttrib a2 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
                 const float smoothNormalWeight = nwbShadowSmoothNormalWeight(float3(a0.normal), float3(a1.normal), float3(a2.normal));
 
-                // Interpolate the object-space normal, then transform it to world space (the surface contract) with
-                // the inverse-transpose of object->world carried in the instance's world->object rows, so a
-                // non-identity instance rotation/scale matches the rasterizer's world-space normal.
                 const float3 objectNormal = float3(a0.normal) * triangleHit.w + float3(a1.normal) * triangleHit.u + float3(a2.normal) * triangleHit.v;
 
                 NwbShadowHit hit;
@@ -167,23 +112,13 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
                 hit.worldPosition = worldOrigin + worldDirection * triangleHit.t;
                 hit.rayDirection = worldDirection;
 
-                // Evaluate this material's surface hook for its optical params, then fold the crossing into the
-                // running accumulator via the shared integrator. The geometric face
-                // normal cross(v1-v0,v2-v0) + the object-space ray `direction` are already in hand;
-                // triangleHit.t is the world distance (the ray dir is left un-normalised so its t matches RayTCurrent()).
-                // hit.worldNormal stays the SHADING normal for any hook that reads it; the integrator uses geometry
-                // for crossing pairing and smooth author normals only for optional Fresnel.
                 const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
                 const float3 geometricNormal = cross(v1 - v0, v2 - v0);
                 nwbShadowIntegrateCrossing(acc, instanceIndex, surface.refractionIor, surface.shadowAbsorptionTint, geometricNormal, objectNormal, smoothNormalWeight, direction, triangleHit.t);
-                // Cost safeguard for deeply-stacked transparency: stop once effectively opaque, but keep the
-                // accumulated near-zero value so finalize applies the Beer-Lambert term without blackening overlaps.
+                // Stop once transmittance is effectively opaque.
                 if(max(max(acc.transmittance.x, acc.transmittance.y), acc.transmittance.z) < NWB_SW_SHADOW_TRANSMITTANCE_EPSILON)
                     return;
             }
-            // Leaf processed without an early return (a transparent leaf that did not floor must keep traversing for
-            // further occluders). Pop the next deferred far node; without this nodeIndex is unchanged and the loop
-            // would re-read this same leaf forever.
             if(stackPointer == 0u)
                 return;
             nodeIndex = stack[--stackPointer];
@@ -198,28 +133,22 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
             const bool leftMiss = (tLeft >= NWB_SW_SHADOW_AABB_MISS);
             const bool rightMiss = (tRight >= NWB_SW_SHADOW_AABB_MISS);
 
-            // Both children miss (the parent AABB overlapped but neither tight sibling box did -- the slab test's
-            // padding makes this the common case). Nothing to descend; pop the next deferred far node.
             if(leftMiss && rightMiss){
                 if(stackPointer == 0u)
                     return;
                 nodeIndex = stack[--stackPointer];
                 continue;
             }
-            // Rank by entry distance; a missed child's sentinel sorts last, so the near child is always a real hit.
             const uint nearChild = (tLeft <= tRight) ? left : right;
             const uint farChild  = (tLeft <= tRight) ? right : left;
             const bool farMiss   = (tLeft <= tRight) ? rightMiss : leftMiss;
 
-            // Exactly one child intersects: descend it inline, defer nothing.
             if(farMiss){
                 nodeIndex = nearChild;
                 continue;
             }
 
-            // Conservative on stack exhaustion: a subtree deeper than the traversal stack is treated as a
-            // fully-opaque occluder rather than being skipped, so a pathologically unbalanced BVH over-darkens
-            // at worst instead of leaking light through unvisited geometry. +1 bound (one deferred far node).
+            // Conservatively block light rather than skip an over-deep subtree.
             if((stackPointer + 1u) >= NWB_SW_SHADOW_MESH_STACK_SIZE){
                 acc.transmittance = half3(0.0h, 0.0h, 0.0h);
                 return;
@@ -230,26 +159,18 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     }
 }
 
-// Scene-level occlusion: walk the software scene/instance BVH; each leaf is an instance whose world AABB the
-// ray crossed, so refine it with the exact per-mesh triangle traversal and fold its contribution into the
-// shared running accumulator. Stops as soon as the transmittance reaches zero (an opaque hit).
+// Scene traversal refines candidate instances through mesh BVHs.
 void nwbSwShadowOccluded(const float3 origin, const float3 direction, const float tMin, const float tMax, inout NwbShadowVisibilityAccumulator acc){
     if(nwbSwShadowInstanceCount() == 0u)
         return;
 
     const float3 invDir = nwbSwShadowSafeInvDir(direction);
 
-    // Front-to-back descent (same shape as the per-mesh traversal above): rank the two children by ray-entry
-    // distance, descend the NEAR one inline, defer only the FAR one. The scene BVH is shallow so the stack
-    // halving matters less here, but the near-first ordering still lets the per-instance opaque stop and the
-    // transmittance floor fire across the nearer instances first, skipping farther ones. Order-independence and
-    // no-tMax-narrowing hold for the same reasons as the per-mesh traversal (see comment there).
+    // Near-first scene traversal preserves early exits.
     uint stack[NWB_SW_SHADOW_SCENE_STACK_SIZE];
     uint stackPointer = 0u;
     uint nodeIndex = 0u; // root
 
-    // Root-only slab test (see the per-mesh traversal): every other node the loop reaches is already proven to
-    // intersect by its parent's entry-distance ranking, so the loop drops the per-node redundant re-test.
     {
         const NwbBvhNode root = NwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[nodeIndex];
 #if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
@@ -262,7 +183,6 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
 
     while(true){
         const NwbBvhNode node = NwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[nodeIndex];
-        // No loop-top box test: this node is the pre-proven root or a parent-ranked child (see above).
 
         if(nwbBvhNodeIsLeaf(node)){
             nwbSwShadowInstanceOccluded(nwbBvhLeafPrimitive(node), origin, direction, tMin, tMax, acc);
@@ -278,8 +198,7 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
             const NwbBvhNode leftNode = NwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[left];
             const NwbBvhNode rightNode = NwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[right];
 #if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
-            // The CPU scene-BVH packs this bit bottom-up. Pruning an opaque-only sibling before its slab test avoids
-            // the material fetch and per-mesh walk that the older leaf-only class filter would immediately discard.
+            // Prune opaque-only subtrees for transparent-only traces.
             const bool leftTransparent = nwbBvhNodeContainsTransparentOccluder(leftNode);
             const bool rightTransparent = nwbBvhNodeContainsTransparentOccluder(rightNode);
 #endif
@@ -319,8 +238,7 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
                 continue;
             }
 
-            // Conservative on stack exhaustion (see nwbSwShadowInstanceOccluded): an over-deep scene tree is
-            // treated as a fully-opaque occluder rather than dropping instances. Unreachable in practice. +1.
+            // Conservatively block light rather than skip an over-deep subtree.
             if((stackPointer + 1u) >= NWB_SW_SHADOW_SCENE_STACK_SIZE){
                 acc.transmittance = half3(0.0h, 0.0h, 0.0h);
                 return;

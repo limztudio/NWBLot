@@ -9,33 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Bitonic sort, three regimes selected by push-constant `mode`, all inlined into `main`:
-//
-//   mode == LOCAL_TILE  : one dispatch sorts every GROUP_SIZE-element tile in place. Each workgroup owns a
-//                         contiguous tile; it loads the tile into groupshared, runs the full intra-tile bitonic
-//                         network (sequenceSize 2..GROUP_SIZE) with `compareDistance` halving each round, then
-//                         writes the sorted tile back. This collapses the `log2(GROUP_SIZE)*(log2(GROUP_SIZE)+1)/2`
-//                         compare-swap sub-steps that issuing one GLOBAL dispatch each would otherwise require.
-//
-//   mode == GLOBAL      : ONE inter-tile merge step for `sequenceSize > GROUP_SIZE` with `compareDistance >=
-//                         GROUP_SIZE`. Each thread owns ONE element and the XOR partner `(index ^ compareDistance)`
-//                         lands in a DIFFERENT tile, so the swap is a plain global-memory read/conditional-write.
-//
-//   mode == GLOBAL_TAIL : the per-sequenceSize INTRA-tile tail for `sequenceSize > GROUP_SIZE`. After the
-//                         GLOBAL inter-tile steps (compareDistance >= GROUP_SIZE) are done, the remaining
-//                         `compareDistance = GROUP_SIZE/2..1` steps all have their XOR partner inside the SAME
-//                         tile, so this one dispatch loads the tile into groupshared and runs them all there —
-//                         collapsing 8 dispatches per sequenceSize into one, mirroring the LOCAL_TILE collapse.
-//
-// The three bodies are intentionally inlined into `main` rather than split into separately-called functions:
-// the bundled slangc crashes (SIGSEGV in the SPIR-V backend) on a groupshared tile combined with a nested
-// `GroupMemoryBarrierWithGroupSync` bitonic network placed inside a callee. Keeping the groupshared work inline
-// in the entry point compiles cleanly.
-//
-// Order invariant: all three regimes use the same `nwbBvhSortPairLess` (lexicographic (key,payload)) and the same
-// `(index & sequenceSize)` ascending test, so they compose into the standard bitonic sort. Sorting each tile
-// first just turns every GROUP_SIZE run into a sorted (hence bitonic) sequence, which is exactly what the
-// merge steps at sequenceSize <= GROUP_SIZE would have produced; the larger merges are unaffected.
+// LOCAL_TILE sorts tiles, GLOBAL merges tiles, and GLOBAL_TAIL finishes tile-local merges.
+// Keep groupshared sorting inline: the bundled slangc crashes on nested barrier networks in callees.
 
 
 struct NwbBvhBitonicSortPushConstants{
@@ -51,8 +26,7 @@ struct NwbBvhBitonicSortPushConstants{
 [[vk::push_constant]]
 ConstantBuffer<NwbBvhBitonicSortPushConstants> g_NwbBvhBitonicSortPushConstants;
 
-// Lexicographic (key, payload) order: equal Morton codes fall back to the primitive index so the comparison
-// is a strict total order — Karras topology needs unique sort keys to avoid degenerate internal nodes.
+// Payload breaks equal Morton-code ties for stable BVH topology.
 bool nwbBvhSortPairLess(const uint keyA, const uint payloadA, const uint keyB, const uint payloadB){
     if(keyA != keyB)
         return keyA < keyB;
@@ -66,8 +40,7 @@ bool nwbBvhSortPairLess(const uint keyA, const uint payloadA, const uint keyB, c
 groupshared uint s_tileKeys[NWB_BVH_SORT_GROUP_SIZE];
 groupshared uint s_tilePayload[NWB_BVH_SORT_GROUP_SIZE];
 
-// Keep the groupshared networks in main (a function callee triggers a bundled slangc SPIR-V backend crash), while
-// sharing their byte-identical compare/swap body through preprocessing so LOCAL_TILE and GLOBAL_TAIL cannot diverge.
+// Preprocessor-shared compare/swap keeps the inline tile modes aligned.
 #define NWB_BVH_SORT_TILE_COMPARE_SWAP(ASCENDING, PARTNER) \
     const uint keyA = s_tileKeys[local]; \
     const uint payloadA = s_tilePayload[local]; \
@@ -94,8 +67,7 @@ void main(
     const uint mode = g_NwbBvhBitonicSortPushConstants.mode;
 
     if(mode == 1u){
-        // GLOBAL: one inter-tile merge step (sequenceSize > GROUP_SIZE, compareDistance >= GROUP_SIZE). Each
-        // thread owns `index`; its XOR partner is in a different tile, so this is a global-memory compare-swap.
+        // Inter-tile global-memory compare/swap.
         const uint index = dispatchThreadID.x;
         const uint partner = index ^ g_NwbBvhBitonicSortPushConstants.compareDistance;
         if(partner <= index)
@@ -117,7 +89,7 @@ void main(
         return;
     }
 
-    // LOCAL_TILE / GLOBAL_TAIL: cooperative groupshared sort over one GROUP_SIZE tile.
+    // Tile-local modes use groupshared storage.
     const uint tileBase = groupID.x * NWB_BVH_SORT_GROUP_SIZE;
     const uint local = groupThreadID.x;
     const uint global = tileBase + local;
@@ -127,18 +99,13 @@ void main(
     GroupMemoryBarrierWithGroupSync();
 
     if(mode == 0u){
-        // LOCAL_TILE: full intra-tile bitonic network, sequenceSize 2..GROUP_SIZE with compareDistance halving
-        // each round. Builds a sorted (hence bitonic) tile from arbitrary input.
         [unroll]
         for(uint sequenceSize = 2u; sequenceSize <= NWB_BVH_SORT_GROUP_SIZE; sequenceSize <<= 1u){
             [unroll]
             for(uint compareDistance = sequenceSize >> 1u; compareDistance > 0u; compareDistance >>= 1u){
                 const uint partner = local ^ compareDistance;
                 if(partner > local){
-                    // Ascending test uses the GLOBAL index, not `local`: at the final LOCAL_TILE round
-                    // (sequenceSize == GROUP_SIZE) the bit lives above the tile's low log2(GROUP_SIZE) bits, which
-                    // are constant within a tile, so tiles must alternate ascending/descending — `(local & seq)`
-                    // would be uniformly 0 and corrupt multi-tile sorts. (For seq < GROUP_SIZE the two agree.)
+                    // Use global index so tiles alternate sort direction.
                     const bool ascending = (global & sequenceSize) == 0u;
                     NWB_BVH_SORT_TILE_COMPARE_SWAP(ascending, partner)
                 }
@@ -147,11 +114,7 @@ void main(
         }
     }
     else{
-        // GLOBAL_TAIL: the intra-tile tail for sequenceSize > GROUP_SIZE. The inter-tile GLOBAL steps already
-        // handled compareDistance >= GROUP_SIZE, so this runs compareDistance = GROUP_SIZE/2..1 (all partners
-        // inside this tile). The ascending flag uses the GLOBAL sequenceSize: it isolates a bit above the tile's
-        // low log2(GROUP_SIZE) bits, which are constant within a GROUP_SIZE-aligned tile (GROUP_SIZE is a power
-        // of two, as the bitonic scheme assumes), so it is uniform across the tile and computed once.
+        // Finish the post-global tile-local merge tail.
         const uint sequenceSize = g_NwbBvhBitonicSortPushConstants.sequenceSize;
         const bool ascending = (global & sequenceSize) == 0u;
         [unroll]

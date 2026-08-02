@@ -13,7 +13,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// CPU mirror of the shader NwbSurfelConstants (5 x Float4 = 80 bytes, matches surfel_constants.slangi lane-for-lane).
+// CPU/shader ABI mirror for surfel constants.
 struct NwbSurfelConstantsGpu{
     Float4 cameraPositionCellSize;  // xyz = camera world position, w = hash cell size
     Float4 hashPoolFrameDivisor;    // x = hash cell count, y = pool capacity, z = frame index, w = update divisor
@@ -23,12 +23,10 @@ struct NwbSurfelConstantsGpu{
 };
 static_assert(sizeof(NwbSurfelConstantsGpu) == sizeof(f32) * 4u * 5u, "NwbSurfelConstantsGpu must match the shader NwbSurfelConstants layout");
 
-// The surfel normal bias: push the trace ray origin + the gather sample point off the surface along the normal so a
-// ray/query does not self-hit the surface it belongs to. Small world-space offset scaled by camera distance.
+// Offset trace and gather points to avoid self-intersection.
 inline constexpr f32 s_SurfelNormalBias = 0.05f;
 
-// Live-count diagnostic: snapshot the surfel counter every s_SurfelCountLogInterval frames and map + log it
-// s_SurfelCountLogDelay frames later (the copy is async, so the delay lets the GPU finish before the CPU maps).
+// Delayed counter readback avoids stalling on the asynchronous copy.
 inline constexpr u32 s_SurfelCountLogInterval = 120u;
 inline constexpr u32 s_SurfelCountLogDelay = 3u;
 
@@ -53,7 +51,6 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
     if(!rayTracingState().m_surfelSpawnBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // All surfel resources and frame inputs are selected through the common heap-slot push block.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         rayTracingState().m_surfelSpawnBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelSpawnBindingLayout){
@@ -108,7 +105,6 @@ bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
     if(!rayTracingState().m_surfelAgeFreeBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // The maintenance field is entirely heap-selected by the common push block.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         rayTracingState().m_surfelAgeFreeBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelAgeFreeBindingLayout){
@@ -163,7 +159,6 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
     if(!rayTracingState().m_surfelHashBuildBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Pool and hash-head views are selected through the global descriptor heap.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         rayTracingState().m_surfelHashBuildBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelHashBuildBindingLayout){
@@ -218,7 +213,6 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
     if(!rayTracingState().m_surfelTraceBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Deferred scene slots, material-context slots, live/snapshot surfels, and geometry all come from the heap.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         rayTracingState().m_surfelTraceBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelTraceBindingLayout){
@@ -257,8 +251,7 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
 }
 
 bool RendererRayTracingSystem::ensureSurfelResources(){
-    // Create the persistent pool / cell-head / counter / params buffers lazily. They live on RendererRayTracingState
-    // (NOT DeferredFrameTargets) so a window resize does not reset surfel convergence.
+    // Persistent field storage survives window resizes.
     if(!hasSurfelWork())
         return true;
 
@@ -274,8 +267,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         return false;
     }
 
-    // Surfel pool (poolCapacity * 64B). UAV-writable (the spawn/hash-build/trace passes write it); the gather binds it
-    // as an SRV. On (re)creation, request the one-shot clear (this function has no command list) + reset the seed.
+    // Fresh pool storage needs one clear before tracing.
     if(!rayTracingState().m_surfelPoolBuffer){
         Core::BufferDesc desc;
         desc
@@ -294,7 +286,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         rayTracingState().m_surfelResourcesNeedClear = true;
     }
 
-    // Cell-head buffer (cellCount uints -- one linked-list head per hash cell). Cleared to 0xFFFFFFFF (empty).
+    // Hash heads use 0xFFFFFFFF as the empty sentinel.
     if(!rayTracingState().m_surfelCellHeadBuffer){
         Core::BufferDesc desc;
         desc
@@ -312,7 +304,6 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         rayTracingState().m_surfelResourcesNeedClear = true;
     }
 
-    // Allocation counter (bump top + free top). Cleared to 0.
     if(!rayTracingState().m_surfelCounterBuffer){
         Core::BufferDesc desc;
         desc
@@ -330,10 +321,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         rayTracingState().m_surfelResourcesNeedClear = true;
     }
 
-    // Trace indirect-args buffer: DispatchIndirectArguments{ceil(BUMP_TOP/divisor),1,1}, rewritten by the build-args
-    // pass each frame (no clear needed -- fully overwritten before the trace reads it). isDrawIndirectArgs marks it for
-    // the IndirectArgument state; canHaveUAVs lets the build-args pass write it. Automatic state tracking barriers the
-    // build-args UAV write -> the trace's indirect consume.
+    // Build-args rewrites the indirect dispatch buffer each frame.
     if(!rayTracingState().m_surfelTraceIndirectArgsBuffer){
         Core::BufferDesc desc;
         desc
@@ -351,9 +339,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         }
     }
 
-    // Free-list recycling: poolCapacity uints, a persistent LIFO stack of recycled surfel ids (depth = counter
-    // FREE_TOP). Age-free pushes; spawn pops. Same barrier/state-tracking as the pool so the intra-frame push->pop
-    // (pass 0 -> pass 3) UAV barrier is emitted. Contents cleared to 0 once (FREE_TOP=0 is what marks it empty).
+    // Age-free pushes ids and spawn pops them from this persistent free list.
     if(!rayTracingState().m_surfelFreeListBuffer){
         Core::BufferDesc desc;
         desc
@@ -371,11 +357,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         rayTracingState().m_surfelResourcesNeedClear = true;
     }
 
-    // Snapshot pool for the infinite bounce: a copy of the previous frame's converged pool the trace's bounce gather reads
-    // as an SRV (never the live pool it is writing), so surfel->surfel feedback reads a stable frame-start field. SRV-only
-    // (canHaveUAVs false -- only copyBuffer writes it), same size/stride as the live pool. No clear: fully overwritten by
-    // the copyBuffer at the top of renderSurfelGi before any read (frame 0's snapshot is a copy of the freshly-cleared
-    // pool, so the bounce is 0 until the first real frame lands -- the documented "single frame shows first bounce only").
+    // Bounce gathers read a stable previous-frame pool snapshot.
     if(!rayTracingState().m_surfelPoolSnapshotBuffer){
         Core::BufferDesc desc;
         desc
@@ -392,8 +374,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         }
     }
 
-    // Snapshot cell-head: the matching previous-frame cell-head, so the bounce gather's 3x3x3 walk is mutually
-    // consistent with its snapshot pool (both captured at the same frame-start). SRV-only; overwritten by copyBuffer.
+    // Snapshot hash heads alongside the pool for a consistent bounce gather.
     if(!rayTracingState().m_surfelCellHeadSnapshotBuffer){
         Core::BufferDesc desc;
         desc
@@ -410,8 +391,6 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         }
     }
 
-    // CPU-readable copy of the counter for the periodic live-count diagnostic. Snapshotted on a log-interval frame,
-    // mapped a few frames later (mirrors the SW-shadow edge-stats readback).
     if(!rayTracingState().m_surfelCounterReadback){
         Core::BufferDesc desc;
         desc
@@ -427,17 +406,13 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         }
     }
 
-    // Params CB (5 x Float4). Uploaded each rendered frame in prepareSurfelResources. setIsConstantBuffer marks it a
-    // uniform buffer (adds VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT + 16-byte-aligns the suballocation); it is bound as a
-    // ConstantBuffer in every surfel pass, so without the flag validation reports a uniform-buffer type/usage and
-    // alignment mismatch.
+    // Every surfel pass binds this per-frame parameter buffer as a ConstantBuffer.
     if(!rayTracingState().m_surfelConstants){
         Core::BufferDesc cbDesc;
         cbDesc
             .setByteSize(sizeof(NwbSurfelConstantsGpu))
             .setIsConstantBuffer(true)
-            // Graphics uploads this per-frame selector before the AsyncCompute surfel packet consumes it. The remaining
-            // persistent surfel field stays exclusive to Compute once its one-shot initialization has moved there.
+            // Graphics upload and async consume share this selector.
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setDebugName(Name("surfel_constants"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
@@ -449,8 +424,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         }
     }
 
-    // Register each persistent surfel buffer exactly once in the global heap. The typed shader aliases choose read or
-    // writable views at use time; the descriptor itself owns the backing-buffer lifetime until its retirement delay.
+    // Persistent descriptors own backing resources until deferred retirement.
     if(
         !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelConstants.get(), Core::GpuDescriptorClass::UniformBuffer, false, rayTracingState().m_surfelConstantsHeapHandle)
         || !__hidden_raytracing_system::EnsureHeapBuffer(heap, *rayTracingState().m_surfelPoolBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, rayTracingState().m_surfelPoolHeapHandle)
@@ -465,16 +439,14 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         return false;
     }
 
-    // The trace pipeline is the one backend-specific pass: the HW-shadow branch selects the RayQuery twin, else the SW walk.
+    // Only tracing differs between hardware and software surfel paths.
     const bool traceReady = rayTracingState().m_surfelUseHwTrace ? ensureSurfelTraceHwPipeline() : ensureSurfelTracePipeline();
     if(!ensureSurfelSpawnPipeline() || !ensureSurfelAgeFreePipeline() || !ensureSurfelHashBuildPipeline() || !traceReady || !ensureSurfelResolvePipeline() || !ensureSurfelUpsamplePipeline() || !ensureSurfelTraceBuildArgsPipeline())
         return false;
     return true;
 }
 
-// HW-RayQuery trace twin. Same surfel passes; only the TRACE swaps its pipeline: inline RayQuery over the scene
-// TLAS (surfel_trace_hw_cs -> gi_hw_trace.slangi) instead of the SW BVH walk. Gated on accel-struct + ray-query support,
-// so it only builds on the HW-shadow branch (which is where surfels are enabled on real RT hardware).
+// Hardware trace twin; other surfel passes are shared.
 bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
     if(rayTracingState().m_surfelTraceHwPipeline)
         return true;
@@ -497,7 +469,6 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
     if(!rayTracingState().m_surfelTraceHwBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // The fixed heap blocks provide the TLAS, trace contexts, surfels, and geometry; the local layout is push-only.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         rayTracingState().m_surfelTraceHwBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelTraceHwBindingLayout){
@@ -523,10 +494,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
         .setComputeShader(rayTracingState().m_surfelTraceHwShader)
         .addBindingLayout(rayTracingState().m_surfelTraceHwBindingLayout)
     ;
-    // Pin the global resource (set 8), sampler (set 9), and TLAS (set 10) layouts onto the hardware surfel-trace
-    // pipeline. The local HW GI layout remains positional set 0; the heap layouts carry explicit high set indices and
-    // createPipelineLayoutForBindingLayouts gap-fills sets 1-7. This is a COMPUTE pipeline, so the heap binds through
-    // bindCompute.
+    // Preserve resource, sampler, and TLAS heap sets for hardware trace.
     pipelineDesc
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
@@ -559,7 +527,6 @@ bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
     if(!rayTracingState().m_surfelResolveBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // G-buffer, surfel field, and half-resolution storage output are all selected from heap slots.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         rayTracingState().m_surfelResolveBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelResolveBindingLayout){
@@ -614,7 +581,6 @@ bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
     if(!rayTracingState().m_surfelUpsampleBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Half irradiance, G-buffer, and full-resolution storage output are heap-selected.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         rayTracingState().m_surfelUpsampleBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelUpsampleBindingLayout){
@@ -669,7 +635,6 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
     if(!rayTracingState().m_surfelTraceBuildArgsBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Constants, counter, and indirect argument output are selected by heap slots.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
         rayTracingState().m_surfelTraceBuildArgsBindingLayout = device.createBindingLayout(layoutDesc);
         if(!rayTracingState().m_surfelTraceBuildArgsBindingLayout){
@@ -735,8 +700,6 @@ void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
 }
 
 bool RendererRayTracingSystem::hasSurfelWork()const noexcept{
-    // Surfel GI is disabled until m_surfelEnabled is set (in prepareShadowVisibilityResources, once the SW scene BVH is
-    // resident). A zero-init pool + 0xFFFFFFFF cell heads make the gather a no-op (-> hemiAmbient) until then.
     return rayTracingState().m_surfelEnabled;
 }
 
@@ -751,8 +714,7 @@ bool RendererRayTracingSystem::initializeSurfelResources(Core::CommandList& comm
     if(!pool || !cellHead || !counter || !freeList)
         return false;
 
-    // One-shot clear of newly-created field storage. Keeping this work beside the first AsyncCompute packet means the
-    // persistent UAV field never needs a Graphics -> Compute ownership transfer on a dedicated queue family.
+    // Initialize the persistent field on its first producer queue.
     commandList.setBufferState(pool, Core::ResourceStates::CopyDest);
     commandList.setBufferState(cellHead, Core::ResourceStates::CopyDest);
     commandList.setBufferState(counter, Core::ResourceStates::CopyDest);
@@ -775,14 +737,10 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
     if(!hasSurfelWork())
         return true;
 
-    // Lazily create the persistent buffers + pipelines. They live on RendererRayTracingState so a window resize does
-    // not reset surfel convergence.
     if(!ensureSurfelResources())
         return false;
 
-    // The shared deferred target-generation payload already owns a UniformBuffer heap descriptor. Register the one
-    // remaining trace selector (material-context slots) in surfel state; this avoids changing shadow/caustic bindings
-    // while leaving both surfel trace backends entirely heap-addressed.
+    // Register the remaining heap-selected trace context.
     Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     if(
         !targets.bindless.valid()
@@ -801,22 +759,14 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
         return false;
     }
 
-    // The Graphics fallback retains the historical initialization point. On a dedicated lane the first surfel packet
-    // records this clear itself, preserving Compute ownership of the persistent UAV field from its first use onward.
+    // Dedicated async compute performs its own first-use initialization.
     if(
         !graphics().getDevice().isRenderLaneDedicated(Core::RenderLane::AsyncCompute)
         && !initializeSurfelResources(commandList)
     )
         return false;
 
-    // Upload the params CB. The cell size sets the surfel spacing (one surfel per hash cell); the gather radius is a bit
-    // larger (NWB_SURFEL_DEFAULT_RADIUS) so the 3x3x3 neighbour blend overlaps smoothly.
-    // The update divisor is 1 on the first (not-yet-seeded) frame so EVERY surfel traces to bootstrap in ONE frame --
-    // the unfocused smoke app renders only that frame -- then reverts to the round-robin divisor. The trace's temporal
-    // accumulation is a bounded running mean capped at NWB_SURFEL_MAX_ACCUM (carried in coverageRadiusBiasHyst.w). The
-    // trace retains the full 64-ray budget until an individual surfel's sampleCount reaches the shader-side confidence
-    // threshold, then safely reuses its accumulated SH with the reduced current-ray budget. The camera position rides
-    // xyz for distance scaling.
+    // First frame traces every surfel; later frames use round-robin updates.
     const u32 updateDivisor = rayTracingState().m_surfelSeeded ? Max<u32>(NWB_SURFEL_UPDATE_DIVISOR, 1u) : 1u;
     const f32 cellSize = NWB_SURFEL_CELL_SIZE;
 
@@ -855,7 +805,7 @@ void RendererRayTracingSystem::finalizeSurfelResourceInitialization(){
 }
 
 void RendererRayTracingSystem::discardSurfelResourceInitialization(){
-    // NeedClear deliberately remains set so the next successful Graphics/AsyncCompute producer retries the one-shot clear.
+    // Keep the clear pending until a producer succeeds.
     rayTracingState().m_surfelResourcesClearPending = false;
 }
 
@@ -863,8 +813,7 @@ void RendererRayTracingSystem::clearSurfelIrradiance(Core::CommandList& commandL
     if(!targets.surfelIrradiance)
         return;
 
-    // Alpha 0 means no surfel coverage, so this is the deferred lighting no-op when the GI producer is unavailable or
-    // chooses not to dispatch. Keep the result ShaderResource-ready before its later Compute -> Graphics release.
+    // Zero coverage is the deferred-lighting no-op.
     commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.clearTextureFloat(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
@@ -881,12 +830,10 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     if(!heap.isInitialized())
         return false;
 
-    // The trace pass runs the selected backend: the HW RayQuery twin on the HW-shadow branch, else the SW BVH walk.
-    // Everything else (snapshot copy, age-free/clear/hash-build/spawn/resolve) is backend-agnostic.
+    // Only the trace pass is backend-specific.
     const bool useHwTrace = rayTracingState().m_surfelUseHwTrace;
     Core::ComputePipeline* const tracePipeline = useHwTrace ? rayTracingState().m_surfelTraceHwPipeline.get() : rayTracingState().m_surfelTracePipeline.get();
 
-    // Guard: every pass needs its pipeline; an ensure failure leaves the block inert this frame.
     if(
         !rayTracingState().m_surfelSpawnPipeline
         || !rayTracingState().m_surfelAgeFreePipeline
@@ -926,8 +873,6 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     if(!initializeSurfelResources(commandList))
         return false;
 
-    // The age-free / hash-build passes dispatch over the full pool (they touch every slot); the trace dispatches per
-    // LIVE surfel via its indirect args and derives its round-robin phase from the CB divisor.
     const u32 poolCapacity = rayTracingState().m_surfelPoolCapacity;
 
     SurfelHeapPushConstants surfelPush;
@@ -942,12 +887,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     surfelPush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
     surfelPush.materialContextSlotsHeapSlot = rayTracingState().m_surfelMaterialContextSlotsHeapHandle.slot();
 
-    // Snapshot the previous frame's converged pool + cell-head for the infinite bounce into the SRV-only snapshot buffers
-    // BEFORE any pass mutates them this frame, so the trace's per-ray bounce gather reads a stable frame-start field
-    // (== the PREVIOUS frame's converged result -- only the trace writes SH, and it runs after this copy). Copying BOTH
-    // keeps the snapshot walk mutually consistent (a slot recycled this frame must not be reachable from a stale head).
-    // On the (re)creation frame the source pool is post-clear (UnorderedAccess) rather than the prev-frame resolve's
-    // ShaderResource; either way the CopySource transition barrier below covers it. ~2.5 MB/frame -- negligible.
+    // Snapshot pool and heads together before mutating the live field.
     {
         const u32 cellCount = rayTracingState().m_surfelHashCellCount;
         Core::Buffer* pool = rayTracingState().m_surfelPoolBuffer.get();
@@ -966,20 +906,14 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         commandList.commitBarriers();
     }
 
-    // The passes UAV-write the surfel buffers then UAV/SRV-read them next; enable automatic UAV barriers so the
-    // commitBarriers between passes serialises the writes. This enable block MUST sit ABOVE pass (0) so the age-free
-    // pass's first counter[FREE_TOP]/free-list writes are barriered against the previous frame's spawn writes.
+    // Order every in-place field update, including prior-frame spawn writes.
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelPoolBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelCellHeadBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelCounterBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelFreeListBuffer.get(), true);
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelTraceIndirectArgsBuffer.get(), true);
 
-    // Age-free recycling: one thread per pool slot; free surfels unseen for maxAge frames (alive = 0) and PUSH
-    // their ids onto the free-list for the spawn to reuse. Runs FIRST -- it reads lastSeenFrame written by the PREVIOUS
-    // frame's spawn keep-alive, and frees the slots BEFORE the hash-build re-links live surfels + the spawn pops. The
-    // push (here) and the spawn's pop are barrier-separated (clear + hash-build between), so the free-list stack has no
-    // concurrent push/pop -> no ABA. The linear workgroup width is shared with the shader.
+    // Age-free recycles unseen surfels before hash rebuild and spawn.
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelAgeFree, graphics().getDevice(), commandList);
         commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
@@ -995,8 +929,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         commandList.dispatch(DivideUp(poolCapacity, static_cast<u32>(NWB_SURFEL_LINEAR_GROUP_SIZE)), 1u, 1u);
     }
 
-    // (1) Clear the cell-head to empty, then rebuild the hash from the live pool BEFORE the spawn, so the spawn sees this
-    // frame's exact occupancy (a non-empty cell head == a surfel already covers the cell) and fills only empty cells.
+    // Rebuild occupancy before spawning into empty cells.
     {
         Core::Buffer* cellHead = rayTracingState().m_surfelCellHeadBuffer.get();
         commandList.setBufferState(cellHead, Core::ResourceStates::CopyDest);
@@ -1004,7 +937,6 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         commandList.clearBufferUInt(cellHead, NWB_SURFEL_CELL_INVALID);
     }
 
-    // (2) Hash-build: one thread per pool slot; link each live surfel into its cell's list.
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelHashBuild, graphics().getDevice(), commandList);
         commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
@@ -1019,8 +951,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         commandList.dispatch(DivideUp(poolCapacity, static_cast<u32>(NWB_SURFEL_LINEAR_GROUP_SIZE)), 1u, 1u);
     }
 
-    // (3) Spawn: one thread per screen tile. Reads the freshly-built cell head; where a cell is still empty, atomically
-    // claims it and bump-allocates one surfel (one surfel per hash bucket). [numthreads(8,8,1)] over (screen / spawnTile).
+    // Spawn claims only empty hash cells.
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelSpawn, graphics().getDevice(), commandList);
         commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -1045,11 +976,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         commandList.dispatch(DivideUp(tilesX, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), DivideUp(tilesY, static_cast<u32>(NWB_SURFEL_GROUP_SIZE)), 1u);
     }
 
-    // Build the trace's indirect args: 1 thread reads the post-spawn BUMP_TOP + the divisor (surfel CB) and
-    // writes {ceil(BUMP_TOP/divisor),1,1}, so the trace dispatches one workgroup per LIVE surfel instead of the fixed
-    // ceil(poolCapacity/divisor) (a ~pool/live over-dispatch of dead-slot workgroups). The spawn's counter UAV write is
-    // synced to the build-args read by the counter's per-frame UAV barriers; the args UAV write is synced to the trace's
-    // IndirectArgument consume by setComputeState (auto) below.
+    // Build an indirect dispatch sized for live surfels.
     {
         commandList.setBufferState(rayTracingState().m_surfelConstants.get(), Core::ResourceStates::ConstantBuffer);
         commandList.setBufferState(rayTracingState().m_surfelCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
@@ -1067,14 +994,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         );
     }
 
-    // Trace: one workgroup per LIVE surfel (64 lanes, with 64 current hemisphere rays for new/low-confidence surfels
-    // and 32 rays once accumulated SH history is mature), via dispatchIndirect.
-    // Stage the trace's geometry inputs to
-    // ShaderResource, then dispatch the selected backend. HW = the driver walks the TLAS; we still stage the
-    // HW-resident per-mesh position/index/attribute buffers plus the shadow-owned material context (the shader uses all
-    // of them to reconstruct the authored surface at the hit). SW = the per-mesh BVH nodes/positions/indices/attributes
-    // + its scene BVH/instance tables and the same material context. Every one of these accesses is heap-addressed, so
-    // their backing resources are transitioned explicitly here.
+    // Trace geometry is heap-selected and must be transitioned explicitly.
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelTrace, graphics().getDevice(), commandList);
         if(useHwTrace){
@@ -1105,11 +1025,9 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         commandList.commitBarriers();
         Core::ComputeState state;
         state.setPipeline(tracePipeline);
-        // The explicit IndirectArgument transition above makes the heap-written args buffer visible to the dispatch.
         state.setIndirectParams(rayTracingState().m_surfelTraceIndirectArgsBuffer.get());
         commandList.setComputeState(state);
-        // Both surfel shaders access per-mesh geometry through the descriptor heap, so bind its blocks against the
-        // selected pipeline before dispatch. The HW path also selects its TLAS generation at set 10.
+        // Hardware trace additionally selects the TLAS generation at set 10.
         if(rayTracingState().m_surfelUseHwTrace && !rayTracingState().m_tlasHeapHandle.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot dispatch surfel HW GI without the descriptor-heap TLAS handle"));
             return false;
@@ -1122,11 +1040,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         commandList.dispatchIndirect(0u);
     }
 
-    // Resolve at half resolution: one thread per half-res pixel gathers the surfel field (pool + cell-head as COMPUTE
-    // SRVs) + the G-buffer into surfelIrradianceHalf. This is what keeps the pool off the lighting dispatch,
-    // eliminating the frames-in-flight pool race; the 125-cell gather runs for 1/FACTOR^2 the pixels.
-    // The pool/cell-head UAV writes (trace/hash-build) are synced to SRV here; the half-res UAV write is synced to SRV
-    // for the upsample after.
+    // Resolve at half resolution so deferred lighting never touches the writable pool.
     const u32 halfWidth = DivideUp(targets.width, static_cast<u32>(NWB_SURFEL_RESOLVE_HALF_FACTOR));
     const u32 halfHeight = DivideUp(targets.height, static_cast<u32>(NWB_SURFEL_RESOLVE_HALF_FACTOR));
     {
@@ -1152,9 +1066,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         commandList.dispatch(DivideUp(halfWidth, groupSize), DivideUp(halfHeight, groupSize), 1u);
     }
 
-    // Upsample at full resolution: reconstruct the full-res surfelIrradiance from the half-res resolve with a surface-
-    // gated joint-bilinear filter (no bleed across silhouettes/creases; irradiance is HDR so no clamp; coverage preserved
-    // so the lighting contract is unchanged). Sync the half-res UAV write -> the upsample's SRV read first.
+    // Surface-aware upsample preserves coverage across edges.
     commandList.setTextureState(targets.surfelIrradianceHalf.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_SurfelUpsample, graphics().getDevice(), commandList);
@@ -1177,14 +1089,10 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         commandList.dispatch(DivideUp(targets.width, groupSize), DivideUp(targets.height, groupSize), 1u);
     }
 
-    // (6) Sync the surfelIrradiance UAV write -> the deferred-lighting compute-shader SRV read.
     commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
 
-    // Live-count diagnostic: map the completed asynchronous snapshot and log it, else snapshot this frame.
-    // live = BUMP_TOP - FREE_TOP is exact (BUMP_TOP is CAS-capped at poolCapacity). On a static fully-visible scene
-    // FREE_TOP stays 0 + BUMP_TOP is stable; under camera motion FREE_TOP rises as off-screen surfels age out and falls
-    // as revealed cells reuse the freed ids -> the live count stays bounded (the point of recycling).
+    // Map completed diagnostics or schedule the next asynchronous snapshot.
     {
         const u32 frameIndex = rayTracingState().m_surfelFrameIndex;
         Core::Buffer* counter = rayTracingState().m_surfelCounterBuffer.get();
@@ -1236,8 +1144,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         }
     }
 
-    // Advance the frame counter (seeds the ray rotation + round-robin) and mark seeded so the next frame uses the
-    // steady-state divisor + EMA hysteresis.
+    // Subsequent frames use steady-state round-robin updates.
     rayTracingState().m_surfelSeeded = true;
     rayTracingState().m_surfelFrameIndex = rayTracingState().m_surfelFrameIndex + 1u;
     return true;

@@ -392,8 +392,7 @@ VkImageMemoryBarrier2 BuildTextureStateBarrier(
     barrier.dstAccessMask = VulkanDetail::GetVkAccessFlags(stateBits);
     barrier.oldLayout = oldState != ResourceStates::Unknown ? VulkanDetail::GetVkImageLayout(oldState) : VK_IMAGE_LAYOUT_UNDEFINED;
     barrier.newLayout = VulkanDetail::GetVkImageLayout(stateBits);
-    // Ordinary state transitions never imply a queue-family transfer. Vulkan zero-initializes these fields to
-    // family 0, so set the required ignored sentinel explicitly before using the barrier on a nonzero family.
+    // Ordinary transitions use Vulkan's explicit ignored queue-family sentinel.
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.image = image;
@@ -929,12 +928,7 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
         m_renderPassFramebuffer = nullptr;
     }
 
-    // ResourceStates intentionally describe shader visibility without committing to a graphics, compute, or ray
-    // pipeline. The normal stage mapping therefore includes ALL_GRAPHICS alongside compute/ray stages. That is valid
-    // for the Graphics command pool, but not for a compute-only (or copy-only) pool. ALL_COMMANDS is valid on every
-    // queue family and scopes only the commands supported by that queue, so use it for each non-empty side when the
-    // generic barrier is emitted outside the Graphics lane. Preserve NONE for the ignored side of a queue-ownership
-    // release/acquire pair.
+    // Non-graphics queues use ALL_COMMANDS for generic shader visibility; preserve NONE for ignored ownership sides.
     VkDependencyInfo queueCompatibleDepInfo = depInfo;
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_StateHandoffArena);
     Vector<VkMemoryBarrier2, Alloc::ScratchArena> queueCompatibleMemoryBarriers{scratchArena};
@@ -954,10 +948,7 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
             ;
         };
         const auto makeSourceScopeQueueCompatible = [&](VkPipelineStageFlags2& stageMask, VkAccessFlags2& accessMask){
-            // A Compute/Copy command buffer cannot have produced an attachment access. Such a source can only be an
-            // imported Graphics handoff, whose producer is already ordered by the submission wait token. Vulkan does
-            // not allow an attachment access mask with a Compute-only ALL_COMMANDS expansion, so represent that
-            // cross-queue source with the empty local scope instead of emitting an invalid barrier.
+            // Imported Graphics attachments have no legal local Compute/Copy source scope.
             if((accessMask & s_GraphicsAttachmentAccessMask) != 0u){
                 stageMask = VK_PIPELINE_STAGE_2_NONE;
                 accessMask = 0u;
@@ -1229,10 +1220,7 @@ void CommandList::releaseTextureOwnership(
     const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
     const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
 
-    // A release must also be exported in the handoff. Every image subresource therefore needs a concrete tracked
-    // layout first: unlike a buffer, an untouched image may still be VK_IMAGE_LAYOUT_UNDEFINED even when its RHI
-    // descriptor names a preferred initial state. Do not invent a layout here; make the producer transition it
-    // explicitly before releasing ownership.
+    // Releases require explicit image layouts; never invent one for untouched images.
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
             const ResourceStates::Mask state = m_stateTracker.getTextureState(&texture, arraySlice, mipLevel);
@@ -1285,9 +1273,7 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const RenderLan
         return;
     }
 
-    // Match the texture path above: even an untouched buffer must have an exported concrete state so the matching
-    // acquire can be emitted by the consumer. Existing state tracking has precedence; the descriptor initial state
-    // only seeds a resource that this command list has not otherwise touched.
+    // Exports need concrete buffer state; tracked state takes precedence over descriptor initial state.
     ResourceStates::Mask state = m_stateTracker.getBufferState(&buffer);
     if(state == ResourceStates::Unknown)
         state = buffer.m_desc.initialState;

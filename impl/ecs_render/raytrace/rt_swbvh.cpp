@@ -32,9 +32,7 @@ using MeshBufferSlotLookup = HashMap<
 >;
 
 
-// The scene-level caches below intentionally hash only canonical, fully initialized upload/build inputs. Raw
-// RayTracingInstanceDesc bytes include bitfields, and the temporary SIMD BVH values carry lanes that are not part of
-// the spatial build, so hash their semantic fields instead of their object representations.
+// Hash semantic scene inputs, not padded object representations.
 inline constexpr u32 s_SceneStaticCacheHashVersion = 2u;
 
 void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTracingInstanceDesc& instance){
@@ -109,10 +107,7 @@ void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTracingIn
 }
 
 
-// Look up the backing buffer in the cross-frame cache. A hit reuses its valid handle; a miss registers the buffer
-// and pins the caller's correctly-deletable BufferHandle so the raw pointer key cannot be recycled. Every backing buffer uses
-// one full-range STORAGE_BUFFER descriptor; raw and structured access are shader-side views. Failed registrations
-// are not cached so a later gather can retry.
+// Cross-frame cache pins raw keys; failed registrations retry next gather.
 [[nodiscard]] bool AcquireMeshHeapHandle(
     Core::GpuDescriptorHeap& heap,
     RtMeshHeapHandleCache& cache,
@@ -143,16 +138,14 @@ void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTracingIn
         return false;
 
     RtMeshHeapHandleCacheEntry entry;
-    entry.keepAlive = bufferHandle;  // refcount-pin the key with its owning arena deleter
+    entry.keepAlive = bufferHandle;
     entry.handle = outHandle;
     entry.seenThisFrame = true;
     cache.insert({bufferKey, Move(entry)});
     return true;
 }
 
-// End-of-gather sweep: free + evict every cached buffer that did not reappear this frame (a mesh was unloaded or
-// fell out of the visible occluder set). Seen-this-frame entries are reset to unseen for the next gather. The
-// heap.free quarantine keeps in-flight frames referencing a freed slot valid until they retire.
+// Evict unseen cache entries; heap quarantine protects in-flight work.
 void SweepUnseenMeshHeapHandles(
     Core::GpuDescriptorHeap& heap,
     RtMeshHeapHandleCache& cache
@@ -169,7 +162,7 @@ void SweepUnseenMeshHeapHandles(
     }
 }
 
-// Begin a gather: mark nothing seen yet so the sweep can tell reappearances from dropouts.
+// Mark entries unseen before gathering.
 void BeginMeshHeapHandleGather(
     RtMeshHeapHandleCache& cache
 ){
@@ -181,8 +174,7 @@ void BeginMeshHeapHandleGather(
     return __hidden_raytracing_system::IsHeapHandle(handle, Core::GpuDescriptorClass::StorageBuffer);
 }
 
-// Heap descriptor writes retain the backing buffer through deferred free. Keep the registration next to the
-// explicit owner instead of relying on transient descriptor state to retain or describe writable scratch.
+// Register writable scratch with its explicit owner.
 [[nodiscard]] bool RegisterWritableBvhBuffer(
     Core::GpuDescriptorHeap& heap,
     Core::Buffer& buffer,
@@ -215,9 +207,6 @@ bool RendererRayTracingSystem::buildPendingMeshBlas(Core::CommandList& commandLi
     for(auto it = meshes.begin(); it != meshes.end(); ++it){
         MeshResources& meshResources = it.value();
 
-        // Runtime (skinned/deforming) meshes change their vertex positions every
-        // frame, so their BLAS is rebuilt from the freshly skinned positions each
-        // frame. Static meshes build a BLAS once and clear the pending flag.
         if(meshResources.runtimeMesh){
             if(!buildMeshBlas(commandList, meshResources))
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: runtime mesh BLAS build failed"));
@@ -233,18 +222,12 @@ bool RendererRayTracingSystem::buildPendingMeshBlas(Core::CommandList& commandLi
 }
 
 bool RendererRayTracingSystem::buildPendingMeshSwBvh(Core::CommandList& commandList){
-    // Builds/refits per-mesh software BVHs. Two callers gate WHEN it runs:
-    //  - The no-RayQuery fallback prepare (the only shadow backend) -- builds every mesh.
-    //  - The hybrid prepare on RT hardware -- only when the scene has a TRANSPARENT occluder (whose colored shadow the
-    //    software pass must trace); opaque-only / no-transparent scenes never call this, so they pay no software cost.
-    // Resource allocation happens first in preparePendingMeshSwBvhResources; this pass only records build/refit work.
+    // Record only prepared SW-BVH work; callers decide when software tracing is needed.
     bool allBuildsReady = true;
     auto& meshes = meshState().m_meshes;
     for(auto it = meshes.begin(); it != meshes.end(); ++it){
         MeshResources& meshResources = it.value();
 
-        // Runtime (skinned/deforming) meshes update their software BVH every frame from the freshly skinned
-        // positions; static meshes build once and clear the pending flag.
         if(meshResources.runtimeMesh){
             if(!updateMeshSwBvh(commandList, meshResources)){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: runtime mesh '{}' software BVH update failed")
@@ -270,9 +253,7 @@ bool RendererRayTracingSystem::buildPendingMeshSwBvh(Core::CommandList& commandL
 }
 
 bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
-    // Keep allocation out of updateMeshSwBvh: recording the per-frame build/refit command stream may only consume
-    // the resources prepared here. Runtime meshes are intentionally included every frame because a provider can
-    // replace the current cache entry between frames; static meshes stay in the set until their first build succeeds.
+    // Prepare resources before recording; runtime meshes prepare every frame.
     bool allResourcesReady = true;
     auto& meshes = meshState().m_meshes;
     for(auto it = meshes.begin(); it != meshes.end(); ++it){
@@ -284,15 +265,12 @@ bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
             allResourcesReady = false;
             continue;
         }
-        // meshletPrimitiveIndexCount is the reconstructed triangle-index count (3 per triangle).
         if(meshResources.meshletPrimitiveIndexCount == 0u || (meshResources.meshletPrimitiveIndexCount % s_RayTracingTriangleIndexCount) != 0u){
             allResourcesReady = false;
             continue;
         }
 
         const u32 primitiveCount = meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
-        // Stable mesh geometry is registered before command recording. The build set below keeps only the transient
-        // scratch/UAV resources, while the kernels select these two heap descriptors through push constants.
         if(!m_renderer.meshSystem().ensureMeshSwBvhInputHeapHandles(meshResources)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH input heap registration failed for mesh '{}'")
                 , StringConvert(meshResources.meshName.c_str())
@@ -329,14 +307,9 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     auto rendererView = world().view<RendererComponent>();
     const usize candidateCount = rendererView.candidateCount();
     Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena> instances{ scratchArena };
-    // Per-instance occluder material, built lockstep with `instances` (one record per push, same order) so the
-    // uploaded table indexes by the hardware InstanceID() the trace reads.
+    // Kept parallel to instances for hardware InstanceID lookup.
     Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
-    // Shadow-OWNED combined material-constants context, built lockstep with `instances`: the per-occluder
-    // InstanceGpuData (g_NwbMeshInstances for the trace; index == InstanceID()) + the combined typed bytes
-    // (g_NwbMaterialTypedWords for material-evaluating trace consumers; each occluder's constant + mutable block).
-    // The draw pass's buffers hold only the opaque set at trace time, so software shadow, GI, and caustics select these
-    // shadow-owned buffers through the shared heap-slot cbuffer; the hardware opaque shadow itself does not read them.
+    // All-occluder trace context; draw buffers hold one transparency class.
     InstanceGpuDataVector shadowInstanceData{ scratchArena };
     MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
     ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(
@@ -357,20 +330,12 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     );
     meshSlotLookup.reserve(candidateCount);
 
-    // Reset the per-frame distinct-mesh table; the gather repopulates its index, attribute, and position buffers.
-    // Each backing buffer is registered in the global descriptor heap, and its slot is stored in the material record
-    // for shader-side NwbHeapRawBuffer() access. The table drives host-side barriers and record population.
     Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: hardware TLAS build requires the descriptor-buffer TLAS heap layout"));
         return false;
     }
-    // Begin the stable-handle-cache gather: mark every cached buffer unseen so the end-of-gather sweep can distinguish
-    // reappearances from dropouts. Reappearing buffers reuse their handles; absent buffers are freed and evicted below.
     BeginMeshHeapHandleGather(rayTracingState().m_hwMeshHeapHandleCache);
-    // Clear the distinct-mesh table for this frame's rebuild. The Vectors retain capacity (they grow once to the
-    // scene's steady-state distinct-mesh count, then reuse that storage) and m_shadowMeshCount mirrors their length --
-    // the gather below repopulates both by push_back with cached handles.
     rayTracingState().m_shadowMeshIndexBuffers.clear();
     rayTracingState().m_shadowMeshAttributeBuffers.clear();
     rayTracingState().m_shadowMeshPositionBuffers.clear();
@@ -378,9 +343,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     rayTracingState().m_shadowMeshAttributeHandles.clear();
     rayTracingState().m_shadowMeshPositionHandles.clear();
     rayTracingState().m_shadowMeshCount = 0u;
-    // Whether any gathered occluder is transparent. On RT hardware this gates the hybrid software-transparent-shadow
-    // prepare: the HW pass casts only the opaque (binary) shadow, so the SW colored pass is needed only when a
-    // transparent occluder exists; opaque-only scenes skip the software BVH build entirely.
+    // Gates hybrid software transparent-shadow work.
     rayTracingState().m_sceneHasTransparentOccluder = false;
     bool staticScene = true;
 
@@ -397,28 +360,19 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             resolvedMesh,
             mesh
         );
-        // The BLAS owns the positions it traces, while the HW GI trace needs the index buffer (3 vertex indices by
-        // PrimitiveIndex), the triangle-corner attribute buffer, and the raw position buffer for geometric face
-        // normals, so require all three.
         if(!meshReady || !mesh || !mesh->blas || !mesh->triangleIndexBuffer || !mesh->attributeBuffer || !mesh->positionBuffer)
             continue;
-        // Runtime mesh BLASes refit or rebuild in place, so their resource identity is insufficient to prove that a
-        // resident TLAS still bounds the current geometry. Keep the dynamic path fully per-frame.
+        // Runtime mesh updates disable static TLAS reuse.
         if(resolvedMesh.runtime || mesh->runtimeMesh)
             staticScene = false;
 
-        // Dedupe to a per-mesh table slot: instances sharing a mesh share its index/attribute/position buffers. The
-        // scratch lookup avoids rescanning the growing dense table for every instance while preserving its first-seen
-        // order, which the parallel buffer and heap-handle arrays consume.
+        // Reuse one table slot for instances sharing geometry.
         Core::Buffer* meshIndexBuffer = mesh->triangleIndexBuffer.get();
         u32 meshSlot = 0u;
         const auto foundMeshSlot = meshSlotLookup.find(meshIndexBuffer);
         if(foundMeshSlot != meshSlotLookup.end())
             meshSlot = foundMeshSlot.value();
         else{
-            // New distinct mesh: append its three backing buffers to the per-frame table and mint the parallel
-            // global-heap handles the HW caustic/GI traces read this geometry through. Every distinct mesh is always
-            // registered (the table grows on demand).
             Core::GpuDescriptorHandle indexHandle;
             Core::GpuDescriptorHandle attributeHandle;
             Core::GpuDescriptorHandle positionHandle;
@@ -451,7 +405,6 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             rayTracingState().m_shadowMeshIndexBuffers.push_back(meshIndexBuffer);
             rayTracingState().m_shadowMeshAttributeBuffers.push_back(mesh->attributeBuffer.get());
             rayTracingState().m_shadowMeshPositionBuffers.push_back(mesh->positionBuffer.get());
-            // Mirror the same three buffers into the global heap for HW caustic and GI.
             rayTracingState().m_shadowMeshIndexHandles.push_back(indexHandle);
             rayTracingState().m_shadowMeshAttributeHandles.push_back(attributeHandle);
             rayTracingState().m_shadowMeshPositionHandles.push_back(positionHandle);
@@ -466,8 +419,6 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
 
         const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
         if(transform){
-            // Compose object->world (T * R(quat) * S) and store it as the instance's row-major 3x4 transform;
-            // the engine's column-vector SIMDMatrix rows map directly onto AffineTransform (= Float34).
             const SIMDMatrix instanceWorld = MatrixAffineTransformation(
                 LoadFloat(transform->scale),
                 VectorZero(),
@@ -477,13 +428,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             StoreFloat(instanceWorld, &instanceDesc.transform);
         }
 
-        // Resolve the occluder material (transmittance-model id + transparent flag) + the per-mesh attribute slot
-        // + the material-constants context the trace surface dispatch reads. That context is packed into the
-        // SHADOW-OWNED combined buffers (NOT the draw pass's, which hold only one transparency class at trace
-        // time): appendShadowOccluderMaterialContext appends this occluder's constant block (its real byte offset
-        // -> materialConstantByteOffset) + its per-instance mutable block (offset packed into the InstanceGpuData
-        // pushed lockstep below). meshInstanceIndex == the combined-instance push index == InstanceID(). An
-        // unresolved material falls back to a fully-opaque record (still a colorless shadow) + a default instance.
+        // Build material context in InstanceID order; unresolved materials remain opaque.
         const u32 meshInstanceIndex = static_cast<u32>(instances.size());
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
@@ -504,21 +449,11 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
                 return false;
             instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, materialConstantByteOffset, meshInstanceIndex);
         }
-        // Carry this mesh's heap slots on both resolved and fallback records. The HW opaque trace does not read
-        // geometry; caustic and GI consume the slots by InstanceID. nodeSlot stays s_Max because this is the HW path.
         instanceMaterial.indexSlot = rayTracingState().m_shadowMeshIndexHandles[meshSlot].slot();
         instanceMaterial.attributeSlot = rayTracingState().m_shadowMeshAttributeHandles[meshSlot].slot();
         instanceMaterial.positionSlot = rayTracingState().m_shadowMeshPositionHandles[meshSlot].slot();
 
-        // Non-transparent occluders (including the unresolved-material fallback above, which casts a colorless
-        // opaque shadow) are marked FORCE_OPAQUE. The hardware shadow RayQuery then lets the fixed-function
-        // intersector commit the first opaque occluder and terminate (RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH)
-        // with no per-candidate shader callback and no per-instance material load on the common opaque path.
-        // Transparent occluders stay non-opaque so they still surface as candidates the hardware trace skips (the
-        // software traversal casts their colored shadow). The flag is invisible to the GI and caustic traces:
-        // both pass RAY_FLAG_FORCE_OPAQUE at the ray level and so already treat every instance as opaque
-        // regardless of it -- so this force-opaque set (= the exact set the shadow trace treated as a solid
-        // occluder before) changes only the shadow path.
+        // Opaque candidates terminate RayQuery; software handles transparent transmittance.
         if(!(materialInfo && materialInfo->transparent))
             instanceDesc.setFlags(Core::RayTracingInstanceFlags::ForceOpaque);
 
@@ -527,8 +462,6 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         shadowInstanceData.push_back(shadowInstance);
     }
 
-    // Log a new peak only, keeping steady scenes quiet. Each HW distinct mesh contributes index, attribute, and
-    // position handles.
     if(rayTracingState().m_shadowMeshCount > rayTracingState().m_shadowMeshHeapHighWater){
         rayTracingState().m_shadowMeshHeapHighWater = rayTracingState().m_shadowMeshCount;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: HW-shadow heap registration high-water: {} distinct meshes -> {} handles")
@@ -536,8 +469,6 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             , static_cast<u64>(rayTracingState().m_shadowMeshCount) * s_HardwareRayTracingMeshBufferCount
         );
     }
-    // End-of-gather sweep: free + evict every cached HW buffer that did not reappear this frame (a mesh was unloaded
-    // or fell out of the visible occluder set). Reappearing buffers keep their cached handle for next frame.
     SweepUnseenMeshHeapHandles(heap, rayTracingState().m_hwMeshHeapHandleCache);
 
     rayTracingState().m_tlasInstanceCount = static_cast<u32>(instances.size());
@@ -548,8 +479,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         return false;
     }
 
-    // The exact TLAS inputs are stable only for a fully static set of gathered occluders. The per-instance material
-    // context has a separate key below: a material edit can reuse the TLAS while still refreshing its trace data.
+    // TLAS and material context use separate static keys.
     const u64 tlasStaticSceneHash = staticScene ? ComputeTlasStaticSceneHash(instances) : 0u;
     const bool canReuseTlas =
         staticScene
@@ -583,9 +513,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
             );
             return false;
         }
-        // Each TLAS generation receives an immutable descriptor-buffer block. Retire the old handle before
-        // replacing its resource so the heap retains the old acceleration structure until all in-flight command
-        // buffers that selected its block have drained.
+        // Retire the old heap block before replacing the TLAS generation.
         if(rayTracingState().m_tlasHeapHandle.valid()){
             heap.free(rayTracingState().m_tlasHeapHandle);
             rayTracingState().m_tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
@@ -607,8 +535,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
     }
     rayTracingState().m_tlasDeviceAddress = rayTracingState().m_tlas->getDeviceAddress();
 
-    // The shared scene TLAS is selected from a dedicated fixed heap set. A fresh handle/block is allocated only when
-    // the TLAS object changes; it remains immutable thereafter.
+    // Allocate a heap block only for a new TLAS generation.
     if(!rayTracingState().m_tlasHeapHandle.valid()){
         const Core::GpuDescriptorHandle tlasHeapHandle = heap.allocate(Core::GpuDescriptorClass::AccelStruct);
         if(
@@ -623,10 +550,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         rayTracingState().m_tlasHeapHandle = tlasHeapHandle;
     }
 
-    // A word of padding keeps the typed buffer valid when no occluder contributed any typed bytes. Hash the final
-    // upload representation, including the descriptor slots, so edits refresh only the material context and not the
-    // TLAS. Hybrid transparent frames deliberately write this HW version even if it was cached: the SW gather runs
-    // next and must restore its own node-slot-bearing context if it succeeds.
+    // Preserve a valid typed buffer and hash the descriptor-slot representation.
     if(shadowMaterialTypedBytes.empty())
         shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
     const u64 hwMaterialContextHash = ComputeShadowMaterialContextHash(
@@ -661,7 +585,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
         }
         else
             rayTracingState().m_hwShadowMaterialContextHashValid = false;
-        // One physical context buffer cannot simultaneously hold the SW-specific node slots.
+        // HW context cannot represent SW node slots.
         rayTracingState().m_swShadowMaterialContextHashValid = false;
     }
 
@@ -675,12 +599,7 @@ bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Co
 bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_rt_swbvh;
 
-    // Software scene/instance BVH (TLAS-analog) over ALL gathered occluders, plus the shadow-owned material context.
-    // Built by the no-RayQuery fallback prepare (the only shadow backend) AND, on RT hardware, by the hybrid prepare
-    // when the scene has a transparent occluder. The gather order matches buildSceneTlas's (same RendererComponent
-    // view, aligned conditions), so the scene-BVH leaf index equals the hardware InstanceID. The shared material
-    // context keeps that order too; its descriptor slots are valid for both paths, while the software write restores
-    // the additional node slots needed by the transparent traversal. The caller gates WHEN this runs.
+    // Software scene BVH and material context share hardware instance ordering.
     auto* meshSystem = world().getSystem<NWB::Impl::MeshSystem>();
     if(!meshSystem)
         return false;
@@ -688,17 +607,12 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     auto rendererView = world().view<RendererComponent>();
     const usize candidateCount = rendererView.candidateCount();
 
-    // Per-instance GPU records + transient SIMD world-space AABB/centroid calculation values. The calculation
-    // records stay parallel to the uploaded instance buffer so the BVH leaf payload indexes it directly.
+    // Parallel instance records and CPU BVH build values.
     Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena> instances{ scratchArena };
     Vector<SceneBvhPrimitiveCalculation, Core::Alloc::ScratchArena> instanceBvhPrimitives{ scratchArena };
-    // Per-instance occluder material, built lockstep with `instances` (same push order) so the uploaded table
-    // indexes by the scene-BVH leaf instance index the software traversal reads.
+    // Parallel material records index scene-BVH leaves.
     Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
-    // Shadow-OWNED combined material-constants context, built lockstep with `instances` (see buildSceneTlas): the
-    // per-occluder InstanceGpuData (g_NwbMeshInstances for the trace) + the combined typed bytes
-    // (g_NwbMaterialTypedWords for the trace). The draw pass's buffers hold only one transparency class at trace
-    // time, so the software traversal selects these shadow-owned buffers through its heap-slot push selector.
+    // All-occluder trace context; draw buffers hold one transparency class.
     InstanceGpuDataVector shadowInstanceData{ scratchArena };
     MaterialTypedByteDataVector shadowMaterialTypedBytes{ scratchArena };
     ECSRenderDetail::MaterialTypedByteContentRangeMap shadowMutableTypedRanges(
@@ -720,18 +634,12 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
     );
     meshSlotLookup.reserve(candidateCount);
 
-    // Reset the per-frame distinct-mesh table; the gather repopulates its buffers and descriptor-heap handles.
     Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software scene BVH requires the initialized global descriptor heap"));
         return false;
     }
-    // Begin the SW stable-handle-cache gather: mark every cached SW buffer unseen so the gather (AcquireMeshHeapHandle
-    // sets seenThisFrame on touch) and the end-of-gather sweep can tell reappearances from dropouts.
     BeginMeshHeapHandleGather(rayTracingState().m_swMeshHeapHandleCache);
-    // Clear the distinct-mesh table for this frame's rebuild. The Vectors retain capacity (they grow once to the
-    // scene's steady-state distinct-mesh count, then reuse that storage) and m_swShadowMeshCount mirrors their length
-    // -- the gather below repopulates both by push_back with cached handles.
     rayTracingState().m_swShadowMeshNodeBuffers.clear();
     rayTracingState().m_swShadowMeshPositionBuffers.clear();
     rayTracingState().m_swShadowMeshIndexBuffers.clear();
@@ -756,9 +664,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             resolvedMesh,
             mesh
         );
-        // Only instances whose per-mesh software BVH topology + geometry are built (and that have valid
-        // object-space bounds) can be traced. Storage alone is insufficient because resource preparation may
-        // allocate it before the first build command has initialized the topology.
+        // Allocation alone is insufficient; topology must be initialized.
         if(
             !meshReady
             || !mesh
@@ -771,22 +677,17 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             || !mesh->csgLocalBounds.valid()
         )
             continue;
-        // A runtime mesh updates its local BVH every frame. Its world-space instance bounds can therefore change even
-        // when the transform and descriptor slots do not, so static scene-BVH reuse is intentionally disabled.
+        // Runtime mesh updates disable static scene-BVH reuse.
         if(resolvedMesh.runtime || mesh->runtimeMesh)
             staticScene = false;
 
-        // Dedupe to a per-mesh table slot: instances sharing a mesh share its node/position/index buffers. The
-        // scratch lookup avoids rescanning the growing dense table for every instance while preserving its first-seen
-        // order, which the parallel buffer and heap-handle arrays consume.
+        // Reuse one table slot for instances sharing geometry.
         Core::Buffer* meshNodeBuffer = mesh->swBvhNodeBuffer.get();
         u32 meshSlot = 0u;
         const auto foundMeshSlot = meshSlotLookup.find(meshNodeBuffer);
         if(foundMeshSlot != meshSlotLookup.end())
             meshSlot = foundMeshSlot.value();
         else{
-            // New distinct mesh: append its four backing buffers to the per-frame table. The build inputs and node
-            // output own persistent mesh-level heap handles; only trace attributes use the visibility-scoped cache.
             const Core::GpuDescriptorHandle nodeHandle = mesh->swBvhNodeHeapHandle;
             Core::GpuDescriptorHandle attributeHandle;
             const Core::GpuDescriptorHandle positionHandle = mesh->swBvhPositionHeapHandle;
@@ -812,11 +713,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             rayTracingState().m_swShadowMeshNodeBuffers.push_back(meshNodeBuffer);
             rayTracingState().m_swShadowMeshPositionBuffers.push_back(mesh->positionBuffer.get());
             rayTracingState().m_swShadowMeshIndexBuffers.push_back(mesh->triangleIndexBuffer.get());
-            // The per-triangle-corner shadow-trace attribute buffer (normal/uv0), parallel to the triangle index
-            // buffer so the trace interpolates the exact raster corner attributes.
             rayTracingState().m_swShadowMeshAttributeBuffers.push_back(mesh->attributeBuffer.get());
-            // Node, position, and index reuse the persistent registrations the SW-BVH build needs, so each mesh
-            // buffer has one heap slot for both build and traversal. Attribute remains visibility-scoped.
             rayTracingState().m_swShadowMeshNodeHandles.push_back(nodeHandle);
             rayTracingState().m_swShadowMeshPositionHandles.push_back(positionHandle);
             rayTracingState().m_swShadowMeshIndexHandles.push_back(indexHandle);
@@ -838,7 +735,6 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         SIMDVector determinant;
         const SIMDMatrix worldToObject = MatrixInverse(&determinant, objectToWorld);
 
-        // Shared with caustic-target gathering: exact world bounds of all eight object-space corners.
         const SIMDVector localMin = LoadFloatInt(mesh->csgLocalBounds.minBounds);
         const SIMDVector localMax = LoadFloatInt(mesh->csgLocalBounds.maxBounds);
         SIMDVector worldMin{};
@@ -851,14 +747,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         StoreFloat(worldToObject, &instance.worldToObject);
         instance.primitiveCount = mesh->meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
 
-        // Resolve the occluder material (transmittance-model id + transparent flag) + the material-constants
-        // context the surface hook reads in the trace. That context is packed into the SHADOW-OWNED combined
-        // buffers (NOT the draw pass's, which hold only one transparency class at trace time):
-        // appendShadowOccluderMaterialContext appends this occluder's constant block (real byte offset ->
-        // materialConstantByteOffset) + its per-instance mutable block (offset packed into the InstanceGpuData
-        // pushed lockstep below). meshInstanceIndex == the combined-instance push index == the scene-BVH leaf
-        // index the traversal reads. An unresolved material falls back to a fully-opaque record (still a colorless
-        // shadow) + a default instance.
+        // Build material context in scene-BVH leaf order; unresolved materials remain opaque.
         const u32 meshInstanceIndex = static_cast<u32>(instances.size());
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
@@ -877,7 +766,6 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
                 return false;
             instanceMaterial = __hidden_raytracing_system::ResolveInstanceShadowMaterial(*materialInfo, materialConstantByteOffset, meshInstanceIndex);
         }
-        // Carry this mesh's four heap slots on every material record; software shadow traversal consumes them next.
         instanceMaterial.indexSlot = rayTracingState().m_swShadowMeshIndexHandles[meshSlot].slot();
         instanceMaterial.attributeSlot = rayTracingState().m_swShadowMeshAttributeHandles[meshSlot].slot();
         instanceMaterial.positionSlot = rayTracingState().m_swShadowMeshPositionHandles[meshSlot].slot();
@@ -894,7 +782,6 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         shadowInstanceData.push_back(shadowInstance);
     }
 
-    // Log a new peak only. Each SW distinct mesh contributes node, position, index, and attribute handles.
     if(rayTracingState().m_swShadowMeshCount > rayTracingState().m_swShadowMeshHeapHighWater){
         rayTracingState().m_swShadowMeshHeapHighWater = rayTracingState().m_swShadowMeshCount;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW-shadow heap registration high-water: {} distinct meshes -> {} handles")
@@ -902,24 +789,17 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
             , static_cast<u64>(rayTracingState().m_swShadowMeshCount) * s_SoftwareRayTracingMeshBufferCount
         );
     }
-    // End-of-gather sweep: free + evict every cached SW buffer that did not reappear this frame (a mesh was unloaded
-    // or fell out of the visible occluder set). Reappearing buffers keep their cached handle for next frame.
     SweepUnseenMeshHeapHandles(heap, rayTracingState().m_swMeshHeapHandleCache);
 
     const u32 instanceCount = static_cast<u32>(instances.size());
     if(instanceCount == 0u){
-        // No traceable instances is not a failure: the consumer treats a zero instance count as
-        // "nothing occludes" (fully lit), so report success and leave the resident buffers untouched.
         rayTracingState().m_sceneBvhInstanceCount = 0u;
         rayTracingState().m_sceneSwBvhStaticSceneHashValid = false;
         rayTracingState().m_swShadowMaterialContextHashValid = false;
         return true;
     }
 
-    // The topology key covers the exact world-space leaf bounds and world->object records the CPU SAH build consumes,
-    // plus the transparent class that the packed hierarchy tags for pruning. A material edit that changes only optical
-    // parameters still reuses the hierarchy; a class transition rebuilds it so transparent traversal never sees a
-    // stale subtree tag.
+    // Topology hash includes bounds, transforms, and transparent-subtree class.
     const u64 sceneStaticHash = staticScene
         ? ComputeSceneSwBvhStaticSceneHash(instances, instanceBvhPrimitives)
         : 0u
@@ -947,9 +827,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         rayTracingState().m_sceneSwBvhStaticSceneHashValid = false;
 
     if(!canReuseSceneBvh){
-        // CPU-build the scene BVH over the gathered instance world AABBs. At TLAS scale (a handful to a few
-        // hundred instances) a CPU build + upload is far cheaper than a GPU LBVH dispatch, and the node layout
-        // matches the per-mesh BVH so the traversal pass reads scene and mesh BVHs the same way.
+        // CPU-build the small scene BVH and upload the shared node layout.
         Vector<u32, Core::Alloc::ScratchArena> indices{ scratchArena };
         indices.reserve(instanceCount);
         for(u32 i = 0u; i < instanceCount; ++i)
@@ -957,7 +835,6 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
 
         Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena> buildNodes{ scratchArena };
         buildNodes.reserve(requiredNodeCount);
-        // Per-instance leaf cost = primitive count, so a large instance biases the SAH tree like a large primitive.
         Vector<u32, Core::Alloc::ScratchArena> instanceLeafCost{ scratchArena };
         instanceLeafCost.reserve(instanceCount);
         for(u32 i = 0u; i < instanceCount; ++i)
@@ -999,9 +876,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         commandList.commitBarriers();
     }
 
-    // A word of padding keeps the typed buffer valid when no occluder contributed any typed bytes. In a hybrid
-    // frame buildSceneTlas has just populated this shared buffer with HW descriptor slots, so this independent key
-    // correctly refreshes the SW node-slot-bearing material context even when the scene topology was reused.
+    // Preserve a valid typed buffer and refresh SW node-slot context independently.
     if(shadowMaterialTypedBytes.empty())
         shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
     const u64 swMaterialContextHash = ComputeShadowMaterialContextHash(
@@ -1036,7 +911,7 @@ bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, C
         }
         else
             rayTracingState().m_swShadowMaterialContextHashValid = false;
-        // The hardware table lacks software node slots, so its cache is no longer representative of this buffer.
+        // HW context cannot represent SW node slots.
         rayTracingState().m_hwShadowMaterialContextHashValid = false;
     }
 
@@ -1070,17 +945,14 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
         .setIndexCount(meshResources.meshletPrimitiveIndexCount)
     ;
 
-    // Keep the shadow geometry non-opaque so the RayQuery path can inspect each candidate's material flags.
+    // RayQuery must inspect candidate material flags.
     Core::RayTracingGeometryDesc geometry;
     geometry
         .setTriangles(triangles)
         .setFlags(Core::RayTracingGeometryFlags::NoDuplicateAnyHitInvocation)
     ;
 
-    // Runtime (skinned) meshes keep a single resident BLAS built with AllowUpdate and refit it in
-    // place from the freshly skinned positions each frame, forcing a full rebuild once the adaptive
-    // refit budget (scales ~cube-root of triangle count) is exhausted to restore BVH quality. Static
-    // meshes build once.
+    // Runtime BLASes refit until the adaptive rebuild budget.
     Core::RayTracingAccelStructBuildFlags::Mask buildFlags = Core::RayTracingAccelStructBuildFlags::PreferFastTrace;
     if(meshResources.runtimeMesh)
         buildFlags |= Core::RayTracingAccelStructBuildFlags::AllowUpdate;
@@ -1163,8 +1035,7 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
     if(!rayTracingState().m_bvhSortBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // All sort buffers are global heap entries selected by push constants. This local layout therefore carries
-        // only that push-constant range; heap layouts are appended to the pipeline below.
+        // Push-only layout; sort resources use the global heap.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhSortPushConstants)));
 
         rayTracingState().m_bvhSortBindingLayout = device.createBindingLayout(layoutDesc);
@@ -1223,8 +1094,7 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
         if(sortHandlesReady())
             return true;
 
-        // A live buffer may have survived while its descriptor did not (for example, after a partial preparation
-        // retry). Fill only the absent slots; never overwrite a live heap descriptor generation.
+        // Register only missing handles to preserve live generations.
         Core::GpuDescriptorHandle acquiredKeys = Core::GpuDescriptorHandle::invalid();
         Core::GpuDescriptorHandle acquiredPayload = Core::GpuDescriptorHandle::invalid();
         if(
@@ -1308,16 +1178,14 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
     NWB_ASSERT(__hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhSortKeysHeapHandle));
     NWB_ASSERT(__hidden_rt_swbvh::IsStorageBufferHeapHandle(rayTracingState().m_bvhSortPayloadHeapHandle));
 
-    // paddedCount must be a power of two and a multiple of the dispatch group size; the caller fills the
-    // sort buffers to it and pads the tail with sentinel keys that sort to the end.
+    // Padded count is power-of-two and group-aligned.
     if(paddedCount < static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE))
         return false;
 
     Core::Buffer* keysBuffer = rayTracingState().m_bvhSortKeysBuffer.get();
     Core::Buffer* payloadBuffer = rayTracingState().m_bvhSortPayloadBuffer.get();
 
-    // Each step reads and writes the same buffers, so consecutive steps must be serialized with UAV barriers:
-    // enable per-buffer UAV barriers, then commit one per step.
+    // Consecutive sort steps require UAV barriers.
     commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
     commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
     commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
@@ -1342,8 +1210,6 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
         commandList.commitBarriers();
     };
 
-    // Local-tile sort: one dispatch fully sorts every GROUP_SIZE tile in groupshared, producing a sorted (hence
-    // bitonic) run per tile.
     {
         BvhSortPushConstants pushConstants;
         pushConstants.elementCount = elementCount;
@@ -1352,13 +1218,7 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
         bvhSortBarrier();
     }
 
-    // Global merge: the standard bitonic merging steps for sequenceSize > GROUP_SIZE. Each step is
-    // split by compareDistance relative to the tile stride GROUP_SIZE:
-    //   - compareDistance >= GROUP_SIZE : the XOR partner lands in a DIFFERENT tile, so these stay plain
-    //     global-memory swaps — one dispatch each (GLOBAL).
-    //   - compareDistance <  GROUP_SIZE : the XOR partner stays in the SAME tile, so the 8 steps from
-    //     GROUP_SIZE/2 down to 1 run in one groupshared dispatch per sequenceSize (GLOBAL_TAIL), collapsing
-    //     what would otherwise be 8 dispatches + 8 UAV barriers per sequenceSize into one.
+    // Merge inter-tile globally and intra-tile in groupshared tails.
     for(u32 sequenceSize = static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE) << 1u; sequenceSize <= paddedCount; sequenceSize <<= 1u){
         for(u32 compareDistance = sequenceSize >> 1u; compareDistance >= static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE); compareDistance >>= 1u){
             BvhSortPushConstants pushConstants;
@@ -1401,8 +1261,7 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
     if(!rayTracingState().m_bvhBuildBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Inputs and all scratch/work buffers are selected through the global heap. Keep the pipeline-local layout
-        // push-only and append the resource/sampler heap layouts to each build pipeline below.
+        // Push-only layout; build resources use the global heap.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhBuildPushConstants)));
 
         rayTracingState().m_bvhBuildBindingLayout = device.createBindingLayout(layoutDesc);
@@ -1474,8 +1333,7 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
         s_BvhBuildInitialCapacity
     );
 
-    // The fit's bottom-up rendezvous counter is SHARED scratch (one u32 per internal node, < N). Meshes are
-    // built sequentially within a frame and serialized by barriers, so a single shared counter suffices.
+    // Shared visit-counter scratch is safe because mesh builds are serialized.
     Core::BufferDesc counterBufferDesc;
     counterBufferDesc
         .setByteSize(static_cast<u64>(sizeof(u32) * capacity))
@@ -1547,8 +1405,7 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
         return false;
     }
 
-    // A binary LBVH over N primitives has exactly 2N-1 nodes (internal [0,N-1) + leaves [N-1,2N-1)). These
-    // are PER-MESH and persist across frames (refit reuses the topology), so they are sized exactly to N.
+    // Per-mesh binary LBVH needs 2N-1 persistent nodes.
     const usize nodeCount = primitiveCount * 2u - 1u;
 
     Core::BufferDesc nodeBufferDesc;
@@ -1618,8 +1475,7 @@ bool RendererRayTracingSystem::ensureMeshSwBvhResources(
         return false;
     if(!ensureBvhBuildPipeline())
         return false;
-    // Size the shared sort/counter scratch ONCE to the per-mesh cap (a power of two, so it is itself a valid
-    // padded sort length). Heap slots select every per-mesh resource, and node/parent stay exactly sized.
+    // Allocate shared sort/counter scratch at the maximum supported mesh size.
     if(!ensureBvhSortBuffers(s_BvhMaxPrimitivesPerMesh))
         return false;
     if(!ensureBvhVisitCounterBuffer(s_BvhMaxPrimitivesPerMesh))
@@ -1727,8 +1583,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     StoreFloat(VectorSetW(aabbMin, 0.0f), &pushConstants.aabbMin);
     StoreFloat(VectorSetW(aabbMax, 0.0f), &pushConstants.aabbMax);
 
-    // Initialize: sort-key padding to a sentinel that sorts last, parent links to "no parent", and the
-    // per-internal-node visit counters to zero (the fit's second-arrival rendezvous).
+    // Initialize sentinels and fit rendezvous counters.
     commandList.setBufferState(keysBuffer, Core::ResourceStates::CopyDest);
     commandList.setBufferState(meshParentBuffer, Core::ResourceStates::CopyDest);
     commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::CopyDest);
@@ -1848,8 +1703,7 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     pushConstants.parentHeapSlot = parentHeapHandle.slot();
     pushConstants.visitCounterHeapSlot = rayTracingState().m_bvhVisitCounterHeapHandle.slot();
 
-    // A refit reuses the sorted topology, child links, and per-leaf primitive from the last full build, so
-    // only the rendezvous counters reset; the fit pass recomputes every box from the current positions.
+    // Refit retains topology and recomputes boxes.
     commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.clearBufferUInt(visitCounterBuffer, 0u);
@@ -1859,9 +1713,7 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     commandList.setEnableUavBarriersForBuffer(meshNodeBuffer, true);
     commandList.setEnableUavBarriersForBuffer(meshParentBuffer, true);
     commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
-    // Even though refit does not read the payload branch at runtime, the same fit shader declares every build
-    // scratch view. Set every heap-selected buffer to UAV explicitly; no local descriptor state performs that
-    // bookkeeping implicitly.
+    // Fit declares all scratch views, so each needs a UAV state.
     commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
     commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);
     commandList.setBufferState(meshNodeBuffer, Core::ResourceStates::UnorderedAccess);
@@ -1891,7 +1743,6 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
         || meshResources.swBvhTriangleIndexHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
     )
         return false;
-    // meshletPrimitiveIndexCount is the reconstructed triangle-index count (3 per triangle).
     if(meshResources.meshletPrimitiveIndexCount == 0u || (meshResources.meshletPrimitiveIndexCount % s_RayTracingTriangleIndexCount) != 0u)
         return false;
     const u32 primitiveCount = meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
@@ -1903,17 +1754,12 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
     ))
         return false;
 
-    // The morton / topology / fit kernels read positions and triangle indices as raw byte buffers, so move
-    // both to ShaderResource before the build/refit dispatches bind them.
+    // Build kernels read input buffers as raw SRVs.
     commandList.setBufferState(meshResources.positionBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(meshResources.triangleIndexBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
 
-    // Skinned (runtime) meshes deform every frame: refit the build-pose topology in place from the freshly
-    // skinned positions, forcing a full rebuild once the adaptive refit budget (scales ~cube-root of triangle
-    // count) is exhausted to restore tree quality. Static meshes build once. A mesh's first appearance is
-    // always a full build. Resource preparation can allocate node storage before recording begins, so topology
-    // initialization is tracked independently from buffer existence.
+    // Runtime meshes refit until the adaptive budget; first build initializes topology.
     const bool firstBuild = !meshResources.swBvhTopologyBuilt;
     const bool performRefit =
         meshResources.runtimeMesh
@@ -1971,8 +1817,7 @@ bool RendererRayTracingSystem::updateMeshSwBvh(Core::CommandList& commandList, M
 }
 
 bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
-    // A binary BVH over N instances has 2N-1 nodes. Both buffers are CPU-written each frame and read by the
-    // traversal pass, so they are structured SRVs (no UAV) that grow by doubling like the hardware TLAS.
+    // Binary scene BVH needs 2N-1 CPU-uploaded SRV nodes.
     const usize requiredNodes = static_cast<usize>(instanceCount) * 2u - 1u;
     if(!rayTracingState().m_sceneBvhNodeBuffer || rayTracingState().m_sceneBvhNodeCapacity < requiredNodes){
         const usize capacity = ::NextGrowingCapacity(
@@ -1994,9 +1839,7 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene BVH node buffer"));
             return false;
         }
-        // The slot cbuffer selects this structured view through the global StorageBuffer heap. Register the new
-        // generation before replacing the owned handle so a descriptor-allocation failure leaves the old
-        // buffer/descriptor pair intact for a retry on a later frame.
+        // Register the new view before replacing ownership to keep the old pair retryable.
         if(!replaceRayTraceMaterialContextHeapHandle(*nodeBuffer.get(), rayTracingState().m_sceneBvhNodeHeapHandle))
             return false;
         rayTracingState().m_sceneBvhNodeBuffer = Move(nodeBuffer);

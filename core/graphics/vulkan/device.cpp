@@ -28,9 +28,7 @@ namespace VulkanDetail{
 
 
 static constexpr AStringView s_PipelineCacheVirtualPath = "vulkan/pipeline_cache.bin";
-// A single, fixed runtime pipeline-cache volume (NOT keyed by device identity). The header UUID/vendor/device
-// check in ValidatePipelineCacheData already rejects data from a different GPU/driver, so a device or driver
-// change simply starts empty + overwrites this same volume on save.
+// Pipeline-cache validation rejects data from different GPUs or drivers.
 static constexpr AStringView s_PipelineCacheVolumeName = "runtime_pipeline_cache";
 static constexpr u64 s_PipelineCacheVolumeSegmentSize = 16ull * 1024ull * 1024ull;
 static constexpr u64 s_PipelineCacheVolumeMetadataSize = 4ull * 1024ull;
@@ -358,7 +356,6 @@ Device::Device(const DeviceDesc& desc)
         auto props2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceProperties2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
         void* pNext = nullptr;
 
-        // Subgroup (wave) properties are core Vulkan 1.1 -- the engine floor is 1.3, so this is always available.
         m_context.subgroupProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES;
         m_context.subgroupProperties.pNext = pNext;
         pNext = &m_context.subgroupProperties;
@@ -406,8 +403,7 @@ Device::Device(const DeviceDesc& desc)
         vkGetPhysicalDeviceFeatures2(m_context.physicalDevice, &features2);
     }
 
-    // Descriptor-buffer entry points are a hard device requirement. Keep the extension state intact on failure so
-    // BackendContext can reject this device after construction instead of leaving an unsupported device alive.
+    // Descriptor-buffer entry points are mandatory for this device.
     if(
         !m_context.extensions.EXT_descriptor_buffer
         || !vkGetDescriptorEXT
@@ -421,7 +417,6 @@ Device::Device(const DeviceDesc& desc)
     if(!m_allocator.initialize())
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to initialize VMA allocator"));
 
-    // AMD breadcrumb ring: allocated AFTER the VMA allocator is initialized (createHostMappedBuffer needs it).
     if(m_gpuCrashDiagnosticsEnabled && m_context.extensions.AMD_buffer_marker){
         auto breadcrumbInfo = VulkanDetail::MakeVkStruct<VkBufferCreateInfo>(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO);
         breadcrumbInfo.size = static_cast<VkDeviceSize>(s_MaxAmdBreadcrumbSlots) * sizeof(u32);
@@ -432,9 +427,7 @@ Device::Device(const DeviceDesc& desc)
             NWB_MEMSET(m_amdBreadcrumb.mappedMemory, 0, static_cast<usize>(breadcrumbInfo.size));
         }
         else{
-            // A successful VMA allocation without a persistent mapping cannot service breadcrumbs, but it still owns
-            // a buffer/allocation pair. Release that pair before disabling the optional feature; otherwise the later
-            // destructor guard sees a null buffer and strands the allocation until VMA teardown.
+            // Release an unusable allocation before disabling breadcrumbs.
             if(breadcrumbRes == VK_SUCCESS)
                 m_allocator.destroyHostMappedBuffer(m_amdBreadcrumb.buffer, m_amdBreadcrumb.allocation, m_amdBreadcrumb.mappedMemory);
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to allocate AMD breadcrumb buffer ({}); AMD GPU breadcrumbs disabled."), ResultToString(breadcrumbRes));
@@ -443,8 +436,7 @@ Device::Device(const DeviceDesc& desc)
     }
 
 
-    // Stand up the required descriptor-buffer manager (VK_EXT_descriptor_buffer). The extension and its properties
-    // are already detected/enabled/queried above; this carves the two global segments used by every renderer pipeline.
+    // Initialize required global descriptor-buffer segments.
     if(
         m_context.extensions.EXT_descriptor_buffer
         && vkGetDescriptorEXT
@@ -457,7 +449,6 @@ Device::Device(const DeviceDesc& desc)
         }
     }
 
-    // The global heap is mandatory. Capacity 0 selects a default clamped to the device's descriptor-layout limits.
     if(m_context.extensions.EXT_descriptor_buffer && m_descriptorBufferManager.isEnabled()){
         GpuDescriptorHeapDesc heapDesc;
         heapDesc.setBindlessHeapAbi(desc.bindlessHeapAbi);
@@ -469,7 +460,6 @@ Device::Device(const DeviceDesc& desc)
     }
 
     GraphicsBytes pipelineCacheInitialData{m_context.objectArena};
-    // A missing pipeline cache is expected on first use or after an interrupted shutdown, so rebuilding it is logged at INFO.
     if(!loadPipelineCacheData(pipelineCacheInitialData))
         NWB_LOGGER_INFO(NWB_TEXT("Vulkan: No usable pipeline cache found; starting with an empty cache."));
 
@@ -506,16 +496,12 @@ Device::~Device(){
     m_uploadManager.clear();
     m_scratchManager.clear();
 
-    // Release the global descriptor heap's descriptor blocks/layouts while the device is still valid (idempotent; the member
-    // destructor also calls this).
     m_gpuDescriptorHeap.shutdown();
     m_descriptorBufferManager.shutdown();
 
     for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)
         m_queues[i].reset();
 
-    // Freed after the queues (and their command lists) so isAmdBreadcrumbEnabled() stays stable while command
-    // lists unregister their marker trackers in their destructors.
     if(m_amdBreadcrumb.allocation)
         m_allocator.destroyHostMappedBuffer(m_amdBreadcrumb.buffer, m_amdBreadcrumb.allocation, m_amdBreadcrumb.mappedMemory);
 
@@ -577,8 +563,7 @@ bool Device::loadPipelineCacheData(GraphicsBytes& outData){
 }
 
 VkDescriptorSetLayout Device::getOrCreateEmptyDescriptorBufferSetLayout()const{
-    // Double-checked lazy init under the pipeline-cache mutex (the empty layouts are device-singletons created once
-    // and never recreated; the const cast mirrors how other device-singleton caches are materialized on first use).
+    // Lazily create immutable empty layouts under the cache mutex.
     if(m_context.emptyDescriptorBufferSetLayout != VK_NULL_HANDLE)
         return m_context.emptyDescriptorBufferSetLayout;
 
@@ -596,8 +581,6 @@ VkDescriptorSetLayout Device::getOrCreateEmptyDescriptorBufferSetLayout()const{
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create empty descriptor-buffer set layout. {}"), ResultToString(res));
         return VK_NULL_HANDLE;
     }
-    // const-cast: the context member is logically immutable after lazy init (created once, never recreated), but this
-    // is called from the const createPipelineLayoutForBindingLayouts path, so the assignment needs the cast.
     const_cast<VkDescriptorSetLayout&>(m_context.emptyDescriptorBufferSetLayout) = setLayout;
     return setLayout;
 }
@@ -723,9 +706,7 @@ u64 Device::executeCommandLists(
     if(outCommandListsSubmitted)
         *outCommandListsSubmitted = false;
 
-    // Once Vulkan has reported device loss, no subsequent submit can make an ownership-recovery packet safe.
-    // Leave command-list ownership with its caller; the Graphics layer will terminate this device generation and
-    // destroy those lists during recreation.
+    // Device loss makes recovery submissions unsafe.
     if(isDeviceLost())
         return 0u;
 
@@ -788,8 +769,7 @@ QueueSubmissionToken Device::executeCommandLists(
     const CommandQueue::Enum executionQueue,
     const QueueSubmissionDesc& submitDesc
 ){
-    // Do not feed new work or timeline waits to a VkDevice after a terminal loss. This also gives renderer packet
-    // recovery a reliable invalid token without issuing another Vulkan call.
+    // Do not submit or wait after terminal device loss.
     if(isDeviceLost())
         return {};
 
@@ -821,9 +801,7 @@ QueueSubmissionToken Device::executeCommandLists(
                 return {};
             }
 
-            // Tokens are public value objects, so reject a fabricated or future timeline value before it reaches
-            // vkQueueSubmit2. Waiting for a value this queue has never signalled would otherwise deadlock the
-            // consumer indefinitely. The queue lock also pairs this validation with submit's monotonic update.
+            // Reject fabricated/future timeline tokens that could deadlock a wait.
             {
                 ScopedLock producerLock(producerQueue->m_mutex);
                 if(token.value > producerQueue->m_lastSubmittedID){
@@ -832,13 +810,11 @@ QueueSubmissionToken Device::executeCommandLists(
                 }
             }
 
-            // Queue order already establishes the edge when both logical lanes collapsed to Graphics (or when an
-            // explicit caller chains work on one physical queue). Avoid a self-timeline wait in that case.
+            // Queue order already covers same-queue dependencies.
             if(token.queue == executionQueue)
                 continue;
 
-            // Vulkan requires each semaphore to occur at most once in a submission's wait list. Multiple tokens
-            // from one producer queue collapse to the largest timeline value, which also covers every earlier token.
+            // Collapse same-semaphore waits to their largest timeline value.
             bool merged = false;
             for(Queue::SubmissionWait& wait : localWaits){
                 if(wait.semaphore != producerQueue->m_trackingSemaphore)
@@ -967,8 +943,7 @@ bool Device::waitForIdle(){
 }
 
 void Device::captureGpuCrash(const AStringView context)noexcept{
-    // This method is invoked only from Vulkan's device-lost paths. Keep the state independent of optional crash
-    // diagnostics: a renderer must still stop recovery submissions when capture support is disabled.
+    // Device-loss state must not depend on optional crash diagnostics.
     m_deviceLost.store(true, MemoryOrder::release);
     if(!m_gpuCrashDiagnosticsEnabled)
         return;
@@ -977,23 +952,19 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
     const bool hasDeviceFault = m_context.extensions.EXT_device_fault;
     const bool hasBufferMarker = m_context.extensions.AMD_buffer_marker && m_amdBreadcrumb.buffer != VK_NULL_HANDLE;
 
-    // Claim the one-shot capture atomically: only the first thread to lose the device proceeds, so a
-    // device-lost reported concurrently from submit/present/waitForIdle never dispatches two crash dumps.
+    // Capture only the first concurrent device-loss report.
     if(m_gpuCrashCaptured.exchange(true))
         return;
 
     GpuCrashReport report(m_gpuCrashReportArena);
     Vector<u8, Alloc::PersistentArena> vendorBinary(m_gpuCrashVendorBinaryArena);
 
-    // The report lives in a fixed, pre-reserved arena so capture never touches the growable heap. Formatting
-    // is wrapped: if the arena is exhausted the report degrades to whatever was built rather than throwing
-    // std::bad_alloc out of the device-lost path (the function is noexcept, so an escape would terminate).
+    // Fixed crash arena permits partial reports without allocation failure.
     try{
         report.details.reserve(s_MaxGpuCrashReportChars);
         report.context.append(context.data(), context.size());
 
-        // A single aggregate budget across all queues AND both fault sections keeps the formatted output
-        // within the fixed arena. (Clamping per-queue would let kCount queues each emit the full cap.)
+        // One aggregate budget bounds all fault sections.
         u32 remainingEntries = s_MaxGpuCrashCaptureEntries;
 
         if(hasCheckpoints){
@@ -1032,8 +1003,7 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
         if(hasBufferMarker && remainingEntries > 0u){
             const u32* breadcrumbSlots = static_cast<const u32*>(m_amdBreadcrumb.mappedMemory);
             if(breadcrumbSlots){
-                // Each slot holds the highest sequence the GPU executed there; the slot with the global max
-                // sequence is the furthest point the GPU reached before the device was lost.
+                // Largest sequence marks the last GPU-reached breadcrumb.
                 u32 furthestSequence = 0u;
                 u32 furthestSlot = 0u;
                 for(u32 slot = 0u; slot < s_MaxAmdBreadcrumbSlots; ++slot){
@@ -1046,8 +1016,7 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
                 if(furthestSequence != 0u){
                     AmdBreadcrumbSlotRecord record;
                     {
-                        // Read the CPU-side record under the same lock reserveAmdBreadcrumb writes it, so a
-                        // worker still recording at device-lost cannot hand us a torn {sequence, markerHash}.
+                        // Lock with breadcrumb writes to avoid torn records.
                         ScopedLock lock(m_amdBreadcrumb.slotMutex);
                         record = m_amdBreadcrumb.slotRecords[furthestSlot];
                     }
@@ -1059,7 +1028,6 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
                             report.details.append(StringFormat(m_gpuCrashReportArena, "last reached breadcrumb (seq {}): <unresolved marker>\n", furthestSequence));
                     }
                     else{
-                        // The CPU lapped this ring slot after the GPU wrote it, so the recorded label is stale.
                         report.details.append(StringFormat(m_gpuCrashReportArena, "last reached breadcrumb (seq {}): <label overwritten>\n", furthestSequence));
                     }
                     --remainingEntries;
@@ -1150,19 +1118,15 @@ void Device::captureGpuCrash(const AStringView context)noexcept{
             ));
     }
     catch(...){
-        // Fixed crash arena exhausted while formatting; ship the partial report rather than terminate.
     }
 
-    // Logging itself formats/allocates; never let it abort the crash path.
     try{
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: GPU crash detected during {}:\n{}"), StringConvert(report.context.c_str()), StringConvert(report.details.c_str()));
     }
     catch(...){
     }
 
-    // Attach the NVIDIA Aftermath GPU crash dump if one was collected. WaitForCrashDump blocks briefly while
-    // the driver finishes writing the dump; the bytes stay owned by the Aftermath module for the synchronous
-    // dispatch below, where the crash reporter copies them into the package.
+    // Attach available Aftermath dump while its bytes remain owned by the module.
     if(Aftermath::IsActive()){
         const Aftermath::GpuCrashDumpView dump = Aftermath::WaitForCrashDump();
         if(dump.data && dump.size != 0u){
@@ -1184,14 +1148,11 @@ Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const usize markerHash){
     if(m_amdBreadcrumb.buffer == VK_NULL_HANDLE)
         return write;
 
-    // Monotonic sequence (>=1 so a zeroed slot reads as "never reached"), ring-mapped to a slot. The CPU-side
-    // record lets device-lost readback map the furthest-reached slot back to its marker hash.
+    // Monotonic sequence maps GPU progress to breadcrumb markers.
     const u32 sequence = m_amdBreadcrumb.nextSequence.fetch_add(1u) + 1u;
     const u32 slot = sequence % s_MaxAmdBreadcrumbSlots;
     {
-        // Concurrent recording can land two reservations on the same ring slot; serialize the pair store so
-        // device-lost readback never sees a torn {sequence, markerHash}. beginMarker is a region-boundary op,
-        // so this brief lock is not on a hot per-draw path.
+        // Serialize paired breadcrumb stores to avoid torn readback.
         ScopedLock lock(m_amdBreadcrumb.slotMutex);
         m_amdBreadcrumb.slotRecords[slot].markerHash = markerHash;
         m_amdBreadcrumb.slotRecords[slot].sequence = sequence;
@@ -1205,8 +1166,7 @@ Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(const usize markerHash){
 }
 
 void Device::runGarbageCollection(){
-    // Timeline queries can themselves return VK_ERROR_DEVICE_LOST. Teardown owns retirement after the terminal
-    // signal, so avoid issuing extra queue queries while the higher level is arranging device recreation.
+    // Avoid extra queue queries after device loss.
     if(isDeviceLost())
         return;
 
@@ -1241,7 +1201,7 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
         return m_context.extensions.NV_cluster_acceleration_structure;
     case Feature::SamplerFeedback:
     case Feature::VirtualResources:
-        // Retained only to preserve Feature enum ordinals for external callers. The corresponding systems are retired.
+        // Retained unsupported feature ordinal for ABI compatibility.
         return false;
     case Feature::CooperativeVectorInferencing:
         return m_context.extensions.NV_cooperative_vector && m_context.coopVecFeatures.cooperativeVector;
@@ -1252,7 +1212,6 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
     case Feature::VariableRateShading:
         return m_context.extensions.KHR_fragment_shading_rate;
     case Feature::WaveLaneCountMinMax:{
-        // Wave/subgroup size is core Vulkan 1.1 (engine floor is 1.3), so this is always supported.
         auto* out = static_cast<WaveLaneCountMinMaxFeatureInfo*>(featureInfo);
         if(out && featureInfoSize >= sizeof(WaveLaneCountMinMaxFeatureInfo)){
             out->minWaveLaneCount = m_context.subgroupProperties.subgroupSize;

@@ -18,30 +18,19 @@ NWB_VULKAN_BEGIN
 
 
 namespace __hidden_vulkan_descriptor_heap{
-    // Defaults when GpuDescriptorHeapDesc leaves a capacity at 0. Clamped to the descriptor-layout limits in
-    // initialize().
     inline constexpr u32 s_DefaultResourceCapacity = 16384u;
     inline constexpr u32 s_DefaultSamplerCapacity = 2048u;
 
-    // Non-sampler resource classes that share the one resource-heap register set. Their per-class descriptor arrays
-    // each occupy the full resourceCapacity, so the total live in one set is this many times the capacity - used to
-    // respect the aggregate per-stage descriptor-resource limits.
+    // Non-sampler classes share one resource-heap register set.
     //
-    // Sampled-image dimensions are deliberately appended after Sampler in the public enum to preserve existing
-    // handle tags, so do not rely on enum contiguity when iterating the resource classes below.
+    // Public descriptor-class tags are non-contiguous for ABI compatibility.
     inline constexpr u32 s_ResourceClassCount = 9u;
-    // Five sampled-image arrays plus the uniform-texel-buffer array all count against Vulkan's sampled-image
-    // descriptor limits.
     inline constexpr u32 s_SampledImageOrTexelClassCount = 6u;
 
-    // The descriptor-buffer heap owns a distinct block per live TLAS generation. Two in-flight frames plus the
-    // current replacement need at most three slots; keep one spare so a burst of capacity growth still preserves
-    // immutable old blocks through the deferred-free quarantine.
+    // Reserve TLAS blocks across in-flight generation replacement.
     inline constexpr u32 s_AccelStructCapacity = s_MaxFramesInFlight + 2u;
 
-    // Canonical descriptor type each class writes as. write() forces item.type to this so the handle's class - not
-    // the caller's factory choice - is authoritative (matters for StorageBuffer: structured/raw SRV+UAV all resolve
-    // to one STORAGE_BUFFER descriptor, and descriptor writes match on the exact ResourceType).
+    // Descriptor class determines the canonical Vulkan descriptor type.
     ResourceType::Enum ClassToResourceType(const GpuDescriptorClass::Enum descriptorClass){
         switch(descriptorClass){
         case GpuDescriptorClass::SampledImage:  return ResourceType::Texture_SRV;
@@ -120,8 +109,6 @@ GpuDescriptorHeap::~GpuDescriptorHeap(){
 
 
 u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptorClass)const{
-    // Register-space binding numbers inside each fixed-capacity descriptor-buffer layout. Sampler counts from 0 in
-    // its own table.
     const GpuDescriptorHeapAbi& abi = m_desc.bindlessHeapAbi;
     switch(descriptorClass){
     case GpuDescriptorClass::SampledImage:  return abi.sampledImageBinding;
@@ -140,9 +127,7 @@ u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptor
 }
 
 GpuDescriptorHeap::SlotAllocator& GpuDescriptorHeap::allocatorForClass(const GpuDescriptorClass::Enum descriptorClass){
-    // All ordinary non-sampler classes share one global slot namespace. Acceleration structures are
-    // intentionally separate: each slot selects a fixed descriptor-buffer block at set 10 rather than an element
-    // of the resource descriptor array.
+    // Ordinary resources share slots; TLAS selects immutable set-10 blocks.
     if(descriptorClass == GpuDescriptorClass::Sampler)
         return m_samplerSlots;
     if(descriptorClass == GpuDescriptorClass::AccelStruct)
@@ -200,8 +185,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     if(m_initialized)
         return true;
 
-    // A previous attempt may have failed after carving one descriptor-buffer block. shutdown() is deliberately
-    // idempotent so a retry begins from a clean state instead of leaking that partial generation.
+    // Idempotent shutdown recovers partially initialized descriptor blocks.
     shutdown();
     m_desc = desc;
     const auto failInitialization = [this](){
@@ -213,8 +197,6 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         return failInitialization();
     }
 
-    // The renderer's global heap has no fallback. Fail initialization unless the descriptor-buffer manager is live
-    // before any heap layout or slot state is created.
     if(
         !m_context.extensions.EXT_descriptor_buffer
         || !m_context.descriptorBufferManager
@@ -226,11 +208,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     u32 resourceCapacity = desc.resourceCapacity > 0 ? desc.resourceCapacity : s_DefaultResourceCapacity;
     u32 samplerCapacity = desc.samplerCapacity > 0 ? desc.samplerCapacity : s_DefaultSamplerCapacity;
 
-    // Descriptor-buffer layouts use fixed descriptor capacity. Clamp only against ordinary descriptor-layout limits
-    // before creating the global heap layouts.
     const VkPhysicalDeviceLimits& limits = m_context.physicalDeviceProperties.limits;
-    // The heap is visible to every shader stage. The sampled-image limit includes UNIFORM_TEXEL_BUFFER, so all five
-    // sampled-image/texel arrays count together; every resource class also counts toward maxPerStageResources.
     u32 resourceLimit = limits.maxDescriptorSetSampledImages / s_SampledImageOrTexelClassCount;
     resourceLimit = Min(resourceLimit, limits.maxDescriptorSetStorageImages);
     resourceLimit = Min(resourceLimit, limits.maxDescriptorSetStorageBuffers);
@@ -265,8 +243,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         return failInitialization();
     }
 
-    // Resource descriptor-buffer block: one mutable-SRV/UAV/CBV bindless layout with one register space per
-    // non-sampler class, added in ascending slot order (see getRegisterSlot).
+    // Resource block contains bindless non-sampler classes in slot order.
     BindlessLayoutDesc resourceLayoutDesc;
     resourceLayoutDesc
         .setLayoutType(BindlessLayoutType::MutableSrvUavCbv)
@@ -289,16 +266,11 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap failed to create resource bindless layout."));
         return failInitialization();
     }
-    // The resource set is pure-class, so a non-compatible result is an extension/driver failure rather than a
-    // recoverable layout shape.
     if(!m_resourceLayout->isDescriptorBufferCompatible()){
-        // A pure MutableSrvUavCbv bindless set is always segment-coherent; a downgrade here is a driver/extension
-        // problem, not a recoverable shape mismatch, so treat it as a hard init failure rather than silently mixing.
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap resource layout is not descriptor-buffer-compatible despite descriptor-buffer initialization."));
         return failInitialization();
     }
-    // Sampler descriptor-buffer block: separate namespace/layout because samplers cannot share an array with sampled
-    // images.
+    // Samplers require a separate descriptor-buffer layout.
     BindlessLayoutDesc samplerLayoutDesc;
     samplerLayoutDesc
         .setLayoutType(BindlessLayoutType::MutableSampler)
@@ -317,9 +289,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap sampler layout is not descriptor-buffer-compatible despite descriptor-buffer initialization."));
         return failInitialization();
     }
-    // TLAS surface. It is an immutable one-descriptor global-heap layout rather than a mutable HLSL descriptor
-    // array: VK_EXT_descriptor_buffer encodes the AS address directly. Each allocated AS handle later receives its
-    // own one-descriptor block and bindCompute/bindRayTracing selects that block at set 10.
+    // TLAS uses immutable one-descriptor generation blocks at set 10.
     if(m_context.extensions.KHR_acceleration_structure){
         BindlessLayoutDesc accelStructLayoutDesc;
         accelStructLayoutDesc
@@ -357,9 +327,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         }
     }
 
-    // Carve one persistent block per segment sized to the driver-queried set block for each layout, and cache each
-    // class's binding offset within it. The heap's descriptors are written into these blocks' mapped memory via
-    // write() and never re-carved (the heap outlives any single frame). The blocks are freed in shutdown().
+    // Carve persistent mapped resource and sampler blocks once.
     const u32 offsetAlignmentBytes = m_context.descriptorBufferManager->getOffsetAlignmentBytes();
     if(!initializeDescriptorBufferBlocks(offsetAlignmentBytes))
         return failInitialization();
@@ -403,9 +371,6 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
 void GpuDescriptorHeap::shutdown(){
     ScopedLock lock(m_mutex);
 
-    // Return the persistent resource/sampler blocks and every per-generation TLAS block before dropping
-    // layouts. This also handles a partially initialized heap after an allocation/layout failure. The manager outlives
-    // the heap (it is device-owned), so freeing here is safe and ordering-independent.
     if(m_context.descriptorBufferManager){
         if(m_resourceBufferBlock.valid())
             m_context.descriptorBufferManager->free(m_resourceBufferBlock);
@@ -526,7 +491,6 @@ void GpuDescriptorHeap::advanceFrame(){
 
     ++m_frameCounter;
 
-    // Return every slot whose quarantine has matured to its class's free list; compact the rest in place.
     usize kept = 0;
     for(usize i = 0; i < m_retired.size(); ++i){
         const RetiredSlot& retired = m_retired[i];
@@ -580,20 +544,14 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
         return false;
     }
 
-    // The handle's class is authoritative: force the register space (slot), the global index (arrayElement), and the
-    // canonical descriptor type. The caller supplies only the resource and its view params (range/subresources).
+    // Handle class owns binding, array index, and descriptor type.
     DescriptorWriteItem writeItem = item;
     writeItem.slot = getRegisterSlot(descriptorClass);
     writeItem.arrayElement = handle.slot();
     writeItem.type = ClassToResourceType(descriptorClass);
 
-    // Write the descriptor as bytes into the heap's persistent carved block at
-    // block.offsetBytes + classBindingOffset + slotIndex*descriptorSize. The block was carved once in
-    // initialize() and is never re-carved -- the heap is persistent, so every write() rewrites in place.
     if(descriptorClass == GpuDescriptorClass::AccelStruct){
-        // A TLAS descriptor block is owned by its handle slot, so retain the AS until that slot's deferred-free
-        // quarantine matures. Replacing a populated slot would mutate descriptor bytes an in-flight command buffer
-        // may still reference; callers must allocate a fresh handle for a new TLAS generation instead.
+        // TLAS handles retain backing AS until deferred free; generations need fresh handles.
         if(handle.slot() >= m_accelStructBufferBlocks.size()){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::write: AccelStruct handle slot {} is out of range."), handle.slot());
             return false;
@@ -614,9 +572,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
         return true;
     }
 
-    // Persistent heap descriptors retain each resource until free()'s in-flight quarantine matures. Replacing a
-    // populated slot would mutate a descriptor an older command buffer may still use;
-    // callers must allocate a fresh handle for a different resource generation.
+    // Descriptor handles retain resources through quarantine; generations need fresh handles.
     auto& retainedResources = descriptorClass == GpuDescriptorClass::Sampler
         ? m_samplerDescriptorResources
         : m_resourceDescriptorResources
@@ -652,21 +608,15 @@ void GpuDescriptorHeap::bindCompute(
     const ComputePipeline& pipeline,
     const GpuDescriptorHandle accelStructHandle
 ){
-    // Bind persistent resource/sampler blocks at sets 8/9 and, when supplied, the current TLAS generation's
-    // immutable descriptor block at set 10. m_pipelineLayout is a public PipelineBindingState member so impl/
-    // need not name Vk.
+    // Bind persistent resource/sampler blocks at 8/9 and optional TLAS at 10.
     commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.m_pipelineLayout, accelStructHandle);
 }
 
 void GpuDescriptorHeap::bindGraphics(CommandList& commandList, const GraphicsPipeline& pipeline){
-    // The fullscreen deferred passes have no TLAS; the ordinary resource/sampler heap sets are identical to their
-    // compute/RT siblings and must be selected only after setGraphicsState() has installed this pipeline layout.
     commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipelineLayout);
 }
 
 void GpuDescriptorHeap::bindGraphics(CommandList& commandList, const MeshletPipeline& pipeline){
-    // Mesh shader pipelines share the graphics bind point but carry their own PipelineBindingState type. Keep the
-    // overload here rather than exposing VkPipelineLayout above the Vulkan RHI boundary.
     commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.m_pipelineLayout);
 }
 
@@ -675,8 +625,6 @@ void GpuDescriptorHeap::bindRayTracing(
     const RayTracingPipeline& pipeline,
     const GpuDescriptorHandle accelStructHandle
 ){
-    // Same PipelineBindingState::m_pipelineLayout the RT dispatch binds its set-0 material table against. The heap
-    // routes through descriptor-buffer offsets, including the optional set-10 TLAS generation.
     commandList.bindDescriptorBufferHeap(*this, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipeline.m_pipelineLayout, accelStructHandle);
 }
 
@@ -715,8 +663,6 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
             return false;
         }
         outBlock = block;
-        // Cache each class's driver-queried binding offset within the set block; write() addresses a descriptor as
-        // block.offsetBytes + m_classBufferOffset[class] + slot*descriptorSize.
         const auto& bindingOffsets = bindingLayout->getDescriptorBufferBindingOffsets();
         for(u32 c = 0; c < classCount; ++c){
             const GpuDescriptorClass::Enum cls = classes[c];
@@ -741,8 +687,6 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
         return true;
     };
 
-    // The public class enum has stable tags, so the resource classes are listed explicitly
-    // rather than assuming the non-sampler subset is contiguous. They stay in ascending register-slot order.
     static constexpr GpuDescriptorClass::Enum s_ResourceClasses[] = {
         GpuDescriptorClass::SampledImage,
         GpuDescriptorClass::StorageImage,

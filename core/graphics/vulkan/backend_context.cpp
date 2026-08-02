@@ -111,9 +111,7 @@ struct OptionalDeviceFeatureSet{
     VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV rayTracingLinearSweptSpheres = MakeVkFeatureStruct<VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_LINEAR_SWEPT_SPHERES_FEATURES_NV);
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShader = MakeVkFeatureStruct<VkPhysicalDeviceMeshShaderFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT);
     VkPhysicalDeviceFragmentShadingRateFeaturesKHR fragmentShadingRate = MakeVkFeatureStruct<VkPhysicalDeviceFragmentShadingRateFeaturesKHR>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR);
-    // VK_EXT_descriptor_buffer (descriptor-as-memory). It is advertised by the BC-250/RADV target and
-    // natively encodes acceleration structures via VkDescriptorGetInfoEXT; descriptor-buffer-compatible pipelines
-    // consume it through the production binding path.
+    // Descriptor buffers are the production descriptor transport.
     VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptorBuffer = MakeVkFeatureStruct<VkPhysicalDeviceDescriptorBufferFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT);
     VkPhysicalDeviceFaultFeaturesEXT deviceFault = MakeVkFeatureStruct<VkPhysicalDeviceFaultFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT);
 };
@@ -144,8 +142,7 @@ static OptionalDeviceFeatureSet MakeRequestedOptionalDeviceFeatures(){
     features.fragmentShadingRate.primitiveFragmentShadingRate = VK_TRUE;
     features.fragmentShadingRate.attachmentFragmentShadingRate = VK_TRUE;
 
-    // Descriptor buffers are a required renderer capability. The device feature support check below rejects a
-    // selected GPU that exposes the extension but not its descriptorBuffer feature.
+    // Descriptor-buffer feature support is mandatory.
     features.descriptorBuffer.descriptorBuffer = VK_TRUE;
 
     features.deviceFault.deviceFault = VK_TRUE;
@@ -301,9 +298,6 @@ static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
     case DeviceExtensionFeature::DescriptorBuffer:
         return SupportsRequestedValue(requested.descriptorBuffer.descriptorBuffer, supported.descriptorBuffer.descriptorBuffer);
     case DeviceExtensionFeature::DeviceFault:
-        // Only the core deviceFault capability gates the extension; deviceFaultVendorBinary is optional and is
-        // clamped to device support in FinalizeOptionalDeviceFeatureEnablement (requesting it unsupported makes
-        // vkCreateDevice fail with VK_ERROR_FEATURE_NOT_PRESENT).
         return SupportsRequestedValue(requested.deviceFault.deviceFault, supported.deviceFault.deviceFault);
     case DeviceExtensionFeature::None:
     case DeviceExtensionFeature::Count:
@@ -316,8 +310,6 @@ static void FinalizeOptionalDeviceFeatureEnablement(OptionalDeviceFeatureSet& en
     enabled.meshShader.taskShader = supported.meshShader.taskShader;
     enabled.rayTracingLinearSweptSpheres.spheres = supported.rayTracingLinearSweptSpheres.spheres;
     enabled.rayTracingLinearSweptSpheres.linearSweptSpheres = supported.rayTracingLinearSweptSpheres.linearSweptSpheres;
-    // Optional VK_EXT_device_fault sub-feature: only enable the vendor-binary capability where the device
-    // actually supports it, otherwise vkCreateDevice fails with VK_ERROR_FEATURE_NOT_PRESENT (e.g. AMD iGPUs).
     enabled.deviceFault.deviceFaultVendorBinary = supported.deviceFault.deviceFaultVendorBinary;
 }
 
@@ -783,9 +775,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
     m_presentQueueFamily = s_InvalidQueueFamilyIndex;
 
     const bool requirePresentQueue = !m_deviceParams.headlessDevice;
-    // Even though AsyncCompute is optional, keep scanning after Graphics/Present are found so a dedicated family
-    // later in the driver-reported list is discovered. The old early-out is valid only when no caller is looking
-    // for the best-effort lane.
+    // Continue scanning for a dedicated async-compute family.
     const bool searchAsyncComputeQueue = m_deviceParams.enableAsyncComputeLane;
 
     for(i32 i = 0; i < static_cast<i32>(props.size()); ++i){
@@ -1136,8 +1126,7 @@ bool BackendContext::createVulkanDevice(){
 
     const bool diagnosticsConfigExtensionEnabled = isDeviceExtensionEnabled(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
     const bool aftermathRequested = m_deviceParams.enableGpuCrashDiagnostics && physicalDeviceProperties.vendorID == s_NvidiaVendorId;
-    // Aftermath is process-global and must be enabled before the device is created so the driver attaches GPU
-    // crash dump collection to it. NVIDIA-only; on any other vendor the vendor-neutral diagnostics still apply.
+    // Configure process-global NVIDIA Aftermath before device creation.
     const bool aftermathActive = aftermathRequested && Aftermath::Initialize();
     if(aftermathRequested && !aftermathActive)
         NWB_LOGGER_INFO(NWB_TEXT("Vulkan: NVIDIA Aftermath GPU crash dumps unavailable; using vendor-neutral GPU diagnostics only."));
@@ -1267,8 +1256,6 @@ bool BackendContext::createVulkanDevice(){
         || !requireFeature(supportedCoreFeatures.shaderStorageImageWriteWithoutFormat, "shaderStorageImageWriteWithoutFormat")
         || !requireFeature(supportedCoreFeatures.shaderStorageImageReadWithoutFormat, "shaderStorageImageReadWithoutFormat")
         || !requireFeature(supportedVulkan11Features.storageBuffer16BitAccess, "storageBuffer16BitAccess")
-        // Shader color payloads and render-target outputs use native `half`; its SPIR-V InputOutput16 capability
-        // requires this feature in addition to Vulkan 1.2's shaderFloat16 arithmetic support below.
         || !requireFeature(supportedVulkan11Features.storageInputOutput16, "storageInputOutput16")
         || !requireFeature(supportedVulkan11Features.shaderDrawParameters, "shaderDrawParameters")
         || !requireFeature(supportedVulkan12Features.descriptorIndexing, "descriptorIndexing")
@@ -1276,9 +1263,7 @@ bool BackendContext::createVulkanDevice(){
         || !requireFeature(supportedVulkan12Features.timelineSemaphore, "timelineSemaphore")
         || !requireFeature(supportedVulkan12Features.shaderFloat16, "shaderFloat16")
         || !requireFeature(supportedVulkan12Features.shaderSampledImageArrayNonUniformIndexing, "shaderSampledImageArrayNonUniformIndexing")
-        // The bindless GpuDescriptorHeap fetches per-mesh geometry from a STORAGE_BUFFER descriptor array indexed by
-        // NonUniformResourceIndex; require non-uniform storage-buffer indexing so a target lacking it
-        // fails device creation with a clear capability log instead of silently miscompiling the heap fetch path.
+        // Bindless geometry uses non-uniform storage-buffer indexing.
         || !requireFeature(supportedVulkan12Features.shaderStorageBufferArrayNonUniformIndexing, "shaderStorageBufferArrayNonUniformIndexing")
         || !requireFeature(supportedVulkan12Features.shaderSubgroupExtendedTypes, "shaderSubgroupExtendedTypes")
         || !requireFeature(supportedVulkan12Features.scalarBlockLayout, "scalarBlockLayout")
@@ -1353,8 +1338,7 @@ bool BackendContext::createVulkanDevice(){
     else if(maintenance4Enabled && maintenance4Features.maintenance4 == VK_TRUE)
         VulkanDetail::AppendFeatureStruct(pNext, &maintenance4Features);
 
-    // NVIDIA Aftermath device configuration. Both structs must outlive vkCreateDevice, so they are declared at
-    // function scope and only chained into pNext when Aftermath is active and the extension is enabled.
+    // Aftermath configuration must outlive vkCreateDevice.
     VkPhysicalDeviceDiagnosticsConfigFeaturesNV diagnosticsConfigFeatures = VulkanDetail::MakeVkFeatureStruct<VkPhysicalDeviceDiagnosticsConfigFeaturesNV>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DIAGNOSTICS_CONFIG_FEATURES_NV);
     VkDeviceDiagnosticsConfigCreateInfoNV diagnosticsConfigCreateInfo = VulkanDetail::MakeVkStruct<VkDeviceDiagnosticsConfigCreateInfoNV>(VK_STRUCTURE_TYPE_DEVICE_DIAGNOSTICS_CONFIG_CREATE_INFO_NV);
     if(aftermathActive && diagnosticsConfigExtensionEnabled){
@@ -1404,8 +1388,7 @@ bool BackendContext::createVulkanDevice(){
     vulkan12features.bufferDeviceAddress = bufferDeviceAddressFeatures.bufferDeviceAddress;
     vulkan12features.shaderSubgroupExtendedTypes = supportedVulkan12Features.shaderSubgroupExtendedTypes;
     vulkan12features.scalarBlockLayout = supportedVulkan12Features.scalarBlockLayout;
-    // The GPU timing path resets timer query pools HOST-side (Device::resetTimerQuery -> vkResetQueryPool), which requires
-    // the hostQueryReset feature (core in Vulkan 1.2). Enable it where the device advertises it.
+    // Host-side timer-query resets require hostQueryReset.
     vulkan12features.hostQueryReset = supportedVulkan12Features.hostQueryReset;
     if(isDeviceExtensionEnabled(VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME))
         vulkan12features.samplerFilterMinmax = supportedVulkan12Features.samplerFilterMinmax;
@@ -1877,8 +1860,6 @@ bool BackendContext::createDevice(){
         registerDeviceExtension(m_optionalExtensions.device, name, resolveDeviceExtensionFeature(name));
     if(m_deviceParams.enableGpuCrashDiagnostics){
         m_optionalExtensions.device.emplace(GraphicsString(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, m_arena), DeviceExtensionFeature::None);
-        // NVIDIA Aftermath enrichment (shader debug info / resource tracking / automatic checkpoints). The
-        // diagnosticsConfig feature is chained manually in createVulkanDevice when this extension is enabled.
         m_optionalExtensions.device.emplace(GraphicsString(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME, m_arena), DeviceExtensionFeature::None);
     }
 
@@ -1940,7 +1921,7 @@ bool BackendContext::createDevice(){
     }
 
 #if defined(NWB_GPU_FAULT_INJECTION)
-    // DEBUG / TEST ONLY: fault once after device creation so the capture path does not depend on the render loop.
+    // Test-only device fault injection after creation.
     u64 faultDeviceAddress = 0u;
     if(VulkanDetail::ReadGpuFaultInjectionValue(faultDeviceAddress))
         m_rhiDevice->debugTriggerGpuFault(faultDeviceAddress);
@@ -2010,8 +1991,6 @@ void BackendContext::destroy(){
         m_vulkanInstance = VK_NULL_HANDLE;
     }
 
-    // Process-global: re-establish any Nsight monitor settings after this backend clears its device/instance handles.
-    // Safe when Aftermath was never enabled.
     Aftermath::Shutdown();
 }
 
@@ -2049,8 +2028,7 @@ bool BackendContext::beginFrame(const BackBufferResizeCallbacks& callbacks){
             &m_swapChainIndex
         );
 
-        // VK_SUBOPTIMAL_KHR still returns an acquired image; render it instead of
-        // recreating the swap chain around a signaled acquire semaphore.
+        // Render acquired suboptimal images before recreating the swapchain.
         if(res == VK_ERROR_OUT_OF_DATE_KHR && attempt < s_MaxRetryCountAcquireNextImage - 1){
             if(callbacks.beforeResize)
                 callbacks.beforeResize(callbacks.userData);

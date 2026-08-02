@@ -149,11 +149,7 @@ void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
 }
 
 bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& targets){
-    // The shadow-visibility image is the shared output of the shadow subsystem: both the hardware ray-traced
-    // and the software-BVH backends write per-light colored transmittance into it, one Texture2DArray layer
-    // per shadow slot (NWB_SCENE_SHADOW_SLOT_COUNT). The deferred lighting pass always samples it, so it is
-    // allocated unconditionally and cleared to "all lit" (white) each frame (then overwritten by whichever
-    // backend runs) to keep a single binding/shader path regardless of ray-tracing support.
+    // Deferred lighting always samples this per-slot transmittance target.
     targets.shadowVisibilityFormat = Core::Format::RGBA16_FLOAT;
 
     Core::TextureDesc visibilityDesc;
@@ -172,11 +168,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         return false;
     }
 
-    // Stage-2 adaptive transparent shadow scratch: a HALF-res sibling of the visibility target (same slot layers, RGBA16F)
-    // the coarse software trace writes one transmittance per 2x2 block into and the adaptive resolve interpolates/refines.
-    // Allocated alongside the visibility target so it shares the resize lifecycle (resetDeferredFrameTargets rebuilds the
-    // SW shadow heap-slot payload, which selects whichever coarse handle is current). Round UP so a coarse texel covers its 2x2
-    // block even for odd extents -- matching the caustic half-res buffers.
+    // Round up half-resolution scratch so odd extents retain coverage.
     targets.shadowCoarseTransmittanceFormat = Core::Format::RGBA16_FLOAT;
     Core::TextureDesc coarseDesc;
     coarseDesc
@@ -194,12 +186,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         return false;
     }
 
-    // Soft opaque shadow HALF-res targets: the two ping-pong soft buffers (RGBA16F Texture2DArrays, one
-    // layer per shadow slot -- the jittered trace writes A, the a-trous resolve alternates A<->B, the upsample
-    // reads B into the full-res visibility) + the single-layer packed geometry cache (octahedral normal + camera
-    // distance + validity) the geometry downsample fills for the edge-stop. Half the render extent (rounded up so a
-    // half texel covers its SOFT_FACTOR block for odd extents), matching the caustic half-res buffers. Allocated with
-    // the visibility target so they share the resize lifecycle (resetDeferredFrameTargets rebuilds the resolve set).
+    // Ping-pong half-resolution soft visibility and geometry cache.
     targets.shadowSoftFormat = Core::Format::RGBA16_FLOAT;
     targets.shadowSoftGeometryFormat = Core::Format::RGBA16_FLOAT;
     const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
@@ -243,12 +230,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         return false;
     }
 
-    // Soft opaque shadow TEMPORAL accumulation HALF-res targets: the accumulated-visibility + moments ping-pong
-    // Texture2DArrays (mirror softHalfADesc: NWB_SCENE_SHADOW_SLOT_COUNT layers, UAV) + the previous-frame single-layer
-    // geometry cache (mirror softGeometryDesc). Allocated here so they share the resize lifecycle; a freshly (re)created
-    // history holds no valid samples, so re-seed the temporal state (the next merge treats every pixel as n=0 = pure
-    // current) and invalidate the stashed prev-frame worldToClip so a resize can't reproject through a stale matrix into
-    // freshly-allocated garbage history.
+    // Recreated history must not reproject through the previous target's matrix.
     Core::TextureDesc shadowHistADesc = softHalfADesc;
     shadowHistADesc.setName("engine/shadow/hist_a");
     targets.shadowHistA = graphics().createTexture(shadowHistADesc);
@@ -289,12 +271,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     rayTracingState().m_prevWorldToClipValid = false;
     rayTracingState().m_softShadowHistoryFrontIsA = 1u;
 
-    // Soft COLORED TRANSPARENT shadow HALF-res targets: the PARALLEL colored pipeline's buffers -- the raw colored
-    // soft trace output + its accumulated-visibility & moments ping-pong (mirroring the opaque set exactly: same softHalfADesc
-    // format/extent/layers/UAV). The geometry cache + prevWorldToClip are SHARED (not duplicated). Allocated here so they
-    // share the resize lifecycle; the transparent history uses the SAME m_softShadowHistoryFrontIsA selector as the opaque
-    // history (one frame-end flip covers both), so a freshly (re)created transparent history is covered by the temporal
-    // re-seed above (the first merge treats every pixel as n=0 = pure current).
+    // Transparent temporal history shares geometry and the opaque history selector.
     Core::TextureDesc transparentSoftHalfDesc = softHalfADesc;
     transparentSoftHalfDesc.setName("engine/shadow/transparent_soft_half");
     targets.transparentSoftHalf = graphics().createTexture(transparentSoftHalfDesc);
@@ -331,7 +308,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         return false;
     }
 
-    // Intentionally provision one record/pixel (not per active light); writes and indirect count are clamped, and overflowed edges use interpolated transmittance.
+    // Edge records are capped at one per pixel; overflow falls back to interpolation.
     const u32 edgeListCapacityRecords = targets.width * targets.height;
     Core::BufferDesc edgeListDesc;
     edgeListDesc
@@ -389,7 +366,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
-    // All resources are selected by global heap slots; transition every backing object explicitly.
+    // Heap-selected resources still need explicit state transitions.
     commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -398,10 +375,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
     commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
     commandList.setAccelStructState(rayTracingState().m_tlas.get(), Core::ResourceStates::AccelStructRead);
 
-    // When the soft resources are ready this frame and at least one light holds a shadow slot, route the HW opaque shadow
-    // through the same half-res soft denoise chain the SW path uses. The HW opaque-soft RayQuery trace casts SPP
-    // cone-jittered opaque rays per half-res pixel into shadowSoftHalfA, then the shared
-    // dispatchSoftShadowDenoiseAndTransparentFold denoises it into the full-res visibility.
+    // Hardware tracing shares the half-resolution soft-shadow resolve when available.
     if(rayTracingState().m_softShadowReady && rayTracingState().m_shadowSoftPipeline && rayTracingState().m_softShadowSlotMask != 0u){
         const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
         const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
@@ -411,13 +385,11 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
-        // Enable UAV barriers on the soft buffers + geometry cache for the resolve (mirror the SW soft block). The
-        // trace write of soft-A -> the direct first wavelet / merge reads it; soft-B + geometry are resolve scratch.
+        // Resolve reuses the trace outputs as UAV/SRV scratch.
         commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
         commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
         commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
-        // Temporal accumulator buffers: enable UAV barriers so the merge's history/moments writes are ordered before the
-        // direct first a-trous wavelet reads the accumulated history as an SRV. No-op when temporal is off (no merge).
+        // Temporal merge writes history before the wavelet pass reads it.
         if(rayTracingState().m_softShadowTemporalReady){
             commandList.setEnableUavBarriersForTexture(targets.shadowHistA.get(), true);
             commandList.setEnableUavBarriersForTexture(targets.shadowHistB.get(), true);
@@ -425,9 +397,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
             commandList.setEnableUavBarriersForTexture(targets.shadowMomentsB.get(), true);
         }
 
-        // HW opaque-soft trace: one cone-jittered opaque RayQuery sample-set per HALF-res pixel into soft-A (all slot
-        // lights at once). Advance the per-frame cone-jitter seed once (the HW RayQuery path is the primary shadow
-        // producer this frame, mutually exclusive with the no-RT software traversal).
+        // Advance the jitter sequence once for the primary shadow producer.
         const u32 frameIndex = rayTracingState().m_softShadowFrameIndex++;
 
         {
@@ -458,21 +428,16 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
             commandList.dispatch(softGroupsX, softGroupsY, 1u);
         }
 
-        // Preserve the UAV write boundary before the heap-selected resolve reads soft-A as an SRV.
+        // Preserve the trace-to-resolve UAV boundary.
         commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
-        // Denoise the half-res soft-A trace into the full-res visibility. When m_softTransparentReady is true, the same
-        // chain also traces colored transmittance against the transparent-only software scene BVH and multiplies the
-        // denoised result onto the soft-opaque visibility. Otherwise this produces only the soft opaque shadow, and
-        // system.cpp may run the hybrid multiply fallback.
+        // The resolve optionally folds transparent software transmittance.
         dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, frameIndex, softGroupsX, softGroupsY);
         return true;
     }
 
-    // Soft path not ready -> the existing FULL-resolution 1-spp inline-RayQuery fallback (never a regression). One
-    // occlusion ray per output pixel, written straight into the full-res visibility array the deferred lighting samples.
-    // The shader reads its dispatch bounds from the output's own dimensions.
+    // Full-resolution inline-RayQuery fallback.
     commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
 
@@ -487,8 +452,6 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         shadowState.setPipeline(rayTracingState().m_shadowPipeline.get());
         commandList.setComputeState(shadowState);
         heap.bindCompute(commandList, *rayTracingState().m_shadowPipeline.get(), rayTracingState().m_tlasHeapHandle);
-        // Soft shadow cone-jitter: advance the per-frame seed once here. A soft light samples inside its source cone; a
-        // zero-radius light jitters to the axis exactly and keeps the hard-shadow result.
         ShadowRqPushConstants shadowPush;
         shadowPush.frameIndex = rayTracingState().m_softShadowFrameIndex++;
         shadowPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
@@ -510,33 +473,21 @@ void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandL
     if(!targets.shadowVisibility)
         return;
 
-    // White (full transmittance) across every slot layer = fully lit. This is the default the deferred
-    // lighting pass samples whenever no shadow backend wrote the image this frame (ray tracing unavailable,
-    // no trace-able geometry, or a trace that could not be dispatched), and the value every light without a
-    // shadow slot keeps.
+    // White transmittance is the all-lit fallback.
     commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.clearTextureFloat(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
 }
 
 bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets, bool multiplyOntoOpaque){
-    // Software shadow traversal. Two callers:
-    //  - No-RayQuery fallback (multiplyOntoOpaque=false): the only shadow backend; traces ALL occluders and OVERWRITES
-    //    the visibility (opaque blocks + transparent tints).
-    //  - Hybrid on RT hardware (multiplyOntoOpaque=true): the HW RayQuery pass (renderShadowVisibility) already wrote
-    //    the opaque binary mask; this traces the TRANSPARENT-ONLY scene BVH and MULTIPLIES its colored transmittance
-    //    onto that mask. Whether the SW scene BVH holds all occluders or only the transparent ones is decided by
-    //    buildSceneSwBvh; this pass only needs to know to multiply rather than overwrite.
+    // Hybrid mode folds transparent software transmittance onto the hardware opaque mask.
     if(!targets.shadowVisibility)
         return false;
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
     NWB_ASSERT(deferredState().m_lightBuffer);
-    // No software scene BVH this frame (no traceable instances) -> the caller clears the mask to all-lit.
     if(!rayTracingState().m_sceneBvhNodeBuffer || rayTracingState().m_sceneBvhInstanceCount == 0u)
         return false;
-    // Every decomposed pass uses the global heap. Validate the selector and persistent work-buffer generations before
-    // recording any dispatch; target storage handles are recreated with the deferred target generation.
     if(!rayTracingState().m_swShadowOpaquePrepassPipeline || rayTracingState().m_swShadowMeshCount == 0u)
         return false;
 
@@ -561,34 +512,27 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, graphics().getDevice(), commandList);
 
-    // The per-mesh BVH node buffers were left in UnorderedAccess by the build pass; stage every heap-selected
-    // software traversal input before dispatch.
+    // BVH build leaves traversal inputs in UAV state.
     transitionSwShadowTraversalResources(commandList);
     if(rayTracingState().m_shadowInstanceBuffer)
         commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-    // The trace selects its G-buffer, scene-shading, and light-list inputs through the descriptor heap, so their
-    // resource states are explicit because the heap does not encode them.
     commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
     commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    // The two software sub-passes that write the visibility UAV (the opaque pre-pass + the transparent resolve/multiply)
-    // need a UAV barrier between them, and the Stage-2 coarse->resolve handoff needs one on the coarse texture. Enable
-    // UAV barriers on both so each commitBarriers between dispatches syncs the read-after-write hazard on the same image.
+    // Subsequent passes read/write these UAVs in place.
     commandList.setEnableUavBarriersForTexture(targets.shadowVisibility.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.shadowCoarseTransmittance.get(), true);
     commandList.commitBarriers();
 
-    // Set 0 is the automatically bound push-only gap; each pass state carries no local descriptor object.
     const auto passState = [&](const Core::ComputePipelineHandle& pipeline){
         Core::ComputeState state;
         state.setPipeline(pipeline.get());
         return state;
     };
 
-    // SW traversal accesses every resource through the descriptor heap, so bind tables after each ComputeState.
     const auto bindPassHeap = [&](const Core::ComputePipelineHandle& pipeline){
         heap.bindCompute(commandList, *pipeline.get());
     };
@@ -617,17 +561,12 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
     const u32 coarseGroupsX = DivideUp(coarseWidth, groupSize);
     const u32 coarseGroupsY = DivideUp(coarseHeight, groupSize);
 
-    // Set true once the soft colored-transparent fold has multiplied its denoised transmittance onto the soft-opaque
-    // visibility. The transparent coarse/adaptive/uniform fallback below is skipped so the colored shadow is not folded
-    // twice.
+    // Skip the fallback after a soft transparent fold.
     bool softTransparentRan = false;
 
-    // No-RayQuery software path: there is no HW opaque mask, so first write the full-res OPAQUE binary mask, then fold the
-    // transparent colored shadow onto it. This mirrors the hybrid path (HW opaque mask + transparent) while keeping hard
-    // opaque shadows full-res sharp.
+    // Software-only mode first creates the opaque mask.
     if(!multiplyOntoOpaque){
-        // The soft pipeline overwrites every slot's visibility at upsample, so skip the full-res opaque prepass when
-        // soft will run; keep it as the fallback when soft is not ready this frame.
+        // Soft upsample overwrites the opaque prepass.
         const bool softWillRun = rayTracingState().m_softShadowReady && rayTracingState().m_softShadowSlotMask != 0u;
         if(!softWillRun){
             commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
@@ -641,36 +580,26 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
         }
 
-        // Sync before the transparent pass. The opaque mask (the prepass, or the soft resolve below, wrote shadowVisibility)
-        // -> the transparent pass reads+multiplies it: a write->read/write hazard the visibility UAV barrier covers, so it
-        // stays UnorderedAccess. The transparent coarse pass writes its own storage image next.
+        // The transparent pass reads and multiplies the opaque mask in place.
         commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
-        // Soft opaque shadow (all light types): half-res jittered opaque trace (directional softens by its constant angular
-        // radius, point/spot by the distance-dependent cone their source sphere subtends -- the jitter is type-aware inside
-        // the trace) -> geometry downsample -> a-trous denoise -> bilateral upsample, OVERWRITING every slot's full-res
-        // visibility. Runs only when the resolve resources are ready this frame AND at least one light holds a shadow slot
-        // (softWillRun); else the full-res prepass mask above is the shadow (a clean fallback). The transparent pass below
-        // still folds its colored shadow onto the (now soft) opaque mask, so transparent colored shadow keeps working.
+        // Soft opaque resolve replaces the full-resolution mask.
         if(softWillRun){
             const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
             const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
             const u32 softGroupsX = DivideUp(softHalfWidth, groupSize);
             const u32 softGroupsY = DivideUp(softHalfHeight, groupSize);
 
-            // Advance the per-frame cone-jitter seed once (the no-RT software traversal is the primary shadow producer
-            // this frame, mutually exclusive with the HW RayQuery path).
+            // Advance the primary producer's jitter sequence once.
             const u32 frameIndex = rayTracingState().m_softShadowFrameIndex++;
 
-            // Soft opaque trace: one cone-jittered opaque visibility sample per HALF-res pixel into soft-A (all slot
-            // lights at once). Enable UAV barriers on the soft buffers + geometry cache for the resolve.
+            // Resolve reads the soft trace and geometry scratch in place.
             commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
             commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
             commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
-            // Stage-3 temporal accumulator buffers retain UAV ordering before the heap-selected merge/resolve changes
-            // their sampled/storage roles. No-op when temporal is off (the merge never dispatches).
+            // Temporal merge writes history before later reads.
             if(rayTracingState().m_softShadowTemporalReady){
                 commandList.setEnableUavBarriersForTexture(targets.shadowHistA.get(), true);
                 commandList.setEnableUavBarriersForTexture(targets.shadowHistB.get(), true);
@@ -700,29 +629,19 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
                 commandList.dispatch(softGroupsX, softGroupsY, 1u);
             }
 
-            // Preserve the UAV write boundary before the heap-selected resolve changes soft-A to ShaderResource.
+            // Preserve the trace-to-resolve UAV boundary.
             commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
 
-            // Denoise the half-res soft-A trace into the full-res visibility (geometry downsample -> per-slot temporal
-            // merge + a-trous resolve -> the guarded soft transparent trace+fold -> deferred temporal finalization). Backend-
-            // agnostic: it reads ONLY the shared soft/temporal buffers + the G-buffer, so the SAME helper serves the HW
-            // opaque-soft trace (which wrote soft-A above via the RayQuery pipeline). softTransparentRan mirrors the fold's
-            // effect (the helper's fold sets it internally iff m_softTransparentReady): the transparent fallback below is
-            // then skipped exactly as before so the colored shadow is not double-folded.
+            // Shared resolve also guards against a second transparent fold.
             dispatchSoftShadowDenoiseAndTransparentFold(commandList, targets, frameIndex, softGroupsX, softGroupsY);
             softTransparentRan = rayTracingState().m_softTransparentReady;
         }
     }
 
-    // Transparent colored-shadow fallback (coarse/adaptive/uniform multiply). Skipped when the soft transparent fold ran;
-    // the two paths are exclusive per slot so the colored shadow is never double-folded.
+    // Fallback transparent fold; it is mutually exclusive with the soft path.
     if(!softTransparentRan && rayTracingState().m_swShadowAdaptiveEnabled){
-        // Adaptive transparent shadow. Shared base: the coarse trace. The resolve is either an in-place conditional
-        // re-trace or, when compacted mode is enabled, classify+append -> build-args -> DispatchIndirect trace. The
-        // compacted path launches only edge rays as coherent waves instead of a full-res grid that diverges on edge lanes.
-        // Edge-fraction instrumentation rides a slow cadence: snapshot the GPU counter every s_SwShadowEdgeStatsPeriod
-        // ticks and read it back s_SwShadowEdgeStatsLogDelay ticks later (by then GPU-complete, so the map never stalls).
+        // Compacted mode traces only classified edge records; stats are sampled asynchronously.
         const bool compact = rayTracingState().m_swShadowCompactEnabled;
         const u32 tick = rayTracingState().m_swShadowEdgeStatsTick++;
         const bool snapshot =
@@ -737,8 +656,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.commitBarriers();
         }
 
-        // Transparent coarse: one transparent trace per coarse block written into the coarse buffer (colored
-        // transmittance only). Shared base for both the compacted and the Stage-2 adaptive resolve.
+        // Coarse transmittance feeds both adaptive resolve modes.
         commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
@@ -752,13 +670,12 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         commandList.setPushConstants(&coarsePush, sizeof(coarsePush));
         commandList.dispatch(coarseGroupsX, coarseGroupsY, 1u);
 
-        // Sync the coarse buffer before the resolve UAV-reads it (UAV write -> UAV read on the same image).
+        // Synchronize the coarse write before resolve.
         commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
 
         if(compact){
-            // Compacted resolve. Reset the per-frame append counter; the list needs no clear because the indirect trace
-            // reads only indices below the clamped count, all written this frame. Stage the compaction buffers writable.
+            // The append list is bounded by this frame's reset counter.
             commandList.setEnableUavBarriersForBuffer(rayTracingState().m_swShadowEdgeCounterBuffer.get(), true);
             commandList.setEnableUavBarriersForBuffer(rayTracingState().m_swShadowEdgeListBuffer.get(), true);
             commandList.clearBufferUInt(rayTracingState().m_swShadowEdgeCounterBuffer.get(), 0u);
@@ -767,9 +684,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.setBufferState(rayTracingState().m_swShadowIndirectArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
 
-            // Classify (Stage-3): classify each pixel/light; interior -> interpolate + fold in place; edge -> append to
-            // the list and leave the PRISTINE opaque mask for the indirect trace's single overwrite. collectStats tallies
-            // the fraction on snapshots.
+            // Classify interpolated interiors and append traceable edges.
             commandList.setBufferState(rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
@@ -787,14 +702,13 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.setPushConstants(&classifyPush, sizeof(classifyPush));
             commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
 
-            // Sync the append counter + edge list (classify producer -> buildargs/indirect consumers) and the visibility
-            // WAW (interior/overflow writes -> indirect edge overwrites). UAV barriers are enabled on all three.
+            // Classify produces the list and in-place visibility writes.
             commandList.setBufferState(rayTracingState().m_swShadowEdgeCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.setBufferState(rayTracingState().m_swShadowEdgeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
 
-            // Build args: 1 thread builds DispatchIndirectArguments{ceil(count/64),1,1} from the clamped append count.
+            // Build indirect dispatch arguments from the clamped list count.
             commandList.setBufferState(rayTracingState().m_swShadowIndirectArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
             SwShadowHeapPushConstants argsPush = makePush();
@@ -805,14 +719,11 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.setPushConstants(&argsPush, sizeof(argsPush));
             commandList.dispatch(1u, 1u, 1u);
 
-            // Sync the args write before the indirect consume, and keep the list/counter readable by the indirect trace.
+            // Indirect dispatch consumes the generated arguments and list.
             commandList.setBufferState(rayTracingState().m_swShadowEdgeCounterBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.setBufferState(rayTracingState().m_swShadowEdgeListBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
 
-            // Indirect trace: DispatchIndirect over the compacted edge records, one ray per thread. Its ComputeState
-            // carries the indirect-args buffer; setComputeState auto-transitions it
-            // UnorderedAccess->IndirectArgument.
             SwShadowHeapPushConstants tracePush = makePush();
             tracePush.width = targets.width;
             tracePush.height = targets.height;
@@ -828,7 +739,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             commandList.dispatchIndirect(0u);
         }
         else{
-            // Stage-2 resolve: full-res adaptive (interpolate interior / re-trace edges in place, fold onto the opaque mask).
+            // Full-resolution adaptive fallback.
             commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.setBufferState(rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::ResourceStates::UnorderedAccess);
@@ -847,7 +758,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         }
 
         if(snapshot){
-            // Snapshot the counter into the CPU-readable buffer; the map happens s_SwShadowEdgeStatsLogDelay ticks later.
+            // Readback is delayed until its submission completes.
             commandList.setBufferState(rayTracingState().m_swShadowEdgeStatsBuffer.get(), Core::ResourceStates::CopySource);
             commandList.commitBarriers();
             commandList.copyBuffer(
@@ -900,8 +811,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
         }
     }
     else if(!softTransparentRan){
-        // Non-adaptive baseline: uniform transparent multiply at HALF resolution, one trace per 2x2 block folded onto
-        // each full-res pixel's own opaque mask. Kept for comparison against the adaptive path.
+        // Non-adaptive half-resolution transparent fallback.
         commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
         SwShadowHeapPushConstants pushConstants = makePush();
@@ -933,8 +843,7 @@ bool RendererRayTracingSystem::softTransparentShadowReady()const noexcept{
 }
 
 void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const{
-    // Full/half RayQuery trace layouts are push-only. The deferred selector, G-buffers, output StorageImage, and TLAS
-    // are all global descriptor-heap selections.
+    // Trace layouts are push-only; resources come from the global heap.
     static_assert(sizeof(ShadowRqSoftPushConstants) >= sizeof(ShadowRqPushConstants), "shadow-trace push-constant range must cover both the hard and soft trace push structs");
     layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowRqSoftPushConstants)));
 }
@@ -944,8 +853,6 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
         return true;
     if(rayTracingState().m_shadowPipelineFailed)
         return false;
-    // Hardware shadow trace is inline RayQuery in a COMPUTE shader (not the RT pipeline), so it needs RayQuery +
-    // the acceleration structure feature (the TLAS it queries).
     if(!graphics().queryFeatureSupport(Core::Feature::RayQuery) || !graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
         rayTracingState().m_shadowPipelineFailed = true;
         return false;
@@ -962,7 +869,6 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
     if(!rayTracingState().m_shadowBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Set 0 contains only the push range; the TLAS and every ordinary resource are heap-addressed.
         appendShadowTraceBindingLayout(layoutDesc);
 
         rayTracingState().m_shadowBindingLayout = device.createBindingLayout(layoutDesc);
@@ -1010,7 +916,6 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
         return true;
     if(rayTracingState().m_shadowSoftPipelineFailed)
         return false;
-    // Same feature gate as the hard trace: inline RayQuery in a COMPUTE shader against the TLAS.
     if(!graphics().queryFeatureSupport(Core::Feature::RayQuery) || !graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)){
         rayTracingState().m_shadowSoftPipelineFailed = true;
         return false;
@@ -1024,8 +929,7 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
         return false;
     }
 
-    // The soft trace REUSES the shared shadow binding layout (identical trace context; only the bound visibility-output
-    // texture differs). ensureShadowPipeline creates it; the HW prepare branch runs that before this, so it is resident.
+    // Soft and hard traces share their push-only layout.
     if(!rayTracingState().m_shadowBindingLayout){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow binding layout missing for the soft RayQuery pipeline"));
         rayTracingState().m_shadowSoftPipelineFailed = true;
@@ -1065,9 +969,6 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
 }
 
 bool RendererRayTracingSystem::ensureSwShadowPipeline(){
-    // Idempotent: the shared layout and persistent compaction buffers are created once (guarded by
-    // m_swShadowBindingLayout), and each per-pass pipeline creation below is guarded by its own handle. A hard failure
-    // is sticky.
     if(rayTracingState().m_swShadowPipelineFailed)
         return false;
 
@@ -1082,7 +983,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
     if(!rayTracingState().m_swShadowBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Every selector, writable target, and work buffer is heap-addressed by one fixed push ABI.
+        // All pass resources are selected through the fixed push ABI.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwShadowHeapPushConstants)));
 
         rayTracingState().m_swShadowBindingLayout = device.createBindingLayout(layoutDesc);
@@ -1092,10 +993,6 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
             return false;
         }
 
-        // The transparent adaptive config is fixed at its shipping defaults (adaptive ON, compact ON, edge threshold 0.1,
-        // stats OFF -- see renderer_state.h). Create the persistent edge-fraction counter + its CPU-readable
-        // snapshot: both are tiny and always bound (the shader always declares slots 15/16), so they exist alongside the
-        // layout regardless of the config -- the config only selects the dispatched mode + whether stats are tallied.
 
         Core::BufferDesc edgeStatsDesc;
         edgeStatsDesc
@@ -1126,9 +1023,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
             return false;
         }
 
-        // Stage-3 compaction: the persistent per-frame append counter (2 u32) + the indirect dispatch-args buffer (3 u32,
-        // created BOTH UAV-writable -- build-args writes it -- AND isDrawIndirectArgs so dispatchIndirect's validateIndirectBuffer
-        // accepts it). The variable-size edge list is allocated per-resolution in createShadowVisibilityTarget.
+        // Compaction uses a persistent counter and UAV-writable indirect-args buffer.
         Core::BufferDesc edgeCounterDesc;
         edgeCounterDesc
             .setByteSize(static_cast<u64>(sizeof(u32) * NWB_SW_SHADOW_EDGE_COUNTER_SIZE))
@@ -1172,7 +1067,6 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         return false;
     }
 
-    // One named pipeline per pass, all against the shared push-only layout. Each kernel consumes the same heap-slot map.
     const bool passesReady =
         ensureSwShadowPassPipeline(rayTracingState().m_swShadowOpaquePrepassShader, rayTracingState().m_swShadowOpaquePrepassPipeline, AssetsGraphicsShadow::s_SwOpaquePrepassShaderName, "ECSRender_SwShadowOpaquePrepass")
         && ensureSwShadowPassPipeline(rayTracingState().m_swShadowSoftOpaqueShader, rayTracingState().m_swShadowSoftOpaquePipeline, AssetsGraphicsShadow::s_SwSoftOpaqueShaderName, "ECSRender_SwShadowSoftOpaque")
@@ -1192,9 +1086,6 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
 }
 
 bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const char* debugLabel){
-    // Idempotent per-pass loader + compute-pipeline creator against the SHARED software-shadow binding layout (created by
-    // ensureSwShadowPipeline before any pass is built). Returns true if the pipeline is already/newly resident; a failure
-    // here bubbles up to fail the whole SW shadow ensure for the frame.
     if(pipeline)
         return true;
 
@@ -1212,7 +1103,6 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
         .setComputeShader(shader)
         .addBindingLayout(rayTracingState().m_swShadowBindingLayout)
     ;
-    // Every SW shadow pass requires the global resource/sampler heap layouts.
     Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
@@ -1222,8 +1112,6 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
     ;
     pipeline = graphics().getDevice().createComputePipeline(pipelineDesc);
     if(!pipeline){
-        // debugLabel identifies the failing pass in the shader-load path already; keep the message argument-free (the
-        // NWB_TEXT log string is wide, and debugLabel is a narrow const char* the wide formatter cannot consume).
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create software shadow compute pipeline"));
         return false;
     }
@@ -1231,9 +1119,7 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
 }
 
 bool RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instanceCount){
-    // The per-instance occluder material table is CPU-written each frame and read by the shadow shaders, so it
-    // is a structured SRV (no UAV) that grows by doubling like the TLAS / scene-instance buffers. Shared by the
-    // hardware and software backends (only one runs per frame), built lockstep with that backend's instances.
+    // CPU-uploaded material context is shared by the exclusive HW/SW backends.
     if(rayTracingState().m_shadowInstanceMaterialBuffer && rayTracingState().m_shadowInstanceMaterialCapacity >= instanceCount)
         return ensureRayTraceMaterialContextHeapHandle(
             *rayTracingState().m_shadowInstanceMaterialBuffer.get(),
@@ -1267,9 +1153,7 @@ bool RendererRayTracingSystem::ensureShadowInstanceMaterialBuffer(usize instance
 }
 
 bool RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceCount){
-    // Shadow-owned combined instance buffer (g_NwbMeshInstances for the trace): InstanceGpuData per occluder,
-    // structured SRV, grows by doubling like the draw pass's instance buffer. Built each frame over ALL gathered
-    // occluders so the trace's surface hook can resolve the mutable storage offset that lives in translation.w.
+    // Shadow tracing needs an instance record for every gathered occluder.
     if(instanceCount == 0u)
         return !rayTracingState().m_shadowInstanceBuffer || ensureRayTraceMaterialContextHeapHandle(
             *rayTracingState().m_shadowInstanceBuffer.get(),
@@ -1303,9 +1187,7 @@ bool RendererRayTracingSystem::ensureShadowInstanceContextBuffer(usize instanceC
 }
 
 bool RendererRayTracingSystem::ensureShadowMaterialTypedBuffer(usize byteCount){
-    // Shadow-owned combined material-typed buffer (g_NwbMaterialTypedWords for the trace): each occluder's
-    // constant + mutable typed blocks, word-strided structured SRV, grows by doubling like the draw pass's typed
-    // buffer. Always at least one word so the binding is valid even with no transparent occluders.
+    // Keep one word so the heap binding remains valid with no transparent occluders.
     usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
     requiredByteCount = AlignUp(requiredByteCount, sizeof(u32));
     if(rayTracingState().m_shadowMaterialTypedBuffer && rayTracingState().m_shadowMaterialTypedCapacity >= requiredByteCount)
@@ -1340,9 +1222,6 @@ bool RendererRayTracingSystem::uploadShadowMaterialContextBuffers(
     const InstanceGpuDataVector& instanceData,
     const MaterialTypedByteDataVector& materialTypedBytes
 ){
-    // The combined typed buffer always has content (at minimum the padded word reserved below) so the trace's
-    // material-context binding is always valid; the instance buffer may be empty only when no occluder resolved a
-    // material, in which case the trace never indexes it (no transparent hit dispatches).
     usize uploadBytes = 0u;
     if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes, uploadBytes))
         return false;

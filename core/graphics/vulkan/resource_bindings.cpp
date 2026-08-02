@@ -80,7 +80,7 @@ VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages){
     return flags;
 }
 
-// Descriptor-buffer offset alignment clamped to a 32-bit value (1 when zero/oversized) for byte-offset math.
+// Clamp descriptor-buffer alignment for 32-bit byte offsets.
 u32 GetDescriptorBufferOffsetAlignmentBytes(const VulkanContext& context){
     const VkDeviceSize alignment = context.descriptorBufferProperties.descriptorBufferOffsetAlignment;
     return (alignment == 0 || alignment > UINT32_MAX) ? 1u : static_cast<u32>(alignment);
@@ -211,9 +211,7 @@ void DestroyPipelineAndOwnedLayout(
     }
 }
 
-// The descriptor-buffer segment a binding's descriptors live in. Samplers go in the dedicated sampler
-// segment (RADV requires a separate buffer binding for sampler descriptors); every other descriptor-buffer type
-// lives in the resource segment.
+// Samplers occupy their dedicated descriptor-buffer segment.
 constexpr DescriptorBufferSegmentKind::Enum GetDescriptorBufferSegmentKind(ResourceType::Enum type){
     return type == ResourceType::Sampler ? DescriptorBufferSegmentKind::Sampler : DescriptorBufferSegmentKind::Resource;
 }
@@ -238,9 +236,7 @@ constexpr bool IsSupportedDescriptorBindingType(ResourceType::Enum type){
     }
 }
 
-// Descriptor-buffer layouts must be decided before vkCreateDescriptorSetLayout. A layout created with
-// VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT cannot be reinterpreted as a descriptor set, and a
-// mixed sampler/resource shape is therefore rejected.
+// Descriptor-buffer layouts cannot be reinterpreted as ordinary descriptor sets.
 bool IsDescriptorBufferBackendReady(const VulkanContext& context){
     return context.extensions.EXT_descriptor_buffer
         && context.descriptorBufferManager
@@ -316,8 +312,7 @@ constexpr bool UsesDescriptorBufferInfo(ResourceType::Enum type){
     }
 }
 
-// Supported register-space resource type for a global descriptor-heap layout. Immutable layouts may declare a
-// one-descriptor acceleration-structure surface; mutable ResourceDescriptorHeap/SamplerDescriptorHeap tables do not.
+// Global heap resource type; TLAS uses its own immutable one-descriptor layout.
 constexpr bool IsBindlessRegisterSpaceType(ResourceType::Enum type){
     return IsSupportedDescriptorBindingType(type);
 }
@@ -519,8 +514,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
         descriptorSetLayoutCount += layout->m_descriptorSetLayouts.size();
     }
 
-    // Determine each layout's descriptor-set placement. Push-constant-only pipeline-local layouts use positional
-    // assignment; resource-bearing global-heap layouts pin themselves to explicit reserved high sets (8/9/10).
+    // Global heaps pin to reserved sets 8/9/10; local push-only layouts remain positional.
     const auto layoutSetIndex = [](const BindingLayout& layout, const u32 positional, bool& outExplicit) -> u32{
         if(const BindlessLayoutDesc* bindlessDesc = layout.getBindlessDesc()){
             outExplicit = true;
@@ -538,7 +532,6 @@ bool Device::createPipelineLayoutForBindingLayouts(
     }
 
 
-    // All layouts are descriptor-buffer layouts. No ordinary descriptor-set pipeline path exists.
     for(const auto& bindingLayout : bindingLayouts){
         const auto* layout = bindingLayout.get();
         if(!layout || !layout->isDescriptorBufferCompatible()){
@@ -562,7 +555,6 @@ bool Device::createPipelineLayoutForBindingLayouts(
     }
 
     if(!anyExplicitSet){
-        // Positional path: concatenate every layout's sets in list order.
         descriptorSetLayouts.reserve(descriptorSetLayoutCount);
         for(const auto& bindingLayout : bindingLayouts){
             auto* layout = bindingLayout.get();
@@ -573,8 +565,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
         NWB_ASSERT(descriptorSetLayouts.size() == descriptorSetLayoutCount);
     }
     else{
-        // Explicit-index path: place each layout's set(s) at its target index and fill every unused set in between with
-        // the cached descriptor-buffer empty layout so the pipeline layout is dense from set 0 (Vulkan requires no holes).
+        // Fill unused sets with empty descriptor-buffer layouts; Vulkan permits no gaps.
         const VkDescriptorSetLayout fillSetLayout = getOrCreateEmptyDescriptorBufferSetLayout();
         if(fillSetLayout == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor-buffer explicit-set placement needs the empty descriptor-buffer gap-set layout, which is unavailable"), operationName);
@@ -679,13 +670,7 @@ void Device::appendPipelineShaderStage(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// VK_EXT_descriptor_buffer manager
-//
-// Two HOST-mapped VkBuffers sub-allocated by byte offset through a shared free-range list + bump pointer. Descriptor
-// buffers use their own usage bits, their own offset alignment (descriptorBufferOffsetAlignment), and write
-// descriptors through vkGetDescriptorEXT (VkDescriptorGetInfoEXT + VkDescriptorDataEXT), which natively encodes
-// acceleration-structure handles. Descriptor-buffer-compatible pipelines consume these segments through
-// CommandList's descriptor-buffer binding path; the renderer has no ordinary descriptor-set transport.
+// VK_EXT_descriptor_buffer manager for mapped resource and sampler segments.
 
 
 DescriptorBufferManager::DescriptorBufferManager(const VulkanContext& context, VulkanAllocator& allocator)
@@ -706,15 +691,10 @@ bool DescriptorBufferManager::initialize(){
 
     const auto& props = m_context.descriptorBufferProperties;
 
-    // One global segment per type. RADV advertises multi-GB address spaces for both; we cap at modest working sizes
-    // since the segments are HOST-mapped and persist for device life. The suballocator only ever hands out what gets
-    // written, so the reservation is virtual from a memory-pressure standpoint only.
+    // Cap persistent mapped segment reservations at practical working sizes.
     constexpr u32 s_TargetResourceSegmentBytes = 32u * 1024u * 1024u;
     constexpr u32 s_TargetSamplerSegmentBytes = 2u * 1024u * 1024u;
 
-    // Segment offsets are intentionally 32-bit, but a driver may advertise a larger address space than this manager
-    // chooses to reserve. Only the alignment participates in our offset arithmetic; capacities are clamped to the
-    // modest targets below before conversion to u32.
     if(props.descriptorBufferOffsetAlignment == 0 || props.descriptorBufferOffsetAlignment > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer offset alignment is outside the supported 32-bit range."));
         return false;
@@ -837,8 +817,7 @@ DescriptorBufferSegment DescriptorBufferManager::allocate(const DescriptorBuffer
         result.sizeBytes = sizeBytes;
         result.allocationSerial = segment.nextAllocationSerial++;
         clearAllocation(result);
-        // Keep live ranges ordered by byte offset. writeDescriptor() can then locate the only possible owner with a
-        // binary search instead of walking every persistent descriptor-buffer allocation on every descriptor update.
+        // Ordered live ranges allow binary-search ownership checks.
         usize insertIndex = 0u;
         while(
             insertIndex < segment.liveAllocations.size()
@@ -997,7 +976,6 @@ void DescriptorBufferManager::free(const DescriptorBufferSegment& segment){
         return true;
     };
 
-    // Merge newly inserted range with its right neighbor, then re-merge leftward to coalesce a fully surrounded hole.
     if(mergeAdjacentAt(insertIndex))
         mergeAdjacentAt(insertIndex);
     if(insertIndex > 0)
@@ -1027,8 +1005,6 @@ bool DescriptorBufferManager::writeDescriptor(
         return false;
     }
 
-    // Sampler is the one type that lives in the separate sampler segment (RADV requires samplers in their own
-    // descriptor buffer binding); every other type writes into the resource segment.
     const bool isSampler = (descriptorType == VK_DESCRIPTOR_TYPE_SAMPLER);
     const DescriptorBufferSegmentKind::Enum expectedKind = isSampler
         ? DescriptorBufferSegmentKind::Sampler
@@ -1073,9 +1049,7 @@ bool DescriptorBufferManager::writeDescriptor(
         );
         return false;
     }
-    // liveAllocations stays ordered by offset, so only the range immediately preceding dstOffsetBytes can own the
-    // requested descriptor bytes. Match its full allocation identity, not just its byte range, so a stale segment
-    // cannot target a newly recycled allocation at the same offset.
+    // Validate full live-allocation identity to reject stale recycled ranges.
     usize first = 0u;
     usize last = storage.liveAllocations.size();
     while(first < last){
@@ -1103,14 +1077,12 @@ bool DescriptorBufferManager::writeDescriptor(
     auto getInfo = VulkanDetail::MakeVkStruct<VkDescriptorGetInfoEXT>(VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT);
     getInfo.type = descriptorType;
 
-    // vkGetDescriptorEXT writes through these stack locals; their lifetimes must cover the call.
     VkDescriptorAddressInfoEXT addressInfo{};
     VkDescriptorImageInfo imageInfo{};
     VkSampler samplerHandle = VK_NULL_HANDLE;
     VkDeviceAddress accelStructAddress = 0;
 
     if(VulkanDetail::UsesDescriptorBufferInfo(item.type)){
-        // Uniform/storage buffer (non-texel): device-address range.
         auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
         if(!buffer)
             return false;
@@ -1180,8 +1152,7 @@ bool DescriptorBufferManager::writeDescriptor(
             break;
         }
         case ResourceType::RayTracingAccelStruct:{
-            // The TLAS heap path. vkGetDescriptorEXT directly encodes the acceleration-structure device address in
-            // the descriptor-buffer block selected for this generation.
+            // TLAS descriptor directly encodes the generation's device address.
             auto* as = checked_cast<AccelStruct*>(item.resourceHandle);
             if(!as)
                 return false;
@@ -1361,8 +1332,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
         return nullptr;
     }
 
-    // Pipeline-local layouts carry push constants only, so their descriptor-buffer block is intentionally empty.
-    // Resource-bearing descriptor blocks are owned exclusively by GpuDescriptorHeap.
+    // Local push-only layouts have no descriptor bytes.
     layout->m_descriptorBufferCompatible = true;
 
     return BindingLayoutHandle(layout, BindingLayoutHandle::deleter_type(&m_context.objectArena), AdoptRef);
@@ -1439,7 +1409,6 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     }
 
     auto layoutInfo = VulkanDetail::MakeVkStruct<VkDescriptorSetLayoutCreateInfo>(VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO);
-    // Descriptor buffers have a fixed, driver-queried block sized for the layout's full descriptorCount.
     layoutInfo.flags |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
     layoutInfo.bindingCount = static_cast<u32>(bindings.size());
     layoutInfo.pBindings = bindings.data();
@@ -1512,9 +1481,7 @@ void CommandList::bindDescriptorBufferHeap(
     const VkPipelineLayout pipelineLayout,
     const GpuDescriptorHandle accelStructHandle
 ){
-    // Descriptor-buffer heap bind. Pipelines always embed resource/sampler at reserved sets 8/9. Hardware TLAS consumers
-    // additionally embed the fixed AS layout at set 10 and pass a handle whose descriptor-buffer block is immutable
-    // for that TLAS generation. The descriptor data was written at heap write() time; this only selects offsets.
+    // Bind global resource/sampler sets and optional immutable TLAS generation at 8/9/10.
     if(!m_currentCmdBuf || pipelineLayout == VK_NULL_HANDLE)
         return;
     if(!heap.isInitialized())
@@ -1550,16 +1517,13 @@ void CommandList::bindDescriptorBufferHeap(
         return;
     }
 
-    // Bind both segments once for this command buffer (idempotent with the empty-set bind; the driver accepts a
-    // re-bind at the same addresses). The order (resource=0, sampler=1) matches the manager's indices.
     VkDescriptorBufferBindingInfoEXT bindingInfos[2] = {
         m_context.descriptorBufferManager->getResourceBindingInfo(),
         m_context.descriptorBufferManager->getSamplerBindingInfo()
     };
     vkCmdBindDescriptorBuffersEXT(m_currentCmdBuf->m_cmdBuf, 2u, bindingInfos);
 
-    // The heap sets occupy the manager's two segments: resource -> resource segment, sampler -> sampler segment,
-    // optional TLAS -> resource segment. They are contiguous at 8/9/10, so one API call selects all required blocks.
+    // Resource, sampler, and TLAS heap sets are contiguous at 8/9/10.
     const u32 resourceIndex = m_context.descriptorBufferManager->getResourceBufferIndex();
     const u32 samplerIndex = m_context.descriptorBufferManager->getSamplerBufferIndex();
     const u32 bufferIndices[3] = { resourceIndex, samplerIndex, resourceIndex };
@@ -1586,9 +1550,7 @@ void CommandList::bindDescriptorBufferEmptySet(const VkPipelineBindPoint bindPoi
     if(!m_context.descriptorBufferManager || !m_context.descriptorBufferManager->isEnabled())
         return;
 
-    // Set 0 is always a descriptor-buffer empty/push-constant layout. It has no descriptor bytes, but selecting
-    // the resource segment's aligned zero offset establishes descriptor-buffer state for the push-only gap. All
-    // resource-bearing sets are selected separately by the global heap.
+    // Select empty set 0 to establish descriptor-buffer state for push-only layouts.
     VkDescriptorBufferBindingInfoEXT bindingInfos[2] = {
         m_context.descriptorBufferManager->getResourceBindingInfo(),
         m_context.descriptorBufferManager->getSamplerBindingInfo()

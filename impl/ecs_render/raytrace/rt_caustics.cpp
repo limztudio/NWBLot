@@ -26,8 +26,7 @@ static constexpr AStringView s_HwRaygenExportName = "CausticHwRayGen";
 static constexpr AStringView s_HwMissExportName = "CausticHwMiss";
 static constexpr AStringView s_HwHitGroupExportName = "CausticHwHitGroup";
 
-// A caustic resolve target role. Each ping-pong target has both a sampled read slot and a StorageImage write slot;
-// the dispatch selects the non-aliasing input/output pair through push constants.
+// A ping-pong resolve target with sampled and storage slots.
 struct CausticResolvePassResources{
     Core::Texture* texture = nullptr;
     u32 sampledSlot = 0u;
@@ -45,11 +44,7 @@ struct CausticResolvePassResources{
 
 
 bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
-    // Caustic emission-target gather (CPU only): collect the world-space AABB of every refractive instance in
-    // the scene -- the domain the caustic photon producer aims at. Runs once per frame regardless of the shadow
-    // backend (HW TLAS or SW BVH); mirrors buildSceneSwBvh's mesh/transform resolve + 8-corner world AABB but does
-    // NOT require a software BVH and keeps ONLY instances whose material is refractive. The count gates caustic-light
-    // assignment (see ResolveCausticLights): zero refractive instances -> zero caustic lights.
+    // Photon emission targets are world bounds of refractive instances.
     rayTracingState().m_causticRefractiveInstanceCount = 0u;
 
     auto* meshSystem = world().getSystem<NWB::Impl::MeshSystem>();
@@ -78,13 +73,9 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
             resolvedMesh,
             mesh
         );
-        // Need valid object-space bounds to build a world AABB; the per-mesh BVH / position buffers (required by
-        // the SW shadow trace) are NOT required here -- the emission target is geometry-agnostic.
         if(!meshReady || !mesh || !mesh->csgLocalBounds.valid())
             continue;
 
-        // Only refractive instances are emission targets (the producer's classification, mirroring buildSceneTlas
-        // / buildSceneSwBvh's MaterialSurfaceInfo.refractive read).
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(!m_renderer.materialSystem().findMaterialSurfaceInfo(renderer.material, materialInfo))
             continue;
@@ -102,13 +93,10 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
             : MatrixIdentity()
         ;
 
-        // Use the shared 8-corner transform so caustic targets and the scene BVH retain identical world bounds.
         SIMDVector localMin = LoadFloatInt(mesh->csgLocalBounds.minBounds);
         SIMDVector localMax = LoadFloatInt(mesh->csgLocalBounds.maxBounds);
         if(resolvedMesh.runtime){
-            // Inflate the bind-pose extent about its center (component-wise, in SIMD) for a deforming refractor (no
-            // per-frame CPU bound exists); keeps the photon emission domain over a skinned pose that reaches past the
-            // rest bounds. center = (min+max)/2; half = (max-min)/2 * inflation; [min,max] = center -+ half.
+            // Conservative deformation inflation keeps skinned refractors in the emission domain.
             const SIMDVector center = VectorMultiply(VectorAdd(localMin, localMax), VectorReplicate(0.5f));
             const SIMDVector half = VectorMultiply(VectorSubtract(localMax, localMin), VectorReplicate(0.5f * s_CausticRuntimeBoundsInflation));
             localMin = VectorSubtract(center, half);
@@ -132,8 +120,6 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
 
     const u32 targetCount = static_cast<u32>(targets.size());
     if(targetCount == 0u){
-        // No refractive instances: leave the resident buffer untouched, keep the count zero (every light's
-        // caustic slot stays -1 downstream), and reset the combined extent.
         rayTracingState().m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
         rayTracingState().m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
         rayTracingState().m_causticRefractiveInstanceCount = 0u;
@@ -154,9 +140,6 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
     StoreFloat(combinedMax, &rayTracingState().m_causticTargetBoundsMax);
     rayTracingState().m_causticRefractiveInstanceCount = targetCount;
 
-    // No temporal motion-reject / reprojection: the resolve is a purely SPATIAL a-trous wavelet denoise (no history),
-    // so a moving (even non-rigidly morphing) caustic is ghost-free by construction -- nothing here needs to track or
-    // reseed on refractor motion.
     return true;
 }
 
@@ -213,27 +196,15 @@ bool RendererRayTracingSystem::ensureCausticMaterialContextSlotsHeapHandle(){
 }
 
 bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& targets){
-    // Additive caustic producer targets, the inverted-lifecycle sibling of the shadow visibility target. The
-    // deferred lighting pass always samples the resolved irradiance (nwbBxdfCausticIrradiance), so it is allocated
-    // unconditionally and cleared to BLACK each frame (the additive identity, vs the shadow buffer's white) to keep
-    // a single binding/shader path regardless of whether a caustic producer ran:
-    //  - causticIrradiance:  RGBA16F FULL-res, the resolve's UPSAMPLE output the lighting adds pre-tonemap.
-    //  - causticAccumulator: R32_UINT FULL-res, one Texture2DArray layer per RGB channel, the fixed-point splat target the
-    //                        producer InterlockedAdds into (no float image atomics exist on the backend).
-    //  - causticHistory / causticResolveHalf: the two HALF-res RGBA16F ping-pong buffers for the half-res a-trous wavelet
-    //                        (the prepare pass writes causticHistory, the wavelet alternates the two, the final lands in
-    //                        whichever the upsample reads back to the full-res irradiance). Half-res = 1/4 the pixels.
+    // Full-res additive targets with half-res temporal resolve ping-pong.
     targets.causticIrradianceFormat = Core::Format::RGBA16_FLOAT;
     targets.causticAccumulatorFormat = Core::Format::R32_UINT;
     targets.causticHistoryFormat = Core::Format::RGBA16_FLOAT;
 
-    // A (re)created accumulator holds no valid splat history, so re-seed the splat-space temporal EMA: the next
-    // temporal-enabled frame clears the accumulator instead of decaying it. (This runs on the initial create AND on a
-    // resize, both of which allocate a fresh accumulator texture.)
+    // Fresh accumulators reseed the temporal EMA.
     rayTracingState().m_causticAccumulatorInitialized = false;
     rayTracingState().m_causticTemporalReuseFrameCount = 0u;
 
-    // Round UP so a half-res pixel always covers its 2x2 full-res block even for odd extents.
     const u32 halfWidth = (targets.width + 1u) / 2u;
     const u32 halfHeight = (targets.height + 1u) / 2u;
 
@@ -243,10 +214,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         .setHeight(targets.height)
         .setFormat(targets.causticIrradianceFormat)
         .setInUAV(true)
-        // Hardware caustics run in the independent Graphics packet while normal deferred lighting samples this
-        // resolved output on AsyncCompute. The packet dependency supplies execution/memory ordering; concurrent
-        // sharing avoids an ownership round trip every frame and keeps both hardware and software producer routes
-        // valid on a device with distinct queue families.
+        // Graphics production and async deferred lighting share this target concurrently.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/caustic/irradiance")
     ;
@@ -256,10 +224,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         return false;
     }
 
-    // Surfel-GI resolved irradiance: full-res RGBA16F. The surfel_resolve_cs COMPUTE pass gathers the surfel field once
-    // per pixel into this (rgb = indirect irradiance, a = 1 where a surfel covered the pixel); the deferred lighting
-    // samples it instead of the read-write surfel pool -- keeping the pool off the lighting dispatch eliminates the
-    // frames-in-flight pool race. Same lifecycle as causticIrradiance (full-res, recreated on resize).
+    // Deferred lighting samples resolved surfel GI, never the writable pool.
     targets.surfelIrradianceFormat = Core::Format::RGBA16_FLOAT;
     Core::TextureDesc surfelIrradianceDesc;
     surfelIrradianceDesc
@@ -275,8 +240,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         return false;
     }
 
-    // Half-res surfel producer: the resolve gathers into this (1/HALF_FACTOR each axis); surfel_upsample_cs reconstructs
-    // the full-res surfelIrradiance above. Same RGBA16F format; transient (no clear -- written + read within the GI block).
+    // Transient half-resolution surfel resolve input.
     Core::TextureDesc surfelIrradianceHalfDesc;
     surfelIrradianceHalfDesc
         .setWidth(DivideUp(targets.width, static_cast<u32>(NWB_SURFEL_RESOLVE_HALF_FACTOR)))
@@ -335,7 +299,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         return false;
     }
 
-    // Half-res geometry cache (xyz = world, w = receiver validity) for the resolve's per-tap edge-stop geometry.
+    // Half-resolution geometry cache for edge-aware resolve.
     Core::TextureDesc geometryDesc;
     geometryDesc
         .setWidth(halfWidth)
@@ -356,21 +320,13 @@ void RendererRayTracingSystem::clearCausticTargets(Core::CommandList& commandLis
     if(!targets.causticIrradiance || !targets.causticAccumulator)
         return;
 
-    // Per-frame reset of the additive caustic targets. Black irradiance = the additive identity (the inverse of the
-    // shadow buffer's white default): the value the deferred lighting samples whenever no caustic producer ran this
-    // frame, so the additive term is a pixel-identical no-op. Always cleared.
+    // Black is the additive no-op when no producer runs.
     commandList.setTextureState(targets.causticIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.clearTextureFloat(targets.causticIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
 
-    // The accumulator is the R32_UINT fixed-point splat target (one Texture2DArray layer per RGB channel). When the
-    // splat-space temporal EMA is ENABLED (NWB_CAUSTIC_TEMPORAL_DECAY > 0) it must PERSIST across frames -- the producer
-    // decays it in place instead of clearing (prepareCausticAccumulatorForSplat) -- so it is NOT cleared here. When
-    // temporal is disabled it is a per-frame target and is cleared to 0 here. The a-trous scratch causticHistory needs no
-    // clear either way because every wavelet pass fully overwrites it.
+    // Temporal splat accumulation persists; non-temporal accumulation is cleared per frame.
     if(causticTemporalDecay() <= 0.f){
-        // A later re-enable must bootstrap from a fresh full/two-phase sequence rather than treating the repeatedly
-        // cleared accumulator as converged temporal history.
         rayTracingState().m_causticAccumulatorInitialized = false;
         rayTracingState().m_causticTemporalReuseFrameCount = 0u;
         commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::CopyDest);
@@ -385,8 +341,7 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
     Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
     NWB_ASSERT(heap.isInitialized());
 
-    // Every resolve access is selected by a global heap slot. Descriptor heaps are invisible to automatic resource-state
-    // tracking, so stage every input/output explicitly and retain UAV barriers across the ping-pong hand-offs.
+    // Heap-selected resolve resources need explicit transitions and UAV ordering.
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
     commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::ShaderResource);
     commandList.setEnableUavBarriersForTexture(targets.causticHistory.get(), true);
@@ -394,7 +349,6 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
     commandList.setEnableUavBarriersForTexture(targets.causticResolveGeometry.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.causticIrradiance.get(), true);
 
-    // The resolve runs at HALF resolution (1/4 the pixels); only the final UPSAMPLE dispatches at full res.
     const u32 halfWidth = (targets.width + 1u) / 2u;
     const u32 halfHeight = (targets.height + 1u) / 2u;
     const u32 halfGroupsX = DivideUp(halfWidth, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
@@ -402,9 +356,7 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
     const u32 fullGroupsX = DivideUp(targets.width, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const u32 fullGroupsY = DivideUp(targets.height, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
 
-    // Geometry downsample pre-pass: fill the half-res geometry cache (world position + receiver validity) ONCE, so the
-    // PREPARE + WAVELET passes tap one half-res texel for the edge-stop geometry instead of re-reading the full-res
-    // world-position + depth G-buffer at the half pixel's 2x location every a-trous tap.
+    // Downsample geometry once for all edge-aware wavelet taps.
     {
         commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -428,9 +380,7 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
         commandList.dispatch(halfGroupsX, halfGroupsY, 1u);
     }
 
-    // Splat-space temporal EMA normalization: with decay enabled the accumulator holds the EMA accum = photons/(1-decay)
-    // at the static steady state, so pre-multiply the exposure by (1-decay) to keep the STATIC caustic brightness
-    // byte-unchanged vs the non-temporal path. Disabled (decay <= 0) -> factor 1, the exposure is exactly s_CausticIntensity.
+    // Normalize temporal accumulation to retain non-temporal brightness.
     const f32 temporalDecay = causticTemporalDecay();
     const f32 effectiveIntensity = (temporalDecay > 0.f) ? (s_CausticIntensity * (1.f - temporalDecay)) : s_CausticIntensity;
 
@@ -438,8 +388,6 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
         NWB_ASSERT(input.texture);
         NWB_ASSERT(output.texture);
         NWB_ASSERT(input.texture != output.texture);
-        // The selected wavelet input never aliases this pass's output (the ping-pong invariant), so every heap access
-        // can retain an explicit, unambiguous state transition.
         commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(input.texture, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -470,9 +418,7 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
         commandList.dispatch(groupsX, groupsY, 1u);
     };
 
-    // PREPARE+DOWNSAMPLE (half-res): sum each half-res pixel's 2x2 accumulator block, un-scale + area-normalize ONCE into
-    // the prepared buffer the wavelet reads. The target is seeded by parity so the ping-pong always ENDS in half-B (the
-    // upsample input) regardless of PASS_COUNT: an even count starts in half-B, an odd count in half-A.
+    // Seed parity so the final ping-pong result always lands in half-B.
     const bool prepareToHalfB = (static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) % 2u) == 0u;
     const __hidden_caustics::CausticResolvePassResources halfA{
         targets.causticHistory.get(),
@@ -495,30 +441,19 @@ void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& command
         1u, CausticResolveStage::PrepareDownsample, halfGroupsX, halfGroupsY
     );
 
-    // Half-res edge-avoiding a-trous wavelet passes at a doubling dilation. Each pass writes the buffer NOT holding its
-    // input. srcIsHalfB tracks where the latest result lives, seeded from the prepare target so after PASS_COUNT passes
-    // the final result is in half-B.
+    // Edge-aware half-resolution wavelet passes.
     bool srcIsHalfB = prepareToHalfB;
     for(u32 pass = 0u; pass < static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT); ++pass){
         runPass(srcIsHalfB ? halfB : halfA, srcIsHalfB ? halfA : halfB, 1u << pass, CausticResolveStage::Wavelet, halfGroupsX, halfGroupsY);
         srcIsHalfB = !srcIsHalfB;
     }
 
-    // UPSAMPLE (full-res): edge-aware bilateral resample of the final half-res caustic (half-B) into the full-res
-    // irradiance buffer the deferred lighting adds.
+    // Edge-aware upsample into deferred-lighting irradiance.
     runPass(halfB, irradiance, 1u, CausticResolveStage::Upsample, fullGroupsX, fullGroupsY);
 }
 
 void RendererRayTracingSystem::prepareCausticAccumulatorForSplat(Core::CommandList& commandList, DeferredFrameTargets& targets, f32 decayFactor){
-    // Splat-space temporal EMA step, run at the top of the SW/HW producer when temporal is enabled (decayFactor > 0).
-    // clearCausticTargets left the accumulator untouched (the clear is deferred to here), so exactly ONE of two paths
-    // runs per frame:
-    //  - First enabled frame (or the frame after a resize/invalidation): the accumulator holds no valid history, so clear
-    //    it to 0. The producer then splats a normal single-frame caustic on top -- identical to the pre-temporal frame 0.
-    //  - Every later frame: dispatch the decay pass (accum_N = decayFactor*accum_{N-1}) in place; the producer atomic-adds
-    //    this frame's photons on top, so the accumulator holds the EMA. A UAV barrier between the decay dispatch and the
-    //    producer's atomic-adds (setEnableUavBarriersForTexture + commitBarriers) syncs the read-after-write on the image.
-    // Both paths leave the accumulator in UnorderedAccess for the producer's atomic-adds.
+    // Bootstrap temporal accumulation once; later frames decay before atomic splats.
     if(!rayTracingState().m_causticAccumulatorInitialized){
         rayTracingState().m_causticAccumulatorInitialized = true;
         commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::CopyDest);
@@ -550,14 +485,12 @@ void RendererRayTracingSystem::prepareCausticAccumulatorForSplat(Core::CommandLi
         1u
     );
 
-    // Sync the decay's UAV writes before the producer's atomic-adds hit the same image.
+    // Order decay writes before photon atomic adds.
     commandList.commitBarriers();
 }
 
 bool RendererRayTracingSystem::hasCausticWork()const noexcept{
-    // The software caustic producer runs only on the no-hardware-ray-tracing path, and only when the scene holds at
-    // least one caustic light AND at least one refractive instance (else the black-cleared irradiance buffer is the
-    // additive no-op). The SW scene BVH must also have been built (it is the same geometry the photons trace).
+    // Software photons require a caustic light, refractor, and software scene BVH.
     const bool hardwareShadowSupported =
         graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
         && graphics().queryFeatureSupport(Core::Feature::RayQuery)
@@ -581,12 +514,7 @@ bool RendererRayTracingSystem::hasCausticWork()const noexcept{
 }
 
 bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTargets& targets){
-    // Build the heap-only producer + resolve pipelines, mirroring the SW shadow prepare. Called from
-    // the render-prepare path after the SW scene BVH + caustic emission targets are ready. Gated on the prepare-time
-    // facts (refractive instances gathered + the SW scene BVH built + the emission-target buffer resident); the
-    // caustic-LIGHT gate lives in renderGpuBvhCaustics (the light count is resolved later, in the render pass). This
-    // keeps the heap slots ready the same frame the gate first opens. A failure leaves the producer idle (the
-    // black-cleared caustic buffer remains the additive no-op).
+    // Prepare heap-only software pipelines once geometry and emission targets exist.
     if(graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct) && graphics().queryFeatureSupport(Core::Feature::RayQuery))
         return true;
     if(
@@ -621,8 +549,6 @@ bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTarget
         ensureCausticGeometryDownsamplePipeline()
         && ensureCausticResolvePipeline()
     ;
-    // The splat-space temporal EMA decay pre-pass is only dispatched when temporal is enabled (decay > 0); gate its
-    // pipeline on that so the disabled path never builds it.
     const bool temporalReady =
         causticTemporalDecay() <= 0.f
         || ensureCausticAccumulatorDecayPipeline()
@@ -650,10 +576,7 @@ bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameT
 }
 
 bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    // Software caustic photon producer + resolve — the no-hardware-ray-tracing fallback. Dispatched in the
-    // SW-fallback branch right after the SW shadow pass and BEFORE deferred lighting (which reads the resolved
-    // irradiance). The accumulators were already cleared to black by clearCausticTargets this frame. Runs only when
-    // hasCausticWork() holds (>=1 caustic light AND >=1 refractive instance), so an empty buffer = additive no-op.
+    // Software photon producer runs before deferred lighting.
 
     if(!hasCausticWork())
         return false;
@@ -673,15 +596,10 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, graphics().getDevice(), commandList);
 
-        // Splat-space temporal EMA step (enabled paths only): decay the resident accumulator (or clear it on the first
-        // frame / after a resize) before this frame's splat. clearCausticTargets skipped the accumulator clear when
-        // temporal is on, so this owns the accumulator's per-frame reset. No-op when temporal is disabled (the
-        // accumulator was already cleared to 0 by clearCausticTargets).
         if(temporalDecay > 0.f)
             prepareCausticAccumulatorForSplat(commandList, targets, temporalDecay);
 
-        // Heap descriptors are invisible to automatic resource-state tracking, so stage every shared traversal input
-        // alongside this pass's caustic emission, target, and view resources.
+        // Heap-selected traversal inputs need explicit state transitions.
         transitionSwShadowTraversalResources(commandList);
         commandList.setBufferState(rayTracingState().m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_causticEmissionTargetBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -699,9 +617,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         pushConstants.width = targets.width;
         pushConstants.height = targets.height;
         pushConstants.instanceCount = rayTracingState().m_sceneBvhInstanceCount;
-        // SW temporal reuse: bootstrap with the original two-phase checkerboard, then use four interleaved 2x2 phases
-        // after the EMA warm-up. gridSide stays the FULL emission grid side; photonCount is gridSide^2 / phaseCount, so
-        // the physical flux formula scales each photon to retain the same expected full-domain power.
+        // Temporal sampling phases retain the full-domain flux.
         pushConstants.photonCount = photonCount;
         pushConstants.emissionTargetCount = rayTracingState().m_causticRefractiveInstanceCount;
         pushConstants.gridSide = s_CausticSwPhotonGridSide;
@@ -718,13 +634,12 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(Core::CommandList& commandLi
         Core::ComputeState computeState;
         computeState.setPipeline(rayTracingState().m_swCausticPipeline.get());
         commandList.setComputeState(computeState);
-        // SW caustic traversal accesses every resource through the global descriptor heap.
         Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
         NWB_ASSERT(heap.isInitialized());
         heap.bindCompute(commandList, *rayTracingState().m_swCausticPipeline.get());
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         commandList.dispatch(DivideUp(photonCount, static_cast<u32>(NWB_CAUSTIC_SW_GROUP_SIZE)), 1u, 1u);
-        // Advance the interleaved phase and convergence count only after a producer dispatch was recorded.
+        // Advance temporal phase only after recording a producer dispatch.
         rayTracingState().m_swCausticFrameIndex = rayTracingState().m_swCausticFrameIndex + 1u;
         advanceCausticTemporalReuse();
     }
@@ -761,7 +676,7 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
     if(!rayTracingState().m_swCausticBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Every selector and resource is a heap entry selected by the push block. Keep set 0 push-only.
+        // Set 0 is push-only; resources come from the global heap.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticPhotonPushConstants)));
 
         rayTracingState().m_swCausticBindingLayout = device.createBindingLayout(layoutDesc);
@@ -788,7 +703,7 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
         .setComputeShader(rayTracingState().m_swCausticShader)
         .addBindingLayout(rayTracingState().m_swCausticBindingLayout)
     ;
-    // Pin the global resource and sampler layouts at their fixed heap sets. Set 0 remains push-only.
+    // Global heap layouts occupy their fixed sets.
     pipelineDesc
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
@@ -819,7 +734,7 @@ bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
     if(!rayTracingState().m_causticResolveBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Every input and output uses a target-generation heap slot. Keep set 0 push-only.
+        // Target-generation resources are selected through the push block.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticResolvePushConstants)));
 
         rayTracingState().m_causticResolveBindingLayout = device.createBindingLayout(layoutDesc);
@@ -876,7 +791,6 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
     if(!rayTracingState().m_causticGeometryDownsampleBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // G-buffer reads and geometry-cache output are global heap entries selected by this push block.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticGeometryDownsamplePushConstants)));
 
         rayTracingState().m_causticGeometryDownsampleBindingLayout = device.createBindingLayout(layoutDesc);
@@ -917,15 +831,11 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
 }
 
 f32 RendererRayTracingSystem::causticTemporalDecay(){
-    // Splat-space temporal EMA decay factor: 0.85 = a moderate ~6-7 frame time constant that de-sparkles a spinning
-    // refractor while still following its motion. The renderer-state value is clamped to [0,1), so the EMA cannot diverge.
     return rayTracingState().m_causticTemporalDecay;
 }
 
 u32 RendererRayTracingSystem::causticTemporalPhaseCount(){
-    // A disabled EMA has no history to recombine, so it must retain the full photon grid. Once the resident EMA has
-    // received enough accepted producer updates, its existing history safely fills the three untouched 2x2 phases while
-    // this frame traces only the fourth.
+    // Reuse phases only after temporal history warms up.
     if(causticTemporalDecay() <= 0.f)
         return 1u;
     return rayTracingState().m_causticTemporalReuseFrameCount < s_CausticTemporalWarmupFrameCount
@@ -960,7 +870,7 @@ bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
     if(!rayTracingState().m_causticAccumulatorDecayBindingLayout){
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        // The accumulator StorageImage is selected by the push block; set 0 is push-only.
+        // The accumulator is heap-selected through push constants.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticAccumulatorDecayPushConstants)));
 
         rayTracingState().m_causticAccumulatorDecayBindingLayout = device.createBindingLayout(layoutDesc);
@@ -1019,12 +929,8 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     }
 
     if(!rayTracingState().m_hwCausticBindingLayout){
-        // The fixed set-10 block supplies the TLAS. The photon push block selects every other resource, including the
-        // selector payloads and accumulator. The closest-hit fetches per-corner attributes through material-record heap
-        // slots, so no per-mesh geometry arrays belong to set 0.
         Core::BindingLayoutDesc layoutDesc(arena());
         layoutDesc.setVisibility(Core::ShaderType::AllRayTracing);
-        // Set 0 carries only the photon push constants.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticPhotonPushConstants)));
 
         rayTracingState().m_hwCausticBindingLayout = device.createBindingLayout(layoutDesc);
@@ -1048,14 +954,11 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     }
 
     Core::RayTracingPipelineDesc pipelineDesc(arena());
-    // Payload = NwbCausticHwPayload (3*float3 + 2*float + 2*uint = 52 bytes); round up to 64. Recursion stays 1 (the
-    // shared bounce loop drives the bounces via a fresh TraceRay per segment, not shader recursion).
+    // The iterative bounce loop needs no shader recursion.
     pipelineDesc.setMaxPayloadSize(static_cast<u32>(sizeof(f32) * 16u));
     pipelineDesc.setMaxRecursionDepth(1u);
     pipelineDesc.addBindingLayout(rayTracingState().m_hwCausticBindingLayout);
-    // Pin the global resource (set 8), sampler (set 9), and TLAS (set 10) layouts onto the hardware caustic
-    // ray-tracing pipeline. The local caustic RT layout remains positional set 0; the heap layouts carry explicit high
-    // set indices and createPipelineLayoutForBindingLayouts gap-fills sets 1-7.
+    // Preserve global resource, sampler, and TLAS heap sets.
     pipelineDesc.addBindingLayout(heap.getResourceLayout());
     pipelineDesc.addBindingLayout(heap.getSamplerLayout());
     pipelineDesc.addBindingLayout(heap.getAccelStructLayout());
@@ -1095,9 +998,7 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
 }
 
 bool RendererRayTracingSystem::hasHwCausticWork()const noexcept{
-    // The hardware caustic producer runs only on the hardware-ray-tracing path, and only when the scene holds at
-    // least one caustic light AND at least one refractive instance (else the black-cleared irradiance buffer is the
-    // additive no-op). The TLAS + at least one tracked mesh must exist so the photon has geometry to hit.
+    // Hardware photons require a caustic light, refractor, TLAS, and tracked mesh.
     return graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
         && rayTracingState().m_causticLightCount > 0u
         && rayTracingState().m_causticRefractiveInstanceCount > 0u
@@ -1116,10 +1017,7 @@ bool RendererRayTracingSystem::hasHwCausticWork()const noexcept{
 }
 
 bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& targets){
-    // Build the hardware caustic producer + resolve resources, mirroring prepareGpuBvhCausticResources for the HW
-    // path. Gated on the prepare-time invariants (refractive instances + the TLAS + tracked meshes + emission targets
-    // + the caustic targets + the view buffer); the caustic-LIGHT gate lives in renderHwCaustics (the light count is
-    // resolved later, in the render pass). A non-HW device early-returns true (nothing to build here).
+    // Prepare hardware resources once geometry and emission targets exist.
     if(!graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return true;
     if(
@@ -1154,8 +1052,6 @@ bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& t
         ensureCausticGeometryDownsamplePipeline()
         && ensureCausticResolvePipeline()
     ;
-    // The splat-space temporal EMA decay pre-pass is only dispatched when temporal is enabled (decay > 0); gate its
-    // pipeline on that so the disabled path never builds it.
     const bool temporalReady =
         causticTemporalDecay() <= 0.f
         || ensureCausticAccumulatorDecayPipeline()
@@ -1164,10 +1060,7 @@ bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& t
 }
 
 bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    // Hardware ray-traced caustic photon producer + resolve -- the byte-parallel sibling of renderGpuBvhCaustics,
-    // dispatched in the HW branch right after the shadow pass + clearCausticTargets and BEFORE deferred lighting. The
-    // raygen runs the SHARED iterative bounce loop (recursion 1) over the TLAS and splats into the SAME R32_UINT
-    // accumulator the SAME resolve consumes, so the HW + SW paths converge to the same caustic (Monte-Carlo A/B).
+    // Hardware photons share the accumulator and resolve with the software reference.
     if(!hasHwCausticWork())
         return false;
     NWB_ASSERT(targets.bindless.valid());
@@ -1194,16 +1087,10 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, graphics().getDevice(), commandList);
 
-        // Splat-space temporal EMA step (enabled paths only): decay the resident accumulator (or clear it on the first
-        // frame / after a resize) before this frame's splat. Byte-identical to the SW producer's temporal step.
         if(temporalDecay > 0.f)
             prepareCausticAccumulatorForSplat(commandList, targets, temporalDecay);
 
-        // Move the per-mesh attribute byte buffers to ShaderResource (the heap descriptors the closest-hit reads by
-        // attributeSlot point at them, so they still need the transition) + the shadow-owned material context + the
-        // emission/view buffers. The G-buffer, selector payloads, and accumulator are also heap-selected, so stage all
-        // resources explicitly. HW caustics needs no index buffer because the fixed-function intersector supplies the
-        // hit triangle.
+        // Heap-selected hit attributes and inputs need explicit state transitions.
         for(u32 slot = 0u; slot < rayTracingState().m_shadowMeshCount; ++slot)
             commandList.setBufferState(rayTracingState().m_shadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
         commandList.setBufferState(rayTracingState().m_shadowInstanceMaterialBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -1221,13 +1108,7 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.commitBarriers();
 
-        // Push constants byte-identical to the SW producer (same struct + same constants) so the photon grid / flux /
-        // emission / jitter match the SW reference exactly. instanceCount is the live TLAS instance count (the SW
-        // scene-BVH count is zero on the HW path), used only as the raygen's non-zero geometry guard.
-        //
-        // HW temporal reuse: byte-identical to the SW producer -- bootstrap with two checkerboard phases, then use four
-        // interleaved 2x2 phases after the EMA warm-up. gridSide remains the FULL emission side and photonCount is the
-        // per-frame grid budget, so nwbCausticCreatePhoton keeps expected full-domain power invariant.
+        // Hardware and software producers use matching photon parameters.
         CausticPhotonPushConstants pushConstants;
         pushConstants.width = targets.width;
         pushConstants.height = targets.height;
@@ -1248,24 +1129,19 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
         Core::RayTracingState rayTracingPassState;
         rayTracingPassState.setShaderTable(rayTracingState().m_hwCausticShaderTable.get());
         commandList.setRayTracingState(rayTracingPassState);
-        // Closest-hit accesses corner attributes through the descriptor heap, so bind its blocks after the
-        // RayTracingState and before dispatchRays. Set 10 selects the TLAS generation.
+        // Bind heap blocks after RayTracingState; set 10 selects the TLAS generation.
         Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
         heap.bindRayTracing(commandList, *rayTracingState().m_hwCausticPipeline.get(), rayTracingState().m_tlasHeapHandle);
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
-        // Dispatch one ray per photon over gridSide x (gridSide/phaseCount), so raygen's flattened photonIndex equals
-        // the SW dispatch index and exactly photonCount rays launch without wasted early-out threads. The grid side
-        // scales per build config (dbg 128 / opt+fin 512); photon flux remains energy-conserving at either budget.
         Core::RayTracingDispatchRaysArguments dispatchArgs;
         dispatchArgs.setDimensions(s_CausticHwPhotonGridSide, s_CausticHwPhotonGridSide / temporalPhaseCount, 1u);
         commandList.dispatchRays(dispatchArgs);
-        // Advance the interleaved phase and convergence count only after a producer dispatch was recorded.
+        // Advance temporal phase only after recording a producer dispatch.
         rayTracingState().m_hwCausticFrameIndex = rayTracingState().m_hwCausticFrameIndex + 1u;
         advanceCausticTemporalReuse();
     }
 
-    // Identical resolve to the SW path: the shared heap-selected a-trous wavelet denoise.
     dispatchCausticResolve(commandList, targets);
 
     if(!rayTracingState().m_hwCausticDispatchLogged){
@@ -1282,10 +1158,7 @@ bool RendererRayTracingSystem::renderHwCaustics(Core::CommandList& commandList, 
 }
 
 bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCount){
-    // The caustic emission-target list is CPU-written each frame and read by the caustic producer, so it is a
-    // structured SRV (no UAV) that grows by doubling like the scene-BVH / instance-material buffers. It owns a
-    // persistent StorageBuffer heap descriptor: capacity replacement acquires a new slot before retiring the old
-    // one, preserving already-recorded photon dispatches until the heap's deferred-free quarantine drains.
+    // Replace the heap slot before retiring the old emission-target buffer.
     auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
@@ -1329,8 +1202,7 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
         .setByteSize(static_cast<u64>(sizeof(NwbCausticEmissionTargetGpu) * capacity))
         .setStructStride(sizeof(NwbCausticEmissionTargetGpu))
         .setDebugName(Name("caustic_emission_targets"))
-        // Graphics uploads this per-frame list during preparation; dedicated AsyncCompute reads it for either photon
-        // producer. It is a shared read-only input after the upload, never an ownership-transfer result.
+        // Graphics upload and async photon reads share this immutable per-frame input.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;

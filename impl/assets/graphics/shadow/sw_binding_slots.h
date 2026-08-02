@@ -13,44 +13,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Software (compute) shadow traversal pass — the no-hardware-ray-tracing fallback. One thread per pixel
-// reads the G-buffer, casts one occlusion ray per light through the software scene/instance BVH (and, in
-// the per-mesh stage, each instance's triangle BVH), and writes per-light colored transmittance into the
-// shadow-visibility Texture2DArray the deferred lighting pass samples. The local scene/light positions remain as ABI
-// gaps; the target-generation slot cbuffer at binding 22 selects those shared buffers through the descriptor heap.
-// Per-mesh triangle traversal uses descriptor-heap slots from the material record. A compact cbuffer at slot 8 selects
-// its five shared scene/material buffers from that same heap; the local SRV positions remain ABI gaps.
+// Software shadows use push-selected global heap resources; local SRV slots are ABI gaps.
 #define NWB_SW_SHADOW_SET 0
 
-// Local G-buffer and scene/light binding numbers are retained as intentional ABI gaps. Every SW trace pass selects the
-// target-generation images and shared scene buffers through the deferred bindless-slot cbuffer at binding 22.
 #define NWB_SW_SHADOW_BINDING_GBUFFER_WORLD_POSITION 0
 #define NWB_SW_SHADOW_BINDING_GBUFFER_NORMAL 1
 #define NWB_SW_SHADOW_BINDING_GBUFFER_DEPTH 2
 #define NWB_SW_SHADOW_BINDING_SCENE_SHADING 3
 #define NWB_SW_SHADOW_BINDING_LIGHT_LIST 4
 #define NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT 6
-// The local NwbRayTraceMaterialContextSlots cbuffer. Its sceneSlots select scene BVH nodes, scene instances,
-// instance-material records, and typed words; materialSlots.x selects mesh-instance records.
+// Shared material context selects scene and mesh records from the heap.
 #define NWB_SW_SHADOW_BINDING_MATERIAL_CONTEXT_SLOTS 8
-// Slots 5, 7, and 9-14 are intentional ABI gaps. SW shadow reads per-mesh nodes, positions, indices, and attributes
-// from the global descriptor heap through slots carried by the material record; b8 selects the shared scene/material
-// context. Do not repurpose or renumber these holes.
-// Adaptive transparent shadow (coarse-trace + edge-refine):
-//  - COARSE: an RGBA16F Texture2DArray (one layer per shadow slot) the coarse transparent trace writes one transmittance
-//    per coarse block into and the adaptive resolve reads back to interpolate the flat interior / detect edges.
-//  - EDGE_STATS: a 2-uint UAV counter ([0] = full-res traced rays, [1] = total candidate rays) the resolve
-//    atomically tallies when stats collection is on, read back to the log as the edge fraction that decides
-//    whether the compacted-indirect path is worth building.
+// Slots 5, 7, and 9-14 are intentional ABI gaps; do not renumber.
 #define NWB_SW_SHADOW_BINDING_COARSE 15
 #define NWB_SW_SHADOW_BINDING_EDGE_STATS 16
-// Compacted-indirect adaptive transparent shadow (the soft-shadow analog of an irradiance cache, but the
-// re-traced edge pixels are STREAM-COMPACTED into a list and dispatched indirectly so only edge rays launch, as
-// coherent waves with no in-wave divergence). Three UAVs:
-//  - EDGE_COUNTER: a 2-uint counter ([0] = atomic append count, [1] = clamped trace count written by the build-args pass).
-//  - EDGE_LIST: the compacted edge-pixel list, 2 u32 per record (word0 = (x<<16)|y, word1 = light-loop index).
-//  - INDIRECT_ARGS: a 3-uint DispatchIndirectArguments{groupsX,1,1} buffer (created UAV + isDrawIndirectArgs) the
-//    build-args pass writes and the indirect trace pass consumes via ComputeState::indirectParams.
+// Compacted edge records feed the indirect transparent retrace.
 #define NWB_SW_SHADOW_BINDING_EDGE_COUNTER 17
 #define NWB_SW_SHADOW_BINDING_EDGE_LIST 18
 #define NWB_SW_SHADOW_BINDING_INDIRECT_ARGS 19
@@ -58,92 +35,51 @@
 #define NWB_SW_SHADOW_INDIRECT_ARGS_GROUP_COUNT_Y 1u
 #define NWB_SW_SHADOW_INDIRECT_ARGS_GROUP_COUNT_Z 2u
 #define NWB_SW_SHADOW_INDIRECT_ARGS_WORD_COUNT 3u
-// Soft opaque shadow: a HALF-res RGBA16F Texture2DArray (one layer per shadow slot) the jittered opaque trace writes one
-// cone-jittered visibility sample per half-res pixel into. It is then denoised by the SEPARATE shadow_resolve pipeline --
-// geometry downsample + a-trous wavelet + bilateral upsample into the full-res visibility the lighting samples. Only the
-// SW traversal declares/writes it; the resolve binds its own copy.
+// Half-resolution opaque trace input for the soft resolve.
 #define NWB_SW_SHADOW_BINDING_SOFT_HALF 20
-// Soft COLORED TRANSPARENT shadow: a HALF-res RGBA16F Texture2DArray (one
-// layer per shadow slot) the soft transparent trace (sw_shadow_transparent_soft_cs) writes ONE cone-jittered COLORED
-// (Beer-Lambert/Fresnel) transmittance sample per half-res pixel into. It is denoised by the SEPARATE RGB shadow_resolve
-// pipeline -- temporal reproject-merge + RGB a-trous wavelet + fold-multiply upsample onto the
-// full-res visibility (which already holds the soft OPAQUE result). UAV (written by the soft transparent trace, read by
-// the resolve). Only the SW traversal declares/writes it; the resolve binds its own copy. Kept a PARALLEL signal to the
-// opaque SOFT_HALF (independent noise stats, separately denoised) and folded only at the final full-res upsample.
+// Parallel half-resolution transparent trace input for RGB resolve/fold.
 #define NWB_SW_SHADOW_BINDING_TRANSPARENT_SOFT_HALF 21
-// The target-generation DeferredBindlessResourceSlots cbuffer. Its gbufferSlots.z/y/w select world position, normal,
-// and depth from the global sampled-image heap, while avboitSlots.z/.w select scene shading and the light list for
-// every software-shadow pass.
+// Target-generation frame selector cbuffer.
 #define NWB_SW_SHADOW_BINDING_BINDLESS_RESOURCES 22
 
-// 8x8 = 64 threads per group (one thread per pixel).
 #define NWB_SW_SHADOW_GROUP_SIZE 8
 
-// Coarse-trace downscale for the adaptive transparent passes: the coarse buffer + trace run at full-res >> SHIFT,
-// i.e. one coarse trace per (FACTOR x FACTOR) full-res block. SHIFT=1 -> half-res (1 trace / 2x2 block); SHIFT=2 ->
-// quarter-res (1 trace / 4x4 block, ~4x fewer coarse traces but coarser interior + more edge-refine). Shared by the
-// shader (coarse-trace block stride + resolve coordinate) and C++ (coarse-buffer dims + dispatch grid) so they agree.
+// Shared C++/shader coarse transparent-trace scale.
 #define NWB_SW_SHADOW_COARSE_SHIFT 2u
 #define NWB_SW_SHADOW_COARSE_FACTOR (1u << NWB_SW_SHADOW_COARSE_SHIFT)
 
-// Soft opaque shadow downscale: the jittered opaque trace + its
-// a-trous denoise run at full-res >> SOFT_SHIFT. SHIFT=1 -> HALF resolution (1 jittered trace per 2x2 block, the
-// half-resolution target). Independent of COARSE_SHIFT above (that is the adaptive TRANSPARENT trace's quarter-res); the soft
-// opaque trace is a separate signal with its own half-res buffers, so its factor is kept distinct and explicit.
+// Separate shared C++/shader soft-opaque scale.
 #define NWB_SW_SHADOW_SOFT_SHIFT 1u
 #define NWB_SW_SHADOW_SOFT_FACTOR (1u << NWB_SW_SHADOW_SOFT_SHIFT)
 
-// Threads per group for the 1D indirect trace pass. Equals GROUP_SIZE^2 so it reuses the [numthreads(8,8,1)]
-// entry point: the build-args pass computes groupsX = ceil(traceCount / 64) and each thread derives its flat record
-// index as groupID.x * 64 + SV_GroupIndex.
 #define NWB_SW_SHADOW_TRACE_GROUP 64
 
-// Edge-stats counter layout (NWB_SW_SHADOW_BINDING_EDGE_STATS): [0] traced rays, [1] total candidate rays.
 #define NWB_SW_SHADOW_EDGE_STATS_TRACED 0
 #define NWB_SW_SHADOW_EDGE_STATS_TOTAL 1
 #define NWB_SW_SHADOW_EDGE_STATS_COUNT 2
 
-// Compaction counter layout (NWB_SW_SHADOW_BINDING_EDGE_COUNTER): [0] atomic append count, [1] clamped trace count.
 #define NWB_SW_SHADOW_EDGE_COUNTER_APPEND 0
 #define NWB_SW_SHADOW_EDGE_COUNTER_TRACE 1
 #define NWB_SW_SHADOW_EDGE_COUNTER_SIZE 2
 
-// Compacted edge record: 2 u32 words. word0 packs the full-res pixel (x<<16)|y (16 bits each); word1 holds the
-// light-LOOP index (0..NWB_SCENE_MAX_LIGHTS-1) so the trace pass does one g_NwbSceneLights load + recovers slot=params.z.
+// Compacted edge record: packed pixel and light-loop index.
 #define NWB_SW_SHADOW_EDGE_RECORD_WORDS 2
 
-// Occluder class the per-mesh traversal filters to. Each pass kernel that traces #defines NWB_SW_SHADOW_OCCLUDER to
-// one of these BEFORE including sw_shadow_traverse.slangi; the filter in nwbSwShadowInstanceOccluded then skips the
-// other class. The class is a compile-time identity baked into each pass, not a runtime push value:
-//  - OPAQUE      -> skip TRANSPARENT occluders: a binary blocker mask. Used by the opaque prepass and soft opaque
-//                   half-res trace, the SW analogs of the HW RayQuery opaque mask.
-//  - TRANSPARENT -> skip OPAQUE occluders: the colored Beer-Lambert tint MULTIPLIED onto an existing opaque mask
-//                   (the transparent coarse / resolve / indirect re-trace / uniform half-res multiply). The opaque
-//                   shadow already came from the HW mask (hybrid) or the opaque prepass (software), so tracing opaque
-//                   here would only redundantly re-darken -- and skipping it avoids walking the opaque meshes' BVHs.
-//  - ALL         -> trace BOTH classes (reserved for a single-pass fallback).
+// Compile-time occluder class for traversal passes.
 #define NWB_SW_SHADOW_OCCLUDER_OPAQUE 0
 #define NWB_SW_SHADOW_OCCLUDER_TRANSPARENT 1
 #define NWB_SW_SHADOW_OCCLUDER_ALL 2
 
-// G-buffer background/validity depth: a depth at or above this is the cleared background (no geometry), so it is fully
-// lit and casts no candidate ray. The gbuffer concern's nwbSwShadowIsBackground and every pass share this definition.
 #define NWB_SW_SHADOW_BACKGROUND_DEPTH NWB_SCENE_BACKGROUND_DEPTH
 
-// Two opaque samples seed/reset temporal history without shimmer. Once an accepted history is available, the trace
-// drops to the smaller runtime budget below while the reproject-merge still validates every current sample.
 #define NWB_SW_SHADOW_SOFT_SPP 3u
 #define NWB_SW_SHADOW_SOFT_TEMPORAL_SPP 3u
 
-// One transparent sample converges after temporal RGB denoising.
 #define NWB_SW_SHADOW_TRANSPARENT_SPP 3u
 
-// Decorrelation salt for the transparent cone-jitter sequence.
 #define NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT 2654435761u
 
-// Per-thread traversal stack depths. The scene/instance BVH is shallow (a few-to-hundreds of instances);
-// the per-mesh triangle BVH is deeper. Both traversals treat a deeper subtree as occluded rather than
-// skipping it, so these are generous-but-not-proven bounds, not correctness-critical.
+// Over-deep traversal conservatively blocks light.
 #define NWB_SW_SHADOW_SCENE_STACK_SIZE 32
 #define NWB_SW_SHADOW_MESH_STACK_SIZE 64
 

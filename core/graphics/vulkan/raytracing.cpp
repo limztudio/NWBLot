@@ -934,9 +934,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     BufferDesc bufferDesc;
     bufferDesc.byteSize = accelStructSize;
     bufferDesc.isAccelStructStorage = true;
-    // Keep the backing allocation identifiable as the owning AS.  Aside from aiding GPU debugging,
-    // this makes allocator diagnostics point to the actual TLAS/BLAS lifetime rather than a generic
-    // storage-buffer label.
+    // Identify the backing allocation with its acceleration structure.
     bufferDesc.debugName = desc.debugName;
     bufferDesc.isVirtual = desc.isVirtual;
     bufferDesc.queueSharing = desc.queueSharing;
@@ -1562,8 +1560,7 @@ bool CommandList::attachAccelStructBuildScratchBuffer(
     if(buildScratchSize == 0)
         return true;
 
-    // The build scratch device address must be aligned to minAccelerationStructureScratchOffsetAlignment (VUID-vkCmdBuildAccelerationStructuresKHR-pInfos-03710).
-    // The buffer allocator does not guarantee that alignment, so over-allocate by the alignment and round the scratch address up into the buffer.
+    // Align scratch address to Vulkan's acceleration-structure requirement.
     const u64 scratchAlignment = static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment);
     const u64 scratchPadding = scratchAlignment > 1u ? scratchAlignment - 1u : 0u;
 
@@ -1622,8 +1619,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
     if(!attachAccelStructBuildScratchBuffer(buildInfo, sizeInfo.buildScratchSize, "TLAS_BuildScratch", NWB_TEXT("allocate TLAS scratch buffer")))
         return false;
 
-    // The TLAS build reads the referenced BLASes and writes the TLAS storage, so it must follow any acceleration-structure writes already recorded this frame (the BLAS builds/refits) as well as the
-    // previous frame's build of this same TLAS. On a single queue this barrier covers both the BLAS->TLAS read dependency and the cross-frame TLAS write-after-write.
+    // Order BLAS writes and prior TLAS writes before this TLAS build.
     {
         auto reuseBarrier = VulkanDetail::MakeVkStruct<VkMemoryBarrier2>(VK_STRUCTURE_TYPE_MEMORY_BARRIER_2);
         reuseBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
@@ -1804,7 +1800,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             buildGeometry(i);
     }
 
-    // An in-place refit (PerformUpdate) requires the structure to have been built with AllowUpdate and to already hold a built BLAS to read as the update source.
+    // Refit requires an existing AllowUpdate BLAS.
     const bool performUpdate =
         (buildFlags & RayTracingAccelStructBuildFlags::PerformUpdate)
         && (buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)
@@ -1840,8 +1836,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
     if(!attachAccelStructBuildScratchBuffer(buildInfo, scratchSize, "AS_BuildScratch", NWB_TEXT("allocate BLAS scratch buffer")))
         return;
 
-    // Reusing an acceleration structure requires a build-write barrier; on a single queue it also covers the
-    // cross-frame dependency for per-frame skinned refits.
+    // Reused acceleration structures need build-write ordering.
     if(as->m_built){
         auto reuseBarrier = VulkanDetail::MakeVkStruct<VkMemoryBarrier2>(VK_STRUCTURE_TYPE_MEMORY_BARRIER_2);
         reuseBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
@@ -1949,8 +1944,7 @@ void CommandList::compactBottomLevelAccelStructs(){
         compactBufferDesc.byteSize = compactedSize;
         compactBufferDesc.isAccelStructStorage = true;
         compactBufferDesc.debugName = as->m_desc.debugName;
-        // Preserve the AS's sharing contract when replacing its backing allocation. A compacted BLAS remains
-        // reachable from the TLAS consumed by the dedicated async shadow packet.
+        // Preserve queue sharing while a compacted BLAS remains TLAS-reachable.
         compactBufferDesc.queueSharing = as->m_desc.queueSharing;
 
         BufferHandle compactBuffer = m_device.createBuffer(compactBufferDesc);
@@ -2178,7 +2172,6 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
         vkInst.accelerationStructureReference = blas ? blas->m_deviceAddress : 0;
     };
 
-    // TLAS instance conversion is CPU-only and scales with scene instance count.
     if(taskPool().isParallelEnabled() && numInstances >= s_ParallelTlasInstanceThreshold)
         scheduleParallelFor(static_cast<usize>(0), numInstances, s_TlasInstanceGrainSize, buildVkInstance);
     else{

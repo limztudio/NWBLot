@@ -20,8 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// UPSAMPLE fold mode (mirrors shadow_resolve_cs.slang's pushConstants.upsampleFold): OVERWRITE the full-res visibility
-// (soft OPAQUE) vs MULTIPLY the denoised colored transmittance onto it (soft TRANSPARENT fold).
+// Soft resolve either overwrites visibility or multiplies transparent transmittance.
 namespace SoftShadowUpsampleFold{
     enum Enum : u32{
         Overwrite = 0u,
@@ -46,125 +45,73 @@ public:
     [[nodiscard]] bool buildSceneTlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool buildSceneSwBvh(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool prepareCausticEmissionTargets(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
-    // Retire caustic-owned emission-target and material-context heap descriptors before invalidation releases their
-    // backing buffers.
     void releaseCausticEmissionTargetHeapHandle();
     [[nodiscard]] bool createShadowVisibilityTarget(DeferredFrameTargets& targets);
     [[nodiscard]] bool createCausticTargets(DeferredFrameTargets& targets);
     [[nodiscard]] bool prepareShadowVisibilityResources(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena, bool& outBackendReady);
-    // The five trace material-context buffers are global heap descriptors. This uploads their current slot numbers
-    // into the small selector payload shared by RT shadow, surfel GI, and caustic producers.
+    // Upload shared material-context heap slots.
     [[nodiscard]] bool uploadRayTraceMaterialContextSlots(Core::CommandList& commandList);
-    // Retire the five heap descriptors before resource invalidation releases their backing buffers.
     void releaseRayTraceMaterialContextHeapHandles();
-    // Retire the shared SW-BVH scratch descriptors before resource invalidation releases their backing buffers.
     void releaseSwBvhScratchHeapHandles();
-    // Retire the persistent surfel descriptor generations before resource invalidation releases their backing buffers.
     void releaseSurfelGiHeapHandles();
-    // Normalizes the G-buffer and trace inputs shared by the independent shadow, caustics, surfel-GI, and AVBOIT
-    // packets. The prelude records these transitions once before all four packets import the resulting state snapshot.
+    // Normalize inputs shared by independently recorded effect packets.
     void normalizePostGbufferPacketResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearCausticTargets(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    // The dedicated surfel packet owns this no-op clear before its compute producer, so the exclusive irradiance output
-    // can begin and remain on AsyncCompute until deferred lighting acquires it.
     void clearSurfelIrradiance(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    // Software-BVH shadow traversal. multiplyOntoOpaque=false: standalone no-RT path (opaque + transparent, overwrite).
-    // multiplyOntoOpaque=true: hybrid path on RT hardware -- traces the TRANSPARENT-only scene BVH and multiplies its colored transmittance onto the HW opaque binary mask already in the visibility buffer.
+    // Hybrid mode folds software transparent transmittance onto hardware opaque visibility.
     [[nodiscard]] bool renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets, bool multiplyOntoOpaque = false);
     [[nodiscard]] bool prepareGpuBvhCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool hasCausticWork()const noexcept;
-    // Hardware ray-traced caustic photon producer -- the byte-parallel sibling of the SW producer above, run on
-    // the HW branch (RayTracingAccelStruct supported). Reuses the TLAS, heap-selected material/geometry context, and
-    // shared R32_UINT accumulator + resolve; its closest hit reconstructs the surface through material-record slots.
     [[nodiscard]] bool prepareHwCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool renderHwCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool hasHwCausticWork()const noexcept;
-    // Surfel GI: the feature gate + prep + render hooks. hasSurfelWork returns m_surfelEnabled (set in
-    // prepareShadowVisibilityResources once the SW scene BVH is resident). prepareSurfelResources creates the
-    // persistent pool/hash/counter/params buffers + pipelines, clears them on (re)creation, and uploads the params
-    // CB. renderSurfelGi consumes the prepared heap slots and records the complete surfel update and resolve sequence
-    // (the SW trace reuses the SW scene BVH).
     [[nodiscard]] bool hasSurfelWork()const noexcept;
     [[nodiscard]] bool prepareSurfelResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    // Keep the first surfel-pool clear marked dirty until its actual producer packet is accepted. The Graphics fallback
-    // records it during shadow preparation; a dedicated lane records it immediately before the surfel compute work.
+    // Clear ownership commits only after the producer packet accepts.
     void finalizeSurfelResourceInitialization();
     void discardSurfelResourceInitialization();
     [[nodiscard]] bool renderSurfelGi(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    // Lazily create the persistent surfel buffers (pool / cell-head / counter / params CB) and their per-pass
-    // pipelines. The buffers live on RendererRayTracingState so a window resize does not reset convergence.
+    // Persistent surfel storage survives resize.
     [[nodiscard]] bool ensureSurfelResources();
-    // The surfel pass pipelines use only their common push range plus the global heap resource/sampler layouts.
     [[nodiscard]] bool ensureSurfelSpawnPipeline();
-    // Age-free recycling: one thread per pool slot; frees surfels unseen for maxAge frames + pushes their ids onto
-    // the free-list. Reads only the persistent buffers, so pipeline + set are built once (like hash-build).
     [[nodiscard]] bool ensureSurfelAgeFreePipeline();
     [[nodiscard]] bool ensureSurfelHashBuildPipeline();
     [[nodiscard]] bool ensureSurfelTracePipeline();
-    // HW-RayQuery trace twin: the same surfel trace over the TLAS (inline RayQuery) instead of the SW BVH. Selected
-    // by m_surfelUseHwTrace on the HW-shadow branch; gated on RayQuery + accel-struct support (like ensureShadowPipeline).
+    // Hardware surfel trace uses inline RayQuery over the TLAS.
     [[nodiscard]] bool ensureSurfelTraceHwPipeline();
-    // The resolve pass: a COMPUTE gather-once-per-pixel into the screen-space surfelIrradiance texture the deferred
-    // lighting compute dispatch samples (keeps the RW pool off the lighting shader -> no frames-in-flight pool race). Its field/input/
-    // output resources are heap-selected by the common push block.
+    // Resolve keeps the writable surfel pool off deferred lighting.
     [[nodiscard]] bool ensureSurfelResolvePipeline();
-    // Half-res upsample: reconstructs the full-res surfelIrradiance from heap-selected half irradiance plus G-buffer
-    // normal/world-position and a heap-selected storage output.
     [[nodiscard]] bool ensureSurfelUpsamplePipeline();
-    // Trace dispatchIndirect: a 1-thread build-args pass writes ceil(BUMP_TOP/divisor) into the trace's indirect-args
-    // buffer, so the trace dispatches per LIVE surfel. It uses the same heap slots as the other surfel passes.
     [[nodiscard]] bool ensureSurfelTraceBuildArgsPipeline();
-    // True when the prepare built the hybrid transparent-shadow software resources this frame (RT hardware + the scene
-    // has a transparent occluder). Used as the !softTransparentShadowReady fallback that folds colored transparent shadow
-    // onto the HW opaque pass with renderGpuBvhShadowVisibility(..., multiplyOntoOpaque=true).
     [[nodiscard]] bool hybridTransparentShadowReady()const noexcept;
-    // True when the prepare built the soft transparent trace+fold resources this frame (the HW/SW opaque soft path is
-    // ready AND the transparent SW scene BVH + RGB resolve/merge sets built). When true, the colored TRANSPARENT shadow
-    // is traced + denoised + multiplied onto the soft-opaque visibility inside renderShadowVisibility's soft chain.
     [[nodiscard]] bool softTransparentShadowReady()const noexcept;
-    // Soft-shadow recording cannot swap the target-generation handles while the sibling caustics and surfel-GI packets
-    // validate the shared bindless bundle. Finalize the deferred temporal swap only after the ordered submission
-    // succeeds, or discard it when packet recording/submission is abandoned.
+    // Commit soft-shadow history only after ordered submission accepts.
     void finalizeSoftShadowTemporalHistory(DeferredFrameTargets& targets);
     void discardSoftShadowTemporalHistory();
-    // A software-shadow edge-stat copy is recorded before the queue submission exists. Bind it to the accepted
-    // submission token afterward so a later CPU map waits for actual queue completion instead of assuming a frame delay.
+    // Bind shadow readback to its accepted submission token.
     void confirmShadowVisibilitySubmission(const Core::QueueSubmissionToken& submissionToken);
-    // The surfel live-count readback follows the same acceptance-aware completion rule when the packet runs on
-    // AsyncCompute.
     void confirmSurfelGiSubmission(const Core::QueueSubmissionToken& submissionToken);
 
 
 private:
     [[nodiscard]] bool initializeSurfelResources(Core::CommandList& commandList);
     [[nodiscard]] bool buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources);
-    // Allocates the software-BVH pipelines, shared scratch, and per-mesh storage before the per-frame command-list
-    // update records its build/refit dispatches. Runtime meshes are prepared every frame because their resource set
-    // is selected from the current runtime-mesh cache entry; static meshes remain dirty until their first build.
+    // Runtime meshes prepare every frame; static meshes remain dirty until first build.
     [[nodiscard]] bool preparePendingMeshSwBvhResources();
     [[nodiscard]] bool ensureShadowPipeline();
-    // Hardware (RayQuery) SOFT OPAQUE half-res trace. It reuses the push-only trace layout; heap slots select soft-A
-    // as its storage output, so the HW opaque shadow feeds the same denoise chain as the SW path.
+    // Hardware soft trace feeds the shared software denoise chain.
     [[nodiscard]] bool ensureShadowSoftPipeline();
-    // Shared hardware opaque-shadow trace layout. Every resource, including the TLAS, is heap-selected; this local
-    // layout contains only the push range.
+    // Hardware shadow layouts are push-only; resources come from heap sets.
     void appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const;
-    // ensureSwShadowPipeline creates the shared software-shadow binding layout + persistent adaptive buffers once, then
-    // creates one named compute pipeline per decomposed pass via ensureSwShadowPassPipeline.
     [[nodiscard]] bool ensureSwShadowPipeline();
     [[nodiscard]] bool ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const char* debugLabel);
-    // Soft opaque shadow: the half-res geometry downsample pre-pass + the a-trous wavelet resolve/upsample.
-    // dispatchSoftShadowResolve runs the denoise chain for a contiguous RANGE of shadow slots in one dispatch, overwriting
-    // each of those slots' full-res visibility with the denoised soft shadow.
     [[nodiscard]] bool ensureSoftShadowResolvePipeline();
     [[nodiscard]] bool ensureShadowGeometryDownsamplePipeline();
-    // Soft colored-transparent shadow: RGB a-trous resolve pipeline sharing the same push-only layout.
     [[nodiscard]] bool ensureSoftTransparentResolvePipeline();
-    // The sampled Texture2DArray inputs and writable storage output for one resolve role. Keep backing objects next to
-    // their heap slots so explicit state transitions cannot drift from the pushed selectors.
+    // Resolve resources pair backing targets with their pushed heap slots.
     struct SoftShadowResolvePassResources{
         Core::Texture* softHalfTexture = nullptr;
         Core::Texture* inputColorTexture = nullptr;
@@ -175,8 +122,7 @@ private:
         u32 moments = 0u;
         u32 outputStorage = 0u;
     };
-    // Heap-only resolve dispatch description. The first wavelet reads the current trace or accumulated history directly,
-    // avoiding a redundant PREPARE copy; no resource is represented by a pipeline-local descriptor object.
+    // Heap-only soft resolve dispatch description.
     struct SoftShadowResolveDispatch{
         Core::ComputePipeline* pipeline = nullptr;
         SoftShadowResolvePassResources firstWaveletResources;
@@ -187,58 +133,32 @@ private:
         u32 visibilityStorage = 0u;
         u32 sceneShading = 0u;
         bool temporalMomentsValid = false;
-        // Selects the source scratch target for the direct first wavelet. Subsequent passes ping-pong from it.
         bool firstWaveletWritesHalfA = true;
         SoftShadowUpsampleFold::Enum fold = SoftShadowUpsampleFold::Overwrite;
-        // A-trous wavelet pass count for this signal: opaque = NWB_SHADOW_RESOLVE_PASS_COUNT (1), the cheaper smooth transparent
-        // tint = NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT (1). MUST be ODD so the preselected upsample input remains the
-        // final ping-pong result; dispatchSoftShadowResolve asserts the parity. Defaulted to 1 (= the opaque constant, which
-        // this header does not include) and set explicitly at each build site.
+        // Must be odd so the selected upsample input is the final ping-pong result.
         u32 waveletPassCount = 1u;
     };
-    // dispatchSoftShadowResolve runs the direct-input a-trous N wavelet passes -> upsample for a CONTIGUOUS RANGE of shadow
-    // slots [slotStart, slotStart+slotCount), against heap slots + pipeline + fold in `dispatch`. The resolve shader loops
-    // the range per pixel, so one dispatch covers every active Texture2DArray layer (each layer independent), reducing
-    // dispatch and barrier count. See SoftShadowResolveDispatch.
+    // Resolve a contiguous shadow-slot range in one heap-selected dispatch.
     void dispatchSoftShadowResolve(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 slotStart, u32 slotCount, const SoftShadowResolveDispatch& dispatch);
-    // Backend-agnostic soft-shadow denoise + transparent fold, run AFTER whichever backend (SW BVH or HW RayQuery) wrote
-    // the half-res soft opaque trace into shadowSoftHalfA (and synced it to UnorderedAccess): geometry downsample ->
-    // per-slot [temporal reproject-merge -> a-trous resolve OVERWRITE] -> the guarded soft colored-transparent trace+fold
-    // -> deferred temporal-history finalization. Reads only the shared soft/temporal buffers + the G-buffer, so the same
-    // chain denoises both backends. softGroupsX/Y are the half-res dispatch grid; frameIndex seeds the trace jitter.
+    // Denoise either backend's soft trace and optionally fold transparent transmittance.
     void dispatchSoftShadowDenoiseAndTransparentFold(Core::CommandList& commandList, DeferredFrameTargets& targets, u32 frameIndex, u32 softGroupsX, u32 softGroupsY);
-    // Soft opaque shadow TEMPORAL accumulation: the reproject-merge pass
-    // inserted per slot between the soft trace and the a-trous resolve. The pipeline is push-only and heap slots select
-    // every sampled and writable image. swapSoftShadowTemporalHistory stashes this frame's worldToClip for next-frame reprojection +
-    // ping-pongs the history / moments / geometry buffers at frame end (guarded on m_softShadowTemporalReady).
+    // Temporal merge precedes soft resolve and swaps history at frame end.
     [[nodiscard]] bool ensureShadowReprojectMergePipeline();
     [[nodiscard]] bool softShadowTemporalHistoryUsable()const noexcept;
     void swapSoftShadowTemporalHistory(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureSwCausticPipeline();
     [[nodiscard]] bool ensureCausticMaterialContextSlotsHeapHandle();
     [[nodiscard]] bool ensureCausticResolvePipeline();
-    // Geometry downsample pre-pass: fills the half-res geometry cache (world + receiver validity) the resolve reads.
     [[nodiscard]] bool ensureCausticGeometryDownsamplePipeline();
-    // Resolve/temporal resources shared by the software-BVH and hardware-ray-tracing caustic producers.
     [[nodiscard]] bool causticResolveResourcesReady(const DeferredFrameTargets& targets, f32 temporalDecay)const;
-    // Accumulator decay pre-pass (splat-space temporal EMA): multiplies the resident R32_UINT accumulator by the temporal
-    // decay factor before the producer splats this frame's photons (only used when temporal is enabled, decay > 0).
     [[nodiscard]] bool ensureCausticAccumulatorDecayPipeline();
-    // Returns the fixed splat-space EMA decay factor (m_causticTemporalDecay = 0.85). <=0 would mean temporal off.
     [[nodiscard]] f32 causticTemporalDecay();
-    // Selects full-grid, bootstrap, or converged temporal photon sampling. The phase count changes only after accepted
-    // producer updates; packet rollback restores the frame count before a retry records the same work.
+    // Temporal phase changes only after accepted producer updates.
     [[nodiscard]] u32 causticTemporalPhaseCount();
     void advanceCausticTemporalReuse();
-    // Splat-space temporal step, run at the top of each caustic producer (SW/HW) when temporal is enabled: on the first
-    // enabled frame (or after a resize) the accumulator holds no history so it is CLEARED to 0; every later frame the
-    // decay pass multiplies it by decayFactor in place (accum_N = decay*accum_{N-1}). Leaves the accumulator in
-    // UnorderedAccess for the producer's atomic-adds.
+    // Bootstrap or decay temporal splat accumulation before photon atomic adds.
     void prepareCausticAccumulatorForSplat(Core::CommandList& commandList, DeferredFrameTargets& targets, f32 decayFactor);
-    // Runs the N-pass edge-avoiding a-trous wavelet resolve (shared by the SW + HW caustic paths): converts the splat
-    // accumulator to denoised irradiance, ping-ponging the irradiance + scratch buffers so the final pass lands in
-    // irradiance. The accumulator must already hold this frame's splat (producer dispatched). Assumes the resolve
-    // pipeline is ready and every target-generation heap slot is live.
+    // Shared software/hardware caustic wavelet resolve.
     void dispatchCausticResolve(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureCausticRtPipeline();
     [[nodiscard]] bool ensureBvhSortPipeline();
@@ -258,7 +178,7 @@ private:
     [[nodiscard]] bool ensureRayTraceMaterialContextSlotsBuffer();
     [[nodiscard]] bool ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);
     [[nodiscard]] bool replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);
-    // Stages the shared heap-selected software-BVH traversal inputs; callers own pass-specific resources and barriers.
+    // Stage shared software-BVH traversal inputs.
     void transitionSwShadowTraversalResources(Core::CommandList& commandList);
     [[nodiscard]] bool ensureCausticEmissionTargetBuffer(usize targetCount);
     [[nodiscard]] bool ensureShadowInstanceMaterialBuffer(usize instanceCount);

@@ -25,8 +25,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The renderer has two intentionally constrained submission topologies. This plan owns their lane selection and
-// dependency graph, while RendererSystem continues to own resource-state handoffs, temporal commits, and recovery.
+// The plan owns lane routing and dependencies; RendererSystem owns state and recovery.
 namespace FrameExecutionPacket{
     enum Enum : u8{
         GraphicsFallback,
@@ -48,8 +47,7 @@ namespace FrameExecutionPacket{
 };
 
 
-// Submission batches preserve the renderer's accepted packet order without making RendererSystem restate every
-// topology-specific packet sequence. RendererSystem retains the per-batch temporal and state-handoff decisions.
+// Batches preserve packet order without duplicating topology in RendererSystem.
 namespace FrameExecutionSubmissionBatch{
     enum Enum : u8{
         GraphicsFallback,
@@ -65,8 +63,7 @@ namespace FrameExecutionSubmissionBatch{
 };
 
 
-// A recorded workload can share a submission packet with other work. Keep that mapping declarative with the
-// packet graph so recording, timing, and submission cannot drift into separate topology decisions.
+// Work-to-packet mapping keeps recording, timing, and submission declarative.
 namespace FrameExecutionWork{
     enum Enum : u8{
         GraphicsPrefix,
@@ -89,8 +86,7 @@ namespace FrameExecutionWork{
 };
 
 
-// A packet can wait on a token produced outside the current plan. Keep those edges alongside packet-to-packet
-// dependencies so submission preparation does not maintain a separate topology predicate for each external source.
+// External-token edges live with packet dependencies.
 namespace FrameExecutionExternalWait{
     enum Enum : u8{
         LaggedLightingHistory,
@@ -106,8 +102,7 @@ struct FrameExecutionPlanInput{
     bool laggedLightingHistoryReady = false;
     bool laggedLightingHistoryAccepted = false;
     bool hasTransparentRenderers = false;
-    // Hardware caustics use the Graphics support packet. This keeps vkCmdTraceRays work on the Graphics lane while
-    // it overlaps the dedicated Compute shadow/surfel producer; software caustics remain a Compute dispatch.
+    // Hardware caustics run on Graphics; software caustics run on Compute.
     bool hardwareCaustics = false;
 };
 
@@ -119,14 +114,12 @@ struct FrameExecutionPacketPlan{
     FrameExecutionExternalWait::Enum externalWaits[FrameExecutionExternalWait::kCount] = {};
     u8 externalWaitCount = 0u;
     bool enabled = false;
-    // An enabled packet receives a timing ticket indexed by its packet ID unless it is explicitly execution-only.
-    // This avoids a second packet-to-ticket registry that must be updated whenever the topology grows.
+    // Enabled timed packets receive a ticket keyed by packet ID.
     bool recordsTiming = false;
 };
 
 
-// The current widest batch is the five-packet async AVBOIT chain. Keep the storage bounded by the full packet set
-// so a future topology can regroup packets without silently changing the plan's fixed-capacity contract.
+// Bound batch storage by the full packet set.
 struct FrameExecutionSubmissionBatchPlan{
     FrameExecutionPacket::Enum packets[FrameExecutionPacket::kCount] = {};
     u8 packetCount = 0u;
@@ -138,8 +131,7 @@ struct FrameExecutionWorkPlan{
 };
 
 
-// RendererSystem owns the lifetime of history submissions. It supplies their latest accepted tokens as external
-// dependencies for this frame; the plan decides which packet, if any, consumes each one.
+// RendererSystem supplies accepted history tokens as external dependencies.
 struct FrameExecutionExternalWaitTokens{
     Core::QueueSubmissionToken tokens[FrameExecutionExternalWait::kCount] = {};
 
@@ -153,8 +145,7 @@ struct FrameExecutionExternalWaitTokens{
 };
 
 
-// RendererSystem owns the persistent command-list instances for both logical lanes. The plan resolves which one a
-// work item needs from its packet lane, so topology predicates do not become a second command-list routing table.
+// The plan routes work to RendererSystem-owned command lists.
 struct FrameExecutionLaneCommandListPair{
     Core::CommandList* graphics = nullptr;
     Core::CommandList* asyncCompute = nullptr;
@@ -218,9 +209,7 @@ public:
             addPacketWait(FrameExecutionPacket::GraphicsAvboitPre, FrameExecutionPacket::GraphicsPrefix);
             if(!usesAsyncCaustics){
                 assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::GraphicsAvboitPre);
-                // The prior frame's Async stash reads the live caustic irradiance. Hardware caustics overwrite it
-                // from Graphics, so an active lagged frame must not start that producer until the accepted stash has
-                // finished. Software caustics remain ordered by their shared AsyncCompute queue.
+                // History stash must finish before Graphics hardware caustics rewrite live irradiance.
                 if(usesLaggedAsyncLighting)
                     addExternalWait(
                         FrameExecutionPacket::GraphicsAvboitPre,
@@ -252,8 +241,6 @@ public:
             addPacketWait(FrameExecutionPacket::GraphicsEffects, FrameExecutionPacket::GraphicsPrefix);
             if(!usesAsyncCaustics){
                 assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::GraphicsEffects);
-                // See the corresponding GraphicsAvboitPre branch: the prior Async stash must complete before the
-                // Graphics hardware producer clears and rewrites its live irradiance image.
                 if(usesLaggedAsyncLighting)
                     addExternalWait(
                         FrameExecutionPacket::GraphicsEffects,
@@ -506,8 +493,7 @@ private:
             FrameExecutionPacket::GraphicsPresent
         );
 
-        // The optional history copy is recorded only after Graphics presentation accepts, so it intentionally stays
-        // outside the ordinary pre-recorded submission batches and retains its explicit lifecycle handling.
+        // History copy records only after presentation accepts.
     }
 private:
     FrameExecutionPacketPlan m_packets[FrameExecutionPacket::kCount] = {};
@@ -519,17 +505,13 @@ private:
 };
 
 
-// Recording stays in RendererSystem because it owns the resource-state handoffs, but the ordered command lists
-// submitted for each packet follow the plan's work mapping. A work item may append more than once: the async-effects
-// timing bracket deliberately contributes a begin and an end command list around its packet's other work.
+// RendererSystem records lists; the plan maps them to packet order.
 struct FrameExecutionPacketCommandListRange{
     Core::CommandList* const* commandLists = nullptr;
     usize commandListCount = 0u;
 };
 
 
-// RendererSystem owns the actual command lists, while the plan owns their work-to-packet routing. Supplying these
-// bindings in recording order keeps optional topology work out of the renderer's submission assembly branches.
 struct FrameExecutionWorkCommandListBinding{
     FrameExecutionWork::Enum work = FrameExecutionWork::kCount;
     Core::CommandList* commandList = nullptr;
@@ -538,8 +520,6 @@ struct FrameExecutionWorkCommandListBinding{
 
 class FrameExecutionPacketCommandLists final{
 public:
-    // Graphics fallback currently contains the largest packet: twelve lists. Keep this constrained collector
-    // allocation-free and make any future packet-size increase explicit in the plan contract.
     static constexpr usize s_MaxCommandListsPerPacket = 12u;
 
 
@@ -550,8 +530,6 @@ public:
 
 
 public:
-    // Disabled work is intentionally skipped: callers can declare the complete canonical recording order once,
-    // including command lists that are only instantiated by a split topology.
     [[nodiscard]] bool appendPlannedWorkCommandLists(
         const FrameExecutionWorkCommandListBinding* const bindings,
         const usize bindingCount
@@ -610,9 +588,7 @@ private:
 };
 
 
-// Mutable, per-frame execution state for a FrameExecutionPlan. It resolves the plan's predecessor edges into
-// accepted submission tokens and retains the newest accepted AsyncCompute edge for recovery. The renderer still
-// owns recovery lifecycle handling, while this state decides whether an accepted Compute packet remains to join.
+// Per-frame state resolves accepted tokens and retains recoverable async edges.
 class FrameExecutionPlanSubmissionState final{
 public:
     explicit FrameExecutionPlanSubmissionState(
@@ -688,8 +664,7 @@ public:
     [[nodiscard]] Core::QueueSubmissionToken token(const FrameExecutionPacket::Enum packet)const noexcept{
         return m_packetTokens[static_cast<usize>(packet)];
     }
-    // RendererSystem owns each batch's rollback action, while this state owns the accepted-token boundary that
-    // distinguishes a rejected first packet from a later rejection after the batch has already begun.
+    // Accepted-token boundary distinguishes first rejection from later rollback.
     [[nodiscard]] bool batchHasAcceptedPacket(
         const FrameExecutionSubmissionBatch::Enum batch
     )const noexcept{
@@ -700,9 +675,7 @@ public:
         }
         return false;
     }
-    // A null result means no accepted AsyncCompute packet is outstanding, so failure recovery has no queue join to
-    // submit. A non-null token is always the latest accepted packet on the ordered Compute lane, which also covers
-    // every earlier accepted Compute packet on that lane.
+    // Latest accepted compute token covers every earlier compute packet.
     [[nodiscard]] const Core::QueueSubmissionToken* asyncRecoveryWaitToken()const noexcept{
         return m_asyncRecoveryWaitToken.valid() ? &m_asyncRecoveryWaitToken : nullptr;
     }

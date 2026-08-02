@@ -39,46 +39,28 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Finite positive-infinity sentinel for CPU-side ray-tracing bounds and SAH cost initialization. Keeping it below
-// the f32 limit leaves headroom for the surface-area arithmetic that follows.
+// Finite infinity for CPU BVH bounds.
 inline constexpr f32 s_RayTracingFiniteInfinity = 1e30f;
-// The reconstructed mesh index buffer stores one u32 index for each corner of every traced triangle.
 inline constexpr u32 s_RayTracingTriangleIndexCount = 3u;
-// Each hardware instance mask is an eight-bit field; this selects every instance for traces that do not filter.
 inline constexpr u32 s_RayTracingAllInstanceMask = NWB_RAY_TRACING_ALL_INSTANCE_MASK;
-// Distinct geometry buffers registered in the descriptor heap for each mesh on the two trace backends.
+// Heap geometry buffers per mesh.
 inline constexpr u32 s_HardwareRayTracingMeshBufferCount = 3u;
 inline constexpr u32 s_SoftwareRayTracingMeshBufferCount = 4u;
 
 
-// Number of in-place refits performed on a skinned BLAS before forcing a full rebuild. A refit
-// (in-place UPDATE) keeps the build-pose tree topology and only resizes the bounding boxes, so
-// traversal quality drifts as the pose moves away from the last full build; the periodic rebuild
-// restores it. This is the quality/cost knob for skinned ray-traced geometry.
+// Limit skinned BLAS refits before rebuilding topology.
 inline constexpr u32 s_BlasMaxRefitsBeforeRebuild = 8u;
 
-// Adaptive refit-to-rebuild budget. The full-rebuild cost scales ~primitiveCount while the per-frame refit cost is
-// nearly topology-size-independent, so a larger mesh amortizes its (proportionally larger) rebuild over more refits
-// — refitting a 50k-triangle skinned mesh 8 times then rebuilding costs less than rebuilding it every frame, but
-// rebuilding it every 8 frames still over-pays relative to a 1k-triangle mesh doing the same. The budget therefore
-// grows with triangle count: budget(prims) = clamp(s_BlasMaxRefitsBeforeRebuild << floor(log2(prims)/3), min, cap).
-// The /3 makes the budget track N^(1/3) (cube root, in power-of-two steps), which is the cost/quality-optimal
-// rebuild cadence for a topology whose rebuild cost is O(N) and whose quality drift ~ surface area is O(N^(2/3)).
-// The flat constant remains the budget at the reference size (1..7 triangles); s_BlasMinRefitsBeforeRebuild is the
-// hard floor (quality-leaning meshes still rebuild often) and s_BlasMaxRefitsBeforeRebuildCap bounds drift for
-// very large meshes. Used by both the HW BLAS and the SW BVH update paths so the two move together.
+// Scale rebuild cadence by mesh size, clamped to preserve quality.
 inline constexpr u32 s_BlasMinRefitsBeforeRebuild = 4u;
 inline constexpr u32 s_BlasMaxRefitsBeforeRebuildCap = 64u;
 inline constexpr u32 s_BlasRefitBudgetLog2ExponentStep = 3u;
 
-// Adaptive refit budget for a mesh of `primitiveCount` triangles: the cube-root-scaled value above, clamped to
-// [s_BlasMinRefitsBeforeRebuild, s_BlasMaxRefitsBeforeRebuildCap]. Pure-integer (power-of-two cube root via
-// shifts), so no transcendental dependency.
+// Cube-root-scaled refit budget.
 [[nodiscard]] inline constexpr u32 adaptiveRefitsBeforeRebuild(const u32 primitiveCount)noexcept{
     u32 log2 = 0u;
     u32 n = primitiveCount;
     while(n > 1u){ n >>= 1u; ++log2; }
-    // Cube root in power-of-two steps: every tripling of the exponent adds one budget doubling.
     u32 budget = s_BlasMaxRefitsBeforeRebuild << (log2 / s_BlasRefitBudgetLog2ExponentStep);
     if(budget < s_BlasMinRefitsBeforeRebuild)
         budget = s_BlasMinRefitsBeforeRebuild;
@@ -87,24 +69,15 @@ inline constexpr u32 s_BlasRefitBudgetLog2ExponentStep = 3u;
     return budget;
 }
 
-// Initial scene-TLAS instance capacity; grows by doubling when the live instance count exceeds it.
 inline constexpr usize s_TlasInitialInstanceCapacity = 128u;
 
-// Initial element capacity of the BVH Morton-sort scratch buffers (keys + payload); grows by doubling.
 inline constexpr usize s_BvhSortInitialCapacity = 1024u;
 
-// Stage-2 adaptive shadow edge-fraction instrumentation cadence, in transparent-shadow dispatches: snapshot the GPU
-// counter into the CPU-readable buffer every s_SwShadowEdgeStatsPeriod ticks, then log it s_SwShadowEdgeStatsLogDelay
-// ticks later -- by which point the copy is GPU-complete, so the map needs no stall (the delay is comfortably deeper than
-// any frames-in-flight count).
+// Async-safe transparent-shadow edge-stat readback cadence.
 inline constexpr u32 s_SwShadowEdgeStatsPeriod = 120u;
 inline constexpr u32 s_SwShadowEdgeStatsLogDelay = 8u;
 
-// CPU mirror of the shader NwbBvhBitonicSortPushConstants block. `mode` selects the shader regime:
-// 0 = LOCAL_TILE (one dispatch sorts each GROUP_SIZE tile in groupshared), 1 = GLOBAL (one INTER-tile merge
-// step for a sequenceSize > GROUP_SIZE with compareDistance >= GROUP_SIZE, global-memory compare-exchange),
-// 2 = GLOBAL_TAIL (the per-sequenceSize INTRA-tile tail: one groupshared dispatch for the 8 compareDistance
-// < GROUP_SIZE steps). compareDistance is GLOBAL-only; sequenceSize is GLOBAL/GLOBAL_TAIL-only.
+// CPU mirror of NwbBvhBitonicSortPushConstants.
 struct BvhSortPushConstants{
     u32 elementCount = 0u;
     u32 compareDistance = 0u;
@@ -116,25 +89,19 @@ struct BvhSortPushConstants{
 };
 static_assert(sizeof(BvhSortPushConstants) == sizeof(u32) * 8u, "BvhSortPushConstants must match the shader NwbBvhBitonicSortPushConstants layout");
 
-// Initial per-mesh triangle capacity for the shared LBVH visit-counter scratch; grows by doubling.
 inline constexpr usize s_BvhBuildInitialCapacity = 1024u;
 
-// Largest mesh (in triangles) the software BVH supports. The shared sort/counter scratch is sized once to
-// this cap so that per-mesh build passes — which reference those shared buffers through heap slots — never reference a
-// reallocated buffer when meshes of different sizes are built within a frame. 256K triangles is far above
-// any realistic shadow caster; oversized meshes are skipped (their shadows fall back to "all lit").
+// Maximum per-mesh software BVH size; oversized meshes are skipped.
 inline constexpr u32 s_BvhMaxPrimitivesPerMesh = 262144u;
 
-// CPU mirror of the shader NwbBvhNode (std430, 32 bytes): AABB + child node indices, or a leaf-flagged
-// primitive index in leftChild with rightChild = primitive count (see bvh_common.slangi).
+// CPU mirror of the shader BVH node.
 struct NwbBvhNodeGpu{
     Float3UInt aabbMinLeftChild;
     Float3UInt aabbMaxRightChild;
 };
 static_assert(sizeof(NwbBvhNodeGpu) == 32u, "NwbBvhNodeGpu must match the shader NwbBvhNode std430 layout");
 
-// CPU-only, scratch-lifetime BVH build values. These remain in SIMD form while the recursive SAH build is
-// calculating; the caller packs the final GPU nodes into their typed Float3UInt storage layout afterward.
+// Scratch scene-BVH build values.
 struct SceneBvhPrimitiveCalculation{
     SIMDVector aabbMin = {};
     SIMDVector aabbMax = {};
@@ -150,7 +117,7 @@ struct SceneBvhNodeCalculation{
     bool containsTransparentOccluder = false;
 };
 
-// CPU mirror of the shader NwbBvhBuildPushConstants (shared by the morton / topology / fit kernels).
+// CPU mirror of NwbBvhBuildPushConstants.
 struct BvhBuildPushConstants{
     u32 primitiveCount = 0u;
     u32 internalCount = 0u;
@@ -169,84 +136,51 @@ struct BvhBuildPushConstants{
 };
 static_assert(sizeof(BvhBuildPushConstants) == sizeof(u32) * 12u + sizeof(Float4) * 2u, "BvhBuildPushConstants must match the shader NwbBvhBuildPushConstants layout");
 
-// BVH node child-link encoding, mirroring the bvh_common.slangi shader constants (NWB_BVH_LEAF_FLAG /
-// NWB_BVH_INVALID) for CPU-side BVH build + validation + clears: a leaf sets `LeafFlag` on its leftChild and packs
-// the primitive index in the low bits; `Invalid` is the empty parent/child sentinel. (`Invalid` is the all-bits
-// sentinel rather than a maskable bit, grouped here as part of the one node-index encoding.)
+// Shader-mirrored BVH child encoding.
 namespace BvhNodeIndex{
     enum Mask : u32{
         LeafFlag = NWB_BVH_LEAF_FLAG,
-        // The scene-BVH packer tags rightChild with this bit when the node's subtree contains a transparent
-        // occluder. It shares the numeric bit with LeafFlag because it lives in the other child-link field.
+        // Reuses LeafFlag in rightChild to mark transparent subtrees.
         TransparentSubtreeFlag = NWB_BVH_TRANSPARENT_SUBTREE_FLAG,
         ChildIndexMask = NWB_BVH_CHILD_INDEX_MASK,
         Invalid = NWB_BVH_INVALID,
     };
 };
 
-// Initial scene/instance BVH instance capacity; grows by doubling like the hardware TLAS.
 inline constexpr usize s_SceneBvhInitialInstanceCapacity = 64u;
 
-// Binned-SAH scene-BVH build tuning. BuildSceneBvhNode evaluates a fixed-grid SAH over all three centroid axes at
-// every split and takes the lowest-cost bin boundary. Each
-// instance carries a leaf cost (its primitive count in production) so a large instance biases the tree like a large
-// primitive would; when none is supplied every instance counts uniformly (the self-test path). Leaves remain
-// single-instance (the NwbBvhNode leaf ABI encodes one instance), so SAH here only chooses split axis + position;
-// s_SceneBvhAxisCount is the number of spatial axes evaluated, s_SceneBvhSahBinCount is the per-axis bin grid size,
-// and s_SceneBvhSahTraversalCost is the baseline ct of the
-// cost = ct + (SA_L*cost_L + SA_R*cost_R)/SA_parent model (the per-instance intersection cost ci is folded into the
-// leaf-cost weight itself, so a uniform-weight build is implicitly ci = 1).
+// Fixed-grid binned SAH; leaf cost weights instance intersection cost.
 inline constexpr u32 s_SceneBvhAxisCount = 3u;
 inline constexpr u32 s_SceneBvhSahBinCount = 12u;
 inline constexpr f32 s_SceneBvhSahTraversalCost = 1.0f;
 
-// CPU mirror of the per-instance record the software shadow traversal consumes. Holds the affine world->object
-// transform (so a world-space ray can be pushed into each instance's object space), an ABI-reserved word, and the
-// CPU-side leaf cost used while building the scene BVH. Geometry is selected by the heap slots in the material record.
-// 64 bytes / std430-friendly.
+// CPU mirror of the software scene-BVH instance ABI.
 struct SceneSwBvhInstanceGpu{
-    Float34 worldToObject{};   // affine world->object (row-major 3x4); pushes a world ray into object space
-    u32 reservedMeshIndex = 0u; // preserves the former per-mesh selector's ABI position
-    u32 primitiveCount = 0u;   // triangle count used as the CPU scene-BVH leaf cost
+    Float34 worldToObject{};
+    u32 reservedMeshIndex = 0u;
+    u32 primitiveCount = 0u;
     u32 pad0 = 0u;
     u32 pad1 = 0u;
 };
 static_assert(sizeof(SceneSwBvhInstanceGpu) == sizeof(Float34) + sizeof(u32) * 4u, "SceneSwBvhInstanceGpu must stay a tight 64-byte record");
 
-// Initial capacity (in records) of the per-frame caustic emission-target buffer; grows by doubling.
 inline constexpr usize s_CausticEmissionTargetInitialCapacity = 32u;
 
-// CPU/GPU record of one caustic emission target: the world-space AABB of a refractive instance. The caustic
-// photon producer aims its light-side emission domain at these boxes; all caustic lights share one global target list.
-// A tight 32-byte std430-friendly record ({ float4 aabbMin; float4 aabbMax; }); the w lanes are unused padding (kept
-// for SIMD-friendly 16-byte lanes / std430 float4 alignment).
+// CPU/GPU refractive-instance AABB record.
 struct NwbCausticEmissionTargetGpu{
     Float4 aabbMin = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 aabbMax = Float4(0.f, 0.f, 0.f, 0.f);
 };
 static_assert(sizeof(NwbCausticEmissionTargetGpu) == sizeof(Float4) * 2u, "NwbCausticEmissionTargetGpu must stay a tight 32-byte std430 record");
 
-// CPU mirror of the shader NwbRtInstanceMaterial (shadow/instance_material.slangi, 36 bytes / nine uints,
-// std430): the per-instance shadow-occluder transmittance-model id + flags + the
-// material-constants context the surface hook needs (the constant block byte offset into g_NwbMaterialTypedWords
-// and the g_NwbMeshInstances index that resolves the mutable storage offset). Built per frame into one structured
-// buffer indexed by the shadow instance id (hardware InstanceID() == software scene-BVH leaf index), so the
-// hardware and software trace paths read the same record for the same entity. The model id dispatches the
-// per-hit transmittance hook; reservedMeshSlot preserves its ABI position, while the trace reaches
-// geometry through the heap slots below.
+// CPU mirror of trace material ABI; HW and SW share instance IDs.
 struct NwbRtInstanceMaterialGpu{
     u32 shadowTransmittanceModelId = Limit<u32>::s_Max;
     u32 flags = 0u;
     u32 reservedMeshSlot = 0u;
     u32 materialConstantByteOffset = 0u;
     u32 meshInstanceIndex = 0u;
-    // Per-buffer descriptor-heap slots (GpuDescriptorHandle::slot()) for this occluder's mesh geometry. These
-    // slots are the pivot of the geometry-access split the other RT comments name by side. Host-index side: the
-    // host registers each backing buffer in the global descriptor heap at BVH-build time and stores the
-    // returned slot here, and the per-mesh buffer Vectors survive only for host-side barriers. Shader-layout-only
-    // side: every RT pass reads that geometry through the pinned heap via
-    // NwbHeapRawBuffer(<x>Slot), never through a bound per-mesh array. Default s_Max marks "unregistered";
-    // nodeSlot is the SW BVH node buffer (SW-only, stays s_Max on hardware-built records).
+    // Global-heap geometry slots; nodeSlot is software-only.
     u32 indexSlot = Limit<u32>::s_Max;
     u32 attributeSlot = Limit<u32>::s_Max;
     u32 positionSlot = Limit<u32>::s_Max;
@@ -254,11 +188,7 @@ struct NwbRtInstanceMaterialGpu{
 };
 static_assert(sizeof(NwbRtInstanceMaterialGpu) == 36u, "NwbRtInstanceMaterialGpu must match the shader NwbRtInstanceMaterial std430 layout (9 x uint)");
 
-// Per-instance shadow-occluder flags (NwbRtInstanceMaterialGpu.flags), mirroring the shader-side
-// NWB_RT_INSTANCE_MATERIAL_FLAG_* defines: `Transparent` = evaluate the per-hit transmittance hook; `Refractive` =
-// the material asset's `refractive` classification for the caustic producer. The shadow trace does NOT gate on
-// `Refractive` -- transmittance is unified (each material's surface hook owns the final value, a refractive hook
-// computing it via the engine helper). This is the producer's classification.
+// Shader-mirrored flags: transparent selects transmittance; refractive selects caustics.
 namespace RtInstanceMaterialFlag{
     enum Mask : u32{
         None = 0u,
@@ -267,11 +197,9 @@ namespace RtInstanceMaterialFlag{
     };
 };
 
-// Initial element capacity of the per-frame instance-material table; grows by doubling like the TLAS/scene BVH.
 inline constexpr usize s_ShadowInstanceMaterialInitialCapacity = 128u;
 
-// CPU mirror of sw_shadow_heap_resources.slangi. Every software-shadow pass uses this one heap-only selector block:
-// fields unused by a particular kernel are inert, while the shared layout remains a fixed 84-byte push range.
+// CPU mirror of the heap-only software-shadow selector block.
 struct SwShadowHeapPushConstants{
     u32 width = 0u;
     u32 height = 0u;
@@ -298,8 +226,7 @@ struct SwShadowHeapPushConstants{
 static_assert(NWB_SW_SHADOW_SOFT_TEMPORAL_SPP >= 1u && NWB_SW_SHADOW_SOFT_TEMPORAL_SPP <= NWB_SW_SHADOW_SOFT_SPP, "temporal soft-shadow sample budget must be within the bootstrap budget");
 static_assert(sizeof(SwShadowHeapPushConstants) == sizeof(u32) * 21u, "SwShadowHeapPushConstants must match the shader push-constant layout");
 
-// CPU mirror of the hardware RayQuery shadow push constants (shadow_rayquery_cs.slang): the cone-jitter frame counter
-// followed by target-generation heap slots for the full-resolution world-position, normal, and depth G-buffers.
+// CPU mirror of hardware RayQuery shadow push constants.
 struct ShadowRqPushConstants{
     u32 frameIndex = 0u;
     u32 worldPositionSlot = 0u;
@@ -310,11 +237,7 @@ struct ShadowRqPushConstants{
 };
 static_assert(sizeof(ShadowRqPushConstants) == sizeof(u32) * 6u, "ShadowRqPushConstants must match the shader push-constant layout");
 
-// CPU mirror of the hardware RayQuery SOFT OPAQUE half-res trace push constants (shadow_rayquery_soft_cs.slang): the
-// explicit half-res grid dims + the frame counter seeding the per-pixel cone-jitter, followed by the same three
-// target-generation heap G-buffer slots. Mirrors NwbShadowRqSoftPushConstants (and, minus instanceCount,
-// SwShadowSoftOpaquePushConstants) so the half-res grid guard is structured identically and the downsample/resolve tap
-// alignment stays byte-identical.
+// CPU mirror of half-resolution hardware soft-shadow push constants.
 struct ShadowRqSoftPushConstants{
     u32 width = 0u;
     u32 height = 0u;
@@ -328,39 +251,33 @@ struct ShadowRqSoftPushConstants{
 };
 static_assert(sizeof(ShadowRqSoftPushConstants) == sizeof(u32) * 9u, "ShadowRqSoftPushConstants must match the shader push-constant layout");
 
-// CPU mirror of shadow_resolve_cs.slang's NwbShadowResolvePushConstants: the full/half dims, the a-trous dilation +
-// stage selector, the active shadow-slot range the resolve loops, the temporal-moments-valid flag, the upsample fold,
-// and target-generation descriptor-heap slots for every sampled input and both storage outputs. 21 x 4 = 84 bytes.
+// CPU mirror of NwbShadowResolvePushConstants.
 struct ShadowResolvePushConstants{
-    u32 width = 0u;          // FULL-res width (UPSAMPLE dispatch/output dim)
-    u32 height = 0u;         // FULL-res height
-    u32 halfWidth = 0u;      // HALF-res width (PREPARE/WAVELET dispatch dim)
-    u32 halfHeight = 0u;     // HALF-res height
-    u32 stepWidth = 1u;      // a-trous dilation for this wavelet pass (1,2,4,8,16), in HALF-res texels
-    u32 stage = NWB_SHADOW_RESOLVE_STAGE_PREPARE; // optional PREPARE, WAVELET (half-res), or UPSAMPLE (-> full-res visibility)
-    u32 lightSlotStart = 0u; // first active shadow slot to process
-    u32 lightSlotCount = 0u; // number of contiguous active slots to process
-    u32 momentsValid = 0u;   // 1 = the MOMENTS SRV holds this-frame integrated temporal moments (the merge ran this frame)
-                             // -> the WAVELET's SVGF variance edge-stop may use the temporal variance; 0 = temporal off /
-                             // first frame -> the shader never samples the (dummy) MOMENTS SRV and uses the spatial fallback.
-    u32 upsampleFold = 0u;   // UPSAMPLE fold mode: 0 = OVERWRITE the full-res visibility (soft OPAQUE);
-                             // 1 = MULTIPLY the denoised colored transmittance onto it (soft TRANSPARENT fold, RMW). Ignored
-                             // by PREPARE/WAVELET; see SoftShadowUpsampleFold::Enum + the UPSAMPLE stage in shadow_resolve_cs.
-    u32 geometrySlot = 0u;      // SampledImage: half-res packed geometry cache
-    u32 depthSlot = 0u;         // SampledImage: full-res G-buffer depth
-    u32 worldPositionSlot = 0u; // SampledImage: full-res G-buffer world position
-    u32 normalSlot = 0u;        // SampledImage: full-res G-buffer normal
-    u32 softHalfSlot = 0u;      // SampledImage2DArray: optional PREPARE source
-    u32 inputColorSlot = 0u;    // SampledImage2DArray: direct-input WAVELET / UPSAMPLE source
-    u32 momentsSlot = 0u;       // SampledImage2DArray: temporal moments (or non-temporal dummy)
-    u32 outputStorageSlot = 0u; // StorageImage: half-res ping-pong output
-    u32 visibilityStorageSlot = 0u; // StorageImage: full-res visibility upsample/fold output
-    u32 sceneShadingSlot = 0u;  // UniformBuffer: camera-position payload
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 halfWidth = 0u;
+    u32 halfHeight = 0u;
+    u32 stepWidth = 1u;
+    u32 stage = NWB_SHADOW_RESOLVE_STAGE_PREPARE;
+    u32 lightSlotStart = 0u;
+    u32 lightSlotCount = 0u;
+    u32 momentsValid = 0u;
+    u32 upsampleFold = 0u;
+    u32 geometrySlot = 0u;
+    u32 depthSlot = 0u;
+    u32 worldPositionSlot = 0u;
+    u32 normalSlot = 0u;
+    u32 softHalfSlot = 0u;
+    u32 inputColorSlot = 0u;
+    u32 momentsSlot = 0u;
+    u32 outputStorageSlot = 0u;
+    u32 visibilityStorageSlot = 0u;
+    u32 sceneShadingSlot = 0u;
     u32 pad0 = 0u;
 };
 static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 21u, "ShadowResolvePushConstants must match the shader push-constant layout");
 
-// Shadow resolve stages, kept in lockstep with shadow_resolve_cs.slang's pushConstants.stage switch.
+// Shader-mirrored shadow resolve stages.
 namespace ShadowResolveStage{
     enum Enum : u32{
         Prepare = NWB_SHADOW_RESOLVE_STAGE_PREPARE,
@@ -369,14 +286,7 @@ namespace ShadowResolveStage{
     };
 };
 
-// UPSAMPLE fold mode: the SoftShadowUpsampleFold::Enum values are the single source of truth, kept in lockstep with
-// shadow_resolve_cs.slang's upsampleFold branch:
-//  - Overwrite: the soft OPAQUE resolve writes its denoised grayscale visibility into the full-res visibility.
-//  - Multiply:  the soft COLORED TRANSPARENT resolve read-modify-write MULTIPLIES its denoised colored transmittance onto
-//    the visibility (which already holds the opaque result), so visibility = opaqueSoftUpsampled * transparentSoftUpsampled.
-
-// Mirror of shadow_geometry_downsample_cs.slang's NwbShadowGeometryDownsamplePushConstants: full-res G-buffer dims,
-// the half-res output dims, and three SampledImage heap slots for the G-buffer inputs.
+// CPU mirror of shadow geometry-downsample push constants.
 struct ShadowGeometryDownsamplePushConstants{
     u32 width = 0u;
     u32 height = 0u;
@@ -391,39 +301,29 @@ struct ShadowGeometryDownsamplePushConstants{
 };
 static_assert(sizeof(ShadowGeometryDownsamplePushConstants) == sizeof(u32) * 10u, "ShadowGeometryDownsamplePushConstants must match the shader push-constant layout");
 
-// CPU mirror of shadow_reproject_merge_cs.slang's NwbShadowReprojectMergePushConstants (temporal accumulation):
-// the STASHED previous-frame worldToClip (64-byte row-major matrix -- Float44U's raw[16] is the row-major dump of the
-// mesh-view worldToClip, matching the shader's `row_major float4x4`) + the full/half dims + the active shadow-slot range +
-// the history-valid flag + six global-heap sampled-image slots. Three pad words complete four scalar lanes:
-// 64 + 16*4 = 128 bytes.
+// CPU mirror of temporal shadow-reprojection push constants.
 struct ShadowReprojectMergePushConstants{
     Float44U prevWorldToClip = {};
-    u32 width = 0u;          // FULL-res width (to read the world-position G-buffer at the 2x texel)
-    u32 height = 0u;         // FULL-res height
-    u32 halfWidth = 0u;      // HALF-res width (dispatch/output dim)
-    u32 halfHeight = 0u;     // HALF-res height
-    u32 lightSlotStart = 0u; // first active SOFT shadow slot to process
-    u32 lightSlotCount = 0u; // number of contiguous active SOFT slots (one per dispatch -> 1)
-    u32 historyValid = 0u;       // 0 = no valid history this frame (first frame / after resize) -> force n=0 (pure current)
-    u32 softTraceSlot = 0u;      // SampledImage2DArray: raw trace for this merge signal
-    u32 historyInSlot = 0u;      // SampledImage2DArray: selected incoming history A/B
-    u32 momentsInSlot = 0u;      // SampledImage2DArray: selected incoming moments A/B
-    u32 geometryCurrSlot = 0u;   // SampledImage: current half-res geometry cache
-    u32 geometryPrevSlot = 0u;   // SampledImage: previous half-res geometry cache
-    u32 worldPositionSlot = 0u;  // SampledImage: full-res world-position G-buffer
-    u32 historyOutputStorageSlot = 0u; // StorageImage2DArray: selected outgoing history A/B
-    u32 momentsOutputStorageSlot = 0u; // StorageImage2DArray: selected outgoing moments A/B
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 halfWidth = 0u;
+    u32 halfHeight = 0u;
+    u32 lightSlotStart = 0u;
+    u32 lightSlotCount = 0u;
+    u32 historyValid = 0u;
+    u32 softTraceSlot = 0u;
+    u32 historyInSlot = 0u;
+    u32 momentsInSlot = 0u;
+    u32 geometryCurrSlot = 0u;
+    u32 geometryPrevSlot = 0u;
+    u32 worldPositionSlot = 0u;
+    u32 historyOutputStorageSlot = 0u;
+    u32 momentsOutputStorageSlot = 0u;
     u32 pad2 = 0u;
 };
 static_assert(sizeof(ShadowReprojectMergePushConstants) == sizeof(f32) * 16u + sizeof(u32) * 16u, "ShadowReprojectMergePushConstants must match the shader push-constant layout");
 
-// CPU mirror of the caustic photon producer push constants, shared by BOTH the software compute producer
-// (caustic/caustic_photon_sw_cs.slang) and the hardware ray-traced producer (caustic/caustic_photon_hw_raygen.slang).
-// The byte-identical layout across the two backends is a parity invariant (same photon grid / flux). frameIndex and
-// temporalPhaseCount drive the temporal emission phase on BOTH backends (the splat-space EMA recombines the interleaved
-// grid phases). The trailing slots select the two UniformBuffer selector payloads, the depth/world-
-// position G-buffer images, the refractive emission-target buffer, mesh view buffer, and writable accumulator from
-// the global descriptor heap for both producers.
+// Shared CPU mirror of SW/HW caustic photon push constants.
 struct CausticPhotonPushConstants{
 #define NWB_CAUSTIC_PHOTON_PUSH_CONSTANT_FIELD(name, defaultValue) u32 name = defaultValue;
     NWB_CAUSTIC_PHOTON_PUSH_CONSTANTS_FIELDS(NWB_CAUSTIC_PHOTON_PUSH_CONSTANT_FIELD)
@@ -431,54 +331,47 @@ struct CausticPhotonPushConstants{
 };
 static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 15u, "CausticPhotonPushConstants must match the shader push-constant layout");
 
-// CPU mirror of the caustic resolve push constants (caustic/caustic_resolve_cs.slang). The resolve is an N-pass
-// edge-avoiding a-trous wavelet denoise: per pass it carries the wavelet dilation (stepWidth) and whether this is the
-// first pass (read+normalize the accumulator vs read the previous pass's color). The six heap slots select the
-// sampled inputs plus the writable StorageImage output; the trailing pad preserves the original 32-byte prefix
-// alignment.
+// CPU mirror of caustic resolve push constants.
 struct CausticResolvePushConstants{
-    u32 width = 0u;             // FULL-res width (G-buffer dim; UPSAMPLE dispatch/output dim)
-    u32 height = 0u;            // FULL-res height
-    u32 halfWidth = 0u;         // HALF-res width (the resolve buffers; PREPARE/WAVELET dispatch dim)
-    u32 halfHeight = 0u;        // HALF-res height
-    f32 causticIntensity = 0.f; // exposure, applied once during the PREPARE-pass area-normalize
-    u32 stepWidth = 1u;         // a-trous dilation for this wavelet pass (1,2,4), in HALF-res texels
-    u32 stage = NWB_CAUSTIC_RESOLVE_STAGE_PREPARE_DOWNSAMPLE; // PREPARE+DOWNSAMPLE, WAVELET (half-res), or UPSAMPLE (-> full-res irradiance)
-    u32 pad = 0u;               // completes the preserved first 32-byte scalar block
-    u32 worldPositionSlot = 0u; // SampledImage: full-res world-position G-buffer
-    u32 depthSlot = 0u;         // SampledImage: full-res depth G-buffer
-    u32 inputColorSlot = 0u;    // SampledImage: selected half-res wavelet input
-    u32 geometrySlot = 0u;      // SampledImage: half-res caustic geometry cache
-    u32 accumulatorSlot = 0u;   // SampledImage2DArrayUint: typed R32_UINT fixed-point splat accumulator
-    u32 outputStorageSlot = 0u; // StorageImage: selected half-res ping-pong or full-res irradiance output
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 halfWidth = 0u;
+    u32 halfHeight = 0u;
+    f32 causticIntensity = 0.f;
+    u32 stepWidth = 1u;
+    u32 stage = NWB_CAUSTIC_RESOLVE_STAGE_PREPARE_DOWNSAMPLE;
+    u32 pad = 0u;
+    u32 worldPositionSlot = 0u;
+    u32 depthSlot = 0u;
+    u32 inputColorSlot = 0u;
+    u32 geometrySlot = 0u;
+    u32 accumulatorSlot = 0u;
+    u32 outputStorageSlot = 0u;
 };
 static_assert(sizeof(CausticResolvePushConstants) == sizeof(u32) * 13u + sizeof(f32), "CausticResolvePushConstants must match the shader push-constant layout");
 
-// Every surfel GI pass is descriptor-heap-only. This dispatch-uniform selector block names the persistent surfel
-// buffers, the two trace context uniforms, and the frame textures/storage outputs used by its particular pass. Keeping
-// the same ABI on every surfel pipeline makes each local layout push-only and prevents an accidental local CBV/SRV/UAV
-// from returning during a later pass-specific change.
+// Heap-only selector ABI shared by every surfel GI pass.
 struct SurfelHeapPushConstants{
-    u32 constantsHeapSlot = 0u;                 // UniformBuffer: NwbSurfelConstants
-    u32 poolHeapSlot = 0u;                      // StorageBuffer: live NwbSurfel pool
-    u32 cellHeadHeapSlot = 0u;                  // StorageBuffer: live hash heads
-    u32 counterHeapSlot = 0u;                   // StorageBuffer: bump/free counters
-    u32 freeListHeapSlot = 0u;                  // StorageBuffer: recycled surfel ids
-    u32 snapshotPoolHeapSlot = 0u;              // StorageBuffer: previous-frame pool
-    u32 snapshotCellHeadHeapSlot = 0u;          // StorageBuffer: previous-frame hash heads
-    u32 traceIndirectArgsHeapSlot = 0u;         // StorageBuffer: DispatchIndirectArguments
-    u32 deferredResourcesHeapSlot = 0u;         // UniformBuffer: NwbDeferredBindlessResources
-    u32 materialContextSlotsHeapSlot = 0u;      // UniformBuffer: NwbRayTraceMaterialContextSlots
-    u32 worldPositionSlot = 0u;                 // SampledImage: full-resolution world-position G-buffer
-    u32 normalSlot = 0u;                        // SampledImage: full-resolution normal G-buffer
-    u32 outputStorageHeapSlot = 0u;             // StorageImage: resolve/upsample output
-    u32 halfIrradianceSlot = 0u;                // SampledImage: half-resolution surfel resolve output
+    u32 constantsHeapSlot = 0u;
+    u32 poolHeapSlot = 0u;
+    u32 cellHeadHeapSlot = 0u;
+    u32 counterHeapSlot = 0u;
+    u32 freeListHeapSlot = 0u;
+    u32 snapshotPoolHeapSlot = 0u;
+    u32 snapshotCellHeadHeapSlot = 0u;
+    u32 traceIndirectArgsHeapSlot = 0u;
+    u32 deferredResourcesHeapSlot = 0u;
+    u32 materialContextSlotsHeapSlot = 0u;
+    u32 worldPositionSlot = 0u;
+    u32 normalSlot = 0u;
+    u32 outputStorageHeapSlot = 0u;
+    u32 halfIrradianceSlot = 0u;
 };
 static_assert(sizeof(SurfelHeapPushConstants) == sizeof(u32) * 14u, "SurfelHeapPushConstants must match NwbSurfelHeapPushConstants");
 static_assert(NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL >= 1u && NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL <= NWB_SURFEL_RAYS_PER_SURFEL);
 static_assert(NWB_SURFEL_CONVERGED_SAMPLE_COUNT >= 1u && NWB_SURFEL_CONVERGED_SAMPLE_COUNT <= NWB_SURFEL_MAX_ACCUM);
 
-// Caustic resolve stages, kept in lockstep with caustic_resolve_cs.slang's pushConstants.stage switch.
+// Shader-mirrored caustic resolve stages.
 namespace CausticResolveStage{
     enum Enum : u32{
         PrepareDownsample = NWB_CAUSTIC_RESOLVE_STAGE_PREPARE_DOWNSAMPLE,
@@ -487,9 +380,7 @@ namespace CausticResolveStage{
     };
 };
 
-// Mirror of caustic_geometry_downsample_cs.slang's NwbCausticGeometryDownsamplePushConstants (the half-res geometry
-// cache pre-pass): full-res G-buffer dims + the half-res output dims + two global-heap G-buffer slots + one writable
-// StorageImage output slot.
+// CPU mirror of caustic geometry-downsample push constants.
 struct CausticGeometryDownsamplePushConstants{
     u32 width = 0u;
     u32 height = 0u;
@@ -502,9 +393,7 @@ struct CausticGeometryDownsamplePushConstants{
 };
 static_assert(sizeof(CausticGeometryDownsamplePushConstants) == sizeof(u32) * 8u, "CausticGeometryDownsamplePushConstants must match the shader push-constant layout");
 
-// Mirror of caustic_accumulator_decay_cs.slang's NwbCausticAccumulatorDecayPushConstants (the splat-space temporal EMA
-// pre-pass): the accumulator dims + the per-frame decay factor (accum_N = decayFactor*accum_{N-1} before this frame's
-// splat) + its writable StorageImage slot.
+// CPU mirror of caustic accumulator-decay push constants.
 struct CausticAccumulatorDecayPushConstants{
     u32 width = 0u;
     u32 height = 0u;
@@ -513,20 +402,17 @@ struct CausticAccumulatorDecayPushConstants{
 };
 static_assert(sizeof(CausticAccumulatorDecayPushConstants) == sizeof(u32) * 4u, "CausticAccumulatorDecayPushConstants must match the shader push-constant layout");
 
-// Hardware uses full density; software uses a debug-safe grid and full opt/fin grid.
-// PHOTON_COUNT must equal GRID_SIDE^2.
+// Hardware uses full density; photon count must equal gridSide squared.
 inline constexpr u32 s_CausticHwPhotonGridSide = 512u;
 inline constexpr u32 s_CausticHwPhotonCount = s_CausticHwPhotonGridSide * s_CausticHwPhotonGridSide;
 #if defined(NDEBUG)
-inline constexpr u32 s_CausticSwPhotonGridSide = 512u;                      // opt/fin: the full density (262144 photons)
+inline constexpr u32 s_CausticSwPhotonGridSide = 512u;
 #else
-inline constexpr u32 s_CausticSwPhotonGridSide = NWB_CAUSTIC_SW_GRID_SIDE;  // dbg-safe (128 -> 16384; the SW path TDRs above this unoptimized)
+inline constexpr u32 s_CausticSwPhotonGridSide = NWB_CAUSTIC_SW_GRID_SIDE;
 #endif
 inline constexpr u32 s_CausticSwPhotonCount = s_CausticSwPhotonGridSide * s_CausticSwPhotonGridSide;
 
-// Temporal caustic work reduction: begin with the existing two-phase checkerboard while the splat-space EMA seeds, then
-// use four interleaved 2x2 phases once it has received a short accepted-update warm-up. Each active phase keeps the
-// photon flux normalized by its actual photonCount, so the static expected irradiance stays unchanged.
+// Two bootstrap phases, then four converged phases with normalized flux.
 inline constexpr u32 s_CausticTemporalBootstrapPhaseCount = 2u;
 inline constexpr u32 s_CausticTemporalConvergedPhaseCount = 4u;
 inline constexpr u32 s_CausticTemporalWarmupFrameCount = 8u;
@@ -540,9 +426,7 @@ inline constexpr f32 s_CausticIntensity = 2.0f;
 // Runtime refractor bounds are inflated because emission uses bind-pose AABBs.
 inline constexpr f32 s_CausticRuntimeBoundsInflation = 1.25f;
 
-// Software transparent-shadow broad phase: the scene BVH is only an instance-level reject before the per-mesh BVH and
-// exact triangle tests. Keep this box slightly conservative so grazing half-res shadow rays are never dropped by the
-// top-level instance AABB when several transparent shadows overlap.
+// Conservative top-level bounds for transparent-shadow rays.
 inline constexpr f32 s_SwShadowSceneBoundsMinPadding = 0.25f;
 inline constexpr f32 s_SwShadowSceneBoundsRelativePadding = 0.10f;
 
@@ -550,9 +434,7 @@ inline constexpr f32 s_SwShadowSceneBoundsRelativePadding = 0.10f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared helpers defined in rt_detail.cpp, used across the raytracing_* TUs (scene-BVH build, descriptor-heap
-// registrations, and per-instance occluder-material resolve). Moved out of the anon TU namespace so the split TUs
-// can all reach them.
+// Cross-TU ray-tracing helpers.
 namespace __hidden_raytracing_system{
 
 

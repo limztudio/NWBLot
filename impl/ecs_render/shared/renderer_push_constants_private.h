@@ -9,7 +9,7 @@
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 
 #include <core/graphics/module.h>
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets/graphics/scene/binding_slots.h>
 

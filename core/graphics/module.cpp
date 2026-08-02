@@ -481,8 +481,7 @@ void Graphics::updateWindowState(u32 width, u32 height, bool windowVisible, bool
 
 void Graphics::destroy(){
     waitAllJobs();
-    if(auto* device = m_backend->getDevice())
-        device->waitForIdle();
+    waitForIdle();
 
     invalidateRenderPassResources();
     m_renderPasses.clear();
@@ -493,6 +492,11 @@ void Graphics::destroy(){
     m_backend->destroy();
     m_instanceCreated = false;
     m_deviceRecreationRequested = false;
+}
+
+void Graphics::waitForIdle(){
+    if(auto* device = m_backend->getDevice())
+        device->waitForIdle();
 }
 
 GraphicsBackend::Device& Graphics::getDevice()const noexcept{
@@ -527,8 +531,7 @@ void Graphics::addRenderPassToBack(IRenderPass& pass){
 
 void Graphics::removeRenderPass(IRenderPass& pass){
     waitAllJobs();
-    auto& device = getDevice();
-    device.waitForIdle();
+    waitForIdle();
 
     pass.invalidateResources();
     m_renderPasses.remove(&pass);
@@ -601,8 +604,7 @@ TextureHandle Graphics::createTexture(const TextureDesc& desc)const{
 
 void Graphics::backBufferResizing(){
     waitAllJobs();
-    auto& device = getDevice();
-    device.waitForIdle();
+    waitForIdle();
 
     invalidateRenderPassResources();
     m_swapChainFramebuffers.clear();

@@ -18,13 +18,13 @@ nwb_target_link_libraries_whole_archive(nwb_resource_cooker
 )
 target_link_libraries(nwb_resource_cooker PRIVATE
     nwb_assets
+    nwb_assets_cook
     nwb_common
     nwb_alloc
     nwb_filesystem
     nwb_logclient
     nwb::tbb
     nwb_metascript
-    nwb_graphics
     nwb::cli11_headers
 )
 target_compile_definitions(nwb_resource_cooker PRIVATE __TBB_NO_IMPLICIT_LINKAGE=1 __TBBMALLOC_NO_IMPLICIT_LINKAGE=1)

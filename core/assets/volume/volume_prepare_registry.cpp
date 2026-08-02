@@ -11,7 +11,7 @@
 #include "volume_prepare_registry.h"
 
 #include "arena_names.h"
-#include <core/assets/auto_registration.h>
+#include <core/assets/registration_queue.h>
 
 #include <core/common/log.h>
 

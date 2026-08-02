@@ -119,6 +119,7 @@ public:
     [[nodiscard]] bool isDeviceRecreationRequested()const noexcept{ return m_deviceRecreationRequested; }
     void updateWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
     void destroy();
+    void waitForIdle();
 
 public:
     [[nodiscard]] GraphicsBackend::Device& getDevice()const noexcept;

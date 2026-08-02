@@ -5,7 +5,8 @@
 #pragma once
 
 
-#include "registry.h"
+#include "cooker.h"
+
 #include <core/common/module.h>
 
 
@@ -18,17 +19,18 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using AssetCodecFactory = UniquePtr<IAssetCodec>(*)();
+using AssetCookerFactory = UniquePtr<IAssetCooker>(*)(AssetArena& arena);
 
 
-template<typename AssetCodecT>
-[[nodiscard]] inline UniquePtr<IAssetCodec> CreateAssetCodec(){
-    return MakeUnique<AssetCodecT>();
+template<typename AssetCookerT>
+[[nodiscard]] inline UniquePtr<IAssetCooker> CreateAssetCooker(AssetArena& arena){
+    return MakeUnique<AssetCookerT>(arena);
 }
 
-class AssetCodecAutoRegistrar final : public Core::Common::Initializerable{
+
+class AssetCookerAutoRegistrar final : public Core::Common::Initializerable{
 public:
-    explicit AssetCodecAutoRegistrar(AssetCodecFactory factory)
+    explicit AssetCookerAutoRegistrar(AssetCookerFactory factory)
         : m_factory(factory)
     {}
 
@@ -39,13 +41,14 @@ public:
 
 
 private:
-    AssetCodecFactory m_factory = nullptr;
+    AssetCookerFactory m_factory = nullptr;
 };
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry);
+void RegisterAutoCollectedAssetCookers(AssetCookerRegistry& outRegistry, AssetArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

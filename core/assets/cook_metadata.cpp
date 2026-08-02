@@ -10,7 +10,7 @@
 
 #include "cook_metadata.h"
 #include "arena_names.h"
-#include "auto_registration.h"
+#include "registration_queue.h"
 
 #include <core/common/log.h>
 

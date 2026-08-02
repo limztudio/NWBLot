@@ -1,3 +1,10 @@
+nwb_declare_static_library(nwb_shader_archive)
+target_sources(nwb_shader_archive PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/shader_archive.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shader_archive.h"
+)
+target_link_libraries(nwb_shader_archive PUBLIC nwb_common)
+
 nwb_declare_static_library(nwb_graphics)
 target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/backend_contract.cpp"
@@ -5,7 +12,6 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/pipeline_helpers.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/shader_archive.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/spirv_entry_point.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/allocator.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/buffer.cpp"
@@ -38,7 +44,6 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_nodes.h"
     "${CMAKE_CURRENT_LIST_DIR}/render_pass.h"
-    "${CMAKE_CURRENT_LIST_DIR}/shader_archive.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_param.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_stage_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/spirv_entry_point.h"

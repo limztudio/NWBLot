@@ -14,7 +14,6 @@
 
 #include <core/assets/ref.h>
 #include <core/ecs/world.h>
-#include <core/graphics/vulkan/backend_context.h>
 #include <core/graphics/module.h>
 #include <core/telemetry/frame_graph_registry.h>
 #include <impl/assets_material/asset.h>
@@ -158,8 +157,7 @@ inline void FinishDestroyingSmokeWorld(
     NotNullUniquePtr<Core::ECS::World>& world
 ){
     context.graphics.waitAllJobs();
-    auto& device = context.graphics.getDevice();
-    device.waitForIdle();
+    context.graphics.waitForIdle();
 
     world->clear();
     world.owner().reset();

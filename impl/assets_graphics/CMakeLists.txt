@@ -28,7 +28,7 @@ if(NWB_BUILD_RESOURCE_COOKER)
         nwb_assets_csg_cook
         nwb_assets_material_cook
         nwb_assets_shader_cook
-        nwb_graphics
+        nwb_shader_archive
         nwb_filesystem
     )
     target_compile_definitions(nwb_assets_graphics_cook PRIVATE NWB_COOK=1)

@@ -17,6 +17,7 @@ target_link_libraries(nwb_loader PRIVATE
     nwb_filesystem
     nwb_frame
     nwb_graphics
+    nwb_shader_archive
     nwb_logclient
     nwb::cli11_headers
 )

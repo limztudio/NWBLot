@@ -5,7 +5,7 @@
 #include "system.h"
 
 #include <core/common/log.h>
-#include <core/graphics/vulkan/backend_context.h>
+#include <core/graphics/backend_selection.h>
 #include <core/graphics/module.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/shader_archive.h>

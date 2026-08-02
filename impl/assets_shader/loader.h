@@ -9,8 +9,7 @@
 
 #include <core/assets/manager.h>
 #include <core/graphics/module.h>
-#include <core/graphics/vulkan/backend_context.h>
-#include <core/graphics/shader_archive.h>
+#include <core/graphics/backend_selection.h>
 #include <core/graphics/shader_stage_names.h>
 #include <impl/assets_shader/asset.h>
 #include <core/common/log.h>

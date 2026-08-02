@@ -5,7 +5,6 @@
 #include "project.h"
 
 #include <core/ecs/module.h>
-#include <core/graphics/vulkan/backend_context.h>
 #include <core/graphics/module.h>
 #include <core/telemetry/frame_graph_registry.h>
 #include <impl/assets/graphics/bindless/runtime_abi.h>
@@ -116,8 +115,7 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
 
     context.graphics.waitAllJobs();
 
-    auto& device = context.graphics.getDevice();
-    device.waitForIdle();
+    context.graphics.waitForIdle();
 
     world->clear();
     world.reset();

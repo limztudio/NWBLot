@@ -17,7 +17,7 @@
 #include "pack_manifest.h"
 #include "volume_prepare_registry.h"
 
-#include <core/assets/auto_registration.h>
+#include <core/assets/cooker_registration.h>
 #include <core/assets/cook_metadata.h>
 #include <core/assets/cook_paths.h>
 #include <core/assets/paths.h>

@@ -8,8 +8,8 @@
 #include <impl/assets_model/asset.h>
 #include <core/assets/bunch/cook.h>
 #include <core/assets/volume/cooker.h>
-#include <core/assets/auto_registration.h>
 #include <core/assets/cook_entry_registry.h>
+#include <core/assets/registration_queue.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/binary_payload.h>
 #include <impl/assets_shader/asset.h>

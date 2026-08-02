@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "auto_registration.h"
+#include "cooker_registration.h"
 #include "arena_names.h"
 #include "registration_queue.h"
 
@@ -19,14 +19,14 @@ NWB_ASSETS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_auto_registration{
+namespace __hidden_cooker_registration{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AutoRegistrationQueue<AssetCodecFactory>& QueryAutoCodecFactoryQueue(){
-    static AutoRegistrationQueue<AssetCodecFactory> queue(AssetsArenaScope::s_AutoCodecFactoryQueueArena);
+AutoRegistrationQueue<AssetCookerFactory>& QueryAutoCookerFactoryQueue(){
+    static AutoRegistrationQueue<AssetCookerFactory> queue(AssetsArenaScope::s_AutoCookerFactoryQueueArena);
     return queue;
 }
 
@@ -71,26 +71,28 @@ void RegisterFactoryProducts(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetCodecAutoRegistrar::initialize(){
-    return __hidden_auto_registration::InitializeAutoFactory(
-        __hidden_auto_registration::QueryAutoCodecFactoryQueue(),
+bool AssetCookerAutoRegistrar::initialize(){
+    return __hidden_cooker_registration::InitializeAutoFactory(
+        __hidden_cooker_registration::QueryAutoCookerFactoryQueue(),
         m_factory
     );
 }
 
-void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
-    Alloc::ScratchArena scratchArena(AssetsArenaScope::s_RegisterCodecsScratch);
-    Vector<AssetCodecFactory, Alloc::ScratchArena> codecFactories{scratchArena};
-    __hidden_auto_registration::QueryAutoCodecFactoryQueue().copyTo(codecFactories);
 
-    __hidden_auto_registration::RegisterFactoryProducts(
-        codecFactories,
-        [](const AssetCodecFactory factory){ return factory(); },
-        [&](UniquePtr<IAssetCodec> codec){ return outRegistry.registerCodec(Move(codec)); },
-        [](){ NWB_LOGGER_ERROR(NWB_TEXT("RegisterAutoCollectedAssetCodecs: codec factory returned null codec")); },
-        [](){ NWB_LOGGER_ERROR(NWB_TEXT("RegisterAutoCollectedAssetCodecs: failed to register codec")); }
+void RegisterAutoCollectedAssetCookers(AssetCookerRegistry& outRegistry, AssetArena& arena){
+    Alloc::ScratchArena scratchArena(AssetsArenaScope::s_RegisterCookersScratch);
+    Vector<AssetCookerFactory, Alloc::ScratchArena> cookerFactories{scratchArena};
+    __hidden_cooker_registration::QueryAutoCookerFactoryQueue().copyTo(cookerFactories);
+
+    __hidden_cooker_registration::RegisterFactoryProducts(
+        cookerFactories,
+        [&](const AssetCookerFactory factory){ return factory(arena); },
+        [&](UniquePtr<IAssetCooker> cooker){ return outRegistry.registerCooker(Move(cooker)); },
+        [](){ NWB_LOGGER_ERROR(NWB_TEXT("RegisterAutoCollectedAssetCookers: cooker factory returned null cooker")); },
+        [](){ NWB_LOGGER_ERROR(NWB_TEXT("RegisterAutoCollectedAssetCookers: failed to register cooker")); }
     );
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

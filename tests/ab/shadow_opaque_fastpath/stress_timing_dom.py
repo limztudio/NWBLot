@@ -13,7 +13,6 @@ Usage: stress_timing_dom.py <domain_reldir> <timing_out> <logserver_out> <durati
 """
 
 import os
-import socket
 import subprocess
 import sys
 import time
@@ -21,37 +20,10 @@ from pathlib import Path
 
 
 REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / "tests/ab"))
 RUNTIME = REPO / "__cmake/build/linux-clang-x64/Testing/skinning_culling_benchmark_runtime/opt"
 
-
-def free_port():
-    with socket.socket() as sock:
-        sock.bind(("localhost", 0))
-        return sock.getsockname()[1]
-
-
-def wait_port(port, timeout=10.0):
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        try:
-            with socket.create_connection(("localhost", port), timeout=0.5):
-                return True
-        except OSError:
-            time.sleep(0.15)
-    return False
-
-
-def stop_process(process, timeout):
-    if process is None or process.poll() is not None:
-        return
-    try:
-        process.terminate()
-        process.wait(timeout=timeout)
-    except ProcessLookupError:
-        return
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
+from process_helpers import free_port, stop_process, wait_port  # noqa: E402
 
 
 def main():

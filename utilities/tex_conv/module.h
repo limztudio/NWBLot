@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <impl/assets_texture/format.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,23 +19,22 @@ NWB_TEX_CONV_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_UastcBlockWidth = 4u;
-inline constexpr u32 s_UastcBlockHeight = 4u;
-inline constexpr u32 s_UastcBytesPerBlock = 16u;
-inline constexpr u32 s_TextureMetadataVersion = 1u;
-inline constexpr AStringView s_UastcSpecificationRevision = "b624c07ad3c659e7b0f0badcb36e9a6b8820a99d";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace TextureDimension{
-    enum Enum : u8{
-        Texture2D = 0u,
-        TextureCube,
-        Texture3D,
-    };
-};
+namespace TextureDimension = Impl::TextureDimension;
+using Impl::TextureFormat::ComputeCompleteMipCount;
+using Impl::TextureFormat::ComputePlaneBlockLayout;
+using Impl::TextureFormat::s_ClampMipAddressMode;
+using Impl::TextureFormat::s_LinearColorSpace;
+using Impl::TextureFormat::s_MipMajorSliceMajorBlocksPayloadLayout;
+using Impl::TextureFormat::s_SrgbColorSpace;
+using Impl::TextureFormat::s_Texture2DDimension;
+using Impl::TextureFormat::s_Texture3DDimension;
+using Impl::TextureFormat::s_TextureCubeDimension;
+using Impl::TextureFormat::s_TextureMetadataVersion;
+using Impl::TextureFormat::s_UastcBlockHeight;
+using Impl::TextureFormat::s_UastcBlockWidth;
+using Impl::TextureFormat::s_UastcBytesPerBlock;
+using Impl::TextureFormat::s_UastcLdr4x4Format;
+using Impl::TextureFormat::s_UastcSpecificationRevision;
 
 struct MipLevel{
     u32 level = 0u;
@@ -92,4 +93,3 @@ NWB_TEX_CONV_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

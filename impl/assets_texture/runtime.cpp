@@ -27,62 +27,13 @@ namespace __hidden_texture_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 s_UastcBlockWidth = 4u;
-static constexpr u32 s_UastcBlockHeight = 4u;
-static constexpr u32 s_UastcBytesPerBlock = 16u;
-
 Core::Assets::AssetCodecAutoRegistrar s_TextureAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<TextureAssetCodec>);
 
-
-[[nodiscard]] static bool ComputeCompleteMipCount(
-    const TextureDimension::Enum dimension,
-    const u32 width,
-    const u32 height,
-    const u32 depth,
-    u32& outMipCount
-){
-    outMipCount = 0u;
-    if(!IsValidTextureDimension(dimension) || width == 0u || height == 0u || depth == 0u)
-        return false;
-
-    u32 mipWidth = width;
-    u32 mipHeight = height;
-    u32 mipDepth = depth;
-    for(;;){
-        if(outMipCount == Limit<u32>::s_Max)
-            return false;
-        ++outMipCount;
-
-        if(mipWidth == 1u && mipHeight == 1u && (dimension != TextureDimension::Texture3D || mipDepth == 1u))
-            return true;
-
-        mipWidth = mipWidth > 1u ? mipWidth >> 1u : 1u;
-        mipHeight = mipHeight > 1u ? mipHeight >> 1u : 1u;
-        if(dimension == TextureDimension::Texture3D)
-            mipDepth = mipDepth > 1u ? mipDepth >> 1u : 1u;
-    }
-}
-
-[[nodiscard]] static bool ComputeMipSliceCount(
-    const TextureDimension::Enum dimension,
-    const u32 mipDepth,
-    u32& outSliceCount
-){
-    switch(dimension){
-    case TextureDimension::Texture2D:
-        outSliceCount = 1u;
-        return true;
-    case TextureDimension::TextureCube:
-        outSliceCount = 6u;
-        return true;
-    case TextureDimension::Texture3D:
-        outSliceCount = mipDepth;
-        return mipDepth > 0u;
-    default:
-        outSliceCount = 0u;
-        return false;
-    }
-}
+using TextureFormat::ComputeCompleteMipCount;
+using TextureFormat::ComputeMipSliceCount;
+using TextureFormat::s_UastcBlockHeight;
+using TextureFormat::s_UastcBlockWidth;
+using TextureFormat::s_UastcBytesPerBlock;
 
 [[nodiscard]] static bool ValidateTextureMipLevels(
     const Texture::MipLevelVector& mipLevels,
@@ -361,4 +312,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

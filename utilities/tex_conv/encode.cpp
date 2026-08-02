@@ -60,63 +60,6 @@ using VolumeMips = basisu::vector<ImagePlanes>;
 
 static constexpr usize s_InvalidBackendSlice = Limit<usize>::s_Max;
 
-[[nodiscard]] static bool ComputeCompleteMipCount(
-    const TextureDimension::Enum dimension,
-    const u32 width,
-    const u32 height,
-    const u32 depth,
-    u32& outMipCount
-){
-    outMipCount = 0u;
-    if(width == 0u || height == 0u || depth == 0u)
-        return false;
-
-    u32 mipWidth = width;
-    u32 mipHeight = height;
-    u32 mipDepth = depth;
-    for(;;){
-        if(outMipCount == Limit<u32>::s_Max)
-            return false;
-        ++outMipCount;
-
-        if(mipWidth == 1u && mipHeight == 1u && (dimension != TextureDimension::Texture3D || mipDepth == 1u))
-            return true;
-
-        mipWidth = mipWidth > 1u ? mipWidth >> 1u : 1u;
-        mipHeight = mipHeight > 1u ? mipHeight >> 1u : 1u;
-        if(dimension == TextureDimension::Texture3D)
-            mipDepth = mipDepth > 1u ? mipDepth >> 1u : 1u;
-    }
-}
-
-[[nodiscard]] static bool ComputePlaneBlockLayout(
-    const u32 width,
-    const u32 height,
-    u32& outBlocksX,
-    u32& outBlocksY,
-    u64& outPlaneByteCount
-){
-    outBlocksX = 0u;
-    outBlocksY = 0u;
-    outPlaneByteCount = 0u;
-    if(width == 0u || height == 0u)
-        return false;
-
-    const u64 blocksX64 = DivideUp(static_cast<u64>(width), static_cast<u64>(s_UastcBlockWidth));
-    const u64 blocksY64 = DivideUp(static_cast<u64>(height), static_cast<u64>(s_UastcBlockHeight));
-    if(!FitsU32(blocksX64) || !FitsU32(blocksY64) || blocksX64 > Limit<u64>::s_Max / blocksY64)
-        return false;
-
-    const u64 blockCount = blocksX64 * blocksY64;
-    if(blockCount > Limit<u64>::s_Max / s_UastcBytesPerBlock)
-        return false;
-
-    outBlocksX = static_cast<u32>(blocksX64);
-    outBlocksY = static_cast<u32>(blocksY64);
-    outPlaneByteCount = blockCount * s_UastcBytesPerBlock;
-    return true;
-}
-
 static void ResetPayload(
     TexturePayload& outPayload,
     const TextureDimension::Enum dimension,

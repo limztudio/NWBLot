@@ -3,6 +3,7 @@ target_sources(nwb_assets_texture PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
     "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
+    "${CMAKE_CURRENT_LIST_DIR}/format.h"
 )
 target_link_libraries(nwb_assets_texture PUBLIC nwb_assets)
 
@@ -26,6 +27,7 @@ if(NWB_BUILD_RESOURCE_COOKER)
         "${CMAKE_CURRENT_LIST_DIR}/asset.h"
         "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook.h"
+        "${CMAKE_CURRENT_LIST_DIR}/format.h"
     )
     target_link_libraries(nwb_assets_texture_cook PUBLIC
         nwb_assets

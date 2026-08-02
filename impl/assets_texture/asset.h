@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "../global.h"
+#include "format.h"
 
 #include <core/assets/module.h>
 
@@ -28,21 +28,6 @@ namespace TextureColorSpace{
 
 [[nodiscard]] inline bool IsValidTextureColorSpace(const TextureColorSpace::Enum colorSpace){
     return colorSpace == TextureColorSpace::Linear || colorSpace == TextureColorSpace::Srgb;
-}
-
-namespace TextureDimension{
-    enum Enum : u8{
-        Texture2D = 0u,
-        TextureCube,
-        Texture3D,
-    };
-};
-
-[[nodiscard]] inline bool IsValidTextureDimension(const TextureDimension::Enum dimension){
-    return dimension == TextureDimension::Texture2D
-        || dimension == TextureDimension::TextureCube
-        || dimension == TextureDimension::Texture3D
-    ;
 }
 
 struct TextureMipLevel{
@@ -153,4 +138,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -148,6 +148,45 @@ static void AppendLegacyTextureV1Binary(
 #endif
 
 
+TEST(AssetsGraphics, TextureFormatComputesSharedMipAndUastcBlockLayouts){
+    u32 mipCount = 0u;
+    EXPECT_TRUE(NWB::Impl::TextureFormat::ComputeCompleteMipCount(
+        NWB::Impl::TextureDimension::Texture2D,
+        7u,
+        5u,
+        1u,
+        mipCount
+    ));
+    EXPECT_EQ(mipCount, 3u);
+
+    EXPECT_TRUE(NWB::Impl::TextureFormat::ComputeCompleteMipCount(
+        NWB::Impl::TextureDimension::TextureCube,
+        2u,
+        2u,
+        1u,
+        mipCount
+    ));
+    EXPECT_EQ(mipCount, 2u);
+
+    EXPECT_TRUE(NWB::Impl::TextureFormat::ComputeCompleteMipCount(
+        NWB::Impl::TextureDimension::Texture3D,
+        4u,
+        2u,
+        3u,
+        mipCount
+    ));
+    EXPECT_EQ(mipCount, 3u);
+
+    u32 blocksX = 0u;
+    u32 blocksY = 0u;
+    u64 planeByteCount = 0u;
+    EXPECT_TRUE(NWB::Impl::TextureFormat::ComputePlaneBlockLayout(7u, 5u, blocksX, blocksY, planeByteCount));
+    EXPECT_EQ(blocksX, 2u);
+    EXPECT_EQ(blocksY, 2u);
+    EXPECT_EQ(planeByteCount, 64u);
+}
+
+
 TEST(AssetsGraphics, TextureCodecRoundTripPreservesUastcMipPayload){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);

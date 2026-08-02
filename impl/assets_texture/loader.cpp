@@ -29,9 +29,9 @@ namespace __hidden_texture_loader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 s_UastcBlockWidth = 4u;
-static constexpr u32 s_UastcBlockHeight = 4u;
-static constexpr u32 s_UastcBytesPerBlock = 16u;
+using TextureFormat::s_UastcBlockHeight;
+using TextureFormat::s_UastcBlockWidth;
+using TextureFormat::s_UastcBytesPerBlock;
 static constexpr u32 s_RgbaBytesPerTexel = 4u;
 static constexpr Core::FormatSupport::Mask s_RequiredTextureFormatSupport =
     Core::FormatSupport::Texture

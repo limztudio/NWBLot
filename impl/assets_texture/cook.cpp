@@ -63,20 +63,22 @@ static constexpr AStringView s_SlicesField = "slices";
 static constexpr AStringView s_OffsetBytesField = "offset_bytes";
 static constexpr AStringView s_SizeBytesField = "size_bytes";
 
-static constexpr AStringView s_UastcLdr4x4Format = "uastc_ldr_4x4";
-static constexpr AStringView s_UastcSpecificationRevision = "b624c07ad3c659e7b0f0badcb36e9a6b8820a99d";
-static constexpr AStringView s_MipMajorSliceMajorBlocksPayloadLayout = "mip_major_slice_major_blocks";
-static constexpr AStringView s_ClampMipAddressMode = "clamp";
-static constexpr AStringView s_LinearColorSpace = "linear";
-static constexpr AStringView s_SrgbColorSpace = "srgb";
-static constexpr AStringView s_Texture2DDimension = "2d";
-static constexpr AStringView s_TextureCubeDimension = "cube";
-static constexpr AStringView s_Texture3DDimension = "volume";
-static constexpr AStringView s_TextureDataExtension = ".tex";
-static constexpr u32 s_UastcBlockWidth = 4u;
-static constexpr u32 s_UastcBlockHeight = 4u;
-static constexpr u32 s_UastcBytesPerBlock = 16u;
-static constexpr u32 s_TextureMetadataVersion = 1u;
+using TextureFormat::ComputeCompleteMipCount;
+using TextureFormat::ComputeMipSliceCount;
+using TextureFormat::s_ClampMipAddressMode;
+using TextureFormat::s_LinearColorSpace;
+using TextureFormat::s_MipMajorSliceMajorBlocksPayloadLayout;
+using TextureFormat::s_SrgbColorSpace;
+using TextureFormat::s_Texture2DDimension;
+using TextureFormat::s_Texture3DDimension;
+using TextureFormat::s_TextureCubeDimension;
+using TextureFormat::s_TextureDataExtension;
+using TextureFormat::s_TextureMetadataVersion;
+using TextureFormat::s_UastcBlockHeight;
+using TextureFormat::s_UastcBlockWidth;
+using TextureFormat::s_UastcBytesPerBlock;
+using TextureFormat::s_UastcLdr4x4Format;
+using TextureFormat::s_UastcSpecificationRevision;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -194,56 +196,6 @@ template<typename IntegerT>
         , StringConvert(expectedValue)
     );
     return false;
-}
-
-[[nodiscard]] static bool ComputeCompleteMipCount(
-    const TextureDimension::Enum dimension,
-    const u32 width,
-    const u32 height,
-    const u32 depth,
-    u32& outMipCount
-){
-    outMipCount = 0u;
-    if(!IsValidTextureDimension(dimension) || width == 0u || height == 0u || depth == 0u)
-        return false;
-
-    u32 mipWidth = width;
-    u32 mipHeight = height;
-    u32 mipDepth = depth;
-    for(;;){
-        if(outMipCount == Limit<u32>::s_Max)
-            return false;
-        ++outMipCount;
-
-        if(mipWidth == 1u && mipHeight == 1u && (dimension != TextureDimension::Texture3D || mipDepth == 1u))
-            return true;
-
-        mipWidth = mipWidth > 1u ? mipWidth >> 1u : 1u;
-        mipHeight = mipHeight > 1u ? mipHeight >> 1u : 1u;
-        if(dimension == TextureDimension::Texture3D)
-            mipDepth = mipDepth > 1u ? mipDepth >> 1u : 1u;
-    }
-}
-
-[[nodiscard]] static bool ComputeMipSliceCount(
-    const TextureDimension::Enum dimension,
-    const u32 mipDepth,
-    u32& outSliceCount
-){
-    switch(dimension){
-    case TextureDimension::Texture2D:
-        outSliceCount = 1u;
-        return true;
-    case TextureDimension::TextureCube:
-        outSliceCount = 6u;
-        return true;
-    case TextureDimension::Texture3D:
-        outSliceCount = mipDepth;
-        return mipDepth > 0u;
-    default:
-        outSliceCount = 0u;
-        return false;
-    }
 }
 
 [[nodiscard]] static bool ReadTextureDimension(

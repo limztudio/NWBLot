@@ -184,6 +184,36 @@ Optional<CapturingLogger> DescriptorBufferRoundTripTest::s_logger;
 Optional<Common::LoggerRegistrationGuard> DescriptorBufferRoundTripTest::s_loggerGuard;
 
 
+[[nodiscard]] static TextureHandle CreateConcurrentTestTexture(
+    GraphicsBackend::Device& device,
+    const bool keepInitialState = false
+){
+    TextureDesc desc;
+    desc
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Format::RGBA8_UNORM)
+        .setInUAV(true)
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    ;
+    if(keepInitialState)
+        desc.setKeepInitialState(true);
+    return device.createTexture(desc);
+}
+
+[[nodiscard]] static TextureHandle CreateExclusiveRayOutputTestTexture(GraphicsBackend::Device& device){
+    return device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+    );
+}
+
+
 // RendererSystem requests this terminal policy only when accepted cross-queue ownership cannot be recovered. The
 // Graphics owner must stop the current generation before it records another frame, leaving orderly teardown and
 // recreation to the caller that owns the device lifetime.
@@ -1397,39 +1427,14 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCo
     if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
         GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
 
-    const auto makeConcurrentTexture = [&device](const bool keepInitialState = false){
-        TextureDesc desc;
-        desc
-            .setWidth(4u)
-            .setHeight(4u)
-            .setFormat(Format::RGBA8_UNORM)
-            .setInUAV(true)
-            .setInitialState(ResourceStates::Common)
-            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
-        ;
-        if(keepInitialState)
-            desc.setKeepInitialState(true);
-        return device.createTexture(desc);
-    };
-    const auto makeExclusiveRayOutput = [&device](){
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(4u)
-                .setHeight(4u)
-                .setFormat(Format::RGBA8_UNORM)
-                .setInUAV(true)
-                .setInitialState(ResourceStates::Common)
-        );
-    };
-
-    auto gbuffer = makeConcurrentTexture();
-    auto opaqueColor = makeConcurrentTexture(true);
-    auto compositeColor = makeConcurrentTexture(true);
-    auto avboitColor = makeConcurrentTexture();
-    auto avboitExtinction = makeConcurrentTexture();
-    auto shadowVisibility = makeExclusiveRayOutput();
-    auto causticIrradiance = makeExclusiveRayOutput();
-    auto surfelIrradiance = makeExclusiveRayOutput();
+    auto gbuffer = CreateConcurrentTestTexture(device);
+    auto opaqueColor = CreateConcurrentTestTexture(device, true);
+    auto compositeColor = CreateConcurrentTestTexture(device, true);
+    auto avboitColor = CreateConcurrentTestTexture(device);
+    auto avboitExtinction = CreateConcurrentTestTexture(device);
+    auto shadowVisibility = CreateExclusiveRayOutputTestTexture(device);
+    auto causticIrradiance = CreateExclusiveRayOutputTestTexture(device);
+    auto surfelIrradiance = CreateExclusiveRayOutputTestTexture(device);
     auto slotsBuffer = device.createBuffer(
         BufferDesc()
             .setByteSize(256u)
@@ -1708,40 +1713,15 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLighting
     if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
         GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
 
-    const auto makeConcurrentTexture = [&device](const bool keepInitialState = false){
-        TextureDesc desc;
-        desc
-            .setWidth(4u)
-            .setHeight(4u)
-            .setFormat(Format::RGBA8_UNORM)
-            .setInUAV(true)
-            .setInitialState(ResourceStates::Common)
-            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
-        ;
-        if(keepInitialState)
-            desc.setKeepInitialState(true);
-        return device.createTexture(desc);
-    };
-    const auto makeExclusiveRayOutput = [&device](){
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(4u)
-                .setHeight(4u)
-                .setFormat(Format::RGBA8_UNORM)
-                .setInUAV(true)
-                .setInitialState(ResourceStates::Common)
-        );
-    };
-
-    auto gbuffer = makeConcurrentTexture();
-    auto opaqueColor = makeConcurrentTexture(true);
-    auto compositeColor = makeConcurrentTexture(true);
-    auto shadowVisibility = makeExclusiveRayOutput();
-    auto causticIrradiance = makeExclusiveRayOutput();
-    auto surfelIrradiance = makeExclusiveRayOutput();
-    auto shadowHistory = makeConcurrentTexture(true);
-    auto causticHistory = makeConcurrentTexture(true);
-    auto surfelHistory = makeConcurrentTexture(true);
+    auto gbuffer = CreateConcurrentTestTexture(device);
+    auto opaqueColor = CreateConcurrentTestTexture(device, true);
+    auto compositeColor = CreateConcurrentTestTexture(device, true);
+    auto shadowVisibility = CreateExclusiveRayOutputTestTexture(device);
+    auto causticIrradiance = CreateExclusiveRayOutputTestTexture(device);
+    auto surfelIrradiance = CreateExclusiveRayOutputTestTexture(device);
+    auto shadowHistory = CreateConcurrentTestTexture(device, true);
+    auto causticHistory = CreateConcurrentTestTexture(device, true);
+    auto surfelHistory = CreateConcurrentTestTexture(device, true);
     ASSERT_NE(gbuffer.get(), nullptr);
     ASSERT_NE(opaqueColor.get(), nullptr);
     ASSERT_NE(compositeColor.get(), nullptr);
@@ -4944,4 +4924,3 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

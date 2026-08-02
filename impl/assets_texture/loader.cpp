@@ -39,19 +39,22 @@ static constexpr Core::FormatSupport::Mask s_RequiredTextureFormatSupport =
 ;
 
 Futex s_BasisTranscoderInitializationMutex;
-bool s_BasisTranscoderInitialized = false;
+Atomic<bool> s_BasisTranscoderInitialized = false;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static void InitializeBasisTranscoder(){
+    if(s_BasisTranscoderInitialized.load(MemoryOrder::acquire))
+        return;
+
     ScopedLock lock(s_BasisTranscoderInitializationMutex);
-    if(s_BasisTranscoderInitialized)
+    if(s_BasisTranscoderInitialized.load(MemoryOrder::acquire))
         return;
 
     basist::basisu_transcoder_init();
-    s_BasisTranscoderInitialized = true;
+    s_BasisTranscoderInitialized.store(true, MemoryOrder::release);
 }
 
 [[nodiscard]] static bool SupportsTextureFormat(Core::Device& device, const Core::Format::Enum format){
@@ -472,3 +475,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

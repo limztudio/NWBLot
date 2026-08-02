@@ -4684,6 +4684,48 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRequiresDescriptorBuff
         heap.advanceFrame();
     EXPECT_EQ(sampledImage3D->getReferenceCount(), 1u)
         << "heap did not release the Texture3D resource after its in-flight quarantine matured";
+
+    // TextureCube has a distinct image-view type from the other sampled-image arrays. The heap therefore gives it
+    // its own appended ABI binding/class instead of exposing a cube through the Texture2D table.
+    auto sampledImageCube = device.createTexture(
+        TextureDesc()
+            .setWidth(32u)
+            .setHeight(32u)
+            .setArraySize(6u)
+            .setDimension(TextureDimension::TextureCube)
+            .setFormat(Format::RGBA16_FLOAT)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(sampledImageCube);
+    EXPECT_EQ(sampledImageCube->getReferenceCount(), 1u);
+
+    EXPECT_EQ(
+        heap.getRegisterSlot(GpuDescriptorClass::SampledImageCube),
+        NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_CUBE
+    );
+    const GpuDescriptorHandle sampledImageCubeHandle = heap.allocate(GpuDescriptorClass::SampledImageCube);
+    ASSERT_TRUE(sampledImageCubeHandle.valid());
+    EXPECT_TRUE(heap.write(
+        sampledImageCubeHandle,
+        DescriptorWriteItem::Texture_SRV(
+            0u,
+            sampledImageCube.get(),
+            Format::RGBA16_FLOAT,
+            TextureSubresourceSet(0u, 1u, 0u, 6u),
+            TextureDimension::TextureCube
+        )
+    )) << "heap TextureCube write() did not route through the descriptor-buffer path";
+    EXPECT_EQ(sampledImageCube->getReferenceCount(), 2u)
+        << "heap write() did not retain the persistent TextureCube resource";
+
+    heap.free(sampledImageCubeHandle);
+    EXPECT_EQ(sampledImageCube->getReferenceCount(), 2u)
+        << "heap free() released the TextureCube resource before its in-flight quarantine matured";
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
+    EXPECT_EQ(sampledImageCube->getReferenceCount(), 1u)
+        << "heap did not release the TextureCube resource after its in-flight quarantine matured";
 }
 
 

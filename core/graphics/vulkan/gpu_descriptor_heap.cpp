@@ -29,10 +29,10 @@ namespace __hidden_vulkan_descriptor_heap{
     //
     // Sampled-image dimensions are deliberately appended after Sampler in the public enum to preserve existing
     // handle tags, so do not rely on enum contiguity when iterating the resource classes below.
-    inline constexpr u32 s_ResourceClassCount = 8u;
-    // Four sampled-image arrays plus the uniform-texel-buffer array all count against Vulkan's sampled-image
+    inline constexpr u32 s_ResourceClassCount = 9u;
+    // Five sampled-image arrays plus the uniform-texel-buffer array all count against Vulkan's sampled-image
     // descriptor limits.
-    inline constexpr u32 s_SampledImageOrTexelClassCount = 5u;
+    inline constexpr u32 s_SampledImageOrTexelClassCount = 6u;
 
     // The descriptor-buffer heap owns a distinct block per live TLAS generation. Two in-flight frames plus the
     // current replacement need at most three slots; keep one spare so a burst of capacity growth still preserves
@@ -54,6 +54,7 @@ namespace __hidden_vulkan_descriptor_heap{
         case GpuDescriptorClass::SampledImage2DArray: return ResourceType::Texture_SRV;
         case GpuDescriptorClass::SampledImage3D: return ResourceType::Texture_SRV;
         case GpuDescriptorClass::SampledImage2DArrayUint: return ResourceType::Texture_SRV;
+        case GpuDescriptorClass::SampledImageCube: return ResourceType::Texture_SRV;
         default:                                return ResourceType::None;
         }
     }
@@ -80,6 +81,7 @@ namespace __hidden_vulkan_descriptor_heap{
             abi.sampledImage2DArrayBinding,
             abi.sampledImage3DBinding,
             abi.sampledImage2DArrayUintBinding,
+            abi.sampledImageCubeBinding,
         };
         for(u32 bindingIndex = 0u; bindingIndex < s_ResourceClassCount; ++bindingIndex){
             const u32 binding = resourceBindings[bindingIndex];
@@ -132,6 +134,7 @@ u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptor
     case GpuDescriptorClass::SampledImage2DArray: return abi.sampledImage2DArrayBinding;
     case GpuDescriptorClass::SampledImage3D: return abi.sampledImage3DBinding;
     case GpuDescriptorClass::SampledImage2DArrayUint: return abi.sampledImage2DArrayUintBinding;
+    case GpuDescriptorClass::SampledImageCube: return abi.sampledImageCubeBinding;
     default:                                return 0u;
     }
 }
@@ -278,6 +281,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImage2DArray), resourceCapacity))
         .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImage3D), resourceCapacity))
         .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImage2DArrayUint), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImageCube), resourceCapacity))
     ;
 
     m_resourceLayout = m_device.createBindlessLayout(resourceLayoutDesc);
@@ -747,7 +751,8 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
         GpuDescriptorClass::UniformBuffer,
         GpuDescriptorClass::SampledImage2DArray,
         GpuDescriptorClass::SampledImage3D,
-        GpuDescriptorClass::SampledImage2DArrayUint
+        GpuDescriptorClass::SampledImage2DArrayUint,
+        GpuDescriptorClass::SampledImageCube
     };
     static constexpr GpuDescriptorClass::Enum s_SamplerClasses[] = {
         GpuDescriptorClass::Sampler

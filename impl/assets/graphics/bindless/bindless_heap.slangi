@@ -57,6 +57,11 @@ Texture2DArray<float4> g_NwbHeapSampledImage2DArrays[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_3D, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 Texture3D<float4> g_NwbHeapSampledImage3Ds[];
 
+// TextureCube likewise needs its own declaration and descriptor binding: a cube image view cannot be addressed
+// through the Texture2D table even though both are sampled-image descriptors in Vulkan.
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_CUBE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+TextureCube<float4> g_NwbHeapSampledImageCubes[];
+
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 RWTexture2D<float4> g_NwbHeapStorageImages[];
 
@@ -145,6 +150,10 @@ Texture2DArray<float4> NwbHeapSampledImage2DArray(const uint slot){
 
 Texture3D<float4> NwbHeapSampledImage3D(const uint slot){
     return g_NwbHeapSampledImage3Ds[slot];
+}
+
+TextureCube<float4> NwbHeapSampledImageCube(const uint slot){
+    return g_NwbHeapSampledImageCubes[slot];
 }
 
 // CSG's slot cbuffer is uniform per draw/dispatch, so these array lookups remain uniform like the fullscreen image

@@ -41,6 +41,7 @@ namespace AssetsGraphicsBindless{
     abi.sampledImage2DArrayBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY;
     abi.sampledImage3DBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_3D;
     abi.sampledImage2DArrayUintBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY_UINT;
+    abi.sampledImageCubeBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_CUBE;
     abi.samplerBinding = NWB_BINDLESS_HEAP_BINDING_SAMPLER;
     abi.accelStructBinding = NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT;
     return abi;

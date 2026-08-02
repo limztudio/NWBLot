@@ -73,19 +73,43 @@ static void InitializeBasisTranscoder(){
     return SupportsTextureFormat(device, rgbaFormat) ? rgbaFormat : Core::Format::UNKNOWN;
 }
 
+[[nodiscard]] static Core::Format::Enum SelectRgbaUploadFormat(Core::Device& device, const TextureColorSpace::Enum colorSpace){
+    const Core::Format::Enum rgbaFormat = colorSpace == TextureColorSpace::Srgb
+        ? Core::Format::RGBA8_UNORM_SRGB
+        : Core::Format::RGBA8_UNORM
+    ;
+    return SupportsTextureFormat(device, rgbaFormat) ? rgbaFormat : Core::Format::UNKNOWN;
+}
+
 [[nodiscard]] static bool IsAstc4x4Format(const Core::Format::Enum format){
     return format == Core::Format::ASTC_4x4_UNORM || format == Core::Format::ASTC_4x4_UNORM_SRGB;
 }
 
-[[nodiscard]] static bool DecodeMipAsAstc(
+[[nodiscard]] static bool DecodeTextureSliceAsAstc(
     const Texture& textureAsset,
     const TextureMipLevel& mip,
-    Vector<u8, Core::Alloc::ScratchArena>& outUploadBytes
+    const u32 sliceIndex,
+    u8* const outUploadBytes,
+    const usize uploadByteCount
 ){
-    outUploadBytes.resize(static_cast<usize>(mip.sizeBytes));
+    if(
+        !outUploadBytes
+        || mip.sliceCount == 0u
+        || sliceIndex >= mip.sliceCount
+        || (mip.sizeBytes % mip.sliceCount) != 0u
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: invalid UASTC slice layout"));
+        return false;
+    }
+    const u64 sliceSizeBytes = mip.sizeBytes / mip.sliceCount;
+    if(sliceSizeBytes != uploadByteCount || sliceSizeBytes > Limit<usize>::s_Max){
+        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: ASTC UASTC slice size is invalid"));
+        return false;
+    }
 
-    const u8* const sourceData = textureAsset.uastcBlocks().data() + static_cast<usize>(mip.offsetBytes);
-    for(u64 blockOffset = 0u; blockOffset < mip.sizeBytes; blockOffset += s_UastcBytesPerBlock){
+    const u64 sourceOffset = mip.offsetBytes + static_cast<u64>(sliceIndex) * sliceSizeBytes;
+    const u8* const sourceData = textureAsset.uastcBlocks().data() + static_cast<usize>(sourceOffset);
+    for(u64 blockOffset = 0u; blockOffset < sliceSizeBytes; blockOffset += s_UastcBytesPerBlock){
         basist::uastc_block sourceBlock;
         NWB_MEMCPY(
             &sourceBlock,
@@ -93,7 +117,7 @@ static void InitializeBasisTranscoder(){
             sourceData + static_cast<usize>(blockOffset),
             sizeof(sourceBlock)
         );
-        if(!basist::transcode_uastc_to_astc(sourceBlock, outUploadBytes.data() + static_cast<usize>(blockOffset))){
+        if(!basist::transcode_uastc_to_astc(sourceBlock, outUploadBytes + static_cast<usize>(blockOffset))){
             NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: UASTC-to-ASTC transcoding failed"));
             return false;
         }
@@ -101,20 +125,34 @@ static void InitializeBasisTranscoder(){
     return true;
 }
 
-[[nodiscard]] static bool DecodeMipAsRgba(
+[[nodiscard]] static bool DecodeTextureSliceAsRgba(
     const Texture& textureAsset,
     const TextureMipLevel& mip,
-    Vector<u8, Core::Alloc::ScratchArena>& outUploadBytes
+    const u32 sliceIndex,
+    u8* const outUploadBytes,
+    const usize uploadByteCount
 ){
     const u64 texelCount = static_cast<u64>(mip.width) * static_cast<u64>(mip.height);
     if(texelCount > Limit<usize>::s_Max / s_RgbaBytesPerTexel){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: RGBA8 fallback mip size exceeds addressable memory"));
         return false;
     }
-    outUploadBytes.resize(static_cast<usize>(texelCount * s_RgbaBytesPerTexel));
+    const u64 expectedUploadByteCount = texelCount * s_RgbaBytesPerTexel;
+    if(
+        !outUploadBytes
+        || expectedUploadByteCount != uploadByteCount
+        || mip.sliceCount == 0u
+        || sliceIndex >= mip.sliceCount
+        || (mip.sizeBytes % mip.sliceCount) != 0u
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: invalid RGBA8 UASTC slice layout"));
+        return false;
+    }
 
     const bool srgb = textureAsset.colorSpace() == TextureColorSpace::Srgb;
-    const u8* const sourceData = textureAsset.uastcBlocks().data() + static_cast<usize>(mip.offsetBytes);
+    const u64 sourceSliceBytes = mip.sizeBytes / mip.sliceCount;
+    const u64 sourceOffset = mip.offsetBytes + static_cast<u64>(sliceIndex) * sourceSliceBytes;
+    const u8* const sourceData = textureAsset.uastcBlocks().data() + static_cast<usize>(sourceOffset);
     for(u32 blockY = 0u; blockY < mip.blockCountY; ++blockY){
         for(u32 blockX = 0u; blockX < mip.blockCountX; ++blockX){
             const u64 blockIndex = static_cast<u64>(blockY) * static_cast<u64>(mip.blockCountX) + blockX;
@@ -169,29 +207,69 @@ static void InitializeBasisTranscoder(){
     Vector<u8, Core::Alloc::ScratchArena>& scratchBytes
 ){
     usize rowPitch = 0u;
+    usize sliceUploadByteCount = 0u;
     if(IsAstc4x4Format(format)){
         const u64 rowPitch64 = static_cast<u64>(mip.blockCountX) * s_UastcBytesPerBlock;
-        if(rowPitch64 > Limit<usize>::s_Max){
+        if(rowPitch64 > Limit<usize>::s_Max || rowPitch64 > Limit<u64>::s_Max / mip.blockCountY){
             NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: ASTC mip row pitch exceeds addressable memory"));
             return false;
         }
-        if(!DecodeMipAsAstc(textureAsset, mip, scratchBytes))
-            return false;
         rowPitch = static_cast<usize>(rowPitch64);
+        sliceUploadByteCount = static_cast<usize>(rowPitch64 * mip.blockCountY);
     }
     else{
         const u64 rowPitch64 = static_cast<u64>(mip.width) * s_RgbaBytesPerTexel;
-        if(rowPitch64 > Limit<usize>::s_Max){
+        if(rowPitch64 > Limit<usize>::s_Max || rowPitch64 > Limit<u64>::s_Max / mip.height){
             NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: RGBA8 mip row pitch exceeds addressable memory"));
             return false;
         }
-        if(!DecodeMipAsRgba(textureAsset, mip, scratchBytes))
-            return false;
         rowPitch = static_cast<usize>(rowPitch64);
+        sliceUploadByteCount = static_cast<usize>(rowPitch64 * mip.height);
     }
 
-    commandList.writeTexture(&texture, 0u, mipLevel, scratchBytes.data(), rowPitch, scratchBytes.size());
+    if(mip.sliceCount == 0u || sliceUploadByteCount > Limit<usize>::s_Max / mip.sliceCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: texture mip upload size exceeds addressable memory"));
+        return false;
+    }
+    scratchBytes.resize(sliceUploadByteCount * mip.sliceCount);
+    for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
+        u8* const destination = scratchBytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount;
+        const bool decoded = IsAstc4x4Format(format)
+            ? DecodeTextureSliceAsAstc(textureAsset, mip, sliceIndex, destination, sliceUploadByteCount)
+            : DecodeTextureSliceAsRgba(textureAsset, mip, sliceIndex, destination, sliceUploadByteCount)
+        ;
+        if(!decoded)
+            return false;
+    }
+
+    if(textureAsset.dimension() == TextureDimension::Texture3D){
+        commandList.writeTexture(&texture, 0u, mipLevel, scratchBytes.data(), rowPitch, sliceUploadByteCount);
+        return true;
+    }
+
+    for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
+        const u8* const source = scratchBytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount;
+        commandList.writeTexture(&texture, sliceIndex, mipLevel, source, rowPitch, sliceUploadByteCount);
+    }
     return true;
+}
+
+[[nodiscard]] static Core::TextureDimension::Enum ToCoreTextureDimension(const TextureDimension::Enum dimension){
+    switch(dimension){
+    case TextureDimension::Texture2D: return Core::TextureDimension::Texture2D;
+    case TextureDimension::TextureCube: return Core::TextureDimension::TextureCube;
+    case TextureDimension::Texture3D: return Core::TextureDimension::Texture3D;
+    default: return Core::TextureDimension::Unknown;
+    }
+}
+
+[[nodiscard]] static Core::GpuDescriptorClass::Enum ToSampledImageDescriptorClass(const TextureDimension::Enum dimension){
+    switch(dimension){
+    case TextureDimension::Texture2D: return Core::GpuDescriptorClass::SampledImage;
+    case TextureDimension::TextureCube: return Core::GpuDescriptorClass::SampledImageCube;
+    case TextureDimension::Texture3D: return Core::GpuDescriptorClass::SampledImage3D;
+    default: return Core::GpuDescriptorClass::kCount;
+    }
 }
 
 
@@ -236,7 +314,7 @@ bool TextureAssetLoader::Create(
         return false;
     }
 
-    const Core::Format::Enum format = __hidden_texture_loader::SelectUploadFormat(device, textureAsset.colorSpace());
+    Core::Format::Enum format = __hidden_texture_loader::SelectUploadFormat(device, textureAsset.colorSpace());
     if(format == Core::Format::UNKNOWN){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: device cannot filter ASTC 4x4 or RGBA8 for texture '{}'")
             , owner
@@ -246,20 +324,42 @@ bool TextureAssetLoader::Create(
     }
 
     const Name imageName = debugName ? debugName : textureAsset.virtualPath();
+    const Core::TextureDimension::Enum textureDimension = __hidden_texture_loader::ToCoreTextureDimension(textureAsset.dimension());
+    const Core::GpuDescriptorClass::Enum descriptorClass = __hidden_texture_loader::ToSampledImageDescriptorClass(textureAsset.dimension());
+    if(textureDimension == Core::TextureDimension::Unknown || descriptorClass == Core::GpuDescriptorClass::kCount){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: texture '{}' has an unsupported dimension")
+            , owner
+            , StringConvert(textureAsset.virtualPath().c_str())
+        );
+        return false;
+    }
+
     Core::TextureDesc textureDesc;
     textureDesc
         .setWidth(textureAsset.width())
         .setHeight(textureAsset.height())
         .setMipLevels(static_cast<u32>(textureAsset.mipLevels().size()))
         .setFormat(format)
-        .setDimension(Core::TextureDimension::Texture2D)
+        .setDimension(textureDimension)
         .setInitialState(Core::ResourceStates::ShaderResource)
         .setKeepInitialState(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName(imageName)
     ;
+    if(textureAsset.dimension() == TextureDimension::TextureCube)
+        textureDesc.setArraySize(6u);
+    else if(textureAsset.dimension() == TextureDimension::Texture3D)
+        textureDesc.setDepth(textureAsset.depth());
 
     Core::TextureHandle texture = graphics.createTexture(textureDesc);
+    if(!texture && __hidden_texture_loader::IsAstc4x4Format(format)){
+        const Core::Format::Enum rgbaFallback = __hidden_texture_loader::SelectRgbaUploadFormat(device, textureAsset.colorSpace());
+        if(rgbaFallback != Core::Format::UNKNOWN){
+            textureDesc.setFormat(rgbaFallback);
+            texture = graphics.createTexture(textureDesc);
+            format = rgbaFallback;
+        }
+    }
     if(!texture){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create texture '{}'"), owner, StringConvert(imageName.c_str()));
         return false;
@@ -300,7 +400,7 @@ bool TextureAssetLoader::Create(
         return false;
     }
 
-    const Core::GpuDescriptorHandle sampledImageHandle = heap.allocate(Core::GpuDescriptorClass::SampledImage);
+    const Core::GpuDescriptorHandle sampledImageHandle = heap.allocate(descriptorClass);
     if(!sampledImageHandle.valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to allocate a bindless sampled-image slot for texture '{}'"), owner, StringConvert(imageName.c_str()));
         return false;
@@ -310,7 +410,7 @@ bool TextureAssetLoader::Create(
         texture.get(),
         format,
         Core::s_AllSubresources,
-        Core::TextureDimension::Texture2D
+        textureDimension
     ))){
         heap.free(sampledImageHandle);
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to write the bindless sampled-image slot for texture '{}'"), owner, StringConvert(imageName.c_str()));

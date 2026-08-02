@@ -42,8 +42,8 @@ namespace TextureAssetLoader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Creates, uploads, and registers a static Texture2D asset. The ASTC path is used when the device supports filtered
-// ASTC 4x4 sampling; the portable RGBA8 path decodes the same UASTC source otherwise.
+// Creates, uploads, and registers a static 2D, cube, or 3D texture asset. The ASTC path is used when the device
+// supports filtered ASTC 4x4 sampling; the portable RGBA8 path decodes the same UASTC source otherwise.
 [[nodiscard]] bool Create(
     TextureGpuResource& outResource,
     const Texture& textureAsset,

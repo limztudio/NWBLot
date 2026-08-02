@@ -1,31 +1,48 @@
 # tex_conv
 
-tex_conv converts one LDR image into a pair of NWB texture files:
+tex_conv converts LDR images into a pair of NWB texture files. A single positional
+image produces a 2D texture:
 
     tex_conv foobar.png
 
-This writes foobar.nwb and foobar.tex beside the input. --output path/name selects
-a different base name, --linear marks and filters the image as linear data, and
---force is required to replace either existing output file.
+Cubemaps and volume textures use explicit ordered image lists:
 
-Version 1 accepts PNG, JPEG/JFIF, TGA, and QOI images. Its input decoder is the
-vendored Basis Universal encoder; unsupported formats fail rather than silently
-producing a different texture type.
+    tex_conv --cube posx.png negx.png posy.png negy.png posz.png negz.png --output sky
+    tex_conv --volume z0.png z1.png z2.png z3.png --output fog
+
+`--cube` always takes exactly six square faces in `+X, -X, +Y, -Y, +Z, -Z`
+order. `--volume` takes one or more same-sized slices in ascending Z order. This
+writes `foobar.nwb` and `foobar.tex` beside the first input unless `--output`
+selects a different base name. `--linear` marks and filters the image data as
+linear data, and `--force` is required to replace either existing output file.
+
+All texture modes accept PNG, JPEG/JFIF, TGA, and QOI images. The input decoder
+is the vendored Basis Universal encoder; unsupported formats fail rather than
+silently producing a different texture type.
 
 ## File contract
 
 The .tex file has no container header. It is a contiguous sequence of standard
-UASTC LDR 4x4 blocks, ordered by mip level from level 0 to the 1x1 level. Every
-block is 16 bytes and follows the pinned UASTC texture specification's LSB-first
-bit layout (revision b624c07ad3c659e7b0f0badcb36e9a6b8820a99d). Edge blocks are
-the normal clamped 4x4 UASTC blocks produced by the encoder.
+UASTC LDR 4x4 blocks. Every block is 16 bytes and follows the pinned UASTC
+texture specification's LSB-first bit layout (revision
+b624c07ad3c659e7b0f0badcb36e9a6b8820a99d). Edge blocks are the normal clamped
+4x4 UASTC blocks produced by the encoder.
+
+2D assets retain the version-1 `mip_major_blocks` order: mip level 0 through the
+1x1 level. Cube and volume assets use version-2
+`mip_major_slice_major_blocks` order: each mip's cube faces or Z planes are
+contiguous before the next mip. Cube planes retain `+X, -X, +Y, -Y, +Z, -Z`
+order; volume planes retain ascending Z order. Volume mips reduce all three
+dimensions, including depth, until they reach 1×1×1.
 
 The sibling .nwb file is readable metascript metadata. It records:
 
-- the uastc_ldr_4x4 format, color space, and base resolution;
+- the uastc_ldr_4x4 format, color space, base resolution, and (for version 2)
+  dimension and depth;
 - the 4x4 / 16-byte block layout;
 - the .tex basename and mip-major payload layout; and
-- for each mip, its dimensions, block grid, byte offset, and byte size.
+- for each mip, its dimensions, block grid, byte offset, byte size, and (for
+  version 2) plane count.
 
 For example, a 7x5 source has three mips and its payload records 64 bytes at
 offset 0 for 7x5, then 16 bytes each for 3x2 and 1x1. The metadata's

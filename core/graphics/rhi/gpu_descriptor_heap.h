@@ -43,6 +43,9 @@ namespace GpuDescriptorClass{
         // Keep appended to preserve the stable tags above. A uint Texture2DArray has a distinct shader image type
         // from the floating-point Texture2DArray table, so it must occupy its own descriptor-array binding.
         SampledImage2DArrayUint, // Texture2DArray<uint>_SRV -> SAMPLED_IMAGE
+        // Keep appended to preserve the stable handle ABI above. Cubemaps require a cube image view and therefore
+        // cannot share the Texture2D sampled-image declaration.
+        SampledImageCube,        // TextureCube_SRV -> SAMPLED_IMAGE
 
         kCount
     };
@@ -98,6 +101,7 @@ struct GpuDescriptorHeapAbi{
     u32 sampledImage2DArrayBinding = s_Unspecified;
     u32 sampledImage3DBinding = s_Unspecified;
     u32 sampledImage2DArrayUintBinding = s_Unspecified;
+    u32 sampledImageCubeBinding = s_Unspecified;
     u32 samplerBinding = s_Unspecified;
     u32 accelStructBinding = s_Unspecified;
 
@@ -113,6 +117,7 @@ struct GpuDescriptorHeapAbi{
             && sampledImage2DArrayBinding != s_Unspecified
             && sampledImage3DBinding != s_Unspecified
             && sampledImage2DArrayUintBinding != s_Unspecified
+            && sampledImageCubeBinding != s_Unspecified
             && samplerBinding != s_Unspecified
             && accelStructBinding != s_Unspecified
         ;

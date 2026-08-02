@@ -32,6 +32,8 @@ struct TextureCookEntry{
     bool hasAlpha = false;
     u32 width = 0u;
     u32 height = 0u;
+    TextureDimension::Enum dimension = TextureDimension::Texture2D;
+    u32 depth = 1u;
     Texture::MipLevelVector mipLevels;
     Core::Assets::AssetBytes uastcBlocks;
 

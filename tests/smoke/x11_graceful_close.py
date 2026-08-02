@@ -1,18 +1,16 @@
 #!/usr/bin/env python3
-# Gracefully close an X11 top-level window owned by a PID by sending a WM_DELETE_WINDOW ClientMessage.
+# Gracefully close a known X11 top-level window by sending a WM_DELETE_WINDOW ClientMessage.
 #
 # The NWB render apps exit gracefully ONLY via the WM_DELETE_WINDOW protocol (their X11 event loop returns "stop" on
 # that message, which unwinds to main()'s return and -- in a NWB_BUILDMODE build -- writes the .namesym sidecar).
 # SIGINT/SIGTERM/TerminateProcess skip that path, so a plain kill produces no sidecar. This is the Linux analog of the
 # window-capture smoke's Windows WM_CLOSE teardown.
 #
-# Window discovery uses `xprop` (present on the host) to read _NET_CLIENT_LIST + match WM_NAME against a substring
-# (the apps do not set _NET_WM_PID reliably). Only the actual ClientMessage send needs libX11 via ctypes.
+# The capture smoke provides the exact X11 window ID it captured. Only the actual ClientMessage send needs libX11 via
+# ctypes, so teardown cannot accidentally close another application's similarly titled window.
 import ctypes
 import ctypes.util
-import subprocess
 import sys
-import time
 
 XLib = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
 
@@ -44,21 +42,6 @@ class XClientMessageEvent(ctypes.Structure):
     ]
 
 
-def list_windows():
-    """Return [(wid_hex, wm_name_or_empty), ...] via xprop reading the root _NET_CLIENT_LIST."""
-    out = subprocess.run(["xprop", "-root", "_NET_CLIENT_LIST"], capture_output=True, text=True).stdout
-    windows = []
-    for token in out.replace(",", " ").split():
-        if token.startswith("0x"):
-            wid = token.rstrip(",")
-            name_out = subprocess.run(["xprop", "-id", wid, "WM_NAME"], capture_output=True, text=True).stdout
-            name = ""
-            if '"' in name_out:
-                name = name_out[name_out.index('"') + 1:name_out.rindex('"')]
-            windows.append((wid, name))
-    return windows
-
-
 def send_wm_delete(disp, win):
     protocols = XLib.XInternAtom(disp, b"WM_PROTOCOLS", False)
     delete_window = XLib.XInternAtom(disp, b"WM_DELETE_WINDOW", False)
@@ -87,33 +70,30 @@ def send_wm_delete(disp, win):
 
 def main():
     if len(sys.argv) < 2:
-        print("usage: x11_graceful_close.py <name-substring> [timeout_seconds]", file=sys.stderr)
+        print("usage: x11_graceful_close.py <window-id>", file=sys.stderr)
         return 2
-    needle = sys.argv[1].lower()
-    timeout_s = float(sys.argv[2]) if len(sys.argv) > 2 else 15.0
+
+    try:
+        window_id = int(sys.argv[1], 0)
+    except ValueError:
+        print(f"error: invalid X11 window ID '{sys.argv[1]}'", file=sys.stderr)
+        return 2
+    if window_id <= 0:
+        print(f"error: invalid X11 window ID '{sys.argv[1]}'", file=sys.stderr)
+        return 2
 
     disp = XLib.XOpenDisplay(None)
     if not disp:
         print("error: cannot open X display", file=sys.stderr)
         return 3
 
-    deadline = time.time() + timeout_s
-    sent = False
-    while time.time() < deadline:
-        for wid_hex, name in list_windows():
-            if needle in name.lower():
-                win = Window(int(wid_hex, 16))
-                if send_wm_delete(disp, win):
-                    print(f"sent WM_DELETE_WINDOW to window {wid_hex} ('{name}')", flush=True)
-                    sent = True
-        if sent:
-            break
-        time.sleep(0.3)
-
+    sent = send_wm_delete(disp, Window(window_id))
     XLib.XCloseDisplay(disp)
     if not sent:
-        print(f"error: no window matching '{needle}' within {timeout_s}s", file=sys.stderr)
+        print(f"error: failed to send WM_DELETE_WINDOW to 0x{window_id:x}", file=sys.stderr)
         return 1
+
+    print(f"sent WM_DELETE_WINDOW to window 0x{window_id:x}", flush=True)
     return 0
 
 

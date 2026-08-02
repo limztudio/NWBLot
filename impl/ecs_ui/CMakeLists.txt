@@ -6,6 +6,7 @@ target_sources(nwb_ecs_ui PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/input_events.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/graphics_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/texture_resources.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/texture_submission.h"
     "${CMAKE_CURRENT_LIST_DIR}/system.h"
 )
 target_link_libraries(nwb_ecs_ui PUBLIC

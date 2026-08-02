@@ -184,24 +184,25 @@ def request_windows_graceful_exit(pid):
     return bool(targets)
 
 
-def request_linux_graceful_exit(window_title):
+def request_linux_graceful_exit(window_handle):
     # Run the shared X11 helper instead of importing it: importing the helper opens libX11 eagerly, while the capture
     # smoke must still be able to fall back to SIGTERM when no X server or libX11 is available. The helper locates the
-    # top-level window by title and posts WM_DELETE_WINDOW, which reaches the app's normal shutdown path.
-    if not window_title:
+    # exact captured top-level window and posts WM_DELETE_WINDOW, which reaches the app's normal shutdown path.
+    if window_handle is None:
         return False
 
+    window_id = f"0x{int(window_handle):x}"
     close_helper = Path(__file__).with_name("x11_graceful_close.py")
     try:
         result = subprocess.run(
-            [sys.executable, str(close_helper), window_title, "5.0"],
+            [sys.executable, str(close_helper), window_id],
             check=False,
             capture_output=True,
             text=True,
             timeout=6.0,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
-        write_status(f"Linux graceful X11 close failed for '{window_title}' ({error}); terminating")
+        write_status(f"Linux graceful X11 close failed for {window_id} ({error}); terminating")
         return False
 
     if result.returncode == 0:
@@ -209,7 +210,7 @@ def request_linux_graceful_exit(window_title):
 
     detail = (result.stderr or result.stdout).strip()
     suffix = f": {detail}" if detail else ""
-    write_status(f"Linux graceful X11 close failed for '{window_title}' (exit {result.returncode}){suffix}; terminating")
+    write_status(f"Linux graceful X11 close failed for {window_id} (exit {result.returncode}){suffix}; terminating")
     return False
 
 
@@ -263,7 +264,7 @@ def launch_captured_process(command, working_directory, env, name):
     return process
 
 
-def terminate_process(process, name, window_title=""):
+def terminate_process(process, name, window_handle=None):
     if process is None:
         return None, ""
 
@@ -285,8 +286,8 @@ def terminate_process(process, name, window_title=""):
                 except OSError as error:
                     write_status(f"{name}: graceful WM_CLOSE failed ({error}); terminating")
 
-            elif host_platform == "Linux" and window_title:
-                if request_linux_graceful_exit(window_title):
+            elif host_platform == "Linux" and window_handle is not None:
+                if request_linux_graceful_exit(window_handle):
                     try:
                         process.wait(timeout=10.0)
                     except subprocess.TimeoutExpired:
@@ -1701,6 +1702,7 @@ def launch_and_capture(args, backend):
     logserver_process = None
     testbed_process = None
     result = None
+    handle = None
     testbed_exit_code = None
     testbed_exit_tail = ""
     try:
@@ -1721,7 +1723,7 @@ def launch_and_capture(args, backend):
         result = capture_checked_window(args, backend, handle)
         validate_expected_log_messages(log_directory, log_baseline, log_pattern, args.expect_log_message, args.reject_log_message)
     finally:
-        testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, "testbed", args.window_title)
+        testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, "testbed", handle)
         terminate_process(logserver_process, "logserver")
 
     require_normal_testbed_exit(testbed_exit_code, testbed_exit_tail)
@@ -1734,7 +1736,7 @@ def parse_args(argv):
     parser.add_argument("--working-directory", type=Path, default=Path.cwd(), help="Working directory for launched processes.")
     parser.add_argument("--output", type=Path, required=True, help="Screenshot output path. The script writes a 24-bit BMP.")
     parser.add_argument("--window-handle", type=parse_int, help="Capture an existing native window handle instead of launching testbed.")
-    parser.add_argument("--window-title", default="", help="Expected window title, also used as a fallback when the window does not publish a PID.")
+    parser.add_argument("--window-title", default="", help="Expected window title when matching a launched testbed window.")
     parser.add_argument("--timeout", type=float, default=45.0, help="Seconds to wait for logserver and the testbed window.")
     parser.add_argument("--settle-seconds", type=float, default=2.0, help="Seconds to wait after the window becomes visible.")
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")

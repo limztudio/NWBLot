@@ -112,6 +112,7 @@ UiSystem::UiSystem(
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_textures(arena)
+    , m_textureUploadBatch(arena)
     , m_textureUploadScratch(arena)
 {
     readAccess<UiComponent>();
@@ -252,6 +253,7 @@ void UiSystem::invalidateResources(){
     // invalidates render passes while the device is still live, so retire descriptors before releasing those resources.
     releaseDescriptorHeapResources();
     m_textures.clear();
+    m_textureUploadBatch.reset();
     m_textureUploadScratch.clear();
 
     m_prepareCommandList.reset();
@@ -326,11 +328,21 @@ bool UiSystem::prepareResources(Core::Framebuffer* framebuffer){
         m_prepareCommandList->open();
         const bool texturesReady = processTextureRequests(*m_prepareCommandList, *drawData);
         m_prepareCommandList->close();
-        if(!texturesReady)
+        if(!texturesReady){
+            m_textureUploadBatch.reset();
             return false;
+        }
 
-        Core::CommandList* commandLists[] = { m_prepareCommandList.get() };
-        device.executeCommandLists(commandLists, 1);
+        if(!m_textureUploadBatch.empty()){
+            Core::CommandList* commandLists[] = { m_prepareCommandList.get() };
+            bool submitted = false;
+            device.executeCommandLists(commandLists, 1u, Core::CommandQueue::Graphics, &submitted);
+            m_textureUploadBatch.complete(submitted);
+            if(!submitted){
+                NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to submit ImGui texture uploads"));
+                return false;
+            }
+        }
     }
 
     if(!ensureBuffers(

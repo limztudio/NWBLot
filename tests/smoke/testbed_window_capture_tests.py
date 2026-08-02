@@ -104,17 +104,16 @@ class TextureSmokeAnalysisTests(unittest.TestCase):
 
 
 class GracefulTerminationTests(unittest.TestCase):
-    def test_linux_x11_helper_receives_testbed_window_title(self):
+    def test_linux_x11_helper_receives_captured_window_handle(self):
         result = mock.Mock(returncode=0)
         with mock.patch.object(window_capture_smoke.subprocess, "run", return_value=result) as run:
-            self.assertTrue(window_capture_smoke.request_linux_graceful_exit("NWB Testbed"))
+            self.assertTrue(window_capture_smoke.request_linux_graceful_exit(0x4a))
 
         run.assert_called_once_with(
             [
                 sys.executable,
                 str(SMOKE_DIRECTORY / "x11_graceful_close.py"),
-                "NWB Testbed",
-                "5.0",
+                "0x4a",
             ],
             check=False,
             capture_output=True,
@@ -126,9 +125,9 @@ class GracefulTerminationTests(unittest.TestCase):
         process = _FakeProcess(graceful_exit=True)
         with mock.patch.object(window_capture_smoke.platform, "system", return_value="Linux"), \
              mock.patch.object(window_capture_smoke, "request_linux_graceful_exit", return_value=True) as close:
-            terminate_process(process, "testbed", "NWB Testbed")
+            terminate_process(process, "testbed", 0x4a)
 
-        close.assert_called_once_with("NWB Testbed")
+        close.assert_called_once_with(0x4a)
         self.assertEqual(process.wait_timeouts, [10.0])
         self.assertEqual(process.terminate_calls, 0)
 
@@ -137,7 +136,7 @@ class GracefulTerminationTests(unittest.TestCase):
         with mock.patch.object(window_capture_smoke.platform, "system", return_value="Linux"), \
              mock.patch.object(window_capture_smoke, "request_linux_graceful_exit", return_value=True), \
              mock.patch.object(window_capture_smoke, "write_status") as write_status:
-            terminate_process(process, "testbed", "NWB Testbed")
+            terminate_process(process, "testbed", 0x4a)
 
         self.assertEqual(process.wait_timeouts, [10.0, 5.0])
         self.assertEqual(process.terminate_calls, 1)
@@ -148,10 +147,19 @@ class GracefulTerminationTests(unittest.TestCase):
         process = _FakeProcess()
         with mock.patch.object(window_capture_smoke.platform, "system", return_value="Linux"), \
              mock.patch.object(window_capture_smoke, "request_linux_graceful_exit", return_value=False) as close:
-            terminate_process(process, "testbed", "NWB Testbed")
+            terminate_process(process, "testbed", 0x4a)
 
-        close.assert_called_once_with("NWB Testbed")
+        close.assert_called_once_with(0x4a)
         self.assertEqual(process.wait_timeouts, [5.0])
+        self.assertEqual(process.terminate_calls, 1)
+
+    def test_linux_without_a_captured_handle_does_not_discover_a_window_by_title(self):
+        process = _FakeProcess()
+        with mock.patch.object(window_capture_smoke.platform, "system", return_value="Linux"), \
+             mock.patch.object(window_capture_smoke, "request_linux_graceful_exit") as close:
+            terminate_process(process, "testbed")
+
+        close.assert_not_called()
         self.assertEqual(process.terminate_calls, 1)
 
     def test_windows_keeps_existing_wm_close_path(self):
@@ -159,7 +167,7 @@ class GracefulTerminationTests(unittest.TestCase):
         with mock.patch.object(window_capture_smoke.platform, "system", return_value="Windows"), \
              mock.patch.object(window_capture_smoke, "request_windows_graceful_exit", return_value=True) as windows_close, \
              mock.patch.object(window_capture_smoke, "request_linux_graceful_exit") as linux_close:
-            terminate_process(process, "testbed", "NWB Testbed")
+            terminate_process(process, "testbed", 0x4a)
 
         windows_close.assert_called_once_with(process.pid)
         linux_close.assert_not_called()
@@ -169,7 +177,7 @@ class GracefulTerminationTests(unittest.TestCase):
         process = _FakeProcess(graceful_exit=True, graceful_exit_code=-6)
         with mock.patch.object(window_capture_smoke.platform, "system", return_value="Linux"), \
              mock.patch.object(window_capture_smoke, "request_linux_graceful_exit", return_value=True):
-            exit_code, tail = terminate_process(process, "testbed", "NWB Testbed")
+            exit_code, tail = terminate_process(process, "testbed", 0x4a)
 
         self.assertEqual(exit_code, -6)
         self.assertEqual(tail, "")

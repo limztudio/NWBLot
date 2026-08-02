@@ -6,6 +6,7 @@
 
 
 #include "components.h"
+#include "texture_submission.h"
 
 #include <core/alloc/general.h>
 #include <core/assets/global.h>
@@ -148,6 +149,7 @@ private:
     Core::CommandListHandle m_prepareCommandList;
     Core::CommandListHandle m_renderCommandList;
     UiTextureResourceVector m_textures;
+    UiTextureUploadBatch m_textureUploadBatch;
     UiTextureUploadVector m_textureUploadScratch;
     usize m_vertexBufferCapacity = 0;
     usize m_indexBufferCapacity = 0;

@@ -196,6 +196,7 @@ void UiSystem::releaseDescriptorHeapResources(){
 
 
 bool UiSystem::processTextureRequests(Core::CommandList& commandList, ImDrawData& drawData){
+    m_textureUploadBatch.reset();
 #if defined(IMGUI_HAS_TEXTURES)
     if(!drawData.Textures)
         return true;
@@ -210,6 +211,7 @@ bool UiSystem::processTextureRequests(Core::CommandList& commandList, ImDrawData
         case ImTextureStatus_WantUpdates:
             if(!createOrRefreshTexture(commandList, *textureData))
                 return false;
+            m_textureUploadBatch.add(*textureData);
             break;
         case ImTextureStatus_WantDestroy:
             destroyTexture(*textureData);
@@ -277,7 +279,6 @@ bool UiSystem::createOrRefreshTexture(Core::CommandList& commandList, ImTextureD
     }
 
     commandList.writeTexture(resource->texture.get(), 0u, 0u, uploadPixels, uploadRowPitch);
-    textureData.SetStatus(ImTextureStatus_OK);
     return true;
 }
 

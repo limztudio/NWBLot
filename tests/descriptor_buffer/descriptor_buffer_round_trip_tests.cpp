@@ -31,6 +31,7 @@
 #include <impl/assets/graphics/avboit/constants.h>
 #include <impl/assets/graphics/bindless/runtime_abi.h>
 #include <impl/assets/graphics/skinned_mesh/constants.h>
+#include <impl/ecs_ui/texture_submission.h>
 #include <tests/capturing_logger.h>
 
 // The manager lives in the Vulkan backend (Core::GraphicsBackend namespace). The test is inherently Vulkan-aware
@@ -577,6 +578,54 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
 
 
 #if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+
+// Texture uploads must leave ImGui's create/update status pending if the Vulkan submission is rejected. The next
+// recording batch then retries the request and commits its status only after the device accepts that retry.
+TEST_F(DescriptorBufferRoundTripTest, ImguiTextureUploadBatchCommitsOnlyAfterAcceptedSubmission){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name s_TestArenaName{"tests/descriptor_buffer/imgui_texture_upload_batch_arena"};
+    Alloc::GlobalArena arena{s_TestArenaName};
+    Impl::UiTextureUploadBatch uploads{arena};
+    ImTextureData createTexture;
+    ImTextureData updateTexture;
+    createTexture.SetStatus(ImTextureStatus_WantCreate);
+    updateTexture.SetStatus(ImTextureStatus_WantUpdates);
+
+    auto rejected = device.createCommandList();
+    ASSERT_NE(rejected.get(), nullptr);
+    rejected->open();
+    rejected->close();
+    ASSERT_TRUE(rejected->hasCommandBuffer());
+
+    uploads.add(createTexture);
+    uploads.add(updateTexture);
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    CommandList* rejectedCommandLists[] = { rejected.get() };
+    bool submitted = true;
+    device.executeCommandLists(rejectedCommandLists, 1u, CommandQueue::Graphics, &submitted);
+    EXPECT_FALSE(submitted);
+    uploads.complete(submitted);
+    EXPECT_EQ(createTexture.Status, ImTextureStatus_WantCreate);
+    EXPECT_EQ(updateTexture.Status, ImTextureStatus_WantUpdates);
+
+    auto accepted = device.createCommandList();
+    ASSERT_NE(accepted.get(), nullptr);
+    accepted->open();
+    accepted->close();
+    ASSERT_TRUE(accepted->hasCommandBuffer());
+
+    uploads.add(createTexture);
+    uploads.add(updateTexture);
+    CommandList* acceptedCommandLists[] = { accepted.get() };
+    submitted = false;
+    device.executeCommandLists(acceptedCommandLists, 1u, CommandQueue::Graphics, &submitted);
+    ASSERT_TRUE(submitted);
+    uploads.complete(submitted);
+    EXPECT_EQ(createTexture.Status, ImTextureStatus_OK);
+    EXPECT_EQ(updateTexture.Status, ImTextureStatus_OK);
+}
+
 
 // The async renderer records its Graphics-prefix timestamp before it knows whether the pre-recorded final packet will
 // submit. Reject that final submit after the prefix is accepted, then use a tiny Graphics recovery packet to complete

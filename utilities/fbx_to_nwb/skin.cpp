@@ -66,10 +66,12 @@ JointMatrix ToJointMatrix(const ufbx_matrix& matrix){
     return result;
 }
 
-bool NearlyEqualJointMatrixRows(const SIMDVector (&lhsRows)[s_JointMatrixRowCount], const SIMDVector (&rhsRows)[s_JointMatrixRowCount]){
+bool NearlyEqualJointMatrices(const JointMatrix& lhs, const JointMatrix& rhs){
     const SIMDVector epsilon = VectorReplicate(s_JointMatrixRowEpsilon);
+    const SIMDMatrix lhsMatrix = LoadFloat(lhs);
+    const SIMDMatrix rhsMatrix = LoadFloat(rhs);
     for(usize rowIndex = 0u; rowIndex < s_JointMatrixRowCount; ++rowIndex){
-        if(!Vector4NearEqual(lhsRows[rowIndex], rhsRows[rowIndex], epsilon))
+        if(!Vector4NearEqual(lhsMatrix.v[rowIndex], rhsMatrix.v[rowIndex], epsilon))
             return false;
     }
     return true;
@@ -132,17 +134,7 @@ bool FindOrAddJoint(
         const usize jointIndex = static_cast<usize>(foundJoint.value());
         NWB_ASSERT(jointIndex < context.inverseBindMatrices.size());
         NWB_ASSERT(jointIndex < context.bindPoseMatrices.size());
-        const SIMDVector existingInverseBindRows[s_JointMatrixRowCount] = {
-            LoadFloat(context.inverseBindMatrices[jointIndex].rows[0u]),
-            LoadFloat(context.inverseBindMatrices[jointIndex].rows[1u]),
-            LoadFloat(context.inverseBindMatrices[jointIndex].rows[2u]),
-        };
-        const SIMDVector convertedInverseBindRows[s_JointMatrixRowCount] = {
-            LoadFloat(convertedMatrix.rows[0u]),
-            LoadFloat(convertedMatrix.rows[1u]),
-            LoadFloat(convertedMatrix.rows[2u]),
-        };
-        if(!NearlyEqualJointMatrixRows(existingInverseBindRows, convertedInverseBindRows)){
+        if(!NearlyEqualJointMatrices(context.inverseBindMatrices[jointIndex], convertedMatrix)){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes bind skeleton joint '{}' with different inverse bind matrices")
                 , StringConvert(NodeDisplayName(cluster->bone_node))
             );

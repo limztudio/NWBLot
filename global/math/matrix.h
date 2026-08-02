@@ -1024,14 +1024,18 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveImpl(
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0f, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, s_MatrixProjectionNearEqualEpsilon));
 
-    const f32 twoNearZ = nearZ + nearZ;
-    const f32 range = farZ / rangeDenominator;
-    return MatrixSet(
-        twoNearZ / viewWidth, 0.0f, 0.0f, 0.0f,
-        0.0f, twoNearZ / viewHeight, 0.0f, 0.0f,
-        0.0f, 0.0f, range, rangeNearScale * range * nearZ,
-        0.0f, 0.0f, forwardZ, 0.0f
-    );
+    const SIMDVector zero = VectorZero();
+    const SIMDVector nearZVector = VectorReplicate(nearZ);
+    const SIMDVector twoNearZ = VectorAdd(nearZVector, nearZVector);
+    const SIMDVector range = VectorDivide(VectorReplicate(farZ), VectorReplicate(rangeDenominator));
+    const SIMDVector rangeNear = VectorMultiply(VectorScale(range, rangeNearScale), nearZVector);
+
+    SIMDMatrix matrix{};
+    matrix.v[0] = VectorMergeX(VectorDivide(twoNearZ, VectorReplicate(viewWidth)), zero, zero, zero);
+    matrix.v[1] = VectorMergeX(zero, VectorDivide(twoNearZ, VectorReplicate(viewHeight)), zero, zero);
+    matrix.v[2] = VectorMergeX(zero, zero, range, rangeNear);
+    matrix.v[3] = VectorMergeX(zero, zero, VectorReplicate(forwardZ), zero);
+    return matrix;
 }
 
 
@@ -1113,16 +1117,26 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveOffCenterImpl(
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(farZ, nearZ, s_MatrixProjectionNearEqualEpsilon));
 
-    const f32 twoNearZ = nearZ + nearZ;
-    const f32 reciprocalWidth = 1.0f / (viewRight - viewLeft);
-    const f32 reciprocalHeight = 1.0f / (viewTop - viewBottom);
-    const f32 range = farZ / rangeDenominator;
-    return MatrixSet(
-        twoNearZ * reciprocalWidth, 0.0f, centerScale * (viewLeft + viewRight) * reciprocalWidth, 0.0f,
-        0.0f, twoNearZ * reciprocalHeight, centerScale * (viewTop + viewBottom) * reciprocalHeight, 0.0f,
-        0.0f, 0.0f, range, rangeNearScale * range * nearZ,
-        0.0f, 0.0f, forwardZ, 0.0f
-    );
+    const SIMDVector zero = VectorZero();
+    const SIMDVector left = VectorReplicate(viewLeft);
+    const SIMDVector right = VectorReplicate(viewRight);
+    const SIMDVector bottom = VectorReplicate(viewBottom);
+    const SIMDVector top = VectorReplicate(viewTop);
+    const SIMDVector nearZVector = VectorReplicate(nearZ);
+    const SIMDVector twoNearZ = VectorAdd(nearZVector, nearZVector);
+    const SIMDVector reciprocalWidth = VectorReciprocal(VectorSubtract(right, left));
+    const SIMDVector reciprocalHeight = VectorReciprocal(VectorSubtract(top, bottom));
+    const SIMDVector range = VectorDivide(VectorReplicate(farZ), VectorReplicate(rangeDenominator));
+    const SIMDVector rangeNear = VectorMultiply(VectorScale(range, rangeNearScale), nearZVector);
+    const SIMDVector offsetX = VectorMultiply(VectorScale(VectorAdd(left, right), centerScale), reciprocalWidth);
+    const SIMDVector offsetY = VectorMultiply(VectorScale(VectorAdd(bottom, top), centerScale), reciprocalHeight);
+
+    SIMDMatrix matrix{};
+    matrix.v[0] = VectorMergeX(VectorMultiply(twoNearZ, reciprocalWidth), zero, offsetX, zero);
+    matrix.v[1] = VectorMergeX(zero, VectorMultiply(twoNearZ, reciprocalHeight), offsetY, zero);
+    matrix.v[2] = VectorMergeX(zero, zero, range, rangeNear);
+    matrix.v[3] = VectorMergeX(zero, zero, VectorReplicate(forwardZ), zero);
+    return matrix;
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicImpl(
@@ -1136,13 +1150,17 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicImpl(
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0f, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0f, s_MatrixProjectionNearEqualEpsilon));
 
-    const f32 range = 1.0f / rangeDenominator;
-    return MatrixSet(
-        s_MatrixTwo / viewWidth, 0.0f, 0.0f, 0.0f,
-        0.0f, s_MatrixTwo / viewHeight, 0.0f, 0.0f,
-        0.0f, 0.0f, range, rangeNearScale * range * nearZ,
-        0.0f, 0.0f, 0.0f, 1.0f
-    );
+    const SIMDVector zero = VectorZero();
+    const SIMDVector nearZVector = VectorReplicate(nearZ);
+    const SIMDVector range = VectorReciprocal(VectorReplicate(rangeDenominator));
+    const SIMDVector rangeNear = VectorMultiply(VectorScale(range, rangeNearScale), nearZVector);
+
+    SIMDMatrix matrix{};
+    matrix.v[0] = VectorMergeX(VectorDivide(s_SIMDTwo, VectorReplicate(viewWidth)), zero, zero, zero);
+    matrix.v[1] = VectorMergeX(zero, VectorDivide(s_SIMDTwo, VectorReplicate(viewHeight)), zero, zero);
+    matrix.v[2] = VectorMergeX(zero, zero, range, rangeNear);
+    matrix.v[3] = s_SIMDIdentityR3;
+    return matrix;
 }
 
 NWB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicOffCenterImpl(
@@ -1158,15 +1176,25 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicOffCenterImpl(
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0f, s_MatrixProjectionNearEqualEpsilon));
 
-    const f32 reciprocalWidth = 1.0f / (viewRight - viewLeft);
-    const f32 reciprocalHeight = 1.0f / (viewTop - viewBottom);
-    const f32 range = 1.0f / rangeDenominator;
-    return MatrixSet(
-        reciprocalWidth + reciprocalWidth, 0.0f, 0.0f, -(viewLeft + viewRight) * reciprocalWidth,
-        0.0f, reciprocalHeight + reciprocalHeight, 0.0f, -(viewTop + viewBottom) * reciprocalHeight,
-        0.0f, 0.0f, range, rangeNearScale * range * nearZ,
-        0.0f, 0.0f, 0.0f, 1.0f
-    );
+    const SIMDVector zero = VectorZero();
+    const SIMDVector left = VectorReplicate(viewLeft);
+    const SIMDVector right = VectorReplicate(viewRight);
+    const SIMDVector bottom = VectorReplicate(viewBottom);
+    const SIMDVector top = VectorReplicate(viewTop);
+    const SIMDVector nearZVector = VectorReplicate(nearZ);
+    const SIMDVector reciprocalWidth = VectorReciprocal(VectorSubtract(right, left));
+    const SIMDVector reciprocalHeight = VectorReciprocal(VectorSubtract(top, bottom));
+    const SIMDVector range = VectorReciprocal(VectorReplicate(rangeDenominator));
+    const SIMDVector rangeNear = VectorMultiply(VectorScale(range, rangeNearScale), nearZVector);
+    const SIMDVector offsetX = VectorNegate(VectorMultiply(VectorAdd(left, right), reciprocalWidth));
+    const SIMDVector offsetY = VectorNegate(VectorMultiply(VectorAdd(bottom, top), reciprocalHeight));
+
+    SIMDMatrix matrix{};
+    matrix.v[0] = VectorMergeX(VectorAdd(reciprocalWidth, reciprocalWidth), zero, zero, offsetX);
+    matrix.v[1] = VectorMergeX(zero, VectorAdd(reciprocalHeight, reciprocalHeight), zero, offsetY);
+    matrix.v[2] = VectorMergeX(zero, zero, range, rangeNear);
+    matrix.v[3] = s_SIMDIdentityR3;
+    return matrix;
 }
 
 

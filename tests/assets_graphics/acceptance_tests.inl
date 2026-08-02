@@ -291,7 +291,7 @@ template<typename MeshT>
         const NWB::Impl::MeshletDesc& meshlet = mesh.meshlets()[meshletIndex];
         if(!NWB::Impl::MeshletConeEnabled(mesh.meshletBounds()[meshletIndex]))
             ++metrics.coneDisabledCount;
-        metrics.radiusSum += mesh.meshletBounds()[meshletIndex].sphere.w;
+        metrics.radiusSum += VectorGetW(LoadFloat(mesh.meshletBounds()[meshletIndex].sphere));
         metrics.vertexReuseSum += static_cast<f64>(NWB::Impl::MeshletPrimitiveCount(meshlet) * 3u)
             / static_cast<f64>(NWB::Impl::MeshletVertexCount(meshlet))
         ;
@@ -469,9 +469,7 @@ TEST(AssetsGraphics, MeshAcceptanceSphereSmooth){
             for(usize i = 0u; i < loadedMesh.positionStream().size(); ++i){
                 const Float3U& position = loadedMesh.positionStream()[i];
                 const Float4U normal = LoadHalf4U(loadedMesh.normalStream()[i]);
-                EXPECT_EQ(normal.x, position.x);
-                EXPECT_EQ(normal.y, position.y);
-                EXPECT_EQ(normal.z, position.z);
+                EXPECT_TRUE(Vector3Equal(LoadFloat(normal), LoadFloat(position)));
             }
 
             const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];

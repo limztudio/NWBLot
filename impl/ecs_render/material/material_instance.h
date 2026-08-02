@@ -265,7 +265,7 @@ template<typename TValue>
             Half4U packedValue;
             NWB_MEMCPY(&packedValue, sizeof(packedValue), parameter.value.raw, sizeof(packedValue));
             const Float4U unpackedValue = LoadHalf4U(packedValue);
-            outValue = Float4(unpackedValue.x, unpackedValue.y, unpackedValue.z, unpackedValue.w);
+            StoreFloat(LoadFloat(unpackedValue), &outValue);
             return true;
         }
         if(parameter.fieldType == MaterialLayoutFieldType::Float4){

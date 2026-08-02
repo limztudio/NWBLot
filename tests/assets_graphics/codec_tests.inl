@@ -89,7 +89,7 @@ static void CheckMinimalRuntimeMeshletPayload(
     EXPECT_EQ(meshlet.uv0Base, 0u);
     EXPECT_EQ(meshlet.colorBase, 0u);
     EXPECT_EQ(meshlet.encoding, 0u);
-    EXPECT_GT(loadedMesh.meshletBounds()[0u].sphere.w, 0.0f);
+    EXPECT_GT(VectorGetW(LoadFloat(loadedMesh.meshletBounds()[0u].sphere)), 0.0f);
     EXPECT_TRUE(NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
 }
 

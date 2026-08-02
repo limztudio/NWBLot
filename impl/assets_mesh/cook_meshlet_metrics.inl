@@ -66,7 +66,7 @@ template<typename CookEntryT>
         metrics.vertexCountSum += vertexCount;
         metrics.positionCountSum += MeshletPositionCount(meshlet);
         metrics.attributeCountSum += MeshletAttributeCount(meshlet);
-        metrics.radiusSum += bounds.sphere.w;
+        metrics.radiusSum += VectorGetW(LoadFloat(bounds.sphere));
 
         if(!MeshletConeEnabled(bounds)){
             ++metrics.coneDisabledCount;

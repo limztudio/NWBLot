@@ -82,6 +82,10 @@ namespace FrustumPlaneIndex{
     return VectorSetW(center, radius);
 }
 
+[[nodiscard]] NWB_INLINE SIMDVector SphereCenterRadius(const SIMDVector center, const SIMDVector radius)noexcept{
+    return VectorSelect(center, radius, s_SIMDMaskW);
+}
+
 [[nodiscard]] inline SIMDVector CreateSphereFromVectorPoints(const SIMDVector* points, const usize count)noexcept{
     NWB_ASSERT(points != nullptr);
     NWB_ASSERT(count > 0u);
@@ -97,7 +101,7 @@ namespace FrustumPlaneIndex{
         radiusSq = VectorMax(radiusSq, Vector3LengthSq(delta));
     }
 
-    return SphereCenterRadius(centerVector, VectorGetX(VectorSqrt(radiusSq)));
+    return SphereCenterRadius(centerVector, VectorSqrt(radiusSq));
 }
 
 [[nodiscard]] NWB_INLINE SIMDVector BoxCornerOffset(const u32 index)noexcept{
@@ -462,18 +466,24 @@ inline void FrustumCorners(
     const f32 farPlane,
     SIMDVector* outCorners
 )noexcept{
-    const Float2U depths(nearPlane, farPlane);
+    const SIMDVector slopes = VectorSet(rightSlope, leftSlope, bottomSlope, topSlope);
+    const SIMDVector depths[2] = {
+        VectorReplicate(nearPlane),
+        VectorReplicate(farPlane),
+    };
+    const SIMDVector zero = VectorZero();
     u32 corner = 0u;
-    for(const f32 depth : depths.raw){
-        const f32 left = leftSlope * depth;
-        const f32 right = rightSlope * depth;
-        const f32 bottom = bottomSlope * depth;
-        const f32 top = topSlope * depth;
+    for(const SIMDVector depth : depths){
+        const SIMDVector scaledSlopes = VectorMultiply(slopes, depth);
+        const SIMDVector right = VectorSplatX(scaledSlopes);
+        const SIMDVector left = VectorSplatY(scaledSlopes);
+        const SIMDVector bottom = VectorSplatZ(scaledSlopes);
+        const SIMDVector top = VectorSplatW(scaledSlopes);
         const SIMDVector localCorners[4] = {
-            VectorSet(right, top, depth, 0.0f),
-            VectorSet(left, top, depth, 0.0f),
-            VectorSet(left, bottom, depth, 0.0f),
-            VectorSet(right, bottom, depth, 0.0f),
+            VectorMergeX(right, top, depth, zero),
+            VectorMergeX(left, top, depth, zero),
+            VectorMergeX(left, bottom, depth, zero),
+            VectorMergeX(right, bottom, depth, zero),
         };
         for(const SIMDVector localCorner : localCorners){
             outCorners[corner] = VectorAdd(Vector3Rotate(localCorner, orientation), origin);
@@ -983,17 +993,22 @@ inline void SIMDCALL BoundingSphere::transform(BoundingSphere& outSphere, const 
     SIMDVector translation{};
     const SIMDVector sphereValue = LoadFloat(centerRadius);
     const SIMDVector centerVector = CollisionDetail::SphereCenter(sphereValue);
-    const f32 sphereRadius = CollisionDetail::SphereRadius(sphereValue);
+    const SIMDVector sphereRadius = VectorSplatW(sphereValue);
     if(MatrixDecompose(&scale, &rotation, &translation, matrix)){
         const SIMDVector absScale = VectorAbs(scale);
-        const f32 maxScale = VectorGetX(CollisionDetail::Vector3MaxComponent(absScale));
-        StoreFloat(CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), sphereRadius * maxScale), &outSphere.centerRadius);
+        const SIMDVector maxScale = CollisionDetail::Vector3MaxComponent(absScale);
+        StoreFloat(
+            CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), VectorMultiply(sphereRadius, maxScale)),
+            &outSphere.centerRadius
+        );
         return;
     }
 
     const SIMDVector maxScaleVector = VectorMax(Vector3Length(matrix.v[0]), VectorMax(Vector3Length(matrix.v[1]), Vector3Length(matrix.v[2])));
-    const f32 maxScale = VectorGetX(maxScaleVector);
-    StoreFloat(CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), sphereRadius * maxScale), &outSphere.centerRadius);
+    StoreFloat(
+        CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), VectorMultiply(sphereRadius, maxScaleVector)),
+        &outSphere.centerRadius
+    );
 }
 
 inline void SIMDCALL BoundingSphere::transform(
@@ -1004,7 +1019,10 @@ inline void SIMDCALL BoundingSphere::transform(
 )const noexcept{
     const SIMDVector sphereValue = LoadFloat(centerRadius);
     const SIMDVector transformedCenter = VectorAdd(Vector3Rotate(VectorScale(CollisionDetail::SphereCenter(sphereValue), scale), rotation), translation);
-    StoreFloat(CollisionDetail::SphereCenterRadius(transformedCenter, CollisionDetail::SphereRadius(sphereValue) * Abs(scale)), &outSphere.centerRadius);
+    StoreFloat(
+        CollisionDetail::SphereCenterRadius(transformedCenter, VectorScale(VectorSplatW(sphereValue), Abs(scale))),
+        &outSphere.centerRadius
+    );
 }
 
 [[nodiscard]] inline ContainmentType::Enum SIMDCALL BoundingSphere::contains(const SIMDVector point)const noexcept{
@@ -1202,38 +1220,35 @@ inline void BoundingSphere::createMerged(
     const SIMDVector sphereValue1 = LoadFloat(sphere1.centerRadius);
     const SIMDVector center0 = CollisionDetail::SphereCenter(sphereValue0);
     const SIMDVector center1 = CollisionDetail::SphereCenter(sphereValue1);
-    const f32 radius0 = CollisionDetail::SphereRadius(sphereValue0);
-    const f32 radius1 = CollisionDetail::SphereRadius(sphereValue1);
+    const SIMDVector radius0 = VectorSplatW(sphereValue0);
+    const SIMDVector radius1 = VectorSplatW(sphereValue1);
     const SIMDVector delta = VectorSubtract(center1, center0);
     const SIMDVector distanceSquared = Vector3LengthSq(delta);
-    const f32 distanceSq = VectorGetX(distanceSquared);
-    const f32 radiusDelta = radius0 - radius1;
+    const SIMDVector radiusDelta = VectorSubtract(radius0, radius1);
 
-    if(radiusDelta * radiusDelta >= distanceSq){
-        outSphere = radius0 >= radius1 ? sphere0 : sphere1;
+    if(Vector4GreaterOrEqual(VectorMultiply(radiusDelta, radiusDelta), distanceSquared)){
+        outSphere = Vector4GreaterOrEqual(radius0, radius1) ? sphere0 : sphere1;
         return;
     }
 
-    const SIMDVector distanceVector = VectorSqrt(distanceSquared);
-    const f32 distance = VectorGetX(distanceVector);
-    const SIMDVector newRadiusVector = VectorMultiply(
-        VectorAdd(distanceVector, VectorReplicate(radius0 + radius1)),
+    const SIMDVector distance = VectorSqrt(distanceSquared);
+    const SIMDVector newRadius = VectorMultiply(
+        VectorAdd(distance, VectorAdd(radius0, radius1)),
         s_SIMDOneHalf
     );
-    const f32 newRadius = VectorGetX(newRadiusVector);
     SIMDVector newCenter = center0;
-    if(distance > CollisionDetail::s_RayEpsilon)
-        newCenter = VectorMultiplyAdd(delta, VectorReplicate((newRadius - radius0) / distance), center0);
+    if(Vector4Greater(distance, VectorReplicate(CollisionDetail::s_RayEpsilon)))
+        newCenter = VectorMultiplyAdd(delta, VectorDivide(VectorSubtract(newRadius, radius0), distance), center0);
 
     StoreFloat(CollisionDetail::SphereCenterRadius(newCenter, newRadius), &outSphere.centerRadius);
 }
 
 inline void BoundingSphere::createFromBoundingBox(BoundingSphere& outSphere, const BoundingBox& box)noexcept{
-    StoreFloat(CollisionDetail::SphereCenterRadius(LoadFloat(box.center), VectorGetX(Vector3Length(LoadFloat(box.extents)))), &outSphere.centerRadius);
+    StoreFloat(CollisionDetail::SphereCenterRadius(LoadFloat(box.center), Vector3Length(LoadFloat(box.extents))), &outSphere.centerRadius);
 }
 
 inline void BoundingSphere::createFromBoundingBox(BoundingSphere& outSphere, const BoundingOrientedBox& box)noexcept{
-    StoreFloat(CollisionDetail::SphereCenterRadius(LoadFloat(box.center), VectorGetX(Vector3Length(LoadFloat(box.extents)))), &outSphere.centerRadius);
+    StoreFloat(CollisionDetail::SphereCenterRadius(LoadFloat(box.center), Vector3Length(LoadFloat(box.extents))), &outSphere.centerRadius);
 }
 
 inline void BoundingSphere::createFromPoints(
@@ -1255,7 +1270,7 @@ inline void BoundingSphere::createFromPoints(
         radiusSq = VectorMax(radiusSq, Vector3LengthSq(delta));
     }
 
-    StoreFloat(CollisionDetail::SphereCenterRadius(centerVector, VectorGetX(VectorSqrt(radiusSq))), &outSphere.centerRadius);
+    StoreFloat(CollisionDetail::SphereCenterRadius(centerVector, VectorSqrt(radiusSq)), &outSphere.centerRadius);
 }
 
 inline void BoundingSphere::createFromFrustum(BoundingSphere& outSphere, const BoundingFrustum& frustum)noexcept{

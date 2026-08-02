@@ -71,12 +71,8 @@ TEST(Csg, CsgCutterComponent){
     EXPECT_TRUE(cutter.active);
     EXPECT_TRUE(cutter.parameterBytes.empty());
 
-    EXPECT_EQ(cutter.worldToShape._11, 1.0f);
-    EXPECT_EQ(cutter.worldToShape._22, 1.0f);
-    EXPECT_EQ(cutter.worldToShape._33, 1.0f);
-    EXPECT_EQ(cutter.shapeToWorld._11, 1.0f);
-    EXPECT_EQ(cutter.shapeToWorld._22, 1.0f);
-    EXPECT_EQ(cutter.shapeToWorld._33, 1.0f);
+    EXPECT_TRUE(MatrixIsIdentity(LoadFloat(cutter.worldToShape)));
+    EXPECT_TRUE(MatrixIsIdentity(LoadFloat(cutter.shapeToWorld)));
 
     cutter.receiverGroup = Name("project/csg/receiver_group_a");
     cutter.shapeType = Name("engine/csg/box");
@@ -538,11 +534,7 @@ TEST(Csg, CsgShapeRegistryBounds){
     NWB::Impl::CsgShapeRegistry registry(testWorld.arena);
     EXPECT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
 
-    Float34 shapeToWorld = ::Float34Identity();
-    shapeToWorld._14 = 10.0f;
-    shapeToWorld._24 = -5.0f;
-    shapeToWorld._34 = 1.0f;
-    const SIMDMatrix shapeToWorldMatrix = LoadFloat(shapeToWorld);
+    const SIMDMatrix shapeToWorldMatrix = MatrixTranslation(10.0f, -5.0f, 1.0f);
 
     NWB::Impl::CsgBoxShapeParameters boxParameters;
     boxParameters.halfExtents = Float4(2.0f, 3.0f, 4.0f, 0.0f);

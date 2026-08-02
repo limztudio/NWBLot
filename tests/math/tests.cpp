@@ -72,6 +72,55 @@ TEST(Math, PerspectiveFovKeepsProjectionTermsSimd){
     EXPECT_TRUE(NearlyEqual4(projection.v[3], 0.0f, 0.0f, 1.0f, 0.0f));
 }
 
+TEST(Math, ProjectionBuildersKeepTermsSimd){
+    const SIMDMatrix perspective = MatrixPerspectiveLH(8.0f, 4.0f, 1.0f, 11.0f);
+    EXPECT_TRUE(NearlyEqual4(perspective.v[0], 0.25f, 0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(perspective.v[1], 0.0f, 0.5f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(perspective.v[2], 0.0f, 0.0f, 1.1f, -1.1f));
+    EXPECT_TRUE(NearlyEqual4(perspective.v[3], 0.0f, 0.0f, 1.0f, 0.0f));
+
+    const SIMDMatrix offCenterPerspective = MatrixPerspectiveOffCenterLH(-2.0f, 6.0f, -3.0f, 5.0f, 1.0f, 11.0f);
+    EXPECT_TRUE(NearlyEqual4(offCenterPerspective.v[0], 0.25f, 0.0f, -0.5f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(offCenterPerspective.v[1], 0.0f, 0.25f, -0.25f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(offCenterPerspective.v[2], 0.0f, 0.0f, 1.1f, -1.1f));
+    EXPECT_TRUE(NearlyEqual4(offCenterPerspective.v[3], 0.0f, 0.0f, 1.0f, 0.0f));
+
+    const SIMDMatrix orthographic = MatrixOrthographicLH(8.0f, 4.0f, 1.0f, 11.0f);
+    EXPECT_TRUE(NearlyEqual4(orthographic.v[0], 0.25f, 0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(orthographic.v[1], 0.0f, 0.5f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual4(orthographic.v[2], 0.0f, 0.0f, 0.1f, -0.1f));
+    EXPECT_TRUE(NearlyEqual4(orthographic.v[3], 0.0f, 0.0f, 0.0f, 1.0f));
+
+    const SIMDMatrix offCenterOrthographic = MatrixOrthographicOffCenterLH(-2.0f, 6.0f, -3.0f, 5.0f, 1.0f, 11.0f);
+    EXPECT_TRUE(NearlyEqual4(offCenterOrthographic.v[0], 0.25f, 0.0f, 0.0f, -0.5f));
+    EXPECT_TRUE(NearlyEqual4(offCenterOrthographic.v[1], 0.0f, 0.25f, 0.0f, -0.25f));
+    EXPECT_TRUE(NearlyEqual4(offCenterOrthographic.v[2], 0.0f, 0.0f, 0.1f, -0.1f));
+    EXPECT_TRUE(NearlyEqual4(offCenterOrthographic.v[3], 0.0f, 0.0f, 0.0f, 1.0f));
+
+    const SIMDMatrix centeredOrthographic = MatrixOrthographicOffCenterLH(-1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 11.0f);
+    EXPECT_TRUE(SignBit(VectorGetW(centeredOrthographic.v[0])));
+    EXPECT_TRUE(SignBit(VectorGetW(centeredOrthographic.v[1])));
+}
+
+TEST(Math, ScalarInterpolationUsesVectorCoefficients){
+    const SIMDVector p0 = VectorSet(0.0f, 1.0f, 2.0f, 3.0f);
+    const SIMDVector p1 = VectorSet(4.0f, 5.0f, 6.0f, 7.0f);
+    const SIMDVector p2 = VectorSet(8.0f, 9.0f, 10.0f, 11.0f);
+    const SIMDVector p3 = VectorSet(12.0f, 13.0f, 14.0f, 15.0f);
+    const SIMDVector tangent0 = VectorReplicate(2.0f);
+    const SIMDVector tangent1 = VectorReplicate(-2.0f);
+
+    const SIMDVector hermite = VectorHermite(p0, tangent0, p1, tangent1, 0.5f);
+    const SIMDVector hermiteV = VectorHermiteV(p0, tangent0, p1, tangent1, VectorReplicate(0.5f));
+    EXPECT_TRUE(NearlyEqual4(hermite, 2.5f, 3.5f, 4.5f, 5.5f));
+    EXPECT_TRUE(NearlyEqual4(hermite, VectorGetX(hermiteV), VectorGetY(hermiteV), VectorGetZ(hermiteV), VectorGetW(hermiteV)));
+
+    const SIMDVector catmullRom = VectorCatmullRom(p0, p1, p2, p3, 0.5f);
+    const SIMDVector catmullRomV = VectorCatmullRomV(p0, p1, p2, p3, VectorReplicate(0.5f));
+    EXPECT_TRUE(NearlyEqual4(catmullRom, 6.0f, 7.0f, 8.0f, 9.0f));
+    EXPECT_TRUE(NearlyEqual4(catmullRom, VectorGetX(catmullRomV), VectorGetY(catmullRomV), VectorGetZ(catmullRomV), VectorGetW(catmullRomV)));
+}
+
 TEST(Math, Vector4CrossBasisOrientation){
     const SIMDVector xAxis = VectorSet(1.0f, 0.0f, 0.0f, 0.0f);
     const SIMDVector yAxis = VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
@@ -340,6 +389,42 @@ TEST(Math, CollisionPredicatesUseSimdReductions){
     EXPECT_FALSE(BoundingSphere(Float3U(0.25f, 0.25f, 0.5f), 0.1f).intersects(a, b, c));
     EXPECT_EQ(BoundingSphere(Float3U(0.0f, 0.0f, 0.0f), 2.0f).contains(sphere), ContainmentType::Contains);
     EXPECT_EQ(BoundingSphere(Float3U(4.0f, 0.0f, 0.0f), 1.0f).contains(sphere), ContainmentType::Disjoint);
+}
+
+TEST(Math, CollisionBuildersKeepIntermediateValuesSimd){
+    BoundingSphere merged;
+    BoundingSphere::createMerged(
+        merged,
+        BoundingSphere(Float3U(0.0f, 0.0f, 0.0f), 1.0f),
+        BoundingSphere(Float3U(4.0f, 0.0f, 0.0f), 1.0f)
+    );
+    EXPECT_TRUE(NearlyEqual4(LoadFloat(merged.centerRadius), 2.0f, 0.0f, 0.0f, 3.0f));
+
+    BoundingSphere contained;
+    const BoundingSphere larger(Float3U(0.0f, 0.0f, 0.0f), 3.0f);
+    BoundingSphere::createMerged(contained, larger, BoundingSphere(Float3U(1.0f, 0.0f, 0.0f), 1.0f));
+    EXPECT_TRUE(NearlyEqual4(LoadFloat(contained.centerRadius), 0.0f, 0.0f, 0.0f, 3.0f));
+
+    BoundingSphere fromBox;
+    BoundingSphere::createFromBoundingBox(fromBox, BoundingBox(Float3U(1.0f, 2.0f, 3.0f), Float3U(1.0f, 2.0f, 2.0f)));
+    EXPECT_TRUE(NearlyEqual4(LoadFloat(fromBox.centerRadius), 1.0f, 2.0f, 3.0f, 3.0f));
+
+    const BoundingFrustum frustum(
+        Float3U(10.0f, 20.0f, 30.0f),
+        Float4(0.0f, 0.0f, 0.0f, 1.0f),
+        2.0f,
+        -1.0f,
+        3.0f,
+        -2.0f,
+        1.0f,
+        2.0f
+    );
+    Float3U corners[BoundingFrustum::s_CornerCount] = {};
+    frustum.getCorners(corners);
+    EXPECT_TRUE(NearlyEqual3(LoadFloat(corners[0]), 12.0f, 23.0f, 31.0f));
+    EXPECT_TRUE(NearlyEqual3(LoadFloat(corners[3]), 12.0f, 18.0f, 31.0f));
+    EXPECT_TRUE(NearlyEqual3(LoadFloat(corners[4]), 14.0f, 26.0f, 32.0f));
+    EXPECT_TRUE(NearlyEqual3(LoadFloat(corners[7]), 14.0f, 16.0f, 32.0f));
 }
 
 TEST(Math, HalfFloatScalarConversion){

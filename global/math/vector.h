@@ -2555,17 +2555,10 @@ NWB_INLINE SIMDVector SIMDCALL VectorLerpV(SIMDVector v0, SIMDVector v1, SIMDVec
     return VectorMultiplyAdd(VectorSubtract(v1, v0), t, v0);
 }
 
+NWB_INLINE SIMDVector SIMDCALL VectorHermiteV(SIMDVector position0, SIMDVector tangent0, SIMDVector position1, SIMDVector tangent1, SIMDVector t)noexcept;
+
 NWB_INLINE SIMDVector SIMDCALL VectorHermite(SIMDVector position0, SIMDVector tangent0, SIMDVector position1, SIMDVector tangent1, f32 t)noexcept{
-    const f32 t2 = t * t;
-    const f32 t3 = t2 * t;
-    const f32 p0 = 2.0f * t3 - 3.0f * t2 + 1.0f;
-    const f32 t0 = t3 - 2.0f * t2 + t;
-    const f32 p1 = -2.0f * t3 + 3.0f * t2;
-    const f32 t1 = t3 - t2;
-    SIMDVector result = VectorScale(position0, p0);
-    result = VectorMultiplyAdd(tangent0, VectorReplicate(t0), result);
-    result = VectorMultiplyAdd(position1, VectorReplicate(p1), result);
-    return VectorMultiplyAdd(tangent1, VectorReplicate(t1), result);
+    return VectorHermiteV(position0, tangent0, position1, tangent1, VectorReplicate(t));
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorHermiteV(SIMDVector position0, SIMDVector tangent0, SIMDVector position1, SIMDVector tangent1, SIMDVector t)noexcept{
@@ -2584,19 +2577,9 @@ NWB_INLINE SIMDVector SIMDCALL VectorHermiteV(SIMDVector position0, SIMDVector t
     return VectorMultiplyAdd(VectorSplatW(t3), tangent1, result);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorCatmullRom(SIMDVector p0, SIMDVector p1, SIMDVector p2, SIMDVector p3, f32 t)noexcept{
-    const f32 t2 = t * t;
-    const f32 t3 = t2 * t;
-    const f32 c0 = (-t3 + 2.0f * t2 - t) * 0.5f;
-    const f32 c1 = (3.0f * t3 - 5.0f * t2 + 2.0f) * 0.5f;
-    const f32 c2 = (-3.0f * t3 + 4.0f * t2 + t) * 0.5f;
-    const f32 c3 = (t3 - t2) * 0.5f;
-    SIMDVector result = VectorScale(p1, c1);
-    result = VectorMultiplyAdd(p0, VectorReplicate(c0), result);
-    SIMDVector temp = VectorScale(p3, c3);
-    temp = VectorMultiplyAdd(p2, VectorReplicate(c2), temp);
-    return VectorAdd(result, temp);
-}
+NWB_INLINE SIMDVector SIMDCALL VectorCatmullRomV(SIMDVector p0, SIMDVector p1, SIMDVector p2, SIMDVector p3, SIMDVector t)noexcept;
+
+NWB_INLINE SIMDVector SIMDCALL VectorCatmullRom(SIMDVector p0, SIMDVector p1, SIMDVector p2, SIMDVector p3, f32 t)noexcept{ return VectorCatmullRomV(p0, p1, p2, p3, VectorReplicate(t)); }
 
 NWB_INLINE SIMDVector SIMDCALL VectorCatmullRomV(SIMDVector p0, SIMDVector p1, SIMDVector p2, SIMDVector p3, SIMDVector t)noexcept{
     const SIMDVector three = VectorReplicate(3.0f);

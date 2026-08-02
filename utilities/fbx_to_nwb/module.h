@@ -47,9 +47,9 @@ struct MeshSkinInfluenceEqual{
     }
 };
 
-struct JointMatrix{
-    Vec4 rows[s_JointMatrixRowCount];
-};
+// Keep imported joint matrices in the project's unaligned affine storage type so the importer can cross the
+// persistent-storage/SIMD boundary through LoadFloat()/StoreFloat() without rebuilding rows by hand.
+using JointMatrix = Float34U;
 static_assert(sizeof(JointMatrix) == sizeof(f32) * s_JointMatrixElementCount);
 static_assert(alignof(JointMatrix) == alignof(f32));
 static_assert(IsTriviallyCopyable_V<JointMatrix>);

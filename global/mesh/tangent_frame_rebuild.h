@@ -93,8 +93,10 @@ static_assert(
     const SIMDVector uvDelta1 = VectorSubtract(uv1, uv0);
     const SIMDVector uvDelta2 = VectorSubtract(uv2, uv0);
     const SIMDVector determinantVector = Vector2Cross(uvDelta1, uvDelta2);
-    const f32 determinant = VectorGetX(determinantVector);
-    if(!IsFinite(determinant) || Abs(determinant) <= s_Epsilon)
+    if(
+        !VectorIsFinite(determinantVector, VectorComponentMask::s_XYZW)
+        || Vector4LessOrEqual(VectorAbs(determinantVector), VectorReplicate(s_Epsilon))
+    )
         return false;
 
     const SIMDVector du1 = VectorSplatX(uvDelta1);

@@ -69,13 +69,8 @@ static bool TestMeshletHasPositionNormalValue(
         const Float3U& position = positions[positionRef.position];
         const Float4U normal = LoadHalf4U(normals[attributeRef.normal]);
         if(
-            position.x == expectedPosition.x
-            && position.y == expectedPosition.y
-            && position.z == expectedPosition.z
-            && normal.x == expectedNormal.x
-            && normal.y == expectedNormal.y
-            && normal.z == expectedNormal.z
-            && normal.w == expectedNormal.w
+            Vector3Equal(LoadFloat(position), LoadFloat(expectedPosition))
+            && Vector4Equal(LoadFloat(normal), LoadFloat(expectedNormal))
         )
             return true;
     }

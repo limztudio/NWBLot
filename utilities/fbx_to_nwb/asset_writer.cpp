@@ -337,19 +337,12 @@ bool BuildSkeletonOutputData(
             ? &bindPoseMatrices[parentIndex]
             : nullptr
         ;
-        SIMDMatrix globalBindPoseMatrix{};
-        globalBindPoseMatrix.v[0u] = LoadFloat(bindPoseMatrices[oldJointIndex].rows[0u]);
-        globalBindPoseMatrix.v[1u] = LoadFloat(bindPoseMatrices[oldJointIndex].rows[1u]);
-        globalBindPoseMatrix.v[2u] = LoadFloat(bindPoseMatrices[oldJointIndex].rows[2u]);
-        globalBindPoseMatrix.v[3u] = s_SIMDIdentityR3;
+        const SIMDMatrix globalBindPoseMatrix = LoadFloat(bindPoseMatrices[oldJointIndex]);
 
         SIMDMatrix parentGlobalBindPoseMatrix{};
         const SIMDMatrix* parentGlobalBindPoseMatrixPtr = nullptr;
         if(parentGlobalBindPose){
-            parentGlobalBindPoseMatrix.v[0u] = LoadFloat(parentGlobalBindPose->rows[0u]);
-            parentGlobalBindPoseMatrix.v[1u] = LoadFloat(parentGlobalBindPose->rows[1u]);
-            parentGlobalBindPoseMatrix.v[2u] = LoadFloat(parentGlobalBindPose->rows[2u]);
-            parentGlobalBindPoseMatrix.v[3u] = s_SIMDIdentityR3;
+            parentGlobalBindPoseMatrix = LoadFloat(*parentGlobalBindPose);
             parentGlobalBindPoseMatrixPtr = &parentGlobalBindPoseMatrix;
         }
 
@@ -358,10 +351,8 @@ bool BuildSkeletonOutputData(
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: failed to build local bind pose for joint '{}'"), StringConvert(sortNames[oldJointIndex]));
             return false;
         }
-        JointMatrix localBindPose;
-        StoreFloat(localBindPoseMatrix.v[0u], &localBindPose.rows[0u]);
-        StoreFloat(localBindPoseMatrix.v[1u], &localBindPose.rows[1u]);
-        StoreFloat(localBindPoseMatrix.v[2u], &localBindPose.rows[2u]);
+        JointMatrix localBindPose{};
+        StoreFloat(localBindPoseMatrix, &localBindPose);
 
         outData.oldToNewJointIndices[oldJointIndex] = static_cast<u16>(outData.joints.size());
         outData.joints.push_back(joints[oldJointIndex]);

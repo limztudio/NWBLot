@@ -27,9 +27,8 @@ struct NwbDeferredBindlessResources{
     uint4 csgRemovedSlots;// removed-interval cap normal/data/count, padding (StorageImage)
 };
 
-// The target-generation slot payload used to occupy a local CBV in every fullscreen/compute consumer.  It now lives
-// in the global UniformBuffer heap like the resources it selects.  Each pass provides the descriptor slot through
-// its push constants, preserving a descriptor-heap-only binding model without duplicating the 112-byte payload.
+// Fullscreen and compute passes select this 112-byte target-generation payload from the global UniformBuffer heap
+// through push constants, keeping resource binding heap-only without duplicating the payload.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed view of the global UniformBuffer descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]

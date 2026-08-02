@@ -157,7 +157,6 @@ struct RasterState{
     f32 depthBiasClamp = 0.f;
     f32 slopeScaledDepthBias = 0.f;
 
-    // Extended rasterizer state supported by Maxwell
     u8 forcedSampleCount = 0;
     bool programmableSamplePositionsEnable = false;
     bool conservativeRasterEnable = false;

@@ -6,9 +6,8 @@
 // irradiance (nwbSurfelGather -- the (2*EXTENT+1)^3 hash walk, reused verbatim), and writes it to a HALF-res texture
 // that surfel_upsample_cs then reconstructs into the full-res surfelIrradiance the deferred-lighting compute shader samples.
 // Running the 125-cell gather at 1/FACTOR^2 the pixels reduces its cost to roughly a full-res 3x3x3 gather.
-// This is the caustic-style decoupling: the surfel pool is touched ONLY by COMPUTE (spawn / hash-build / trace / this
-// resolve), never by the lighting shader, so the frames-in-flight race (the former pixel gather of frame N overlapping the compute
-// RMW of frame N+1 on the shared single-buffered pool) is eliminated.
+// The surfel pool is touched only by compute (spawn / hash-build / trace / resolve), never by the lighting shader,
+// avoiding frames-in-flight read/write overlap on the shared single-buffered pool.
 // Output alpha = 1 where a surfel covered the half texel (rgb = gathered irradiance); 0 elsewhere (background or no
 // coverage) so the upsample -> lighting falls back to hemiAmbient. Decode the query normal the same way lighting does
 // (encode = n*0.5+0.5), so the surfel normalWeight matches the deferred path.

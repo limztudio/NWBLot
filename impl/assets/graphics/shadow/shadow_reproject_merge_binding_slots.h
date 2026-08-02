@@ -21,8 +21,8 @@
 // visibility (the a-trous then reads THIS instead of the raw trace, and it becomes next frame's history) + the next moments.
 #define NWB_SHADOW_REPROJECT_MERGE_SET 0
 
-// Logical SRV positions retained for the pass ABI documentation. These six reads now come from global descriptor-heap
-// slots in the push constants, so they no longer occupy entries in the local descriptor-buffer layout.
+// Logical SRV positions document the pass ABI. Push-constant heap slots select these six reads without local
+// descriptor-buffer entries.
 // Heap SRV: the raw half-res trace this frame -- the "current" sample the blend leans on. Texture2DArray, one layer per
 // shadow slot.
 #define NWB_SHADOW_REPROJECT_MERGE_BINDING_SOFT_TRACE       0

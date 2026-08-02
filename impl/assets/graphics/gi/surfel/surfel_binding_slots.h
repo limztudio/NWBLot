@@ -9,7 +9,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Surfel resources are global-heap views selected by one push block; spawn keeps one surfel per bucket.
+// Shared surfel-GI configuration. Every surfel resource view is a global descriptor-heap entry selected by the common
+// NwbSurfelHeapPushConstants block; no surfel pass owns local CBV/SRV/UAV bindings. Spawn keeps one surfel per hash
+// bucket.
+//
+// ONE SURFEL PER HASH BUCKET. Hash-build runs before spawn, and an atomic CompareExchange(INVALID -> PENDING) claim
+// lets only one screen tile allocate for an empty bucket. The resulting single-node lists keep the fixed-order gather
+// deterministic.
 
 #define NWB_SURFEL_RESOLVE_GROUP_SIZE 8
 #define NWB_SURFEL_RESOLVE_HALF_FACTOR 2

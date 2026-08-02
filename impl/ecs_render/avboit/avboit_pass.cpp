@@ -391,7 +391,7 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     NWB_ASSERT(avboitTargets.valid());
 
     // All accumulation variants sample the integrated Texture3D and both work buffers through the heap, so transition
-    // them explicitly instead of relying on a now-removed local descriptor state tracker.
+    // them explicitly.
     commandList.setTextureState(
         avboitTargets.transmittanceTexture.get(),
         ECSRenderDetail::s_FramebufferSubresources,

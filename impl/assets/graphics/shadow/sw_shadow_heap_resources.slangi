@@ -12,9 +12,8 @@
 #include "shadow_heap_resources.slangi"
 
 
-// One push ABI serves every software-shadow kernel.  The old per-pass structs made the shared G-buffer/context
-// selectors local CBVs; keeping all selectors in this compact (84-byte) block makes every source independent of a
-// set-0 resource block while preserving each pass's existing width/trace-control fields.
+// One 84-byte push ABI serves every software-shadow kernel. It carries shared G-buffer/context selectors and each
+// pass's width/trace-control fields, keeping sources independent of a set-0 resource block.
 struct NwbSwShadowHeapPushConstants{
     uint width;
     uint height;

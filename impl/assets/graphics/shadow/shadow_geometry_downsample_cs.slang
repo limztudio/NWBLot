@@ -27,7 +27,7 @@ struct NwbShadowGeometryDownsamplePushConstants{
     uint height;      // full-res G-buffer height
     uint halfWidth;   // half-res output width
     uint halfHeight;  // half-res output height
-    // Global heap SampledImage slots: the full-res G-buffer inputs no longer consume local set-0 descriptors.
+    // Global heap SampledImage slots select the full-resolution G-buffer inputs.
     uint worldPositionSlot;
     uint normalSlot;
     uint depthSlot;

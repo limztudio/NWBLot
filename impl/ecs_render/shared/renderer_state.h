@@ -336,9 +336,9 @@ struct RtSceneBvhState{
     Core::BufferHandle m_bvhVisitCounterBuffer;
     Core::GpuDescriptorHandle m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
     usize m_bvhBuildCapacity = 0u;
-    Core::BufferHandle m_sceneBvhNodeBuffer;  // CPU-built instance BVH.
-    Core::BufferHandle m_sceneInstanceBuffer; // Per-instance trace data.
-    // Global heap views selected by trace contexts.
+    Core::BufferHandle m_sceneBvhNodeBuffer;  // CPU-built binned-SAH scene/instance BVH (TLAS-analog), uploaded when inputs change
+    Core::BufferHandle m_sceneInstanceBuffer; // per-instance world->object transform + reserved ABI word + BVH leaf cost
+    // Global StorageBuffer heap views selected by the common trace-context slot cbuffer for SW shadow, GI, and caustics.
     Core::GpuDescriptorHandle m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::BufferHandle m_rayTraceMaterialContextSlotsBuffer;

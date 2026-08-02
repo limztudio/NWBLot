@@ -7,8 +7,8 @@
 // surfel on that surface. ONE SURFEL PER HASH BUCKET: the hash is rebuilt from the live pool BEFORE this pass, so a
 // non-empty cell head means a surfel already covers the cell (skip). Many screen tiles map to one near-camera cell on
 // the bootstrap frame, so the empty-cell claim is atomic -- CompareExchange(INVALID -> PENDING) -- and only the winning
-// tile allocates; losers skip (no wasted slots). Keeping every cell list length 1 is what makes the gather's fixed-order
-// walk deterministic (the flicker was overstuffed cells walked in non-deterministic order + truncated). Background
+// tile allocates; losers skip (no wasted slots). Keeping every cell list length 1 makes the gather's fixed-order walk
+// deterministic. Background
 // pixels (no G-buffer normal) are skipped. Recycling / keep-alive are handled in the age-free pass and this spawn pass.
 
 

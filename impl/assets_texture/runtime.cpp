@@ -251,6 +251,22 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
+    usize prefixCursor = 0u;
+    TextureBinaryPayload::HeaderPrefix headerPrefix;
+    if(!Core::Assets::ReadMagicHeaderPayload(
+        binary,
+        prefixCursor,
+        headerPrefix,
+        TextureBinaryPayload::s_TextureMagic,
+        NWB_TEXT("Texture::loadBinary"),
+        NWB_TEXT("texture")
+    ))
+        return false;
+    if(headerPrefix.version != TextureBinaryPayload::s_TextureVersion){
+        NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: unsupported texture payload version; recook required"));
+        return false;
+    }
+
     usize cursor = 0u;
     TextureBinaryPayload::HeaderBinary header;
     if(!Core::Assets::ReadMagicHeaderPayload(

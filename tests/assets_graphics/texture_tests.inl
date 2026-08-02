@@ -115,6 +115,38 @@ static NWB::Impl::Texture::MipLevelVector MakeTextureVolumeTestMipLevels(TestAre
     return mipLevels;
 }
 
+#if defined(NWB_FINAL)
+static void AppendLegacyTextureV1Binary(
+    NWB::Core::Assets::AssetBytes& outBinary,
+    const NWB::Impl::Texture::MipLevelVector& mipLevels,
+    const NWB::Core::Assets::AssetBytes& uastcBlocks
+){
+    outBinary.clear();
+    outBinary.reserve(40u + mipLevels.size() * 32u + uastcBlocks.size());
+
+    AppendPOD(outBinary, NWB::Impl::TextureBinaryPayload::s_TextureMagic);
+    AppendPOD(outBinary, 1u);
+    AppendPOD(outBinary, static_cast<u32>(NWB::Impl::TextureColorSpace::Srgb));
+    AppendPOD(outBinary, 7u);
+    AppendPOD(outBinary, 5u);
+    AppendPOD(outBinary, static_cast<u32>(mipLevels.size()));
+    AppendPOD(outBinary, 1u);
+    AppendPOD(outBinary, 0u);
+    AppendPOD(outBinary, static_cast<u64>(uastcBlocks.size()));
+
+    for(const NWB::Impl::TextureMipLevel& mip : mipLevels){
+        AppendPOD(outBinary, mip.width);
+        AppendPOD(outBinary, mip.height);
+        AppendPOD(outBinary, mip.blockCountX);
+        AppendPOD(outBinary, mip.blockCountY);
+        AppendPOD(outBinary, mip.offsetBytes);
+        AppendPOD(outBinary, mip.sizeBytes);
+    }
+    for(const u8 byte : uastcBlocks)
+        AppendPOD(outBinary, byte);
+}
+#endif
+
 
 TEST(AssetsGraphics, TextureCodecRoundTripPreservesUastcMipPayload){
     CapturingLogger logger;
@@ -136,6 +168,10 @@ TEST(AssetsGraphics, TextureCodecRoundTripPreservesUastcMipPayload){
     NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
     ASSERT_TRUE(codec.serialize(texture, binary));
     ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinary) + 3u * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinary) + 96u);
+    usize headerCursor = 0u;
+    NWB::Impl::TextureBinaryPayload::HeaderPrefix headerPrefix;
+    ASSERT_TRUE(ReadPOD(binary, headerCursor, headerPrefix));
+    EXPECT_EQ(headerPrefix.version, NWB::Impl::TextureBinaryPayload::s_TextureVersion);
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
     ASSERT_TRUE(codec.deserialize(testArena.arena, texture.virtualPath(), binary, loadedAsset));
@@ -229,6 +265,27 @@ TEST(AssetsGraphics, TextureCodecRoundTripsCubeAndVolumePayloads){
     }
 
     EXPECT_EQ(logger.errorCount(), 0u);
+}
+
+TEST(AssetsGraphics, TextureCodecRejectsLegacyV1Binary){
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
+    const NWB::Impl::Texture::MipLevelVector mipLevels = MakeTextureTestMipLevels(testArena);
+    const NWB::Core::Assets::AssetBytes uastcBlocks = MakeTextureTestUastcPayload(testArena);
+    AppendLegacyTextureV1Binary(binary, mipLevels, uastcBlocks);
+    ASSERT_EQ(binary.size(), 40u + 3u * 32u + 96u);
+
+    NWB::Impl::TextureAssetCodec codec;
+    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
+    EXPECT_FALSE(codec.deserialize(testArena.arena, Name("project/textures/legacy"), binary, loadedAsset));
+    EXPECT_EQ(loadedAsset.get(), nullptr);
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported texture payload version")));
+#else
+#endif
 }
 
 TEST(AssetsGraphics, TextureCookerBuildsCookedAssetFromTexConverterMetadata){

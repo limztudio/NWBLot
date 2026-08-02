@@ -24,7 +24,18 @@ namespace TextureBinaryPayload{
 
 
 inline constexpr u32 s_TextureMagic = 0x54455831u; // TEX1
-inline constexpr u32 s_TextureVersion = 1u;
+inline constexpr u32 s_TextureVersion = 2u;
+
+#pragma pack(push, 1)
+struct HeaderPrefix{
+    u32 magic = s_TextureMagic;
+    u32 version = s_TextureVersion;
+};
+#pragma pack(pop)
+static_assert(sizeof(HeaderPrefix) == 8u, "Texture header prefix layout drifted");
+static_assert(alignof(HeaderPrefix) == 1u, "Texture header prefix must stay packed");
+static_assert(IsStandardLayout_V<HeaderPrefix>, "Texture header prefix must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<HeaderPrefix>, "Texture header prefix must stay binary-serializable");
 
 #pragma pack(push, 1)
 struct HeaderBinary{

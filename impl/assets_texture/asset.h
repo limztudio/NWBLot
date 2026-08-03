@@ -105,12 +105,14 @@ public:
 
 
 private:
-    TextureColorSpace::Enum m_colorSpace = TextureColorSpace::Linear;
-    bool m_hasAlpha = false;
     u32 m_width = 0u;
     u32 m_height = 0u;
-    TextureDimension::Enum m_dimension = TextureDimension::Texture2D;
     u32 m_depth = 1u;
+
+    TextureColorSpace::Enum m_colorSpace = TextureColorSpace::Linear;
+    TextureDimension::Enum m_dimension = TextureDimension::Texture2D;
+    bool m_hasAlpha = false;
+
     MipLevelVector m_mipLevels;
     Core::Assets::AssetBytes m_uastcBlocks;
 };

@@ -28,12 +28,14 @@ NWB_IMPL_BEGIN
 
 struct TextureCookEntry{
     Name virtualPath = NAME_NONE;
-    TextureColorSpace::Enum colorSpace = TextureColorSpace::Linear;
-    bool hasAlpha = false;
     u32 width = 0u;
     u32 height = 0u;
-    TextureDimension::Enum dimension = TextureDimension::Texture2D;
     u32 depth = 1u;
+
+    TextureColorSpace::Enum colorSpace = TextureColorSpace::Linear;
+    TextureDimension::Enum dimension = TextureDimension::Texture2D;
+    bool hasAlpha = false;
+
     Texture::MipLevelVector mipLevels;
     Core::Assets::AssetBytes uastcBlocks;
 

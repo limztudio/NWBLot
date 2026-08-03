@@ -1140,56 +1140,58 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     // Preserve CPU mirrors so rejected recordings can be retried exactly.
     struct PostGbufferPacketCpuState{
-        bool avboitTargetsNeedClear = true;
-        bool deferredBindlessSlotsUploaded = false;
+        u64 swShadowEdgeStatsPendingSubmissionID = 0u;
+        u64 surfelCountReadbackPendingSubmissionID = 0u;
+
         u32 softShadowFrameIndex = 0u;
         u32 swShadowEdgeStatsTick = 0u;
-        bool swShadowEdgeStatsPending = false;
         u32 swShadowEdgeStatsPendingTick = 0u;
-        u64 swShadowEdgeStatsPendingSubmissionID = 0u;
-        Core::CommandQueue::Enum swShadowEdgeStatsPendingSubmissionQueue = Core::CommandQueue::kCount;
-        bool swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
-        bool swShadowDispatchLogged = false;
-        bool causticAccumulatorInitialized = false;
         u32 causticTemporalReuseFrameCount = 0u;
         u32 swCausticFrameIndex = 0u;
         u32 hwCausticFrameIndex = 0u;
+        u32 surfelFrameIndex = 0u;
+        u32 surfelCountReadbackFrame = 0u;
+
+        bool avboitTargetsNeedClear = true;
+        bool deferredBindlessSlotsUploaded = false;
+        bool swShadowEdgeStatsPending = false;
+        bool swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
+        bool swShadowDispatchLogged = false;
+        bool causticAccumulatorInitialized = false;
         bool swCausticDispatchLogged = false;
         bool hwCausticDispatchLogged = false;
         bool causticEmissionGateLogged = false;
-        u32 surfelFrameIndex = 0u;
         bool surfelSeeded = false;
         bool surfelCountReadbackPending = false;
-        u32 surfelCountReadbackFrame = 0u;
-        u64 surfelCountReadbackPendingSubmissionID = 0u;
-        Core::CommandQueue::Enum surfelCountReadbackPendingSubmissionQueue = Core::CommandQueue::kCount;
         bool surfelCountReadbackPendingSubmissionUnconfirmed = false;
+        Core::CommandQueue::Enum swShadowEdgeStatsPendingSubmissionQueue = Core::CommandQueue::kCount;
+        Core::CommandQueue::Enum surfelCountReadbackPendingSubmissionQueue = Core::CommandQueue::kCount;
     };
     const PostGbufferPacketCpuState postGbufferPacketCpuState{
-        m_avboitState.m_targetsNeedClear,
-        deferredTargets.bindless.slotsUploaded,
+        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionID,
+        m_rayTracingState.m_surfelCountReadbackPendingSubmissionID,
         m_rayTracingState.m_softShadowFrameIndex,
         m_rayTracingState.m_swShadowEdgeStatsTick,
-        m_rayTracingState.m_swShadowEdgeStatsPending,
         m_rayTracingState.m_swShadowEdgeStatsPendingTick,
-        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionID,
-        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionQueue,
-        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionUnconfirmed,
-        m_rayTracingState.m_swShadowDispatchLogged,
-        m_rayTracingState.m_causticAccumulatorInitialized,
         m_rayTracingState.m_causticTemporalReuseFrameCount,
         m_rayTracingState.m_swCausticFrameIndex,
         m_rayTracingState.m_hwCausticFrameIndex,
+        m_rayTracingState.m_surfelFrameIndex,
+        m_rayTracingState.m_surfelCountReadbackFrame,
+        m_avboitState.m_targetsNeedClear,
+        deferredTargets.bindless.slotsUploaded,
+        m_rayTracingState.m_swShadowEdgeStatsPending,
+        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionUnconfirmed,
+        m_rayTracingState.m_swShadowDispatchLogged,
+        m_rayTracingState.m_causticAccumulatorInitialized,
         m_rayTracingState.m_swCausticDispatchLogged,
         m_rayTracingState.m_hwCausticDispatchLogged,
         m_rayTracingState.m_causticEmissionGateLogged,
-        m_rayTracingState.m_surfelFrameIndex,
         m_rayTracingState.m_surfelSeeded,
         m_rayTracingState.m_surfelCountReadbackPending,
-        m_rayTracingState.m_surfelCountReadbackFrame,
-        m_rayTracingState.m_surfelCountReadbackPendingSubmissionID,
-        m_rayTracingState.m_surfelCountReadbackPendingSubmissionQueue,
         m_rayTracingState.m_surfelCountReadbackPendingSubmissionUnconfirmed,
+        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionQueue,
+        m_rayTracingState.m_surfelCountReadbackPendingSubmissionQueue,
     };
     const auto restorePrefixCpuState = [&](){
         // Rejected G-buffer recording invalidates CPU upload mirrors.

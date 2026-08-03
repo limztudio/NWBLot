@@ -104,6 +104,7 @@ static_assert(IsStandardLayout_V<RuntimeMeshLocalBounds>, "RuntimeMeshLocalBound
 static_assert(IsTriviallyCopyable_V<RuntimeMeshLocalBounds>, "RuntimeMeshLocalBounds must stay cheap to pass by value");
 
 struct RuntimeMeshDesc : public RuntimeMeshBuffers{
+    RuntimeMeshLocalBounds localBounds;
     Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     u32 meshletCount = 0u;
     // Logical triangle-corner count. The backing raw u8 buffer is physically word-padded for ByteAddressBuffer
@@ -114,7 +115,6 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     Core::BufferHandle attributeBuffer;       // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;
-    RuntimeMeshLocalBounds localBounds;
     u64 version = 0u;
 
     [[nodiscard]] bool valid()const noexcept{

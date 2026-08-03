@@ -38,24 +38,27 @@ using Impl::TextureFormat::s_UastcLdr4x4Format;
 using Impl::TextureFormat::s_UastcSpecificationRevision;
 
 struct MipLevel{
+    u64 offsetBytes = 0u;
+    u64 sizeBytes = 0u;
+
     u32 level = 0u;
     u32 width = 0u;
     u32 height = 0u;
     u32 blocksX = 0u;
     u32 blocksY = 0u;
-    u64 offsetBytes = 0u;
-    u64 sizeBytes = 0u;
     u32 sliceCount = 1u;
 };
 
 struct TexturePayload{
-    TextureDimension::Enum dimension = TextureDimension::Texture2D;
+    Vector<MipLevel> mips;
+    Vector<u8> bytes;
+
     u32 width = 0u;
     u32 height = 0u;
     u32 depth = 1u;
+
+    TextureDimension::Enum dimension = TextureDimension::Texture2D;
     bool hasAlpha = false;
-    Vector<MipLevel> mips;
-    Vector<u8> bytes;
 };
 
 struct OutputPaths{

@@ -7,8 +7,8 @@
 #   1. configure + build a NWB_BUILDMODE variant (separate output domain "namesym", does not touch the release tree),
 #   2. run that variant's workloads so each executable records every Name literal it touches and, on exit, writes its
 #      "<exe>.namesym" sidecar next to itself (core/common/application_entry.h -> NameSymbols::WriteDefaultFile),
-#   3. copy those sidecars into the release output so the matching release exe loads them at startup
-#      (NameSymbols::LoadDefaultFile) and Name::c_str() resolves its own hashes locally.
+#   3. copy those sidecars into the release output for the log server to load at startup
+#      (NameSymbols::LoadDefaultFile) and resolve client hash tokens centrally.
 #
 # This is invoked by the on-demand "nwb_namesym" CMake target (configuration/NameSymbols.cmake), which passes the
 # resolved buildmode/release paths for the configuration being built. It can also be run directly for one-off captures.

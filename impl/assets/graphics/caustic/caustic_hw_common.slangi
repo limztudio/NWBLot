@@ -123,7 +123,7 @@ ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> nwbCausticHwView(){
 
 
 // Per-triangle-corner attribute load -- identical layout to the SW kernel's nwbCausticSwLoadVertexAttrib + the
-// shadow trace's nwbShadowRtLoadVertexAttrib (Half4U normal @ +0, Float2U uv0 @ +8, 16B stride), so the closest-hit
+// shadow trace's nwbSwShadowLoadVertexAttrib (Half4U normal @ +0, Float2U uv0 @ +8, 16B stride), so the closest-hit
 // interpolates the SAME inputs into the per-hit surface dispatch.
 NwbRayTraceVertexAttrib nwbCausticHwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
     // attributeSlot is this mesh's per-corner attribute buffer's GLOBAL HEAP slot (carried on the instance material

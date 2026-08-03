@@ -67,7 +67,6 @@ def report(path):
             med, nz, tot = nonzero_med(dec[label])
             mean = statistics.mean(a for a in dec[label] if a > 1e-6) if nz else 0.0
             print(f"  {label:<32} {med:>9.4f} {mean:>9.4f} {nz:>5} {tot:>5}")
-    # deferred label may differ
     for label in list(dec):
         if label.startswith("deferred") and label not in order:
             med, nz, tot = nonzero_med(dec[label])

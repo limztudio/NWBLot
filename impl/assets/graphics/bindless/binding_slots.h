@@ -12,7 +12,7 @@
 // Global descriptor heap - shader-side binding contract.
 //
 // These numbers ARE the contract between the shader and the host. They must match, exactly:
-//   - the set indices GpuDescriptorHeap binds at (m_resourceSetIndex = 8, m_samplerSetIndex = 9; reserved high sets
+//   - the set indices in GpuDescriptorHeapAbi (resourceSetIndex = 8, samplerSetIndex = 9; reserved high sets
 //     keep the heap separate from pipeline-local low sets), and
 //   - the per-class register-space binding numbers GpuDescriptorHeap::getRegisterSlot() adds to each table.
 // createBindlessLayout() sets binding.binding = item.slot directly (no classic 128/256/384 offset), so the resource

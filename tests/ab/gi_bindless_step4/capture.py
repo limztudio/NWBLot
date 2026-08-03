@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from window_capture_runner import REPO, capture_smoke_window
 
-# GI reuses the skinning-culling benchmark's cooked body/ground assets, so its smoke target
+# GI reuses the skinning-culling benchmark's cooked ground asset, so its smoke target
 # runs from that runtime rather than the transparent-multi smoke runtime.
 RUNTIME = REPO / "__cmake/build/linux-clang-x64/Testing/skinning_culling_benchmark_runtime/opt"
 TITLE = "NWB GI Test"

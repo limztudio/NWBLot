@@ -16,9 +16,8 @@ endfunction()
 #
 # It drives configuration/generate_name_symbols.py, which configures + builds the buildmode variant (preset
 # "<platform>-clang-namesym-x64", output domain "namesym", separate binaryDir so the release tree is untouched), runs
-# its workloads, and copies the produced "<exe>.namesym" sidecars into this configuration's output root. The release
-# exes there load them at startup (NameSymbols::LoadDefaultFile) so Name::c_str() resolves its own hashes -> readable
-# opt/fin logs.
+# its workloads, and copies the produced "<exe>.namesym" sidecars into this configuration's output root for the log
+# server to load at startup (NameSymbols::LoadDefaultFile) and decode opt/fin client log hashes.
 #
 # It is an explicit on-demand target, NOT a dependency of the normal build: the GUI workloads (testbed + window-capture
 # smokes) launch real windows and need a display, so wiring them into every build would be both heavy and headless-

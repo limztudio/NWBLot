@@ -6,7 +6,7 @@
 // where the colored transmittance AGREES (flat shadow) bilinearly interpolate it (cheap), where it DISAGREES (an edge)
 // re-trace THIS pixel at full res (sharp). Either way fold the result onto this pixel's own full-res opaque mask, so the
 // opaque (hard) shadow stays full-res while the soft transparent shadow costs one trace per block in the interior and
-// per-pixel only along its edges. The A/B baseline for the Stage-3 compacted path (dispatched when NWB_SW_SHADOW_COMPACT=0).
+// per-pixel only along its edges. This is the fallback path when runtime edge compaction is disabled.
 
 
 #include "sw_binding_slots.h"

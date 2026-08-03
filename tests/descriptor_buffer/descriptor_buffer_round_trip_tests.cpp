@@ -53,10 +53,6 @@ NWB_BEGIN
 namespace Tests{
 
 
-// Bring the engine's core namespaces into scope. The test types (Graphics, GraphicsAllocator, Alloc::GlobalArena,
-// Perf::TimingRecorder, GraphicsBackend::Device, DescriptorBufferManager, ...) all live under NWB::Core, and the
-// suite is nested in NWB::Tests, so a single using-directive keeps the bodies readable without full qualification.
-// DescriptorBufferSegmentKind is a nested namespace inside GraphicsBackend and is spelled out fully at each use.
 using namespace Core;
 
 
@@ -80,9 +76,7 @@ public:
         , m_graphics(m_allocator, m_threadPool, m_jobSystem, m_gpuTiming)
     {}
 
-    ~HeadlessGraphicsScope(){
-        // Graphics::~Graphics() tears down the backend; nothing else to release here.
-    }
+    ~HeadlessGraphicsScope(){}
 
     // Returns false on driver/instance failure (no Vulkan, no physical device, etc.). The caller SKIPS in that case
     // rather than failing — a CI runner without a GPU is an environment condition.
@@ -3305,7 +3299,6 @@ TEST_F(DescriptorBufferRoundTripTest, FreeListReusesFreedRange){
 
     const auto second = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, mgr.getOffsetAlignmentBytes());
     ASSERT_TRUE(second.valid());
-    // Same offset: the freed range was the head of the free list and exactly matched the request.
     EXPECT_EQ(second.offsetBytes, first.offsetBytes);
 
     mgr.free(second);

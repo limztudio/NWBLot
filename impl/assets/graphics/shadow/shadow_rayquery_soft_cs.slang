@@ -23,9 +23,9 @@
 
 
 // Explicit half-res grid dims + the frame counter seeding the per-pixel low-discrepancy cone-jitter sample (so the
-// jittered rays walk the source across frames, decorrelated per pixel). Mirrors NwbSwShadowSoftOpaquePushConstants (minus
-// instanceCount, which the HW path does not need -- the TLAS bounds the trace) so the half-res grid guard is structured
-// identically and the downsample/resolve tap alignment stays byte-identical.
+// jittered rays walk the source across frames, decorrelated per pixel). It mirrors the corresponding grid fields in
+// NwbSwShadowHeapPushConstants; the HW path needs no instanceCount because the TLAS bounds the trace, preserving
+// downsample/resolve tap alignment with the software path.
 struct NwbShadowRqSoftPushConstants{
     uint width;
     uint height;

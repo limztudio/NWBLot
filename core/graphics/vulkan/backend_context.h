@@ -166,6 +166,7 @@ private:
     void destroySwapChain();
     void clearSemaphores(SemaphoreVector& semaphores);
     bool recreateSemaphores(SemaphoreVector& semaphores, usize count, AStringView operationName);
+    [[nodiscard]] bool createFrameSyncQueries();
 
 
 private:

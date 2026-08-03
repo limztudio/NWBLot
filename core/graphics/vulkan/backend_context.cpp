@@ -459,6 +459,33 @@ bool BackendContext::recreateSemaphores(SemaphoreVector& semaphores, const usize
     return true;
 }
 
+bool BackendContext::createFrameSyncQueries(){
+    if(!m_rhiDevice)
+        return false;
+
+    // Presentation acquires one fence per in-flight frame. Create the fixed pool with the device/swap-chain
+    // resources so present() only recycles completed fences instead of allocating Vulkan objects in the frame loop.
+    while(!m_framesInFlight.empty())
+        m_framesInFlight.pop();
+    m_queryPool.clear();
+    m_queryPool.reserve(m_maxFramesInFlight);
+
+    for(u32 index = 0u; index < m_maxFramesInFlight; ++index){
+        EventQueryHandle query = m_rhiDevice->createEventQuery();
+        if(!query){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create frame synchronization query {} of {}")
+                , index + 1u
+                , m_maxFramesInFlight
+            );
+            m_queryPool.clear();
+            return false;
+        }
+        m_queryPool.push_back(Move(query));
+    }
+
+    return true;
+}
+
 void BackendContext::resizeSwapChain(){
     if(m_vulkanDevice){
         destroySwapChain();
@@ -1947,6 +1974,13 @@ bool BackendContext::createSwapChain(){
         return false;
     }
 
+    if(!createFrameSyncQueries()){
+        clearSemaphores(m_presentSemaphores);
+        clearSemaphores(m_acquireSemaphores);
+        destroySwapChain();
+        return false;
+    }
+
     m_swapChainIndex = 0;
     m_acquireSemaphoreIndex = 0;
 
@@ -2120,8 +2154,11 @@ bool BackendContext::present(){
         query = m_queryPool.back();
         m_queryPool.pop_back();
     }
-    else
-        query = m_rhiDevice->createEventQuery();
+    else{
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: frame synchronization query pool was exhausted"));
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: frame synchronization query pool was exhausted; continuing without frame fence throttling."));
+        return true;
+    }
 
     if(!query){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to acquire frame synchronization query; continuing without frame fence throttling."));

@@ -675,19 +675,19 @@ void Graphics::animate(f64 elapsedTime){
     }
 }
 
-void Graphics::render(){
-    Framebuffer* framebuffer = getCurrentFramebuffer();
+bool Graphics::prepareFramePreamble(){
     auto& device = getDevice();
     if(device.isDeviceLost()){
         requestDeviceRecreation();
-        return;
+        return false;
     }
+
     m_gpuTiming.collect(device, m_frameIndex);
     m_gpuTiming.beginFrame(m_frameIndex);
 
-    // Reset every known timer-query pool before any render pass can record a timestamp. Render passes submit in
-    // registration order, so keeping this preamble on Graphics makes the reset precede skinning, shadow preparation,
-    // and every later renderer packet on the same GPU timeline.
+    // Materialize and reset every declared timer-query pool before any pass preparation can record a timestamp.
+    // Per-pass preparation submits skinning and shadow packets, so this must remain ahead of it as well as every
+    // later render packet on the same GPU timeline.
     if(m_gpuTiming.queryCollectionEnabled()){
         if(!m_gpuTiming.materializeRequestedQueries(device))
             NWB_LOGGER_WARNING(NWB_TEXT("Graphics: failed to materialize one or more requested GPU-timing query pools"));
@@ -724,6 +724,25 @@ void Graphics::render(){
         }
     }
 
+    if(device.isDeviceLost()){
+        requestDeviceRecreation();
+        return false;
+    }
+
+    return true;
+}
+
+void Graphics::render(){
+    Framebuffer* framebuffer = getCurrentFramebuffer();
+    auto& device = getDevice();
+    if(device.isDeviceLost()){
+        requestDeviceRecreation();
+        return;
+    }
+
+    // Keep prepare -> render interleaved in registration order. Skinning submits its deformation work before the
+    // renderer prepares the dependent mesh, CSG, and ray-tracing packets; a global all-pass prepare phase would
+    // observe stale runtime meshes.
     for(auto* renderPass : m_renderPasses){
         if(m_deviceRecreationRequested || device.isDeviceLost()){
             if(device.isDeviceLost())
@@ -825,6 +844,12 @@ bool Graphics::animateRenderPresent(){
                 &Graphics::BackBufferResizedCallback,
             };
             if(m_backend->beginFrame(resizeCallbacks)){
+                if(!prepareFramePreamble()){
+                    if(device.isDeviceLost())
+                        requestDeviceRecreation();
+                    return false;
+                }
+
                 render();
 
                 if(m_deviceRecreationRequested || device.isDeviceLost()){

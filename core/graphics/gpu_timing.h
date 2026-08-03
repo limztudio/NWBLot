@@ -77,9 +77,9 @@ private:
         // Set while a frame-preamble command list contains a reset for this pool. It becomes deviceReady only after
         // that command list has been submitted successfully.
         bool frameResetRecorded = false;
-        // False until this pool has been reset on the DEVICE timeline by recordFrameReset() at a frame open. Pools
-        // created outside a render pass can self-reset before their first write; render-pass scopes must use prewarmed
-        // pools that have already passed through recordFrameReset().
+        // False until this pool has been reset on the DEVICE timeline by recordFrameReset() at a frame open. Recording
+        // only consumes pools declared during preparation; render-pass scopes must use pools that have already passed
+        // through recordFrameReset().
         bool deviceReady = false;
     };
 
@@ -112,7 +112,7 @@ public:
     void requestQueries(u32 queryCount);
     [[nodiscard]] bool materializeRequestedQueries(Device& device);
     [[nodiscard]] bool reserveQueries(Device& device, u32 queryCount);
-    [[nodiscard]] GpuTimingScope beginQuery(Device& device, CommandList& commandList, u64 frameIndex, u32 epoch);
+    [[nodiscard]] GpuTimingScope beginQuery(CommandList& commandList, u64 frameIndex, u32 epoch);
     [[nodiscard]] bool endQuery(CommandList& commandList, const GpuTimingScope& scope);
     [[nodiscard]] bool recordQueryEnd(CommandList& commandList, const GpuTimingScope& scope);
     [[nodiscard]] bool confirmQuery(const GpuTimingScope& scope, bool publishSample);
@@ -195,8 +195,8 @@ public:
         const Name& secondScope,
         const Name& outputScope
     );
-    // Materializes every declared scope before the frame preamble. Graphics calls this after capture can be toggled
-    // on at runtime and before dynamic-rendering scopes need their query pools reset.
+    // Materializes every declared scope during Graphics' frame preamble. Capture can be toggled on at runtime, but
+    // recording never creates a query pool: scopes and their capacity must be declared through prepareScopeQueries().
     [[nodiscard]] bool materializeRequestedQueries(Device& device);
     // Record a device-timeline reset of every available timer-query pool onto the command buffer. Graphics emits this
     // in its frame preamble before it invokes any render pass and before any dynamic render pass opens

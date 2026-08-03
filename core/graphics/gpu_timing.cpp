@@ -98,7 +98,6 @@ bool GpuTimingAccumulator::materializeRequestedQueries(Device& device){
 }
 
 GpuTimingScope GpuTimingAccumulator::beginQuery(
-    Device& device,
     CommandList& commandList,
     const u64 frameIndex,
     const u32 epoch
@@ -106,21 +105,14 @@ GpuTimingScope GpuTimingAccumulator::beginQuery(
     if(!m_enabled)
         return {};
 
-    u32 index = findAvailableQuery();
-    if(index == Limit<u32>::s_Max){
-        if(!commandList.canResetTimerQueryHere())
-            return {};
-
-        index = appendQuery(device);
-    }
+    const u32 index = findAvailableQuery();
     if(index == Limit<u32>::s_Max)
         return {};
 
     QueryRecord& record = m_queries[index];
-    // beginTimerQuery self-resets the pool on the device timeline when it is called outside a render pass, so an
-    // outside-pass scope can grow on demand. Inside a render pass that reset is illegal, so only prewarmed pools that
-    // recordFrameReset() made deviceReady are eligible; if validation under-reserved a scope, that sample is skipped
-    // rather than creating a query pool while rendering.
+    // beginTimerQuery self-resets an already prepared pool when recording outside a render pass. Inside a render pass
+    // that reset is illegal, so only pools that recordFrameReset() made deviceReady are eligible. Under-reserved or
+    // undeclared scopes skip their sample instead of allocating persistent query pools from a recording path.
     if(!record.deviceReady && !commandList.canResetTimerQueryHere())
         return {};
 
@@ -362,20 +354,12 @@ GpuTimingScope GpuTimingRecorder::beginScope(const Name& scopeName, Device& devi
     if(!ticket)
         return {};
 
-    GpuTimingAccumulator* accumulator = nullptr;
-    auto found = m_accumulators.find(scopeName);
-    if(found != m_accumulators.end())
-        accumulator = found.value().get();
-    else{
-        if(!commandList.canResetTimerQueryHere())
-            return {};
-
-        accumulator = findOrCreateAccumulator(scopeName);
-    }
-    if(!accumulator)
+    const auto found = m_accumulators.find(scopeName);
+    if(found == m_accumulators.end())
         return {};
 
-    GpuTimingScope scope = accumulator->beginQuery(device, commandList, m_currentFrameIndex, m_epoch);
+    static_cast<void>(device);
+    GpuTimingScope scope = found.value()->beginQuery(commandList, m_currentFrameIndex, m_epoch);
     scope.submissionTicket = ticket;
     return scope;
 }

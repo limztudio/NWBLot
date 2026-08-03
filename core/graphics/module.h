@@ -199,6 +199,10 @@ public:
     void displayScaleChanged();
 
     void animate(f64 elapsedTime);
+    // Runs the allocation/submission work that must precede every frame's render-pass preparation. Call this after
+    // the backend has acquired a frame and before render(); direct headless callers use it to establish the same
+    // ordering without a swap-chain beginFrame().
+    [[nodiscard]] bool prepareFramePreamble();
     void render();
     void updateAverageFrameTime(f64 elapsedTime);
     void notifyPointerScaleChanged()const;

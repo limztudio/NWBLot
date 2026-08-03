@@ -254,6 +254,7 @@ TEST_F(DescriptorBufferRoundTripTest, FrameSubmissionSuspensionFreezesTheFrameCl
 
 inline constexpr GpuTimingScopeDefinition s_FrameTimingPreambleScope("tests/frame_timing_preamble");
 inline constexpr GpuTimingScopeDefinition s_FrameTimingLateActivationScope("tests/frame_timing_late_activation");
+inline constexpr GpuTimingScopeDefinition s_UnpreparedTimingScope("tests/timing_unprepared_scope");
 inline constexpr GpuTimingScopeDefinition s_SubmissionTicketScope("tests/timing_submission_ticket");
 inline constexpr GpuTimingScopeDefinition s_ConcurrentSubmissionTicketScope("tests/timing_submission_ticket_concurrent");
 inline constexpr GpuTimingScopeDefinition s_FrameTransactionScope("tests/timing_frame_transaction");
@@ -368,6 +369,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleResetsTimerQueriesBef
     ASSERT_TRUE(probePass.initialize());
 
     graphics.addRenderPassToBack(probePass);
+    ASSERT_TRUE(graphics.prepareFramePreamble());
     graphics.render();
     graphics.removeRenderPass(probePass);
 
@@ -375,6 +377,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleResetsTimerQueriesBef
     ASSERT_TRUE(device.waitForIdle());
 
     // collect() runs at the next frame open, before that frame's reset can overwrite the completed sample.
+    ASSERT_TRUE(graphics.prepareFramePreamble());
     graphics.render();
     ASSERT_TRUE(device.waitForIdle());
     EXPECT_TRUE(timingSink.stats(s_FrameTimingPreambleScope.identity).valid());
@@ -400,15 +403,52 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQuer
     ASSERT_TRUE(probePass.initialize());
 
     graphics.addRenderPassToBack(probePass);
+    ASSERT_TRUE(graphics.prepareFramePreamble());
     graphics.render();
     graphics.removeRenderPass(probePass);
 
     ASSERT_TRUE(probePass.recorded());
     ASSERT_TRUE(device.waitForIdle());
 
+    ASSERT_TRUE(graphics.prepareFramePreamble());
     graphics.render();
     ASSERT_TRUE(device.waitForIdle());
     EXPECT_TRUE(timingSink.stats(s_FrameTimingLateActivationScope.identity).valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
+// Recording must not grow persistent timer-query pools. A scope that was not declared during preparation simply
+// produces no sample, even when the command list is outside dynamic rendering and could otherwise self-reset a new
+// query pool on the device timeline.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingScopesRequirePreparedQueryPools){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(graphics.prepareFramePreamble());
+
+    auto commandList = device.createCommandList();
+    ASSERT_NE(commandList.get(), nullptr);
+    GpuTimingSubmissionTicket timingTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
+        commandList->open();
+        {
+            GpuTimingMeasure timingMeasure(timing, s_UnpreparedTimingScope, device, *commandList);
+        }
+        commandList->close();
+    }
+
+    CommandList* commandLists[] = { commandList.get() };
+    ASSERT_TRUE(timingTicket.submit(device, commandLists, 1u));
+    ASSERT_TRUE(device.waitForIdle());
+    ASSERT_TRUE(graphics.prepareFramePreamble());
+    EXPECT_FALSE(timingSink.stats(s_UnpreparedTimingScope.identity).valid());
 
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();
@@ -440,7 +480,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
     auto framebuffer = device.createFramebuffer(FramebufferDesc().addColorAttachment(target.get()));
     ASSERT_NE(framebuffer.get(), nullptr);
 
-    // Establish the one prepared pool on the device timeline, exactly as Graphics::render() does before its passes.
+    // Establish the one prepared pool on the device timeline, exactly as Graphics::prepareFramePreamble() does
+    // before its passes.
     auto resetCommandList = device.createCommandList();
     ASSERT_NE(resetCommandList.get(), nullptr);
     resetCommandList->open();

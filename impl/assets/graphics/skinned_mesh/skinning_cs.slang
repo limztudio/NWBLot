@@ -106,7 +106,7 @@ bool nwbSkinnedMeshApplyLinearSkin(const uint skinIndex, inout float3 position, 
     float3 skinnedTangent = float3(0.0);
     float totalWeight = 0.0;
 
-    for(uint influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
+    for(uint influenceIndex = 0u; influenceIndex < NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT; ++influenceIndex){
         const float weight = skin.weight[influenceIndex];
         const uint jointId = skin.joint[influenceIndex];
         if(abs(weight) <= NWB_SKINNED_MESH_EPSILON || jointId >= jointCount)
@@ -146,7 +146,7 @@ bool nwbSkinnedMeshApplyDualQuaternionSkin(const uint skinIndex, inout float3 po
     bool hasReference = false;
     float totalWeight = 0.0;
 
-    for(uint influenceIndex = 0u; influenceIndex < 4u; ++influenceIndex){
+    for(uint influenceIndex = 0u; influenceIndex < NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT; ++influenceIndex){
         const float weight = skin.weight[influenceIndex];
         const uint jointId = skin.joint[influenceIndex];
         if(abs(weight) <= NWB_SKINNED_MESH_EPSILON || jointId >= jointCount)

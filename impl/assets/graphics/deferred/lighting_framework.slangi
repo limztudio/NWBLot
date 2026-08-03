@@ -106,7 +106,7 @@ NwbBxdfSurface nwbBxdfLoadSurface(const int2 pixel){
 
 // Default Reinhard tonemap the engine model uses; a project BXDF may reuse or replace it.
 half3 nwbBxdfTonemap(half3 color){
-    return color / (color + half3(0.65h));
+    return nwbSceneTonemap(color);
 }
 
 

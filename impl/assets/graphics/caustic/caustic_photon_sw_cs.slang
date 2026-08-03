@@ -5,6 +5,7 @@
 #include "sw_binding_slots.h"
 #include "photon_push_constants.slangi"
 #include "photon_types.slangi"
+#include "../bvh/constants.h"
 #include "../mesh/runtime_constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"
@@ -120,7 +121,7 @@ NwbCausticSwTriangleHit nwbCausticSwRayTriangle(const float3 origin, const float
 
 NwbRayTraceVertexAttrib nwbCausticSwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
     // Per-mesh attribute slots are non-uniform heap indices.
-    return nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u));
+    return nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
 }
 
 
@@ -146,14 +147,14 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     [loop] while(active){
         if(nwbBvhNodeIsLeaf(node)){
             const uint triangle = nwbBvhLeafPrimitive(node);
-            const uint indexBase = triangle * 3u;
-            const uint3 triIndices = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * 4u);
+            const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+            const uint3 triIndices = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
             const uint i0 = triIndices.x;
             const uint i1 = triIndices.y;
             const uint i2 = triIndices.z;
-            const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(i0 * 12u));
-            const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(i1 * 12u));
-            const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(i2 * 12u));
+            const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(i0 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(i1 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(i2 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
             const NwbCausticSwTriangleHit triangleHit = nwbCausticSwRayTriangle(origin, direction, tMin, closest.t, v0, v1, v2);
             if(triangleHit.hit){
                 closest.hit = true;
@@ -165,7 +166,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
                 closest.transmission = half3(1.0h, 1.0h, 1.0h);
 
                 if(refractive){
-                    const uint attributeBase = triangle * 3u;
+                    const uint attributeBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
                     const NwbRayTraceVertexAttrib a0 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase);
                     const NwbRayTraceVertexAttrib a1 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
                     const NwbRayTraceVertexAttrib a2 = nwbCausticSwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);

@@ -10,6 +10,7 @@
 
 
 #include "sw_binding_slots.h"
+#include "../bvh/constants.h"
 
 // Each tracing pass chooses its occluder class at compile time.
 #ifndef NWB_SW_SHADOW_OCCLUDER
@@ -84,18 +85,18 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
 
         if(nwbBvhNodeIsLeaf(node)){
             const uint triangle = nwbBvhLeafPrimitive(node);
-            const uint indexBase = triangle * 3u;
-            const uint3 indices = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * 4u);
-            const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.x * 12u));
-            const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.y * 12u));
-            const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.z * 12u));
+            const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+            const uint3 indices = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+            const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
             const NwbSwShadowTriangleHit triangleHit = nwbSwShadowRayTriangle(origin, direction, tMin, tMax, v0, v1, v2);
             if(triangleHit.hit){
                 if(!transparent){
                     acc.transmittance = half3(0.0h, 0.0h, 0.0h);
                     return;
                 }
-                const uint attributeBase = triangle * 3u;
+                const uint attributeBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
                 const NwbRayTraceVertexAttrib a0 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase);
                 const NwbRayTraceVertexAttrib a1 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
                 const NwbRayTraceVertexAttrib a2 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);

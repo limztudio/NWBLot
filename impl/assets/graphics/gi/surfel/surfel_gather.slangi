@@ -48,8 +48,8 @@ bool nwbSurfelGather(const float3 worldPosition, const float3 normal, out float3
             if(surfel.alive != 0u && surfel.sampleCount != 0u){
                 const float dist = length(biasedPosition - surfel.position);
                 const float normalWeight = saturate(dot(normal, surfel.normal));
-                const float distanceWeight = saturate(1.0 - dist / max(surfel.radius, 1e-4));
-                const float confidence = saturate(float(surfel.sampleCount) / 8.0);
+                const float distanceWeight = saturate(1.0 - dist / max(surfel.radius, NWB_SURFEL_RADIUS_MIN));
+                const float confidence = saturate(float(surfel.sampleCount) / NWB_SURFEL_GATHER_FULL_CONFIDENCE_SAMPLE_COUNT);
                 const float weight = normalWeight * distanceWeight * confidence;
                 // Reconstruct the surfel's directional irradiance at the QUERY normal: a surface facing the red
                 // wall reads redder than one facing away. Normal/distance similarity still gates leakage (the surfel's
@@ -62,7 +62,7 @@ bool nwbSurfelGather(const float3 worldPosition, const float3 normal, out float3
         }
     }
 
-    if(totalWeight < 1e-4)
+    if(totalWeight < NWB_SURFEL_GATHER_WEIGHT_EPSILON)
         return false;
     outIrradiance = irradianceSum / totalWeight;
     return true;

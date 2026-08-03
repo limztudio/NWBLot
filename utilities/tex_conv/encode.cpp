@@ -59,6 +59,11 @@ using ImagePlanes = basisu::vector<basisu::image>;
 using VolumeMips = basisu::vector<ImagePlanes>;
 
 static constexpr usize s_InvalidBackendSlice = Limit<usize>::s_Max;
+// Keep Basis encoding serial for reproducible cooked texture bytes across machines.
+static constexpr u32 s_BasisEncoderWorkerCount = 1u;
+// Basis image channels are normalized 8-bit values when averaging volume slices in linear space.
+static constexpr f32 s_BasisColorChannelMax = 255.0f;
+static constexpr f32 s_BasisColorChannelRoundingBias = 0.5f;
 
 static void ResetPayload(
     TexturePayload& outPayload,
@@ -175,11 +180,11 @@ static void ResetPayload(
     const bool srgb,
     TexturePayload& outPayload
 ){
-    const u32 planeCount = dimension == TextureDimension::TextureCube ? 6u : 1u;
+    const u32 planeCount = dimension == TextureDimension::TextureCube ? s_TextureCubeFaceCount : 1u;
     if(inputPaths.size() != planeCount)
         return false;
 
-    basisu::job_pool jobPool(1u);
+    basisu::job_pool jobPool(s_BasisEncoderWorkerCount);
     basisu::basis_compressor_params parameters;
     parameters.set_format_mode(basist::basis_tex_format::cUASTC_LDR_4x4);
     parameters.set_srgb_options(srgb);
@@ -317,15 +322,15 @@ static void ResetPayload(
     float blue = 0.0f;
     for(const basisu::image& plane : planes){
         const basisu::color_rgba& color = plane(x, y);
-        red += basisu::srgb_to_linear(static_cast<float>(color.r) / 255.0f);
-        green += basisu::srgb_to_linear(static_cast<float>(color.g) / 255.0f);
-        blue += basisu::srgb_to_linear(static_cast<float>(color.b) / 255.0f);
+        red += basisu::srgb_to_linear(static_cast<float>(color.r) / s_BasisColorChannelMax);
+        green += basisu::srgb_to_linear(static_cast<float>(color.g) / s_BasisColorChannelMax);
+        blue += basisu::srgb_to_linear(static_cast<float>(color.b) / s_BasisColorChannelMax);
         alpha += color.a;
     }
     return basisu::color_rgba(
-        static_cast<int>(basisu::linear_to_srgb(red / count) * 255.0f + 0.5f),
-        static_cast<int>(basisu::linear_to_srgb(green / count) * 255.0f + 0.5f),
-        static_cast<int>(basisu::linear_to_srgb(blue / count) * 255.0f + 0.5f),
+        static_cast<int>(basisu::linear_to_srgb(red / count) * s_BasisColorChannelMax + s_BasisColorChannelRoundingBias),
+        static_cast<int>(basisu::linear_to_srgb(green / count) * s_BasisColorChannelMax + s_BasisColorChannelRoundingBias),
+        static_cast<int>(basisu::linear_to_srgb(blue / count) * s_BasisColorChannelMax + s_BasisColorChannelRoundingBias),
         static_cast<int>((alpha + count / 2u) / count)
     );
 }
@@ -393,7 +398,7 @@ static void ResetPayload(
         }
     }
 
-    basisu::job_pool jobPool(1u);
+    basisu::job_pool jobPool(s_BasisEncoderWorkerCount);
     basisu::basis_compressor_params parameters;
     parameters.set_format_mode(basist::basis_tex_format::cUASTC_LDR_4x4);
     parameters.set_srgb_options(srgb);
@@ -496,7 +501,7 @@ bool EncodeTexture(
         }
         return __hidden_encode::Encode2DOrCube(inputPaths, dimension, srgb, outPayload);
     case TextureDimension::TextureCube:
-        if(inputPaths.size() != 6u){
+        if(inputPaths.size() != s_TextureCubeFaceCount){
             NWB_LOGGER_WARNING(NWB_TEXT("tex_conv: a cubemap requires exactly six ordered face images."));
             return false;
         }

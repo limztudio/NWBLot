@@ -17,7 +17,7 @@ float nwbCsgBoxDistance(const float3 shapePosition, const NwbCsgCutter cutter){
 float3 nwbCsgBoxNormal(const float3 shapePosition, const NwbCsgCutter cutter){
     const float3 q = abs(shapePosition) - cutter.parameter0.xyz;
     const float3 outside = max(q, float3(0.0));
-    if(dot(outside, outside) > 0.00000001)
+    if(dot(outside, outside) > NWB_CSG_NORMALIZATION_LENGTH_SQUARED_EPSILON)
         return nwbCsgNormalizeOr(
             outside * float3(
                 nwbCsgNonZeroSign(shapePosition.x),

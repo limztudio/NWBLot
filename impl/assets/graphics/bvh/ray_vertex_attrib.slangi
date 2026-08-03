@@ -9,11 +9,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "constants.h"
 #include "../common/math.slangi"
 
 
-// Per-triangle-corner attribute ABI shared by software and hardware ray traces: packed Half4 normal at byte 0 and
-// Float2 uv0 at byte 8. Callers keep their own heap-load strategy, then decode the identical 16-byte record here.
+// Per-triangle-corner attribute ABI shared by software and hardware ray traces: packed Half4 normal at byte
+// NWB_RAYTRACE_VERTEX_ATTRIBUTE_NORMAL_BYTE_OFFSET and Float2 uv0 at byte
+// NWB_RAYTRACE_VERTEX_ATTRIBUTE_UV0_BYTE_OFFSET. Callers keep their own heap-load strategy, then decode the identical
+// NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES-byte record here.
 struct NwbRayTraceVertexAttrib{
     half3 normal;
     float2 uv0;

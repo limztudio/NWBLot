@@ -18,6 +18,15 @@
 #define NWB_BVH_CHILD_INDEX_MASK 0x7fffffffu
 #define NWB_BVH_INVALID 0xffffffffu
 
+// Raw triangle geometry is shared by the CPU mesh upload and every hardware/software ray-trace consumer. Keep the
+// byte-address layout here so BVH build, shadow, GI, and caustic traces cannot silently decode different records.
+#define NWB_RAYTRACE_TRIANGLE_CORNER_COUNT 3u
+#define NWB_RAYTRACE_INDEX_STRIDE_BYTES 4u
+#define NWB_RAYTRACE_POSITION_STRIDE_BYTES 12u
+#define NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES 16u
+#define NWB_RAYTRACE_VERTEX_ATTRIBUTE_NORMAL_BYTE_OFFSET 0u
+#define NWB_RAYTRACE_VERTEX_ATTRIBUTE_UV0_BYTE_OFFSET 8u
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

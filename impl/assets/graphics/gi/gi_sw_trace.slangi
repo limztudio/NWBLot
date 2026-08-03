@@ -19,6 +19,7 @@
 
 
 #include "sw_binding_slots.h"
+#include "../bvh/constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"
 #include "../bindless/bindless_heap_rt.slangi"
@@ -99,9 +100,10 @@ StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> NwbHeapGiSwInstances(const 
 
 
 // Per-triangle-corner inputs for the material surface evaluator. This is the same 16-byte ray-trace attribute layout
-// the shadow and caustic paths use: Half4 normal at +0 and Float2 uv0 at +8.
+// the shadow and caustic paths use: Half4 normal at NWB_RAYTRACE_VERTEX_ATTRIBUTE_NORMAL_BYTE_OFFSET and Float2 uv0
+// at NWB_RAYTRACE_VERTEX_ATTRIBUTE_UV0_BYTE_OFFSET.
 NwbRayTraceVertexAttrib nwbGiSwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
-    return nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u));
+    return nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
 }
 
 
@@ -159,14 +161,14 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
     [loop] while(active){
         if(nwbBvhNodeIsLeaf(node)){
             const uint triangle = nwbBvhLeafPrimitive(node);
-            const uint indexBase = triangle * 3u;
-            const uint3 triIndices = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * 4u);
-            const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.x * 12u));
-            const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.y * 12u));
-            const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.z * 12u));
+            const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+            const uint3 triIndices = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+            const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
             const NwbGiSwTriangleHit triHit = nwbGiSwRayTriangle(origin, direction, tMin, closest.t, v0, v1, v2);
             if(triHit.hit){
-                const uint attributeBase = triangle * 3u;
+                const uint attributeBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
                 const NwbRayTraceVertexAttrib a0 = nwbGiSwLoadVertexAttrib(material.attributeSlot, attributeBase);
                 const NwbRayTraceVertexAttrib a1 = nwbGiSwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
                 const NwbRayTraceVertexAttrib a2 = nwbGiSwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);

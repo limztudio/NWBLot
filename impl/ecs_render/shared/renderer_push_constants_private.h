@@ -12,6 +12,7 @@
 #include <core/graphics/backend_selection.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/assets/graphics/scene/binding_slots.h>
+#include <impl/ecs_scene/components.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,7 +77,12 @@ struct SceneLightGpuData{
     // x = range, y = light type, z = shadow slot (negative = no slot), w = caustic slot (negative = no slot).
     Float4 params = Float4(0.f, 0.f, -1.f, -1.f);
     // Soft-shadow source size: x = directional angular radius (radians), y = punctual source radius (world units); z/w reserved.
-    Float4 params2 = Float4(0.00465f, 0.1f, 0.f, 0.f);
+    Float4 params2 = Float4(
+        NWB::Impl::Scene::LightDefaults::s_DirectionalAngularRadius,
+        NWB::Impl::Scene::LightDefaults::s_PunctualSourceRadius,
+        0.f,
+        0.f
+    );
 };
 
 static_assert(sizeof(MeshFrameHeapSlots) == sizeof(u32) * NWB_MESH_FRAME_HEAP_SLOT_COUNT, "Mesh frame heap-slot payload must stay a uint4");

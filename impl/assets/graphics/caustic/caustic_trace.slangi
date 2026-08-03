@@ -11,6 +11,7 @@
 
 #include "../common/math.slangi"
 #include "../mesh/surface.slangi"
+#include "photon_push_constants.h"
 #include "refract.slangi"
 #include "splat_constants.slangi"
 
@@ -182,19 +183,24 @@ float2 nwbCausticEmissionJitter(uint photonIndex){
 // phases. phaseCount = 1 is the non-temporal full-grid fallback.
 float2 nwbCausticJitteredTemporalCell(const uint photonIndex, const uint gridSide, const uint frameIndex, const uint temporalPhaseCount){
     const uint fullGridSide = max(gridSide, 1u);
-    const uint phaseCount = temporalPhaseCount == 4u ? 4u : (temporalPhaseCount == 2u ? 2u : 1u);
+    const uint phaseCount = temporalPhaseCount == NWB_CAUSTIC_TEMPORAL_CONVERGED_PHASE_COUNT
+        ? NWB_CAUSTIC_TEMPORAL_CONVERGED_PHASE_COUNT
+        : (temporalPhaseCount == NWB_CAUSTIC_TEMPORAL_BOOTSTRAP_PHASE_COUNT
+            ? NWB_CAUSTIC_TEMPORAL_BOOTSTRAP_PHASE_COUNT
+            : NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT)
+    ;
     const uint phase = frameIndex % phaseCount;
     uint row = 0u;
     uint column = 0u;
 
-    if(phaseCount == 4u){
+    if(phaseCount == NWB_CAUSTIC_TEMPORAL_CONVERGED_PHASE_COUNT){
         const uint halfWidth = max(fullGridSide >> 1u, 1u);
         const uint subgridRow = photonIndex / halfWidth;
         const uint pair = photonIndex % halfWidth;
         row = ((phase >> 1u) & 1u) + 2u * subgridRow;
         column = (phase & 1u) + 2u * pair;
     }
-    else if(phaseCount == 2u){
+    else if(phaseCount == NWB_CAUSTIC_TEMPORAL_BOOTSTRAP_PHASE_COUNT){
         const uint halfWidth = max(fullGridSide >> 1u, 1u);
         row = photonIndex / halfWidth;
         const uint pair = photonIndex % halfWidth;

@@ -47,10 +47,6 @@ ConstantBuffer<NwbShadowReprojectMergePushConstants> g_NwbShadowMergePush;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-float nwbShadowMergeLuma(const float3 color){
-    return dot(color, float3(0.2126, 0.7152, 0.0722));
-}
-
 float nwbShadowTemporalWorldSpacing(const float cameraDistance){
     return max(cameraDistance * NWB_SHADOW_TEMPORAL_WORLD_SPACING_SCALE, NWB_SHADOW_TEMPORAL_WORLD_SPACING_MIN);
 }
@@ -117,7 +113,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         // Invalid receiver: pass through the current sample and reset history.
         if(!valid){
             g_NwbShadowMergeHistoryOut[uint3(h, slot)] = float4(cur, 1.0);
-            const float lumaCur0 = nwbShadowMergeLuma(cur);
+            const float lumaCur0 = nwbLuminance(cur);
             g_NwbShadowMergeMomentsOut[uint3(h, slot)] = float4(lumaCur0, lumaCur0 * lumaCur0, 0.0, 0.0);
             continue;
         }
@@ -136,8 +132,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         }
 
         // Clamp history to the current neighbourhood.
-        const float lumaCur = nwbShadowMergeLuma(cur);
-        const float lumaHistRaw = nwbShadowMergeLuma(hist);
+        const float lumaCur = nwbLuminance(cur);
+        const float lumaHistRaw = nwbLuminance(hist);
         const float temporalDelta = lumaCur - lumaHistRaw;
         const float temporalDeltaAbs = abs(temporalDelta);
         float3 mu = float3(0.0, 0.0, 0.0);
@@ -159,7 +155,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 const float3 s = NwbHeapSampledImage2DArray(g_NwbShadowMergePush.softTraceSlot).Load(int4(t, slot, 0)).rgb;
                 mu += s;
                 mu2 += s * s;
-                const float sl = nwbShadowMergeLuma(s);
+                const float sl = nwbLuminance(s);
                 lumaM1 += sl;
                 lumaM2 += sl * sl;
                 const float tapDelta = sl - lumaHistRaw;
@@ -188,7 +184,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         }
 
         // Reduce history at temporal edges after removing local noise.
-        const float lumaHist = nwbShadowMergeLuma(histClamped);
+        const float lumaHist = nwbLuminance(histClamped);
         const bool temporalChangeCoherent = temporalChangeSupport >= NWB_SHADOW_TEMPORAL_ANTILAG_MIN_SUPPORT;
         const float edgeSignal = temporalChangeCoherent
             ? max(0.0, abs(lumaCur - lumaHist) - NWB_SHADOW_TEMPORAL_NOISE_SLACK * sigmaLuma)

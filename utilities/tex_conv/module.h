@@ -29,6 +29,7 @@ using Impl::TextureFormat::s_SrgbColorSpace;
 using Impl::TextureFormat::s_Texture2DDimension;
 using Impl::TextureFormat::s_Texture3DDimension;
 using Impl::TextureFormat::s_TextureCubeDimension;
+using Impl::TextureFormat::s_TextureCubeFaceCount;
 using Impl::TextureFormat::s_TextureMetadataVersion;
 using Impl::TextureFormat::s_UastcBlockHeight;
 using Impl::TextureFormat::s_UastcBlockWidth;

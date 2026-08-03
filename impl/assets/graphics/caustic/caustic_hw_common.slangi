@@ -9,6 +9,7 @@
 #include "hw_binding_slots.h"
 #include "photon_push_constants.slangi"
 #include "photon_types.slangi"
+#include "../bvh/constants.h"
 #include "../mesh/runtime_constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"
@@ -132,7 +133,7 @@ NwbRayTraceVertexAttrib nwbCausticHwLoadVertexAttrib(const uint attributeSlot, c
     // decoration is applied fresh at every descriptor access.
     // One Load4 for the whole 16-byte attribute record (packed normal in .xy, uv0 in .zw) -- one request instead of two
     // dependent Load2s (bit-identical; mirrors the SW producer).
-    return nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u));
+    return nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
 }
 
 

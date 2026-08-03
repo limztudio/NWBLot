@@ -15,6 +15,7 @@
 
 
 #include "binding_slots.h"
+#include "constants.h"
 #include "bvh_common.slangi"
 #include "../bindless/bindless_heap.slangi"
 
@@ -35,15 +36,15 @@ void nwbBvhLoadTrianglePositions(
     out float3 outP1,
     out float3 outP2
 ){
-    const uint indexBase = triangle * 3u;
+    const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
     const uint indexHeapSlot = g_NwbBvhBuildPushConstants.triangleIndexHeapSlot;
     const uint positionHeapSlot = g_NwbBvhBuildPushConstants.positionHeapSlot;
-    const uint i0 = NwbHeapRawBuffer(indexHeapSlot).Load(indexBase * 4u);
-    const uint i1 = NwbHeapRawBuffer(indexHeapSlot).Load((indexBase + 1u) * 4u);
-    const uint i2 = NwbHeapRawBuffer(indexHeapSlot).Load((indexBase + 2u) * 4u);
-    outP0 = asfloat(NwbHeapRawBuffer(positionHeapSlot).Load3(i0 * 12u));
-    outP1 = asfloat(NwbHeapRawBuffer(positionHeapSlot).Load3(i1 * 12u));
-    outP2 = asfloat(NwbHeapRawBuffer(positionHeapSlot).Load3(i2 * 12u));
+    const uint i0 = NwbHeapRawBuffer(indexHeapSlot).Load(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    const uint i1 = NwbHeapRawBuffer(indexHeapSlot).Load((indexBase + 1u) * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    const uint i2 = NwbHeapRawBuffer(indexHeapSlot).Load((indexBase + 2u) * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    outP0 = asfloat(NwbHeapRawBuffer(positionHeapSlot).Load3(i0 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    outP1 = asfloat(NwbHeapRawBuffer(positionHeapSlot).Load3(i1 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    outP2 = asfloat(NwbHeapRawBuffer(positionHeapSlot).Load3(i2 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
 }
 
 

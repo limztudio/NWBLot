@@ -28,7 +28,7 @@ int Run(const int argc, char** argv){
 
     CLI::App app{ "Convert LDR images into an NWB UASTC 2D, cube, or volume texture asset." };
     app.add_option("input", inputArgument, "2D input image (.png, .jpg, .jpeg, .jfif, .tga, or .qoi)");
-    app.add_option("--cube", cubeArguments, "Six cubemap faces: +X -X +Y -Y +Z -Z")->expected(6);
+    app.add_option("--cube", cubeArguments, "Six cubemap faces: +X -X +Y -Y +Z -Z")->expected(static_cast<int>(s_TextureCubeFaceCount));
     app.add_option("--volume", volumeArguments, "Ordered volume Z slices: z0 z1 ... zN")->expected(1, -1);
     app.add_option("-o,--output", outputArgument, "Output base name or .nwb filename");
     app.add_flag("--linear", linear, "Treat input as linear data instead of sRGB color");

@@ -54,7 +54,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const int3 fullCoord = int3(int2(pixel), 0);
     const float3 rawNormal = nwbSurfelUpsampleGbufferNormal().Load(fullCoord).xyz;
-    if(dot(rawNormal, rawNormal) < 0.01){
+    if(dot(rawNormal, rawNormal) < NWB_SURFEL_GBUFFER_NORMAL_LENGTH_SQUARED_MIN){
         g_NwbSurfelUpsampleOutput[pixel] = float4(0.0, 0.0, 0.0, 0.0);   // background -> hemiAmbient in lighting
         return;
     }
@@ -67,8 +67,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const int2 downFull = int2(int(pixel.x), min(int(pixel.y) + 1, int(fullHeight) - 1));
     const float3 dxWorld = nwbSurfelUpsampleGbufferWorldPosition().Load(int3(rightFull, 0)).xyz - centerWorld;
     const float3 dyWorld = nwbSurfelUpsampleGbufferWorldPosition().Load(int3(downFull, 0)).xyz - centerWorld;
-    const float spacing = max(max(length(dxWorld), length(dyWorld)), 1e-4);
-    const float sigmaWorld = spacing * 3.0;
+    const float spacing = max(max(length(dxWorld), length(dyWorld)), NWB_SURFEL_UPSAMPLE_WORLD_SPACING_MIN);
+    const float sigmaWorld = spacing * NWB_SURFEL_UPSAMPLE_WORLD_SIGMA_SCALE;
     const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
 
     uint halfWidth, halfHeight;
@@ -85,18 +85,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     float3 sum = float3(0.0, 0.0, 0.0);
     float weightSum = 0.0;
-    [unroll] for(int j = 0; j < 2; ++j){
-        [unroll] for(int i = 0; i < 2; ++i){
+    [unroll] for(int j = 0; j < NWB_SURFEL_UPSAMPLE_TAP_SIDE; ++j){
+        [unroll] for(int i = 0; i < NWB_SURFEL_UPSAMPLE_TAP_SIDE; ++i){
             const int2 tap = int2(clamp(baseTexel.x + i, 0, int(halfWidth) - 1), clamp(baseTexel.y + j, 0, int(halfHeight) - 1));
             // The resolve target is RGBA16F. Keep its irradiance/coverage payload native-half while it is only
             // transported through this filter; geometry and the weighted accumulation remain FP32 below.
             const half4 tapValue = half4(nwbSurfelUpsampleHalfIrradiance().Load(int3(tap, 0)));
-            if(tapValue.a < half(0.5))
+            if(tapValue.a < half(NWB_SURFEL_UPSAMPLE_COVERAGE_MIN))
                 continue;   // this half texel had no surfel coverage -> nothing to upsample from
             // Recover the tap's geometry from the SAME full texel the resolve gathered at (tap * factor, top-left).
             const int2 tapFull = int2(min(uint(tap.x) * factor, fullWidth - 1u), min(uint(tap.y) * factor, fullHeight - 1u));
             const float3 tapRawNormal = nwbSurfelUpsampleGbufferNormal().Load(int3(tapFull, 0)).xyz;
-            if(dot(tapRawNormal, tapRawNormal) < 0.01)
+            if(dot(tapRawNormal, tapRawNormal) < NWB_SURFEL_GBUFFER_NORMAL_LENGTH_SQUARED_MIN)
                 continue;   // tap's geometry is background
             const float3 tapNormal = normalize(tapRawNormal * 2.0 - 1.0);
             if(dot(tapNormal, centerNormal) < NWB_SURFEL_UPSAMPLE_NORMAL_GATE)

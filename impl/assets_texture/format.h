@@ -58,6 +58,7 @@ inline constexpr u32 s_UastcBlockWidth = 4u;
 inline constexpr u32 s_UastcBlockHeight = 4u;
 inline constexpr u32 s_UastcBytesPerBlock = 16u;
 inline constexpr u32 s_TextureMetadataVersion = 1u;
+inline constexpr u32 s_TextureCubeFaceCount = 6u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -102,7 +103,7 @@ inline constexpr u32 s_TextureMetadataVersion = 1u;
         outSliceCount = 1u;
         return true;
     case TextureDimension::TextureCube:
-        outSliceCount = 6u;
+        outSliceCount = s_TextureCubeFaceCount;
         return true;
     case TextureDimension::Texture3D:
         outSliceCount = mipDepth;

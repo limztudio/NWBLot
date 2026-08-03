@@ -11,6 +11,11 @@
 
 // Shared CPU/GPU photon-producer ABI. Consumers provide FIELD(name, defaultValue) to materialize their native scalar
 // declarations; keeping this header macro-only lets the C++ renderer and Slang shaders use one authoritative field order.
+#define NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT 1u
+#define NWB_CAUSTIC_TEMPORAL_BOOTSTRAP_PHASE_COUNT 2u
+#define NWB_CAUSTIC_TEMPORAL_CONVERGED_PHASE_COUNT 4u
+#define NWB_CAUSTIC_TEMPORAL_WARMUP_FRAME_COUNT 8u
+
 #define NWB_CAUSTIC_PHOTON_PUSH_CONSTANTS_FIELDS(FIELD) \
     FIELD(width, 0u) \
     FIELD(height, 0u) \
@@ -26,7 +31,7 @@
     FIELD(deferredResourcesHeapSlot, 0u) \
     FIELD(materialContextSlotsHeapSlot, 0u) \
     FIELD(accumulatorStorageSlot, 0u) \
-    FIELD(temporalPhaseCount, 1u)
+    FIELD(temporalPhaseCount, NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -42,7 +42,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const int3 loadCoord = int3(int2(pixel), 0);
     const float3 rawNormal = NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.normalSlot).Load(loadCoord).xyz;
-    if(dot(rawNormal, rawNormal) < 0.01)
+    if(dot(rawNormal, rawNormal) < NWB_SURFEL_GBUFFER_NORMAL_LENGTH_SQUARED_MIN)
         return;   // no geometry at this tile (background)
 
     const float3 worldPosition = NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.worldPositionSlot).Load(loadCoord).xyz;
@@ -135,18 +135,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     float4 seedShG = float4(0.0, 0.0, 0.0, 0.0);
     float4 seedShB = float4(0.0, 0.0, 0.0, 0.0);
     float seedWeight = 0.0;
-    for(int dz = -1; dz <= 1; ++dz)
-    for(int dy = -1; dy <= 1; ++dy)
-    for(int dx = -1; dx <= 1; ++dx){
+    for(int dz = -NWB_SURFEL_SEED_CELL_EXTENT; dz <= NWB_SURFEL_SEED_CELL_EXTENT; ++dz)
+    for(int dy = -NWB_SURFEL_SEED_CELL_EXTENT; dy <= NWB_SURFEL_SEED_CELL_EXTENT; ++dy)
+    for(int dx = -NWB_SURFEL_SEED_CELL_EXTENT; dx <= NWB_SURFEL_SEED_CELL_EXTENT; ++dx){
         const uint seedBucket = nwbSurfelHashCell(myCell + int3(dx, dy, dz), cellCount);
         uint seedId = g_NwbSurfelCellHead[seedBucket];
         uint seedWalk = 0u;
         [loop] while(seedId < poolCapacity && seedWalk < NWB_SURFEL_MAX_WALK){
             const NwbSurfel neighbour = g_NwbSurfelPool[seedId];
-            if(neighbour.alive != 0u && neighbour.sampleCount >= 2u){
+            if(neighbour.alive != 0u && neighbour.sampleCount >= NWB_SURFEL_SEED_NEIGHBOR_MIN_SAMPLE_COUNT){
                 const float dist = length(worldPosition - neighbour.position);
                 const float normalWeight = saturate(dot(worldNormal, neighbour.normal));
-                const float distanceWeight = saturate(1.0 - dist / max(neighbour.radius, 1e-4));
+                const float distanceWeight = saturate(1.0 - dist / max(neighbour.radius, NWB_SURFEL_RADIUS_MIN));
                 const float weight = normalWeight * distanceWeight;
                 seedShR += neighbour.shR * weight;
                 seedShG += neighbour.shG * weight;
@@ -157,7 +157,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             ++seedWalk;
         }
     }
-    const bool seeded = seedWeight > 1e-4;
+    const bool seeded = seedWeight > NWB_SURFEL_GATHER_WEIGHT_EPSILON;
     const float seedNorm = seeded ? (1.0 / seedWeight) : 0.0;
 
     NwbSurfel surfel;

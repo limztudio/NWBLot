@@ -41,7 +41,7 @@ NWB_IMPL_BEGIN
 
 // Finite infinity for CPU BVH bounds.
 inline constexpr f32 s_RayTracingFiniteInfinity = 1e30f;
-inline constexpr u32 s_RayTracingTriangleIndexCount = 3u;
+inline constexpr u32 s_RayTracingTriangleIndexCount = NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
 inline constexpr u32 s_RayTracingAllInstanceMask = NWB_RAY_TRACING_ALL_INSTANCE_MASK;
 // Heap geometry buffers per mesh.
 inline constexpr u32 s_HardwareRayTracingMeshBufferCount = 3u;
@@ -207,7 +207,7 @@ struct SwShadowHeapPushConstants{
     u32 frameIndex = 0u;
     u32 coarseWidth = 0u;
     u32 coarseHeight = 0u;
-    f32 edgeThreshold = 0.1f;
+    f32 edgeThreshold = ECSRenderDetail::s_DefaultSwShadowEdgeThreshold;
     u32 collectStats = 0u;
     u32 edgeCapacity = 0u;
     u32 traceGroupSize = 0u;
@@ -413,10 +413,11 @@ inline constexpr u32 s_CausticSwPhotonGridSide = NWB_CAUSTIC_SW_GRID_SIDE;
 inline constexpr u32 s_CausticSwPhotonCount = s_CausticSwPhotonGridSide * s_CausticSwPhotonGridSide;
 
 // Two bootstrap phases, then four converged phases with normalized flux.
-inline constexpr u32 s_CausticTemporalBootstrapPhaseCount = 2u;
-inline constexpr u32 s_CausticTemporalConvergedPhaseCount = 4u;
-inline constexpr u32 s_CausticTemporalWarmupFrameCount = 8u;
-static_assert(s_CausticTemporalBootstrapPhaseCount == 2u && s_CausticTemporalConvergedPhaseCount == 4u);
+inline constexpr u32 s_CausticTemporalBootstrapPhaseCount = NWB_CAUSTIC_TEMPORAL_BOOTSTRAP_PHASE_COUNT;
+inline constexpr u32 s_CausticTemporalConvergedPhaseCount = NWB_CAUSTIC_TEMPORAL_CONVERGED_PHASE_COUNT;
+inline constexpr u32 s_CausticTemporalWarmupFrameCount = NWB_CAUSTIC_TEMPORAL_WARMUP_FRAME_COUNT;
+static_assert(s_CausticTemporalBootstrapPhaseCount > NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT);
+static_assert(s_CausticTemporalConvergedPhaseCount > s_CausticTemporalBootstrapPhaseCount);
 static_assert((s_CausticHwPhotonGridSide % s_CausticTemporalConvergedPhaseCount) == 0u);
 static_assert((s_CausticSwPhotonGridSide % s_CausticTemporalConvergedPhaseCount) == 0u);
 

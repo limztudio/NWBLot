@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/kernel/renderer_types.h>
+#include <impl/ecs_render/kernel/renderer_constants_private.h>
 
 #include <core/ecs/entity_id.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
@@ -453,7 +454,7 @@ struct RtShadowState{
     // Separate HW/SW caches avoid cross-gather eviction.
     RtMeshHeapHandleCache m_hwMeshHeapHandleCache;
     RtMeshHeapHandleCache m_swMeshHeapHandleCache;
-    f32 m_swShadowEdgeThreshold = 0.1f;
+    f32 m_swShadowEdgeThreshold = ECSRenderDetail::s_DefaultSwShadowEdgeThreshold;
     bool m_swShadowEdgeStatsPending = false;
     bool m_shadowResolvePipelineFailed = false;
     bool m_shadowResolveRgbPipelineFailed = false;
@@ -539,7 +540,7 @@ struct RtCausticState{
     Float4 m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
     Float4 m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
     // Splat-space EMA avoids image-space reprojection ghosts; resolve normalizes steady-state brightness.
-    f32 m_causticTemporalDecay = 0.85f;
+    f32 m_causticTemporalDecay = ECSRenderDetail::s_DefaultCausticTemporalDecay;
     // Accepted updates select bootstrap then converged phases; rollback restores this counter.
     u32 m_causticTemporalReuseFrameCount = 0u;
     u32 m_swCausticFrameIndex = 0u;

@@ -815,7 +815,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setInRenderTarget(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/gbuffer_normal")
-        .setClearValue(Core::Color(0.5f, 0.5f, 1.f, 1.f))
+        .setClearValue(ECSRenderDetail::s_GBufferNormalClearColor)
     ;
     createdTargets.normal = graphics().createTexture(normalDesc);
     if(!createdTargets.normal){
@@ -831,7 +831,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
         .setInRenderTarget(true)
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/deferred/gbuffer_world_position")
-        .setClearValue(Core::Color(0.f, 0.f, 0.f, 1.f))
+        .setClearValue(ECSRenderDetail::s_GBufferWorldPositionClearColor)
     ;
     createdTargets.worldPosition = graphics().createTexture(worldPositionDesc);
     if(!createdTargets.worldPosition){
@@ -1028,10 +1028,10 @@ void RendererDeferredSystem::clearDeferredTargets(
     commandList.commitBarriers();
 
     commandList.clearTextureFloat(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
-    commandList.clearTextureFloat(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.5f, 0.5f, 1.f, 1.f));
-    commandList.clearTextureFloat(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 1.f));
+    commandList.clearTextureFloat(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_GBufferNormalClearColor);
+    commandList.clearTextureFloat(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_GBufferWorldPositionClearColor);
     if(clearSurfelIrradiance && targets.surfelIrradiance)
-        commandList.clearTextureFloat(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::Color(0.f, 0.f, 0.f, 0.f));
+        commandList.clearTextureFloat(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_SurfelIrradianceClearColor);
 
     if(clearCsgTargets){
         Core::GpuTimingMeasure csgClearTiming(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, graphics().getDevice(), commandList);

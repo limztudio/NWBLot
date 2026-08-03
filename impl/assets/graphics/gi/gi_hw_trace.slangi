@@ -19,6 +19,7 @@
 
 
 #include "hw_binding_slots.h"
+#include "../bvh/constants.h"
 #include "../raytrace/constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"
@@ -71,7 +72,7 @@ uint nwbMeshFrameViewHeapSlot(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-triangle-corner normal + uv0, in the shared 16-byte ray-trace attribute layout. GI needs these inputs to
+// Per-triangle-corner normal + uv0, in the shared NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES-byte ray-trace attribute layout. GI needs these inputs to
 // evaluate the material surface hook exactly through its declared contract rather than inferring an interface field.
 struct NwbGiHwVertexAttrib{
     half3 normal;
@@ -80,7 +81,7 @@ struct NwbGiHwVertexAttrib{
 
 NwbGiHwVertexAttrib nwbGiHwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
     // attributeSlot is a non-uniform global heap slot; NwbHeapRawBuffer() applies the required decoration per load.
-    const uint4 packed = NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * 16u);
+    const uint4 packed = NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES);
     NwbGiHwVertexAttrib attrib;
     attrib.normal = half3(float3(
         nwbUnpackHalf2x16(packed.x),
@@ -140,15 +141,15 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     // across the wave -- different rays hit different meshes -- so its heap subscript must be NonUniformResourceIndex-
     // tagged; NwbHeapRawBuffer() applies that internally and is re-invoked at EACH access below (never hoisted into a
     // resource local) so the decoration is applied fresh at every descriptor access.
-    const uint indexBase = triangle * 3u;
-    const uint3 tri = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * 4u);
-    const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(tri.x * 12u));
-    const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(tri.y * 12u));
-    const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(tri.z * 12u));
+    const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+    const uint3 tri = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(tri.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(tri.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(tri.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
     const float3 objNormal = normalize(cross(v1 - v0, v2 - v0));   // same edges/order/sign as nwbGiSwRayTriangle
     const float2 bary = query.CommittedTriangleBarycentrics();
     const float3 weights = float3(1.0 - bary.x - bary.y, bary.x, bary.y);
-    const uint attributeBase = triangle * 3u;
+    const uint attributeBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
     const NwbGiHwVertexAttrib a0 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase);
     const NwbGiHwVertexAttrib a1 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
     const NwbGiHwVertexAttrib a2 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);

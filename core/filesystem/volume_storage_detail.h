@@ -27,6 +27,7 @@ namespace __hidden_filesystem{
 inline constexpr u64 s_VolumeDefaultMetadataBytes = 512ull * 1024ull;
 inline constexpr u64 s_VolumeMinMetadataBytes = 4ull * 1024ull;
 inline constexpr u64 s_VolumeMoveChunkBytes = 1024ull * 1024ull;
+inline constexpr u64 s_VolumeFallbackMetadataDivisor = 8u;
 
 using ::AddNoOverflow;
 using ::CanRepresentU64;
@@ -59,7 +60,7 @@ static_assert(sizeof(VolumeIndexEntryDisk) == 80, "VolumeIndexEntryDisk size mis
 [[nodiscard]] inline u64 DefaultMetadataBytes(const u64 segmentSize){
     u64 output = s_VolumeDefaultMetadataBytes;
     if(output >= segmentSize)
-        output = segmentSize / 8;
+        output = segmentSize / s_VolumeFallbackMetadataDivisor;
     if(output < s_VolumeMinMetadataBytes)
         output = s_VolumeMinMetadataBytes;
     return output;

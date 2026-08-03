@@ -35,7 +35,7 @@ void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttri
         const float3 weights = float3(1.0 - bary.x - bary.y, bary.x, bary.y);
 
         const uint prim = PrimitiveIndex();
-        const uint attributeBase = prim * 3u;
+        const uint attributeBase = prim * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
         // material.attributeSlot is this mesh's per-corner attribute buffer's global heap slot.
         const NwbRayTraceVertexAttrib a0 = nwbCausticHwLoadVertexAttrib(material.attributeSlot, attributeBase);
         const NwbRayTraceVertexAttrib a1 = nwbCausticHwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);

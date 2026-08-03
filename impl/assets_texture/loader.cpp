@@ -350,7 +350,7 @@ bool TextureAssetLoader::Create(
         .setName(imageName)
     ;
     if(textureAsset.dimension() == TextureDimension::TextureCube)
-        textureDesc.setArraySize(6u);
+        textureDesc.setArraySize(TextureFormat::s_TextureCubeFaceCount);
     else if(textureAsset.dimension() == TextureDimension::Texture3D)
         textureDesc.setDepth(textureAsset.depth());
 

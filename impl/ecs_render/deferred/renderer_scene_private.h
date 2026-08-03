@@ -27,8 +27,15 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr f32 s_CausticSlotUnassigned = -1.f;
+inline constexpr f32 s_ShadowSlotUnassigned = -1.f;
+inline constexpr f32 s_CausticSlotUnassigned = s_ShadowSlotUnassigned;
 inline constexpr f32 s_CausticSlotDisabled = -2.f;
+inline constexpr f32 s_CausticSlotEnabledThreshold = s_CausticSlotUnassigned - 0.5f;
+inline constexpr f32 s_Rec709LuminanceRed = 0.2126f;
+inline constexpr f32 s_Rec709LuminanceGreen = 0.7152f;
+inline constexpr f32 s_Rec709LuminanceBlue = 0.0722f;
+inline constexpr f32 s_DirectionalShadowImportanceBoost = 4.0f;
+inline constexpr f32 s_ShadowImportanceDistanceSquaredEpsilon = 1e-4f;
 
 // SceneLightGpuData::params.y carries static_cast<f32>(LightType::Enum) (Directional=0, Point=1, Spot=2). These
 // thresholds decode the integer-typed light type back from its float packing: a half-way bound between adjacent
@@ -44,7 +51,7 @@ NWB_INLINE f32 ResolveExtentAspectRatio(const u32 width, const u32 height){
     if(width != 0u && height != 0u)
         return static_cast<f32>(width) / static_cast<f32>(height);
 
-    return 1.0f;
+    return NWB::Impl::Scene::CameraDefaults::s_FallbackAspectRatio;
 }
 
 NWB_INLINE f32 ResolveFramebufferAspectRatio(const Core::FramebufferInfoEx& framebufferInfo){
@@ -61,18 +68,21 @@ inline f32 ShadowSlotImportance(
     const SIMDVector lightPosition,
     const SIMDVector cameraPosition
 ){
-    const SIMDVector luminance = Vector3Dot(colorIntensity, VectorSet(0.2126f, 0.7152f, 0.0722f, 0.0f));
+    const SIMDVector luminance = Vector3Dot(
+        colorIntensity,
+        VectorSet(s_Rec709LuminanceRed, s_Rec709LuminanceGreen, s_Rec709LuminanceBlue, 0.0f)
+    );
     const SIMDVector intensity = VectorMax(VectorSplatW(colorIntensity), VectorZero());
     const SIMDVector radiantImportance = VectorMultiply(luminance, intensity);
 
     if(VectorGetY(params) < s_LightTypeDirectionalMax)
-        return VectorGetX(VectorMultiplyAdd(radiantImportance, VectorReplicate(4.0f), s_SIMDOne));
+        return VectorGetX(VectorMultiplyAdd(radiantImportance, VectorReplicate(s_DirectionalShadowImportanceBoost), s_SIMDOne));
 
     const SIMDVector delta = VectorSubtract(lightPosition, cameraPosition);
     const SIMDVector distanceSquared = Vector3LengthSq(delta);
     const SIMDVector range = VectorMax(VectorSplatX(params), VectorZero());
     const SIMDVector rangeSquared = VectorMultiply(range, range);
-    const SIMDVector hasDistance = VectorGreater(distanceSquared, VectorReplicate(1e-4f));
+    const SIMDVector hasDistance = VectorGreater(distanceSquared, VectorReplicate(s_ShadowImportanceDistanceSquaredEpsilon));
     const SIMDVector safeDistanceSquared = VectorSelect(s_SIMDOne, distanceSquared, hasDistance);
     const SIMDVector coverageSquared = VectorSelect(
         s_SIMDOne,
@@ -86,7 +96,10 @@ inline f32 ShadowSlotImportance(
 // uses, but WITHOUT the screen-coverage weighting (the caustic budget is aimed at the refractive occluders, not
 // the camera). Higher = more worth a scarce caustic slot.
 inline f32 CausticSlotImportance(const SIMDVector colorIntensity){
-    const SIMDVector luminance = Vector3Dot(colorIntensity, VectorSet(0.2126f, 0.7152f, 0.0722f, 0.0f));
+    const SIMDVector luminance = Vector3Dot(
+        colorIntensity,
+        VectorSet(s_Rec709LuminanceRed, s_Rec709LuminanceGreen, s_Rec709LuminanceBlue, 0.0f)
+    );
     const SIMDVector intensity = VectorMax(VectorSplatW(colorIntensity), VectorZero());
     return VectorGetX(VectorMultiply(luminance, intensity));
 }
@@ -119,7 +132,7 @@ inline u32 ResolveSceneLights(
         dst.params = Float4(
             src.range,
             static_cast<f32>(src.type),
-            -1.f,
+            s_ShadowSlotUnassigned,
             src.enableCaustics ? s_CausticSlotUnassigned : s_CausticSlotDisabled
         ); // z = shadow slot; w = caustic slot, or disabled when the light did not opt in
         dst.params2 = Float4(src.angularRadius, src.sourceRadius, 0.f, 0.f); // soft-shadow source size
@@ -130,7 +143,10 @@ inline u32 ResolveSceneLights(
     // the most important lights this frame (slot index -> params.z; lights that miss out keep -1 and stay
     // fully lit). A simple K-pass selection over <= NWB_SCENE_MAX_LIGHTS lights is trivially cheap.
     const u32 lightCount = static_cast<u32>(gatheredCount);
-    const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, 1.0f);
+    const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(
+        world,
+        NWB::Impl::Scene::CameraDefaults::s_FallbackAspectRatio
+    );
     const SIMDVector cameraPosition = cameraView.valid()
         ? LoadFloat(cameraView.transform->position)
         : VectorZero()
@@ -142,7 +158,7 @@ inline u32 ResolveSceneLights(
             VectorSet(
                 light.range,
                 static_cast<f32>(light.type),
-                -1.0f,
+                s_ShadowSlotUnassigned,
                 light.enableCaustics ? s_CausticSlotUnassigned : s_CausticSlotDisabled
             ),
             LoadFloat(light.position),
@@ -179,7 +195,7 @@ inline bool CausticLightEligible(const SceneLightGpuData& light){
 }
 
 inline bool CausticLightEnabled(const SceneLightGpuData& light){
-    return light.params.w >= (s_CausticSlotUnassigned - 0.5f);
+    return light.params.w >= s_CausticSlotEnabledThreshold;
 }
 
 // Assigns the bounded pool of NWB_SCENE_CAUSTIC_SLOT_COUNT caustic slots to the most important caustic-enabled,

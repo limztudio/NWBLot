@@ -835,7 +835,7 @@ f32 RendererRayTracingSystem::causticTemporalDecay(){
 u32 RendererRayTracingSystem::causticTemporalPhaseCount(){
     // Reuse phases only after temporal history warms up.
     if(causticTemporalDecay() <= 0.f)
-        return 1u;
+        return NWB_CAUSTIC_TEMPORAL_DISABLED_PHASE_COUNT;
     return rayTracingState().m_causticTemporalReuseFrameCount < s_CausticTemporalWarmupFrameCount
         ? s_CausticTemporalBootstrapPhaseCount
         : s_CausticTemporalConvergedPhaseCount

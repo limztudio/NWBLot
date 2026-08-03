@@ -54,8 +54,8 @@ float3 nwbSurfelBounceGather(const float3 worldPosition, const float3 queryNorma
             if(surfel.alive != 0u && surfel.sampleCount != 0u){
                 const float dist = length(biasedPosition - surfel.position);
                 const float normalWeight = saturate(dot(queryNormal, surfel.normal));
-                const float distanceWeight = saturate(1.0 - dist / max(surfel.radius, 1e-4));
-                const float confidence = saturate(float(surfel.sampleCount) / 8.0);
+                const float distanceWeight = saturate(1.0 - dist / max(surfel.radius, NWB_SURFEL_RADIUS_MIN));
+                const float confidence = saturate(float(surfel.sampleCount) / NWB_SURFEL_GATHER_FULL_CONFIDENCE_SAMPLE_COUNT);
                 const float weight = normalWeight * distanceWeight * confidence;
                 irradianceSum += nwbSurfelShReconstruct(surfel.shR, surfel.shG, surfel.shB, queryNormal) * weight;
                 totalWeight += weight;
@@ -64,7 +64,7 @@ float3 nwbSurfelBounceGather(const float3 worldPosition, const float3 queryNorma
             ++walk;
         }
     }
-    return totalWeight > 1e-4 ? (irradianceSum / totalWeight) : float3(0.0, 0.0, 0.0);
+    return totalWeight > NWB_SURFEL_GATHER_WEIGHT_EPSILON ? (irradianceSum / totalWeight) : float3(0.0, 0.0, 0.0);
 }
 
 

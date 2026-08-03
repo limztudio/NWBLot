@@ -38,7 +38,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint2 fullPixel = min(halfPixel * factor, uint2(screenWidth - 1u, screenHeight - 1u));
     const int3 loadCoord = int3(int2(fullPixel), 0);
     const float3 rawNormal = NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.normalSlot).Load(loadCoord).xyz;
-    if(dot(rawNormal, rawNormal) < 0.01){
+    if(dot(rawNormal, rawNormal) < NWB_SURFEL_GBUFFER_NORMAL_LENGTH_SQUARED_MIN){
         g_NwbSurfelResolveOutput[halfPixel] = float4(0.0, 0.0, 0.0, 0.0);   // background -> no GI (upsample -> hemiAmbient)
         return;
     }

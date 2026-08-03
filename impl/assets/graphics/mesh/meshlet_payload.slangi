@@ -191,15 +191,15 @@ uint nwbMeshletLocalAttribute(const NwbMeshletLocalVertexRef localVertexRef){
 }
 
 uint nwbMeshPackUnorm8(const float value){
-    return uint(saturate(value) * 255.0 + 0.5);
+    return uint(saturate(value) * NWB_MESHLET_UNORM8_MAX + NWB_MESHLET_UNORM8_ROUNDING_BIAS);
 }
 
 uint nwbMeshPackConeCutoffUnorm8(const float value){
-    return uint(saturate(value) * 255.0);
+    return uint(saturate(value) * NWB_MESHLET_UNORM8_MAX);
 }
 
 float nwbMeshUnpackUnorm8(const uint value, const uint bitShift){
-    return float((value >> bitShift) & NWB_MESHLET_PACKED_BYTE_MASK) / 255.0;
+    return float((value >> bitShift) & NWB_MESHLET_PACKED_BYTE_MASK) / NWB_MESHLET_UNORM8_MAX;
 }
 
 uint nwbMeshPackConeOct16(float3 axis){

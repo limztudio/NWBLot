@@ -9,8 +9,29 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#define NWB_LUMINANCE_REC709_RED 0.2126
+#define NWB_LUMINANCE_REC709_GREEN 0.7152
+#define NWB_LUMINANCE_REC709_BLUE 0.0722
+#define NWB_SAFE_NORMALIZE_MIN_LENGTH_SQUARED 0.000001
+#define NWB_SAFE_FRAME_NORMALIZE_MIN_LENGTH_SQUARED 0.00000001
+#define NWB_RAY_TRIANGLE_DETERMINANT_EPSILON 1e-12
+#define NWB_FRAME_FALLBACK_AXIS_Z_MAX 0.999
+#define NWB_TANGENT_HANDEDNESS_EPSILON 0.000001
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 half nwbLuminance(const half3 color){
-    return dot(color, half3(0.2126h, 0.7152h, 0.0722h));
+    return dot(color, half3(
+        half(NWB_LUMINANCE_REC709_RED),
+        half(NWB_LUMINANCE_REC709_GREEN),
+        half(NWB_LUMINANCE_REC709_BLUE)
+    ));
+}
+
+float nwbLuminance(const float3 color){
+    return dot(color, float3(NWB_LUMINANCE_REC709_RED, NWB_LUMINANCE_REC709_GREEN, NWB_LUMINANCE_REC709_BLUE));
 }
 
 uint nwbPackHalf2x16(float2 value){
@@ -42,11 +63,11 @@ float3 nwbSafeNormalizeMinLengthSquared(const float3 value, const float3 fallbac
 }
 
 float3 nwbSafeNormalize(const float3 value, const float3 fallback){
-    return nwbSafeNormalizeMinLengthSquared(value, fallback, 0.000001);
+    return nwbSafeNormalizeMinLengthSquared(value, fallback, NWB_SAFE_NORMALIZE_MIN_LENGTH_SQUARED);
 }
 
 float3 nwbSafeFrameNormalize(const float3 value, const float3 fallback){
-    return nwbSafeNormalizeMinLengthSquared(value, fallback, 0.00000001);
+    return nwbSafeNormalizeMinLengthSquared(value, fallback, NWB_SAFE_FRAME_NORMALIZE_MIN_LENGTH_SQUARED);
 }
 
 struct NwbRayTriangleHit{
@@ -71,7 +92,7 @@ NwbRayTriangleHit nwbRayTriangleMollerTrumbore(const float3 origin, const float3
     const float3 edge2 = v2 - v0;
     const float3 pVec = cross(direction, edge2);
     const float det = dot(edge1, pVec);
-    if(abs(det) < 1e-12)
+    if(abs(det) < NWB_RAY_TRIANGLE_DETERMINANT_EPSILON)
         return result;
 
     const float invDet = 1.0 / det;
@@ -99,7 +120,7 @@ NwbRayTriangleHit nwbRayTriangleMollerTrumbore(const float3 origin, const float3
 }
 
 bool nwbValidFrameDirection(const float3 value){
-    return nwbFiniteFloat3(value) && dot(value, value) > 0.00000001;
+    return nwbFiniteFloat3(value) && dot(value, value) > NWB_SAFE_FRAME_NORMALIZE_MIN_LENGTH_SQUARED;
 }
 
 float3 nwbProjectOntoPlane(const float3 value, const float3 normal){
@@ -107,7 +128,7 @@ float3 nwbProjectOntoPlane(const float3 value, const float3 normal){
 }
 
 float3 nwbFrameFallbackTangent(const float3 normal){
-    const float3 axis = abs(normal.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(0.0, 1.0, 0.0);
+    const float3 axis = abs(normal.z) < NWB_FRAME_FALLBACK_AXIS_Z_MAX ? float3(0.0, 0.0, 1.0) : float3(0.0, 1.0, 0.0);
     return nwbSafeFrameNormalize(cross(axis, normal), float3(1.0, 0.0, 0.0));
 }
 
@@ -116,7 +137,7 @@ float3 nwbFrameOrthonormalTangent(const float3 tangent, const float3 normal){
 }
 
 float nwbTangentHandedness(const float handedness, const float fallbackHandedness){
-    if(abs(handedness) > 0.000001)
+    if(abs(handedness) > NWB_TANGENT_HANDEDNESS_EPSILON)
         return handedness < 0.0 ? -1.0 : 1.0;
     return fallbackHandedness < 0.0 ? -1.0 : 1.0;
 }

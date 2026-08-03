@@ -133,7 +133,7 @@ float nwbShadowResolveLuma(const float v){
     return v;
 }
 float nwbShadowResolveLuma(const float3 c){
-    return dot(c, float3(0.2126, 0.7152, 0.0722));
+    return nwbLuminance(c);
 }
 
 float nwbShadowResolveValueWeightVec(const NwbShadowResolveVisFVec centerVis, const NwbShadowResolveVisFVec tapVis, const float sigmaLum){

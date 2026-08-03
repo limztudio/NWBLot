@@ -11,6 +11,7 @@
 
 #include "sw_binding_slots.h"
 
+#include "../bvh/constants.h"
 #include "../bvh/bvh_common.slangi"
 #include "../bvh/ray_vertex_attrib.slangi"
 #include "../bvh/sw_instance.slangi"
@@ -66,9 +67,9 @@ float3 nwbSwShadowTransformNormal(const NwbSwBvhInstance instance, const float3 
 // normal (two packed-half uints) at +0, Float2U uv0 (two floats) at +8. Returns object-space normal in .xyz, uv0.
 NwbRayTraceVertexAttrib nwbSwShadowLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
     // attributeSlot is a non-uniform global heap slot; NwbHeapRawBuffer() applies the required decoration per load.
-    const uint base = attributeIndex * 16u;
+    const uint base = attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES;
     const uint2 packedNormal = NwbHeapRawBuffer(attributeSlot).Load2(base);
-    const uint2 packedUv0 = NwbHeapRawBuffer(attributeSlot).Load2(base + 8u);
+    const uint2 packedUv0 = NwbHeapRawBuffer(attributeSlot).Load2(base + NWB_RAYTRACE_VERTEX_ATTRIBUTE_UV0_BYTE_OFFSET);
     return nwbRayTraceDecodeVertexAttrib(uint4(packedNormal.x, packedNormal.y, packedUv0.x, packedUv0.y));
 }
 

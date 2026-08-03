@@ -33,12 +33,11 @@ inline void AddSmokeSkinnedRenderSystems(
     ProjectRuntimeContext& context
 ){
     const SmokeRenderSystems systems = CreateSmokeRenderSystems(world, context);
-    auto& modelSystem = world.addSystem<Impl::ModelSystem>(
+    world.addSystem<Impl::ModelSystem>(
         world,
         context.assetManager,
         Impl::CreateModelObjectRendererHooks()
     );
-    static_cast<void>(modelSystem);
     auto& meshSkinningSystem = world.addSystem<Impl::MeshSkinningSystem>(
         world,
         context.graphics,

@@ -486,8 +486,7 @@ static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(){
         true,
         [](const usize, const tchar*){ return false; }
     );
-    NWB_ASSERT(meshletRefsEncoded);
-    static_cast<void>(meshletRefsEncoded);
+    NWB_FATAL_ASSERT(meshletRefsEncoded);
     instance.meshletPositionRefCount = static_cast<u32>(meshletPositionStreamRefs.size());
     instance.meshletAttributeRefCount = static_cast<u32>(meshletAttributeStreamRefs.size());
 

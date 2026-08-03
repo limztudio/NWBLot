@@ -483,8 +483,7 @@ static NWB::Impl::Mesh BuildMinimalMesh(TestArena& testArena){
         meshletAttributeRefDeltas,
         false
     );
-    NWB_ASSERT(meshletRefsEncoded);
-    static_cast<void>(meshletRefsEncoded);
+    NWB_FATAL_ASSERT(meshletRefsEncoded);
 
     mesh.setPayload(
         Move(positions),

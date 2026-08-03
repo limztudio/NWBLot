@@ -100,7 +100,6 @@ public:
             Float4(1.0f, 1.0f, 1.0f, 1.0f),
             s_DirectionalLightIntensity
         );
-        static_cast<void>(directionalLight);
 
         // A white diffuse receiver makes the textured sphere's direct shadow and colored indirect bounce readable.
         // Keep the plane separate from the texture material so no pattern leaks onto the GI receiver itself.
@@ -128,7 +127,7 @@ public:
             s_TextureRuntimeTintParameter
         );
         NWB_FATAL_ASSERT_MSG(
-            activeCamera.valid() && m_whiteGround.valid() && m_texturedSphere.valid(),
+            activeCamera.valid() && directionalLight.valid() && m_whiteGround.valid() && m_texturedSphere.valid(),
             NWB_TEXT("TextureSmokeProject failed to create the white receiver and textured sphere")
         );
 

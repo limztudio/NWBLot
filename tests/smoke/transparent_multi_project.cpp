@@ -342,7 +342,6 @@ public:
             Float4(1.0f, 0.96f, 0.88f),
             s_DefaultDirectionalLightIntensity
         );
-        static_cast<void>(lightEntity);
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(lightEntity))
             light->enableCaustics = true;
@@ -456,7 +455,7 @@ public:
 #endif
         updateTransparentSceneTransforms();
         NWB_FATAL_ASSERT_MSG(
-            activeCamera.valid() && shapesValid && shadowPlaneEntity.valid() && csgEntitiesValid,
+            activeCamera.valid() && lightEntity.valid() && shapesValid && shadowPlaneEntity.valid() && csgEntitiesValid,
             NWB_TEXT("TransparentMultiSmokeProject failed to create all scene entities")
         );
 

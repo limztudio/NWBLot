@@ -136,7 +136,6 @@ public:
             Float4(1.00f, 0.96f, 0.88f), // warm white sun
             s_DirectionalLightIntensity
         );
-        (void)directionalLight;
 
         // The FLOOR: a near-white opaque plane filling the box bottom. This is the receiver of the indirect red
         // bounce (the floor area in the wall's direct shadow lights up red from the GI).
@@ -178,6 +177,7 @@ public:
 
         NWB_FATAL_ASSERT_MSG(
             activeCamera.valid()
+            && directionalLight.valid()
             && m_floorEntity.valid()
             && m_redWallEntity.valid()
             && m_blueWallNegX.valid()

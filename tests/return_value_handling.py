@@ -29,6 +29,8 @@ CALL_AT_START = re.compile(
 )
 FUNCTION_POINTER_CALL = re.compile(r"\(\s*\*\s*(?:[A-Za-z_]\w*\s*)?\)\s*\(")
 GROUPED_CALL = re.compile(r"[)}]\s*\(")
+LOCAL_ASSIGNMENT = r"(?<![\w.>]){}\s*=(?!=)"
+SINGLE_IDENTIFIER = re.compile(r"\s*([A-Za-z_]\w*)\s*")
 NON_CALL_IDENTIFIERS = frozenset(("alignof", "decltype", "noexcept", "sizeof", "typeid"))
 
 
@@ -157,6 +159,77 @@ def line_number(source: str, position: int) -> int:
     return source.count("\n", 0, position) + 1
 
 
+def ungroup_expression(expression: str) -> str:
+    expression = expression.strip()
+    while expression.startswith("("):
+        closing = matching_parenthesis(expression, 0)
+        if closing is None or closing != len(expression) - 1:
+            break
+        expression = expression[1:closing].strip()
+    return expression
+
+
+def open_scopes(source: str, position: int) -> list[int]:
+    scopes: list[int] = []
+    for index, character in enumerate(source[:position]):
+        if character == "{":
+            scopes.append(index)
+        elif character == "}" and scopes:
+            scopes.pop()
+    return scopes
+
+
+def statement_end(source: str, start: int, limit: int) -> int | None:
+    parenthesis_depth = 0
+    bracket_depth = 0
+    brace_depth = 0
+    for position in range(start, limit):
+        character = source[position]
+        if character == "(":
+            parenthesis_depth += 1
+        elif character == ")":
+            if parenthesis_depth == 0:
+                return None
+            parenthesis_depth -= 1
+        elif character == "[":
+            bracket_depth += 1
+        elif character == "]":
+            if bracket_depth == 0:
+                return None
+            bracket_depth -= 1
+        elif character == "{":
+            brace_depth += 1
+        elif character == "}":
+            if brace_depth == 0:
+                return None
+            brace_depth -= 1
+        elif character == ";" and parenthesis_depth == 0 and bracket_depth == 0 and brace_depth == 0:
+            return position
+    return None
+
+
+def local_call_result_cast(source: str, position: int, expression: str) -> bool:
+    identifier_match = SINGLE_IDENTIFIER.fullmatch(ungroup_expression(expression))
+    if identifier_match is None:
+        return False
+
+    identifier = identifier_match.group(1)
+    active_scopes = open_scopes(source, position)
+    last_initializer: str | None = None
+    assignment = re.compile(LOCAL_ASSIGNMENT.format(re.escape(identifier)))
+    for match in assignment.finditer(source, 0, position):
+        assignment_scopes = open_scopes(source, match.start())
+        if active_scopes[: len(assignment_scopes)] != assignment_scopes:
+            continue
+
+        initializer_end = statement_end(source, match.end(), position)
+        if initializer_end is None:
+            continue
+        last_initializer = source[match.end() : initializer_end]
+
+    return last_initializer is not None and initializer_contains_call(last_initializer)
+
+
 def maybe_unused_initializer_start(source: str, start: int) -> int | None:
     for position in range(start, len(source)):
         character = source[position]
@@ -187,13 +260,23 @@ def find_discarded_calls(source: str) -> list[tuple[int, str]]:
     for match in STATIC_VOID_CAST.finditer(code):
         opening = match.end() - 1
         closing = matching_parenthesis(code, opening)
-        if closing is not None and contains_call(code[opening + 1 : closing]):
+        if closing is None:
+            continue
+        expression = code[opening + 1 : closing]
+        if contains_call(expression):
             violations.append((line_number(code, match.start()), "static_cast<void>"))
+        elif local_call_result_cast(code, match.start(), expression):
+            violations.append((line_number(code, match.start()), "local call result"))
 
     for match in C_STYLE_VOID_CAST.finditer(code):
         expression = code[match.end() :]
         if starts_with_call(expression):
             violations.append((line_number(code, match.start()), "C-style void cast"))
+            continue
+
+        expression_end = code.find(";", match.end())
+        if expression_end != -1 and local_call_result_cast(code, match.start(), code[match.end() : expression_end]):
+            violations.append((line_number(code, match.start()), "local call result"))
 
     for match in MAYBE_UNUSED.finditer(code):
         initializer = maybe_unused_initializer_start(code, match.end())
@@ -224,6 +307,11 @@ def run_self_test() -> int:
         ("immediate lambda", "static_cast<void>([]{}());", ((1, "static_cast<void>"),)),
         ("c-style parenthesized callable", "(void)(callback)();", ((1, "C-style void cast"),)),
         ("c-style immediate lambda", "(void)([]{}());", ((1, "C-style void cast"),)),
+        ("local static-void cast", "const bool result = callback();\nstatic_cast<void>(result);", ((2, "local call result"),)),
+        ("grouped local static-void cast", "const bool result = callback();\nstatic_cast<void>((result));", ((2, "local call result"),)),
+        ("local static-void cast with lambda", "const bool result = callback([]{ return false; });\nstatic_cast<void>(result);", ((2, "local call result"),)),
+        ("local c-style void cast", "const bool result = callback();\n(void)result;", ((2, "local call result"),)),
+        ("local non-call cast", "const bool result = false;\nstatic_cast<void>(result);", ()),
         ("maybe-unused call", "[[maybe_unused]] const bool result = callback();", ((1, "maybe_unused local"),)),
         ("maybe-unused unevaluated call", "[[maybe_unused]] constexpr auto typeSize = sizeof(callback());", ()),
         ("maybe-unused lambda object", "[[maybe_unused]] const auto callback = []{ handler(); };", ()),

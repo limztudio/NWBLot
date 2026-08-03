@@ -558,7 +558,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(Core::CommandList& comm
 
     runPass(dispatch.firstWaveletResources, 1u, ShadowResolveStage::Wavelet, halfGroupsX, halfGroupsY);
     bool sourceIsHalfA = dispatch.firstWaveletWritesHalfA;
-    const SoftShadowResolvePassResources* lastWaveletResources = &dispatch.firstWaveletResources;
+    [[maybe_unused]] const SoftShadowResolvePassResources* lastWaveletResources = &dispatch.firstWaveletResources;
     for(u32 pass = 1u; pass < dispatch.waveletPassCount; ++pass){
         const SoftShadowResolvePassResources& nextWaveletResources = sourceIsHalfA
             ? dispatch.outputHalfBResources

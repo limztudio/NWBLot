@@ -165,7 +165,7 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
 
     // A failed earlier attempt leaves no live handles behind (the failure path below resets every acquired slot),
     // so a non-empty partial set signals a broken lifetime transition rather than something we can safely merge.
-    for(const Core::GpuDescriptorHandle handle : mesh.geometryHeapHandles)
+    for([[maybe_unused]] const Core::GpuDescriptorHandle handle : mesh.geometryHeapHandles)
         NWB_ASSERT(!handle.valid());
 
     Core::GpuDescriptorHandle acquired[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};

@@ -427,10 +427,8 @@ private:
         const usize packetIndex = static_cast<usize>(packetID);
         NWB_ASSERT(!m_submissionPacketScheduled[packetIndex]);
         const FrameExecutionPacketPlan& packetPlan = packet(packetID);
-        for(u8 waitPacketIndex = 0u; waitPacketIndex < packetPlan.waitPacketCount; ++waitPacketIndex){
-            const FrameExecutionPacket::Enum waitPacket = packetPlan.waitPackets[waitPacketIndex];
-            NWB_ASSERT(m_submissionPacketScheduled[static_cast<usize>(waitPacket)]);
-        }
+        for(u8 waitPacketIndex = 0u; waitPacketIndex < packetPlan.waitPacketCount; ++waitPacketIndex)
+            NWB_ASSERT(m_submissionPacketScheduled[static_cast<usize>(packetPlan.waitPackets[waitPacketIndex])]);
         NWB_ASSERT(batchPlan.packetCount < FrameExecutionPacket::kCount);
         batchPlan.packets[batchPlan.packetCount++] = packetID;
         m_submissionPacketScheduled[packetIndex] = true;

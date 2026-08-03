@@ -325,10 +325,8 @@ bool CsgShapeRegistry::registerShapeType(const CsgShapeTypeDesc& desc, CsgShapeT
             return false;
         }
 
-        const CsgShapeTypeId existingId = found.value();
-        const usize existingIndex = static_cast<usize>(existingId - 1u);
-        NWB_ASSERT(__hidden_shape_registry::ValidShapeTypeId(existingId));
-        NWB_ASSERT(existingIndex < m_shapeTypes.size());
+        NWB_ASSERT(__hidden_shape_registry::ValidShapeTypeId(found.value()));
+        NWB_ASSERT(static_cast<usize>(found.value() - 1u) < m_shapeTypes.size());
     }
 
     if(found != m_shapeTypeIds.end()){

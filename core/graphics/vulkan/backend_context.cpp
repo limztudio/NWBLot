@@ -332,7 +332,7 @@ static void AppendOptionalDeviceFeature(void*& pNext, OptionalDeviceFeatureSet& 
     }
 }
 
-static const char* DebugUtilsSeverityToString(const VkDebugUtilsMessageSeverityFlagBitsEXT severity){
+[[maybe_unused]] static const char* DebugUtilsSeverityToString(const VkDebugUtilsMessageSeverityFlagBitsEXT severity){
     switch(severity){
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT: return "verbose";
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT: return "info";

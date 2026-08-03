@@ -8,6 +8,7 @@
 #include "../global.h"
 
 #include <core/assets/module.h>
+#include <core/assets/paths.h>
 #include <core/assets/ref.h>
 #include <core/graphics/api.h>
 #include <impl/assets/graphics/mesh/material_typed_constants.h>
@@ -96,29 +97,38 @@ namespace MaterialResourceKind{
 }
 
 
-// Resource fields always name a project asset. The field type determines the expected asset family; the renderer
-// resolves that path to a global bindless slot at runtime.
+// Resource fields always name an engine or project asset. The field type determines the expected asset family; the
+// renderer resolves that path to a global bindless slot at runtime.
 namespace MaterialResourceSource{
     enum Enum : u32{
         None = 0u,
-        ProjectAsset = 1u,
+        Asset = 1u,
+        // Keep the previous spelling source-compatible. Its serialized ordinal remains the generic asset source.
+        ProjectAsset = Asset,
     };
 };
 
 [[nodiscard]] inline bool IsValidMaterialResourceSource(const MaterialResourceSource::Enum resourceSource){
-    return resourceSource == MaterialResourceSource::ProjectAsset;
+    return resourceSource == MaterialResourceSource::Asset;
 }
 
-inline constexpr AStringView s_MaterialProjectAssetPathPrefix = "project/";
-
-[[nodiscard]] inline bool IsMaterialProjectAssetReference(const AStringView resourceName){
+[[nodiscard]] inline bool IsMaterialAssetReference(const AStringView resourceName){
+    const usize rootEnd = resourceName.find('/');
     if(
-        resourceName.size() <= s_MaterialProjectAssetPathPrefix.size()
-        || resourceName.substr(0u, s_MaterialProjectAssetPathPrefix.size()) != s_MaterialProjectAssetPathPrefix
+        rootEnd == AStringView::npos
+        || rootEnd == 0u
+        || rootEnd + 1u >= resourceName.size()
     )
         return false;
 
-    usize componentBegin = s_MaterialProjectAssetPathPrefix.size();
+    const AStringView virtualRoot = resourceName.substr(0u, rootEnd);
+    if(
+        virtualRoot != Core::Assets::s_EngineVirtualRoot
+        && virtualRoot != Core::Assets::s_ProjectVirtualRoot
+    )
+        return false;
+
+    usize componentBegin = rootEnd + 1u;
     for(usize index = componentBegin; index <= resourceName.size(); ++index){
         if(index != resourceName.size() && resourceName[index] != '/')
             continue;
@@ -137,13 +147,13 @@ inline constexpr AStringView s_MaterialProjectAssetPathPrefix = "project/";
     const AStringView resourceName
 ){
     return IsValidMaterialResourceKind(resourceKind)
-        && resourceSource == MaterialResourceSource::ProjectAsset
-        && IsMaterialProjectAssetReference(resourceName)
+        && resourceSource == MaterialResourceSource::Asset
+        && IsMaterialAssetReference(resourceName)
     ;
 }
 
 // Serialized resource paths arrive as Name hashes, so their original text cannot be revalidated here. The explicit
-// project-asset source and the resource kind keep the renderer's asset-family dispatch unambiguous.
+// asset source and the resource kind keep the renderer's asset-family dispatch unambiguous.
 [[nodiscard]] inline bool IsValidSerializedMaterialResourceReference(
     const MaterialResourceKind::Enum resourceKind,
     const MaterialResourceSource::Enum resourceSource,
@@ -153,7 +163,7 @@ inline constexpr AStringView s_MaterialProjectAssetPathPrefix = "project/";
         return false;
 
     return IsValidMaterialResourceKind(resourceKind)
-        && resourceSource == MaterialResourceSource::ProjectAsset
+        && resourceSource == MaterialResourceSource::Asset
     ;
 }
 

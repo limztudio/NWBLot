@@ -162,8 +162,8 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
 
     for(const MaterialResourceReference& resourceReference : materialInfo.resourceReferences){
         u32 heapSlot = 0u;
-        if(resourceReference.resourceSource != MaterialResourceSource::ProjectAsset){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid project resource source")
+        if(resourceReference.resourceSource != MaterialResourceSource::Asset){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid asset resource source")
                 , StringConvert(materialInfo.materialName.c_str())
             );
             return false;

@@ -329,8 +329,8 @@ NwbTestRuntimeMaterial runtime;
 
 )NWB_BIND";
 
-static constexpr AStringView s_ProjectResourceMaterialBindSource = R"NWB_BIND([material_constant]
-struct NwbProjectResourceSurfaceMaterial{
+static constexpr AStringView s_AssetResourceMaterialBindSource = R"NWB_BIND([material_constant]
+struct NwbAssetResourceSurfaceMaterial{
     [default("float4(1.0, 1.0, 1.0, 1.0)")]
     float4 base_color;
 
@@ -340,18 +340,18 @@ struct NwbProjectResourceSurfaceMaterial{
 };
 
 [material_mutable]
-struct NwbProjectResourceRuntimeMaterial{
+struct NwbAssetResourceRuntimeMaterial{
     [default("float(1.0)")]
     float fade_alpha;
 };
 
-NwbProjectResourceSurfaceMaterial surface;
-NwbProjectResourceRuntimeMaterial runtime;
+NwbAssetResourceSurfaceMaterial surface;
+NwbAssetResourceRuntimeMaterial runtime;
 
 )NWB_BIND";
 
-static constexpr AStringView s_SecondProjectResourceMaterialBindSource = R"NWB_BIND([material_constant]
-struct NwbSecondProjectResourceSurfaceMaterial{
+static constexpr AStringView s_SecondAssetResourceMaterialBindSource = R"NWB_BIND([material_constant]
+struct NwbSecondAssetResourceSurfaceMaterial{
     [default("float4(1.0, 1.0, 1.0, 1.0)")]
     float4 base_color;
 
@@ -361,17 +361,17 @@ struct NwbSecondProjectResourceSurfaceMaterial{
 };
 
 [material_mutable]
-struct NwbSecondProjectResourceRuntimeMaterial{
+struct NwbSecondAssetResourceRuntimeMaterial{
     [default("float(1.0)")]
     float fade_alpha;
 };
 
-NwbSecondProjectResourceSurfaceMaterial surface;
-NwbSecondProjectResourceRuntimeMaterial runtime;
+NwbSecondAssetResourceSurfaceMaterial surface;
+NwbSecondAssetResourceRuntimeMaterial runtime;
 
 )NWB_BIND";
 
-static constexpr AStringView s_ProjectResourceMaterialMeta = R"NWB_META(material asset;
+static constexpr AStringView s_AssetResourceMaterialMeta = R"NWB_META(material asset;
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
@@ -389,7 +389,7 @@ asset.parameters = {
     "surface": {
         "base_color": "float4(0.25, 0.5, 0.75, 1.0)",
         "base_color_map": "project/textures/test_checker",
-        "base_color_sampler": "project/samplers/test_linear_clamp",
+        "base_color_sampler": "engine/samplers/linear_clamp",
     },
     "runtime": {
         "fade_alpha": "float(0.75)",
@@ -545,12 +545,12 @@ asset.parameters = {
 
 )NWB_META";
 
-static constexpr AStringView s_ProjectResourceShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
+static constexpr AStringView s_AssetResourceShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
 #include "project/material_interfaces/test_surface.bind"
 
 NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
-    const NwbProjectResourceSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    const NwbAssetResourceSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
     const float4 sampledColor = nwbMaterialBindLoadSurfaceBaseColorMap(instance).SampleLevel(
         nwbMaterialBindLoadSurfaceBaseColorSampler(instance),
         inUv0,

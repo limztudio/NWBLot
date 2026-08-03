@@ -6,9 +6,9 @@
 struct NwbTextureSmokeSurfaceMaterial{
     [default("half4(1.0h, 1.0h, 1.0h, 1.0h)")]
     half4 base_color;
-    // The material supplies this texture's project path in texture_surface.base_color_map.
+    // The material supplies this texture's engine or project path in texture_surface.base_color_map.
     texture2d base_color_map;
-    // The material supplies this sampler's project path in texture_surface.base_color_sampler.
+    // The material supplies this sampler's engine or project path in texture_surface.base_color_sampler.
     sampler base_color_sampler;
 };
 

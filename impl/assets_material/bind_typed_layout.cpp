@@ -449,7 +449,7 @@ static bool BuildMaterialTypedLayoutDefaultValue(
 ){
     outDefaultValue = {};
 
-    // Resource fields store an initially-zero global-heap slot word. Their material-authored project path is carried
+    // Resource fields store an initially-zero global-heap slot word. Their material-authored asset path is carried
     // by MaterialResourceReference and patched only after the renderer owns a live descriptor heap.
     if(IsMaterialLayoutResourceFieldType(fieldType))
         return true;
@@ -931,11 +931,11 @@ bool ApplyMaterialBindTypedLayoutParameterValue(
             || !resourceName
             || !IsSupportedMaterialResourceReference(
                 resourceKind,
-                MaterialResourceSource::ProjectAsset,
+                MaterialResourceSource::Asset,
                 resourcePath
             )
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource parameter '{}' for '{}' must be a project asset path")
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource parameter '{}' for '{}' must be an engine or project asset path")
                 , StringConvert(parameterName.c_str())
                 , StringConvert(materialName.c_str())
             );
@@ -947,7 +947,7 @@ bool ApplyMaterialBindTypedLayoutParameterValue(
         resourceReference.fieldName = field.fieldName;
         resourceReference.resourceName = resourceName;
         resourceReference.resourceKind = resourceKind;
-        resourceReference.resourceSource = MaterialResourceSource::ProjectAsset;
+        resourceReference.resourceSource = MaterialResourceSource::Asset;
         resourceReference.constantByteOffset = parameterEntry.constantByteOffset;
         outResourceReferences.push_back(resourceReference);
         return true;

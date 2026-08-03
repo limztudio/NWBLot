@@ -131,7 +131,7 @@ bool ValidateMaterialCookInterfaces(
             materialEntry.typedLayoutFields,
             materialEntry.resourceReferences
         )){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}': resource fields must be assigned project asset paths in parameters")
+            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}': resource fields must be assigned engine or project asset paths in parameters")
                 , StringConvert(materialEntry.virtualPath.c_str())
             );
             return false;

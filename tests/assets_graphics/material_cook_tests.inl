@@ -137,10 +137,10 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     Path resourceRoot(testArena.arena);
     Path resourceOutputDirectory(testArena.arena);
     EXPECT_TRUE(CookMaterialBindMaterialIntegrationWithPixelSource(
-        s_ProjectResourceMaterialBindSource,
-        s_ProjectResourceMaterialMeta,
-        s_ProjectResourceShaderProbeSource,
-        "material_bind_project_resource_integration",
+        s_AssetResourceMaterialBindSource,
+        s_AssetResourceMaterialMeta,
+        s_AssetResourceShaderProbeSource,
+        "material_bind_asset_resource_integration",
         testArena,
         resourceRoot,
         resourceOutputDirectory
@@ -178,15 +178,15 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         );
         EXPECT_EQ(
             resourceMaterial.resourceReferences()[0u].resourceSource,
-            NWB::Impl::MaterialResourceSource::ProjectAsset
+            NWB::Impl::MaterialResourceSource::Asset
         );
         EXPECT_EQ(
             resourceMaterial.resourceReferences()[1u].resourceName,
-            Name("project/samplers/test_linear_clamp")
+            Name("engine/samplers/linear_clamp")
         );
         EXPECT_EQ(
             resourceMaterial.resourceReferences()[1u].resourceSource,
-            NWB::Impl::MaterialResourceSource::ProjectAsset
+            NWB::Impl::MaterialResourceSource::Asset
         );
     }
 

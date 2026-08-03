@@ -359,13 +359,13 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
     MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
     const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType);
 
-    // Resource fields declare only their shader-visible type. Each material supplies the concrete project-asset path
-    // in its parameters block, so a bind interface cannot carry a fixture, texture asset, or any other identity.
+    // Resource fields declare only their shader-visible type. Each material supplies the concrete engine or project
+    // asset path in its parameters block, so a bind interface cannot carry a fixture, texture asset, or any identity.
     if(isResourceField){
         if(field.attributes.empty())
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': resource field '{}.{}' must not declare attributes; set its project asset path in material parameters")
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': resource field '{}.{}' must not declare attributes; set its engine or project asset path in material parameters")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(bindStruct.name)
             , StringConvert(field.name)

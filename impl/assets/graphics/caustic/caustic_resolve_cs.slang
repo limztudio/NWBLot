@@ -39,7 +39,9 @@ ConstantBuffer<NwbCausticResolvePushConstants> g_NwbCausticResolvePushConstants;
 
 // Groupshared tile for small-dilation wavelet passes.
 groupshared half3  s_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
-groupshared float3 s_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
+// The geometry cache is RGBA16F. Keep its sampled world positions compact in LDS and widen only for the edge-stop
+// arithmetic below; storing them as float3 here would double the shared-memory footprint without adding precision.
+groupshared half3  s_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   s_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   s_NwbCausticResolveTileActive;
 
@@ -47,8 +49,8 @@ groupshared uint   s_NwbCausticResolveTileActive;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-float3 nwbCausticResolveWorldAtHalf(const int2 halfTexel){
-    return NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.geometrySlot).Load(int3(halfTexel, 0)).xyz;
+half3 nwbCausticResolveWorldAtHalf(const int2 halfTexel){
+    return half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.geometrySlot).Load(int3(halfTexel, 0)).xyz);
 }
 
 bool nwbCausticResolveValidAtHalf(const int2 halfTexel){
@@ -57,11 +59,11 @@ bool nwbCausticResolveValidAtHalf(const int2 halfTexel){
 
 // World-space area subtended by one half-resolution pixel.
 float nwbCausticResolveHalfPixelArea(const int2 halfTexel){
-    const float3 center = nwbCausticResolveWorldAtHalf(halfTexel);
+    const float3 center = float3(nwbCausticResolveWorldAtHalf(halfTexel));
     const int2 right = int2(min(halfTexel.x + 1, (int)g_NwbCausticResolvePushConstants.halfWidth - 1), halfTexel.y);
     const int2 down = int2(halfTexel.x, min(halfTexel.y + 1, (int)g_NwbCausticResolvePushConstants.halfHeight - 1));
-    const float3 dx = nwbCausticResolveWorldAtHalf(right) - center;
-    const float3 dy = nwbCausticResolveWorldAtHalf(down) - center;
+    const float3 dx = float3(nwbCausticResolveWorldAtHalf(right)) - center;
+    const float3 dy = float3(nwbCausticResolveWorldAtHalf(down)) - center;
     return max(length(cross(dx, dy)), 1e-4);
 }
 
@@ -111,7 +113,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 if(!nwbCausticResolveValidAtHalf(tap))
                     continue;
                 const float bilinearWeight = (i == 0 ? (1.0 - lerpFrac.x) : lerpFrac.x) * (j == 0 ? (1.0 - lerpFrac.y) : lerpFrac.y);
-                const float3 d = nwbCausticResolveWorldAtHalf(tap) - centerWorld;
+                const float3 d = float3(nwbCausticResolveWorldAtHalf(tap)) - centerWorld;
                 const float weight = bilinearWeight * exp(-dot(d, d) * invTwoSigmaWorldSq);
                 const half3 tapColor = half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);
                 sum += weight * float3(tapColor);
@@ -176,7 +178,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         for(uint i = threadIndex; i < tileTexels; i += threadCount){
             const int2 t = tileOrigin + int2((int)(i % (uint)tileW), (int)(i / (uint)tileW));
             half3 tapColor = half3(0.0h, 0.0h, 0.0h);
-            float3 tapWorld = float3(0.0, 0.0, 0.0);
+            half3 tapWorld = half3(0.0h, 0.0h, 0.0h);
             uint tapValid = 0u;
             if(t.x >= 0 && t.y >= 0 && t.x < hw && t.y < hh){
                 if(nwbCausticResolveValidAtHalf(t)){
@@ -207,9 +209,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             return;
         }
 
-        const float3 centerWorld = nwbCausticResolveWorldAtHalf(texel);
+        const float3 centerWorld = float3(nwbCausticResolveWorldAtHalf(texel));
         const int2 rightTexel = int2(min(texel.x + 1, hw - 1), texel.y);
-        const float pixelSpacing = max(length(nwbCausticResolveWorldAtHalf(rightTexel) - centerWorld), 1e-4);
+        const float pixelSpacing = max(length(float3(nwbCausticResolveWorldAtHalf(rightTexel)) - centerWorld), 1e-4);
         const float sigmaWorld = pixelSpacing * (float)step * 2.0;
         const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
 
@@ -220,7 +222,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const uint idx = (uint)((int(groupThreadID.y) + (ky + 2) * step) * tileW + (int(groupThreadID.x) + (kx + 2) * step));
                 if(s_NwbCausticResolveTileValid[idx] == 0u)
                     continue;
-                const float3 d = s_NwbCausticResolveTileWorld[idx] - centerWorld;
+                const float3 d = float3(s_NwbCausticResolveTileWorld[idx]) - centerWorld;
                 const float weight = s_NwbCausticResolveKernel[kx + 2] * s_NwbCausticResolveKernel[ky + 2] * exp(-dot(d, d) * invTwoSigmaWorldSq);
                 sum += weight * float3(s_NwbCausticResolveTileColor[idx]);
                 weightSum += weight;
@@ -238,9 +240,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         return;
     }
 
-    const float3 centerWorld = nwbCausticResolveWorldAtHalf(texel);
+    const float3 centerWorld = float3(nwbCausticResolveWorldAtHalf(texel));
     const int2 rightTexel = int2(min(texel.x + 1, hw - 1), texel.y);
-    const float pixelSpacing = max(length(nwbCausticResolveWorldAtHalf(rightTexel) - centerWorld), 1e-4);
+    const float pixelSpacing = max(length(float3(nwbCausticResolveWorldAtHalf(rightTexel)) - centerWorld), 1e-4);
     const float sigmaWorld = pixelSpacing * (float)step * 2.0;
     const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
 
@@ -253,7 +255,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 continue;
             if(!nwbCausticResolveValidAtHalf(tap))
                 continue;
-            const float3 d = nwbCausticResolveWorldAtHalf(tap) - centerWorld;
+            const float3 d = float3(nwbCausticResolveWorldAtHalf(tap)) - centerWorld;
             const float weight = s_NwbCausticResolveKernel[kx + 2] * s_NwbCausticResolveKernel[ky + 2] * exp(-dot(d, d) * invTwoSigmaWorldSq);
             const half3 tapColor = half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);
             sum += weight * float3(tapColor);

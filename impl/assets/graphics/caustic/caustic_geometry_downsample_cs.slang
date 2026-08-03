@@ -49,10 +49,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         min((int)halfTexel.y * 2, (int)g_NwbCausticGeometryDownsamplePushConstants.height - 1)
     );
 
-    const float3 world = NwbHeapSampledImage2D(g_NwbCausticGeometryDownsamplePushConstants.worldPositionSlot).Load(int3(full, 0)).xyz;
+    // This copy is RGBA16F -> RGBA16F. Keep the world-position transport as native half and widen only at the typed storage
+    // boundary, which avoids retaining a redundant float payload in this pure copy path.
+    const half3 world = half3(NwbHeapSampledImage2D(g_NwbCausticGeometryDownsamplePushConstants.worldPositionSlot).Load(int3(full, 0)).xyz);
     const float depth = NwbHeapSampledImage2D(g_NwbCausticGeometryDownsamplePushConstants.depthSlot).Load(int3(full, 0)).r;
     const float validity = (depth >= NWB_SCENE_BACKGROUND_DEPTH) ? 0.0 : 1.0; // background (no receiver) -> 0
-    NwbHeapStorageImage2DFloat4(g_NwbCausticGeometryDownsamplePushConstants.outputStorageSlot)[halfTexel] = float4(world, validity);
+    NwbHeapStorageImage2DFloat4(g_NwbCausticGeometryDownsamplePushConstants.outputStorageSlot)[halfTexel] = float4(float3(world), validity);
 }
 
 

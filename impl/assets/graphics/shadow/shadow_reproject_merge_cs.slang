@@ -51,8 +51,8 @@ float nwbShadowTemporalWorldSpacing(const float cameraDistance){
     return max(cameraDistance * NWB_SHADOW_TEMPORAL_WORLD_SPACING_SCALE, NWB_SHADOW_TEMPORAL_WORLD_SPACING_MIN);
 }
 
-float4 nwbShadowMergeGeomCurr(const int2 halfTexel){
-    return NwbHeapSampledImage2D(g_NwbShadowMergePush.geometryCurrSlot).Load(int3(halfTexel, 0));
+half4 nwbShadowMergeGeomCurr(const int2 halfTexel){
+    return half4(NwbHeapSampledImage2D(g_NwbShadowMergePush.geometryCurrSlot).Load(int3(halfTexel, 0)));
 }
 
 
@@ -71,15 +71,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint slotStart = g_NwbShadowMergePush.lightSlotStart;
     const uint slotEnd = min(slotStart + g_NwbShadowMergePush.lightSlotCount, NWB_SCENE_SHADOW_SLOT_COUNT);
 
-    const float4 gc = nwbShadowMergeGeomCurr(texel);
-    const bool valid = gc.w > 0.5;
-    const float3 Nc = nwbOctDecodeNormal(gc.xy);
+    const half4 gc = nwbShadowMergeGeomCurr(texel);
+    const bool valid = gc.w > half(0.5h);
+    const float3 Nc = nwbOctDecodeNormal(float2(gc.xy));
+    const float currentCameraDistance = float(gc.z);
 
     const int2 full = int2(
         min((int)h.x * NWB_SW_SHADOW_SOFT_FACTOR, (int)g_NwbShadowMergePush.width - 1),
         min((int)h.y * NWB_SW_SHADOW_SOFT_FACTOR, (int)g_NwbShadowMergePush.height - 1)
     );
-    const float3 Wc = NwbHeapSampledImage2D(g_NwbShadowMergePush.worldPositionSlot).Load(int3(full, 0)).xyz;
+    const half3 worldPositionSample = half3(NwbHeapSampledImage2D(g_NwbShadowMergePush.worldPositionSlot).Load(int3(full, 0)).xyz);
+    const float3 Wc = float3(worldPositionSample);
 
     // Reproject the current world position into previous history.
     const float4 clipPrev = mul(g_NwbShadowMergePush.prevWorldToClip, float4(Wc, 1.0));
@@ -98,17 +100,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // Accept history only for matching receiver geometry.
     bool historyAccepted = false;
     if(onScreen && valid){
-        const float4 gp = NwbHeapSampledImage2D(g_NwbShadowMergePush.geometryPrevSlot).Load(int3(hp, 0));
-        if(gp.w > 0.5){
-            const float3 Np = nwbOctDecodeNormal(gp.xy);
-            const bool planeOk = abs(gc.z - gp.z) < (NWB_SHADOW_TEMPORAL_PLANE_K * nwbShadowTemporalWorldSpacing(gc.z));
+        const half4 gp = half4(NwbHeapSampledImage2D(g_NwbShadowMergePush.geometryPrevSlot).Load(int3(hp, 0)));
+        if(gp.w > half(0.5h)){
+            const float3 Np = nwbOctDecodeNormal(float2(gp.xy));
+            const bool planeOk = abs(currentCameraDistance - float(gp.z)) < (NWB_SHADOW_TEMPORAL_PLANE_K * nwbShadowTemporalWorldSpacing(currentCameraDistance));
             const bool normalOk = dot(Nc, Np) > NWB_SHADOW_TEMPORAL_NORMAL_MIN;
             historyAccepted = planeOk && normalOk;
         }
     }
 
     for(uint slot = slotStart; slot < slotEnd; ++slot){
-        const float3 cur = NwbHeapSampledImage2DArray(g_NwbShadowMergePush.softTraceSlot).Load(int4(texel, slot, 0)).rgb;
+        const half3 currentVisibilitySample = half3(NwbHeapSampledImage2DArray(g_NwbShadowMergePush.softTraceSlot).Load(int4(texel, slot, 0)).rgb);
+        const float3 cur = float3(currentVisibilitySample);
 
         // Invalid receiver: pass through the current sample and reset history.
         if(!valid){
@@ -124,8 +127,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         float m1Prev = 0.0;
         float m2Prev = 0.0;
         if(historyAccepted){
-            hist = NwbHeapSampledImage2DArray(g_NwbShadowMergePush.historyInSlot).Load(int4(hp, slot, 0)).rgb;
-            const float3 mom = NwbHeapSampledImage2DArray(g_NwbShadowMergePush.momentsInSlot).Load(int4(hp, slot, 0)).xyz;
+            const half3 historySample = half3(NwbHeapSampledImage2DArray(g_NwbShadowMergePush.historyInSlot).Load(int4(hp, slot, 0)).rgb);
+            const half3 momentSample = half3(NwbHeapSampledImage2DArray(g_NwbShadowMergePush.momentsInSlot).Load(int4(hp, slot, 0)).xyz);
+            hist = float3(historySample);
+            const float3 mom = float3(momentSample);
             m1Prev = mom.x;
             m2Prev = mom.y;
             n = mom.z;
@@ -150,9 +155,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                     unclampedTap.x >= 0 && unclampedTap.y >= 0 && unclampedTap.x < hw && unclampedTap.y < hh
                 ;
                 const int2 t = int2(clamp(unclampedTap.x, 0, hw - 1), clamp(unclampedTap.y, 0, hh - 1));
-                if(NwbHeapSampledImage2D(g_NwbShadowMergePush.geometryCurrSlot).Load(int3(t, 0)).w <= 0.5)
+                if(nwbShadowMergeGeomCurr(t).w <= half(0.5h))
                     continue;
-                const float3 s = NwbHeapSampledImage2DArray(g_NwbShadowMergePush.softTraceSlot).Load(int4(t, slot, 0)).rgb;
+                const half3 visibilitySample = half3(NwbHeapSampledImage2DArray(g_NwbShadowMergePush.softTraceSlot).Load(int4(t, slot, 0)).rgb);
+                const float3 s = float3(visibilitySample);
                 mu += s;
                 mu2 += s * s;
                 const float sl = nwbLuminance(s);

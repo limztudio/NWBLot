@@ -5,7 +5,6 @@ target_sources(nwb_assets PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/manager.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/auto_registration.h"
-    "${CMAKE_CURRENT_LIST_DIR}/registration_queue.h"
     "${CMAKE_CURRENT_LIST_DIR}/global.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/binary_payload_io.h"

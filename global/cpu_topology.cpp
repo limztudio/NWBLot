@@ -2,12 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "module.h"
+#include "cpu_topology.h"
 
-#include <global/container/adaptor.h>
-#include <global/thread.h>
+#include "limit.h"
+#include "platform.h"
+#include "thread.h"
 
 #include <mutex>
+#include <vector>
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
@@ -16,13 +18,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ALLOC_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_alloc{
+namespace __hidden_cpu_topology{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -40,21 +36,19 @@ struct AffinityMasks{
 
     void initialize(){
 #if defined(NWB_PLATFORM_WINDOWS)
-        queryMask(m_performance, CoreAffinity::Performance);
-        queryMask(m_efficiency, CoreAffinity::Efficiency);
+        queryMask(m_performance, CpuAffinity::Performance);
+        queryMask(m_efficiency, CpuAffinity::Efficiency);
 #endif
     }
 
 #if defined(NWB_PLATFORM_WINDOWS)
-    void queryMask(u64& outMask, CoreAffinity::Enum type){
+    void queryMask(u64& outMask, CpuAffinity::Enum type){
         ULONG bufferSize = 0;
         GetSystemCpuSetInformation(nullptr, 0, &bufferSize, GetCurrentProcess(), 0);
         if(bufferSize == 0)
             return;
 
-        ScratchArena scratchArena(ArenaScope::s_AffinityQuery, bufferSize);
-        using Buffer = Vector<u8, ScratchArena>;
-        Buffer buffer(bufferSize, Buffer::allocator_type(scratchArena));
+        std::vector<u8> buffer(static_cast<usize>(bufferSize));
         if(!GetSystemCpuSetInformation(
             reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(buffer.data()),
             bufferSize, &bufferSize, GetCurrentProcess(), 0
@@ -79,16 +73,16 @@ struct AffinityMasks{
         }
 
         if(minEfficiency == maxEfficiency)
-            return; // homogeneous CPU, no distinction
+            return;
 
-        u8 targetClass = (type == CoreAffinity::Performance) ? maxEfficiency : minEfficiency;
+        const u8 targetClass = (type == CpuAffinity::Performance) ? maxEfficiency : minEfficiency;
 
         u64 mask = 0;
         ptr = buffer.data();
         while(ptr < end){
             auto* info = reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(ptr);
             if(info->Type == CpuSetInformation && info->CpuSet.EfficiencyClass == targetClass){
-                u32 logicalIndex = info->CpuSet.LogicalProcessorIndex;
+                const u32 logicalIndex = info->CpuSet.LogicalProcessorIndex;
                 if(logicalIndex < s_AffinityMaskBitCount)
                     mask |= (1ULL << logicalIndex);
             }
@@ -98,9 +92,9 @@ struct AffinityMasks{
         outMask = mask;
     }
 #endif
+};
 
-} static s_AffinityMasks;
-
+static AffinityMasks s_AffinityMasks;
 static std::once_flag s_AffinityMasksOnce;
 
 AffinityMasks& GetAffinityMasks(){
@@ -120,23 +114,17 @@ AffinityMasks& GetAffinityMasks(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize CachelineSize(){ return ContainerDetail::AdaptorDetail::CachelineSize(); }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-u64 QueryAffinityMask(CoreAffinity::Enum type){
-    const auto& affinityMasks = __hidden_alloc::GetAffinityMasks();
+u64 QueryCpuAffinityMask(CpuAffinity::Enum type){
+    const auto& affinityMasks = __hidden_cpu_topology::GetAffinityMasks();
     switch(type){
-    case CoreAffinity::Performance: return affinityMasks.m_performance;
-    case CoreAffinity::Efficiency: return affinityMasks.m_efficiency;
+    case CpuAffinity::Performance: return affinityMasks.m_performance;
+    case CpuAffinity::Efficiency: return affinityMasks.m_efficiency;
     default: return 0;
     }
 }
 
-u32 QueryCoreCount(CoreAffinity::Enum type){
-    u64 mask = QueryAffinityMask(type);
+u32 QueryCpuCoreCount(CpuAffinity::Enum type){
+    u64 mask = QueryCpuAffinityMask(type);
     if(mask == 0)
         return static_cast<u32>(Thread::hardware_concurrency());
 
@@ -148,7 +136,7 @@ u32 QueryCoreCount(CoreAffinity::Enum type){
     return count;
 }
 
-void SetCurrentThreadAffinity(u64 mask){
+void SetCurrentThreadCpuAffinity(u64 mask){
 #if defined(NWB_PLATFORM_WINDOWS)
     if(mask != 0)
         SetThreadAffinityMask(GetCurrentThread(), static_cast<DWORD_PTR>(mask));
@@ -156,12 +144,6 @@ void SetCurrentThreadAffinity(u64 mask){
     static_cast<void>(mask);
 #endif
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ALLOC_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

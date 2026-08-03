@@ -37,40 +37,6 @@ AStringView UfbxStringView(const ufbx_string value){
     return AStringView(value.data, value.length);
 }
 
-bool NormalizedAsciiEqual(const ufbx_string value, const AStringView normalized){
-    const AStringView text = UfbxStringView(value);
-    if(text.size() != normalized.size())
-        return false;
-
-    for(usize i = 0u; i < normalized.size(); ++i){
-        if(ToAsciiLower(text[i]) != normalized[i])
-            return false;
-    }
-    return true;
-}
-
-bool NormalizedAsciiContains(const ufbx_string value, const AStringView normalized){
-    const AStringView text = UfbxStringView(value);
-    if(normalized.empty())
-        return true;
-    if(text.size() < normalized.size())
-        return false;
-
-    const usize lastBegin = text.size() - normalized.size();
-    for(usize begin = 0u; begin <= lastBegin; ++begin){
-        bool matched = true;
-        for(usize i = 0u; i < normalized.size(); ++i){
-            if(ToAsciiLower(text[begin + i]) != normalized[i]){
-                matched = false;
-                break;
-            }
-        }
-        if(matched)
-            return true;
-    }
-    return false;
-}
-
 AString MeshDisplayName(const MeshInstance& instance){
     AString nodeName = FromUfbxString(instance.node->name);
     AString meshName = FromUfbxString(instance.mesh->name);
@@ -147,7 +113,8 @@ bool LoadScene(const ImportOptions& options, SceneHandle& outScene){
         loadOptions.target_unit_meters = __hidden_scene::s_TargetUnitMeters;
     }
 
-    const AString inputPath = PathToUtf8(PathFromUtf8(options.inputPath));
+    const Path nativeInputPath(UtilityDetail::Arena(), options.inputPath);
+    const AString inputPath = PathToGenericString<AString>(nativeInputPath);
     ufbx_error error = {};
     outScene.scene = ufbx_load_file_len(inputPath.data(), inputPath.size(), &loadOptions, &error);
     if(!outScene.scene){
@@ -232,16 +199,16 @@ bool SelectMeshInstances(
     outSelection.reserve(instances.size());
     for(const MeshInstance& instance : instances){
         if(
-            __hidden_scene::NormalizedAsciiEqual(instance.node->name, normalized)
-            || __hidden_scene::NormalizedAsciiEqual(instance.mesh->name, normalized)
+            EqualsAsciiIgnoreCase(__hidden_scene::UfbxStringView(instance.node->name), AStringView(normalized))
+            || EqualsAsciiIgnoreCase(__hidden_scene::UfbxStringView(instance.mesh->name), AStringView(normalized))
         ){
             outSelection.push_back(instance.index);
         }
         else if(
             outSelection.empty()
             && (
-                __hidden_scene::NormalizedAsciiContains(instance.node->name, normalized)
-                || __hidden_scene::NormalizedAsciiContains(instance.mesh->name, normalized)
+                ContainsAsciiIgnoreCase(__hidden_scene::UfbxStringView(instance.node->name), AStringView(normalized))
+                || ContainsAsciiIgnoreCase(__hidden_scene::UfbxStringView(instance.mesh->name), AStringView(normalized))
             )
         ){
             if(partialSelection.empty())

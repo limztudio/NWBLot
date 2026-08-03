@@ -201,32 +201,8 @@ bool ParseColorText(const AString& text, Vec4& outColor){
     return true;
 }
 
-bool Normalize(const SIMDVector value, SIMDVector& outValue){
-    const SIMDVector lengthSquaredVector = Vector3LengthSq(value);
-    if(!VectorIsFinite(lengthSquaredVector, VectorComponentMask::s_XYZW) || !Vector3Greater(lengthSquaredVector, VectorZero()))
-        return false;
-
-    const SIMDVector normalized = Vector3Normalize(value);
-    NWB_ASSERT(Vector3IsFinite(normalized));
-    outValue = normalized;
-    return true;
-}
-
-Path PathFromUtf8(const AString& value){
-#if defined(NWB_PLATFORM_WINDOWS) && defined(NWB_UNICODE)
-    return Path(UtilityDetail::Arena(), StringConvert(UtilityDetail::Arena(), AStringView(value.data(), value.size())));
-#else
-    return Path(UtilityDetail::Arena(), value);
-#endif
-}
-
-AString PathToUtf8(const Path& path){
-    const auto text = path.generic_u8string();
-    return AString(reinterpret_cast<const char*>(text.data()), text.size());
-}
-
 Path DefaultOutputPath(const AString& inputPath){
-    Path outputPath = PathFromUtf8(inputPath);
+    Path outputPath(UtilityDetail::Arena(), inputPath);
     outputPath.replace_extension(".nwb");
     return outputPath;
 }

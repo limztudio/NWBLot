@@ -109,7 +109,7 @@ bool RemoveOutputPath(const Path& path){
 
 AString BuildMetadata(const TexturePayload& payload, const Path& dataPath, const bool srgb){
     AStringStream output;
-    const AString dataName = MakeJsonEscapedText<AString>(PathToUtf8(dataPath.filename()));
+    const AString dataName = MakeJsonEscapedText<AString>(PathToGenericString<AString>(dataPath.filename()));
     const AStringView dimensionName = payload.dimension == TextureDimension::TextureCube
         ? s_TextureCubeDimension
         : payload.dimension == TextureDimension::Texture3D
@@ -178,8 +178,8 @@ bool ResolveOutputPaths(const Path& inputPath, const AString& outputArgument, Ou
         outOutputPaths.metadata.replace_extension(".nwb");
     }
     else{
-        const Path outputBase = PathFromUtf8(outputArgument);
-        const AString extension = ToAsciiLowerCopy(PathToUtf8(outputBase.extension()));
+        const Path outputBase(UtilityDetail::Arena(), outputArgument);
+        const AString extension = ToAsciiLowerCopy(PathToGenericString<AString>(outputBase.extension()));
         if(extension.empty())
             outOutputPaths.metadata = outputBase;
         else if(extension == ".nwb")
@@ -267,3 +267,4 @@ NWB_TEX_CONV_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

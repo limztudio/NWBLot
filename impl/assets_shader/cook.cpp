@@ -18,15 +18,7 @@
 
 #include <core/common/log.h>
 #include <global/hash_utils.h>
-
-#if defined(NWB_PLATFORM_WINDOWS)
-#include <windows.h>
-#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
-#include <cerrno>
-#include <fcntl.h>
-#include <sys/wait.h>
-#include <unistd.h>
-#endif
+#include <global/process_execution.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -176,52 +168,6 @@ static bool TryMapTargetProfileToSlangArguments(
     return false;
 }
 
-#if defined(NWB_PLATFORM_WINDOWS)
-template<typename StringT>
-static void AppendWindowsCommandLineArgument(StringT& inOutCommand, const AStringView value){
-    if(!inOutCommand.empty())
-        inOutCommand += ' ';
-
-    bool needsQuotes = value.empty();
-    for(const char ch : value){
-        if(ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '"'){
-            needsQuotes = true;
-            break;
-        }
-    }
-
-    if(!needsQuotes){
-        inOutCommand.append(value.data(), value.size());
-        return;
-    }
-
-    inOutCommand += '"';
-    usize backslashCount = 0u;
-    for(const char ch : value){
-        if(ch == '\\'){
-            ++backslashCount;
-            continue;
-        }
-
-        if(ch == '"'){
-            for(usize i = 0u; i < backslashCount * 2u + 1u; ++i)
-                inOutCommand += '\\';
-            inOutCommand += '"';
-            backslashCount = 0u;
-            continue;
-        }
-
-        for(usize i = 0u; i < backslashCount; ++i)
-            inOutCommand += '\\';
-        inOutCommand += ch;
-        backslashCount = 0u;
-    }
-    for(usize i = 0u; i < backslashCount * 2u; ++i)
-        inOutCommand += '\\';
-    inOutCommand += '"';
-}
-#endif
-
 template<typename ArenaT, typename ArgumentVectorT>
 static void PushCompilerArgument(ArenaT& arena, ArgumentVectorT& inOutArguments, const AStringView value){
     using StringT = typename ArgumentVectorT::value_type;
@@ -289,132 +235,6 @@ private:
     const Path& m_path;
     bool m_active = true;
 };
-
-#if defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
-static constexpr int s_SignalExitCodeBase = 128;
-static constexpr int s_ExecFailureExitCode = 127;
-static constexpr mode_t s_DiagnosticsFileMode = 0666;
-
-static int WaitForCompilerProcess(const pid_t childPid)noexcept{
-    int status = 0;
-    pid_t waitedPid = -1;
-    do{
-        waitedPid = ::waitpid(childPid, &status, 0);
-    }while(waitedPid < 0 && errno == EINTR);
-
-    if(waitedPid != childPid)
-        return -1;
-    if(WIFEXITED(status))
-        return WEXITSTATUS(status);
-    if(WIFSIGNALED(status))
-        return s_SignalExitCodeBase + WTERMSIG(status);
-    return -1;
-}
-#endif
-
-template<typename ArenaT, typename ArgumentVectorT>
-static int RunCompilerProcessRedirected(
-    ArenaT& arena,
-    const ArgumentVectorT& arguments,
-    const Path& diagnosticsPath
-){
-    if(arguments.empty())
-        return -1;
-
-    Vector<const char*, ArenaT> argv(arena);
-    argv.reserve(arguments.size() + 1u);
-    for(const auto& argument : arguments)
-        argv.push_back(argument.c_str());
-    argv.push_back(nullptr);
-
-#if defined(NWB_PLATFORM_WINDOWS)
-    const AString<ArenaT> diagnosticsPathText = PathToString<char>(arena, diagnosticsPath);
-    SECURITY_ATTRIBUTES securityAttributes = {};
-    securityAttributes.nLength = sizeof(securityAttributes);
-    securityAttributes.bInheritHandle = TRUE;
-
-    HANDLE diagnosticsHandle = CreateFileA(
-        diagnosticsPathText.c_str(),
-        GENERIC_WRITE,
-        FILE_SHARE_READ,
-        &securityAttributes,
-        CREATE_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        nullptr
-    );
-    if(diagnosticsHandle == INVALID_HANDLE_VALUE)
-        return -1;
-
-    AString<ArenaT> commandLine{arena};
-    for(const auto& argument : arguments)
-        AppendWindowsCommandLineArgument(commandLine, AStringView(argument));
-
-    STARTUPINFOA startupInfo = {};
-    startupInfo.cb = sizeof(startupInfo);
-    startupInfo.dwFlags = STARTF_USESTDHANDLES;
-    startupInfo.hStdOutput = diagnosticsHandle;
-    startupInfo.hStdError = diagnosticsHandle;
-    startupInfo.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-
-    PROCESS_INFORMATION processInfo = {};
-    const BOOL created = CreateProcessA(
-        arguments.front().c_str(),
-        commandLine.data(),
-        nullptr,
-        nullptr,
-        TRUE,
-        CREATE_NO_WINDOW,
-        nullptr,
-        nullptr,
-        &startupInfo,
-        &processInfo
-    );
-    CloseHandle(diagnosticsHandle);
-    if(!created)
-        return -1;
-
-    WaitForSingleObject(processInfo.hProcess, INFINITE);
-    DWORD exitCode = 1u;
-    if(!GetExitCodeProcess(processInfo.hProcess, &exitCode))
-        NWB_LOGGER_WARNING(NWB_TEXT("ShaderCook: failed to query compiler process exit code"));
-    CloseHandle(processInfo.hThread);
-    CloseHandle(processInfo.hProcess);
-    return static_cast<int>(exitCode);
-#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
-    const AString<ArenaT> diagnosticsPathText = PathToString<char>(arena, diagnosticsPath);
-    const int diagnosticsFd = ::open(diagnosticsPathText.c_str(), O_CREAT | O_TRUNC | O_WRONLY, s_DiagnosticsFileMode);
-    if(diagnosticsFd < 0)
-        return -1;
-
-    const pid_t childPid = ::fork();
-    if(childPid < 0){
-        const int closeResult = ::close(diagnosticsFd);
-        if(closeResult != 0)
-            return -1;
-        return -1;
-    }
-
-    if(childPid == 0){
-        if(::dup2(diagnosticsFd, STDOUT_FILENO) < 0)
-            _exit(s_ExecFailureExitCode);
-        if(::dup2(diagnosticsFd, STDERR_FILENO) < 0)
-            _exit(s_ExecFailureExitCode);
-        if(::close(diagnosticsFd) != 0)
-            _exit(s_ExecFailureExitCode);
-        ::execvp(argv.front(), const_cast<char* const*>(argv.data()));
-        _exit(s_ExecFailureExitCode);
-    }
-
-    const int closeParentResult = ::close(diagnosticsFd);
-    const int compilerExitCode = WaitForCompilerProcess(childPid);
-    if(closeParentResult != 0)
-        return -1;
-    return compilerExitCode;
-#else
-    static_cast<void>(diagnosticsPath);
-    return -1;
-#endif
-}
 
 class SlangShaderCompiler final : public ShaderCook::IShaderCompiler{
 public:
@@ -521,7 +341,22 @@ public:
         ScratchString outputPathText = PathToString<char>(argumentArena, request.outputPath);
         arguments.push_back(Move(outputPathText));
 
-        const int exitCode = RunCompilerProcessRedirected(argumentArena, arguments, diagnosticsPath);
+        ScratchVector<const char*> argv(argumentArena);
+        argv.reserve(arguments.size() + 1u);
+        for(const ScratchString& argument : arguments)
+            argv.push_back(argument.c_str());
+        argv.push_back(nullptr);
+
+        const ScratchString diagnosticsPathText = PathToString<char>(argumentArena, diagnosticsPath);
+        bool exitCodeQueryFailed = false;
+        const int exitCode = ::RunProcessRedirectedToFile(
+            argumentArena,
+            argv.data(),
+            diagnosticsPathText.c_str(),
+            &exitCodeQueryFailed
+        );
+        if(exitCodeQueryFailed)
+            NWB_LOGGER_WARNING(NWB_TEXT("ShaderCook: failed to query compiler process exit code"));
         if(exitCode != 0){
             ScratchString diagnostics{argumentArena};
             if(ReadDiagnostics(diagnosticsPath, diagnostics) && !diagnostics.empty()){

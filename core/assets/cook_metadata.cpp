@@ -10,9 +10,9 @@
 
 #include "cook_metadata.h"
 #include "arena_names.h"
-#include "registration_queue.h"
 
 #include <core/common/log.h>
+#include <global/auto_registration.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,13 +35,13 @@ struct AutoMetadataParser{
     AssetValueMetadataParseFunction valueFunction = nullptr;
 };
 
-AutoRegistrationQueue<AutoMetadataParser>& QueryAutoMetadataParserQueue(){
-    static AutoRegistrationQueue<AutoMetadataParser> queue(AssetsArenaScope::s_MetadataParserQueueArena);
+::AutoRegistrationQueue<AutoMetadataParser, AssetArena>& QueryAutoMetadataParserQueue(){
+    static ::AutoRegistrationQueue<AutoMetadataParser, AssetArena> queue(AssetsArenaScope::s_MetadataParserQueueArena);
     return queue;
 }
 
-AutoRegistrationQueue<AssetBunchExpandFunction>& QueryAutoAssetBunchExpanderQueue(){
-    static AutoRegistrationQueue<AssetBunchExpandFunction> queue(AssetsArenaScope::s_BunchExpanderQueueArena);
+::AutoRegistrationQueue<AssetBunchExpandFunction, AssetArena>& QueryAutoAssetBunchExpanderQueue(){
+    static ::AutoRegistrationQueue<AssetBunchExpandFunction, AssetArena> queue(AssetsArenaScope::s_BunchExpanderQueueArena);
     return queue;
 }
 
@@ -187,11 +187,7 @@ AssetMetadataParserAutoRegistrar::AssetMetadataParserAutoRegistrar(
 }
 
 AssetBunchExpanderAutoRegistrar::AssetBunchExpanderAutoRegistrar(const AssetBunchExpandFunction function){
-    if(function == nullptr)
-        return;
-
-    auto& queue = __hidden_cook_metadata::QueryAutoAssetBunchExpanderQueue();
-    queue.appendUnique(function, [](const AssetBunchExpandFunction lhs, const AssetBunchExpandFunction rhs){ return lhs == rhs; });
+    ::RegisterAutoFactory(__hidden_cook_metadata::QueryAutoAssetBunchExpanderQueue(), function);
 }
 
 bool DiscoverFilesWithExtension(

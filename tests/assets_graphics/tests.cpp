@@ -9,7 +9,6 @@
 #include <core/assets/bunch/cook.h>
 #include <core/assets/volume/cooker.h>
 #include <core/assets/cook_entry_registry.h>
-#include <core/assets/registration_queue.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/binary_payload.h>
 #include <impl/assets_shader/asset.h>
@@ -38,6 +37,7 @@
 
 #include <global/binary.h>
 #include <global/compile.h>
+#include <global/cpu_topology.h>
 #include <global/filesystem.h>
 #include <global/hash_utils.h>
 #include <global/math/convert.h>
@@ -68,7 +68,6 @@ inline constexpr Name s_ShaderScratchArena("tests/assets_graphics/shader");
 inline constexpr Name s_ModelFixtureScratchArena("tests/assets_graphics/model_fixture");
 inline constexpr Name s_CodecScratchArena("tests/assets_graphics/codec");
 inline constexpr Name s_ProjectCookEntryArena("tests/assets_graphics/project_cook_entry");
-inline constexpr Name s_AutoRegistrationQueueArena("tests/assets_graphics/auto_registration_queue");
 
 
 struct AssetsGraphicsTestArenaTag{};
@@ -1259,7 +1258,7 @@ static bool CookPreparedGraphicsAssetRoots(
     const InitializerList<Path> assetRoots,
     const u32 workerThreadCount = 0u
 ){
-    NWB::Core::Alloc::ThreadPool cookThreadPool(workerThreadCount, NWB::Core::Alloc::CoreAffinity::Any);
+    NWB::Core::Alloc::ThreadPool cookThreadPool(workerThreadCount, CpuAffinity::Any);
     NWB::Core::Assets::AssetCookOptions options(testArena.arena, cookThreadPool);
     options.repoRoot = PathToString(testArena.arena, AssetsGraphicsTestRepoRoot(testArena));
     options.assetRoots.reserve(assetRoots.size());
@@ -1780,3 +1779,4 @@ static bool FindShaderArchiveSourceChecksum(
 #include "mesh_cooker_tests.inl"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

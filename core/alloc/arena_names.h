@@ -26,7 +26,6 @@ namespace ArenaScope{
 inline constexpr Name s_ThreadPool("core/alloc/thread_pool");
 inline constexpr Name s_JobSystem("core/alloc/job_system");
 inline constexpr Name s_JobReadyBatch("core/alloc/job_ready_batch");
-inline constexpr Name s_AffinityQuery("core/alloc/affinity_query");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

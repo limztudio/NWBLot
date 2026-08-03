@@ -9,19 +9,13 @@
 #include "persistent.h"
 #include "arena_names.h"
 
+#include <global/cpu_topology.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_ALLOC_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-extern u64 QueryAffinityMask(CoreAffinity::Enum type);
-extern u32 QueryCoreCount(CoreAffinity::Enum type);
-extern void SetCurrentThreadAffinity(u64 mask);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -154,8 +148,8 @@ public:
             });
         }
     }
-    inline explicit ThreadPool(u32 threadCount, CoreAffinity::Enum affinity, usize arenaSize = 0)
-        : ThreadPool(threadCount, QueryAffinityMask(affinity), arenaSize)
+    inline explicit ThreadPool(u32 threadCount, CpuAffinity::Enum affinity, usize arenaSize = 0)
+        : ThreadPool(threadCount, QueryCpuAffinityMask(affinity), arenaSize)
     {}
 
     inline ~ThreadPool(){
@@ -322,7 +316,7 @@ private:
     }
 
     inline void workerLoop(const StopToken& stopToken, u64 affinityMask){
-        SetCurrentThreadAffinity(affinityMask);
+        SetCurrentThreadCpuAffinity(affinityMask);
 
         for(;;){
             TaskItem item;

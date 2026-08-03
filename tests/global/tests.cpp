@@ -8,12 +8,14 @@
 
 #include <global/algorithm.h>
 #include <global/allocation_size.h>
+#include <global/auto_registration.h>
 #include <global/arena_c_allocator.h>
 #include <global/arena_object.h>
 #include <global/binary.h>
 #include <global/blocking_io.h>
 #include <global/compile.h>
 #include <global/containers.h>
+#include <global/cpu_topology.h>
 #include <global/diagnostics.h>
 #include <global/filesystem/operations.h>
 #include <global/filesystem/path.h>
@@ -29,6 +31,7 @@
 #include <global/mesh/triangle_area.h>
 #include <global/overflow.h>
 #include <global/process_execution.h>
+#include <global/process_memory_map.h>
 #include <global/text_utils.h>
 #include <global/type_counter.h>
 
@@ -60,6 +63,28 @@ struct ArenaObjectProbe{
         m_destroyed = true;
     }
 };
+
+struct ArenaReferenceProbe{
+    bool& m_customDeleterCalled;
+    bool& m_destroyed;
+
+    ArenaReferenceProbe(bool& customDeleterCalled, bool& destroyed)
+        : m_customDeleterCalled(customDeleterCalled)
+        , m_destroyed(destroyed)
+    {}
+    ~ArenaReferenceProbe(){
+        m_destroyed = true;
+    }
+};
+
+void DestroyArenaReference(
+    NWB::Core::Alloc::GlobalArena* arena,
+    ArenaReferenceProbe* value
+)noexcept{
+    value->m_customDeleterCalled = true;
+    value->~ArenaReferenceProbe();
+    arena->deallocate(value, alignof(ArenaReferenceProbe), sizeof(ArenaReferenceProbe));
+}
 
 struct TypeCounterFirstTag{};
 struct TypeCounterSecondTag{};
@@ -244,6 +269,86 @@ TEST(Global, GenericAllocationAndTypeHelpers){
     EXPECT_EQ(firstId, ::TypeCounter<TypeCounterFirstTag>::id<u32>());
     EXPECT_NE(firstId, ::TypeCounter<TypeCounterFirstTag>::id<u64>());
     EXPECT_EQ(::TypeCounter<TypeCounterSecondTag>::id<u32>(), 0u);
+}
+
+TEST(Global, ArenaRefDeleterUsesAssociatedNamespaceHook){
+    NWB::Core::Alloc::GlobalArena arena(NWB::Tests::s_TestArena);
+    bool customDeleterCalled = false;
+    bool destroyed = false;
+    ArenaReferenceProbe* const probe = ::NewArenaObject<ArenaReferenceProbe>(arena, customDeleterCalled, destroyed);
+    ASSERT_NE(probe, nullptr);
+
+    const ::ArenaRefDeleter<ArenaReferenceProbe, NWB::Core::Alloc::GlobalArena> deleter(&arena);
+    deleter(probe);
+    EXPECT_TRUE(customDeleterCalled);
+    EXPECT_TRUE(destroyed);
+}
+
+TEST(Global, AutoRegistrationQueueDeduplicatesAndSnapshots){
+    ::AutoRegistrationQueue<u32, NWB::Core::Alloc::GlobalArena> queue(NWB::Tests::s_TestArena);
+    const auto equal = [](const u32 lhs, const u32 rhs){ return lhs == rhs; };
+
+    queue.appendUnique(7u, equal);
+    queue.appendUnique(7u, equal);
+    queue.appendUnique(19u, equal);
+
+    Vector<u32> values;
+    queue.copyTo(values);
+    ASSERT_EQ(values.size(), 2u);
+    EXPECT_EQ(values[0u], 7u);
+    EXPECT_EQ(values[1u], 19u);
+
+    queue.appendUnique(23u, equal);
+    EXPECT_EQ(values.size(), 2u);
+
+    queue.copyTo(values);
+    ASSERT_EQ(values.size(), 3u);
+    EXPECT_EQ(values[2u], 23u);
+}
+
+TEST(Global, CpuTopologyQueriesAreSafe){
+    EXPECT_EQ(QueryCpuAffinityMask(CpuAffinity::Any), 0u);
+    EXPECT_EQ(QueryCpuCoreCount(CpuAffinity::Any), static_cast<u32>(Thread::hardware_concurrency()));
+    SetCurrentThreadCpuAffinity(0u);
+}
+
+TEST(Global, Vector3TryNormalizeRejectsInvalidValues){
+    SIMDVector normalized = VectorSet(9.0f, 8.0f, 7.0f, 6.0f);
+    const SIMDVector unchanged = normalized;
+
+    EXPECT_TRUE(Vector3TryNormalize(VectorSet(3.0f, 4.0f, 0.0f, 0.0f), normalized));
+    EXPECT_TRUE(Vector3NearEqual(normalized, VectorSet(0.6f, 0.8f, 0.0f, 0.0f), VectorReplicate(0.0001f)));
+
+    normalized = unchanged;
+    EXPECT_FALSE(Vector3TryNormalize(VectorZero(), normalized));
+    EXPECT_TRUE(Vector3Equal(normalized, unchanged));
+
+    EXPECT_FALSE(Vector3TryNormalize(s_SIMDQNaN, normalized));
+    EXPECT_TRUE(Vector3Equal(normalized, unchanged));
+
+    EXPECT_FALSE(Vector3TryNormalize(s_SIMDInfinity, normalized));
+    EXPECT_TRUE(Vector3Equal(normalized, unchanged));
+}
+
+TEST(Global, LinuxProcessMemoryMapUtilitiesParseAndLookupRanges){
+    constexpr AStringView s_Maps =
+        "00001000-00002000 r-xp 00000020 00:00 0 /tmp/first.so\n"
+        "00003000-00004000 r--p 00000000 00:00 0 /tmp/second.so\n"
+    ;
+
+    Vector<LinuxProcessMemoryMapEntry> entries;
+    ParseLinuxProcessMemoryMaps(s_Maps, entries);
+    ASSERT_EQ(entries.size(), 2u);
+    EXPECT_EQ(entries[0u].fileOffset, 0x20u);
+    EXPECT_EQ(entries[0u].path, AStringView("/tmp/first.so"));
+
+    LinuxProcessMemoryMapEntry entry;
+    EXPECT_TRUE(FindLinuxProcessMemoryMapForAddress(entries, 0x1000u, entry));
+    EXPECT_EQ(entry.path, AStringView("/tmp/first.so"));
+    EXPECT_TRUE(FindLinuxProcessMemoryMapForAddress(entries, 0x3fffu, entry));
+    EXPECT_EQ(entry.path, AStringView("/tmp/second.so"));
+    EXPECT_FALSE(FindLinuxProcessMemoryMapForAddress(entries, 0x2000u, entry));
+    EXPECT_TRUE(entry.path.empty());
 }
 
 TEST(Global, ForwardAsTuplePreservesReferences){
@@ -543,6 +648,9 @@ TEST(Global, TextUtilityHelpers){
     EXPECT_TRUE(StartsWith(AStringView("alpha"), "al"));
     EXPECT_FALSE(StartsWith(AStringView("alpha"), AStringView("beta")));
     EXPECT_FALSE(StartsWith(AStringView("al"), AStringView("alpha")));
+    EXPECT_TRUE(EqualsAsciiIgnoreCase(AStringView("GraphicsVolume"), AStringView("graphicsvolume")));
+    EXPECT_TRUE(ContainsAsciiIgnoreCase(AStringView("GraphicsVolume"), AStringView("volume")));
+    EXPECT_FALSE(ContainsAsciiIgnoreCase(AStringView("GraphicsVolume"), AStringView("shader")));
 
     AString jsonText;
     AppendJsonQuotedText(jsonText, AStringView("a\"b\\c\n\t"));
@@ -648,6 +756,30 @@ TEST(Global, CaptureProcessOutputTimesOutWithContinuousOutput){
     if(startMilliseconds != 0u)
         EXPECT_LT(elapsedMilliseconds, 1000u);
 }
+
+TEST(Global, RunProcessRedirectedToFileCapturesBothStreams){
+    NWB::Tests::TestArena<> testArena;
+    const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/redirected_process");
+    const Path<NWB::Core::Alloc::GlobalArena> outputPath = root / "combined output.txt";
+    ErrorCode error;
+    ASSERT_TRUE(EnsureEmptyDirectory(root, error));
+    ASSERT_TRUE(WriteTextFile(outputPath, AStringView("stale")));
+
+    const char* const argv[] = {
+        "/bin/sh",
+        "-c",
+        "printf stdout; printf stderr >&2; exit 23",
+        nullptr
+    };
+    const auto outputPathText = PathToString<char>(testArena.arena, outputPath);
+    EXPECT_EQ(RunProcessRedirectedToFile(testArena.arena, argv, outputPathText.c_str()), 23);
+    EXPECT_EQ(RunProcessRedirectedToFile(testArena.arena, nullptr, outputPathText.c_str()), -1);
+
+    AString output;
+    ASSERT_TRUE(ReadTextFile(outputPath, output));
+    EXPECT_EQ(AStringView(output.data(), output.size()), AStringView("stdoutstderr"));
+    EXPECT_TRUE(RemoveAllIfExists(root, error));
+}
 #endif
 
 TEST(Global, FilesystemMovePathToDirectory){
@@ -708,6 +840,18 @@ TEST(Global, FilesystemVolumeSegmentNaming){
     EXPECT_EQ(firstSegment.view().size(), s_HexU64DigitCount + AStringView(".vol").size());
     EXPECT_EQ(firstSegment.view().substr(s_HexU64DigitCount), AStringView(".vol"));
     EXPECT_EQ(HashVolumeSegmentFileName("graphics", 0u), HashVolumeSegmentFileName("graphics", 0u));
+
+    NWB::Tests::TestArena<> testArena;
+    const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/volume_segment_naming");
+    const Path<NWB::Core::Alloc::GlobalArena> firstSegmentPath = MakeVolumeSegmentPath(root, "graphics", 0u);
+    ErrorCode error;
+
+    EXPECT_TRUE(EnsureEmptyDirectory(root, error));
+    EXPECT_FALSE(VolumeSegmentExists(root, "graphics"));
+    EXPECT_TRUE(WriteTextFile(firstSegmentPath, AStringView("segment")));
+    EXPECT_TRUE(VolumeSegmentExists(root, "graphics"));
+    EXPECT_FALSE(VolumeSegmentExists(root, "graphics", 1u));
+    EXPECT_TRUE(RemoveAllIfExists(root, error));
 }
 
 TEST(Global, StringTableText){

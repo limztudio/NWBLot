@@ -614,6 +614,20 @@ template<typename CharT = char, typename ArenaT, typename PathT>
     return output;
 }
 
+template<typename StringT, typename PathT>
+[[nodiscard]] inline StringT PathToGenericString(const PathT& path){
+    using CharT = typename StringT::value_type;
+
+    StringT output;
+    auto out = std::back_inserter(output);
+    BasicStringDetail::WriteConvertedText<CharT>(out, path.native());
+    for(CharT& ch : output){
+        if(ch == static_cast<CharT>('\\'))
+            ch = static_cast<CharT>('/');
+    }
+    return output;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -760,6 +774,32 @@ template<typename CharT, typename ArenaT>
 template<typename CharT, usize N>
 [[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicStringView<CharT> text, const CharT (&expected)[N]){
     return EqualsAsciiIgnoreCase<CharT>(text, BasicStringView<CharT>(expected, N > 0 ? N - 1 : 0));
+}
+
+template<typename CharT>
+[[nodiscard]] inline constexpr bool ContainsAsciiIgnoreCase(const BasicStringView<CharT> text, const BasicStringView<CharT> expected){
+    if(expected.empty())
+        return true;
+    if(text.size() < expected.size())
+        return false;
+
+    const usize lastBegin = text.size() - expected.size();
+    for(usize begin = 0u; begin <= lastBegin; ++begin){
+        bool matched = true;
+        for(usize i = 0u; i < expected.size(); ++i){
+            if(ToAsciiLower(text[begin + i]) != ToAsciiLower(expected[i])){
+                matched = false;
+                break;
+            }
+        }
+        if(matched)
+            return true;
+    }
+    return false;
+}
+template<typename CharT, usize N>
+[[nodiscard]] inline constexpr bool ContainsAsciiIgnoreCase(const BasicStringView<CharT> text, const CharT (&expected)[N]){
+    return ContainsAsciiIgnoreCase<CharT>(text, BasicStringView<CharT>(expected, N > 0 ? N - 1 : 0));
 }
 
 

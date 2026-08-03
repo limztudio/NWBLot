@@ -8,6 +8,8 @@
 #include "../compact_string.h"
 #include "../hash_utils.h"
 #include "../text_utils.h"
+#include "operations.h"
+#include "path.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -45,6 +47,33 @@
     AppendHexU64(hash, fileName);
     fileName += ".vol";
     return fileName;
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline Path<ArenaT> MakeVolumeSegmentPath(
+    const Path<ArenaT>& directory,
+    const AStringView volumeName,
+    const usize segmentIndex
+){
+    return directory / MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str();
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline bool VolumeSegmentExists(
+    const Path<ArenaT>& directory,
+    const AStringView volumeName,
+    const usize segmentIndex = 0u
+){
+    if(directory.empty())
+        return false;
+
+    ErrorCode errorCode;
+    if(!IsDirectory(directory, errorCode) || errorCode)
+        return false;
+
+    const Path<ArenaT> segmentPath = MakeVolumeSegmentPath(directory, volumeName, segmentIndex);
+    errorCode.clear();
+    return FileExists(segmentPath, errorCode) && !errorCode;
 }
 
 

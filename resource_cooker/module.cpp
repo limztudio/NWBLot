@@ -8,6 +8,7 @@
 #include <core/alloc/thread.h>
 #include <core/common/log.h>
 #include <core/assets/cooker_registration.h>
+#include <global/cpu_topology.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -27,7 +28,7 @@ inline constexpr u32 s_CookMainThreadReservedCoreCount = 1u;
 
 
 u32 QueryCookWorkerThreadCount(){
-    const u32 coreCount = NWB::Core::Alloc::QueryCoreCount(NWB::Core::Alloc::CoreAffinity::Any);
+    const u32 coreCount = ::QueryCpuCoreCount(CpuAffinity::Any);
     return coreCount > s_CookMainThreadReservedCoreCount ? coreCount - s_CookMainThreadReservedCoreCount : 0u;
 }
 
@@ -46,7 +47,7 @@ int ResourceCookerMain(int argc, char** argv){
         NWB::Core::Alloc::GlobalArena cookArena(__hidden_resource_cooker::s_CookArena);
         NWB::Core::Alloc::ThreadPool cookThreadPool(
             __hidden_resource_cooker::QueryCookWorkerThreadCount(),
-            NWB::Core::Alloc::CoreAffinity::Any
+            CpuAffinity::Any
         );
 
         NWB::Core::Assets::AssetCookerRegistry assetCookerRegistry(cookArena);

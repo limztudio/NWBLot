@@ -3013,6 +3013,17 @@ NWB_INLINE SIMDVector SIMDCALL Vector3Normalize(SIMDVector value)noexcept{
 #endif
 }
 
+[[nodiscard]] NWB_INLINE bool SIMDCALL Vector3TryNormalize(SIMDVector value, SIMDVector& outValue)noexcept{
+    const SIMDVector lengthSquared = Vector3LengthSq(value);
+    if(!VectorIsFinite(lengthSquared, VectorComponentMask::s_XYZW) || !Vector3Greater(lengthSquared, VectorZero()))
+        return false;
+
+    const SIMDVector normalized = Vector3Normalize(value);
+    NWB_ASSERT(Vector3IsFinite(normalized));
+    outValue = normalized;
+    return true;
+}
+
 [[nodiscard]] NWB_INLINE SIMDVector SIMDCALL Vector3NormalizeOr(SIMDVector value, SIMDVector fallback, const f32 minLengthSquared)noexcept{
     const SIMDVector lengthSquared = Vector3LengthSq(value);
     return SIMDVectorDetail::NormalizeOrV(value, fallback, lengthSquared, minLengthSquared, s_SIMDMask3);

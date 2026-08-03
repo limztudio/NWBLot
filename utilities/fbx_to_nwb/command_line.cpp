@@ -191,12 +191,12 @@ bool ConfigurePromptsAfterLoad(
 
     if(!presence.output && !options.acceptDefaults){
         AString output;
-        const AString defaultOutput = PathToUtf8(DefaultOutputPath(options.inputPath));
+        const AString defaultOutput = PathToGenericString<AString>(DefaultOutputPath(options.inputPath));
         PromptString("Output .nwb path", defaultOutput, output, prompted);
         options.outputPath = output;
     }
     if(options.outputPath.empty())
-        options.outputPath = PathToUtf8(DefaultOutputPath(options.inputPath));
+        options.outputPath = PathToGenericString<AString>(DefaultOutputPath(options.inputPath));
     options.outputPath = UnquoteMatchingAsciiQuotes(Move(options.outputPath));
 
     if(!presence.normalMode && !options.acceptDefaults){
@@ -270,8 +270,8 @@ bool AssetTypeCanUseSkinning(const OutputAssetType::Enum assetType){
 }
 
 AString LowerPathExtension(const AString& pathText){
-    const Path path = PathFromUtf8(pathText);
-    return ToAsciiLowerCopy(PathToUtf8(path.extension()));
+    const Path path(UtilityDetail::Arena(), pathText);
+    return ToAsciiLowerCopy(PathToGenericString<AString>(path.extension()));
 }
 
 bool IsNwbRefreshMode(const ImportOptions& options){
@@ -308,7 +308,7 @@ int RunNwbRefresh(ImportOptions& options, const OptionPresence& presence, Core::
         options.outputPath = options.inputPath;
     options.outputPath = UnquoteMatchingAsciiQuotes(Move(options.outputPath));
 
-    const Path outputPath = PathFromUtf8(options.outputPath);
+    const Path outputPath(UtilityDetail::Arena(), options.outputPath);
     if(outputPath.empty()){
         NWB_LOGGER_WARNING(NWB_TEXT("Output path is empty."));
         return 1;
@@ -317,14 +317,14 @@ int RunNwbRefresh(ImportOptions& options, const OptionPresence& presence, Core::
         return 1;
 
     SourceMeshCanonicalizeReport canonicalizeReport;
-    const Path inputPath = PathFromUtf8(options.inputPath);
+    const Path inputPath(UtilityDetail::Arena(), options.inputPath);
     if(!RefreshNwbMeshAsset(inputPath, outputPath, threadPool, canonicalizeReport))
         return 1;
 
     AStringStream report;
     report
-        << "Refreshed " << PathToUtf8(outputPath) << "\n"
-        << "  input: " << PathToUtf8(inputPath) << "\n"
+        << "Refreshed " << PathToGenericString<AString>(outputPath) << "\n"
+        << "  input: " << PathToGenericString<AString>(inputPath) << "\n"
     ;
     WriteCanonicalizeReport(report, canonicalizeReport);
     NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
@@ -435,7 +435,7 @@ int Run(int argc, char** argv, Core::Alloc::ThreadPool& threadPool, bool& prompt
     }
 
     ErrorCode errorCode;
-    const bool inputIsRegularFile = IsRegularFile(PathFromUtf8(options.inputPath), errorCode);
+    const bool inputIsRegularFile = IsRegularFile(Path(UtilityDetail::Arena(), options.inputPath), errorCode);
     if(errorCode && !IsMissingPathError(errorCode)){
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to query input FBX path: {}"), StringConvert(errorCode.message()));
         return 1;
@@ -503,7 +503,7 @@ int Run(int argc, char** argv, Core::Alloc::ThreadPool& threadPool, bool& prompt
         return 1;
     }
 
-    const Path outputPath = PathFromUtf8(options.outputPath);
+    const Path outputPath(UtilityDetail::Arena(), options.outputPath);
     if(outputPath.empty()){
         NWB_LOGGER_WARNING(NWB_TEXT("Output path is empty."));
         return 1;
@@ -549,7 +549,7 @@ int Run(int argc, char** argv, Core::Alloc::ThreadPool& threadPool, bool& prompt
 
     AStringStream report;
     report
-        << "Wrote " << PathToUtf8(outputPath) << "\n"
+        << "Wrote " << PathToGenericString<AString>(outputPath) << "\n"
         << "  positions: " << mesh.positions.size() << "\n"
         << "  normals: " << mesh.normals.size() << "\n"
         << "  vertex_refs: " << mesh.vertexRefs.size() << "\n"

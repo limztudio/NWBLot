@@ -194,7 +194,7 @@ static void ResetPayload(
         : basist::cBASISTexType2D
     ;
     for(const Path& inputPath : inputPaths){
-        const AString inputPathText = PathToUtf8(inputPath);
+        const AString inputPathText = PathToGenericString<AString>(inputPath);
         parameters.m_source_filenames.push_back(AInteropString(inputPathText.data(), inputPathText.size()));
     }
     parameters.m_mip_gen = true;
@@ -267,7 +267,7 @@ static void ResetPayload(
     u32 height = 0u;
     outPlanes.reserve(inputPaths.size());
     for(const Path& inputPath : inputPaths){
-        const AString inputPathText = PathToUtf8(inputPath);
+        const AString inputPathText = PathToGenericString<AString>(inputPath);
         basisu::image plane;
         if(!basisu::load_image(inputPathText.c_str(), plane)){
             NWB_LOGGER_WARNING(NWB_TEXT("tex_conv: failed to decode volume slice '{}'."), PathToString<tchar>(inputPath));
@@ -526,3 +526,4 @@ NWB_TEX_CONV_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -76,8 +76,6 @@ struct OutputPaths{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Path PathFromUtf8(const AString& value);
-AString PathToUtf8(const Path& path);
 bool IsSupportedInputPath(const Path& path);
 bool ResolveOutputPaths(const Path& inputPath, const AString& outputArgument, OutputPaths& outOutputPaths);
 bool ValidateOutputPaths(const OutputPaths& outputPaths, bool force);
@@ -94,3 +92,4 @@ NWB_TEX_CONV_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

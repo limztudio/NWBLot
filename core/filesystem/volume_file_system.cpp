@@ -587,7 +587,7 @@ bool VolumeFileSystem::scanSegmentsLocked(){
     m_segmentPaths.clear();
 
     for(usize segmentIndex = 0;; ++segmentIndex){
-        const Path hashedSegmentPath = m_mountDirectory / ::MakeVolumeSegmentFileName(m_volumeName.view(), segmentIndex).c_str();
+        const Path hashedSegmentPath = ::MakeVolumeSegmentPath(m_mountDirectory, m_volumeName.view(), segmentIndex);
 
         const bool exists = FileExists(hashedSegmentPath, errorCode);
         if(errorCode){
@@ -631,7 +631,7 @@ void VolumeFileSystem::unmountLocked(){
 }
 
 Path VolumeFileSystem::segmentPath(const usize segmentIndex)const{
-    return m_mountDirectory / ::MakeVolumeSegmentFileName(m_volumeName.view(), segmentIndex).c_str();
+    return ::MakeVolumeSegmentPath(m_mountDirectory, m_volumeName.view(), segmentIndex);
 }
 
 

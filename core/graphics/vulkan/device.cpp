@@ -47,19 +47,6 @@ static const char* GpuCrashAvailabilityText(const bool available){
 }
 
 
-static bool RuntimeCacheVolumeExists(const Path& directory, const AStringView volumeName){
-    if(directory.empty())
-        return false;
-
-    ErrorCode errorCode;
-    if(!IsDirectory(directory, errorCode) || errorCode)
-        return false;
-
-    const Path segmentPath = directory / ::MakeVolumeSegmentFileName(volumeName, 0).c_str();
-    errorCode.clear();
-    return FileExists(segmentPath, errorCode) && !errorCode;
-}
-
 static bool MountPipelineCacheVolume(
     const Path& directory,
     const AStringView volumeName,
@@ -521,7 +508,7 @@ bool Device::loadPipelineCacheData(GraphicsBytes& outData){
     outData.clear();
     if(m_pipelineCacheDirectory.empty() || m_pipelineCacheVolumeName.empty())
         return false;
-    if(!VulkanDetail::RuntimeCacheVolumeExists(m_pipelineCacheDirectory, m_pipelineCacheVolumeName))
+    if(!::VolumeSegmentExists(m_pipelineCacheDirectory, m_pipelineCacheVolumeName))
         return false;
 
     Filesystem::VolumeFileSystem volume(m_context.objectArena);

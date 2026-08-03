@@ -6,6 +6,7 @@
 #include "arena_names.h"
 
 #include <core/common/log.h>
+#include <global/cpu_topology.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,14 +24,14 @@ void Frame::ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY){
     frame->m_input.setMousePositionScale(scaleX, scaleY);
 }
 u32 Frame::queryGraphicsWorkerThreadCount(){
-    u32 coreCount = Alloc::QueryCoreCount(Alloc::CoreAffinity::Performance);
+    u32 coreCount = ::QueryCpuCoreCount(CpuAffinity::Performance);
     if(coreCount <= 1)
-        coreCount = Alloc::QueryCoreCount(Alloc::CoreAffinity::Any);
+        coreCount = ::QueryCpuCoreCount(CpuAffinity::Any);
 
     return coreCount > s_ReservedCoresForMainThread ? (coreCount - s_ReservedCoresForMainThread) : 0;
 }
 u32 Frame::queryProjectWorkerThreadCount(){
-    u32 coreCount = Alloc::QueryCoreCount(Alloc::CoreAffinity::Any);
+    u32 coreCount = ::QueryCpuCoreCount(CpuAffinity::Any);
     const u32 graphicsWorkerThreadCount = queryGraphicsWorkerThreadCount();
     const u32 reservedCoreCount = s_ReservedCoresForMainThread + graphicsWorkerThreadCount;
 
@@ -45,14 +46,14 @@ Frame::Frame(void* inst, u16 width, u16 height)
     : m_graphicsObjectArena(FrameArenaScope::s_GraphicsObjectArena)
     , m_appliedWindowTitle(m_graphicsObjectArena)
     , m_graphicsAllocator(m_graphicsObjectArena)
-    , m_graphicsThreadPool(queryGraphicsWorkerThreadCount(), Alloc::CoreAffinity::Any)
+    , m_graphicsThreadPool(queryGraphicsWorkerThreadCount(), CpuAffinity::Any)
     , m_graphicsJobSystem(m_graphicsThreadPool)
     , m_projectObjectArena(FrameArenaScope::s_ProjectObjectArena)
     , m_perfSession(m_projectObjectArena)
     , m_telemetrySession(m_projectObjectArena)
     , m_frameGraphRegistry(m_projectObjectArena)
     , m_telemetryUploadBytes(m_projectObjectArena)
-    , m_projectThreadPool(queryProjectWorkerThreadCount(), Alloc::CoreAffinity::Any)
+    , m_projectThreadPool(queryProjectWorkerThreadCount(), CpuAffinity::Any)
     , m_projectJobSystem(m_projectThreadPool)
     , m_graphics(m_graphicsAllocator, m_graphicsThreadPool, m_graphicsJobSystem, m_perfSession.gpuTimingSink())
 {

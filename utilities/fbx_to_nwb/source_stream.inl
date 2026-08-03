@@ -279,7 +279,7 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     }
 
     SIMDVector outputNormal;
-    if(!Normalize(ToVector(normal), outputNormal))
+    if(!Vector3TryNormalize(ToVector(normal), outputNormal))
         outputNormal = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
     return outputNormal;
 }
@@ -301,7 +301,7 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
         tangent = ufbx_transform_direction(&normalToWorld, tangent);
 
     SIMDVector outputTangent;
-    if(!Normalize(ToVector(tangent), outputTangent))
+    if(!Vector3TryNormalize(ToVector(tangent), outputTangent))
         return false;
 
     f32 sign = 1.0f;
@@ -311,7 +311,7 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
             bitangent = ufbx_transform_direction(&normalToWorld, bitangent);
 
         SIMDVector outputBitangent;
-        if(Normalize(ToVector(bitangent), outputBitangent)){
+        if(Vector3TryNormalize(ToVector(bitangent), outputBitangent)){
             const SIMDVector tangentSpaceBitangent = Vector3Cross(normal, outputTangent);
             const SIMDVector bitangentDot = Vector3Dot(tangentSpaceBitangent, outputBitangent);
             sign = VectorGetX(bitangentDot) < 0.0f ? -1.0f : 1.0f;

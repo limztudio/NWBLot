@@ -57,14 +57,14 @@ int Run(const int argc, char** argv){
 
         if(!inputArgument.empty()){
             const AString inputPathText(inputArgument.data(), inputArgument.size());
-            inputPaths.push_back(PathFromUtf8(inputPathText));
+            inputPaths.push_back(Path(UtilityDetail::Arena(), inputPathText));
         }
         else if(!cubeArguments.empty()){
             dimension = TextureDimension::TextureCube;
             inputPaths.reserve(cubeArguments.size());
             for(const AInteropString& argument : cubeArguments){
                 const AString inputPathText(argument.data(), argument.size());
-                inputPaths.push_back(PathFromUtf8(inputPathText));
+                inputPaths.push_back(Path(UtilityDetail::Arena(), inputPathText));
             }
         }
         else{
@@ -72,7 +72,7 @@ int Run(const int argc, char** argv){
             inputPaths.reserve(volumeArguments.size());
             for(const AInteropString& argument : volumeArguments){
                 const AString inputPathText(argument.data(), argument.size());
-                inputPaths.push_back(PathFromUtf8(inputPathText));
+                inputPaths.push_back(Path(UtilityDetail::Arena(), inputPathText));
             }
         }
 
@@ -110,8 +110,8 @@ int Run(const int argc, char** argv){
 
         AStringStream report;
         report
-            << "Wrote " << PathToUtf8(outputPaths.metadata) << "\n"
-            << "Wrote " << PathToUtf8(outputPaths.data) << "\n"
+            << "Wrote " << PathToGenericString<AString>(outputPaths.metadata) << "\n"
+            << "Wrote " << PathToGenericString<AString>(outputPaths.data) << "\n"
             << "  " << payload.width << "x" << payload.height
         ;
         if(payload.dimension == TextureDimension::TextureCube)

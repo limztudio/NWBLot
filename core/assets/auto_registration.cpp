@@ -4,10 +4,10 @@
 
 #include "auto_registration.h"
 #include "arena_names.h"
-#include "registration_queue.h"
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
+#include <global/auto_registration.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,40 +25,9 @@ namespace __hidden_auto_registration{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AutoRegistrationQueue<AssetCodecFactory>& QueryAutoCodecFactoryQueue(){
-    static AutoRegistrationQueue<AssetCodecFactory> queue(AssetsArenaScope::s_AutoCodecFactoryQueueArena);
+::AutoRegistrationQueue<AssetCodecFactory, AssetArena>& QueryAutoCodecFactoryQueue(){
+    static ::AutoRegistrationQueue<AssetCodecFactory, AssetArena> queue(AssetsArenaScope::s_AutoCodecFactoryQueueArena);
     return queue;
-}
-
-template<typename FactoryT>
-bool InitializeAutoFactory(AutoRegistrationQueue<FactoryT>& queue, const FactoryT factory){
-    if(factory == nullptr)
-        return true;
-
-    queue.appendUnique(factory, [](const FactoryT lhs, const FactoryT rhs){ return lhs == rhs; });
-    return true;
-}
-
-template<typename FactoryVector, typename CreateProduct, typename RegisterProduct, typename LogNullProduct, typename LogRegisterFailure>
-void RegisterFactoryProducts(
-    const FactoryVector& factories,
-    CreateProduct&& createProduct,
-    RegisterProduct&& registerProduct,
-    LogNullProduct&& logNullProduct,
-    LogRegisterFailure&& logRegisterFailure){
-    for(const auto factory : factories){
-        if(factory == nullptr)
-            continue;
-
-        auto product = createProduct(factory);
-        if(!product){
-            logNullProduct();
-            continue;
-        }
-
-        if(!registerProduct(Move(product)))
-            logRegisterFailure();
-    }
 }
 
 
@@ -72,10 +41,11 @@ void RegisterFactoryProducts(
 
 
 bool AssetCodecAutoRegistrar::initialize(){
-    return __hidden_auto_registration::InitializeAutoFactory(
+    ::RegisterAutoFactory(
         __hidden_auto_registration::QueryAutoCodecFactoryQueue(),
         m_factory
     );
+    return true;
 }
 
 void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
@@ -83,7 +53,7 @@ void RegisterAutoCollectedAssetCodecs(AssetRegistry& outRegistry){
     Vector<AssetCodecFactory, Alloc::ScratchArena> codecFactories{scratchArena};
     __hidden_auto_registration::QueryAutoCodecFactoryQueue().copyTo(codecFactories);
 
-    __hidden_auto_registration::RegisterFactoryProducts(
+    ::RegisterAutoFactoryProducts(
         codecFactories,
         [](const AssetCodecFactory factory){ return factory(); },
         [&](UniquePtr<IAssetCodec> codec){ return outRegistry.registerCodec(Move(codec)); },

@@ -10,7 +10,8 @@
 
 #include "cook_entry_registry.h"
 #include "arena_names.h"
-#include "registration_queue.h"
+
+#include <global/auto_registration.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,8 +29,8 @@ namespace __hidden_cook_entry_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AutoRegistrationQueue<CookEntryRegistrationFunction>& QueryAutoRegistrationQueue(){
-    static AutoRegistrationQueue<CookEntryRegistrationFunction> queue(AssetsArenaScope::s_AutoRegistrationQueueArena);
+::AutoRegistrationQueue<CookEntryRegistrationFunction, AssetArena>& QueryAutoRegistrationQueue(){
+    static ::AutoRegistrationQueue<CookEntryRegistrationFunction, AssetArena> queue(AssetsArenaScope::s_AutoRegistrationQueueArena);
     return queue;
 }
 
@@ -44,11 +45,7 @@ AutoRegistrationQueue<CookEntryRegistrationFunction>& QueryAutoRegistrationQueue
 
 
 CookEntryAutoRegistrar::CookEntryAutoRegistrar(const CookEntryRegistrationFunction function){
-    if(function == nullptr)
-        return;
-
-    auto& queue = __hidden_cook_entry_registry::QueryAutoRegistrationQueue();
-    queue.appendUnique(function, [](const CookEntryRegistrationFunction lhs, const CookEntryRegistrationFunction rhs){ return lhs == rhs; });
+    ::RegisterAutoFactory(__hidden_cook_entry_registry::QueryAutoRegistrationQueue(), function);
 }
 
 bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry){

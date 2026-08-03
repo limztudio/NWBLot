@@ -117,6 +117,37 @@ inline void SkipProcMapWhitespace(const AStringView line, usize& cursor)noexcept
     return true;
 }
 
+template<typename EntryVectorT>
+inline void ParseLinuxProcessMemoryMaps(const AStringView mapsText, EntryVectorT& outEntries){
+    outEntries.clear();
+
+    usize cursor = 0u;
+    AStringView line;
+    while(NextTextLine(mapsText, cursor, line)){
+        LinuxProcessMemoryMapEntry entry;
+        if(ParseLinuxProcessMemoryMapLine(line, entry))
+            outEntries.push_back(entry);
+    }
+}
+
+template<typename EntryRangeT>
+[[nodiscard]] inline bool FindLinuxProcessMemoryMapForAddress(
+    const EntryRangeT& entries,
+    const u64 address,
+    LinuxProcessMemoryMapEntry& outEntry
+){
+    for(const LinuxProcessMemoryMapEntry& entry : entries){
+        if(address < entry.begin || address >= entry.end)
+            continue;
+
+        outEntry = entry;
+        return true;
+    }
+
+    outEntry = LinuxProcessMemoryMapEntry{};
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -91,7 +91,7 @@ template<typename VisitTriangle>
 
     for(auto it = outNormals.begin(); it != outNormals.end(); ++it){
         SIMDVector normal;
-        if(!Normalize(it.value().value, normal)){
+        if(!Vector3TryNormalize(it.value().value, normal)){
             NWB_LOGGER_WARNING(NWB_TEXT("Mesh build: degenerate accumulated vertex normal left un-normalized"));
             continue;
         }
@@ -167,7 +167,7 @@ bool AppendInstanceMesh(
                     NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
                     return false;
                 }
-                if(!Normalize(foundNormal.value().value, normal)){
+                if(!Vector3TryNormalize(foundNormal.value().value, normal)){
                     NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
                     return false;
                 }
@@ -263,7 +263,7 @@ bool AppendInstanceMesh(
                 0.0f
             );
             SIMDVector normalizedFaceNormal;
-            if(!Normalize(faceNormal, normalizedFaceNormal)){
+            if(!Vector3TryNormalize(faceNormal, normalizedFaceNormal)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to regenerate mesh face normal"));
                 return false;
             }

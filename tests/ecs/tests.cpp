@@ -328,7 +328,7 @@ TEST(Ecs, DuplicateComponentAddIsStable){
 
 TEST(Ecs, ParallelEachVisitsSingleAndMultiComponentViews){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::Alloc::ThreadPool threadPool(3u, NWB::Core::Alloc::CoreAffinity::Any);
+    NWB::Core::Alloc::ThreadPool threadPool(3u, CpuAffinity::Any);
     NWB::Core::ECS::World world(arena, threadPool);
 
     static constexpr u32 s_EntityCount = 512u;
@@ -379,7 +379,7 @@ TEST(Ecs, ParallelEachVisitsSingleAndMultiComponentViews){
 
 TEST(Ecs, ParallelEachNestedInParallelForFallsBackSerial){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::Alloc::ThreadPool threadPool(3u, NWB::Core::Alloc::CoreAffinity::Any);
+    NWB::Core::Alloc::ThreadPool threadPool(3u, CpuAffinity::Any);
     NWB::Core::ECS::World world(arena, threadPool);
 
     static constexpr u32 s_EntityCount = 64u;

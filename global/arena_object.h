@@ -34,6 +34,53 @@ void DestroyArenaObject(Arena& arena, Concrete* p){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ArenaObjectDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename ArenaT, typename ValueT>
+void DestroyArenaReference(ArenaT* arena, ValueT* value)noexcept{
+    value->~ValueT();
+    arena->deallocate(value, alignof(ValueT), sizeof(ValueT));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<typename ValueT, typename ArenaT>
+struct ArenaRefDeleter{
+    ArenaT* arena = nullptr;
+
+    constexpr ArenaRefDeleter()noexcept = default;
+    constexpr explicit ArenaRefDeleter(ArenaT* value)noexcept
+        : arena(value)
+    {}
+    template<typename OtherValueT>
+    ArenaRefDeleter(const ArenaRefDeleter<OtherValueT, ArenaT>& other, typename EnableIf<IsConvertible<OtherValueT*, ValueT*>::value>::type* = 0)noexcept
+        : arena(other.arena)
+    {}
+
+    void operator()(ValueT* value)const noexcept{
+        if(value && arena){
+            using ArenaObjectDetail::DestroyArenaReference;
+            DestroyArenaReference(arena, value);
+        }
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename T, typename Arena>
 using ArenaUniquePtr = UniquePtr<T, ArenaDeleter<T, Arena>>;
 

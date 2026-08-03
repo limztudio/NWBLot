@@ -5,15 +5,9 @@
 #pragma once
 
 
-#include "global.h"
-
-#include <global/sync.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NWB_ASSETS_BEGIN
+#include "containers.h"
+#include "name.h"
+#include "sync.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -21,7 +15,7 @@ NWB_ASSETS_BEGIN
 
 // Static extension registration may run while a consumer takes a stable snapshot. Keep synchronization and duplicate
 // handling here so each extension point owns only its value semantics.
-template<typename ValueT>
+template<typename ValueT, typename ArenaT>
 class AutoRegistrationQueue final : NoCopy{
 public:
     explicit AutoRegistrationQueue(const Name& arenaName)
@@ -54,15 +48,44 @@ public:
 
 private:
     Futex m_mutex;
-    AssetArena m_arena;
-    AssetVector<ValueT> m_values;
+    ArenaT m_arena;
+    Vector<ValueT, ArenaT> m_values;
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSETS_END
+template<typename QueueT, typename FactoryT>
+inline void RegisterAutoFactory(QueueT& queue, const FactoryT factory){
+    if(factory == nullptr)
+        return;
+
+    queue.appendUnique(factory, [](const FactoryT lhs, const FactoryT rhs){ return lhs == rhs; });
+}
+
+template<typename FactoryVectorT, typename CreateProductT, typename RegisterProductT, typename LogNullProductT, typename LogRegisterFailureT>
+inline void RegisterAutoFactoryProducts(
+    const FactoryVectorT& factories,
+    CreateProductT&& createProduct,
+    RegisterProductT&& registerProduct,
+    LogNullProductT&& logNullProduct,
+    LogRegisterFailureT&& logRegisterFailure
+){
+    for(const auto factory : factories){
+        if(factory == nullptr)
+            continue;
+
+        auto product = createProduct(factory);
+        if(!product){
+            logNullProduct();
+            continue;
+        }
+
+        if(!registerProduct(Move(product)))
+            logRegisterFailure();
+    }
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

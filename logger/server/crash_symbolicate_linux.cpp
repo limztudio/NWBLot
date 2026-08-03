@@ -78,35 +78,6 @@ struct LinuxSymbolFileCache{
     return ::ParseVariableHexU64(AStringView(line.data() + prefix + 2u, end - prefix - 2u), outAddress);
 }
 
-static void ParseLinuxProcessMemoryMaps(const AStringView mapsText, LinuxProcessMemoryMapTable& outTable){
-    outTable.entries.clear();
-
-    usize cursor = 0u;
-    AStringView line;
-    while(NextTextLine(mapsText, cursor, line)){
-        LinuxProcessMemoryMapEntry entry;
-        if(ParseLinuxProcessMemoryMapLine(line, entry))
-            outTable.entries.push_back(entry);
-    }
-}
-
-[[nodiscard]] static bool FindLinuxProcessMemoryMapForAddress(
-    const LinuxProcessMemoryMapTable& table,
-    const u64 address,
-    LinuxProcessMemoryMapEntry& outEntry
-){
-    for(const LinuxProcessMemoryMapEntry& entry : table.entries){
-        if(address < entry.begin || address >= entry.end)
-            continue;
-
-        outEntry = entry;
-        return true;
-    }
-
-    outEntry = LinuxProcessMemoryMapEntry{};
-    return false;
-}
-
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 [[nodiscard]] static bool IsUnknownSymbolLine(const AStringView line){
     const AStringView trimmed = TrimView(line);
@@ -325,7 +296,7 @@ static void AppendLinuxClientCallstack(
         u64 address = 0u;
         if(procMaps && ParseCallstackFrameAddress(trimmed, address)){
             LinuxProcessMemoryMapEntry mapEntry;
-            if(FindLinuxProcessMemoryMapForAddress(*procMaps, address, mapEntry)){
+            if(::FindLinuxProcessMemoryMapForAddress(procMaps->entries, address, mapEntry)){
                 const u64 moduleOffset = address - mapEntry.begin;
                 const AStringView modulePath = mapEntry.path.empty() ? AStringView("<anonymous>") : mapEntry.path;
                 outReport += " ";
@@ -375,7 +346,7 @@ void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, c
 
     LinuxProcessMemoryMapTable procMapTable(arena);
     if(procMapsPresent)
-        ParseLinuxProcessMemoryMaps(AStringView(procMaps.data(), procMaps.size()), procMapTable);
+        ::ParseLinuxProcessMemoryMaps(AStringView(procMaps.data(), procMaps.size()), procMapTable.entries);
     const LinuxProcessMemoryMapTable* const procMapTablePtr = procMapsPresent ? &procMapTable : nullptr;
 
     u64 instructionPointer = 0u;
@@ -398,7 +369,7 @@ void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, c
     }
 
     LinuxProcessMemoryMapEntry instructionMapEntry;
-    if(!FindLinuxProcessMemoryMapForAddress(procMapTable, instructionPointer, instructionMapEntry)){
+    if(!::FindLinuxProcessMemoryMapForAddress(procMapTable.entries, instructionPointer, instructionMapEntry)){
         outReport += "detail=instruction pointer was not found in proc maps\n";
         if(clientCallstackPresent)
             AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), procMapTablePtr, config, outReport);

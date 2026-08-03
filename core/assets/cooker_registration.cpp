@@ -4,10 +4,10 @@
 
 #include "cooker_registration.h"
 #include "arena_names.h"
-#include "registration_queue.h"
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
+#include <global/auto_registration.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,40 +25,9 @@ namespace __hidden_cooker_registration{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AutoRegistrationQueue<AssetCookerFactory>& QueryAutoCookerFactoryQueue(){
-    static AutoRegistrationQueue<AssetCookerFactory> queue(AssetsArenaScope::s_AutoCookerFactoryQueueArena);
+::AutoRegistrationQueue<AssetCookerFactory, AssetArena>& QueryAutoCookerFactoryQueue(){
+    static ::AutoRegistrationQueue<AssetCookerFactory, AssetArena> queue(AssetsArenaScope::s_AutoCookerFactoryQueueArena);
     return queue;
-}
-
-template<typename FactoryT>
-bool InitializeAutoFactory(AutoRegistrationQueue<FactoryT>& queue, const FactoryT factory){
-    if(factory == nullptr)
-        return true;
-
-    queue.appendUnique(factory, [](const FactoryT lhs, const FactoryT rhs){ return lhs == rhs; });
-    return true;
-}
-
-template<typename FactoryVector, typename CreateProduct, typename RegisterProduct, typename LogNullProduct, typename LogRegisterFailure>
-void RegisterFactoryProducts(
-    const FactoryVector& factories,
-    CreateProduct&& createProduct,
-    RegisterProduct&& registerProduct,
-    LogNullProduct&& logNullProduct,
-    LogRegisterFailure&& logRegisterFailure){
-    for(const auto factory : factories){
-        if(factory == nullptr)
-            continue;
-
-        auto product = createProduct(factory);
-        if(!product){
-            logNullProduct();
-            continue;
-        }
-
-        if(!registerProduct(Move(product)))
-            logRegisterFailure();
-    }
 }
 
 
@@ -72,10 +41,11 @@ void RegisterFactoryProducts(
 
 
 bool AssetCookerAutoRegistrar::initialize(){
-    return __hidden_cooker_registration::InitializeAutoFactory(
+    ::RegisterAutoFactory(
         __hidden_cooker_registration::QueryAutoCookerFactoryQueue(),
         m_factory
     );
+    return true;
 }
 
 
@@ -84,7 +54,7 @@ void RegisterAutoCollectedAssetCookers(AssetCookerRegistry& outRegistry, AssetAr
     Vector<AssetCookerFactory, Alloc::ScratchArena> cookerFactories{scratchArena};
     __hidden_cooker_registration::QueryAutoCookerFactoryQueue().copyTo(cookerFactories);
 
-    __hidden_cooker_registration::RegisterFactoryProducts(
+    ::RegisterAutoFactoryProducts(
         cookerFactories,
         [&](const AssetCookerFactory factory){ return factory(arena); },
         [&](UniquePtr<IAssetCooker> cooker){ return outRegistry.registerCooker(Move(cooker)); },

@@ -560,7 +560,7 @@ AString BuildVirtualBasePath(const Path& outputPath, AString virtualRoot){
     Path relativePath(outputPath.arena());
     bool foundAssets = false;
     for(const Path& part : noExtension){
-        const AString partText = ToAsciiLowerCopy(PathToUtf8(part));
+        const AString partText = ToAsciiLowerCopy(PathToGenericString<AString>(part));
         if(partText == "assets"){
             foundAssets = true;
             relativePath.clear();
@@ -576,7 +576,7 @@ AString BuildVirtualBasePath(const Path& outputPath, AString virtualRoot){
     if(!virtualPath.empty() && virtualPath.back() != '/')
         virtualPath.push_back('/');
 
-    AString relativeText = PathToUtf8(relativePath);
+    AString relativeText = PathToGenericString<AString>(relativePath);
     while(!relativeText.empty() && (relativeText.front() == '/' || relativeText.front() == '\\'))
         relativeText.erase(relativeText.begin());
     virtualPath += relativeText;

@@ -194,9 +194,6 @@ bool ParseNormalModeText(const AString& value, NormalMode::Enum& outNormalMode);
 bool ValidateNormalModeText(AString& inOutValue);
 AStringView SourceTangentModeText(SourceTangentMode::Enum mode);
 bool ParseColorText(const AString& text, Vec4& outColor);
-bool Normalize(SIMDVector value, SIMDVector& outValue);
-Path PathFromUtf8(const AString& value);
-AString PathToUtf8(const Path& path);
 Path DefaultOutputPath(const AString& inputPath);
 
 bool LoadScene(const ImportOptions& options, SceneHandle& outScene);

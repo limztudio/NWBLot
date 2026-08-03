@@ -105,22 +105,12 @@ bool ProjectTickCallback(void* userData, f32 delta){
     return updateContext->callbacks.onUpdate(delta);
 }
 
-bool HasGraphicsVolumeSegment(const Path& mountDirectory){
-    ErrorCode errorCode;
-    if(!IsDirectory(mountDirectory, errorCode) || errorCode)
-        return false;
-
-    const Path segmentPath = mountDirectory / ::MakeVolumeSegmentFileName(s_GraphicsVolumeName, 0).c_str();
-    errorCode.clear();
-    return FileExists(segmentPath, errorCode) && !errorCode;
-}
-
 Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena){
     ErrorCode errorCode;
     Path currentDirectory(arena);
     if(GetCurrentPath(currentDirectory, errorCode)){
         const Path currentResDirectory = currentDirectory / s_ResourceDirectoryName;
-        if(HasGraphicsVolumeSegment(currentResDirectory))
+        if(::VolumeSegmentExists(currentResDirectory, s_GraphicsVolumeName))
             return currentResDirectory;
     }
 
@@ -129,7 +119,7 @@ Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena){
         return Path(arena, s_ResourceDirectoryName);
 
     const Path executableResDirectory = executableDirectory / s_ResourceDirectoryName;
-    if(HasGraphicsVolumeSegment(executableResDirectory))
+    if(::VolumeSegmentExists(executableResDirectory, s_GraphicsVolumeName))
         return executableResDirectory;
 
     const Path parentDirectory = executableDirectory.parent_path();
@@ -137,7 +127,7 @@ Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena){
         return Path(arena, s_ResourceDirectoryName);
 
     const Path parentResDirectory = parentDirectory / s_ResourceDirectoryName;
-    if(HasGraphicsVolumeSegment(parentResDirectory))
+    if(::VolumeSegmentExists(parentResDirectory, s_GraphicsVolumeName))
         return parentResDirectory;
 
     return Path(arena, s_ResourceDirectoryName);

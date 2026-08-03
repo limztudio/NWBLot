@@ -14,11 +14,16 @@
 #include <climits>
 #include <ctime>
 
-#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+#if defined(NWB_PLATFORM_WINDOWS)
+#include <windows.h>
+#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
 #include <fcntl.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#endif
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 #include <poll.h>
 #include <signal.h>
-#include <sys/wait.h>
 #endif
 #if !defined(NWB_PLATFORM_WINDOWS)
 #include <unistd.h>
@@ -34,12 +39,83 @@ namespace ProcessExecutionDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_PLATFORM_WINDOWS)
+template<typename StringT>
+inline void AppendWindowsCommandLineArgument(StringT& inOutCommand, const AStringView value){
+    if(!inOutCommand.empty())
+        inOutCommand += ' ';
+
+    bool needsQuotes = value.empty();
+    for(const char ch : value){
+        if(ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '"'){
+            needsQuotes = true;
+            break;
+        }
+    }
+
+    if(!needsQuotes){
+        inOutCommand.append(value.data(), value.size());
+        return;
+    }
+
+    inOutCommand += '"';
+    usize backslashCount = 0u;
+    for(const char ch : value){
+        if(ch == '\\'){
+            ++backslashCount;
+            continue;
+        }
+
+        if(ch == '"'){
+            for(usize i = 0u; i < backslashCount * 2u + 1u; ++i)
+                inOutCommand += '\\';
+            inOutCommand += '"';
+            backslashCount = 0u;
+            continue;
+        }
+
+        for(usize i = 0u; i < backslashCount; ++i)
+            inOutCommand += '\\';
+        inOutCommand += ch;
+        backslashCount = 0u;
+    }
+    for(usize i = 0u; i < backslashCount * 2u; ++i)
+        inOutCommand += '\\';
+    inOutCommand += '"';
+}
+#endif
+
+#if defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+inline constexpr int s_ProcessSignalExitCodeBase = 128;
+inline constexpr int s_ExecFailureExitCode = 127;
+inline constexpr mode_t s_RedirectedOutputFileMode = 0666;
+
+[[nodiscard]] inline int WaitForProcessExitCode(const pid_t childPid)noexcept{
+    int status = 0;
+    pid_t waitedPid = -1;
+    do{
+        waitedPid = ::waitpid(childPid, &status, 0);
+    }while(waitedPid < 0 && errno == EINTR);
+
+    if(waitedPid != childPid)
+        return -1;
+    if(WIFEXITED(status))
+        return WEXITSTATUS(status);
+    if(WIFSIGNALED(status))
+        return s_ProcessSignalExitCodeBase + WTERMSIG(status);
+    return -1;
+}
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 inline constexpr usize s_DefaultCaptureProcessOutputTimeoutMilliseconds = 3000u;
 inline constexpr u64 s_MillisecondsPerSecond = 1000u;
 inline constexpr u64 s_NanosecondsPerMillisecond = 1000000u;
 inline constexpr int s_ProcessPollSleepMilliseconds = 1;
-inline constexpr int s_ExecFailureExitCode = 127;
 inline constexpr usize s_DefaultCaptureOutputMaxBytes = 8192u;
 inline constexpr usize s_CaptureReadBufferBytes = 256u;
 
@@ -170,6 +246,111 @@ template<typename ArenaT>
     }
 
     return false;
+}
+
+template<typename ArenaT>
+[[nodiscard]] inline int RunProcessRedirectedToFile(
+    ArenaT& arena,
+    const char* const* argv,
+    const char* const outputPath,
+    bool* const outExitCodeQueryFailed = nullptr
+){
+    if(outExitCodeQueryFailed)
+        *outExitCodeQueryFailed = false;
+    if(!argv || !argv[0] || !outputPath)
+        return -1;
+
+#if defined(NWB_PLATFORM_WINDOWS)
+    SECURITY_ATTRIBUTES securityAttributes = {};
+    securityAttributes.nLength = sizeof(securityAttributes);
+    securityAttributes.bInheritHandle = TRUE;
+
+    HANDLE outputHandle = CreateFileA(
+        outputPath,
+        GENERIC_WRITE,
+        FILE_SHARE_READ,
+        &securityAttributes,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr
+    );
+    if(outputHandle == INVALID_HANDLE_VALUE)
+        return -1;
+
+    AString<ArenaT> commandLine{arena};
+    for(const char* const* argument = argv; *argument; ++argument)
+        ProcessExecutionDetail::AppendWindowsCommandLineArgument(commandLine, AStringView(*argument));
+
+    STARTUPINFOA startupInfo = {};
+    startupInfo.cb = sizeof(startupInfo);
+    startupInfo.dwFlags = STARTF_USESTDHANDLES;
+    startupInfo.hStdOutput = outputHandle;
+    startupInfo.hStdError = outputHandle;
+    startupInfo.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+
+    PROCESS_INFORMATION processInfo = {};
+    const BOOL created = CreateProcessA(
+        argv[0],
+        commandLine.data(),
+        nullptr,
+        nullptr,
+        TRUE,
+        CREATE_NO_WINDOW,
+        nullptr,
+        nullptr,
+        &startupInfo,
+        &processInfo
+    );
+    CloseHandle(outputHandle);
+    if(!created)
+        return -1;
+
+    WaitForSingleObject(processInfo.hProcess, INFINITE);
+    DWORD exitCode = 1u;
+    if(!GetExitCodeProcess(processInfo.hProcess, &exitCode) && outExitCodeQueryFailed)
+        *outExitCodeQueryFailed = true;
+    CloseHandle(processInfo.hThread);
+    CloseHandle(processInfo.hProcess);
+    return static_cast<int>(exitCode);
+#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+    static_cast<void>(arena);
+
+    const int outputFileDescriptor = ::open(
+        outputPath,
+        O_CREAT | O_TRUNC | O_WRONLY,
+        ProcessExecutionDetail::s_RedirectedOutputFileMode
+    );
+    if(outputFileDescriptor < 0)
+        return -1;
+
+    const pid_t childPid = ::fork();
+    if(childPid < 0){
+        const int closeResult = ::close(outputFileDescriptor);
+        if(closeResult != 0)
+            return -1;
+        return -1;
+    }
+
+    if(childPid == 0){
+        if(::dup2(outputFileDescriptor, STDOUT_FILENO) < 0)
+            _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
+        if(::dup2(outputFileDescriptor, STDERR_FILENO) < 0)
+            _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
+        if(::close(outputFileDescriptor) != 0)
+            _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
+        ::execvp(argv[0], const_cast<char* const*>(argv));
+        _exit(ProcessExecutionDetail::s_ExecFailureExitCode);
+    }
+
+    const int closeParentResult = ::close(outputFileDescriptor);
+    const int exitCode = ProcessExecutionDetail::WaitForProcessExitCode(childPid);
+    if(closeParentResult != 0)
+        return -1;
+    return exitCode;
+#else
+    static_cast<void>(arena);
+    return -1;
+#endif
 }
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)

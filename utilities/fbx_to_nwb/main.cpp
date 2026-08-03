@@ -6,6 +6,7 @@
 
 #include <core/common/application_entry.h>
 #include <core/common/module.h>
+#include <global/cpu_topology.h>
 #include <logger/client/logger.h>
 
 
@@ -26,9 +27,9 @@ int Run(const int argc, char** argv){
     }
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
 
-    const u32 coreCount = NWB::Core::Alloc::QueryCoreCount(NWB::Core::Alloc::CoreAffinity::Any);
+    const u32 coreCount = ::QueryCpuCoreCount(CpuAffinity::Any);
     const u32 workerCount = coreCount > 1u ? coreCount - 1u : 0u;
-    NWB::Core::Alloc::ThreadPool threadPool(workerCount, NWB::Core::Alloc::CoreAffinity::Any);
+    NWB::Core::Alloc::ThreadPool threadPool(workerCount, CpuAffinity::Any);
 
     bool prompted = false;
     const int result = NWB::FbxToNwb::Run(argc, argv, threadPool, prompted);

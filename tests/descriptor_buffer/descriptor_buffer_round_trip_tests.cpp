@@ -74,7 +74,7 @@ public:
     HeadlessGraphicsScope()
         : m_objectArena(s_TestArenaName)
         , m_allocator(m_objectArena)
-        , m_threadPool(s_TestWorkerThreadCount, Alloc::CoreAffinity::Any)
+        , m_threadPool(s_TestWorkerThreadCount, CpuAffinity::Any)
         , m_jobSystem(m_threadPool)
         , m_gpuTiming(m_objectArena)
         , m_graphics(m_allocator, m_threadPool, m_jobSystem, m_gpuTiming)
@@ -4964,3 +4964,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

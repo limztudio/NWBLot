@@ -128,7 +128,7 @@ public:
     {
         reserveDefaultNodes(threadCount);
     }
-    inline explicit JobSystem(u32 threadCount, CoreAffinity::Enum affinity, usize arenaSize = 0)
+    inline explicit JobSystem(u32 threadCount, CpuAffinity::Enum affinity, usize arenaSize = 0)
         : m_ownedPool(MakeUnique<ThreadPool>(threadCount, affinity, arenaSize))
         , m_pool(*m_ownedPool)
         , m_arena(ArenaScope::s_JobSystem, resolveArenaSize(threadCount, arenaSize))

@@ -11,9 +11,9 @@
 #include "volume_prepare_registry.h"
 
 #include "arena_names.h"
-#include <core/assets/registration_queue.h>
 
 #include <core/common/log.h>
+#include <global/auto_registration.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,8 +31,8 @@ namespace __hidden_asset_volume_prepare_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Assets::AutoRegistrationQueue<AssetsVolumeCookDetail::AssetVolumePrepareFunction>& QueryAutoPrepareQueue(){
-    static Core::Assets::AutoRegistrationQueue<AssetsVolumeCookDetail::AssetVolumePrepareFunction> queue(
+::AutoRegistrationQueue<AssetsVolumeCookDetail::AssetVolumePrepareFunction, Core::Assets::AssetArena>& QueryAutoPrepareQueue(){
+    static ::AutoRegistrationQueue<AssetsVolumeCookDetail::AssetVolumePrepareFunction, Core::Assets::AssetArena> queue(
         AssetsVolumeArenaScope::s_PrepareQueueArena
     );
     return queue;
@@ -55,11 +55,7 @@ namespace AssetsVolumeCookDetail{
 
 
 AssetVolumePrepareAutoRegistrar::AssetVolumePrepareAutoRegistrar(const AssetVolumePrepareFunction function){
-    if(function == nullptr)
-        return;
-
-    auto& queue = __hidden_asset_volume_prepare_registry::QueryAutoPrepareQueue();
-    queue.appendUnique(function, [](const AssetVolumePrepareFunction lhs, const AssetVolumePrepareFunction rhs){ return lhs == rhs; });
+    ::RegisterAutoFactory(__hidden_asset_volume_prepare_registry::QueryAutoPrepareQueue(), function);
 }
 
 bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& context){

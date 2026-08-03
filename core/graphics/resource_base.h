@@ -47,8 +47,8 @@ NWB_INLINE bool operator!=(const Object& lhs, const Object& rhs)noexcept{ return
 
 
 class GraphicsResource : public Alloc::ITaskScheduler{
-    template<typename, typename> friend struct Alloc::ArenaRefDeleter;
-    template<typename Arena, typename T> friend void Alloc::AllocDetail::DestroyArenaReference(Arena* arena, T* p)noexcept;
+    template<typename, typename> friend struct ::ArenaRefDeleter;
+    template<typename ArenaT, typename ValueT> friend void ::ArenaObjectDetail::DestroyArenaReference(ArenaT* arena, ValueT* value)noexcept;
 
 
 protected:

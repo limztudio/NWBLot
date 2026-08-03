@@ -213,7 +213,7 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
     };
 
     for(usize segmentIndex = 0;; ++segmentIndex){
-        const Path currentPath = fromDirectory / ::MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str();
+        const Path currentPath = ::MakeVolumeSegmentPath(fromDirectory, volumeName, segmentIndex);
         const bool exists = FileExists(currentPath, errorCode);
         if(errorCode){
             NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to query volume segment '{}': {}")
@@ -286,9 +286,8 @@ static bool MoveStagedVolumeSegments(const Path& fromDirectory, const Path& toDi
     }
 
     for(usize segmentIndex = 0; segmentIndex < segmentCount; ++segmentIndex){
-        const Path fileName(fromDirectory.arena(), ::MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str());
-        const Path sourcePath = fromDirectory / fileName;
-        const Path destinationPath = toDirectory / fileName;
+        const Path sourcePath = ::MakeVolumeSegmentPath(fromDirectory, volumeName, segmentIndex);
+        const Path destinationPath = ::MakeVolumeSegmentPath(toDirectory, volumeName, segmentIndex);
         if(!RenamePath(sourcePath, destinationPath, errorCode)){
             NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to promote staged segment '{}' to '{}': {}")
                 , PathToString<tchar>(sourcePath)
@@ -308,7 +307,7 @@ static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, 
     ErrorCode errorCode;
 
     for(usize segmentIndex = 0; segmentIndex < segmentCount; ++segmentIndex){
-        const Path segmentPath = outputDirectory / ::MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str();
+        const Path segmentPath = ::MakeVolumeSegmentPath(outputDirectory, volumeName, segmentIndex);
         errorCode.clear();
         if(!RemoveFile(segmentPath, errorCode)){
             NWB_LOGGER_WARNING(NWB_TEXT("Filesystem volume publish: failed to remove promoted segment '{}' after failed promotion: {}")
@@ -372,7 +371,7 @@ bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView
     }
 
     for(usize segmentIndex = 0;; ++segmentIndex){
-        const Path hashedPath = outputDirectory / ::MakeVolumeSegmentFileName(volumeName, segmentIndex).c_str();
+        const Path hashedPath = ::MakeVolumeSegmentPath(outputDirectory, volumeName, segmentIndex);
 
         const bool exists = FileExists(hashedPath, errorCode);
         if(errorCode){

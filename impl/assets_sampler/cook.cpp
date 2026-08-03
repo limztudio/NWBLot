@@ -36,7 +36,6 @@ namespace __hidden_sampler_cook{
 using namespace Core::Metascript;
 
 static constexpr AStringView s_DiagnosticPrefix = "Sampler meta";
-static constexpr AStringView s_VersionField = "version";
 static constexpr AStringView s_MinFilterField = "min_filter";
 static constexpr AStringView s_MagFilterField = "mag_filter";
 static constexpr AStringView s_MipFilterField = "mip_filter";
@@ -325,7 +324,6 @@ bool ParseSamplerCookMetadata(
         asset,
         s_DiagnosticPrefix,
         {
-            s_VersionField,
             s_MinFilterField,
             s_MagFilterField,
             s_MipFilterField,
@@ -340,16 +338,6 @@ bool ParseSamplerCookMetadata(
     ))
         return false;
 
-    const Value* const version = asset.findField(s_VersionField);
-    if(!version || !version->isInteger() || version->asInteger() != SamplerBinaryPayload::s_SamplerVersion){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be {}")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(s_VersionField)
-            , SamplerBinaryPayload::s_SamplerVersion
-        );
-        return false;
-    }
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, outEntry.virtualPath, scratchArena))
         return false;
 

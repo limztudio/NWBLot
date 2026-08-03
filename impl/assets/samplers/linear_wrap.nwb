@@ -1,6 +1,5 @@
 sampler asset;
 
-asset.version = 1;
 asset.min_filter = "linear";
 asset.mag_filter = "linear";
 asset.mip_filter = "linear";

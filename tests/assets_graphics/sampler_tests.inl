@@ -4,7 +4,6 @@
 
 static constexpr AStringView s_SamplerTestMetadata =
     "sampler asset;\n\n"
-    "asset.version = 1;\n"
     "asset.min_filter = \"nearest\";\n"
     "asset.mag_filter = \"linear\";\n"
     "asset.mip_filter = \"nearest\";\n"
@@ -100,4 +99,35 @@ TEST(AssetsGraphics, SamplerCookerBuildsSamplerAsset){
     ErrorCode errorCode;
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
     EXPECT_EQ(logger.errorCount(), 0u);
+}
+
+TEST(AssetsGraphics, SamplerCookerRejectsDeprecatedVersionMetadata){
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    AString metadata(s_SamplerTestMetadata);
+    const usize firstFieldPosition = metadata.find("asset.min_filter");
+    ASSERT_NE(firstFieldPosition, AString::npos);
+    metadata.replace(firstFieldPosition, 0u, "asset.version = 1;\n");
+
+    NWB::Core::Metascript::Document document(testArena.arena);
+    ASSERT_TRUE(document.parse(AStringView(metadata.data(), metadata.size())));
+
+    const Path assetRoot = AssetsGraphicsTestCaseRoot(testArena, "sampler_unsupported_metadata") / "assets";
+    const Path metadataPath = assetRoot / "samplers" / "linear_clamp.nwb";
+    NWB::Impl::SamplerCookEntry entry(testArena.arena);
+    NWB::Core::Alloc::ScratchArena scratchArena(s_CodecScratchArena);
+    EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(
+        assetRoot,
+        "project",
+        metadataPath,
+        document,
+        entry,
+        scratchArena
+    ));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'version'")));
+#else
+#endif
 }

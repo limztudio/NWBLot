@@ -1,6 +1,5 @@
 sampler asset;
 
-asset.version = 1;
 asset.min_filter = "nearest";
 asset.mag_filter = "nearest";
 asset.mip_filter = "nearest";

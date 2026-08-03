@@ -858,6 +858,14 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
         return false;
 
+    // CSG receiver ranges are addressed by material-pass instance index.  A CSG-active material pass reserves one
+    // range for every compatible renderer, not only the renderers that receive CSG clipping, so the complete
+    // renderer view is the safe prepass capacity bound for either material pass.
+    const usize csgReceiverRangeCount = hasCsgFrameWork
+        ? m_world.view<RendererComponent>().candidateCount()
+        : 0u
+    ;
+
     if(!m_materialSystem.prepareMaterialPassResources(
         deferredTargets.framebuffer.get(),
         MaterialPipelinePass::Opaque,
@@ -882,6 +890,17 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
             false,
             m_preparedCsgFrameState,
             nullptr
+        )
+    )
+        return false;
+
+    // All material passes have now established their shared frame buffers.  Create CSG resources once from this
+    // renderer-owned prepass so draw paths only consume the prepared layouts and handles.
+    if(
+        hasCsgFrameWork
+        && !m_csgSystem.prepareCsgFrameResources(
+            csgReceiverRangeCount,
+            static_cast<usize>(m_preparedCsgFrameState.cutterCount)
         )
     )
         return false;

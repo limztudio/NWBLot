@@ -308,6 +308,7 @@ template<typename ParameterT>
 CsgShapeRegistry::CsgShapeRegistry(Core::Alloc::GlobalArena& arena)
     : m_shapeTypes(arena)
     , m_shapeTypeIds(0, Hasher<Name>(), EqualTo<Name>(), arena)
+    , m_shapeTypeIndices(0, Hasher<CsgShapeTypeId>(), EqualTo<CsgShapeTypeId>(), arena)
 {}
 
 
@@ -315,6 +316,12 @@ bool CsgShapeRegistry::registerShapeType(const CsgShapeTypeDesc& desc, CsgShapeT
     outTypeId = s_InvalidCsgShapeTypeId;
     if(!__hidden_shape_registry::ValidShapeTypeDesc(desc))
         return false;
+
+    const CsgShapeTypeId canonicalId = CsgShapeTypeIdFromName(desc.name);
+    if(!__hidden_shape_registry::ValidShapeTypeId(canonicalId)){
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: rejected shape type '{}' with invalid canonical GPU id"), StringConvert(desc.name.c_str()));
+        return false;
+    }
 
     ScopedLock lock(m_mutex);
 
@@ -326,12 +333,19 @@ bool CsgShapeRegistry::registerShapeType(const CsgShapeTypeDesc& desc, CsgShapeT
         }
 
         NWB_ASSERT(__hidden_shape_registry::ValidShapeTypeId(found.value()));
-        NWB_ASSERT(static_cast<usize>(found.value() - 1u) < m_shapeTypes.size());
+        NWB_ASSERT(found.value() == canonicalId);
+        NWB_ASSERT(m_shapeTypeIndices.find(found.value()) != m_shapeTypeIndices.end());
     }
 
     if(found != m_shapeTypeIds.end()){
         const CsgShapeTypeId existingId = found.value();
-        CsgShapeTypeInfo& shapeType = m_shapeTypes[static_cast<usize>(existingId - 1u)];
+        const auto foundIndex = m_shapeTypeIndices.find(existingId);
+        if(foundIndex == m_shapeTypeIndices.end()){
+            NWB_ASSERT(false);
+            return false;
+        }
+
+        CsgShapeTypeInfo& shapeType = m_shapeTypes[foundIndex.value()];
         shapeType.desc = desc;
         ++m_revision;
         outTypeId = existingId;
@@ -343,9 +357,21 @@ bool CsgShapeRegistry::registerShapeType(const CsgShapeTypeDesc& desc, CsgShapeT
         return false;
     }
 
-    const CsgShapeTypeId id = static_cast<CsgShapeTypeId>(m_shapeTypes.size()) + 1u;
+    const auto foundCanonicalId = m_shapeTypeIndices.find(canonicalId);
+    if(foundCanonicalId != m_shapeTypeIndices.end()){
+        const CsgShapeTypeInfo& conflictingShapeType = m_shapeTypes[foundCanonicalId.value()];
+        NWB_LOGGER_ERROR(NWB_TEXT("CsgShapeRegistry: shape types '{}' and '{}' collide on canonical GPU id {}")
+            , StringConvert(conflictingShapeType.desc.name.c_str())
+            , StringConvert(desc.name.c_str())
+            , canonicalId
+        );
+        return false;
+    }
+
+    const CsgShapeTypeId id = canonicalId;
     m_shapeTypes.push_back(CsgShapeTypeInfo{ id, desc });
     m_shapeTypeIds.emplace(desc.name, id);
+    m_shapeTypeIndices.emplace(id, m_shapeTypes.size() - 1u);
     ++m_revision;
     outTypeId = id;
     return true;
@@ -470,11 +496,11 @@ bool CsgShapeRegistry::shapeTypeById(const CsgShapeTypeId typeId, CsgShapeTypeIn
     if(!__hidden_shape_registry::ValidShapeTypeId(typeId))
         return false;
 
-    const usize index = static_cast<usize>(typeId - 1u);
-    if(index >= m_shapeTypes.size())
+    const auto foundIndex = m_shapeTypeIndices.find(typeId);
+    if(foundIndex == m_shapeTypeIndices.end())
         return false;
 
-    outShapeType = m_shapeTypes[index];
+    outShapeType = m_shapeTypes[foundIndex.value()];
     return true;
 }
 

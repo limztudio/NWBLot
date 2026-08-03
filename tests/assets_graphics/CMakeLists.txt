@@ -3,6 +3,7 @@ target_sources(nwb_assets_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/acceptance_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/caustic_refract_tests.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/csg_cook_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/codec_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/material_cook_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/material_tests.inl"
@@ -27,6 +28,7 @@ nwb_target_link_libraries_whole_archive(nwb_assets_graphics_tests
     nwb_assets_graphics_cook
 )
 target_link_libraries(nwb_assets_graphics_tests PRIVATE
+    nwb_ecs_csg
     nwb_assets_cook
     nwb_shader_archive
     nwb_graphics

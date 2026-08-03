@@ -74,6 +74,20 @@ TEST(EcsGraphics, RuntimeResourceNameBuilderMatchesFormattedSuffix){
     EXPECT_EQ(builtName, formattedName);
 }
 
+TEST(EcsGraphics, CsgNonFiniteReceiverBoundsDisableAabbCulling){
+    NWB::Impl::CsgReceiverCpuBounds posedReceiverBounds;
+    posedReceiverBounds.minBounds = Float3Int(-1.0f, -1.0f, -1.0f, NWB::Impl::s_CsgBoundsValidFlag);
+    posedReceiverBounds.maxBounds = Float3Int(1.0f, 1.0f, 1.0f, 0);
+
+    EXPECT_TRUE(posedReceiverBounds.valid());
+    EXPECT_FALSE(posedReceiverBounds.finite());
+    EXPECT_FALSE(NWB::Impl::CsgReceiverBoundsCanCull(posedReceiverBounds));
+
+    posedReceiverBounds.minBounds.w |= NWB::Impl::s_CsgBoundsFiniteFlag;
+    EXPECT_TRUE(posedReceiverBounds.finite());
+    EXPECT_TRUE(NWB::Impl::CsgReceiverBoundsCanCull(posedReceiverBounds));
+}
+
 
 using TestWorld = NWB::Tests::EcsTestWorld;
 

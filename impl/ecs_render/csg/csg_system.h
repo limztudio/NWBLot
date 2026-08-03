@@ -44,7 +44,9 @@ public:
     [[nodiscard]] bool createCsgIntervalSampleStateBuffer();
     [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);
     [[nodiscard]] bool reserveCsgCutterBufferCapacity(usize cutterCount);
-    [[nodiscard]] bool prepareCsgFrameBuffers(const CsgFrameGpuData& csgFrameData);
+    // Renderer preparation owns CSG buffer growth and descriptor registration.  Material/draw paths only verify and
+    // consume these resources after this prepass has completed.
+    [[nodiscard]] bool prepareCsgFrameResources(usize receiverRangeCount, usize cutterCount);
     [[nodiscard]] bool csgFrameBuffersReady(const CsgFrameGpuData& csgFrameData)const;
     [[nodiscard]] bool uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
     [[nodiscard]] bool uploadCsgIntervalSampleState(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);

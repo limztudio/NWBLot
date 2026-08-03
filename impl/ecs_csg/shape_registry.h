@@ -7,6 +7,8 @@
 
 #include "components.h"
 
+#include <impl/assets/csg/shape_id.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -17,9 +19,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CsgShapeTypeId = u32;
-
-inline constexpr CsgShapeTypeId s_InvalidCsgShapeTypeId = 0u;
 inline constexpr usize s_CsgShapeInlineParameterMaxBytes = sizeof(Float4) * 2u;
 
 
@@ -89,6 +88,7 @@ class CsgShapeRegistry final : NoCopy{
 private:
     using ShapeVector = Vector<CsgShapeTypeInfo, Core::Alloc::GlobalArena>;
     using ShapeIdMap = HashMap<Name, CsgShapeTypeId, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena>;
+    using ShapeIndexMap = HashMap<CsgShapeTypeId, usize, Hasher<CsgShapeTypeId>, EqualTo<CsgShapeTypeId>, Core::Alloc::GlobalArena>;
 
 
 public:
@@ -137,6 +137,7 @@ private:
     mutable Futex m_mutex;
     ShapeVector m_shapeTypes;
     ShapeIdMap m_shapeTypeIds;
+    ShapeIndexMap m_shapeTypeIndices;
     u64 m_revision = 0u;
 };
 

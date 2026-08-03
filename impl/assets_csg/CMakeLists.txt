@@ -1,4 +1,7 @@
 nwb_declare_interface_library(nwb_assets_csg)
+target_sources(nwb_assets_csg INTERFACE
+    "${CMAKE_CURRENT_LIST_DIR}/../assets/csg/shape_id.h"
+)
 
 if(NWB_BUILD_RESOURCE_COOKER)
     nwb_declare_static_library(nwb_assets_csg_cook)
@@ -8,6 +11,7 @@ if(NWB_BUILD_RESOURCE_COOKER)
     )
     target_link_libraries(nwb_assets_csg_cook PUBLIC
         nwb_assets
+        nwb_assets_csg
         nwb_metascript
         nwb_filesystem
     )

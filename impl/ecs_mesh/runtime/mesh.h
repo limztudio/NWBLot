@@ -91,12 +91,16 @@ struct RuntimeMeshBuffers{
 };
 
 inline constexpr i32 s_RuntimeMeshBoundsValidFlag = 1 << 0;
+inline constexpr i32 s_RuntimeMeshBoundsFiniteFlag = 1 << 1;
 
 struct RuntimeMeshLocalBounds{
     Float3Int minBounds = Float3Int(0.f, 0.f, 0.f, 0);
     Float3Int maxBounds = Float3Int(0.f, 0.f, 0.f, 0);
 
     [[nodiscard]] bool valid()const noexcept{ return (minBounds.w & s_RuntimeMeshBoundsValidFlag) != 0; }
+    // A valid non-finite bound is a deliberately conservative signal: consumers must retain the bounds payload for
+    // transforms but cannot use it to reject live deformed geometry.
+    [[nodiscard]] bool finite()const noexcept{ return (minBounds.w & s_RuntimeMeshBoundsFiniteFlag) != 0; }
 };
 
 static_assert(alignof(RuntimeMeshLocalBounds) >= alignof(Float4), "RuntimeMeshLocalBounds must stay SIMD-friendly");

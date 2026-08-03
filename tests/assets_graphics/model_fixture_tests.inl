@@ -305,6 +305,51 @@ TEST(AssetsGraphics, ModelBunchStaticMeshAttachmentToNamedJoint){
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 
+TEST(AssetsGraphics, ModelBunchRejectsNonAffineFourthTransformRow){
+#if defined(NWB_FINAL)
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    AString meta;
+    meta.reserve(2048u);
+    AppendTestMeta(meta, s_ModelFixtureMeshMeta);
+    AppendTestMeta(meta, R"(model model;
+
+model.static_meshes = {
+    "tool": {
+        "mesh": mesh,
+        "transform": [
+            [1, 0, 0, 0.5],
+            [0, 1, 0, 0.125],
+            [0, 0, 1, -0.25],
+            [0, 0, 0, 0],
+        ],
+    },
+};
+
+asset_bunch bunch = [
+    mesh,
+    model,
+];
+)");
+
+    TestArena testArena;
+    Path root(testArena.arena);
+    Path outputDirectory(testArena.arena);
+    EXPECT_FALSE(CookSingleGraphicsMeta(
+        AStringView(meta.data(), meta.size()),
+        "model_bunch_non_affine_fourth_transform_row",
+        "characters",
+        "model_fixture.nwb",
+        testArena,
+        root,
+        outputDirectory
+    ));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("row 3 must be the affine homogeneous row [0, 0, 0, 1]")));
+#else
+#endif
+}
+
 #if defined(NWB_FINAL)
 static bool ExpandModelBunchFixture(
     TestArena& testArena,

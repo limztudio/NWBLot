@@ -9,5 +9,6 @@ target_sources(nwb_ecs_csg PRIVATE
 )
 target_link_libraries(nwb_ecs_csg PUBLIC
     nwb_ecs
+    nwb_assets_csg
 )
 

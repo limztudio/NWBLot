@@ -94,6 +94,8 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
         return false;
     }
 
+    // The CPU cache only has bind-pose positions.  Keep these reference bounds valid for the runtime-mesh contract,
+    // but not finite: CSG must not cull a cutter against a pose that can move outside this AABB.
     StoreFloatInt(VectorSetW(minBounds, 0.0f), s_RuntimeMeshBoundsValidFlag, &instance.localBounds.minBounds);
     StoreFloatInt(VectorSetW(maxBounds, 0.0f), 0, &instance.localBounds.maxBounds);
     return true;

@@ -236,6 +236,264 @@ private:
     bool m_active = true;
 };
 
+namespace IncludeDirectiveKind{
+enum Enum : u8;
+};
+
+static bool ExtractIncludeDirective(const AStringView line, AStringView& outIncludeName, IncludeDirectiveKind::Enum& outKind);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class ScopedDirectoryCleanupGuard final : NoCopy{
+public:
+    explicit ScopedDirectoryCleanupGuard(const Path& path)noexcept
+        : m_path(path)
+    {}
+    ~ScopedDirectoryCleanupGuard(){
+        if(!m_active)
+            return;
+
+        ErrorCode errorCode;
+        if(RemoveAllIfExists(m_path, errorCode))
+            return;
+
+        if(errorCode){
+            NWB_LOGGER_WARNING(NWB_TEXT("ShaderCook: failed to remove temporary compiler source directory '{}' : {}")
+                , PathToString<tchar>(m_path)
+                , StringConvert(errorCode.message())
+            );
+        }
+        else{
+            NWB_LOGGER_WARNING(NWB_TEXT("ShaderCook: failed to remove temporary compiler source directory '{}'"), PathToString<tchar>(m_path));
+        }
+    }
+
+
+public:
+    void dismiss()noexcept{ m_active = false; }
+
+
+private:
+    const Path& m_path;
+    bool m_active = true;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static bool BuildCompilerOverlayPath(const Path& overlayRoot, const Path& absolutePath, Path& outPath){
+    outPath.clear();
+    if(!absolutePath.is_absolute())
+        return false;
+
+    const auto rootIt = absolutePath.begin();
+    if(rootIt == absolutePath.end())
+        return false;
+
+    const Path rootPath(absolutePath.arena(), (*rootIt).native());
+    const Path relativePath = absolutePath.lexically_relative(rootPath);
+    if(relativePath.empty())
+        return false;
+
+    outPath = overlayRoot / relativePath;
+    return !outPath.empty();
+}
+
+
+static bool IsCompilerDependency(const ShaderCook::CookVector<Path>& dependencies, const Path& absolutePath){
+    for(const Path& dependency : dependencies){
+        if(dependency == absolutePath)
+            return true;
+    }
+    return false;
+}
+
+
+static void RewriteAbsoluteCompilerIncludes(
+    ScratchString& inOutSource,
+    const Path& sourcePath,
+    const ShaderCook::ShaderCompilerRequest& request,
+    const Path& overlayRoot,
+    Alloc::ScratchArena& scratchArena
+){
+    ScratchString rewrittenSource{scratchArena};
+    rewrittenSource.reserve(inOutSource.size());
+
+    const AStringView sourceView(inOutSource.data(), inOutSource.size());
+    usize lineBegin = 0u;
+    while(lineBegin < sourceView.size()){
+        usize lineEnd = lineBegin;
+        while(lineEnd < sourceView.size() && sourceView[lineEnd] != '\n')
+            ++lineEnd;
+
+        const AStringView line = sourceView.substr(lineBegin, lineEnd - lineBegin);
+        AStringView includeName;
+        IncludeDirectiveKind::Enum includeKind;
+        if(!ExtractIncludeDirective(line, includeName, includeKind)){
+            rewrittenSource.append(line.data(), line.size());
+        }
+        else{
+            Path includePath(sourcePath.arena(), includeName);
+            if(!includePath.is_absolute()){
+                rewrittenSource.append(line.data(), line.size());
+            }
+            else{
+                ErrorCode errorCode;
+                const Path absoluteIncludePath = AbsolutePath(includePath, errorCode).lexically_normal();
+                Path overlayIncludePath(sourcePath.arena());
+                if(
+                    errorCode
+                    || !IsCompilerDependency(request.dependencies, absoluteIncludePath)
+                    || !BuildCompilerOverlayPath(overlayRoot, absoluteIncludePath, overlayIncludePath)
+                ){
+                    rewrittenSource.append(line.data(), line.size());
+                }
+                else{
+                    const usize includeNameOffset = line.find(includeName);
+                    if(includeNameOffset == AStringView::npos){
+                        rewrittenSource.append(line.data(), line.size());
+                    }
+                    else{
+                        const ScratchString overlayIncludeText = PathToString<char>(scratchArena, overlayIncludePath);
+                        rewrittenSource.append(line.data(), includeNameOffset);
+                        rewrittenSource += overlayIncludeText;
+                        rewrittenSource.append(
+                            line.data() + includeNameOffset + includeName.size(),
+                            line.size() - includeNameOffset - includeName.size()
+                        );
+                    }
+                }
+            }
+        }
+
+        if(lineEnd < sourceView.size())
+            rewrittenSource += '\n';
+        lineBegin = lineEnd + 1u;
+    }
+
+    inOutSource = Move(rewrittenSource);
+}
+
+
+static bool PrepareBomStrippedCompilerInputs(
+    const ShaderCook::ShaderCompilerRequest& request,
+    const Path& overlayRoot,
+    Path& outSourcePath,
+    ScratchVector<Path>& outIncludeDirectories,
+    Alloc::ScratchArena& scratchArena
+){
+    outSourcePath = request.sourcePath;
+    outIncludeDirectories.clear();
+
+    if(request.dependencies.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has no resolved source dependencies"), StringConvert(request.shaderName));
+        return false;
+    }
+
+    ScratchString sourceText{scratchArena};
+    bool hasBom = false;
+    for(const Path& dependency : request.dependencies){
+        sourceText.clear();
+        if(!ReadTextFile(dependency, sourceText)){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to read compiler input '{}' while normalizing UTF-8 BOM")
+                , PathToString<tchar>(dependency)
+            );
+            return false;
+        }
+
+        const usize sourceSize = sourceText.size();
+        StripUtf8Bom(sourceText);
+        hasBom = hasBom || sourceText.size() != sourceSize;
+    }
+
+    if(!hasBom){
+        outIncludeDirectories.reserve(request.includeDirectories.size());
+        for(const Path& includeDirectory : request.includeDirectories)
+            outIncludeDirectories.push_back(includeDirectory);
+        return true;
+    }
+
+    ErrorCode errorCode;
+    if(!EnsureEmptyDirectory(overlayRoot, errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to create temporary compiler source directory '{}' : {}")
+            , PathToString<tchar>(overlayRoot)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    // Preserve the original absolute hierarchy so nested relative includes still resolve inside the BOM-stripped overlay.
+    for(const Path& dependency : request.dependencies){
+        Path overlayDependencyPath(dependency.arena());
+        if(!BuildCompilerOverlayPath(overlayRoot, dependency, overlayDependencyPath)){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to map compiler input '{}' into the temporary source directory")
+                , PathToString<tchar>(dependency)
+            );
+            return false;
+        }
+
+        errorCode.clear();
+        if(!EnsureDirectories(overlayDependencyPath.parent_path(), errorCode)){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to create temporary compiler source parent '{}' : {}")
+                , PathToString<tchar>(overlayDependencyPath.parent_path())
+                , StringConvert(errorCode.message())
+            );
+            return false;
+        }
+
+        sourceText.clear();
+        if(!ReadTextFile(dependency, sourceText)){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to read compiler input '{}' while writing BOM-stripped source")
+                , PathToString<tchar>(dependency)
+            );
+            return false;
+        }
+        StripUtf8Bom(sourceText);
+        RewriteAbsoluteCompilerIncludes(sourceText, dependency, request, overlayRoot, scratchArena);
+        if(!WriteTextFile(overlayDependencyPath, AStringView(sourceText.data(), sourceText.size()))){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to write BOM-stripped compiler input '{}'"), PathToString<tchar>(overlayDependencyPath));
+            return false;
+        }
+    }
+
+    ErrorCode sourcePathError;
+    const Path absoluteSourcePath = AbsolutePath(request.sourcePath, sourcePathError).lexically_normal();
+    if(sourcePathError || !IsCompilerDependency(request.dependencies, absoluteSourcePath) || !BuildCompilerOverlayPath(overlayRoot, absoluteSourcePath, outSourcePath)){
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to map source '{}' into the temporary compiler source directory")
+            , PathToString<tchar>(request.sourcePath)
+        );
+        return false;
+    }
+
+    if(request.includeDirectories.size() > Limit<usize>::s_Max / 2u){
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: compiler request for '{}' has too many include directories"), StringConvert(request.shaderName));
+        return false;
+    }
+
+    outIncludeDirectories.reserve(request.includeDirectories.size() * 2u);
+    for(const Path& includeDirectory : request.includeDirectories){
+        errorCode.clear();
+        const Path absoluteIncludeDirectory = AbsolutePath(includeDirectory, errorCode).lexically_normal();
+        Path overlayIncludeDirectory(includeDirectory.arena());
+        if(errorCode || !BuildCompilerOverlayPath(overlayRoot, absoluteIncludeDirectory, overlayIncludeDirectory)){
+            NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: failed to map include directory '{}' into the temporary compiler source directory")
+                , PathToString<tchar>(includeDirectory)
+            );
+            return false;
+        }
+        outIncludeDirectories.push_back(Move(overlayIncludeDirectory));
+    }
+    for(const Path& includeDirectory : request.includeDirectories)
+        outIncludeDirectories.push_back(includeDirectory);
+
+    return true;
+}
+
+
+
 class SlangShaderCompiler final : public ShaderCook::IShaderCompiler{
 public:
     explicit SlangShaderCompiler(ShaderCook::CookArena& memoryArena)
@@ -288,16 +546,30 @@ public:
         ScopedFileCleanupGuard diagnosticsCleanup(diagnosticsPath);
 
         Alloc::ScratchArena argumentArena(AssetsShaderArenaScope::s_CompilerArgumentsArena);
+        Path compilerOverlayRoot = request.outputPath;
+        compilerOverlayRoot += ".bom_sources";
+        ScopedDirectoryCleanupGuard compilerOverlayCleanup(compilerOverlayRoot);
+        Path compilerSourcePath(request.sourcePath.arena());
+        ScratchVector<Path> compilerIncludeDirectories(argumentArena);
+        if(!PrepareBomStrippedCompilerInputs(
+            request,
+            compilerOverlayRoot,
+            compilerSourcePath,
+            compilerIncludeDirectories,
+            argumentArena
+        ))
+            return false;
+
         ScratchVector<ScratchString> arguments(argumentArena);
         arguments.reserve(
             s_BaseCompilerArgumentCount
             + s_MaxTargetProfileCapabilityCount * 2u
-            + static_cast<usize>(request.includeDirectories.size()) * 2u
+            + compilerIncludeDirectories.size() * 2u
             + static_cast<usize>(request.defineCount)
         );
         PushCompilerArgument(argumentArena, arguments, AStringView(NWB_SLANGC_EXECUTABLE));
 
-        ScratchString sourcePathText = PathToString<char>(argumentArena, request.sourcePath);
+        ScratchString sourcePathText = PathToString<char>(argumentArena, compilerSourcePath);
         arguments.push_back(Move(sourcePathText));
         PushCompilerArgument(argumentArena, arguments, "-target");
         PushCompilerArgument(argumentArena, arguments, "spirv");
@@ -320,7 +592,7 @@ public:
         PushCompilerArgument(argumentArena, arguments, request.entryPoint);
         PushCompilerArgument(argumentArena, arguments, "-stage");
         PushCompilerArgument(argumentArena, arguments, slangStage);
-        for(const Path& includeDirectory : request.includeDirectories){
+        for(const Path& includeDirectory : compilerIncludeDirectories){
             PushCompilerArgument(argumentArena, arguments, "-I");
             ScratchString includeDirectoryText = PathToString<char>(argumentArena, includeDirectory);
             arguments.push_back(Move(includeDirectoryText));

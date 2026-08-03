@@ -3,9 +3,9 @@
 
 
 #include <global/container/adaptor.h>
+#include <global/containers.h>
+#include <global/sync.h>
 
-#include <mutex>
-#include <vector>
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
 #elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_APPLE)
@@ -41,7 +41,7 @@ struct CacheSize{
             return;
 
         const DWORD elementCount = (bufferSize + sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION) - 1) / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION);
-        std::vector<SYSTEM_LOGICAL_PROCESSOR_INFORMATION> info(elementCount);
+        InteropVector<SYSTEM_LOGICAL_PROCESSOR_INFORMATION> info(elementCount);
         if(GetLogicalProcessorInformation(info.data(), &bufferSize)){
             for(DWORD i = 0, e = bufferSize / sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION); i < e; ++i){
                 if(info[i].Relationship != RelationCache)
@@ -78,10 +78,10 @@ struct CacheSize{
     }
 } static s_CacheSize;
 
-static std::once_flag s_CacheSizeOnce;
+static OnceFlag s_CacheSizeOnce;
 
 CacheSize& GetCacheSize(){
-    std::call_once(s_CacheSizeOnce, [](){
+    CallOnce(s_CacheSizeOnce, [](){
         s_CacheSize.initialize();
     });
     return s_CacheSize;

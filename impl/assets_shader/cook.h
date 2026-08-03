@@ -55,6 +55,7 @@ public:
         const ShaderMacroDefinition* defines = nullptr;
         u32 defineCount = 0;
         const CookVector<Path>& includeDirectories;
+        const CookVector<Path>& dependencies;
         const Path& sourcePath;
         const Path& outputPath;
     };

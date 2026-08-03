@@ -226,6 +226,37 @@ static constexpr AStringView s_TransformField = "transform";
         return false;
     }
 
+    if(rows.size() == 4u){
+        const Value& homogeneousRow = rows[3u];
+        if(!homogeneousRow.isList() || homogeneousRow.asList().size() != 4u){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' row 3 must have 4 numeric values")
+                , StringConvert(objectKind)
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(s_TransformField)
+            );
+            return false;
+        }
+
+        Float4 homogeneousValues;
+        for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
+            if(!ReadFloatValue(nwbFilePath, homogeneousRow.asList()[columnIndex], objectKind, s_TransformField, homogeneousValues.raw[columnIndex]))
+                return false;
+        }
+        if(
+            homogeneousValues.raw[0u] != 0.0f
+            || homogeneousValues.raw[1u] != 0.0f
+            || homogeneousValues.raw[2u] != 0.0f
+            || homogeneousValues.raw[3u] != 1.0f
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' row 3 must be the affine homogeneous row [0, 0, 0, 1]")
+                , StringConvert(objectKind)
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(s_TransformField)
+            );
+            return false;
+        }
+    }
+
     for(usize rowIndex = 0u; rowIndex < 3u; ++rowIndex){
         const Value& row = rows[rowIndex];
         if(!row.isList() || row.asList().size() != 4u){

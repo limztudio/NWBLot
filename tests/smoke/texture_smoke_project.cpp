@@ -174,3 +174,7 @@ const tchar* NWB::QueryProjectWindowTitle(){
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<__hidden_texture_smoke::TextureSmokeProject>(context);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

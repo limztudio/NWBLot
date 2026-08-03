@@ -39,6 +39,20 @@ add_test(
         "${CMAKE_CURRENT_LIST_DIR}/no_direct_std_in_tests.py"
         --self-test
 )
+add_test(
+    NAME nwb_no_direct_std_in_interop_boundaries
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_direct_std_in_interop_boundaries.py"
+        "${CMAKE_SOURCE_DIR}"
+)
+add_test(
+    NAME nwb_no_direct_std_in_interop_boundaries_self_test
+    COMMAND
+        "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/no_direct_std_in_interop_boundaries.py"
+        --self-test
+)
 
 add_subdirectory(global)
 if(TARGET nwb_crash)

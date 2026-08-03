@@ -10,6 +10,8 @@
 
 #include "cook.h"
 
+#include <impl/assets/csg/shape_id.h>
+
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 #include <global/text_utils.h>
@@ -416,14 +418,36 @@ bool AssignCsgShapeCookIds(CsgShapeCookEntryVector& csgShapeEntries){
 
     Sort(csgShapeEntries.begin(), csgShapeEntries.end(), &ShapeNameLess);
 
+    using ShapeIdNameMap = HashMap<CsgShapeTypeId, Name, Hasher<CsgShapeTypeId>, EqualTo<CsgShapeTypeId>, CookArena>;
+    CookArena& cookArena = csgShapeEntries.get_allocator().arena();
+    ShapeIdNameMap shapeIdNames(0, Hasher<CsgShapeTypeId>(), EqualTo<CsgShapeTypeId>(), cookArena);
+    shapeIdNames.reserve(csgShapeEntries.size());
+
     for(usize index = 0u; index < csgShapeEntries.size(); ++index){
-        if(index >= static_cast<usize>(Limit<u32>::s_Max)){
+        if(index >= static_cast<usize>(Limit<CsgShapeTypeId>::s_Max)){
             NWB_LOGGER_ERROR(NWB_TEXT("CSG shape cook: too many CSG shape assets"));
             return false;
         }
 
         CsgShapeCookEntry& entry = csgShapeEntries[index];
-        entry.shapeTypeId = static_cast<u32>(index) + 1u;
+        const CsgShapeTypeId shapeTypeId = CsgShapeTypeIdFromName(entry.shapeName);
+        if(shapeTypeId == s_InvalidCsgShapeTypeId){
+            NWB_LOGGER_ERROR(NWB_TEXT("CSG shape cook: shape '{}' has an invalid canonical GPU id"), StringConvert(entry.shapeName.c_str()));
+            return false;
+        }
+
+        const auto foundShapeId = shapeIdNames.find(shapeTypeId);
+        if(foundShapeId != shapeIdNames.end()){
+            NWB_LOGGER_ERROR(NWB_TEXT("CSG shape cook: shapes '{}' and '{}' collide on canonical GPU id {}")
+                , StringConvert(foundShapeId.value().c_str())
+                , StringConvert(entry.shapeName.c_str())
+                , shapeTypeId
+            );
+            return false;
+        }
+
+        shapeIdNames.emplace(shapeTypeId, entry.shapeName);
+        entry.shapeTypeId = shapeTypeId;
     }
 
     return true;
@@ -440,10 +464,11 @@ bool EmitCsgShapeModuleIncludes(
 
     outIncludeRoot.clear();
     outIncludeRoot = BuildCsgShapeIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
-    if(!PrepareIncludeRoot(outIncludeRoot))
-        return false;
-    if(csgShapeEntries.empty())
+    if(csgShapeEntries.empty()){
+        if(!PrepareIncludeRoot(outIncludeRoot))
+            return false;
         return WriteEmptyDefaultModuleInclude(outIncludeRoot);
+    }
 
     HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, ScratchArena> seenShapeNames(
         0,
@@ -459,17 +484,22 @@ bool EmitCsgShapeModuleIncludes(
         }
     }
 
-    HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, ScratchArena> seenModules(
+    HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, ScratchArena> validatedModules(
         0,
         Hasher<NameHash>(),
         EqualTo<NameHash>(),
         scratchArena
     );
-    seenModules.reserve(csgShapeEntries.size());
+    validatedModules.reserve(csgShapeEntries.size());
 
-    ScratchString scratchSource(scratchArena);
+    using GeneratedIncludeOwnerMap = HashMap<ScratchString, Name, Hasher<ScratchString>, EqualTo<ScratchString>, ScratchArena>;
+    GeneratedIncludeOwnerMap generatedIncludeOwners(0, Hasher<ScratchString>(), EqualTo<ScratchString>(), scratchArena);
+    generatedIncludeOwners.reserve(csgShapeEntries.size());
+
+    // Preflight every output path before clearing or writing the generated include tree.  A later module must never
+    // be able to overwrite a generated include emitted for an earlier, unrelated module.
     for(const CsgShapeCookEntry& moduleEntry : csgShapeEntries){
-        if(!seenModules.insert(moduleEntry.shaderModule.hash()).second)
+        if(!validatedModules.insert(moduleEntry.shaderModule.hash()).second)
             continue;
 
         for(const CsgShapeCookEntry& entry : csgShapeEntries){
@@ -485,6 +515,38 @@ bool EmitCsgShapeModuleIncludes(
             );
             return false;
         }
+
+        ScratchString canonicalModuleInclude(moduleEntry.moduleInclude, scratchArena);
+        CanonicalizeTextInPlace(canonicalModuleInclude);
+        const auto generatedIncludeOwner = generatedIncludeOwners.try_emplace(
+            Move(canonicalModuleInclude),
+            moduleEntry.shaderModule
+        );
+        if(!generatedIncludeOwner.second && generatedIncludeOwner.first.value() != moduleEntry.shaderModule){
+            NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: generated include '{}' is shared by modules '{}' and '{}'")
+                , StringConvert(moduleEntry.moduleInclude)
+                , StringConvert(generatedIncludeOwner.first.value().c_str())
+                , StringConvert(moduleEntry.shaderModule.c_str())
+            );
+            return false;
+        }
+    }
+
+    if(!PrepareIncludeRoot(outIncludeRoot))
+        return false;
+
+    HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, ScratchArena> emittedModules(
+        0,
+        Hasher<NameHash>(),
+        EqualTo<NameHash>(),
+        scratchArena
+    );
+    emittedModules.reserve(csgShapeEntries.size());
+
+    ScratchString scratchSource(scratchArena);
+    for(const CsgShapeCookEntry& moduleEntry : csgShapeEntries){
+        if(!emittedModules.insert(moduleEntry.shaderModule.hash()).second)
+            continue;
 
         if(!WriteModuleInclude(csgShapeEntries, moduleEntry.shaderModule, moduleEntry.moduleInclude, outIncludeRoot, scratchSource))
             return false;

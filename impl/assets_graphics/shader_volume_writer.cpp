@@ -152,6 +152,7 @@ static bool GetVariantBytecode(
     const AStringView variantName,
     const ShaderCook::DefineCombo& defineCombo,
     const ShaderCook::CookVector<Path>& includeDirectories,
+    const ShaderCook::CookVector<Path>& dependencies,
     const Path& sourcePath,
     const VariantCachePaths& cachePaths,
     const AStringView sourceChecksumHex,
@@ -240,6 +241,7 @@ static bool GetVariantBytecode(
         compileDefines.data(),
         static_cast<u32>(compileDefines.size()),
         includeDirectories,
+        dependencies,
         sourcePath,
         cachePaths.bytecodePath
     };
@@ -402,6 +404,7 @@ bool AppendPreparedShadersToManifest(
                 generatedVariantName,
                 defineCombo,
                 preparedEntry.includeDirectories,
+                preparedEntry.dependencies,
                 preparedEntry.sourcePath,
                 cachePaths,
                 sourceChecksumHex,

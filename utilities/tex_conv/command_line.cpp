@@ -21,8 +21,8 @@ NWB_TEX_CONV_BEGIN
 int Run(const int argc, char** argv){
     AInteropString inputArgument;
     AInteropString outputArgument;
-    std::vector<AInteropString> cubeArguments;
-    std::vector<AInteropString> volumeArguments;
+    InteropVector<AInteropString> cubeArguments;
+    InteropVector<AInteropString> volumeArguments;
     bool force = false;
     bool linear = false;
 

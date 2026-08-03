@@ -565,7 +565,9 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
     NWB_ASSERT(desc.localBounds.valid());
     createdMesh.csgLocalBounds.minBounds = desc.localBounds.minBounds;
     createdMesh.csgLocalBounds.maxBounds = desc.localBounds.maxBounds;
-    createdMesh.csgLocalBounds.minBounds.w = s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag;
+    createdMesh.csgLocalBounds.minBounds.w = s_CsgBoundsValidFlag;
+    if(desc.localBounds.finite())
+        createdMesh.csgLocalBounds.minBounds.w |= s_CsgBoundsFiniteFlag;
     createdMesh.csgLocalBounds.maxBounds.w = 0;
     if((createdMesh.meshletPrimitiveIndexCount % s_MeshletTriangleIndexCount) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' has {} primitive-index bytes, which cannot form triangles")

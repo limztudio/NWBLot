@@ -32,6 +32,80 @@ using TextWrite::s_OutputFloatPrecision;
 static constexpr f32 s_InvertibleJointDeterminantEpsilon = 0.000000000001f;
 static constexpr usize s_PositionSkinKeySkinShiftBits = 32u;
 
+
+// Keep every generated metadata file canonical even when the converter runs on a non-Windows host.  The writers below
+// stream potentially large mesh payloads directly to disk, so normalize text at this one output boundary rather than
+// accumulating a second full copy of each asset just to replace line endings afterwards.
+class NwbTextOutputStream final : NoCopy{
+public:
+    explicit NwbTextOutputStream(BasicOutputFileStream<char>& stream)noexcept
+        : m_stream(stream)
+    {}
+
+
+public:
+    template<usize Length>
+    NwbTextOutputStream& operator<<(const char (&text)[Length]){
+        writeText(AStringView(text, Length - 1u));
+        return *this;
+    }
+
+    NwbTextOutputStream& operator<<(const char* text){
+        if(text)
+            writeText(AStringView(text));
+        return *this;
+    }
+
+    NwbTextOutputStream& operator<<(const AStringView text){
+        writeText(text);
+        return *this;
+    }
+
+    NwbTextOutputStream& operator<<(const AString& text){
+        writeText(AStringView(text.data(), text.size()));
+        return *this;
+    }
+
+    template<typename T>
+    NwbTextOutputStream& operator<<(const T& value){
+        m_stream << value;
+        return *this;
+    }
+
+    void precision(const StreamSize precision){ m_stream.precision(precision); }
+
+    [[nodiscard]] explicit operator bool()const{ return static_cast<bool>(m_stream); }
+    [[nodiscard]] bool operator!()const{ return !m_stream; }
+
+
+private:
+    void writeText(const AStringView text){
+        const char* const data = text.data();
+        usize chunkBegin = 0u;
+        for(usize i = 0u; i < text.size(); ++i){
+            const char character = data[i];
+            if(character != '\r' && character != '\n')
+                continue;
+
+            if(i > chunkBegin)
+                m_stream.write(data + chunkBegin, static_cast<StreamSize>(i - chunkBegin));
+
+            if(character == '\r' && i + 1u < text.size() && data[i + 1u] == '\n')
+                ++i;
+            m_stream.write("\r\n", 2);
+            chunkBegin = i + 1u;
+        }
+
+        if(chunkBegin < text.size())
+            m_stream.write(data + chunkBegin, static_cast<StreamSize>(text.size() - chunkBegin));
+    }
+
+
+private:
+    BasicOutputFileStream<char>& m_stream;
+};
+
+
 template<typename Stream>
 void WriteSkinJoints(Stream& out, const MeshSkinInfluence& skin){
     out << "[";
@@ -497,11 +571,12 @@ bool WriteMeshAsset(const Path& outputPath, const SourceMeshStreams& mesh){
     if(!EnsureOutputDirectory(outputPath, "mesh"))
         return false;
 
-    BasicOutputFileStream<char> file(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
-    if(!file){
+    BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
+    if(!rawFile){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB mesh: failed to open output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
+    NwbTextOutputStream file(rawFile);
     file.precision(s_OutputFloatPrecision);
 
     file << "mesh asset;\n\n";
@@ -632,11 +707,12 @@ bool WriteSkeletonAsset(
     if(!EnsureOutputDirectory(outputPath, "skeleton"))
         return false;
 
-    BasicOutputFileStream<char> file(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
-    if(!file){
+    BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
+    if(!rawFile){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: failed to open output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
+    NwbTextOutputStream file(rawFile);
     file.precision(s_OutputFloatPrecision);
 
     file << "skeleton asset;\n\n";
@@ -699,11 +775,12 @@ bool WriteSkinAsset(
     if(!EnsureOutputDirectory(outputPath, "skin"))
         return false;
 
-    BasicOutputFileStream<char> file(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
-    if(!file){
+    BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
+    if(!rawFile){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skin: failed to open output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
+    NwbTextOutputStream file(rawFile);
     file.precision(s_OutputFloatPrecision);
 
     file << "skin asset;\n\n";
@@ -770,11 +847,12 @@ bool WriteModelAsset(
     if(!EnsureOutputDirectory(outputPath, "model"))
         return false;
 
-    BasicOutputFileStream<char> file(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
-    if(!file){
+    BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
+    if(!rawFile){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: failed to open output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
+    NwbTextOutputStream file(rawFile);
     file.precision(s_OutputFloatPrecision);
 
     file << "model asset;\n\n";
@@ -800,11 +878,12 @@ bool WriteAssetBunch(
     if(!EnsureOutputDirectory(outputPath, "asset bunch"))
         return false;
 
-    BasicOutputFileStream<char> file(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
-    if(!file){
+    BasicOutputFileStream<char> rawFile(outputPath, s_FileOpenBinary | s_FileOpenTruncate);
+    if(!rawFile){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset bunch: failed to open output file '{}'"), PathToString<tchar>(outputPath));
         return false;
     }
+    NwbTextOutputStream file(rawFile);
     file.precision(s_OutputFloatPrecision);
 
     file << "mesh mesh;\n\n";

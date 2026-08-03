@@ -39,6 +39,10 @@ struct CsgBoundsGpuData{
 
 using CsgReceiverCpuBounds = CsgBoundsGpuData;
 
+[[nodiscard]] inline bool CsgReceiverBoundsCanCull(const CsgReceiverCpuBounds& bounds)noexcept{
+    return bounds.valid() && bounds.finite();
+}
+
 struct CsgReceiverRangeGpuData{
     // The CSG shaders pack these four scalars as a single uint4 (rangeInfo):
     //   x = firstCutter, y = cutterCount, z = flags, w = shadingModelId.

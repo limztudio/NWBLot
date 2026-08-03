@@ -8,9 +8,6 @@
 
 #include <core/common/log.h>
 
-#include <string>
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -348,20 +345,20 @@ int Run(int argc, char** argv, Core::Alloc::ThreadPool& threadPool, bool& prompt
     CLI::App app{ "fbx_to_nwb" };
     app.set_help_flag("-h,--help", "Show help");
 
-    std::string inputPath(options.inputPath.data(), options.inputPath.size());
-    std::string outputPathText(options.outputPath.data(), options.outputPath.size());
-    std::string assetType(options.assetType.data(), options.assetType.size());
-    std::string virtualRoot(options.virtualRoot.data(), options.virtualRoot.size());
-    std::string meshSelector(options.meshSelector.data(), options.meshSelector.size());
-    std::string normalMode(options.normalMode.data(), options.normalMode.size());
-    std::string defaultColorText(options.defaultColorText.data(), options.defaultColorText.size());
+    AInteropString inputPath(options.inputPath.data(), options.inputPath.size());
+    AInteropString outputPathText(options.outputPath.data(), options.outputPath.size());
+    AInteropString assetType(options.assetType.data(), options.assetType.size());
+    AInteropString virtualRoot(options.virtualRoot.data(), options.virtualRoot.size());
+    AInteropString meshSelector(options.meshSelector.data(), options.meshSelector.size());
+    AInteropString normalMode(options.normalMode.data(), options.normalMode.size());
+    AInteropString defaultColorText(options.defaultColorText.data(), options.defaultColorText.size());
 
     bool local = false;
     bool ignoreColors = false;
 
     app.add_option("input", inputPath, "Input FBX file path");
     CLI::Option* outputOption = app.add_option("-o,--output", outputPathText, "Output NWB asset metadata path");
-    std::string assetTypeDescription = "Output asset type: ";
+    AInteropString assetTypeDescription = "Output asset type: ";
     const AString assetTypeOptions = OutputAssetTypeOptionsText();
     assetTypeDescription.append(assetTypeOptions.data(), assetTypeOptions.size());
     CLI::Option* assetTypeOption = app.add_option("--asset-type", assetType, assetTypeDescription);

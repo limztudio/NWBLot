@@ -274,12 +274,11 @@ public:
             // Glass tint is (shadow colour . DENSITY): the RGB is the colour the shadow KEEPS, the A is the glass
             // DENSITY (how solid). nwbMakeGlassSurface (smoke_transparent.surface) seeds BOTH consumers together --
             // renderCoverage = density, shadowAbsorptionTint = lerp(white, rgb, density) -- so a denser glass is more
-            // opaque on screen AND casts a darker, matching shadow. Because this body is a THIN SHELL, the engine floors
-            // the shadow's Beer-Lambert chord to NWB_SHADOW_MIN_OCCLUDER_THICKNESS so the density/tint (not the tiny shell
-            // thickness) governs the shadow: pick a DARKER / more-saturated rgb for a darker shadow, raise A toward 1 for a
-            // more solid glass. Here a DEEP GREEN glass (keeps green, absorbs red+blue) casts a clearly green penumbra --
-            // a bright rgb like (0.35,0.925,..) would still read faint because it barely absorbs. To decouple look from
-            // shadow deliberately, override renderCoverage in the hook after the constructor.
+            // opaque on screen AND casts a darker, matching shadow. Beer-Lambert uses the mesh's actual entry->exit chord,
+            // so this thin shell naturally casts a lighter shadow than a thick volume with the same material: choose mesh
+            // thickness and tint/density together. Here a DEEP GREEN glass (keeps green, absorbs red+blue) casts a green
+            // penumbra -- a bright rgb like (0.35,0.925,..) would still read faint because it barely absorbs. To decouple
+            // look from shadow deliberately, override renderCoverage in the hook after the constructor.
             Float4(0.20f, 0.55f, 0.12f, 0.6f),
             Float4(-0.6f, 0.0f, -1.1f, 0.0f),
             Float4(1.0f, 1.0f, 1.0f, 0.0f),

@@ -26,6 +26,7 @@ endif()
 if(NOT EXISTS "${bunch_output}")
     message(FATAL_ERROR "Asset bunch export did not write ${bunch_output}")
 endif()
+require_crlf_text_file("${bunch_output}" "asset bunch export")
 
 file(READ "${bunch_output}" bunch_text)
 
@@ -68,6 +69,8 @@ endif()
 if(NOT EXISTS "${mesh_output}")
     message(FATAL_ERROR "Model export did not write child mesh ${mesh_output}")
 endif()
+require_crlf_text_file("${model_output}" "model export")
+require_crlf_text_file("${mesh_output}" "model child mesh export")
 
 file(READ "${model_output}" model_text)
 file(READ "${mesh_output}" mesh_text)

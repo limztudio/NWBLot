@@ -278,6 +278,43 @@ static bool WriteStandaloneShaderProbe(const Path& assetRoot){
     return WriteTextFile(assetRoot / "shaders" / "standalone_ps.slang", s_StandaloneShaderProbeSource);
 }
 
+// This reaches Slang after dependency collection.  Both files deliberately start with a UTF-8 BOM so the compiler
+// input normalization path, not only the dependency scanner, must make the generated invocation valid.
+static constexpr AStringView s_BomCompilerProbeIncludeSource = "\xEF\xBB\xBF" R"NWB_SLANG(float4 nwbBomCompilerProbeColor(){
+    return float4(0.1, 0.2, 0.3, 1.0);
+}
+
+)NWB_SLANG";
+
+static constexpr AStringView s_BomCompilerProbeSource = "\xEF\xBB\xBF" R"NWB_SLANG(#include "bom_compiler_probe_include.slangi"
+
+struct NwbBomCompilerProbeOutput{
+    float4 color : SV_Target0;
+};
+
+NwbBomCompilerProbeOutput main(){
+    NwbBomCompilerProbeOutput output;
+    output.color = nwbBomCompilerProbeColor();
+    return output;
+}
+
+)NWB_SLANG";
+
+static bool WriteBomCompilerProbe(const Path& assetRoot){
+    if(!WriteTextFile(
+        assetRoot / "shaders" / "bom_compiler_probe_ps.nwb",
+        "shader asset;\n\n"
+        "asset.stage = \"ps\";\n"
+        "asset.target_profile = \"spirv_1_5\";\n"
+        "asset.entry_point = \"main\";\n"
+    ))
+        return false;
+    if(!WriteTextFile(assetRoot / "shaders" / "bom_compiler_probe_include.slangi", s_BomCompilerProbeIncludeSource))
+        return false;
+
+    return WriteTextFile(assetRoot / "shaders" / "bom_compiler_probe_ps.slang", s_BomCompilerProbeSource);
+}
+
 static constexpr AStringView s_ExactEntryPointShaderProbeSource = R"NWB_SLANG(struct NwbExactEntryPointPixelOutput{
     float4 color : SV_Target0;
 };
@@ -334,6 +371,44 @@ TEST(AssetsGraphics, ShaderCookWithoutMaterialBindIncludes){
         EXPECT_TRUE(FindShaderArchiveSourceChecksum(
             records,
             Name("project/shaders/standalone_ps"),
+            Name("ps"),
+            sourceChecksum
+        ));
+    }
+
+    EXPECT_EQ(logger.errorCount(), 0u);
+
+    ErrorCode errorCode;
+    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+}
+
+TEST(AssetsGraphics, ShaderCookCompilesBomPrefixedSourceAndInclude){
+    CapturingLogger logger;
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+
+    TestArena testArena;
+    Path root(testArena.arena);
+    Path outputDirectory(testArena.arena);
+    EXPECT_TRUE(PrepareAssetsGraphicsCookCase(
+        testArena,
+        "shader_cook_bom_compiler_inputs",
+        root,
+        outputDirectory
+    ));
+
+    const Path assetRoot = root / "assets";
+    EXPECT_TRUE(WriteBomCompilerProbe(assetRoot));
+
+    const bool cooked = CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot });
+    EXPECT_TRUE(cooked);
+    if(cooked){
+        NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
+        EXPECT_TRUE(LoadCookedShaderArchiveRecords(testArena, outputDirectory, records));
+
+        u64 sourceChecksum = 0u;
+        EXPECT_TRUE(FindShaderArchiveSourceChecksum(
+            records,
+            Name("project/shaders/bom_compiler_probe_ps"),
             Name("ps"),
             sourceChecksum
         ));

@@ -5,6 +5,7 @@
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
+#include <impl/assets_csg/cook.h>
 #include <impl/assets_model/asset.h>
 #include <core/assets/bunch/cook.h>
 #include <core/assets/volume/cooker.h>
@@ -17,6 +18,7 @@
 #include <impl/assets_texture/binary_payload.h>
 #include <impl/assets_texture/cook.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
+#include <impl/ecs_csg/shape_registry.h>
 
 #include <core/assets/paths.h>
 #include <tests/capturing_logger.h>
@@ -1775,6 +1777,8 @@ static bool FindShaderArchiveSourceChecksum(
 #include "volume_extensibility_tests.inl"
 
 #include "model_fixture_tests.inl"
+
+#include "csg_cook_tests.inl"
 
 #include "mesh_cooker_tests.inl"
 

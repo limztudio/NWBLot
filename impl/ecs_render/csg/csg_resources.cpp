@@ -263,7 +263,7 @@ static void BuildResolvedClipCutterGpuData(
     const SIMDMatrix& cutterWorldToShape,
     const SIMDVector receiverLocalMinBounds,
     const SIMDVector receiverLocalMaxBounds,
-    const bool receiverBoundsValid,
+    const bool receiverBoundsCanCull,
     const SIMDMatrix* receiverLocalToWorld,
     CsgResolvedClipCutter& outCutter
 ){
@@ -277,7 +277,7 @@ static void BuildResolvedClipCutterGpuData(
 
     SIMDVector receiverMinBounds;
     SIMDVector receiverMaxBounds;
-    if(!receiverBoundsValid)
+    if(!receiverBoundsCanCull)
         return CsgClipCutterResolveResult::Ready;
     if(!BuildCsgReceiverWorldBounds(
         receiverLocalMinBounds,
@@ -325,7 +325,7 @@ template<typename CutterHandler>
     const CsgReceiverDrawState& receiverDrawState,
     const SIMDVector receiverLocalMinBounds,
     const SIMDVector receiverLocalMaxBounds,
-    const bool receiverBoundsValid,
+    const bool receiverBoundsCanCull,
     const SIMDMatrix* receiverLocalToWorld,
     CutterHandler&& handler
 ){
@@ -346,7 +346,7 @@ template<typename CutterHandler>
                 cutterWorldToShape,
                 receiverLocalMinBounds,
                 receiverLocalMaxBounds,
-                receiverBoundsValid,
+                receiverBoundsCanCull,
                 receiverLocalToWorld,
                 resolvedCutter
             );
@@ -543,12 +543,14 @@ bool RendererCsgSystem::reserveCsgCutterBufferCapacity(const usize cutterCount){
     return true;
 }
 
-bool RendererCsgSystem::prepareCsgFrameBuffers(const CsgFrameGpuData& csgFrameData){
-    if(!csgFrameData.hasWork())
+bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount, const usize cutterCount){
+    if(receiverRangeCount == 0u || cutterCount == 0u)
         return true;
+    NWB_ASSERT(receiverRangeCount <= static_cast<usize>(Limit<u32>::s_Max));
+    NWB_ASSERT(cutterCount <= static_cast<usize>(Limit<u32>::s_Max));
     if(
-        !reserveCsgReceiverRangeBufferCapacity(csgFrameData.receiverRanges.size())
-        || !reserveCsgCutterBufferCapacity(csgFrameData.cutters.size())
+        !reserveCsgReceiverRangeBufferCapacity(receiverRangeCount)
+        || !reserveCsgCutterBufferCapacity(cutterCount)
     )
         return false;
     if(!m_renderer.meshSystem().createMeshFrameHeapHandles())
@@ -597,6 +599,14 @@ bool RendererCsgSystem::prepareCsgFrameBuffers(const CsgFrameGpuData& csgFrameDa
     if(!createCsgClipResources())
         return false;
 
+    // Keep the setup contract explicit: draw paths may only consume these handles through csgFrameBuffersReady().
+    NWB_ASSERT(csgState().m_receiverRangeBufferCapacity >= receiverRangeCount);
+    NWB_ASSERT(csgState().m_cutterBufferCapacity >= cutterCount);
+    NWB_ASSERT(csgState().m_receiverRangeBufferHeapHandle.valid());
+    NWB_ASSERT(csgState().m_cutterBufferHeapHandle.valid());
+    NWB_ASSERT(csgState().m_clipContextSlotsHeapHandle.valid());
+    NWB_ASSERT(csgState().m_intervalSampleStateHeapHandle.valid());
+    NWB_ASSERT(m_renderer.meshSystem().meshFrameHeapHandlesReady());
     return true;
 }
 
@@ -685,9 +695,9 @@ bool RendererCsgSystem::resolveCsgReceiverClipDrawInfo(
     CsgReceiverClipDrawInfo& outInfo
 )const{
     outInfo = CsgReceiverClipDrawInfo{};
-    const bool receiverBoundsValid = receiverBounds.valid();
-    const SIMDVector receiverLocalMinBounds = receiverBoundsValid ? LoadFloatInt(receiverBounds.minBounds) : VectorZero();
-    const SIMDVector receiverLocalMaxBounds = receiverBoundsValid ? LoadFloatInt(receiverBounds.maxBounds) : VectorZero();
+    const bool receiverBoundsCanCull = CsgReceiverBoundsCanCull(receiverBounds);
+    const SIMDVector receiverLocalMinBounds = receiverBoundsCanCull ? LoadFloatInt(receiverBounds.minBounds) : VectorZero();
+    const SIMDVector receiverLocalMaxBounds = receiverBoundsCanCull ? LoadFloatInt(receiverBounds.maxBounds) : VectorZero();
 
     SIMDMatrix receiverLocalToWorld;
     const SIMDMatrix* receiverLocalToWorldPtr = nullptr;
@@ -707,7 +717,7 @@ bool RendererCsgSystem::resolveCsgReceiverClipDrawInfo(
         receiverDrawState,
         receiverLocalMinBounds,
         receiverLocalMaxBounds,
-        receiverBoundsValid,
+        receiverBoundsCanCull,
         receiverLocalToWorldPtr,
         [&](const __hidden_csg_resources::CsgResolvedClipCutter& resolvedCutter){
             if(resolvedCutter.shapeType.desc.shaderModule){
@@ -738,11 +748,11 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
     if(csgFrameData.cutters.size() > static_cast<usize>(Limit<u32>::s_Max))
         return false;
 
-    const bool receiverBoundsValid = receiverBounds.valid();
-    if(!receiverBoundsValid || !receiverBounds.finite())
+    if(!receiverBounds.valid())
         return false;
-    const SIMDVector receiverLocalMinBounds = LoadFloatInt(receiverBounds.minBounds);
-    const SIMDVector receiverLocalMaxBounds = LoadFloatInt(receiverBounds.maxBounds);
+    const bool receiverBoundsCanCull = CsgReceiverBoundsCanCull(receiverBounds);
+    const SIMDVector receiverLocalMinBounds = receiverBoundsCanCull ? LoadFloatInt(receiverBounds.minBounds) : VectorZero();
+    const SIMDVector receiverLocalMaxBounds = receiverBoundsCanCull ? LoadFloatInt(receiverBounds.maxBounds) : VectorZero();
 
     SIMDMatrix receiverLocalToWorld;
     const SIMDMatrix* receiverLocalToWorldPtr = nullptr;
@@ -778,7 +788,7 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
         receiverDrawState,
         receiverLocalMinBounds,
         receiverLocalMaxBounds,
-        receiverBoundsValid,
+        receiverBoundsCanCull,
         receiverLocalToWorldPtr,
         [&](const __hidden_csg_resources::CsgResolvedClipCutter& resolvedCutter){
             CsgCutterGpuData cutterGpuData;

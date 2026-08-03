@@ -63,6 +63,7 @@ inline void MachinePause(i32 delay){
 
 
 using RecursiveMutex = std::recursive_mutex;
+using OnceFlag = std::once_flag;
 using SpinMutex = tbb::spin_mutex;
 using QueuingMutex = tbb::queuing_mutex;
 using SharedMutex = tbb::spin_rw_mutex;
@@ -79,6 +80,11 @@ template<typename Mutex>
 using LockGuard = std::lock_guard<Mutex>;
 template<typename Mutex>
 using UniqueLock = std::unique_lock<Mutex>;
+
+template<typename Function, typename... Args>
+inline void CallOnce(OnceFlag& flag, Function&& function, Args&&... args){
+    std::call_once(flag, Forward<Function>(function), Forward<Args>(args)...);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

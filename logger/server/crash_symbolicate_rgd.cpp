@@ -8,9 +8,6 @@
 
 #include <nwb_rgd_decode.h>
 
-#include <string>
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -47,8 +44,8 @@ void AppendRadeonGpuDetectiveSummary(LogArena& arena, const Path& packageDirecto
 
     const AString<LogArena> capturePath = PathToString<char>(arena, rgdCapture);
 
-    std::string decoded;
-    if(!nwb_rgd::DecodeCrashDumpToText(std::string(capturePath.data(), capturePath.size()), decoded)){
+    AInteropString decoded;
+    if(!nwb_rgd::DecodeCrashDumpToText(AInteropString(capturePath.data(), capturePath.size()), decoded)){
         outReport += "\n[gpu_detective]\nstatus=decode_failed\n";
         if(!decoded.empty()){
             outReport += "detail=";

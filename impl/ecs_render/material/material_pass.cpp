@@ -136,17 +136,14 @@ bool RendererMaterialSystem::prepareMaterialPassResources(
 
     const bool drawBuffersReady = prepareMaterialPassDrawBuffers(instanceData, materialTypedBytes);
     const bool regularDrawResourcesReady = prepareMaterialPassResourceBindings(drawItems.regular);
-    const bool csgResourcesReady = m_renderer.csgSystem().prepareCsgFrameBuffers(csgFrameData);
-    const bool csgDrawResourcesReady = csgResourcesReady && (drawItems.csg.empty() || prepareMaterialPassResourceBindings(drawItems.csg));
+    const bool csgDrawResourcesReady = drawItems.csg.empty() || prepareMaterialPassResourceBindings(drawItems.csg);
     const bool csgReceiverSurfaceDrawResourcesReady =
-        csgResourcesReady
-        && (drawItems.csgReceiverSurface.empty() || prepareMaterialPassResourceBindings(drawItems.csgReceiverSurface))
+        drawItems.csgReceiverSurface.empty() || prepareMaterialPassResourceBindings(drawItems.csgReceiverSurface)
     ;
 
     return
         drawBuffersReady
         && regularDrawResourcesReady
-        && csgResourcesReady
         && csgDrawResourcesReady
         && csgReceiverSurfaceDrawResourcesReady
     ;

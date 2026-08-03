@@ -4,12 +4,12 @@
 
 #include "cpu_topology.h"
 
+#include "containers.h"
 #include "limit.h"
 #include "platform.h"
+#include "sync.h"
 #include "thread.h"
 
-#include <mutex>
-#include <vector>
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
@@ -48,7 +48,7 @@ struct AffinityMasks{
         if(bufferSize == 0)
             return;
 
-        std::vector<u8> buffer(static_cast<usize>(bufferSize));
+        InteropVector<u8> buffer(static_cast<usize>(bufferSize));
         if(!GetSystemCpuSetInformation(
             reinterpret_cast<PSYSTEM_CPU_SET_INFORMATION>(buffer.data()),
             bufferSize, &bufferSize, GetCurrentProcess(), 0
@@ -95,10 +95,10 @@ struct AffinityMasks{
 };
 
 static AffinityMasks s_AffinityMasks;
-static std::once_flag s_AffinityMasksOnce;
+static OnceFlag s_AffinityMasksOnce;
 
 AffinityMasks& GetAffinityMasks(){
-    std::call_once(s_AffinityMasksOnce, [](){
+    CallOnce(s_AffinityMasksOnce, [](){
         s_AffinityMasks.initialize();
     });
     return s_AffinityMasks;

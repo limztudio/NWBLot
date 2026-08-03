@@ -233,6 +233,9 @@ using List = std::list<T, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
 template<typename T, typename ArenaT>
 using Vector = std::vector<T, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
 
+template<typename T>
+using InteropVector = std::vector<T>;
+
 template<typename T, typename ArenaT, ArenaT& (*DefaultArena)()>
 using DefaultVector = std::vector<T, ContainerDetail::DefaultArenaAllocatorFor_T<T, ArenaT, DefaultArena>>;
 

@@ -6,9 +6,6 @@
 
 #include <CLI.hpp>
 
-#include <string>
-#include <vector>
-
 #include <core/assets/paths.h>
 #include <core/common/command_line.h>
 #include <core/common/log.h>
@@ -24,12 +21,12 @@ namespace __hidden_command_line{
 
 
 struct ParsedCookOptions{
-    std::string repoRoot;
-    std::vector<std::string> assetRoots;
-    std::string outputDirectory;
-    std::string cacheDirectory;
-    std::string configuration;
-    std::string assetType;
+    AInteropString repoRoot;
+    InteropVector<AInteropString> assetRoots;
+    AInteropString outputDirectory;
+    AInteropString cacheDirectory;
+    AInteropString configuration;
+    AInteropString assetType;
 };
 
 inline constexpr AStringView s_ImplDirectoryName = "impl";
@@ -51,7 +48,7 @@ static bool AssignCompactString(
 }
 
 static bool AssignString(
-    const std::string& source,
+    const AInteropString& source,
     const char* label,
     NWB::Core::Assets::AssetString& outValue
 ){
@@ -66,7 +63,7 @@ static bool AssignString(
 }
 
 static bool AssignAssetRootVirtualRoot(
-    const std::string& source,
+    const AInteropString& source,
     ACompactString& outVirtualRoot,
     NWB::Core::Assets::AssetArena& arena
 ){
@@ -93,13 +90,13 @@ static bool AssignAssetRootVirtualRoot(
 }
 
 static bool AssignAssetRoots(
-    const std::vector<std::string>& source,
+    const InteropVector<AInteropString>& source,
     NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetCookRoot>& outValues
 ){
     outValues.clear();
     outValues.reserve(source.size());
     NWB::Core::Assets::AssetArena& arena = outValues.get_allocator().arena();
-    for(const std::string& value : source){
+    for(const AInteropString& value : source){
         if(HasEmbeddedNull(AStringView(value.data(), value.size()))){
             outValues.clear();
             NWB_LOGGER_WARNING(NWB_TEXT("Resource cooker: --asset-root must not contain embedded nulls"));

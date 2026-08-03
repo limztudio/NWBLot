@@ -134,59 +134,59 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         CheckGeneratedMaterialBindBinaryConstants(compactGeneratedSourceView, compactMaterial);
     }
 
-    Path fixtureRoot(testArena.arena);
-    Path fixtureOutputDirectory(testArena.arena);
+    Path resourceRoot(testArena.arena);
+    Path resourceOutputDirectory(testArena.arena);
     EXPECT_TRUE(CookMaterialBindMaterialIntegrationWithPixelSource(
-        s_StaticResourceFixtureMaterialBindSource,
-        s_StaticResourceFixtureMaterialMeta,
-        s_StaticResourceFixtureShaderProbeSource,
-        "material_bind_static_resource_fixture_integration",
+        s_ProjectResourceMaterialBindSource,
+        s_ProjectResourceMaterialMeta,
+        s_ProjectResourceShaderProbeSource,
+        "material_bind_project_resource_integration",
         testArena,
-        fixtureRoot,
-        fixtureOutputDirectory
+        resourceRoot,
+        resourceOutputDirectory
     ));
 
-    const Path fixtureGeneratedIncludePath =
-        fixtureRoot / "cache" / "tests" / "material_bind_includes"
+    const Path resourceGeneratedIncludePath =
+        resourceRoot / "cache" / "tests" / "material_bind_includes"
         / "project" / "material_interfaces" / "test_surface.bind"
     ;
-    NWB::Impl::ShaderCook::CookString fixtureGeneratedSource(testArena.arena);
-    EXPECT_TRUE(ReadTextFile(fixtureGeneratedIncludePath, fixtureGeneratedSource));
-    const AStringView fixtureGeneratedSourceView(fixtureGeneratedSource.data(), fixtureGeneratedSource.size());
-    const AStringView fixtureGeneratedSnippets[] = {
+    NWB::Impl::ShaderCook::CookString resourceGeneratedSource(testArena.arena);
+    EXPECT_TRUE(ReadTextFile(resourceGeneratedIncludePath, resourceGeneratedSource));
+    const AStringView resourceGeneratedSourceView(resourceGeneratedSource.data(), resourceGeneratedSource.size());
+    const AStringView resourceGeneratedSnippets[] = {
         "Texture2D<float4> nwbMaterialBindLoadSurfaceBaseColorMap",
         "SamplerState nwbMaterialBindLoadSurfaceBaseColorSampler",
         "NwbHeapSampledImage2DNonUniform",
         "NwbHeapSamplerNonUniform",
     };
-    CheckGeneratedSourceContainsAll(fixtureGeneratedSourceView, fixtureGeneratedSnippets);
+    CheckGeneratedSourceContainsAll(resourceGeneratedSourceView, resourceGeneratedSnippets);
 
-    UniquePtr<NWB::Core::Assets::IAsset> loadedFixtureAsset;
+    UniquePtr<NWB::Core::Assets::IAsset> loadedResourceAsset;
     EXPECT_TRUE(LoadCookedMaterial(
         testArena,
-        fixtureOutputDirectory,
+        resourceOutputDirectory,
         Name("project/materials/test_material"),
-        loadedFixtureAsset
+        loadedResourceAsset
     ));
-    if(loadedFixtureAsset){
-        EXPECT_EQ(loadedFixtureAsset->assetType(), NWB::Impl::Material::AssetTypeName());
-        const NWB::Impl::Material& fixtureMaterial = static_cast<const NWB::Impl::Material&>(*loadedFixtureAsset);
-        ASSERT_EQ(fixtureMaterial.resourceReferences().size(), 2u);
+    if(loadedResourceAsset){
+        EXPECT_EQ(loadedResourceAsset->assetType(), NWB::Impl::Material::AssetTypeName());
+        const NWB::Impl::Material& resourceMaterial = static_cast<const NWB::Impl::Material&>(*loadedResourceAsset);
+        ASSERT_EQ(resourceMaterial.resourceReferences().size(), 2u);
         EXPECT_EQ(
-            fixtureMaterial.resourceReferences()[0u].resourceName,
-            Name(NWB::Impl::MaterialBuiltinResource::s_CheckerRgba8)
+            resourceMaterial.resourceReferences()[0u].resourceName,
+            Name("project/textures/test_checker")
         );
         EXPECT_EQ(
-            fixtureMaterial.resourceReferences()[0u].resourceSource,
-            NWB::Impl::MaterialResourceSource::Builtin
+            resourceMaterial.resourceReferences()[0u].resourceSource,
+            NWB::Impl::MaterialResourceSource::ProjectAsset
         );
         EXPECT_EQ(
-            fixtureMaterial.resourceReferences()[1u].resourceName,
-            Name(NWB::Impl::MaterialBuiltinResource::s_LinearClamp)
+            resourceMaterial.resourceReferences()[1u].resourceName,
+            Name("project/samplers/test_linear_clamp")
         );
         EXPECT_EQ(
-            fixtureMaterial.resourceReferences()[1u].resourceSource,
-            NWB::Impl::MaterialResourceSource::Builtin
+            resourceMaterial.resourceReferences()[1u].resourceSource,
+            NWB::Impl::MaterialResourceSource::ProjectAsset
         );
     }
 
@@ -199,7 +199,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     errorCode.clear();
     EXPECT_TRUE(RemoveAllIfExists(compactRoot, errorCode));
     errorCode.clear();
-    EXPECT_TRUE(RemoveAllIfExists(fixtureRoot, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(resourceRoot, errorCode));
 
 #if defined(NWB_FINAL)
     Path invalidRoot(testArena.arena);

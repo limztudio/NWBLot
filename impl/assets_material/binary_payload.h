@@ -25,7 +25,7 @@ namespace MaterialBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_MaterialMagic = 0x4D544C37u; // MTL7 (explicit material resource source kinds)
+inline constexpr u32 s_MaterialMagic = 0x4D544C38u; // MTL8 (per-material project resource paths)
 inline constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
 // Material render-property flags packed into the serialized materialFlags word (decoded in Material::loadBinary),
 // mirroring the authored `transparent`/`two_sided`/`refractive` booleans. `Refractive` is the dedicated
@@ -83,7 +83,7 @@ static_assert(
     "MaterialTypedLayoutFieldBinary must stay binary-serializable"
 );
 
-// Static material resource identity. The renderer resolves resourceName according to resourceSource to a
+// Per-material resource identity. The renderer resolves resourceName according to resourceSource to a
 // device-lifetime global-heap handle and writes that handle's slot into constantByteOffset; no device-specific
 // descriptor value is serialized here.
 struct MaterialResourceReferenceBinary{

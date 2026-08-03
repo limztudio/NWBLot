@@ -20,32 +20,6 @@ namespace __hidden_material_surface{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 s_BuiltinCheckerWidth = 2u;
-static constexpr u32 s_BuiltinCheckerHeight = 2u;
-static constexpr u8 s_CheckerRgba8Pixels[] = {
-    255u, 255u, 255u, 255u,  32u,  32u,  32u, 255u,
-     32u,  32u,  32u, 255u, 255u, 255u, 255u, 255u,
-};
-static_assert(sizeof(s_CheckerRgba8Pixels) == s_BuiltinCheckerWidth * s_BuiltinCheckerHeight * sizeof(u32));
-
-static void ReleaseBuiltinChecker(Core::Graphics& graphics, RendererMaterialResourceState& resources){
-    Core::GpuDescriptorHeap& heap = graphics.getDevice().getDescriptorHeap();
-    if(heap.isInitialized() && resources.checkerRgba8HeapHandle.valid())
-        heap.free(resources.checkerRgba8HeapHandle);
-
-    resources.checkerRgba8HeapHandle = Core::GpuDescriptorHandle::invalid();
-    resources.checkerRgba8Texture.reset();
-}
-
-static void ReleaseBuiltinLinearClampSampler(Core::Graphics& graphics, RendererMaterialResourceState& resources){
-    Core::GpuDescriptorHeap& heap = graphics.getDevice().getDescriptorHeap();
-    if(heap.isInitialized() && resources.linearClampHeapHandle.valid())
-        heap.free(resources.linearClampHeapHandle);
-
-    resources.linearClampHeapHandle = Core::GpuDescriptorHandle::invalid();
-    resources.linearClampSampler.reset();
-}
-
 static void ReleaseTextureAssetCache(Core::Graphics& graphics, RendererMaterialResourceState& resources){
     for(auto it = resources.textureAssetCache.begin(); it != resources.textureAssetCache.end(); ++it){
         if(it.value())
@@ -54,90 +28,17 @@ static void ReleaseTextureAssetCache(Core::Graphics& graphics, RendererMaterialR
     resources.textureAssetCache.clear();
 }
 
+static void ReleaseSamplerAssetCache(Core::Graphics& graphics, RendererMaterialResourceState& resources){
+    for(auto it = resources.samplerAssetCache.begin(); it != resources.samplerAssetCache.end(); ++it){
+        if(it.value())
+            SamplerAssetLoader::Release(*it.value(), graphics);
+    }
+    resources.samplerAssetCache.clear();
+}
+
 static void ReleaseMaterialResourceState(Core::Graphics& graphics, RendererMaterialResourceState& resources){
     ReleaseTextureAssetCache(graphics, resources);
-    ReleaseBuiltinChecker(graphics, resources);
-    ReleaseBuiltinLinearClampSampler(graphics, resources);
-}
-
-[[nodiscard]] static bool EnsureBuiltinChecker(Core::Graphics& graphics, RendererMaterialResourceState& resources){
-    if(resources.checkerRgba8Texture && resources.checkerRgba8HeapHandle.valid())
-        return true;
-    if(resources.checkerRgba8Texture || resources.checkerRgba8HeapHandle.valid())
-        ReleaseBuiltinChecker(graphics, resources);
-
-    Core::GpuDescriptorHeap& heap = graphics.getDevice().getDescriptorHeap();
-    Core::TextureDesc textureDesc;
-    textureDesc
-        .setWidth(s_BuiltinCheckerWidth)
-        .setHeight(s_BuiltinCheckerHeight)
-        .setFormat(Core::Format::RGBA8_UNORM)
-        .setInitialState(Core::ResourceStates::ShaderResource)
-        .setKeepInitialState(true)
-        // Material surface hooks can run in the optional AsyncCompute trace/GI packets as well as Graphics.
-        // The built-in texture is immutable after its Graphics upload, so concurrent sharing avoids a permanent
-        // ownership handoff for this common sampled input.
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setName(Name(MaterialBuiltinResource::s_CheckerRgba8))
-    ;
-    Core::Graphics::TextureSetupDesc textureSetup;
-    textureSetup.textureDesc = textureDesc;
-    textureSetup.data = s_CheckerRgba8Pixels;
-    textureSetup.uploadDataSize = sizeof(s_CheckerRgba8Pixels);
-    textureSetup.rowPitch = s_BuiltinCheckerWidth * sizeof(u32);
-    textureSetup.depthPitch = sizeof(s_CheckerRgba8Pixels);
-    textureSetup.queue = Core::CommandQueue::Graphics;
-    resources.checkerRgba8Texture = graphics.setupTexture(textureSetup);
-    if(!resources.checkerRgba8Texture){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create built-in material checker texture"));
-        return false;
-    }
-
-    resources.checkerRgba8HeapHandle = heap.allocate(Core::GpuDescriptorClass::SampledImage);
-    if(
-        !resources.checkerRgba8HeapHandle.valid()
-        || !heap.write(resources.checkerRgba8HeapHandle, Core::DescriptorWriteItem::Texture_SRV(
-            0u,
-            resources.checkerRgba8Texture.get(),
-            Core::Format::RGBA8_UNORM,
-            Core::s_AllSubresources,
-            Core::TextureDimension::Texture2D
-        ))
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register built-in material checker texture"));
-        ReleaseBuiltinChecker(graphics, resources);
-        return false;
-    }
-
-    return true;
-}
-
-[[nodiscard]] static bool EnsureBuiltinLinearClampSampler(Core::Graphics& graphics, RendererMaterialResourceState& resources){
-    if(resources.linearClampSampler && resources.linearClampHeapHandle.valid())
-        return true;
-    if(resources.linearClampSampler || resources.linearClampHeapHandle.valid())
-        ReleaseBuiltinLinearClampSampler(graphics, resources);
-
-    Core::GpuDescriptorHeap& heap = graphics.getDevice().getDescriptorHeap();
-    Core::SamplerDesc samplerDesc;
-    samplerDesc.setAllFilters(true).setAllAddressModes(Core::SamplerAddressMode::Clamp);
-    resources.linearClampSampler = graphics.getDevice().createSampler(samplerDesc);
-    if(!resources.linearClampSampler){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create built-in material clamp sampler"));
-        return false;
-    }
-
-    resources.linearClampHeapHandle = heap.allocate(Core::GpuDescriptorClass::Sampler);
-    if(
-        !resources.linearClampHeapHandle.valid()
-        || !heap.write(resources.linearClampHeapHandle, Core::DescriptorWriteItem::Sampler(0u, resources.linearClampSampler.get()))
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register built-in material clamp sampler"));
-        ReleaseBuiltinLinearClampSampler(graphics, resources);
-        return false;
-    }
-
-    return true;
+    ReleaseSamplerAssetCache(graphics, resources);
 }
 
 [[nodiscard]] static bool ResolveTextureAssetSlot(
@@ -188,6 +89,49 @@ static void ReleaseMaterialResourceState(Core::Graphics& graphics, RendererMater
     return true;
 }
 
+[[nodiscard]] static bool ResolveSamplerAssetSlot(
+    RendererMaterialResourceState& resources,
+    const Name& samplerPath,
+    Core::Graphics& graphics,
+    Core::Assets::AssetManager& assetManager,
+    u32& outHeapSlot
+){
+    outHeapSlot = 0u;
+    auto samplerAssetIt = resources.samplerAssetCache.find(samplerPath);
+    if(samplerAssetIt == resources.samplerAssetCache.end()){
+        UniquePtr<SamplerGpuResource> samplerResource = MakeUnique<SamplerGpuResource>();
+        if(!SamplerAssetLoader::Load(
+            *samplerResource,
+            samplerPath,
+            samplerPath,
+            graphics,
+            assetManager,
+            NWB_TEXT("RendererSystem")
+        ))
+            return false;
+
+        auto insertResult = resources.samplerAssetCache.try_emplace(samplerPath, Move(samplerResource));
+        samplerAssetIt = insertResult.first;
+        if(!insertResult.second && samplerResource)
+            SamplerAssetLoader::Release(*samplerResource, graphics);
+    }
+
+    NWB_ASSERT(samplerAssetIt.value());
+    const SamplerGpuResource& samplerResource = *samplerAssetIt.value();
+    if(
+        !samplerResource.valid()
+        || samplerResource.samplerHeapHandle.descriptorClass() != Core::GpuDescriptorClass::Sampler
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached sampler asset '{}' is invalid")
+            , StringConvert(samplerPath.c_str())
+        );
+        return false;
+    }
+
+    outHeapSlot = samplerResource.samplerHeapHandle.slot();
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -218,57 +162,43 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
 
     for(const MaterialResourceReference& resourceReference : materialInfo.resourceReferences){
         u32 heapSlot = 0u;
+        if(resourceReference.resourceSource != MaterialResourceSource::ProjectAsset){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid project resource source")
+                , StringConvert(materialInfo.materialName.c_str())
+            );
+            return false;
+        }
+
         switch(resourceReference.resourceKind){
         case MaterialResourceKind::SampledImage2D:
-            switch(resourceReference.resourceSource){
-            case MaterialResourceSource::Builtin:
-                if(resourceReference.resourceName != Name(MaterialBuiltinResource::s_CheckerRgba8)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' requests an unsupported built-in sampled image")
-                        , StringConvert(materialInfo.materialName.c_str())
-                    );
-                    return false;
-                }
-                if(!__hidden_material_surface::EnsureBuiltinChecker(graphicsModule, resources))
-                    return false;
-                heapSlot = resources.checkerRgba8HeapHandle.slot();
-                break;
-
-            case MaterialResourceSource::TextureAsset:
-                if(!__hidden_material_surface::ResolveTextureAssetSlot(
-                    resources,
-                    resourceReference.resourceName,
-                    graphicsModule,
-                    assetManager(),
-                    heapSlot
-                )){
-                    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load Texture2D asset '{}'")
-                        , StringConvert(materialInfo.materialName.c_str())
-                        , StringConvert(resourceReference.resourceName.c_str())
-                    );
-                    return false;
-                }
-                break;
-
-            default:
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid sampled-image resource source")
+            if(!__hidden_material_surface::ResolveTextureAssetSlot(
+                resources,
+                resourceReference.resourceName,
+                graphicsModule,
+                assetManager(),
+                heapSlot
+            )){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load Texture2D asset '{}'")
                     , StringConvert(materialInfo.materialName.c_str())
+                    , StringConvert(resourceReference.resourceName.c_str())
                 );
                 return false;
             }
             break;
         case MaterialResourceKind::Sampler:
-            if(
-                resourceReference.resourceSource != MaterialResourceSource::Builtin
-                || resourceReference.resourceName != Name(MaterialBuiltinResource::s_LinearClamp)
-            ){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' requests an unsupported sampler resource")
+            if(!__hidden_material_surface::ResolveSamplerAssetSlot(
+                resources,
+                resourceReference.resourceName,
+                graphicsModule,
+                assetManager(),
+                heapSlot
+            )){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load sampler asset '{}'")
                     , StringConvert(materialInfo.materialName.c_str())
+                    , StringConvert(resourceReference.resourceName.c_str())
                 );
                 return false;
             }
-            if(!__hidden_material_surface::EnsureBuiltinLinearClampSampler(graphicsModule, resources))
-                return false;
-            heapSlot = resources.linearClampHeapHandle.slot();
             break;
         default:
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid material resource kind")

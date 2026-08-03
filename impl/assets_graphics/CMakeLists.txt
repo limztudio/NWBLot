@@ -6,6 +6,7 @@ target_link_libraries(nwb_assets_graphics INTERFACE
     nwb_assets_material
     nwb_assets_shader
     nwb_assets_texture
+    nwb_assets_sampler
 )
 
 if(NWB_BUILD_RESOURCE_COOKER)

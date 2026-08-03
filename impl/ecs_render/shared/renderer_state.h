@@ -19,6 +19,7 @@
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 #include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
 #include <impl/assets_texture/loader.h>
+#include <impl/assets_sampler/loader.h>
 
 #include <global/generic.h>
 #include <global/containers.h>   // dynamic Vector storage for the per-frame SW distinct-mesh table
@@ -43,16 +44,14 @@ class RendererAvboitSystem;
 class RendererRayTracingSystem;
 
 
-// Device-lifetime material built-ins and texture-asset cache.
+// Device-lifetime material asset caches retain the descriptor owner for every patched global heap slot.
 struct RendererMaterialResourceState{
-    Core::TextureHandle checkerRgba8Texture;
-    Core::SamplerHandle linearClampSampler;
-    Core::GpuDescriptorHandle checkerRgba8HeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle linearClampHeapHandle = Core::GpuDescriptorHandle::invalid();
     HashMap<Name, UniquePtr<TextureGpuResource>, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> textureAssetCache;
+    HashMap<Name, UniquePtr<SamplerGpuResource>, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> samplerAssetCache;
 
     explicit RendererMaterialResourceState(Core::Alloc::GlobalArena& arena)
         : textureAssetCache(0, Hasher<Name>(), EqualTo<Name>(), arena)
+        , samplerAssetCache(0, Hasher<Name>(), EqualTo<Name>(), arena)
     {}
 };
 

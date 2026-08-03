@@ -1,0 +1,13 @@
+sampler asset;
+
+asset.version = 1;
+asset.min_filter = "nearest";
+asset.mag_filter = "nearest";
+asset.mip_filter = "nearest";
+asset.address_u = "mirror";
+asset.address_v = "mirror";
+asset.address_w = "mirror";
+asset.reduction = "standard";
+asset.max_anisotropy = 1.0;
+asset.mip_bias = 0.0;
+asset.border_color = [0.0, 0.0, 0.0, 0.0];

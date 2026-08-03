@@ -17,6 +17,9 @@
 #include <impl/assets_texture/asset.h>
 #include <impl/assets_texture/binary_payload.h>
 #include <impl/assets_texture/cook.h>
+#include <impl/assets_sampler/asset.h>
+#include <impl/assets_sampler/binary_payload.h>
+#include <impl/assets_sampler/cook.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/ecs_csg/shape_registry.h>
 
@@ -326,53 +329,49 @@ NwbTestRuntimeMaterial runtime;
 
 )NWB_BIND";
 
-static constexpr AStringView s_StaticResourceFixtureMaterialBindSource = R"NWB_BIND([material_constant]
-struct NwbFixtureSurfaceMaterial{
+static constexpr AStringView s_ProjectResourceMaterialBindSource = R"NWB_BIND([material_constant]
+struct NwbProjectResourceSurfaceMaterial{
     [default("float4(1.0, 1.0, 1.0, 1.0)")]
     float4 base_color;
 
-    [fixture("builtin/material_fixture/checker_rgba8")]
     texture2d base_color_map;
 
-    [fixture("builtin/material_fixture/linear_clamp")]
     sampler base_color_sampler;
 };
 
 [material_mutable]
-struct NwbFixtureRuntimeMaterial{
+struct NwbProjectResourceRuntimeMaterial{
     [default("float(1.0)")]
     float fade_alpha;
 };
 
-NwbFixtureSurfaceMaterial surface;
-NwbFixtureRuntimeMaterial runtime;
+NwbProjectResourceSurfaceMaterial surface;
+NwbProjectResourceRuntimeMaterial runtime;
 
 )NWB_BIND";
 
-static constexpr AStringView s_StaticTextureAssetMaterialBindSource = R"NWB_BIND([material_constant]
-struct NwbTextureAssetSurfaceMaterial{
+static constexpr AStringView s_SecondProjectResourceMaterialBindSource = R"NWB_BIND([material_constant]
+struct NwbSecondProjectResourceSurfaceMaterial{
     [default("float4(1.0, 1.0, 1.0, 1.0)")]
     float4 base_color;
 
-    [texture_asset("project/materials/smoke_pattern")]
     texture2d base_color_map;
 
-    [fixture("builtin/material_fixture/linear_clamp")]
     sampler base_color_sampler;
 };
 
 [material_mutable]
-struct NwbTextureAssetRuntimeMaterial{
+struct NwbSecondProjectResourceRuntimeMaterial{
     [default("float(1.0)")]
     float fade_alpha;
 };
 
-NwbTextureAssetSurfaceMaterial surface;
-NwbTextureAssetRuntimeMaterial runtime;
+NwbSecondProjectResourceSurfaceMaterial surface;
+NwbSecondProjectResourceRuntimeMaterial runtime;
 
 )NWB_BIND";
 
-static constexpr AStringView s_StaticResourceFixtureMaterialMeta = R"NWB_META(material asset;
+static constexpr AStringView s_ProjectResourceMaterialMeta = R"NWB_META(material asset;
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
@@ -389,6 +388,8 @@ asset.shader_variant = "default";
 asset.parameters = {
     "surface": {
         "base_color": "float4(0.25, 0.5, 0.75, 1.0)",
+        "base_color_map": "project/textures/test_checker",
+        "base_color_sampler": "project/samplers/test_linear_clamp",
     },
     "runtime": {
         "fade_alpha": "float(0.75)",
@@ -544,18 +545,18 @@ asset.parameters = {
 
 )NWB_META";
 
-static constexpr AStringView s_StaticResourceFixtureShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
+static constexpr AStringView s_ProjectResourceShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
 #include "project/material_interfaces/test_surface.bind"
 
 NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
-    const NwbFixtureSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
-    const float4 fixtureColor = nwbMaterialBindLoadSurfaceBaseColorMap(instance).SampleLevel(
+    const NwbProjectResourceSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    const float4 sampledColor = nwbMaterialBindLoadSurfaceBaseColorMap(instance).SampleLevel(
         nwbMaterialBindLoadSurfaceBaseColorSampler(instance),
         inUv0,
         0.0
     );
-    return nwbMakeMeshSurface(half3(surface.base_color.rgb * fixtureColor.rgb), inNormal);
+    return nwbMakeMeshSurface(half3(surface.base_color.rgb * sampledColor.rgb), inNormal);
 }
 
 )NWB_SLANG";
@@ -1143,6 +1144,16 @@ NwbTestSurfaceMaterial surface;
 static constexpr AStringView s_MissingDefaultMaterialBindSource = R"NWB_BIND([material_constant]
 struct NwbTestSurfaceMaterial{
     float roughness;
+};
+
+NwbTestSurfaceMaterial surface;
+
+)NWB_BIND";
+
+static constexpr AStringView s_ResourceAttributeMaterialBindSource = R"NWB_BIND([material_constant]
+struct NwbTestSurfaceMaterial{
+    [texture_asset("project/textures/legacy")]
+    texture2d base_color_map;
 };
 
 NwbTestSurfaceMaterial surface;
@@ -1773,6 +1784,7 @@ static bool FindShaderArchiveSourceChecksum(
 
 #include "material_tests.inl"
 #include "material_cook_tests.inl"
+#include "sampler_tests.inl"
 
 #include "volume_extensibility_tests.inl"
 

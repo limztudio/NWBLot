@@ -92,7 +92,6 @@ struct MaterialBindField{
 
     [[nodiscard]] const MaterialBindAttribute* findAttribute(AStringView attributeName)const;
     [[nodiscard]] AStringView defaultArgument()const;
-    [[nodiscard]] bool resourceBinding(MaterialResourceSource::Enum& outResourceSource, AStringView& outResourceName)const;
 };
 
 struct MaterialBindStruct{
@@ -153,11 +152,14 @@ using MaterialBindParameterMap = MaterialCookMap<ACompactString, ACompactString>
 struct MaterialBindTypedLayoutBlockLookupEntry{
     u32 blockIndex = 0u;
     u32 byteBegin = 0u;
+    u32 constantByteBegin = 0u;
 };
 
 struct MaterialBindTypedLayoutParameterLookupEntry{
     u32 fieldIndex = 0u;
     u32 byteOffset = 0u;
+    u32 constantByteOffset = 0u;
+    Name blockName = NAME_NONE;
 };
 
 using MaterialBindTypedLayoutBlockLookup = MaterialCookMap<Name, MaterialBindTypedLayoutBlockLookupEntry>;
@@ -169,7 +171,6 @@ struct MaterialBindTypedLayout{
     Material::TypedLayoutBlockVector typedLayoutBlocks;
     Material::TypedLayoutFieldVector typedLayoutFields;
     Material::TypedBlockByteVector typedBlockBytes;
-    Material::ResourceReferenceVector resourceReferences;
     MaterialBindTypedLayoutBlockLookup blockLookup;
     MaterialBindTypedLayoutParameterLookup parameterLookup;
 
@@ -177,7 +178,6 @@ struct MaterialBindTypedLayout{
         : typedLayoutBlocks(memoryArena)
         , typedLayoutFields(memoryArena)
         , typedBlockBytes(memoryArena)
-        , resourceReferences(memoryArena)
         , blockLookup(0, Hasher<Name>(), EqualTo<Name>(), memoryArena)
         , parameterLookup(0, Hasher<ACompactString>(), EqualTo<ACompactString>(), memoryArena)
     {}
@@ -230,14 +230,14 @@ void CopyMaterialBindTypedLayoutDefaults(
     u64& outLayoutHash,
     Material::TypedLayoutBlockVector& outBlocks,
     Material::TypedLayoutFieldVector& outFields,
-    Material::TypedBlockByteVector& outBlockBytes,
-    Material::ResourceReferenceVector& outResourceReferences
+    Material::TypedBlockByteVector& outBlockBytes
 );
 [[nodiscard]] bool ApplyMaterialBindTypedLayoutParameters(
     const MaterialBindTypedLayout& layout,
     const Name& materialName,
     const MaterialBindParameterMap& parameters,
-    Material::TypedBlockByteVector& inOutBlockBytes
+    Material::TypedBlockByteVector& inOutBlockBytes,
+    Material::ResourceReferenceVector& outResourceReferences
 );
 
 

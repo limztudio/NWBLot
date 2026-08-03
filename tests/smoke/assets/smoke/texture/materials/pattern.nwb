@@ -10,6 +10,8 @@ asset.shader_variant = "default";
 asset.parameters = {
     "texture_surface": {
         "base_color": "half4(1.0h, 1.0h, 1.0h, 1.0h)",
+        "base_color_map": "project/textures/smoke_pattern",
+        "base_color_sampler": "engine/samplers/linear_clamp",
     },
     "texture_runtime": {
         "color_tint": "half4(1.0h, 1.0h, 1.0h, 1.0h)",

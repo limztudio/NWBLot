@@ -100,18 +100,6 @@ static constexpr AStringView s_DefaultAttribute = "default";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_FixtureAttribute = "fixture";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr AStringView s_TextureAssetAttribute = "texture_asset";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Cross-TU helper declarations (definitions de-static'd in their domain .cpp).
 
 bool ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena, Metascript::Document& outDoc);
@@ -140,7 +128,8 @@ bool ApplyMaterialBindTypedLayoutParameterValue(
     const Name& materialName,
     const ACompactString& parameterName,
     const ACompactString& parameterValue,
-    Material::TypedBlockByteVector& inOutBlockBytes
+    Material::TypedBlockByteVector& inOutBlockBytes,
+    Material::ResourceReferenceVector& outResourceReferences
 );
 
 bool BuildMaterialBindTypedLayoutImpl(

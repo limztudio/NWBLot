@@ -1540,6 +1540,11 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
         NWB_TEXT("must declare a default attribute")
     );
     expectParseFailure(
+        s_ResourceAttributeMaterialBindSource,
+        "material_bind_resource_attribute",
+        NWB_TEXT("resource field 'NwbTestSurfaceMaterial.base_color_map' must not declare attributes")
+    );
+    expectParseFailure(
         s_DuplicateInstanceMaterialBindSource,
         "material_bind_duplicate_instance",
         NWB_TEXT("duplicate struct instance declaration")
@@ -1649,7 +1654,7 @@ TEST(AssetsGraphics, MaterialBindGeneratedSlangText){
 }
 
 
-TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
+TEST(AssetsGraphics, MaterialBindProjectResourcePaths){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -1657,9 +1662,9 @@ TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
     NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
     NWB::Impl::Material material(testArena.arena);
     const bool built = BuildMaterialFromBindAndMeta(
-        s_StaticResourceFixtureMaterialBindSource,
-        s_StaticResourceFixtureMaterialMeta,
-        "material_bind_static_resource_fixture",
+        s_ProjectResourceMaterialBindSource,
+        s_ProjectResourceMaterialMeta,
+        "material_bind_project_resource",
         testArena,
         material,
         scratchArena
@@ -1690,15 +1695,15 @@ TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
         const NWB::Impl::MaterialResourceReference& samplerReference = material.resourceReferences()[1u];
         EXPECT_EQ(imageReference.blockName, Name("surface"));
         EXPECT_EQ(imageReference.fieldName, Name("base_color_map"));
-        EXPECT_EQ(imageReference.resourceName, Name(NWB::Impl::MaterialBuiltinResource::s_CheckerRgba8));
+        EXPECT_EQ(imageReference.resourceName, Name("project/textures/test_checker"));
         EXPECT_EQ(imageReference.resourceKind, NWB::Impl::MaterialResourceKind::SampledImage2D);
-        EXPECT_EQ(imageReference.resourceSource, NWB::Impl::MaterialResourceSource::Builtin);
+        EXPECT_EQ(imageReference.resourceSource, NWB::Impl::MaterialResourceSource::ProjectAsset);
         EXPECT_EQ(imageReference.constantByteOffset, 16u);
         EXPECT_EQ(samplerReference.blockName, Name("surface"));
         EXPECT_EQ(samplerReference.fieldName, Name("base_color_sampler"));
-        EXPECT_EQ(samplerReference.resourceName, Name(NWB::Impl::MaterialBuiltinResource::s_LinearClamp));
+        EXPECT_EQ(samplerReference.resourceName, Name("project/samplers/test_linear_clamp"));
         EXPECT_EQ(samplerReference.resourceKind, NWB::Impl::MaterialResourceKind::Sampler);
-        EXPECT_EQ(samplerReference.resourceSource, NWB::Impl::MaterialResourceSource::Builtin);
+        EXPECT_EQ(samplerReference.resourceSource, NWB::Impl::MaterialResourceSource::ProjectAsset);
         EXPECT_EQ(samplerReference.constantByteOffset, 20u);
 
         NWB::Impl::MaterialAssetCodec codec;
@@ -1719,8 +1724,8 @@ TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
     NWB::Impl::MaterialBindEntry bindEntry(testArena.arena);
     const bool parsed = ParseMaterialBindFromText(
         testArena,
-        s_StaticResourceFixtureMaterialBindSource,
-        "material_bind_static_resource_fixture_generated",
+        s_ProjectResourceMaterialBindSource,
+        "material_bind_project_resource_generated",
         bindEntry,
         bindRoot,
         scratchArena
@@ -1755,7 +1760,7 @@ TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
 }
 
 
-TEST(AssetsGraphics, MaterialBindTextureAssetResource){
+TEST(AssetsGraphics, MaterialBindProjectResourceValidation){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -1763,20 +1768,30 @@ TEST(AssetsGraphics, MaterialBindTextureAssetResource){
     NWB::Core::Alloc::ScratchArena scratchArena(s_MaterialScratchArena);
     EXPECT_FALSE(NWB::Impl::IsSupportedMaterialResourceReference(
         NWB::Impl::MaterialResourceKind::SampledImage2D,
-        NWB::Impl::MaterialResourceSource::Builtin,
-        "project/materials/smoke_pattern"
+        NWB::Impl::MaterialResourceSource::ProjectAsset,
+        "builtin/material_fixture/checker_rgba8"
+    ));
+    EXPECT_FALSE(NWB::Impl::IsSupportedMaterialResourceReference(
+        NWB::Impl::MaterialResourceKind::Sampler,
+        NWB::Impl::MaterialResourceSource::ProjectAsset,
+        "project/samplers/../linear_clamp"
     ));
     EXPECT_TRUE(NWB::Impl::IsSupportedMaterialResourceReference(
         NWB::Impl::MaterialResourceKind::SampledImage2D,
-        NWB::Impl::MaterialResourceSource::TextureAsset,
+        NWB::Impl::MaterialResourceSource::ProjectAsset,
         "project/materials/smoke_pattern"
+    ));
+    EXPECT_TRUE(NWB::Impl::IsSupportedMaterialResourceReference(
+        NWB::Impl::MaterialResourceKind::Sampler,
+        NWB::Impl::MaterialResourceSource::ProjectAsset,
+        "project/samplers/linear_clamp"
     ));
 
     NWB::Impl::Material material(testArena.arena);
     const bool built = BuildMaterialFromBindAndMeta(
-        s_StaticTextureAssetMaterialBindSource,
-        s_StaticResourceFixtureMaterialMeta,
-        "material_bind_texture_asset_resource",
+        s_SecondProjectResourceMaterialBindSource,
+        s_ProjectResourceMaterialMeta,
+        "material_bind_project_resource_validation",
         testArena,
         material,
         scratchArena
@@ -1784,9 +1799,9 @@ TEST(AssetsGraphics, MaterialBindTextureAssetResource){
     ASSERT_TRUE(built);
     ASSERT_EQ(material.resourceReferences().size(), 2u);
     const NWB::Impl::MaterialResourceReference& imageReference = material.resourceReferences()[0u];
-    EXPECT_EQ(imageReference.resourceName, Name("project/materials/smoke_pattern"));
+    EXPECT_EQ(imageReference.resourceName, Name("project/textures/test_checker"));
     EXPECT_EQ(imageReference.resourceKind, NWB::Impl::MaterialResourceKind::SampledImage2D);
-    EXPECT_EQ(imageReference.resourceSource, NWB::Impl::MaterialResourceSource::TextureAsset);
+    EXPECT_EQ(imageReference.resourceSource, NWB::Impl::MaterialResourceSource::ProjectAsset);
     EXPECT_EQ(imageReference.constantByteOffset, 16u);
 
     NWB::Impl::MaterialAssetCodec codec;

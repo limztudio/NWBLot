@@ -116,16 +116,26 @@ bool ValidateMaterialCookInterfaces(
             materialEntry.typedLayoutHash,
             materialEntry.typedLayoutBlocks,
             materialEntry.typedLayoutFields,
-            materialEntry.typedBlockBytes,
-            materialEntry.resourceReferences
+            materialEntry.typedBlockBytes
         );
         if(!ApplyMaterialBindTypedLayoutParameters(
             *layout,
             Name(AStringView(materialEntry.virtualPath)),
             materialEntry.parameters,
-            materialEntry.typedBlockBytes
+            materialEntry.typedBlockBytes,
+            materialEntry.resourceReferences
         ))
             return false;
+        if(!MaterialBinaryPayload::ValidateMaterialResourceReferences(
+            materialEntry.typedLayoutBlocks,
+            materialEntry.typedLayoutFields,
+            materialEntry.resourceReferences
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}': resource fields must be assigned project asset paths in parameters")
+                , StringConvert(materialEntry.virtualPath.c_str())
+            );
+            return false;
+        }
     }
 
     return true;

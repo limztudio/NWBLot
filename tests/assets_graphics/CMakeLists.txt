@@ -13,6 +13,7 @@ target_sources(nwb_assets_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/mesh_cooker_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/shader_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/texture_tests.inl"
+    "${CMAKE_CURRENT_LIST_DIR}/sampler_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/volume_extensibility_tests.inl"
     "${CMAKE_CURRENT_LIST_DIR}/../meshlet_ref_test_data.h"
 )
@@ -25,6 +26,7 @@ nwb_target_link_libraries_whole_archive(nwb_assets_graphics_tests
     nwb_assets_mesh_volume_entries
     nwb_assets_model_volume_entry
     nwb_assets_texture_volume_entry
+    nwb_assets_sampler_volume_entry
     nwb_assets_graphics_cook
 )
 target_link_libraries(nwb_assets_graphics_tests PRIVATE

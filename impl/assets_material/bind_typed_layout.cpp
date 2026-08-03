@@ -449,8 +449,8 @@ static bool BuildMaterialTypedLayoutDefaultValue(
 ){
     outDefaultValue = {};
 
-    // Resource fields store an initially-zero global-heap slot word. Their static resource identity is carried by
-    // MaterialResourceReference and patched only after the renderer owns a live descriptor heap.
+    // Resource fields store an initially-zero global-heap slot word. Their material-authored project path is carried
+    // by MaterialResourceReference and patched only after the renderer owns a live descriptor heap.
     if(IsMaterialLayoutResourceFieldType(fieldType))
         return true;
 
@@ -613,7 +613,6 @@ static bool ReserveMaterialBindTypedLayoutVectors(
     outLayout.typedLayoutBlocks.reserve(sortedInstances.size());
     outLayout.typedLayoutFields.reserve(fieldReserveCount);
     outLayout.typedBlockBytes.reserve(byteReserveCount);
-    outLayout.resourceReferences.reserve(fieldReserveCount);
     return true;
 }
 
@@ -656,6 +655,7 @@ static bool BuildMaterialBindTypedLayoutBlockLookup(
     inOutLayout.blockLookup.reserve(inOutLayout.typedLayoutBlocks.size());
 
     usize blockByteBegin = 0u;
+    u32 constantByteBegin = 0u;
     for(usize blockIndex = 0u; blockIndex < inOutLayout.typedLayoutBlocks.size(); ++blockIndex){
         const MaterialTypedLayoutBlock& block = inOutLayout.typedLayoutBlocks[blockIndex];
         if(blockIndex > Limit<u32>::s_Max || blockByteBegin > Limit<u32>::s_Max){
@@ -665,7 +665,11 @@ static bool BuildMaterialBindTypedLayoutBlockLookup(
             return false;
         }
 
-        const MaterialBindTypedLayoutBlockLookupEntry entry{ static_cast<u32>(blockIndex), static_cast<u32>(blockByteBegin) };
+        const MaterialBindTypedLayoutBlockLookupEntry entry{
+            static_cast<u32>(blockIndex),
+            static_cast<u32>(blockByteBegin),
+            constantByteBegin
+        };
         if(!inOutLayout.blockLookup.emplace(block.blockName, entry).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: duplicate block in '{}'"), StringConvert(contextLabel));
             return false;
@@ -678,6 +682,13 @@ static bool BuildMaterialBindTypedLayoutBlockLookup(
         }
 
         blockByteBegin += block.byteSize;
+        if(block.blockClass == MaterialBlockClass::MaterialConstant){
+            if(block.byteSize > Limit<u32>::s_Max - constantByteBegin){
+                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: constant block byte size overflows for '{}'"), StringConvert(contextLabel));
+                return false;
+            }
+            constantByteBegin += block.byteSize;
+        }
     }
 
     return true;
@@ -761,13 +772,22 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(
                 );
                 return false;
             }
-            // Static resource slots are fixed by the cooked resource reference and are never material .nwb
-            // parameters.  Excluding them here prevents an authored uint value from being mistaken for a heap slot.
-            if(IsMaterialLayoutResourceFieldType(field.fieldType))
-                continue;
             if(field.offset > Limit<u32>::s_Max - blockEntry.byteBegin){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' field '{}.{}' "
                     "byte offset exceeds u32 for '{}'")
+                    , StringConvert(bindEntry.virtualPath)
+                    , StringConvert(bindStruct->name)
+                    , StringConvert(bindField.name)
+                    , StringConvert(contextLabel)
+                );
+                return false;
+            }
+            if(
+                IsMaterialLayoutResourceFieldType(field.fieldType)
+                && field.offset > Limit<u32>::s_Max - blockEntry.constantByteBegin
+            ){
+                NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' resource field '{}.{}' "
+                    "constant byte offset exceeds u32 for '{}'")
                     , StringConvert(bindEntry.virtualPath)
                     , StringConvert(bindStruct->name)
                     , StringConvert(bindField.name)
@@ -788,7 +808,9 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(
 
             const MaterialBindTypedLayoutParameterLookupEntry entry{
                 static_cast<u32>(fieldIndex),
-                blockEntry.byteBegin + field.offset
+                blockEntry.byteBegin + field.offset,
+                blockEntry.constantByteBegin + field.offset,
+                block.blockName
             };
             if(!inOutLayout.parameterLookup.emplace(parameterName, entry).second){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: duplicate parameter '{}' in '{}'")
@@ -872,7 +894,8 @@ bool ApplyMaterialBindTypedLayoutParameterValue(
     const Name& materialName,
     const ACompactString& parameterName,
     const ACompactString& parameterValue,
-    Material::TypedBlockByteVector& inOutBlockBytes
+    Material::TypedBlockByteVector& inOutBlockBytes,
+    Material::ResourceReferenceVector& outResourceReferences
 ){
     const auto parameterIt = layout.parameterLookup.find(parameterName);
     if(parameterIt == layout.parameterLookup.end()){
@@ -898,6 +921,37 @@ bool ApplyMaterialBindTypedLayoutParameterValue(
     }
 
     const MaterialTypedLayoutField& field = layout.typedLayoutFields[parameterEntry.fieldIndex];
+    if(IsMaterialLayoutResourceFieldType(field.fieldType)){
+        const MaterialResourceKind::Enum resourceKind = MaterialLayoutFieldResourceKind(field.fieldType);
+        const AStringView resourcePath = TrimView(AStringView(parameterValue));
+        const Name resourceName(resourcePath);
+        if(
+            !parameterEntry.blockName
+            || !field.fieldName
+            || !resourceName
+            || !IsSupportedMaterialResourceReference(
+                resourceKind,
+                MaterialResourceSource::ProjectAsset,
+                resourcePath
+            )
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource parameter '{}' for '{}' must be a project asset path")
+                , StringConvert(parameterName.c_str())
+                , StringConvert(materialName.c_str())
+            );
+            return false;
+        }
+
+        MaterialResourceReference resourceReference;
+        resourceReference.blockName = parameterEntry.blockName;
+        resourceReference.fieldName = field.fieldName;
+        resourceReference.resourceName = resourceName;
+        resourceReference.resourceKind = resourceKind;
+        resourceReference.resourceSource = MaterialResourceSource::ProjectAsset;
+        resourceReference.constantByteOffset = parameterEntry.constantByteOffset;
+        outResourceReferences.push_back(resourceReference);
+        return true;
+    }
 
     UInt4U typedValue = {};
     if(!ParseMaterialTypedLayoutParameterValue(materialName, parameterName, parameterValue, field, typedValue))
@@ -969,7 +1023,6 @@ bool BuildMaterialBindTypedLayoutImpl(
         }
 
         const usize blockByteBegin = outLayout.typedBlockBytes.size();
-        const u32 blockConstantByteBegin = constantTypedByteSize;
 
         MaterialTypedLayoutBlock block;
         block.blockName = Name(AStringView(instance->name));
@@ -1065,49 +1118,6 @@ bool BuildMaterialBindTypedLayoutImpl(
             }
 
             outLayout.typedLayoutFields.push_back(field);
-            if(IsMaterialLayoutResourceFieldType(fieldType)){
-                const MaterialResourceKind::Enum resourceKind = MaterialLayoutFieldResourceKind(fieldType);
-                MaterialResourceSource::Enum resourceSource = MaterialResourceSource::None;
-                AStringView resourceNameText;
-                if(!bindField.resourceBinding(resourceSource, resourceNameText)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource field '{}.{}' is missing a valid resource attribute for '{}'")
-                        , StringConvert(instance->name)
-                        , StringConvert(bindField.name)
-                        , StringConvert(contextName.c_str())
-                    );
-                    return false;
-                }
-                const Name resourceName(resourceNameText);
-                if(
-                    !IsValidMaterialResourceKind(resourceKind)
-                    || !resourceName
-                    || !IsSupportedMaterialResourceReference(resourceKind, resourceSource, resourceNameText)
-                ){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource field '{}.{}' has an invalid resource identity for '{}'")
-                        , StringConvert(instance->name)
-                        , StringConvert(bindField.name)
-                        , StringConvert(contextName.c_str())
-                    );
-                    return false;
-                }
-                if(field.offset > Limit<u32>::s_Max - blockConstantByteBegin){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource field '{}.{}' byte offset exceeds u32 for '{}'")
-                        , StringConvert(instance->name)
-                        , StringConvert(bindField.name)
-                        , StringConvert(contextName.c_str())
-                    );
-                    return false;
-                }
-
-                MaterialResourceReference resourceReference;
-                resourceReference.blockName = block.blockName;
-                resourceReference.fieldName = field.fieldName;
-                resourceReference.resourceName = resourceName;
-                resourceReference.resourceKind = resourceKind;
-                resourceReference.resourceSource = resourceSource;
-                resourceReference.constantByteOffset = blockConstantByteBegin + field.offset;
-                outLayout.resourceReferences.push_back(resourceReference);
-            }
             block.byteSize = fieldOffset + fieldByteSize;
         }
 

@@ -16,6 +16,7 @@ nwb_target_link_libraries_whole_archive(testbed
     nwb_assets_material
     nwb_assets_shader
     nwb_assets_texture
+    nwb_assets_sampler
 )
 target_link_libraries(testbed PRIVATE
     nwb_common

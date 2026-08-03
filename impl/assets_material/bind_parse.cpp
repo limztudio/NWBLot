@@ -358,15 +358,25 @@ static bool ValidateMaterialBindStructAttributes(
 static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const MaterialBindStruct& bindStruct, const MaterialBindField& field){
     MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
     const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType);
-    const MaterialResourceKind::Enum resourceKind = MaterialLayoutFieldResourceKind(resourceFieldType);
+
+    // Resource fields declare only their shader-visible type. Each material supplies the concrete project-asset path
+    // in its parameters block, so a bind interface cannot carry a fixture, texture asset, or any other identity.
+    if(isResourceField){
+        if(field.attributes.empty())
+            return true;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': resource field '{}.{}' must not declare attributes; set its project asset path in material parameters")
+            , PathToString<tchar>(bindFilePath)
+            , StringConvert(bindStruct.name)
+            , StringConvert(field.name)
+        );
+        return false;
+    }
+
     u32 attributeCount = 0u;
 
     for(const MaterialBindAttribute& attribute : field.attributes){
-        const bool supportedAttribute = isResourceField
-            ? attribute.name == s_FixtureAttribute || attribute.name == s_TextureAssetAttribute
-            : attribute.name == s_DefaultAttribute
-        ;
-        if(!supportedAttribute){
+        if(attribute.name != s_DefaultAttribute){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported attribute '{}'")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
@@ -377,11 +387,10 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
         }
         ++attributeCount;
         if(attributeCount > 1u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare exactly one {} attribute")
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare exactly one default attribute")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
                 , StringConvert(field.name)
-                , isResourceField ? NWB_TEXT("resource") : NWB_TEXT("default")
             );
             return false;
         }
@@ -397,39 +406,15 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
     }
 
     if(attributeCount == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare a {} attribute")
-            , PathToString<tchar>(bindFilePath)
-            , StringConvert(bindStruct.name)
-            , StringConvert(field.name)
-            , isResourceField ? NWB_TEXT("resource") : NWB_TEXT("default")
-        );
-        return false;
-    }
-
-    if(!isResourceField)
-        return true;
-
-    MaterialResourceSource::Enum resourceSource = MaterialResourceSource::None;
-    AStringView resourceName;
-    if(!field.resourceBinding(resourceSource, resourceName)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare exactly one valid resource attribute")
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare a default attribute")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(bindStruct.name)
             , StringConvert(field.name)
         );
         return false;
     }
-    if(IsSupportedMaterialResourceReference(resourceKind, resourceSource, resourceName))
-        return true;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' resource '{}' is not supported for resource type '{}'")
-        , PathToString<tchar>(bindFilePath)
-        , StringConvert(bindStruct.name)
-        , StringConvert(field.name)
-        , StringConvert(resourceName)
-        , StringConvert(field.type)
-    );
-    return false;
+    return true;
 }
 
 

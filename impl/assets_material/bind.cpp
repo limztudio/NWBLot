@@ -11,6 +11,8 @@
 #include "bind.h"
 #include "bind_private.h"
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -48,38 +50,6 @@ const MaterialBindAttribute* MaterialBindField::findAttribute(const AStringView 
 AStringView MaterialBindField::defaultArgument()const{
     const MaterialBindAttribute* attribute = findAttribute(__hidden_bind::s_DefaultAttribute);
     return (attribute && attribute->arguments.size() == 1u) ? AStringView(attribute->arguments[0u]) : AStringView();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool MaterialBindField::resourceBinding(
-    MaterialResourceSource::Enum& outResourceSource,
-    AStringView& outResourceName
-)const{
-    outResourceSource = MaterialResourceSource::None;
-    outResourceName = AStringView();
-
-    const MaterialBindAttribute* attribute = findAttribute(__hidden_bind::s_FixtureAttribute);
-    const MaterialBindAttribute* textureAssetAttribute = findAttribute(__hidden_bind::s_TextureAssetAttribute);
-    if((attribute == nullptr) == (textureAssetAttribute == nullptr))
-        return false;
-
-    if(textureAssetAttribute){
-        attribute = textureAssetAttribute;
-        outResourceSource = MaterialResourceSource::TextureAsset;
-    }
-    else
-        outResourceSource = MaterialResourceSource::Builtin;
-
-    if(attribute->arguments.size() != 1u || attribute->arguments[0u].empty()){
-        outResourceSource = MaterialResourceSource::None;
-        return false;
-    }
-
-    outResourceName = AStringView(attribute->arguments[0u]);
-    return true;
 }
 
 
@@ -128,7 +98,6 @@ void MaterialBindTypedLayout::reset(){
     typedLayoutBlocks.clear();
     typedLayoutFields.clear();
     typedBlockBytes.clear();
-    resourceReferences.clear();
     blockLookup.clear();
     parameterLookup.clear();
 }
@@ -224,14 +193,12 @@ void CopyMaterialBindTypedLayoutDefaults(
     u64& outLayoutHash,
     Material::TypedLayoutBlockVector& outBlocks,
     Material::TypedLayoutFieldVector& outFields,
-    Material::TypedBlockByteVector& outBlockBytes,
-    Material::ResourceReferenceVector& outResourceReferences
+    Material::TypedBlockByteVector& outBlockBytes
 ){
     outLayoutHash = layout.layoutHash;
     outBlocks.assign(layout.typedLayoutBlocks.begin(), layout.typedLayoutBlocks.end());
     outFields.assign(layout.typedLayoutFields.begin(), layout.typedLayoutFields.end());
     outBlockBytes.assign(layout.typedBlockBytes.begin(), layout.typedBlockBytes.end());
-    outResourceReferences.assign(layout.resourceReferences.begin(), layout.resourceReferences.end());
 }
 
 
@@ -242,18 +209,25 @@ bool ApplyMaterialBindTypedLayoutParameters(
     const MaterialBindTypedLayout& layout,
     const Name& materialName,
     const MaterialBindParameterMap& parameters,
-    Material::TypedBlockByteVector& inOutBlockBytes
+    Material::TypedBlockByteVector& inOutBlockBytes,
+    Material::ResourceReferenceVector& outResourceReferences
 ){
+    outResourceReferences.clear();
     for(const auto& [parameterName, parameterValue] : parameters){
         if(!__hidden_bind::ApplyMaterialBindTypedLayoutParameterValue(
             layout,
             materialName,
             parameterName,
             parameterValue,
-            inOutBlockBytes
+            inOutBlockBytes,
+            outResourceReferences
         ))
             return false;
     }
+
+    Sort(outResourceReferences.begin(), outResourceReferences.end(), [](const MaterialResourceReference& lhs, const MaterialResourceReference& rhs){
+        return lhs.constantByteOffset < rhs.constantByteOffset;
+    });
 
     return true;
 }

@@ -61,4 +61,8 @@ if(UNIX)
 endif()
 
 nwb_disable_vendor_warnings(nwb_vendor_basis_universal)
+set_target_properties(nwb_vendor_basis_universal PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
+)
 nwb_apply_debug_symbols(nwb_vendor_basis_universal)

@@ -41,6 +41,10 @@ if(TARGET nwb_logserver)
 endif()
 
 if(TARGET nwb_resource_cooker)
+    # Object-cache paths include long content hashes. Keep the root compact so Windows
+    # builds remain below the legacy MAX_PATH limit.
+    set(_nwb_testbed_asset_cache_directory "${PROJECT_SOURCE_DIR}/__build_obj/c/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}")
+
     file(GLOB_RECURSE _nwb_testbed_asset_inputs
         CONFIGURE_DEPENDS
         LIST_DIRECTORIES false
@@ -57,7 +61,7 @@ if(TARGET nwb_resource_cooker)
             --asset-root "impl/assets"
             --asset-root "Testbed/assets"
             --output-directory "${NWB_OUTPUT_ROOT}/res"
-            --cache-directory "${PROJECT_SOURCE_DIR}/__build_obj/asset_cache/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}"
+            --cache-directory "${_nwb_testbed_asset_cache_directory}"
             --configuration "$<CONFIG>"
         COMMAND "${CMAKE_COMMAND}" -E touch "${_nwb_testbed_asset_stamp}"
         DEPENDS
@@ -72,5 +76,6 @@ if(TARGET nwb_resource_cooker)
     add_dependencies(testbed nwb_testbed_assets)
     unset(_nwb_testbed_asset_stamp)
     unset(_nwb_testbed_asset_inputs)
+    unset(_nwb_testbed_asset_cache_directory)
 endif()
 

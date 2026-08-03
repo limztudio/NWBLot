@@ -1,5 +1,7 @@
 // basisu_astc_ldr_fencode.h
 #pragma once
+#include <bit>
+
 #include "../transcoder/basisu.h"
 #include "../transcoder/basisu_transcoder_internal.h"
 #include "basisu_astc_ldr_common.h"

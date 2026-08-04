@@ -140,6 +140,22 @@ namespace Format{
 
         kCount
     };
+
+    [[nodiscard]] constexpr bool IsBCCompressedFormat(const Enum format)noexcept{
+        return format >= BC1_UNORM && format <= BC7_UNORM_SRGB;
+    }
+
+    [[nodiscard]] constexpr bool IsASTCCompressedFormat(const Enum format)noexcept{
+        return format >= ASTC_4x4_UNORM && format <= ASTC_12x12_FLOAT;
+    }
+
+    [[nodiscard]] constexpr bool IsASTCHdrFormat(const Enum format)noexcept{
+        return IsASTCCompressedFormat(format) && (static_cast<u32>(format) - static_cast<u32>(ASTC_4x4_UNORM)) % 3u == 2u;
+    }
+
+    [[nodiscard]] constexpr bool IsBlockCompressedFormat(const Enum format)noexcept{
+        return IsBCCompressedFormat(format) || IsASTCCompressedFormat(format);
+    }
 };
 
 namespace FormatKind{

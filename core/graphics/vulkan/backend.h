@@ -2371,6 +2371,11 @@ private:
 #if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
     [[nodiscard]] bool consumeSubmissionRejectionForTesting(CommandQueue::Enum queue);
 #endif
+    // Probed once at device initialization so compressed texture selection does not rely on
+    // a later optimistic format-property query.
+    void probeCompressedTextureFormats();
+    [[nodiscard]] FormatSupport::Mask queryFormatSupportUncached(Format::Enum format)const;
+    [[nodiscard]] bool canCreateSampledTextureFormat(Format::Enum format)const;
     [[nodiscard]] bool loadPipelineCacheData(GraphicsBytes& outData);
     void savePipelineCacheData();
     [[nodiscard]] bool createPipelineLayoutForBindingLayouts(
@@ -2492,6 +2497,8 @@ private:
     Path m_pipelineCacheDirectory;
     GraphicsString m_pipelineCacheVolumeName;
     Optional<Queue> m_queues[static_cast<u32>(CommandQueue::kCount)];
+    // Only block-compressed entries are populated; all are resolved before the device is exposed.
+    Array<FormatSupport::Mask, static_cast<usize>(Format::kCount)> m_compressedFormatSupport = {};
 
 #if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
     Array<Atomic<u32>, static_cast<u32>(CommandQueue::kCount)> m_submissionRejectionsForTesting = {};

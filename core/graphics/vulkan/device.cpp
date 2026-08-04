@@ -392,6 +392,10 @@ Device::Device(const DeviceDesc& desc)
         vkGetPhysicalDeviceFeatures2(m_context.physicalDevice, &features2);
     }
 
+    // Resolve every ASTC and BC sampled-image path up front. Texture loading consults this
+    // cache, so it can select ASTC, BC, or an uncompressed fallback before allocating data.
+    probeCompressedTextureFormats();
+
     // Descriptor-buffer entry points are mandatory for this device.
     if(
         !m_context.extensions.EXT_descriptor_buffer
@@ -1215,14 +1219,42 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
     }
 }
 
-FormatSupport::Mask Device::queryFormatSupport(Format::Enum format){
-    if(
-        format == Format::ASTC_4x4_FLOAT
-        && !m_context.extensions.EXT_texture_compression_astc_hdr
-    )
+bool Device::canCreateSampledTextureFormat(const Format::Enum format)const{
+    const VkFormat vkFormat = ConvertFormat(format);
+    if(vkFormat == VK_FORMAT_UNDEFINED)
+        return false;
+
+    auto imageFormatInfo = VulkanDetail::MakeVkStruct<VkPhysicalDeviceImageFormatInfo2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2);
+    imageFormatInfo.format = vkFormat;
+    imageFormatInfo.type = VK_IMAGE_TYPE_2D;
+    imageFormatInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    // Static textures must be uploadable as well as sampled, so verify both uses together.
+    imageFormatInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+    auto imageFormatProperties = VulkanDetail::MakeVkStruct<VkImageFormatProperties2>(VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2);
+    const VkResult res = vkGetPhysicalDeviceImageFormatProperties2(
+        m_context.physicalDevice,
+        &imageFormatInfo,
+        &imageFormatProperties
+    );
+    if(res == VK_SUCCESS)
+        return true;
+
+    if(res != VK_ERROR_FORMAT_NOT_SUPPORTED){
+        NWB_LOGGER_WARNING(
+            NWB_TEXT("Vulkan: Failed to probe sampled texture format {}: {}"),
+            StringConvert(GetFormatInfo(format).name),
+            ResultToString(res)
+        );
+    }
+    return false;
+}
+
+FormatSupport::Mask Device::queryFormatSupportUncached(const Format::Enum format)const{
+    if(Format::IsASTCHdrFormat(format) && !m_context.extensions.EXT_texture_compression_astc_hdr)
         return FormatSupport::None;
 
-    VkFormat vkFormat = ConvertFormat(format);
+    const VkFormat vkFormat = ConvertFormat(format);
     if(vkFormat == VK_FORMAT_UNDEFINED)
         return FormatSupport::None;
 
@@ -1253,6 +1285,65 @@ FormatSupport::Mask Device::queryFormatSupport(Format::Enum format){
         support |= FormatSupport::Buffer;
 
     return support;
+}
+
+void Device::probeCompressedTextureFormats(){
+    constexpr FormatSupport::Mask requiredReadableSupport = FormatSupport::Texture | FormatSupport::ShaderSample;
+
+    u32 readableAstcLdrFormatCount = 0u;
+    u32 readableAstcHdrFormatCount = 0u;
+    u32 readableBcFormatCount = 0u;
+    u32 astcLdrFormatCount = 0u;
+    u32 astcHdrFormatCount = 0u;
+    u32 bcFormatCount = 0u;
+    for(u32 formatValue = static_cast<u32>(Format::BC1_UNORM); formatValue <= static_cast<u32>(Format::ASTC_12x12_FLOAT); ++formatValue){
+        const Format::Enum format = static_cast<Format::Enum>(formatValue);
+        FormatSupport::Mask support = queryFormatSupportUncached(format);
+        if(
+            (support & FormatSupport::Texture) == FormatSupport::Texture
+            && !canCreateSampledTextureFormat(format)
+        ){
+            support &= ~requiredReadableSupport;
+        }
+        m_compressedFormatSupport[formatValue] = support;
+
+        const bool readable = (support & requiredReadableSupport) == requiredReadableSupport;
+        if(Format::IsASTCCompressedFormat(format)){
+            if(Format::IsASTCHdrFormat(format)){
+                ++astcHdrFormatCount;
+                if(readable)
+                    ++readableAstcHdrFormatCount;
+            }
+            else{
+                ++astcLdrFormatCount;
+                if(readable)
+                    ++readableAstcLdrFormatCount;
+            }
+        }
+        else{
+            NWB_ASSERT(Format::IsBCCompressedFormat(format));
+            ++bcFormatCount;
+            if(readable)
+                ++readableBcFormatCount;
+        }
+    }
+
+    NWB_LOGGER_INFO(
+        NWB_TEXT("Vulkan: compressed texture probe found {}/{} readable ASTC LDR formats, {}/{} readable ASTC HDR formats, and {}/{} readable BC formats."),
+        readableAstcLdrFormatCount,
+        astcLdrFormatCount,
+        readableAstcHdrFormatCount,
+        astcHdrFormatCount,
+        readableBcFormatCount,
+        bcFormatCount
+    );
+}
+
+FormatSupport::Mask Device::queryFormatSupport(const Format::Enum format){
+    if(Format::IsBlockCompressedFormat(format))
+        return m_compressedFormatSupport[static_cast<usize>(format)];
+
+    return queryFormatSupportUncached(format);
 }
 
 Object Device::getNativeQueue(ObjectType objectType, CommandQueue::Enum queue){

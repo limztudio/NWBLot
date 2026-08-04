@@ -88,6 +88,13 @@ static void InitializeBasisTranscoder(){
     if(SupportsTextureFormat(device, astcFormat))
         return astcFormat;
 
+    const Core::Format::Enum bcFormat = textureAsset.colorSpace() == TextureColorSpace::Srgb
+        ? Core::Format::BC7_UNORM_SRGB
+        : Core::Format::BC7_UNORM
+    ;
+    if(SupportsTextureFormat(device, bcFormat))
+        return bcFormat;
+
     const Core::Format::Enum rgbaFormat = textureAsset.colorSpace() == TextureColorSpace::Srgb
         ? Core::Format::RGBA8_UNORM_SRGB
         : Core::Format::RGBA8_UNORM
@@ -116,6 +123,32 @@ static void InitializeBasisTranscoder(){
 
 [[nodiscard]] static bool IsAstc4x4LdrFormat(const Core::Format::Enum format){
     return format == Core::Format::ASTC_4x4_UNORM || format == Core::Format::ASTC_4x4_UNORM_SRGB;
+}
+
+[[nodiscard]] static bool IsBc7LdrFormat(const Core::Format::Enum format){
+    return format == Core::Format::BC7_UNORM || format == Core::Format::BC7_UNORM_SRGB;
+}
+
+[[nodiscard]] static bool IsLdrCompressedFormat(const Core::Format::Enum format){
+    return IsAstc4x4LdrFormat(format) || IsBc7LdrFormat(format);
+}
+
+[[nodiscard]] static Core::Format::Enum SelectLdrUploadFallback(
+    Core::Device& device,
+    const Core::Format::Enum failedFormat,
+    const TextureColorSpace::Enum colorSpace
+){
+    const Core::Format::Enum bcFormat = colorSpace == TextureColorSpace::Srgb
+        ? Core::Format::BC7_UNORM_SRGB
+        : Core::Format::BC7_UNORM
+    ;
+    if(IsAstc4x4LdrFormat(failedFormat) && SupportsTextureFormat(device, bcFormat))
+        return bcFormat;
+
+    const Core::Format::Enum rgbaFormat = SelectRgbaUploadFormat(device, colorSpace);
+    if(failedFormat != rgbaFormat)
+        return rgbaFormat;
+    return Core::Format::UNKNOWN;
 }
 
 [[nodiscard]] static bool IsHdrCompressedFormat(const Core::Format::Enum format){
@@ -278,6 +311,56 @@ static void InitializeBasisTranscoder(){
             NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: UASTC-to-ASTC transcoding failed"));
             return false;
         }
+    }
+    return true;
+}
+
+[[nodiscard]] static bool DecodeTextureSliceAsBc7(
+    const Texture& textureAsset,
+    const TextureMipLevel& mip,
+    const u32 mipLevel,
+    const u32 sliceIndex,
+    u8* const outUploadBytes,
+    const usize uploadByteCount
+){
+    const u8* sourceData = nullptr;
+    u64 sourceByteCount = 0u;
+    u64 blockCount = 0u;
+    if(
+        !outUploadBytes
+        || !GetPrimaryUastcSlice(textureAsset, mip, sliceIndex, sourceData, sourceByteCount, blockCount)
+        || sourceByteCount > Limit<u32>::s_Max
+        || blockCount > Limit<u32>::s_Max
+        || blockCount > Limit<u64>::s_Max / s_UastcBytesPerBlock
+        || blockCount * s_UastcBytesPerBlock != uploadByteCount
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: BC7 UASTC slice size is invalid"));
+        return false;
+    }
+
+    basist::basisu_lowlevel_uastc_ldr_4x4_transcoder transcoder;
+    if(!transcoder.transcode_image(
+        basist::transcoder_texture_format::cTFBC7_RGBA,
+        outUploadBytes,
+        static_cast<u32>(blockCount),
+        sourceData,
+        static_cast<u32>(sourceByteCount),
+        mip.blockCountX,
+        mip.blockCountY,
+        mip.width,
+        mip.height,
+        mipLevel,
+        0u,
+        static_cast<u32>(sourceByteCount),
+        0u,
+        true,
+        false,
+        mip.blockCountX,
+        nullptr,
+        mip.height
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: UASTC-to-BC7 transcoding failed"));
+        return false;
     }
     return true;
 }
@@ -530,10 +613,10 @@ static void StoreHdrAlpha(
 ){
     usize rowPitch = 0u;
     usize sliceUploadByteCount = 0u;
-    if(IsAstc4x4LdrFormat(format)){
+    if(IsLdrCompressedFormat(format)){
         const u64 rowPitch64 = static_cast<u64>(mip.blockCountX) * s_UastcBytesPerBlock;
         if(rowPitch64 > Limit<usize>::s_Max || rowPitch64 > Limit<u64>::s_Max / mip.blockCountY){
-            NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: ASTC mip row pitch exceeds addressable memory"));
+            NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: compressed LDR mip row pitch exceeds addressable memory"));
             return false;
         }
         rowPitch = static_cast<usize>(rowPitch64);
@@ -556,10 +639,13 @@ static void StoreHdrAlpha(
     scratchBytes.resize(sliceUploadByteCount * mip.sliceCount);
     for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
         u8* const destination = scratchBytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount;
-        const bool decoded = IsAstc4x4LdrFormat(format)
-            ? DecodeTextureSliceAsAstc(textureAsset, mip, sliceIndex, destination, sliceUploadByteCount)
-            : DecodeTextureSliceAsRgba(textureAsset, mip, sliceIndex, destination, sliceUploadByteCount)
-        ;
+        bool decoded = false;
+        if(IsAstc4x4LdrFormat(format))
+            decoded = DecodeTextureSliceAsAstc(textureAsset, mip, sliceIndex, destination, sliceUploadByteCount);
+        else if(IsBc7LdrFormat(format))
+            decoded = DecodeTextureSliceAsBc7(textureAsset, mip, mipLevel, sliceIndex, destination, sliceUploadByteCount);
+        else
+            decoded = DecodeTextureSliceAsRgba(textureAsset, mip, sliceIndex, destination, sliceUploadByteCount);
         if(!decoded)
             return false;
     }
@@ -755,13 +841,20 @@ bool TextureAssetLoader::Create(
     if(
         !texture
         && textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4
-        && __hidden_texture_loader::IsAstc4x4LdrFormat(format)
+        && __hidden_texture_loader::IsLdrCompressedFormat(format)
     ){
-        const Core::Format::Enum rgbaFallback = __hidden_texture_loader::SelectRgbaUploadFormat(device, textureAsset.colorSpace());
-        if(rgbaFallback != Core::Format::UNKNOWN){
-            textureDesc.setFormat(rgbaFallback);
+        Core::Format::Enum fallbackFormat = __hidden_texture_loader::SelectLdrUploadFallback(
+            device,
+            format,
+            textureAsset.colorSpace()
+        );
+        while(fallbackFormat != Core::Format::UNKNOWN){
+            textureDesc.setFormat(fallbackFormat);
+            format = fallbackFormat;
             texture = graphics.createTexture(textureDesc);
-            format = rgbaFallback;
+            if(texture)
+                break;
+            fallbackFormat = __hidden_texture_loader::SelectLdrUploadFallback(device, format, textureAsset.colorSpace());
         }
     }
     if(

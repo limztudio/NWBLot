@@ -74,7 +74,7 @@ if(NWB_BUILD_UTILITIES)
 endif()
 
 if((WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux") AND NWB_BUILD_TESTBED)
-    add_subdirectory(Testbed)
+    add_subdirectory(CoolStuff/Testbed)
 endif()
 
 if(NWB_BUILD_TESTS)

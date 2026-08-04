@@ -101,11 +101,74 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertTrue(args.with_profile)
         self.assertEqual(8123, args.profile_log_port)
 
-    def test_async_shadow_m4_shortcut_forwards_its_arguments(self):
-        with mock.patch.object(launcher, "run_repo_script", return_value=0) as run_repo_script:
+    def test_discovers_directory_and_explicit_script_launchers(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            paths = (
+                root / "CoolStuff" / "Testbed" / "launch.py",
+                root / "tests" / "smoke" / "launcher.py",
+                root / "tests" / "ab" / "async_shadow_m4" / "launch.py",
+                root / "tests" / "ab" / "frame_lagged" / "run.py",
+                root / "tests" / "ab" / "frame_lagged" / "helper.py",
+                root / "utilities" / "tex_conv" / "launch.py",
+            )
+            for path in paths:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                contents = "NWB_LAUNCH_COMMAND = 'frame-lagged'\n" if path.name == "run.py" else ""
+                path.write_text(contents, encoding="utf-8")
+
+            launchers = launcher.discover_repo_launchers(root)
+
+        self.assertEqual(
+            {
+                "async-shadow-m4": Path("tests/ab/async_shadow_m4/launch.py"),
+                "frame-lagged": Path("tests/ab/frame_lagged/run.py"),
+                "smoke": Path("tests/smoke/launcher.py"),
+                "testbed": Path("CoolStuff/Testbed/launch.py"),
+                "tex-conv": Path("utilities/tex_conv/launch.py"),
+            },
+            {command: discovered.script for command, discovered in launchers.items()},
+        )
+
+    def test_launch_py_takes_precedence_over_legacy_launcher_py(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            directory = root / "tests" / "smoke"
+            directory.mkdir(parents=True)
+            (directory / "launch.py").write_text("", encoding="utf-8")
+            (directory / "launcher.py").write_text("", encoding="utf-8")
+
+            launchers = launcher.discover_repo_launchers(root)
+
+        self.assertEqual(Path("tests/smoke/launch.py"), launchers["smoke"].script)
+
+    def test_duplicate_launch_commands_require_an_override(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for path in (
+                root / "tests" / "same_name" / "launch.py",
+                root / "utilities" / "same_name" / "launch.py",
+            ):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("", encoding="utf-8")
+
+            with self.assertRaisesRegex(SystemExit, "duplicate launch command 'same-name'"):
+                launcher.discover_repo_launchers(root)
+
+    def test_discovered_launcher_forwards_its_arguments(self):
+        repo_launchers = {
+            "async-shadow-m4": launcher.RepoLauncher(
+                "async-shadow-m4",
+                Path("tests/ab/async_shadow_m4/launch.py"),
+            )
+        }
+        with (
+            mock.patch.object(launcher, "discover_repo_launchers", return_value=repo_launchers),
+            mock.patch.object(launcher, "run_repo_script", return_value=0) as run_repo_script,
+        ):
             self.assertEqual(0, launcher.main(["async-shadow-m4", "--dry-run"]))
         run_repo_script.assert_called_once_with(
-            launcher.ASYNC_SHADOW_M4_LAUNCH_SCRIPT,
+            Path("tests/ab/async_shadow_m4/launch.py"),
             ["--dry-run"],
             echo=True,
         )

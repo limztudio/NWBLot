@@ -10,12 +10,12 @@ ASCII FBX variants supported by the vendored ufbx loader.
 
 ## Build and run
 
-The repository launcher builds the target as needed and forwards arguments
-after `--`:
+The directory launcher is discovered by the repository root, builds the target
+as needed, and forwards arguments after `--`:
 
 ```sh
-python launcher.py run nwb_fbx_to_nwb -- --help
-python launcher.py run nwb_fbx_to_nwb -- assets/models/crate.fbx
+python launcher.py fbx-to-nwb -- --help
+python launcher.py fbx-to-nwb -- assets/models/crate.fbx
 ```
 
 The second command starts the interactive workflow. For CI and asset pipelines,
@@ -23,7 +23,7 @@ pass `--yes` so that every unspecified option uses its default instead of
 prompting:
 
 ```sh
-python launcher.py run nwb_fbx_to_nwb -- \
+python launcher.py fbx-to-nwb -- \
     assets/models/crate.fbx \
     --output assets/models/crate.nwb \
     --asset-type bunch \
@@ -40,7 +40,7 @@ replaced by `.nwb`. Existing primary output files are never replaced unless
 List the visible mesh instances in a scene before exporting one:
 
 ```sh
-python launcher.py run nwb_fbx_to_nwb -- assets/characters/hero.fbx --list-meshes
+python launcher.py fbx-to-nwb -- assets/characters/hero.fbx --list-meshes
 ```
 
 `--mesh` (or `-m`) selects `all` instances by default. It also accepts `first`,
@@ -52,7 +52,7 @@ present.
 For example, this writes a single static mesh asset from the first instance:
 
 ```sh
-python launcher.py run nwb_fbx_to_nwb -- \
+python launcher.py fbx-to-nwb -- \
     assets/props/crate.fbx \
     --output assets/meshes/crate.nwb \
     --asset-type mesh \
@@ -136,7 +136,7 @@ document.
 To make a canonical copy:
 
 ```sh
-python launcher.py run nwb_fbx_to_nwb -- \
+python launcher.py fbx-to-nwb -- \
     assets/meshes/crate.nwb \
     --output assets/meshes/crate_canonical.nwb \
     --yes
@@ -145,7 +145,7 @@ python launcher.py run nwb_fbx_to_nwb -- \
 To replace the input in place, explicitly acknowledge the overwrite:
 
 ```sh
-python launcher.py run nwb_fbx_to_nwb -- \
+python launcher.py fbx-to-nwb -- \
     assets/meshes/crate.nwb \
     --yes --force
 ```

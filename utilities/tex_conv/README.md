@@ -1,17 +1,17 @@
 # tex_conv
 
-`tex_conv` converts LDR images into a pair of NWB texture files. Its CMake
-target is `nwb_tex_conv`, so it can be built and run from the repository root
-through the launcher:
+`tex_conv` converts LDR images into a pair of NWB texture files. Its directory
+launcher is discovered automatically by the repository root, so it can be
+built and run with:
 
-    python launcher.py run nwb_tex_conv -- --help
-    python launcher.py run nwb_tex_conv -- assets/textures/foobar.png
+    python launcher.py tex-conv -- --help
+    python launcher.py tex-conv -- assets/textures/foobar.png
 
 A single positional image produces a 2D texture. Cubemaps and volume textures
 use explicit ordered image lists:
 
-    python launcher.py run nwb_tex_conv -- --cube posx.png negx.png posy.png negy.png posz.png negz.png --output sky
-    python launcher.py run nwb_tex_conv -- --volume z0.png z1.png z2.png z3.png --output fog
+    python launcher.py tex-conv -- --cube posx.png negx.png posy.png negy.png posz.png negz.png --output sky
+    python launcher.py tex-conv -- --volume z0.png z1.png z2.png z3.png --output fog
 
 `--cube` always takes exactly six square faces in `+X, -X, +Y, -Y, +Z, -Z`
 order. `--volume` takes one or more same-sized slices in ascending Z order. This

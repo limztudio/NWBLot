@@ -49,7 +49,7 @@ if(TARGET nwb_resource_cooker)
         CONFIGURE_DEPENDS
         LIST_DIRECTORIES false
         "${PROJECT_SOURCE_DIR}/impl/assets/*"
-        "${PROJECT_SOURCE_DIR}/Testbed/assets/*"
+        "${PROJECT_SOURCE_DIR}/CoolStuff/Testbed/assets/*"
     )
 
     set(_nwb_testbed_asset_stamp "${NWB_OUTPUT_ROOT}/res/.nwb_testbed_assets_$<CONFIG>.stamp")
@@ -59,7 +59,7 @@ if(TARGET nwb_resource_cooker)
         COMMAND "$<TARGET_FILE:nwb_resource_cooker>"
             --repo-root "${PROJECT_SOURCE_DIR}"
             --asset-root "impl/assets"
-            --asset-root "Testbed/assets"
+            --asset-root "CoolStuff/Testbed/assets"
             --output-directory "${NWB_OUTPUT_ROOT}/res"
             --cache-directory "${_nwb_testbed_asset_cache_directory}"
             --configuration "$<CONFIG>"

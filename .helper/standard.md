@@ -450,7 +450,7 @@ Updated: 2026-07-08
 - Use spin-based locks (`SpinMutex`, `SharedMutex`) only for measured hot-path wins with very short lock hold times.
 
 ## 15. Shader And Asset Text Style
-- Applies to `.slang`, `.slangi`, and `.bind` files under engine and project asset shader trees, including `impl/assets/graphics/`, `Testbed/assets/shaders/`, and `tests/smoke/assets/shaders/`.
+- Applies to `.slang`, `.slangi`, and `.bind` files under engine and project asset shader trees, including `impl/assets/graphics/`, `CoolStuff/Testbed/assets/shaders/`, and `tests/smoke/assets/shaders/`.
 - Project shader authoring is Slang-only; do not add alternate shader-language source standards, compatibility include trees, compiler paths, or per-asset compiler selectors.
 - Use the same project banner, long separator, UTF-8 encoding, CRLF line endings, and exact EOF rule as other source files for `.slang`, `.slangi`, and `.bind`.
 - Keep `.nwb` metadata files as declarative metascript text without the source-file banner, but still use UTF-8 and CRLF line endings.

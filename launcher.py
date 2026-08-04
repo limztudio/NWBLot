@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import ast
 import json
 import os
 import platform
@@ -20,6 +21,11 @@ DEFAULT_ARCH = "x64"
 DEFAULT_CONFIG = "dbg"
 DEFAULT_DOMAIN = "full"
 DEFAULT_BUILD_JOBS = "8"
+LAUNCHER_SEARCH_ROOTS = (Path("CoolStuff"), Path("tests"), Path("utilities"))
+LAUNCHER_SCRIPT_NAMES = ("launch.py", "launcher.py")
+LAUNCH_COMMAND_OVERRIDE = "NWB_LAUNCH_COMMAND"
+RESERVED_LAUNCH_COMMANDS = frozenset(("profiles", "run"))
+# Compatibility aliases for callers that imported the former shortcut locations.
 SMOKE_SCRIPT = Path("tests") / "smoke" / "launcher.py"
 ASYNC_SHADOW_M4_LAUNCH_SCRIPT = Path("tests") / "ab" / "async_shadow_m4" / "launch.py"
 PROFILE_LOGSERVER_TARGET = "nwb_logserver"
@@ -59,6 +65,12 @@ class CMakeTargetInfo:
 
 
 @dataclass(frozen=True)
+class RepoLauncher:
+    command: str
+    script: Path
+
+
+@dataclass(frozen=True)
 class ProfileSession:
     log_port: int
     logserver_executable: Path
@@ -67,6 +79,89 @@ class ProfileSession:
 
 def repo_root() -> Path:
     return Path(__file__).resolve().parent
+
+
+def launch_command_from_directory(script: Path) -> str:
+    return script.parent.name.lower().replace("_", "-")
+
+
+def validate_launch_command(command: str, source: Path) -> str:
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", command):
+        raise SystemExit(
+            f"invalid launch command '{command}' in {source}; use lowercase letters, digits, and single hyphens"
+        )
+    if command in RESERVED_LAUNCH_COMMANDS:
+        raise SystemExit(f"launch command '{command}' in {source} conflicts with a built-in launcher command")
+    return command
+
+
+def launch_command_override(script: Path) -> Optional[str]:
+    try:
+        source = script.read_text(encoding="utf-8")
+        module = ast.parse(source, filename=str(script))
+    except (OSError, SyntaxError):
+        return None
+
+    for statement in module.body:
+        target_name = None
+        value = None
+        if isinstance(statement, ast.Assign):
+            for target in statement.targets:
+                if isinstance(target, ast.Name) and target.id == LAUNCH_COMMAND_OVERRIDE:
+                    target_name = target.id
+                    value = statement.value
+                    break
+        elif isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+            if statement.target.id == LAUNCH_COMMAND_OVERRIDE:
+                target_name = statement.target.id
+                value = statement.value
+
+        if target_name is None:
+            continue
+        if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
+            raise SystemExit(f"{LAUNCH_COMMAND_OVERRIDE} in {script} must be a literal string")
+        return value.value
+
+    return None
+
+
+def discover_repo_launchers(root: Optional[Path] = None) -> Dict[str, RepoLauncher]:
+    root = (root or repo_root()).resolve()
+    conventional_scripts: Dict[Path, Path] = {}
+    explicit_launchers: List[Tuple[Path, str]] = []
+
+    for search_root in LAUNCHER_SEARCH_ROOTS:
+        search_path = root / search_root
+        if not search_path.is_dir():
+            continue
+        for script in sorted(search_path.rglob("*.py"), key=lambda path: path.as_posix()):
+            command_override = launch_command_override(script)
+            if command_override is not None:
+                explicit_launchers.append((script, command_override))
+                continue
+            if script.name not in LAUNCHER_SCRIPT_NAMES:
+                continue
+
+            existing = conventional_scripts.get(script.parent)
+            if existing is None or script.name == "launch.py":
+                conventional_scripts[script.parent] = script
+
+    candidates = explicit_launchers + [
+        (script, launch_command_from_directory(script)) for script in conventional_scripts.values()
+    ]
+    launchers: Dict[str, RepoLauncher] = {}
+    for script, command in sorted(candidates, key=lambda item: item[0].as_posix()):
+        command = validate_launch_command(command, script)
+        launcher = RepoLauncher(command, script.relative_to(root))
+        existing = launchers.get(command)
+        if existing is not None:
+            raise SystemExit(
+                f"duplicate launch command '{command}': {existing.script} and {launcher.script}; "
+                f"set {LAUNCH_COMMAND_OVERRIDE} in one script to disambiguate"
+            )
+        launchers[command] = launcher
+
+    return dict(sorted(launchers.items()))
 
 
 def host_platform_name(system_name: Optional[str] = None) -> str:
@@ -681,6 +776,10 @@ def run_target_command(args) -> int:
     )
 
 
+def run_target_launcher(target: str, argv: Sequence[str]) -> int:
+    return main(["run", target] + list(argv))
+
+
 def run_repo_script(script: Path, script_args: Sequence[str], echo: bool = True) -> int:
     root = repo_root()
     script_path = root / script
@@ -699,30 +798,20 @@ def is_help_request(args: Sequence[str]) -> bool:
     return False
 
 
-def smoke_script_command(args) -> int:
+def repo_launcher_command(args) -> int:
     forwarded_args = list(args.forwarded_args)
     application_args = getattr(args, "application_args", [])
     if application_args:
         forwarded_args += ["--"] + list(application_args)
-    return run_repo_script(SMOKE_SCRIPT, forwarded_args, echo=not is_help_request(forwarded_args))
+    return run_repo_script(args.repo_launcher.script, forwarded_args, echo=not is_help_request(forwarded_args))
 
 
-def async_shadow_m4_script_command(args) -> int:
-    forwarded_args = list(args.forwarded_args)
-    application_args = getattr(args, "application_args", [])
-    if application_args:
-        forwarded_args += ["--"] + list(application_args)
-    return run_repo_script(ASYNC_SHADOW_M4_LAUNCH_SCRIPT, forwarded_args, echo=not is_help_request(forwarded_args))
-
-
-def list_profiles_command(_args) -> int:
-    print("runnable targets:", flush=True)
-    print("  run testbed", flush=True)
-    print("  run nwb_resource_cooker", flush=True)
-    print("  run nwb_fbx_to_nwb", flush=True)
-    print("  run nwb_tex_conv", flush=True)
-    print("", flush=True)
-    return run_repo_script(SMOKE_SCRIPT, ["--profiles"], echo=False)
+def list_profiles_command(args) -> int:
+    print("runnable commands:", flush=True)
+    print("  run <cmake-target> [launcher options] [-- application arguments]", flush=True)
+    for launcher in args.repo_launchers.values():
+        print(f"  {launcher.command}  ({launcher.script})", flush=True)
+    return 0
 
 
 def add_build_options(parser: argparse.ArgumentParser) -> None:
@@ -797,7 +886,9 @@ def add_common_options(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def make_parser() -> argparse.ArgumentParser:
+def make_parser(repo_launchers: Optional[Dict[str, RepoLauncher]] = None) -> argparse.ArgumentParser:
+    if repo_launchers is None:
+        repo_launchers = discover_repo_launchers()
     parser = argparse.ArgumentParser(description="Configure, build, and launch NWB targets.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -806,19 +897,13 @@ def make_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("target", help="CMake executable target, such as testbed or nwb_resource_cooker.")
     run_parser.set_defaults(handler=run_target_command)
 
-    smoke_parser = subparsers.add_parser("smoke", help="Forward to the smoke launcher under tests/smoke.")
-    smoke_parser.add_argument("forwarded_args", nargs=argparse.REMAINDER)
-    smoke_parser.set_defaults(handler=smoke_script_command)
+    for launcher in repo_launchers.values():
+        launcher_parser = subparsers.add_parser(launcher.command, help=f"Forward to {launcher.script}.")
+        launcher_parser.add_argument("forwarded_args", nargs=argparse.REMAINDER)
+        launcher_parser.set_defaults(handler=repo_launcher_command, repo_launcher=launcher)
 
-    async_shadow_m4_parser = subparsers.add_parser(
-        "async-shadow-m4",
-        help="Build and run the async-shadow M4 Vulkan-validation benchmark.",
-    )
-    async_shadow_m4_parser.add_argument("forwarded_args", nargs=argparse.REMAINDER)
-    async_shadow_m4_parser.set_defaults(handler=async_shadow_m4_script_command)
-
-    profiles_parser = subparsers.add_parser("profiles", help="List built-in launch profiles.")
-    profiles_parser.set_defaults(handler=list_profiles_command)
+    profiles_parser = subparsers.add_parser("profiles", help="List generic and discovered launch commands.")
+    profiles_parser.set_defaults(handler=list_profiles_command, repo_launchers=repo_launchers)
 
     return parser
 
@@ -832,13 +917,13 @@ def split_application_args(argv: Sequence[str]) -> Tuple[List[str], List[str]]:
 
 
 def main(argv: Sequence[str]) -> int:
-    if argv and argv[0] == "smoke":
-        return run_repo_script(SMOKE_SCRIPT, argv[1:], echo=not is_help_request(argv[1:]))
-    if argv and argv[0] == "async-shadow-m4":
-        return run_repo_script(ASYNC_SHADOW_M4_LAUNCH_SCRIPT, argv[1:], echo=not is_help_request(argv[1:]))
+    repo_launchers = discover_repo_launchers()
+    if argv and argv[0] in repo_launchers:
+        launcher = repo_launchers[argv[0]]
+        return run_repo_script(launcher.script, argv[1:], echo=not is_help_request(argv[1:]))
 
     parser_args, application_args = split_application_args(argv)
-    args = make_parser().parse_args(parser_args)
+    args = make_parser(repo_launchers).parse_args(parser_args)
     args.application_args = application_args
     return args.handler(args)
 

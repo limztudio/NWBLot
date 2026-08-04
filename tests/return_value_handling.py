@@ -9,7 +9,7 @@ import sys
 
 
 SOURCE_DIRECTORIES = (
-    "Testbed",
+    "CoolStuff/Testbed",
     "core",
     "global",
     "impl",

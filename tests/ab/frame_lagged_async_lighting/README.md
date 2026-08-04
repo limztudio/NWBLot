@@ -7,7 +7,7 @@ Build the smoke executable and cooked assets, then run the lifecycle harness:
 ```bash
 cmake --build <build-dir> --target nwb_frame_lagged_async_lighting_smoke
 
-python tests/ab/frame_lagged_async_lighting/run.py \
+python launcher.py frame-lagged-async-lighting \
   --executable <exec-dir>/frame_lagged_async_lighting_smoke \
   --runtime-dir <build-dir>/Testing/smoke_runtime/dbg \
   --logserver-executable <exec-dir>/logserver \

@@ -54,7 +54,9 @@ using Vector = NWB::Tests::TestVector<T>;
 inline constexpr Name s_ScratchArena("tests/ecs_graphics/scratch");
 
 
-TEST(EcsGraphics, FeatureCompatibilitySlotsKeepLegacyOrdinals){
+TEST(EcsGraphics, DeprecatedFeatureSlotsKeepUnsupportedAbiGaps){
+    // SamplerFeedback and VirtualResources are retired, but external users still rely on
+    // their enum positions. Keep the surrounding ordinals here so either ABI gap cannot move.
     EXPECT_EQ(static_cast<u32>(NWB::Core::Feature::SamplerFeedback), 13u);
     EXPECT_EQ(static_cast<u32>(NWB::Core::Feature::ShaderExecutionReordering), 14u);
     EXPECT_EQ(static_cast<u32>(NWB::Core::Feature::VirtualResources), 19u);

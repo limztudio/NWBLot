@@ -42,8 +42,10 @@ namespace TextureAssetLoader{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Creates, uploads, and registers a static 2D, cube, or 3D texture asset. The ASTC path is used when the device
-// supports filtered ASTC 4x4 sampling; the portable RGBA8 path decodes the same UASTC source otherwise.
+// Creates, uploads, and registers a static 2D, cube, or 3D texture asset. LDR UASTC uses ASTC 4x4 when available,
+// otherwise portable RGBA8. Opaque HDR UASTC uses ASTC HDR 4x4, then BC6H, then RGBA16_FLOAT. HDR textures with
+// constant or companion-stream alpha decode and merge into RGBA16_FLOAT because one sampled-image descriptor owns
+// the complete RGBA result.
 [[nodiscard]] bool Create(
     TextureGpuResource& outResource,
     const Texture& textureAsset,

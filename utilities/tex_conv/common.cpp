@@ -22,7 +22,14 @@ bool IsSupportedInputPath(const Path& path){
         || extension == ".jfif"
         || extension == ".tga"
         || extension == ".qoi"
+        || extension == ".exr"
+        || extension == ".hdr"
     ;
+}
+
+bool IsHdrInputPath(const Path& path){
+    const AString extension = ToAsciiLowerCopy(PathToGenericString<AString>(path.extension()));
+    return extension == ".exr" || extension == ".hdr";
 }
 
 

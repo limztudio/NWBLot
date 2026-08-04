@@ -213,6 +213,8 @@ Device::Device(const DeviceDesc& desc)
             m_context.extensions.NV_device_diagnostic_checkpoints = true;
         else if(NWB_STRCMP(ext, VK_EXT_DEVICE_FAULT_EXTENSION_NAME) == 0)
             m_context.extensions.EXT_device_fault = true;
+        else if(NWB_STRCMP(ext, VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME) == 0)
+            m_context.extensions.EXT_texture_compression_astc_hdr = true;
         else if(NWB_STRCMP(ext, VK_AMD_BUFFER_MARKER_EXTENSION_NAME) == 0)
             m_context.extensions.AMD_buffer_marker = true;
         else if(NWB_STRCMP(ext, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0)
@@ -1214,6 +1216,12 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
 }
 
 FormatSupport::Mask Device::queryFormatSupport(Format::Enum format){
+    if(
+        format == Format::ASTC_4x4_FLOAT
+        && !m_context.extensions.EXT_texture_compression_astc_hdr
+    )
+        return FormatSupport::None;
+
     VkFormat vkFormat = ConvertFormat(format);
     if(vkFormat == VK_FORMAT_UNDEFINED)
         return FormatSupport::None;

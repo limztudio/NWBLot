@@ -128,7 +128,7 @@ static constexpr FormatMapping s_FormatMappings[] = {
     // Compressed formats - ASTC
     { Format::ASTC_4x4_UNORM         , VK_FORMAT_ASTC_4x4_UNORM_BLOCK          ,  0, false, false, true  },
     { Format::ASTC_4x4_UNORM_SRGB    , VK_FORMAT_ASTC_4x4_SRGB_BLOCK           ,  0, false, false, true  },
-    { Format::ASTC_4x4_FLOAT         , VK_FORMAT_UNDEFINED                     ,  0, false, false, true  },
+    { Format::ASTC_4x4_FLOAT         , VK_FORMAT_ASTC_4x4_SFLOAT_BLOCK_EXT     ,  0, false, false, true  },
     { Format::ASTC_5x4_UNORM         , VK_FORMAT_ASTC_5x4_UNORM_BLOCK          ,  0, false, false, true  },
     { Format::ASTC_5x4_UNORM_SRGB    , VK_FORMAT_ASTC_5x4_SRGB_BLOCK           ,  0, false, false, true  },
     { Format::ASTC_5x4_FLOAT         , VK_FORMAT_UNDEFINED                     ,  0, false, false, true  },

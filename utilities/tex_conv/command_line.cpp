@@ -21,17 +21,19 @@ NWB_TEX_CONV_BEGIN
 int Run(const int argc, char** argv){
     AInteropString inputArgument;
     AInteropString outputArgument;
+    AInteropString alphaArgument;
     InteropVector<AInteropString> cubeArguments;
     InteropVector<AInteropString> volumeArguments;
     bool force = false;
     bool linear = false;
 
-    CLI::App app{ "Convert LDR images into an NWB UASTC 2D, cube, or volume texture asset." };
-    app.add_option("input", inputArgument, "2D input image (.png, .jpg, .jpeg, .jfif, .tga, or .qoi)");
+    CLI::App app{ "Convert LDR or HDR images into an NWB 2D, cube, or volume texture asset." };
+    app.add_option("input", inputArgument, "2D input image (.png, .jpg, .jpeg, .jfif, .tga, .qoi, .exr, or .hdr)");
     app.add_option("--cube", cubeArguments, "Six cubemap faces: +X -X +Y -Y +Z -Z")->expected(static_cast<int>(s_TextureCubeFaceCount));
     app.add_option("--volume", volumeArguments, "Ordered volume Z slices: z0 z1 ... zN")->expected(1, -1);
     app.add_option("-o,--output", outputArgument, "Output base name or .nwb filename");
-    app.add_flag("--linear", linear, "Treat input as linear data instead of sRGB color");
+    CLI::Option* alphaOption = app.add_option("--alpha", alphaArgument, "Alpha source: mask image red channel, white, or black");
+    app.add_flag("--linear", linear, "Treat LDR input as linear data instead of sRGB color (HDR input is always linear)");
     app.add_flag("--force", force, "Replace existing .nwb and .tex output files");
 
     try{
@@ -45,6 +47,7 @@ int Run(const int argc, char** argv){
         const AString outputPathText(outputArgument.data(), outputArgument.size());
         TextureDimension::Enum dimension = TextureDimension::Texture2D;
         Vector<Path> inputPaths;
+        AlphaSource alphaSource;
 
         const u32 modeCount = static_cast<u32>(!inputArgument.empty())
             + static_cast<u32>(!cubeArguments.empty())
@@ -76,6 +79,27 @@ int Run(const int argc, char** argv){
             }
         }
 
+        if(alphaOption->count() > 0u){
+            const AString alphaText(alphaArgument.data(), alphaArgument.size());
+            const AString alphaKeyword = ToAsciiLowerCopy(alphaText);
+            if(alphaKeyword == "white"){
+                alphaSource.mode = AlphaSourceMode::Constant;
+                alphaSource.constant = 1.0f;
+            }
+            else if(alphaKeyword == "black"){
+                alphaSource.mode = AlphaSourceMode::Constant;
+                alphaSource.constant = 0.0f;
+            }
+            else if(alphaText.empty()){
+                NWB_LOGGER_WARNING(NWB_TEXT("tex_conv: --alpha expects an image path, white, or black."));
+                return 1;
+            }
+            else{
+                alphaSource.mode = AlphaSourceMode::Image;
+                alphaSource.path = Path(UtilityDetail::Arena(), alphaText);
+            }
+        }
+
         for(const Path& inputPath : inputPaths){
             ErrorCode errorCode;
             const bool inputIsRegularFile = IsRegularFile(inputPath, errorCode);
@@ -93,7 +117,29 @@ int Run(const int argc, char** argv){
                 return 1;
             }
             if(!IsSupportedInputPath(inputPath)){
-                NWB_LOGGER_WARNING(NWB_TEXT("tex_conv: unsupported input format; accepted: PNG, JPEG/JFIF, TGA, and QOI."));
+                NWB_LOGGER_WARNING(NWB_TEXT("tex_conv: unsupported input format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, and Radiance HDR."));
+                return 1;
+            }
+        }
+
+        if(alphaSource.mode == AlphaSourceMode::Image){
+            ErrorCode errorCode;
+            const bool alphaIsRegularFile = IsRegularFile(alphaSource.path, errorCode);
+            if(errorCode && !IsMissingPathError(errorCode)){
+                NWB_LOGGER_WARNING(NWB_TEXT("tex_conv: failed to inspect alpha image '{}': {}")
+                    , PathToString<tchar>(alphaSource.path)
+                    , StringConvert(errorCode.message())
+                );
+                return 1;
+            }
+            if(!alphaIsRegularFile){
+                NWB_LOGGER_WARNING(NWB_TEXT("tex_conv: alpha image was not found or is not a regular file: '{}'")
+                    , PathToString<tchar>(alphaSource.path)
+                );
+                return 1;
+            }
+            if(!IsSupportedInputPath(alphaSource.path)){
+                NWB_LOGGER_WARNING(NWB_TEXT("tex_conv: unsupported alpha image format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, and Radiance HDR."));
                 return 1;
             }
         }
@@ -103,9 +149,9 @@ int Run(const int argc, char** argv){
             return 1;
 
         TexturePayload payload;
-        if(!EncodeTexture(inputPaths, dimension, !linear, payload))
+        if(!EncodeTexture(inputPaths, dimension, !linear, alphaSource, payload))
             return 1;
-        if(!WriteOutputs(outputPaths, payload, !linear, force))
+        if(!WriteOutputs(outputPaths, payload, force))
             return 1;
 
         AStringStream report;
@@ -118,8 +164,9 @@ int Run(const int argc, char** argv){
             report << " cube";
         else if(payload.dimension == TextureDimension::Texture3D)
             report << "x" << payload.depth;
+        const usize totalPayloadBytes = payload.bytes.size() + payload.alphaBytes.size();
         report
-            << ", " << payload.mips.size() << " mips, " << payload.bytes.size() << " bytes\n"
+            << ", " << payload.mips.size() << " mips, " << totalPayloadBytes << " bytes\n"
         ;
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
         return 0;

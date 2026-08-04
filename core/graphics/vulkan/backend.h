@@ -585,6 +585,7 @@ struct VulkanContext{
         bool NV_cluster_acceleration_structure = false;
         bool NV_device_diagnostic_checkpoints = false;
         bool EXT_device_fault = false;
+        bool EXT_texture_compression_astc_hdr = false;
         bool AMD_buffer_marker = false;
         bool EXT_mesh_shader = false;
         bool KHR_fragment_shading_rate = false;

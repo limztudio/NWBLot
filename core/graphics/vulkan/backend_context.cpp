@@ -115,6 +115,7 @@ struct OptionalDeviceFeatureSet{
     // Descriptor buffers are the production descriptor transport.
     VkPhysicalDeviceDescriptorBufferFeaturesEXT descriptorBuffer = MakeVkFeatureStruct<VkPhysicalDeviceDescriptorBufferFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT);
     VkPhysicalDeviceFaultFeaturesEXT deviceFault = MakeVkFeatureStruct<VkPhysicalDeviceFaultFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT);
+    VkPhysicalDeviceTextureCompressionASTCHDRFeatures textureCompressionAstcHdr = MakeVkFeatureStruct<VkPhysicalDeviceTextureCompressionASTCHDRFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXTURE_COMPRESSION_ASTC_HDR_FEATURES);
 };
 
 static OptionalDeviceFeatureSet MakeRequestedOptionalDeviceFeatures(){
@@ -149,6 +150,8 @@ static OptionalDeviceFeatureSet MakeRequestedOptionalDeviceFeatures(){
     features.deviceFault.deviceFault = VK_TRUE;
     features.deviceFault.deviceFaultVendorBinary = VK_TRUE;
 
+    features.textureCompressionAstcHdr.textureCompressionASTC_HDR = VK_TRUE;
+
     return features;
 }
 
@@ -166,6 +169,7 @@ static void* GetOptionalDeviceFeatureStruct(OptionalDeviceFeatureSet& features, 
     case DeviceExtensionFeature::FragmentShadingRate: return &features.fragmentShadingRate;
     case DeviceExtensionFeature::DescriptorBuffer: return &features.descriptorBuffer;
     case DeviceExtensionFeature::DeviceFault: return &features.deviceFault;
+    case DeviceExtensionFeature::TextureCompressionAstcHdr: return &features.textureCompressionAstcHdr;
     case DeviceExtensionFeature::None:
     case DeviceExtensionFeature::Count:
     default:
@@ -321,6 +325,11 @@ static bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
         return SupportsRequestedValue(requested.descriptorBuffer.descriptorBuffer, supported.descriptorBuffer.descriptorBuffer);
     case DeviceExtensionFeature::DeviceFault:
         return SupportsRequestedValue(requested.deviceFault.deviceFault, supported.deviceFault.deviceFault);
+    case DeviceExtensionFeature::TextureCompressionAstcHdr:
+        return SupportsRequestedValue(
+            requested.textureCompressionAstcHdr.textureCompressionASTC_HDR,
+            supported.textureCompressionAstcHdr.textureCompressionASTC_HDR
+        );
     case DeviceExtensionFeature::None:
     case DeviceExtensionFeature::Count:
     default:

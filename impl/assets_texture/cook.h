@@ -34,14 +34,17 @@ struct TextureCookEntry{
 
     TextureColorSpace::Enum colorSpace = TextureColorSpace::Linear;
     TextureDimension::Enum dimension = TextureDimension::Texture2D;
+    TexturePayloadFormat::Enum payloadFormat = TexturePayloadFormat::UastcLdr4x4;
+    TextureAlphaMode::Enum alphaMode = TextureAlphaMode::Opaque;
     bool hasAlpha = false;
+    u8 alphaConstantUnorm8 = 255u;
 
     Texture::MipLevelVector mipLevels;
-    Core::Assets::AssetBytes uastcBlocks;
+    Core::Assets::AssetBytes payloadBytes;
 
     explicit TextureCookEntry(Core::Assets::AssetArena& arena)
         : mipLevels(arena)
-        , uastcBlocks(arena)
+        , payloadBytes(arena)
     {}
 };
 

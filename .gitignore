@@ -411,10 +411,11 @@ FodyWeavers.xsd
 # Claude Code local session data (memory, transcripts, settings) — local tooling, not part of the project.
 .claude/
 
-# A/B validation capture artifacts are local experiment output. Keep the harnesses and
-# README summaries in tests/ab/, but store raw captures under .cozter/out/ab-results/.
+# A/B validation capture artifacts are local experiment output. Keep only executable
+# harnesses in tests/ab/; store captures and result summaries under .cozter/out/ab-results/.
 tests/ab/**/*.bmp
 tests/ab/**/*.png
 tests/ab/**/timing*.txt
 tests/ab/**/*_timing.txt
 tests/ab/**/cold_*.txt
+tests/ab/**/README.txt

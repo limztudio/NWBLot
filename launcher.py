@@ -720,6 +720,7 @@ def list_profiles_command(_args) -> int:
     print("  run testbed", flush=True)
     print("  run nwb_resource_cooker", flush=True)
     print("  run nwb_fbx_to_nwb", flush=True)
+    print("  run nwb_tex_conv", flush=True)
     print("", flush=True)
     return run_repo_script(SMOKE_SCRIPT, ["--profiles"], echo=False)
 

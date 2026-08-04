@@ -17,7 +17,6 @@ from types import SimpleNamespace
 from typing import Mapping, Sequence
 
 
-NWB_LAUNCH_COMMAND = "frame-lagged-async-lighting"
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 

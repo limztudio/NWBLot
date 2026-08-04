@@ -49,9 +49,10 @@
   - Launch with profiling/logserver: `python launcher.py run testbed --with-profile`
   - Smoke profile through root dispatch: `python launcher.py smoke transparent-multi --backend hw`
   - Smoke profile with profiling/logserver: `python launcher.py smoke transparent-multi --backend hw --with-profile`
-  - Smoke-domain launcher script: `python tests/smoke/launcher.py --scene transparent-multi --backend hw`
-  - Directory launchers are discovered beneath `CoolStuff/`, `tests/`, and `utilities/`; add a `launch.py` beside a
-    workflow and its lowercased parent directory name becomes the root command with `_` changed to `-`.
+  - Smoke-domain launcher script: `python tests/smoke/launch.py --scene transparent-multi --backend hw`
+  - Root commands stay flat, but dispatch through category launchers: `launcher.py` → `CoolStuff/launch.py`,
+    `tests/launch.py`, or `utilities/launch.py` → the workflow's `launch.py`. Add a category `launch.py` and then
+    a leaf `launch.py`; the leaf directory name becomes the root command with `_` changed to `-`.
   - An existing script can opt in without a wrapper by defining a literal `NWB_LAUNCH_COMMAND = "my-command"`.
     `launcher.py` remains supported as a legacy entry-point name, but new launchers should use `launch.py`.
   - `python launcher.py profiles` lists all currently discovered commands, so adding a utility or test launcher does

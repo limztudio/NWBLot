@@ -26,7 +26,7 @@ LAUNCHER_SCRIPT_NAMES = ("launch.py", "launcher.py")
 LAUNCH_COMMAND_OVERRIDE = "NWB_LAUNCH_COMMAND"
 RESERVED_LAUNCH_COMMANDS = frozenset(("profiles", "run"))
 # Compatibility aliases for callers that imported the former shortcut locations.
-SMOKE_SCRIPT = Path("tests") / "smoke" / "launcher.py"
+SMOKE_SCRIPT = Path("tests") / "smoke" / "launch.py"
 ASYNC_SHADOW_M4_LAUNCH_SCRIPT = Path("tests") / "ab" / "async_shadow_m4" / "launch.py"
 PROFILE_LOGSERVER_TARGET = "nwb_logserver"
 PROFILE_LOGSERVER_EXECUTABLE = "logserver"
@@ -68,6 +68,7 @@ class CMakeTargetInfo:
 class RepoLauncher:
     command: str
     script: Path
+    router: Optional[Path] = None
 
 
 @dataclass(frozen=True)
@@ -125,26 +126,40 @@ def launch_command_override(script: Path) -> Optional[str]:
     return None
 
 
-def discover_repo_launchers(root: Optional[Path] = None) -> Dict[str, RepoLauncher]:
+def category_launcher_script(directory: Path) -> Optional[Path]:
+    script = directory / "launch.py"
+    return script if script.is_file() else None
+
+
+def discover_directory_launchers(directory: Path, root: Optional[Path] = None) -> Dict[str, RepoLauncher]:
+    """Discover leaf launchers below one category directory.
+
+    A category's own ``launch.py`` is its router, not a runnable leaf.  This keeps
+    the hierarchy explicit while allowing the root launcher to retain a flat public
+    command surface.
+    """
     root = (root or repo_root()).resolve()
+    search_path = directory if directory.is_absolute() else root / directory
+    search_path = search_path.resolve()
     conventional_scripts: Dict[Path, Path] = {}
     explicit_launchers: List[Tuple[Path, str]] = []
 
-    for search_root in LAUNCHER_SEARCH_ROOTS:
-        search_path = root / search_root
-        if not search_path.is_dir():
-            continue
-        for script in sorted(search_path.rglob("*.py"), key=lambda path: path.as_posix()):
-            command_override = launch_command_override(script)
-            if command_override is not None:
-                explicit_launchers.append((script, command_override))
-                continue
-            if script.name not in LAUNCHER_SCRIPT_NAMES:
-                continue
+    if not search_path.is_dir():
+        return {}
 
-            existing = conventional_scripts.get(script.parent)
-            if existing is None or script.name == "launch.py":
-                conventional_scripts[script.parent] = script
+    for script in sorted(search_path.rglob("*.py"), key=lambda path: path.as_posix()):
+        if script.parent == search_path:
+            continue
+        command_override = launch_command_override(script)
+        if command_override is not None:
+            explicit_launchers.append((script, command_override))
+            continue
+        if script.name not in LAUNCHER_SCRIPT_NAMES:
+            continue
+
+        existing = conventional_scripts.get(script.parent)
+        if existing is None or script.name == "launch.py":
+            conventional_scripts[script.parent] = script
 
     candidates = explicit_launchers + [
         (script, launch_command_from_directory(script)) for script in conventional_scripts.values()
@@ -160,6 +175,31 @@ def discover_repo_launchers(root: Optional[Path] = None) -> Dict[str, RepoLaunch
                 f"set {LAUNCH_COMMAND_OVERRIDE} in one script to disambiguate"
             )
         launchers[command] = launcher
+
+    return dict(sorted(launchers.items()))
+
+
+def discover_repo_launchers(root: Optional[Path] = None) -> Dict[str, RepoLauncher]:
+    root = (root or repo_root()).resolve()
+    launchers: Dict[str, RepoLauncher] = {}
+
+    for search_root in LAUNCHER_SEARCH_ROOTS:
+        search_path = root / search_root
+        category_launchers = discover_directory_launchers(search_root, root)
+        router_script = category_launcher_script(search_path)
+        if category_launchers and router_script is None:
+            raise SystemExit(f"missing category launcher: {search_root / 'launch.py'}")
+
+        router = router_script.relative_to(root) if router_script is not None else None
+        for command, discovered in category_launchers.items():
+            launcher = replace(discovered, router=router)
+            existing = launchers.get(command)
+            if existing is not None:
+                raise SystemExit(
+                    f"duplicate launch command '{command}': {existing.script} and {launcher.script}; "
+                    f"set {LAUNCH_COMMAND_OVERRIDE} in one script to disambiguate"
+                )
+            launchers[command] = launcher
 
     return dict(sorted(launchers.items()))
 
@@ -798,19 +838,57 @@ def is_help_request(args: Sequence[str]) -> bool:
     return False
 
 
+def run_discovered_launcher(repo_launcher: RepoLauncher, forwarded_args: Sequence[str], echo: bool = True) -> int:
+    if repo_launcher.router is not None:
+        return run_repo_script(
+            repo_launcher.router,
+            [repo_launcher.command] + list(forwarded_args),
+            echo=echo,
+        )
+    return run_repo_script(repo_launcher.script, forwarded_args, echo=echo)
+
+
+def list_directory_launchers(directory: Path, launchers: Dict[str, RepoLauncher]) -> None:
+    print(f"runnable {directory.name} commands:", flush=True)
+    for launcher in launchers.values():
+        print(f"  {launcher.command}  ({launcher.script})", flush=True)
+
+
+def run_directory_launcher(directory: Path, argv: Sequence[str]) -> int:
+    """Dispatch a category launcher to one of its leaf launchers."""
+    launchers = discover_directory_launchers(directory)
+    values = list(argv)
+    if not values:
+        list_directory_launchers(directory, launchers)
+        return 2
+    if values[0] in ("-h", "--help", "profiles"):
+        list_directory_launchers(directory, launchers)
+        return 0
+
+    repo_launcher = launchers.get(values[0])
+    if repo_launcher is None:
+        valid = ", ".join(launchers)
+        print(f"unknown {directory.name} launcher '{values[0]}' (valid: {valid})", file=sys.stderr)
+        return 2
+
+    forwarded_args = values[1:]
+    return run_repo_script(repo_launcher.script, forwarded_args, echo=not is_help_request(forwarded_args))
+
+
 def repo_launcher_command(args) -> int:
     forwarded_args = list(args.forwarded_args)
     application_args = getattr(args, "application_args", [])
     if application_args:
         forwarded_args += ["--"] + list(application_args)
-    return run_repo_script(args.repo_launcher.script, forwarded_args, echo=not is_help_request(forwarded_args))
+    return run_discovered_launcher(args.repo_launcher, forwarded_args, echo=not is_help_request(forwarded_args))
 
 
 def list_profiles_command(args) -> int:
     print("runnable commands:", flush=True)
     print("  run <cmake-target> [launcher options] [-- application arguments]", flush=True)
     for launcher in args.repo_launchers.values():
-        print(f"  {launcher.command}  ({launcher.script})", flush=True)
+        route = f"{launcher.router} -> {launcher.script}" if launcher.router is not None else str(launcher.script)
+        print(f"  {launcher.command}  ({route})", flush=True)
     return 0
 
 
@@ -898,7 +976,8 @@ def make_parser(repo_launchers: Optional[Dict[str, RepoLauncher]] = None) -> arg
     run_parser.set_defaults(handler=run_target_command)
 
     for launcher in repo_launchers.values():
-        launcher_parser = subparsers.add_parser(launcher.command, help=f"Forward to {launcher.script}.")
+        route = f"{launcher.router} -> {launcher.script}" if launcher.router is not None else str(launcher.script)
+        launcher_parser = subparsers.add_parser(launcher.command, help=f"Forward through {route}.")
         launcher_parser.add_argument("forwarded_args", nargs=argparse.REMAINDER)
         launcher_parser.set_defaults(handler=repo_launcher_command, repo_launcher=launcher)
 
@@ -920,7 +999,7 @@ def main(argv: Sequence[str]) -> int:
     repo_launchers = discover_repo_launchers()
     if argv and argv[0] in repo_launchers:
         launcher = repo_launchers[argv[0]]
-        return run_repo_script(launcher.script, argv[1:], echo=not is_help_request(argv[1:]))
+        return run_discovered_launcher(launcher, argv[1:], echo=not is_help_request(argv[1:]))
 
     parser_args, application_args = split_application_args(argv)
     args = make_parser(repo_launchers).parse_args(parser_args)

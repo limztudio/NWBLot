@@ -54,7 +54,7 @@ if(Python3_Interpreter_FOUND)
         NAME nwb_frame_lagged_async_lighting_harness_unit
         COMMAND
             "${Python3_EXECUTABLE}"
-            "${CMAKE_CURRENT_LIST_DIR}/../ab/frame_lagged_async_lighting/run.py"
+            "${CMAKE_CURRENT_LIST_DIR}/../ab/frame_lagged_async_lighting/launch.py"
             "--self-test"
     )
 

@@ -50,9 +50,12 @@
   - Smoke profile through root dispatch: `python launcher.py smoke transparent-multi --backend hw`
   - Smoke profile with profiling/logserver: `python launcher.py smoke transparent-multi --backend hw --with-profile`
   - Smoke-domain launcher script: `python tests/smoke/launch.py --scene transparent-multi --backend hw`
-  - Root commands stay flat, but dispatch through category launchers: `launcher.py` → `CoolStuff/launch.py`,
-    `tests/launch.py`, or `utilities/launch.py` → the workflow's `launch.py`. Add a category `launch.py` and then
-    a leaf `launch.py`; only this leaf filename is discovered, and its directory name becomes the root command with
-    `_` changed to `-`.
+  - Root commands stay flat, but dispatch through every router in the directory hierarchy: `launcher.py` →
+    `CoolStuff/launch.py`, `tests/launch.py`, or `utilities/launch.py` → any intermediate group launcher such as
+    `tests/ab/launch.py` → the workflow's terminal `launch.py`. Every directory that groups child launchers must
+    provide a router; only terminal launchers become root commands, using their directory name with `_` changed to
+    `-`.
+  - Source-only and CTest-owned directories under `tests/` are not launcher commands. Add a terminal `launch.py`
+    only for an explicit, independently runnable workflow.
   - `python launcher.py profiles` lists all currently discovered commands, so adding a utility or test launcher does
     not require editing the root launcher.

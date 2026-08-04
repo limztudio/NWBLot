@@ -110,7 +110,9 @@ class LauncherPlatformTests(unittest.TestCase):
                 root / "tests" / "launch.py",
                 root / "tests" / "smoke" / "launch.py",
                 root / "tests" / "smoke" / "launcher.py",
+                root / "tests" / "ab" / "launch.py",
                 root / "tests" / "ab" / "async_shadow_m4" / "launch.py",
+                root / "tests" / "ab" / "frame_lagged" / "launch.py",
                 root / "tests" / "ab" / "frame_lagged" / "run.py",
                 root / "tests" / "ab" / "frame_lagged" / "helper.py",
                 root / "utilities" / "launch.py",
@@ -125,6 +127,7 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertEqual(
             {
                 "async-shadow-m4": Path("tests/ab/async_shadow_m4/launch.py"),
+                "frame-lagged": Path("tests/ab/frame_lagged/launch.py"),
                 "smoke": Path("tests/smoke/launch.py"),
                 "testbed": Path("CoolStuff/Testbed/launch.py"),
                 "tex-conv": Path("utilities/tex_conv/launch.py"),
@@ -133,14 +136,15 @@ class LauncherPlatformTests(unittest.TestCase):
         )
         self.assertEqual(
             {
-                "async-shadow-m4": Path("tests/launch.py"),
-                "smoke": Path("tests/launch.py"),
-                "testbed": Path("CoolStuff/launch.py"),
-                "tex-conv": Path("utilities/launch.py"),
+                "async-shadow-m4": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
+                "frame-lagged": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
+                "smoke": (Path("tests/launch.py"),),
+                "testbed": (Path("CoolStuff/launch.py"),),
+                "tex-conv": (Path("utilities/launch.py"),),
             },
-            {command: discovered.router for command, discovered in launchers.items()},
+            {command: discovered.route for command, discovered in launchers.items()},
         )
-        self.assertFalse({"coolstuff", "tests", "utilities"}.intersection(launchers))
+        self.assertFalse({"ab", "coolstuff", "tests", "utilities"}.intersection(launchers))
 
     def test_ignores_nonstandard_leaf_script_names(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -156,6 +160,39 @@ class LauncherPlatformTests(unittest.TestCase):
             launchers = launcher.discover_repo_launchers(root)
 
         self.assertEqual({}, launchers)
+
+    def test_directory_discovery_only_returns_direct_children(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            paths = (
+                root / "tests" / "launch.py",
+                root / "tests" / "ab" / "launch.py",
+                root / "tests" / "ab" / "async_shadow_m4" / "launch.py",
+                root / "tests" / "ab" / "frame_lagged_async_lighting" / "launch.py",
+                root / "tests" / "smoke" / "launch.py",
+            )
+            for path in paths:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("", encoding="utf-8")
+
+            tests_launchers = launcher.discover_directory_launchers(Path("tests"), root)
+            ab_launchers = launcher.discover_directory_launchers(Path("tests") / "ab", root)
+
+        self.assertEqual(
+            {
+                "ab": Path("tests/ab/launch.py"),
+                "smoke": Path("tests/smoke/launch.py"),
+            },
+            {command: discovered.script for command, discovered in tests_launchers.items()},
+        )
+        self.assertNotIn("async-shadow-m4", tests_launchers)
+        self.assertEqual(
+            {
+                "async-shadow-m4": Path("tests/ab/async_shadow_m4/launch.py"),
+                "frame-lagged-async-lighting": Path("tests/ab/frame_lagged_async_lighting/launch.py"),
+            },
+            {command: discovered.script for command, discovered in ab_launchers.items()},
+        )
 
     def test_duplicate_launch_commands_are_rejected(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -183,12 +220,25 @@ class LauncherPlatformTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "missing category launcher: utilities/launch.py"):
                 launcher.discover_repo_launchers(root)
 
+    def test_nested_leaf_requires_an_intermediate_router(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for path in (
+                root / "tests" / "launch.py",
+                root / "tests" / "ab" / "async_shadow_m4" / "launch.py",
+            ):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("", encoding="utf-8")
+
+            with self.assertRaisesRegex(SystemExit, "missing directory launcher: tests/ab/launch.py"):
+                launcher.discover_repo_launchers(root)
+
     def test_discovered_launcher_forwards_its_arguments(self):
         repo_launchers = {
             "async-shadow-m4": launcher.RepoLauncher(
                 "async-shadow-m4",
                 Path("tests/ab/async_shadow_m4/launch.py"),
-                Path("tests/launch.py"),
+                (Path("tests/launch.py"), Path("tests/ab/launch.py")),
             )
         }
         with (
@@ -198,11 +248,29 @@ class LauncherPlatformTests(unittest.TestCase):
             self.assertEqual(0, launcher.main(["async-shadow-m4", "--dry-run"]))
         run_repo_script.assert_called_once_with(
             Path("tests/launch.py"),
+            ["ab", "async-shadow-m4", "--dry-run"],
+            echo=True,
+        )
+
+    def test_category_launcher_forwards_to_its_child_router(self):
+        repo_launchers = {
+            "ab": launcher.RepoLauncher(
+                "ab",
+                Path("tests/ab/launch.py"),
+            )
+        }
+        with (
+            mock.patch.object(launcher, "discover_directory_launchers", return_value=repo_launchers),
+            mock.patch.object(launcher, "run_repo_script", return_value=0) as run_repo_script,
+        ):
+            self.assertEqual(0, launcher.run_directory_launcher(Path("tests"), ["ab", "async-shadow-m4", "--dry-run"]))
+        run_repo_script.assert_called_once_with(
+            Path("tests/ab/launch.py"),
             ["async-shadow-m4", "--dry-run"],
             echo=True,
         )
 
-    def test_category_launcher_forwards_to_its_leaf(self):
+    def test_intermediate_router_forwards_to_its_leaf(self):
         repo_launchers = {
             "async-shadow-m4": launcher.RepoLauncher(
                 "async-shadow-m4",
@@ -213,7 +281,10 @@ class LauncherPlatformTests(unittest.TestCase):
             mock.patch.object(launcher, "discover_directory_launchers", return_value=repo_launchers),
             mock.patch.object(launcher, "run_repo_script", return_value=0) as run_repo_script,
         ):
-            self.assertEqual(0, launcher.run_directory_launcher(Path("tests"), ["async-shadow-m4", "--dry-run"]))
+            self.assertEqual(
+                0,
+                launcher.run_directory_launcher(Path("tests") / "ab", ["async-shadow-m4", "--dry-run"]),
+            )
         run_repo_script.assert_called_once_with(
             Path("tests/ab/async_shadow_m4/launch.py"),
             ["--dry-run"],
@@ -222,20 +293,20 @@ class LauncherPlatformTests(unittest.TestCase):
 
     def test_root_dispatch_preserves_application_argument_separator(self):
         repo_launchers = {
-            "tex-conv": launcher.RepoLauncher(
-                "tex-conv",
-                Path("utilities/tex_conv/launch.py"),
-                Path("utilities/launch.py"),
+            "async-shadow-m4": launcher.RepoLauncher(
+                "async-shadow-m4",
+                Path("tests/ab/async_shadow_m4/launch.py"),
+                (Path("tests/launch.py"), Path("tests/ab/launch.py")),
             )
         }
         with (
             mock.patch.object(launcher, "discover_repo_launchers", return_value=repo_launchers),
             mock.patch.object(launcher, "run_repo_script", return_value=0) as run_repo_script,
         ):
-            self.assertEqual(0, launcher.main(["tex-conv", "--", "--help"]))
+            self.assertEqual(0, launcher.main(["async-shadow-m4", "--", "--measure-seconds", "30"]))
         run_repo_script.assert_called_once_with(
-            Path("utilities/launch.py"),
-            ["tex-conv", "--", "--help"],
+            Path("tests/launch.py"),
+            ["ab", "async-shadow-m4", "--", "--measure-seconds", "30"],
             echo=True,
         )
 

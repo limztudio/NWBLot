@@ -21,7 +21,7 @@ DEFAULT_CONFIG = "dbg"
 DEFAULT_DOMAIN = "full"
 DEFAULT_BUILD_JOBS = "8"
 LAUNCHER_SEARCH_ROOTS = (Path("CoolStuff"), Path("tests"), Path("utilities"))
-LEAF_LAUNCHER_SCRIPT_NAME = "launch.py"
+LAUNCHER_SCRIPT_NAME = "launch.py"
 RESERVED_LAUNCH_COMMANDS = frozenset(("profiles", "run"))
 PROFILE_LOGSERVER_TARGET = "nwb_logserver"
 PROFILE_LOGSERVER_EXECUTABLE = "logserver"
@@ -63,7 +63,7 @@ class CMakeTargetInfo:
 class RepoLauncher:
     command: str
     script: Path
-    router: Optional[Path] = None
+    route: Tuple[Path, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -91,18 +91,8 @@ def validate_launch_command(command: str, source: Path) -> str:
     return command
 
 
-def category_launcher_script(directory: Path) -> Optional[Path]:
-    script = directory / "launch.py"
-    return script if script.is_file() else None
-
-
 def discover_directory_launchers(directory: Path, root: Optional[Path] = None) -> Dict[str, RepoLauncher]:
-    """Discover leaf launchers below one category directory.
-
-    A category's own ``launch.py`` is its router, not a runnable leaf.  This keeps
-    the hierarchy explicit while allowing the root launcher to retain a flat public
-    command surface.
-    """
+    """Discover the launchers directly below one router directory."""
     root = (root or repo_root()).resolve()
     search_path = directory if directory.is_absolute() else root / directory
     search_path = search_path.resolve()
@@ -111,12 +101,60 @@ def discover_directory_launchers(directory: Path, root: Optional[Path] = None) -
         return {}
 
     launchers: Dict[str, RepoLauncher] = {}
-    for script in sorted(search_path.rglob(LEAF_LAUNCHER_SCRIPT_NAME), key=lambda path: path.as_posix()):
-        if script.parent == search_path:
-            continue
+    for script in sorted(search_path.glob(f"*/{LAUNCHER_SCRIPT_NAME}"), key=lambda path: path.as_posix()):
 
         command = validate_launch_command(launch_command_from_directory(script), script)
         launcher = RepoLauncher(command, script.relative_to(root))
+        existing = launchers.get(command)
+        if existing is not None:
+            raise SystemExit(
+                f"duplicate launch command '{command}': {existing.script} and {launcher.script}; "
+                "rename one leaf directory to disambiguate"
+            )
+        launchers[command] = launcher
+
+    return dict(sorted(launchers.items()))
+
+
+def launcher_route(search_path: Path, leaf_script: Path, root: Path) -> Tuple[Path, ...]:
+    relative_parts = leaf_script.parent.relative_to(search_path).parts
+    route: List[Path] = []
+    for depth in range(len(relative_parts)):
+        directory = search_path.joinpath(*relative_parts[:depth])
+        script = directory / LAUNCHER_SCRIPT_NAME
+        if not script.is_file():
+            kind = "category" if depth == 0 else "directory"
+            raise SystemExit(f"missing {kind} launcher: {script.relative_to(root)}")
+        if depth > 0:
+            validate_launch_command(launch_command_from_directory(script), script)
+        route.append(script.relative_to(root))
+    return tuple(route)
+
+
+def discover_leaf_launchers(directory: Path, root: Optional[Path] = None) -> Dict[str, RepoLauncher]:
+    """Discover runnable leaves below a category and retain their router routes.
+
+    A ``launch.py`` with descendant launchers is a router.  A leaf has no nested
+    launchers, and every directory between it and the category must provide a
+    router so nested groupings cannot be bypassed.
+    """
+    root = (root or repo_root()).resolve()
+    search_path = directory if directory.is_absolute() else root / directory
+    search_path = search_path.resolve()
+
+    if not search_path.is_dir():
+        return {}
+
+    scripts = sorted(search_path.rglob(LAUNCHER_SCRIPT_NAME), key=lambda path: path.as_posix())
+    launchers: Dict[str, RepoLauncher] = {}
+    for script in scripts:
+        if script.parent == search_path:
+            continue
+        if any(nested_script != script for nested_script in script.parent.rglob(LAUNCHER_SCRIPT_NAME)):
+            continue
+
+        command = validate_launch_command(launch_command_from_directory(script), script)
+        launcher = RepoLauncher(command, script.relative_to(root), launcher_route(search_path, script, root))
         existing = launchers.get(command)
         if existing is not None:
             raise SystemExit(
@@ -133,15 +171,7 @@ def discover_repo_launchers(root: Optional[Path] = None) -> Dict[str, RepoLaunch
     launchers: Dict[str, RepoLauncher] = {}
 
     for search_root in LAUNCHER_SEARCH_ROOTS:
-        search_path = root / search_root
-        category_launchers = discover_directory_launchers(search_root, root)
-        router_script = category_launcher_script(search_path)
-        if category_launchers and router_script is None:
-            raise SystemExit(f"missing category launcher: {search_root / 'launch.py'}")
-
-        router = router_script.relative_to(root) if router_script is not None else None
-        for command, discovered in category_launchers.items():
-            launcher = replace(discovered, router=router)
+        for command, launcher in discover_leaf_launchers(search_root, root).items():
             existing = launchers.get(command)
             if existing is not None:
                 raise SystemExit(
@@ -788,10 +818,11 @@ def is_help_request(args: Sequence[str]) -> bool:
 
 
 def run_discovered_launcher(repo_launcher: RepoLauncher, forwarded_args: Sequence[str], echo: bool = True) -> int:
-    if repo_launcher.router is not None:
+    if repo_launcher.route:
+        route_arguments = [launch_command_from_directory(script) for script in repo_launcher.route[1:]]
         return run_repo_script(
-            repo_launcher.router,
-            [repo_launcher.command] + list(forwarded_args),
+            repo_launcher.route[0],
+            route_arguments + [repo_launcher.command] + list(forwarded_args),
             echo=echo,
         )
     return run_repo_script(repo_launcher.script, forwarded_args, echo=echo)
@@ -828,7 +859,7 @@ def list_profiles_command(args) -> int:
     print("runnable commands:", flush=True)
     print("  run <cmake-target> [launcher options] [-- application arguments]", flush=True)
     for launcher in args.repo_launchers.values():
-        route = f"{launcher.router} -> {launcher.script}" if launcher.router is not None else str(launcher.script)
+        route = " -> ".join(str(script) for script in (*launcher.route, launcher.script))
         print(f"  {launcher.command}  ({route})", flush=True)
     return 0
 
@@ -917,7 +948,7 @@ def make_parser(repo_launchers: Optional[Dict[str, RepoLauncher]] = None) -> arg
     run_parser.set_defaults(handler=run_target_command)
 
     for launcher in repo_launchers.values():
-        route = f"{launcher.router} -> {launcher.script}" if launcher.router is not None else str(launcher.script)
+        route = " -> ".join(str(script) for script in (*launcher.route, launcher.script))
         launcher_parser = subparsers.add_parser(launcher.command, help=f"Forward through {route}.")
 
     profiles_parser = subparsers.add_parser("profiles", help="List generic and discovered launch commands.")

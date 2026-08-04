@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse
-import ast
 import json
 import os
 import platform
@@ -22,12 +21,8 @@ DEFAULT_CONFIG = "dbg"
 DEFAULT_DOMAIN = "full"
 DEFAULT_BUILD_JOBS = "8"
 LAUNCHER_SEARCH_ROOTS = (Path("CoolStuff"), Path("tests"), Path("utilities"))
-LAUNCHER_SCRIPT_NAMES = ("launch.py", "launcher.py")
-LAUNCH_COMMAND_OVERRIDE = "NWB_LAUNCH_COMMAND"
+LEAF_LAUNCHER_SCRIPT_NAME = "launch.py"
 RESERVED_LAUNCH_COMMANDS = frozenset(("profiles", "run"))
-# Compatibility aliases for callers that imported the former shortcut locations.
-SMOKE_SCRIPT = Path("tests") / "smoke" / "launch.py"
-ASYNC_SHADOW_M4_LAUNCH_SCRIPT = Path("tests") / "ab" / "async_shadow_m4" / "launch.py"
 PROFILE_LOGSERVER_TARGET = "nwb_logserver"
 PROFILE_LOGSERVER_EXECUTABLE = "logserver"
 PROFILE_LOG_ADDRESS = "http://localhost"
@@ -96,36 +91,6 @@ def validate_launch_command(command: str, source: Path) -> str:
     return command
 
 
-def launch_command_override(script: Path) -> Optional[str]:
-    try:
-        source = script.read_text(encoding="utf-8")
-        module = ast.parse(source, filename=str(script))
-    except (OSError, SyntaxError):
-        return None
-
-    for statement in module.body:
-        target_name = None
-        value = None
-        if isinstance(statement, ast.Assign):
-            for target in statement.targets:
-                if isinstance(target, ast.Name) and target.id == LAUNCH_COMMAND_OVERRIDE:
-                    target_name = target.id
-                    value = statement.value
-                    break
-        elif isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
-            if statement.target.id == LAUNCH_COMMAND_OVERRIDE:
-                target_name = statement.target.id
-                value = statement.value
-
-        if target_name is None:
-            continue
-        if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
-            raise SystemExit(f"{LAUNCH_COMMAND_OVERRIDE} in {script} must be a literal string")
-        return value.value
-
-    return None
-
-
 def category_launcher_script(directory: Path) -> Optional[Path]:
     script = directory / "launch.py"
     return script if script.is_file() else None
@@ -141,38 +106,22 @@ def discover_directory_launchers(directory: Path, root: Optional[Path] = None) -
     root = (root or repo_root()).resolve()
     search_path = directory if directory.is_absolute() else root / directory
     search_path = search_path.resolve()
-    conventional_scripts: Dict[Path, Path] = {}
-    explicit_launchers: List[Tuple[Path, str]] = []
 
     if not search_path.is_dir():
         return {}
 
-    for script in sorted(search_path.rglob("*.py"), key=lambda path: path.as_posix()):
+    launchers: Dict[str, RepoLauncher] = {}
+    for script in sorted(search_path.rglob(LEAF_LAUNCHER_SCRIPT_NAME), key=lambda path: path.as_posix()):
         if script.parent == search_path:
             continue
-        command_override = launch_command_override(script)
-        if command_override is not None:
-            explicit_launchers.append((script, command_override))
-            continue
-        if script.name not in LAUNCHER_SCRIPT_NAMES:
-            continue
 
-        existing = conventional_scripts.get(script.parent)
-        if existing is None or script.name == "launch.py":
-            conventional_scripts[script.parent] = script
-
-    candidates = explicit_launchers + [
-        (script, launch_command_from_directory(script)) for script in conventional_scripts.values()
-    ]
-    launchers: Dict[str, RepoLauncher] = {}
-    for script, command in sorted(candidates, key=lambda item: item[0].as_posix()):
-        command = validate_launch_command(command, script)
+        command = validate_launch_command(launch_command_from_directory(script), script)
         launcher = RepoLauncher(command, script.relative_to(root))
         existing = launchers.get(command)
         if existing is not None:
             raise SystemExit(
                 f"duplicate launch command '{command}': {existing.script} and {launcher.script}; "
-                f"set {LAUNCH_COMMAND_OVERRIDE} in one script to disambiguate"
+                "rename one leaf directory to disambiguate"
             )
         launchers[command] = launcher
 
@@ -197,7 +146,7 @@ def discover_repo_launchers(root: Optional[Path] = None) -> Dict[str, RepoLaunch
             if existing is not None:
                 raise SystemExit(
                     f"duplicate launch command '{command}': {existing.script} and {launcher.script}; "
-                    f"set {LAUNCH_COMMAND_OVERRIDE} in one script to disambiguate"
+                    "rename one leaf directory to disambiguate"
                 )
             launchers[command] = launcher
 
@@ -875,14 +824,6 @@ def run_directory_launcher(directory: Path, argv: Sequence[str]) -> int:
     return run_repo_script(repo_launcher.script, forwarded_args, echo=not is_help_request(forwarded_args))
 
 
-def repo_launcher_command(args) -> int:
-    forwarded_args = list(args.forwarded_args)
-    application_args = getattr(args, "application_args", [])
-    if application_args:
-        forwarded_args += ["--"] + list(application_args)
-    return run_discovered_launcher(args.repo_launcher, forwarded_args, echo=not is_help_request(forwarded_args))
-
-
 def list_profiles_command(args) -> int:
     print("runnable commands:", flush=True)
     print("  run <cmake-target> [launcher options] [-- application arguments]", flush=True)
@@ -978,8 +919,6 @@ def make_parser(repo_launchers: Optional[Dict[str, RepoLauncher]] = None) -> arg
     for launcher in repo_launchers.values():
         route = f"{launcher.router} -> {launcher.script}" if launcher.router is not None else str(launcher.script)
         launcher_parser = subparsers.add_parser(launcher.command, help=f"Forward through {route}.")
-        launcher_parser.add_argument("forwarded_args", nargs=argparse.REMAINDER)
-        launcher_parser.set_defaults(handler=repo_launcher_command, repo_launcher=launcher)
 
     profiles_parser = subparsers.add_parser("profiles", help="List generic and discovered launch commands.")
     profiles_parser.set_defaults(handler=list_profiles_command, repo_launchers=repo_launchers)

@@ -101,7 +101,7 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertTrue(args.with_profile)
         self.assertEqual(8123, args.profile_log_port)
 
-    def test_discovers_directory_and_explicit_script_launchers(self):
+    def test_discovers_leaf_launchers(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             paths = (
@@ -118,15 +118,13 @@ class LauncherPlatformTests(unittest.TestCase):
             )
             for path in paths:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                contents = "NWB_LAUNCH_COMMAND = 'frame-lagged'\n" if path.name == "run.py" else ""
-                path.write_text(contents, encoding="utf-8")
+                path.write_text("", encoding="utf-8")
 
             launchers = launcher.discover_repo_launchers(root)
 
         self.assertEqual(
             {
                 "async-shadow-m4": Path("tests/ab/async_shadow_m4/launch.py"),
-                "frame-lagged": Path("tests/ab/frame_lagged/run.py"),
                 "smoke": Path("tests/smoke/launch.py"),
                 "testbed": Path("CoolStuff/Testbed/launch.py"),
                 "tex-conv": Path("utilities/tex_conv/launch.py"),
@@ -136,7 +134,6 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertEqual(
             {
                 "async-shadow-m4": Path("tests/launch.py"),
-                "frame-lagged": Path("tests/launch.py"),
                 "smoke": Path("tests/launch.py"),
                 "testbed": Path("CoolStuff/launch.py"),
                 "tex-conv": Path("utilities/launch.py"),
@@ -145,7 +142,7 @@ class LauncherPlatformTests(unittest.TestCase):
         )
         self.assertFalse({"coolstuff", "tests", "utilities"}.intersection(launchers))
 
-    def test_launch_py_takes_precedence_over_legacy_launcher_py(self):
+    def test_ignores_nonstandard_leaf_script_names(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             category = root / "tests"
@@ -153,14 +150,14 @@ class LauncherPlatformTests(unittest.TestCase):
             (category / "launch.py").write_text("", encoding="utf-8")
             directory = root / "tests" / "smoke"
             directory.mkdir(parents=True)
-            (directory / "launch.py").write_text("", encoding="utf-8")
             (directory / "launcher.py").write_text("", encoding="utf-8")
+            (directory / "run.py").write_text("", encoding="utf-8")
 
             launchers = launcher.discover_repo_launchers(root)
 
-        self.assertEqual(Path("tests/smoke/launch.py"), launchers["smoke"].script)
+        self.assertEqual({}, launchers)
 
-    def test_duplicate_launch_commands_require_an_override(self):
+    def test_duplicate_launch_commands_are_rejected(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             for category in (root / "tests", root / "utilities"):

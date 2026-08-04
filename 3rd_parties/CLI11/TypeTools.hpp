@@ -10,11 +10,13 @@
 
 // [CLI11:public_includes:set]
 #include <algorithm>
-#include <cmath>
+#include <cctype>
+#include <cerrno>
+#include <cstddef>
 #include <cstdint>
-#include <exception>
-#include <limits>
+#include <cstdlib>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -22,6 +24,7 @@
 // [CLI11:public_includes:end]
 
 #include "Encoding.hpp"
+#include "Macros.hpp"
 #include "StringTools.hpp"
 
 namespace CLI {
@@ -944,7 +947,13 @@ inline std::string type_name() {
 /// Convert to an unsigned integral
 template <typename T, enable_if_t<std::is_unsigned<T>::value, detail::enabler> = detail::dummy>
 bool integral_conversion(const std::string &input, T &output) noexcept {
-    if(input.empty() || input.front() == '-') {
+    if(input.empty()) {
+        return false;
+    }
+    // strtoull skips leading whitespace and silently wraps a negative value, so reject any input whose
+    // first non-whitespace character is a minus sign before it reaches strtoull
+    auto first_non_ws = input.find_first_not_of(" \t\n\v\f\r");
+    if(first_non_ws != std::string::npos && input[first_non_ws] == '-') {
         return false;
     }
     char *val{nullptr};
@@ -1068,52 +1077,7 @@ bool integral_conversion(const std::string &input, T &output) noexcept {
 }
 
 /// Convert a flag into an integer value  typically binary flags sets errno to nonzero if conversion failed
-inline std::int64_t to_flag_value(std::string val) noexcept {
-    static const std::string trueString("true");
-    static const std::string falseString("false");
-    if(val == trueString) {
-        return 1;
-    }
-    if(val == falseString) {
-        return -1;
-    }
-    val = detail::to_lower(val);
-    std::int64_t ret = 0;
-    if(val.size() == 1) {
-        if(val[0] >= '1' && val[0] <= '9') {
-            return (static_cast<std::int64_t>(val[0]) - '0');
-        }
-        switch(val[0]) {
-        case '0':
-        case 'f':
-        case 'n':
-        case '-':
-            ret = -1;
-            break;
-        case 't':
-        case 'y':
-        case '+':
-            ret = 1;
-            break;
-        default:
-            errno = EINVAL;
-            return -1;
-        }
-        return ret;
-    }
-    if(val == trueString || val == "on" || val == "yes" || val == "enable") {
-        ret = 1;
-    } else if(val == falseString || val == "off" || val == "no" || val == "disable") {
-        ret = -1;
-    } else {
-        char *loc_ptr{nullptr};
-        ret = std::strtoll(val.c_str(), &loc_ptr, 0);
-        if(loc_ptr != (val.c_str() + val.size()) && errno == 0) {
-            errno = EINVAL;
-        }
-    }
-    return ret;
-}
+CLI11_INLINE std::int64_t to_flag_value(std::string val) noexcept;
 
 /// Integer conversion
 template <typename T,
@@ -1167,6 +1131,11 @@ bool lexical_cast(const std::string &input, T &output) {
     }
     char *val = nullptr;
     auto output_ld = std::strtold(input.c_str(), &val);
+    // strtold performs no conversion (and leaves val == start) for inputs like whitespace-only strings;
+    // treat that as a failure rather than reporting a successful conversion to 0
+    if(val == input.c_str()) {
+        return false;
+    }
     output = static_cast<T>(output_ld);
     if(val == (input.c_str() + input.size())) {
         return true;
@@ -1395,13 +1364,31 @@ bool lexical_cast(const std::string & /*input*/, T & /*output*/) {
 /// Strings can be empty so we need to do a little different
 template <typename AssignTo,
           typename ConvertTo,
-          enable_if_t<std::is_same<AssignTo, ConvertTo>::value &&
+          enable_if_t<std::is_same<AssignTo, ConvertTo>::value && !is_wrapper<AssignTo>::value &&
                           (classify_object<AssignTo>::value == object_category::string_assignable ||
                            classify_object<AssignTo>::value == object_category::string_constructible ||
                            classify_object<AssignTo>::value == object_category::wstring_assignable ||
                            classify_object<AssignTo>::value == object_category::wstring_constructible),
                       detail::enabler> = detail::dummy>
 bool lexical_assign(const std::string &input, AssignTo &output) {
+    return lexical_cast(input, output);
+}
+
+/// Assign a value through lexical cast operations
+/// Strings can be empty so we need to do a little different but also need to support wrappers
+template <typename AssignTo,
+          typename ConvertTo,
+          enable_if_t<std::is_same<AssignTo, ConvertTo>::value && is_wrapper<AssignTo>::value &&
+                          (classify_object<AssignTo>::value == object_category::string_assignable ||
+                           classify_object<AssignTo>::value == object_category::string_constructible ||
+                           classify_object<AssignTo>::value == object_category::wstring_assignable ||
+                           classify_object<AssignTo>::value == object_category::wstring_constructible),
+                      detail::enabler> = detail::dummy>
+bool lexical_assign(const std::string &input, AssignTo &output) {
+    if(input.empty()) {
+        output = AssignTo{};
+        return true;
+    }
     return lexical_cast(input, output);
 }
 
@@ -1457,10 +1444,16 @@ bool lexical_assign(const std::string &input, AssignTo &output) {
 /* on some older clang compilers */
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
+#elif defined(__GNUC__) && (__GNUC__ == 8)
+/* gcc 8 warns on intentional assignments such as std::atomic<unsigned long> = int */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wsign-conversion"
 #endif
         output = val;
 #if defined(__clang__)
 #pragma clang diagnostic pop
+#elif defined(__GNUC__) && (__GNUC__ == 8)
+#pragma GCC diagnostic pop
 #endif
         return true;
     }
@@ -1726,11 +1719,14 @@ bool lexical_conversion(std::vector<std::string> strings, AssignTo &output) {
     output.clear();
     while(!strings.empty()) {
 
-        typename std::remove_const<typename std::tuple_element<0, typename ConvertTo::value_type>::type>::type v1;
-        typename std::tuple_element<1, typename ConvertTo::value_type>::type v2;
+        typename std::remove_const<typename std::tuple_element<0, typename ConvertTo::value_type>::type>::type v1{};
+        typename std::tuple_element<1, typename ConvertTo::value_type>::type v2{};
         bool retval = tuple_type_conversion<decltype(v1), decltype(v1)>(strings, v1);
         if(!strings.empty()) {
             retval = retval && tuple_type_conversion<decltype(v2), decltype(v2)>(strings, v2);
+        } else {
+            // an odd number of elements means the second value is missing; never insert a default-constructed v2
+            retval = false;
         }
         if(retval) {
             output.insert(output.end(), typename AssignTo::value_type{v1, v2});
@@ -1833,37 +1829,12 @@ bool lexical_conversion(const std::vector<std::string> &strings, AssignTo &outpu
 }
 
 /// Sum a vector of strings
-inline std::string sum_string_vector(const std::vector<std::string> &values) {
-    double val{0.0};
-    bool fail{false};
-    std::string output;
-    for(const auto &arg : values) {
-        double tv{0.0};
-        auto comp = lexical_cast(arg, tv);
-        if(!comp) {
-            errno = 0;
-            auto fv = detail::to_flag_value(arg);
-            fail = (errno != 0);
-            if(fail) {
-                break;
-            }
-            tv = static_cast<double>(fv);
-        }
-        val += tv;
-    }
-    if(fail) {
-        for(const auto &arg : values) {
-            output.append(arg);
-        }
-    } else {
-        std::ostringstream out;
-        out.precision(16);
-        out << val;
-        output = out.str();
-    }
-    return output;
-}
+CLI11_INLINE std::string sum_string_vector(const std::vector<std::string> &values);
 
 }  // namespace detail
 // [CLI11:type_tools_hpp:end]
 }  // namespace CLI
+
+#ifndef CLI11_COMPILE
+#include "impl/TypeTools_inl.hpp"  // IWYU pragma: export
+#endif

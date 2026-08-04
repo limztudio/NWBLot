@@ -16,19 +16,20 @@
 // [CLI11:public_includes:set]
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
-#include <iostream>
+#include <iterator>
 #include <limits>
-#include <memory>
+#include <sstream>
 #include <string>
+#include <type_traits>
 #include <utility>
-#include <vector>
 // [CLI11:public_includes:end]
 
 // [CLI11:validators_hpp_filesystem:verbatim]
 
 #if defined CLI11_HAS_FILESYSTEM && CLI11_HAS_FILESYSTEM > 0
-#include <filesystem>  // NOLINT(build/include)
+#include <filesystem>
 #else
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -68,17 +69,16 @@ class Validator {
     /// specify that a validator should not modify the input
     bool non_modifying_{false};
 
-    Validator(std::string validator_desc, std::function<std::string(std::string &)> func)
-        : desc_function_([validator_desc]() { return validator_desc; }), func_(std::move(func)) {}
+    Validator(std::string validator_desc, std::function<std::string(std::string &)> func);
 
   public:
     Validator() = default;
     /// Construct a Validator with just the description string
     explicit Validator(std::string validator_desc) : desc_function_([validator_desc]() { return validator_desc; }) {}
     /// Construct Validator from basic information
-    Validator(std::function<std::string(std::string &)> op, std::string validator_desc, std::string validator_name = "")
-        : desc_function_([validator_desc]() { return validator_desc; }), func_(std::move(op)),
-          name_(std::move(validator_name)) {}
+    Validator(std::function<std::string(std::string &)> op,
+              std::string validator_desc,
+              std::string validator_name = "");
     /// Set the Validator operation function
     Validator &operation(std::function<std::string(std::string &)> op) {
         func_ = std::move(op);
@@ -90,10 +90,7 @@ class Validator {
 
     /// This is the required operator for a Validator - provided to help
     /// users (CLI11 uses the member `func` directly)
-    std::string operator()(const std::string &str) const {
-        std::string value = str;
-        return (active_) ? func_(value) : std::string{};
-    }
+    std::string operator()(const std::string &str) const;
 
     /// Specify the type string
     Validator &description(std::string validator_desc) {
@@ -104,23 +101,14 @@ class Validator {
     CLI11_NODISCARD Validator description(std::string validator_desc) const;
 
     /// Generate type description information for the Validator
-    CLI11_NODISCARD std::string get_description() const {
-        if(active_) {
-            return desc_function_();
-        }
-        return std::string{};
-    }
+    CLI11_NODISCARD std::string get_description() const;
     /// Specify the type string
     Validator &name(std::string validator_name) {
         name_ = std::move(validator_name);
         return *this;
     }
     /// Specify the type string
-    CLI11_NODISCARD Validator name(std::string validator_name) const {
-        Validator newval(*this);
-        newval.name_ = std::move(validator_name);
-        return newval;
-    }
+    CLI11_NODISCARD Validator name(std::string validator_name) const;
     /// Get the name of the Validator
     CLI11_NODISCARD const std::string &get_name() const { return name_; }
     /// Specify whether the Validator is active or not
@@ -129,11 +117,7 @@ class Validator {
         return *this;
     }
     /// Specify whether the Validator is active or not
-    CLI11_NODISCARD Validator active(bool active_val = true) const {
-        Validator newval(*this);
-        newval.active_ = active_val;
-        return newval;
-    }
+    CLI11_NODISCARD Validator active(bool active_val = true) const;
 
     /// Specify whether the Validator can be modifying or not
     Validator &non_modifying(bool no_modify = true) {
@@ -146,11 +130,7 @@ class Validator {
         return *this;
     }
     /// Specify the application index of a validator
-    CLI11_NODISCARD Validator application_index(int app_index) const {
-        Validator newval(*this);
-        newval.application_index_ = app_index;
-        return newval;
-    }
+    CLI11_NODISCARD Validator application_index(int app_index) const;
     /// Get the current value of the application index
     CLI11_NODISCARD int get_application_index() const { return application_index_; }
     /// Get a boolean if the validator is active
@@ -281,9 +261,9 @@ class Range : public Validator {
 /// Check for a non negative number
 CLI11_MODULE_INLINE const Range NonNegativeNumber((std::numeric_limits<double>::max)(), "NONNEGATIVE");
 
-/// Check for a positive valued number (val>0.0), <double>::min  here is the smallest positive number
+/// Check for a positive valued number (val>0.0), <double>::denorm_min is the smallest positive number
 CLI11_MODULE_INLINE const
-    Range PositiveNumber((std::numeric_limits<double>::min)(), (std::numeric_limits<double>::max)(), "POSITIVE");
+    Range PositiveNumber((std::numeric_limits<double>::denorm_min)(), (std::numeric_limits<double>::max)(), "POSITIVE");
 
 namespace detail {
 // the following suggestion was made by Nikita Ofitserov(@himikof)
@@ -291,7 +271,7 @@ namespace detail {
 
 /// Do a check for overflow on signed numbers
 template <typename T>
-inline typename std::enable_if<std::is_signed<T>::value, T>::type overflowCheck(const T &a, const T &b) {
+inline typename std::enable_if<std::is_signed<T>::value, bool>::type overflowCheck(const T &a, const T &b) {
     if((a > 0) == (b > 0)) {
         return ((std::numeric_limits<T>::max)() / (std::abs)(a) < (std::abs)(b));
     }
@@ -299,7 +279,7 @@ inline typename std::enable_if<std::is_signed<T>::value, T>::type overflowCheck(
 }
 /// Do a check for overflow on unsigned numbers
 template <typename T>
-inline typename std::enable_if<!std::is_signed<T>::value, T>::type overflowCheck(const T &a, const T &b) {
+inline typename std::enable_if<!std::is_signed<T>::value, bool>::type overflowCheck(const T &a, const T &b) {
     return ((std::numeric_limits<T>::max)() / a < b);
 }
 

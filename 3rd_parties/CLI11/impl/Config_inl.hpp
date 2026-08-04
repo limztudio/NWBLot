@@ -11,8 +11,17 @@
 // This include is only needed for IDEs to discover symbols
 #include "../Config.hpp"
 
+#include "../Encoding.hpp"
+
 // [CLI11:public_includes:set]
 #include <algorithm>
+#include <cctype>
+#include <cstddef>
+#include <fstream>
+#include <functional>
+#include <locale>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -20,6 +29,41 @@
 
 namespace CLI {
 // [CLI11:config_inl_hpp:verbatim]
+
+CLI11_NODISCARD CLI11_INLINE std::string ConfigItem::fullname() const {
+    std::vector<std::string> tmp = parents;
+    tmp.emplace_back(name);
+    return detail::join(tmp, ".");
+    (void)multiline;  // suppression for cppcheck false positive
+}
+
+CLI11_INLINE std::string
+Config::to_config(const App *app, ConfigOutputMode mode, bool write_description, std::string prefix) const {
+    return to_config(app, mode != ConfigOutputMode::Active, write_description, std::move(prefix));
+}
+
+CLI11_NODISCARD CLI11_INLINE std::string Config::to_flag(const ConfigItem &item) const {
+    if(item.inputs.size() == 1) {
+        return item.inputs.at(0);
+    }
+    if(item.inputs.empty()) {
+        return "{}";
+    }
+    throw ConversionError::TooManyInputsFlag(item.fullname());  // LCOV_EXCL_LINE
+}
+
+CLI11_INLINE std::vector<ConfigItem> Config::from_file(const std::string &name) const {
+#if defined CLI11_HAS_FILESYSTEM && CLI11_HAS_FILESYSTEM > 0
+    std::ifstream input{to_path(name)};
+#else
+    std::ifstream input{name};
+#endif
+
+    if(!input.good())
+        throw FileError::Missing(name);
+
+    return from_config(input);
+}
 
 static constexpr auto multiline_literal_quote = R"(''')";
 static constexpr auto multiline_string_quote = R"(""")";
@@ -89,11 +133,11 @@ convert_arg_for_ini(const std::string &arg, char stringQuote, char literalQuote,
             }
             std::string return_string{multiline_literal_quote};
             return_string.reserve(7 + arg.size());
-            if(arg.front() == '\n' || arg.front() == '\r') {
+            if(arg.front() == '\n') {
                 return_string.push_back('\n');
             }
             return_string.append(arg);
-            if(arg.back() == '\n' || arg.back() == '\r') {
+            if(arg.back() == '\n') {
                 return_string.push_back('\n');
             }
             return_string.append(multiline_literal_quote, 3);
@@ -116,11 +160,12 @@ CLI11_INLINE std::string ini_join(const std::vector<std::string> &args,
         joined.push_back(arrayStart);
         disable_multi_line = true;
     }
+    const bool sep_is_space = std::isspace<char>(sepChar, std::locale());
     std::size_t start = 0;
     for(const auto &arg : args) {
         if(start++ > 0) {
             joined.push_back(sepChar);
-            if(!std::isspace<char>(sepChar, std::locale())) {
+            if(!sep_is_space) {
                 joined.push_back(' ');
             }
         }
@@ -216,10 +261,10 @@ CLI11_INLINE bool hasMLString(std::string const &fullString, char check) {
 }
 
 /// @brief  find a matching configItem in a list
-inline auto find_matching_config(std::vector<ConfigItem> &items,
-                                 const std::vector<std::string> &parents,
-                                 const std::string &name,
-                                 bool fullSearch) -> decltype(items.begin()) {
+CLI11_INLINE auto find_matching_config(std::vector<ConfigItem> &items,
+                                       const std::vector<std::string> &parents,
+                                       const std::string &name,
+                                       bool fullSearch) -> decltype(items.begin()) {
     if(items.empty()) {
         return items.end();
     }
@@ -235,9 +280,25 @@ inline auto find_matching_config(std::vector<ConfigItem> &items,
     } while(fullSearch);
     return items.end();
 }
+
+CLI11_INLINE void clean_name_string(std::string &name, const std::string &keyChars) {
+    if(name.find_first_of(keyChars) != std::string::npos || (name.front() == '[' && name.back() == ']') ||
+       (name.find_first_of("'`\"\\") != std::string::npos)) {
+        if(name.find_first_of('\'') == std::string::npos) {
+            name.insert(0, 1, '\'');
+            name.push_back('\'');
+        } else {
+            if(detail::has_escapable_character(name)) {
+                name = detail::add_escaped_characters(name);
+            }
+            name.insert(0, 1, '\"');
+            name.push_back('\"');
+        }
+    }
+}
 }  // namespace detail
 
-inline std::vector<ConfigItem> ConfigBase::from_config(std::istream &input) const {
+CLI11_INLINE std::vector<ConfigItem> ConfigBase::from_config(std::istream &input) const {
     std::string line;
     std::string buffer;
     std::string currentSection = "default";
@@ -265,6 +326,11 @@ inline std::vector<ConfigItem> ConfigBase::from_config(std::istream &input) cons
             continue;
         }
         if(line.compare(0, 3, multiline_string_quote) == 0 || line.compare(0, 3, multiline_literal_quote) == 0) {
+            // check if the multiline comment opens and closes on the same line; the opening quotes
+            // themselves must not be counted as the closer hence the length requirement
+            if(len >= 6 && detail::hasMLString(line, line.front())) {
+                continue;
+            }
             inMLineComment = true;
             auto cchar = line.front();
             while(inMLineComment) {
@@ -278,6 +344,29 @@ inline std::vector<ConfigItem> ConfigBase::from_config(std::istream &input) cons
                 }
             }
             continue;
+        }
+        // strip a trailing comment (quote aware) for section headers so that "[section] # comment"
+        // is recognized as a section; value lines handle their own trailing comments later
+        if(line.front() == '[' && line.back() != ']' && line.find_first_of(commentChar) != std::string::npos) {
+            std::size_t comment_search = 0;
+            while(comment_search < line.size()) {
+                auto test_char = line[comment_search];
+                if(test_char == '\"' || test_char == '\'' || test_char == '`') {
+                    comment_search = detail::close_sequence(line, comment_search, line[comment_search]);
+                    ++comment_search;
+                } else if(test_char == commentChar) {
+                    break;
+                } else {
+                    ++comment_search;
+                }
+            }
+            if(comment_search < line.size() && line[comment_search] == commentChar) {
+                line = detail::trim_copy(line.substr(0, comment_search));
+                len = line.length();
+                if(len < 3) {
+                    continue;
+                }
+            }
         }
         if(line.front() == '[' && line.back() == ']') {
             if(currentSection != "default") {
@@ -346,7 +435,8 @@ inline std::vector<ConfigItem> ConfigBase::from_config(std::istream &input) cons
             if(mlquote) {
                 // multiline string
                 auto keyChar = item.front();
-                item = buffer.substr(delimiter_pos + 1, std::string::npos);
+                auto offset = buffer.find_first_not_of(" \t");
+                item = buffer.substr((offset == std::string::npos ? 0 : offset) + delimiter_pos + 1, std::string::npos);
                 detail::ltrim(item);
                 item.erase(0, 3);
                 inMLineValue = true;
@@ -492,26 +582,18 @@ inline std::vector<ConfigItem> ConfigBase::from_config(std::istream &input) cons
     return output;
 }
 
-CLI11_INLINE std::string &clean_name_string(std::string &name, const std::string &keyChars) {
-    if(name.find_first_of(keyChars) != std::string::npos || (name.front() == '[' && name.back() == ']') ||
-       (name.find_first_of("'`\"\\") != std::string::npos)) {
-        if(name.find_first_of('\'') == std::string::npos) {
-            name.insert(0, 1, '\'');
-            name.push_back('\'');
-        } else {
-            if(detail::has_escapable_character(name)) {
-                name = detail::add_escaped_characters(name);
-            }
-            name.insert(0, 1, '\"');
-            name.push_back('\"');
-        }
-    }
-    return name;
+CLI11_INLINE std::string
+ConfigBase::to_config(const App *app, bool default_also, bool write_description, std::string prefix) const {
+    return to_config(app,
+                     default_also ? ConfigOutputMode::AllDefaults : ConfigOutputMode::Active,
+                     write_description,
+                     std::move(prefix));
 }
 
 CLI11_INLINE std::string
-ConfigBase::to_config(const App *app, bool default_also, bool write_description, std::string prefix) const {
+ConfigBase::to_config(const App *app, ConfigOutputMode mode, bool write_description, std::string prefix) const {
     std::stringstream out;
+    const bool include_default_values = (mode != ConfigOutputMode::Active);
     std::string commentLead;
     commentLead.push_back(commentChar);
     commentLead.push_back(' ');
@@ -532,6 +614,7 @@ ConfigBase::to_config(const App *app, bool default_also, bool write_description,
     bool defaultUsed = false;
     groups.insert(groups.begin(), std::string("OPTIONS"));
 
+    const std::vector<const Option *> options = app->get_options({});
     for(auto &group : groups) {
         if(group == "OPTIONS" || group.empty()) {
             if(defaultUsed) {
@@ -578,7 +661,7 @@ ConfigBase::to_config(const App *app, bool default_also, bool write_description,
                         // strings which would be interpreted incorrectly
                         auto delim_count = std::count(results[0].begin(), results[0].end(), delim);
                         if(results[0].back() == delim ||
-                           static_cast<decltype(delim_count)>(opt->count()) < delim_count - 1 ||
+                           static_cast<decltype(delim_count)>(opt->count()) <= delim_count ||
                            results[0].find(std::string(2, delim)) != std::string::npos) {
                             results = opt->results();
                         }
@@ -597,7 +680,7 @@ ConfigBase::to_config(const App *app, bool default_also, bool write_description,
                 }
 
                 bool isDefault = false;
-                if(value.empty() && default_also) {
+                if(value.empty() && include_default_values) {
                     if(!opt->get_default_str().empty()) {
                         results_t res;
                         opt->results(res);
@@ -639,7 +722,7 @@ ConfigBase::to_config(const App *app, bool default_also, bool write_description,
                         }
                         out << commentLead << detail::fix_newlines(commentLead, opt->get_description()) << '\n';
                     }
-                    clean_name_string(single_name, keyChars);
+                    detail::clean_name_string(single_name, keyChars);
 
                     std::string name = prefix + single_name;
                     if(commentDefaultsBool && isDefault) {
@@ -654,11 +737,11 @@ ConfigBase::to_config(const App *app, bool default_also, bool write_description,
     auto subcommands = app->get_subcommands({});
     for(const App *subcom : subcommands) {
         if(subcom->get_name().empty()) {
-            if(!default_also && (subcom->count_all() == 0)) {
+            if(!include_default_values && (subcom->count_all() == 0)) {
                 continue;
             }
             if(write_description && !subcom->get_group().empty()) {
-                out << '\n' << commentLead << subcom->get_group() << " Options\n";
+                out << '\n' << commentChar << commentLead << subcom->get_group() << " Options\n";
             }
             /*if (!prefix.empty() || app->get_parent() == nullptr) {
                 out << '[' << prefix << "___"<< subcom->get_group() << "]\n";
@@ -672,38 +755,39 @@ ConfigBase::to_config(const App *app, bool default_also, bool write_description,
                 out << '[' << subname << "]\n";
             }
             */
-            out << to_config(subcom, default_also, write_description, prefix);
+            out << to_config(subcom, mode, write_description, prefix);
         }
     }
 
     for(const App *subcom : subcommands) {
         if(!subcom->get_name().empty()) {
-            if(!default_also && (subcom->count_all() == 0)) {
+            if((!include_default_values && (subcom->count_all() == 0)) ||
+               (mode == ConfigOutputMode::ActiveSubcommandDefaults && !app->got_subcommand(subcom))) {
                 continue;
             }
             std::string subname = subcom->get_name();
-            clean_name_string(subname, keyChars);
+            detail::clean_name_string(subname, keyChars);
 
-            if(subcom->get_configurable() && (default_also || app->got_subcommand(subcom))) {
+            if(subcom->get_configurable() && (app->got_subcommand(subcom) || (mode == ConfigOutputMode::AllDefaults))) {
                 if(!prefix.empty() || app->get_parent() == nullptr) {
 
                     out << '[' << prefix << subname << "]\n";
                 } else {
                     std::string appname = app->get_name();
-                    clean_name_string(appname, keyChars);
+                    detail::clean_name_string(appname, keyChars);
                     subname = appname + parentSeparatorChar + subname;
                     const auto *p = app->get_parent();
                     while(p->get_parent() != nullptr) {
                         std::string pname = p->get_name();
-                        clean_name_string(pname, keyChars);
+                        detail::clean_name_string(pname, keyChars);
                         subname = pname + parentSeparatorChar + subname;
                         p = p->get_parent();
                     }
                     out << '[' << subname << "]\n";
                 }
-                out << to_config(subcom, default_also, write_description, "");
+                out << to_config(subcom, mode, write_description, "");
             } else {
-                out << to_config(subcom, default_also, write_description, prefix + subname + parentSeparatorChar);
+                out << to_config(subcom, mode, write_description, prefix + subname + parentSeparatorChar);
             }
         }
     }
@@ -714,6 +798,14 @@ ConfigBase::to_config(const App *app, bool default_also, bool write_description,
         return outString + out.str();
     }
     return out.str();
+}
+
+CLI11_INLINE ConfigINI::ConfigINI() {
+    commentChar = ';';
+    arrayStart = '\0';
+    arrayEnd = '\0';
+    arraySeparator = ' ';
+    valueDelimiter = '=';
 }
 // [CLI11:config_inl_hpp:end]
 }  // namespace CLI

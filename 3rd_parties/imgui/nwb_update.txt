@@ -1,5 +1,5 @@
 package: imgui
-version: 1.92.8
-updated_utc: 2026-07-14T16:03:35Z
-source: https://github.com/ocornut/imgui/releases/tag/v1.92.8
+version: 1.92.9b (tag v1.92.9b, commit f1cc2ae15e53a861a874c3034aae6798fde194ab)
+updated_utc: 2026-08-04T16:18:30Z
+source: https://github.com/ocornut/imgui/archive/refs/tags/v1.92.9b.zip
 notes: Dear ImGui debug UI. Root source/header subset only; NWB CMake preserved. The NWB static target is runtime-matched through the top-level CMake policy.

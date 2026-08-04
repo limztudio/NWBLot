@@ -9,7 +9,7 @@
 // IWYU pragma: private, include "CLI/CLI.hpp"
 
 // [CLI11:public_includes:set]
-#include <exception>
+#include <cstddef>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -37,7 +37,7 @@ namespace CLI {
 
 // This is added after the one above if a class is used directly and builds its own message
 #define CLI11_ERROR_SIMPLE(name)                                                                                       \
-    explicit name(std::string msg) : name(#name, msg, ExitCodes::name) {}
+    explicit name(std::string msg) : name(#name, std::move(msg), ExitCodes::name) {}
 
 /// These codes are part of every error in CLI. They can be obtained from e using e.exit_code or as a quick shortcut,
 /// int values from e.get_error_code().
@@ -82,7 +82,8 @@ class Error : public std::runtime_error {
     Error(std::string name, std::string msg, int exit_code = static_cast<int>(ExitCodes::BaseClass))
         : runtime_error(msg), actual_exit_code(exit_code), error_name(std::move(name)) {}
 
-    Error(std::string name, std::string msg, ExitCodes exit_code) : Error(name, msg, static_cast<int>(exit_code)) {}
+    Error(std::string name, std::string msg, ExitCodes exit_code)
+        : Error(std::move(name), std::move(msg), static_cast<int>(exit_code)) {}
 };
 
 // Note: Using Error::Error constructors does not work on GCC 4.7
@@ -313,9 +314,9 @@ class ExtrasError : public ParseError {
                           detail::join(args, " "),
                       ExitCodes::ExtrasError) {}
     ExtrasError(const std::string &name, std::vector<std::string> args)
-        : ExtrasError(name,
-                      (args.size() > 1 ? "The following arguments were not expected: "
-                                       : "The following argument was not expected: ") +
+        : ExtrasError((name.empty() ? std::string{} : name + ": ") +
+                          (args.size() > 1 ? "The following arguments were not expected: "
+                                           : "The following argument was not expected: ") +
                           detail::join(args, " "),
                       ExitCodes::ExtrasError) {}
 };

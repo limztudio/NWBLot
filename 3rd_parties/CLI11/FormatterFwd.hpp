@@ -9,10 +9,11 @@
 // IWYU pragma: private, include "CLI/CLI.hpp"
 
 // [CLI11:public_includes:set]
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <string>
-#include <utility>
 #include <vector>
 // [CLI11:public_includes:end]
 
@@ -71,6 +72,9 @@ class FormatterBase {
     /// Values are Needs, Excludes, etc.
     std::map<std::string, std::string> labels_{};
 
+    /// Default user-facing help labels used when no override is set
+    static std::string default_label(const std::string &key) { return key; }
+
     ///@}
     /// @name Basic
     ///@{
@@ -100,10 +104,7 @@ class FormatterBase {
 
     /// Set the alignment ratio for long options within the left column
     /// The ratio is in [0;1] range (e.g. 0.2 = 20% of column width, 6.f/column_width = 6th character)
-    void long_option_alignment_ratio(float ratio) {
-        long_option_alignment_ratio_ =
-            (ratio >= 0.0f) ? ((ratio <= 1.0f) ? ratio : 1.0f / ratio) : ((ratio < -1.0f) ? 1.0f / (-ratio) : -ratio);
-    }
+    void long_option_alignment_ratio(float ratio);
 
     /// Set the right column width (description of options/flags/subcommands)
     void right_column_width(std::size_t val) { right_column_width_ = val; }
@@ -129,11 +130,7 @@ class FormatterBase {
     ///@{
 
     /// Get the current value of a name (REQUIRED, etc.)
-    CLI11_NODISCARD std::string get_label(std::string key) const {
-        if(labels_.find(key) == labels_.end())
-            return key;
-        return labels_.at(key);
-    }
+    CLI11_NODISCARD std::string get_label(std::string key) const;
 
     /// Get the current left column width (options/flags/subcommands)
     CLI11_NODISCARD std::size_t get_column_width() const { return column_width_; }
@@ -148,7 +145,7 @@ class FormatterBase {
     CLI11_NODISCARD std::size_t get_footer_paragraph_width() const { return footer_paragraph_width_; }
 
     /// @brief Get the current alignment ratio for long options within the left column
-    /// @return
+    /// @return The alignment ratio used for long options within the left column
     CLI11_NODISCARD float get_long_option_alignment_ratio() const { return long_option_alignment_ratio_; }
 
     /// Get the current status of description paragraph formatting
@@ -178,15 +175,13 @@ class FormatterLambda final : public FormatterBase {
 
   public:
     /// Create a FormatterLambda with a lambda function
-    explicit FormatterLambda(funct_t funct) : lambda_(std::move(funct)) {}
+    explicit FormatterLambda(funct_t funct);
 
     /// Adding a destructor (mostly to make GCC 4.7 happy)
     ~FormatterLambda() noexcept override {}  // NOLINT(modernize-use-equals-default)
 
     /// This will simply call the lambda function
-    std::string make_help(const App *app, std::string name, AppFormatMode mode) const override {
-        return lambda_(app, name, mode);
-    }
+    std::string make_help(const App *app, std::string name, AppFormatMode mode) const override;
 };
 
 /// This is the default Formatter for CLI11. It pretty prints help output, and is broken into quite a few

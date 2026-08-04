@@ -10,10 +10,10 @@
 
 // [CLI11:public_includes:set]
 #include <algorithm>
-#include <iomanip>
-#include <locale>
+#include <cstddef>
+#include <initializer_list>
+#include <iterator>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -117,13 +117,16 @@ CLI11_INLINE std::string &rtrim(std::string &str, const std::string &filter);
 inline std::string &trim(std::string &str) { return ltrim(rtrim(str)); }
 
 /// Trim anything from string
-inline std::string &trim(std::string &str, const std::string filter) { return ltrim(rtrim(str, filter), filter); }
+inline std::string &trim(std::string &str, const std::string &filter) { return ltrim(rtrim(str, filter), filter); }
 
 /// Make a copy of the string and then trim it
 inline std::string trim_copy(const std::string &str) {
     std::string s = str;
     return trim(s);
 }
+
+/// remove a matching pair of outer characters (front and back) from a string if both equal `key`
+CLI11_INLINE std::string &remove_outer(std::string &str, char key);
 
 /// remove quotes at the front and back of a string either '"' or '\''
 CLI11_INLINE std::string &remove_quotes(std::string &str);
@@ -174,17 +177,10 @@ inline bool is_separator(const std::string &str) {
 }
 
 /// Verify that str consists of letters only
-inline bool isalpha(const std::string &str) {
-    return std::all_of(str.begin(), str.end(), [](char c) { return std::isalpha(c, std::locale()); });
-}
+CLI11_INLINE bool isalpha(const std::string &str);
 
 /// Return a lower case version of a string
-inline std::string to_lower(std::string str) {
-    std::transform(std::begin(str), std::end(str), std::begin(str), [](const std::string::value_type &x) {
-        return std::tolower(x, std::locale());
-    });
-    return str;
-}
+CLI11_INLINE std::string to_lower(std::string str);
 
 /// remove underscores from a string
 inline std::string remove_underscore(std::string str) {
@@ -208,7 +204,7 @@ CLI11_INLINE void remove_default_flag_values(std::string &flags);
 
 /// Check if a string is a member of a list of strings and optionally ignore case or ignore underscores
 CLI11_INLINE std::ptrdiff_t find_member(std::string name,
-                                        const std::vector<std::string> names,
+                                        const std::vector<std::string> &names,
                                         bool ignore_case = false,
                                         bool ignore_underscore = false);
 
@@ -223,11 +219,12 @@ template <typename Callable> inline std::string find_and_modify(std::string str,
 }
 
 /// close a sequence of characters indicated by a closure character.  Brackets allows sub sequences
-/// recognized bracket sequences include "'`[(<{  other closure characters are assumed to be literal strings
+/// recognized bracket sequences include double quote, single quote, backquote, [, (, <, and {; other closure
+/// characters are assumed to be literal strings
 CLI11_INLINE std::size_t close_sequence(const std::string &str, std::size_t start, char closure_char);
 
 /// Split a string '"one two" "three"' into 'one two', 'three'
-/// Quote characters can be ` ' or " or bracket characters [{(< with matching to the matching bracket
+/// Quote characters can be backquote, ' or " or bracket characters [{(< with matching to the matching bracket
 CLI11_INLINE std::vector<std::string> split_up(std::string str, char delimiter = '\0');
 
 /// get the value of an environmental variable or empty string if empty
@@ -259,6 +256,9 @@ CLI11_INLINE bool is_binary_escaped_string(const std::string &escaped_string);
 
 /// extract an escaped binary_string
 CLI11_INLINE std::string extract_binary_string(const std::string &escaped_string);
+
+/// escape an array-like string so it cannot be interpreted as a secondary array
+CLI11_INLINE void handle_secondary_array(std::string &str);
 
 /// process a quoted string, remove the quotes and if appropriate handle escaped characters
 CLI11_INLINE bool process_quoted_string(std::string &str,

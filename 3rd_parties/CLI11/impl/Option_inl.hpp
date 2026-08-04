@@ -13,8 +13,14 @@
 
 // [CLI11:public_includes:set]
 #include <algorithm>
+#include <cerrno>
+#include <cstdlib>
+#include <functional>
+#include <iterator>
 #include <memory>
+#include <set>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 // [CLI11:public_includes:end]
@@ -33,6 +39,18 @@ template <typename CRTP> template <typename T> void OptionBase<CRTP>::copy_to(T 
     other->always_capture_default(always_capture_default_);
     other->multi_option_policy(multi_option_policy_);
     other->callback_priority(callback_priority_);
+}
+
+CLI11_INLINE Option::Option(
+    std::string option_name, std::string option_description, callback_t callback, App *parent, bool allow_non_standard)
+    : description_(std::move(option_description)), parent_(parent), callback_(std::move(callback)) {
+    std::tie(snames_, lnames_, pname_) = detail::get_names(detail::split_names(option_name), allow_non_standard);
+}
+
+CLI11_INLINE void Option::clear() {
+    results_.clear();
+    proc_results_.clear();
+    current_option_state_ = option_state::parsing;
 }
 
 CLI11_INLINE Option *Option::expected(int value) {
@@ -119,6 +137,17 @@ CLI11_INLINE Option *Option::transform(Validator validator, const std::string &t
     return this;
 }
 
+CLI11_INLINE Option *
+Option::transform(Validator validator, const std::string &transform_description, const std::string &transform_name) {
+    auto vp = std::make_shared<Validator>(std::move(validator));
+    if(!transform_name.empty()) {
+        vp->name(transform_name);
+    }
+    vp->description(transform_description);
+    validators_.insert(validators_.begin(), std::move(vp));
+    return this;
+}
+
 CLI11_INLINE Option *Option::transform(const std::function<std::string(std::string)> &transform_func,
                                        std::string transform_description,
                                        std::string transform_name) {
@@ -163,6 +192,13 @@ CLI11_INLINE Validator *Option::get_validator(int index) {
         return validators_[static_cast<decltype(validators_)::size_type>(index)].get();
     }
     throw OptionNotFound("Validator index is not valid");
+}
+
+CLI11_INLINE Option *Option::needs(Option *opt) {
+    if(opt != this) {
+        needs_.insert(opt);
+    }
+    return this;
 }
 
 CLI11_INLINE bool Option::remove_needs(Option *opt) {
@@ -475,10 +511,10 @@ CLI11_INLINE Option *Option::add_result(std::vector<std::string> s) {
 }
 
 CLI11_NODISCARD CLI11_INLINE results_t Option::reduced_results() const {
-    results_t res = proc_results_.empty() ? results_ : proc_results_;
+    const bool parsing = current_option_state_ == option_state::parsing;
+    results_t res = (parsing || proc_results_.empty()) ? results_ : proc_results_;
     if(current_option_state_ < option_state::reduced) {
-        if(current_option_state_ == option_state::parsing) {
-            res = results_;
+        if(parsing) {
             _validate_results(res);
         }
         if(!res.empty()) {
@@ -531,6 +567,31 @@ CLI11_INLINE Option *Option::type_size(int option_type_size_min, int option_type
     }
     if(type_size_max_ >= detail::expected_max_vector_size) {
         inject_separator_ = true;
+    }
+    return this;
+}
+
+CLI11_NODISCARD CLI11_INLINE const std::string &Option::get_single_name() const {
+    if(!lnames_.empty()) {
+        return lnames_[0];
+    }
+    if(!snames_.empty()) {
+        return snames_[0];
+    }
+    if(!pname_.empty()) {
+        return pname_;
+    }
+    return envname_;
+}
+
+CLI11_INLINE Option *Option::type_name(std::string typeval) {
+    type_name_fn([typeval]() { return typeval; });
+    return this;
+}
+
+CLI11_INLINE Option *Option::capture_default_str() {
+    if(default_function_) {
+        default_str_ = default_function_();
     }
     return this;
 }
@@ -623,7 +684,7 @@ CLI11_INLINE void Option::_reduce_results(results_t &out, const results_t &origi
         }
     } break;
     case MultiOptionPolicy::Join:
-        if(results_.size() > 1) {
+        if(original.size() > 1) {
             out.push_back(detail::join(original, std::string(1, (delimiter_ == '\0') ? '\n' : delimiter_)));
         }
         break;
@@ -721,15 +782,12 @@ CLI11_INLINE int Option::_add_result(std::string &&result, std::vector<std::stri
 
         result.pop_back();
         result.erase(result.begin());
-        bool skipSection{false};
         for(auto &var : CLI::detail::split_up(result, ',')) {
             if(!var.empty()) {
                 result_count += _add_result(std::move(var), res);
             }
         }
-        if(!skipSection) {
-            return result_count;
-        }
+        return result_count;
     }
     if(delimiter_ == '\0') {
         res.push_back(std::move(result));

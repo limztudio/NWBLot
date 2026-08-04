@@ -648,6 +648,45 @@ MHD_TLS_init (struct MHD_Daemon *daemon)
 }
 
 
+/**
+ * Release the TLS resources that #MHD_start_daemon_va() may already have
+ * allocated when it decides to fail.
+ *
+ * The daemon object is not usable at that point, so #MHD_stop_daemon()
+ * (which is what frees these on the success path) cannot be called; each
+ * failure exit therefore has to do it, and every one of them used to
+ * forget the Diffie-Hellman parameters.  Those are created by MHD itself
+ * from the PEM blob of #MHD_OPTION_HTTPS_MEM_DHPARAMS, so the
+ * application has no handle to free either.
+ *
+ * @param[in,out] daemon the half-initialised daemon
+ */
+static void
+tls_cleanup_failed_start (struct MHD_Daemon *daemon)
+{
+  if (daemon->have_dhparams)
+  {
+    gnutls_dh_params_deinit (daemon->https_mem_dhparams);
+    daemon->have_dhparams = false;
+  }
+  if (NULL != daemon->priority_cache)
+  {
+    gnutls_priority_deinit (daemon->priority_cache);
+    daemon->priority_cache = NULL;
+  }
+  if (NULL != daemon->x509_cred)
+  {
+    gnutls_certificate_free_credentials (daemon->x509_cred);
+    daemon->x509_cred = NULL;
+  }
+  if (NULL != daemon->psk_cred)
+  {
+    gnutls_psk_free_server_credentials (daemon->psk_cred);
+    daemon->psk_cred = NULL;
+  }
+}
+
+
 #endif /* HTTPS_SUPPORT */
 
 
@@ -1316,7 +1355,26 @@ call_handlers (struct MHD_Connection *con,
        (read_ready || (force_close && con->sk_nonblck)) )
   {
     MHD_connection_handle_read (con, force_close);
-    mhd_assert (! force_close || MHD_CONNECTION_CLOSED == con->state);
+    /* MHD_connection_handle_read() closes the connection when
+       @a force_close is set, but only once it gets far enough to try.
+       It returns early, leaving 'con->state' untouched, in three cases,
+       and all three are reachable from here:
+         - the connection is suspended,
+         - a TLS handshake is still in progress,
+         - the read buffer has no free space at all. */
+#ifdef HTTPS_SUPPORT
+    mhd_assert ((! force_close) || \
+                (MHD_CONNECTION_CLOSED == con->state) || \
+                (con->suspended) || \
+                ( (MHD_TLS_CONN_NO_TLS != con->tls_state) && \
+                  (MHD_TLS_CONN_CONNECTED > con->tls_state) ) || \
+                (con->read_buffer_size == con->read_buffer_offset));
+#else  /* ! HTTPS_SUPPORT */
+    mhd_assert ((! force_close) || \
+                (MHD_CONNECTION_CLOSED == con->state) || \
+                (con->suspended) || \
+                (con->read_buffer_size == con->read_buffer_offset));
+#endif /* ! HTTPS_SUPPORT */
     ret = MHD_connection_handle_idle (con);
     if (force_close)
       return ret;
@@ -2426,6 +2484,16 @@ MHD_tls_push_func_ (gnutls_transport_ptr_t trnsp,
 
 
 /**
+ * The shortest pre-shared key #MHD_OPTION_GNUTLS_PSK_CRED_HANDLER may
+ * hand back, in bytes.  RFC 4279 section 7.1 requires at least 16 bytes
+ * of entropy in a PSK and recommends the length of the hash of the
+ * negotiated cipher suite; anything shorter is brute-forceable offline
+ * from a single recorded handshake, so MHD refuses it rather than let
+ * the application weaken the connection by accident.
+ */
+#define MHD_PSK_MIN_SIZE 16
+
+/**
  * Function called by GNUtls to obtain the PSK for a given session.
  *
  * @param session the session to lookup PSK for
@@ -2470,6 +2538,15 @@ psk_gnutls_adapter (gnutls_session_t session,
                                   &app_psk,
                                   &app_psk_size))
     return -1;
+  if (MHD_PSK_MIN_SIZE > app_psk_size)
+  {
+#ifdef HAVE_MESSAGES
+    MHD_DLOG (daemon,
+              _ ("PSK authentication failed: PSK too short.\n"));
+#endif
+    free (app_psk);
+    return -1;
+  }
   if (UINT_MAX < app_psk_size)
   {
 #ifdef HAVE_MESSAGES
@@ -2479,6 +2556,9 @@ psk_gnutls_adapter (gnutls_session_t session,
     free (app_psk);
     return -1;
   }
+  /* @a app_psk_size is at least MHD_PSK_MIN_SIZE here, so this is never
+     gnutls_malloc(0) -- whose result is implementation defined and would
+     be reported below as an allocation failure. */
   if (NULL == (key->data = gnutls_malloc (app_psk_size)))
   {
 #ifdef HAVE_MESSAGES
@@ -4229,6 +4309,7 @@ MHD_get_timeout64 (struct MHD_Daemon *daemon,
   uint64_t earliest_deadline;
   struct MHD_Connection *pos;
   struct MHD_Connection *earliest_tmot_conn; /**< the connection with earliest timeout */
+  bool resuming; /**< the copy of @a daemon->resuming, read under the lock */
 
 #ifdef MHD_USE_THREADS
   mhd_assert ( (! MHD_D_IS_USING_THREADS_ (daemon)) || \
@@ -4243,9 +4324,20 @@ MHD_get_timeout64 (struct MHD_Daemon *daemon,
 #endif
     return MHD_NO;
   }
+  /* Unlike the other flags checked below, which are touched only by the
+     thread that processes this daemon's polling, 'resuming' is set by
+     #MHD_resume_connection(), which the application may legally call from
+     any thread.  It is guarded by 'cleanup_connection_mutex' everywhere. */
+#if defined(MHD_USE_POSIX_THREADS) || defined(MHD_USE_W32_THREADS)
+  MHD_mutex_lock_chk_ (&daemon->cleanup_connection_mutex);
+#endif
+  resuming = daemon->resuming;
+#if defined(MHD_USE_POSIX_THREADS) || defined(MHD_USE_W32_THREADS)
+  MHD_mutex_unlock_chk_ (&daemon->cleanup_connection_mutex);
+#endif
   if (daemon->data_already_pending
       || (NULL != daemon->cleanup_head)
-      || daemon->resuming
+      || resuming
       || daemon->have_new
       || daemon->shutdown)
   {
@@ -5527,6 +5619,13 @@ MHD_epoll (struct MHD_Daemon *daemon,
     return MHD_NO; /* we're down! */
   if (daemon->shutdown)
     return MHD_NO;
+  /* 'listen_socket_in_epoll', 'was_quiesced' and the epoll set itself
+     are shared with MHD_quiesce_daemon(), which runs on the
+     application's thread.  Testing them and acting on the result has to
+     be one atomic step. */
+#if defined(MHD_USE_POSIX_THREADS) || defined(MHD_USE_W32_THREADS)
+  MHD_mutex_lock_chk_ (&daemon->epoll_listen_mutex);
+#endif
   if ( (MHD_INVALID_SOCKET != (ls = daemon->listen_fd)) &&
        (! daemon->was_quiesced) &&
        (daemon->connections < daemon->connection_limit) &&
@@ -5540,6 +5639,9 @@ MHD_epoll (struct MHD_Daemon *daemon,
                         ls,
                         &event))
     {
+#if defined(MHD_USE_POSIX_THREADS) || defined(MHD_USE_W32_THREADS)
+      MHD_mutex_unlock_chk_ (&daemon->epoll_listen_mutex);
+#endif
 #ifdef HAVE_MESSAGES
       MHD_DLOG (daemon,
                 _ ("Call to epoll_ctl failed: %s\n"),
@@ -5552,15 +5654,16 @@ MHD_epoll (struct MHD_Daemon *daemon,
   if ( (daemon->was_quiesced) &&
        (daemon->listen_socket_in_epoll) )
   {
-    if ( (0 != epoll_ctl (daemon->epoll_fd,
-                          EPOLL_CTL_DEL,
-                          ls,
-                          NULL)) &&
-         (ENOENT != errno) )   /* ENOENT can happen due to race with
-                                  #MHD_quiesce_daemon() */
+    if (0 != epoll_ctl (daemon->epoll_fd,
+                        EPOLL_CTL_DEL,
+                        ls,
+                        NULL))
       MHD_PANIC ("Failed to remove listen FD from epoll set.\n");
     daemon->listen_socket_in_epoll = false;
   }
+#if defined(MHD_USE_POSIX_THREADS) || defined(MHD_USE_W32_THREADS)
+  MHD_mutex_unlock_chk_ (&daemon->epoll_listen_mutex);
+#endif
 
 #if defined(HTTPS_SUPPORT) && defined(UPGRADE_SUPPORT)
   if ( ( (! daemon->upgrade_fd_in_epoll) &&
@@ -5583,6 +5686,9 @@ MHD_epoll (struct MHD_Daemon *daemon,
     daemon->upgrade_fd_in_epoll = true;
   }
 #endif /* HTTPS_SUPPORT && UPGRADE_SUPPORT */
+#if defined(MHD_USE_POSIX_THREADS) || defined(MHD_USE_W32_THREADS)
+  MHD_mutex_lock_chk_ (&daemon->epoll_listen_mutex);
+#endif
   if ( (daemon->listen_socket_in_epoll) &&
        ( (daemon->connections == daemon->connection_limit) ||
          (daemon->at_limit) ||
@@ -5597,6 +5703,9 @@ MHD_epoll (struct MHD_Daemon *daemon,
       MHD_PANIC (_ ("Failed to remove listen FD from epoll set.\n"));
     daemon->listen_socket_in_epoll = false;
   }
+#if defined(MHD_USE_POSIX_THREADS) || defined(MHD_USE_W32_THREADS)
+  MHD_mutex_unlock_chk_ (&daemon->epoll_listen_mutex);
+#endif
 
   if ( (0 != (daemon->options & MHD_TEST_ALLOW_SUSPEND_RESUME)) &&
        (MHD_NO != resume_suspended_connections (daemon)) )
@@ -6176,6 +6285,14 @@ MHD_quiesce_daemon (struct MHD_Daemon *daemon)
   if (NULL != daemon->worker_pool)
     for (i = 0; i < daemon->worker_pool_size; i++)
     {
+      /* Each worker is an independent daemon with its own epoll set and
+         its own lock; they are taken one at a time and never nested, so
+         there is no ordering to get wrong.  Holding the worker's lock
+         is what stops it removing the same descriptor concurrently from
+         its own MHD_epoll(). */
+#if defined(MHD_USE_POSIX_THREADS) || defined(MHD_USE_W32_THREADS)
+      MHD_mutex_lock_chk_ (&daemon->worker_pool[i].epoll_listen_mutex);
+#endif
       daemon->worker_pool[i].was_quiesced = true;
 #ifdef EPOLL_SUPPORT
       if (MHD_D_IS_USING_EPOLL_ (daemon) &&
@@ -6197,7 +6314,13 @@ MHD_quiesce_daemon (struct MHD_Daemon *daemon)
           MHD_PANIC (_ ("Failed to signal quiesce via inter-thread " \
                         "communication channel.\n"));
       }
+#if defined(MHD_USE_POSIX_THREADS) || defined(MHD_USE_W32_THREADS)
+      MHD_mutex_unlock_chk_ (&daemon->worker_pool[i].epoll_listen_mutex);
+#endif
     }
+#endif
+#if defined(MHD_USE_POSIX_THREADS) || defined(MHD_USE_W32_THREADS)
+  MHD_mutex_lock_chk_ (&daemon->epoll_listen_mutex);
 #endif
   daemon->was_quiesced = true;
 #ifdef EPOLL_SUPPORT
@@ -6205,15 +6328,16 @@ MHD_quiesce_daemon (struct MHD_Daemon *daemon)
       (-1 != daemon->epoll_fd) &&
       (daemon->listen_socket_in_epoll) )
   {
-    if ( (0 != epoll_ctl (daemon->epoll_fd,
-                          EPOLL_CTL_DEL,
-                          ret,
-                          NULL)) &&
-         (ENOENT != errno) )   /* ENOENT can happen due to race with
-                                  #MHD_epoll() */
+    if (0 != epoll_ctl (daemon->epoll_fd,
+                        EPOLL_CTL_DEL,
+                        ret,
+                        NULL))
       MHD_PANIC ("Failed to remove listen FD from epoll set.\n");
     daemon->listen_socket_in_epoll = false;
   }
+#endif
+#if defined(MHD_USE_POSIX_THREADS) || defined(MHD_USE_W32_THREADS)
+  MHD_mutex_unlock_chk_ (&daemon->epoll_listen_mutex);
 #endif
   if ( (MHD_ITC_IS_VALID_ (daemon->itc)) &&
        (! MHD_itc_activate_ (daemon->itc, "q")) )
@@ -7878,9 +8002,7 @@ MHD_start_daemon_va (unsigned int flags,
                                   ap))
   {
 #ifdef HTTPS_SUPPORT
-    if ( (0 != (*pflags & MHD_USE_TLS)) &&
-         (NULL != daemon->priority_cache) )
-      gnutls_priority_deinit (daemon->priority_cache);
+    tls_cleanup_failed_start (daemon);
 #endif /* HTTPS_SUPPORT */
     free (interim_params);
     free (daemon);
@@ -7891,6 +8013,9 @@ MHD_start_daemon_va (unsigned int flags,
                                 &addrlen,
                                 interim_params))
   {
+#ifdef HTTPS_SUPPORT
+    tls_cleanup_failed_start (daemon);
+#endif /* HTTPS_SUPPORT */
     free (interim_params);
     free (daemon);
     return NULL;
@@ -7906,6 +8031,7 @@ MHD_start_daemon_va (unsigned int flags,
     MHD_DLOG (daemon,
               _ ("Failed to initialise GnuTLS priorities.\n"));
 #endif /* HAVE_MESSAGES */
+    tls_cleanup_failed_start (daemon);
     free (daemon);
     return NULL;
   }
@@ -8750,6 +8876,17 @@ MHD_start_daemon_va (unsigned int flags,
         MHD_mutex_destroy_chk_ (&daemon->cleanup_connection_mutex);
         goto free_and_fail;
       }
+      if (! MHD_mutex_init_ (&daemon->epoll_listen_mutex))
+      {
+#ifdef HAVE_MESSAGES
+        MHD_DLOG (daemon,
+                  _ ("Failed to initialise mutex.\n"));
+#endif
+        MHD_mutex_destroy_chk_ (&daemon->new_connections_mutex);
+        MHD_mutex_destroy_chk_ (&daemon->cleanup_connection_mutex);
+        MHD_mutex_destroy_chk_ (&daemon->per_ip_connection_mutex);
+        goto free_and_fail;
+      }
       if (! MHD_create_named_thread_ (&daemon->tid,
                                       MHD_D_IS_USING_THREAD_PER_CONN_ (daemon) ?
                                       "MHD-listen" : "MHD-single",
@@ -8770,6 +8907,7 @@ MHD_start_daemon_va (unsigned int flags,
                   _ ("Failed to create listen thread: %s\n"),
                   MHD_strerror_ (errno));
 #endif /* HAVE_MESSAGES */
+        MHD_mutex_destroy_chk_ (&daemon->epoll_listen_mutex);
         MHD_mutex_destroy_chk_ (&daemon->new_connections_mutex);
         MHD_mutex_destroy_chk_ (&daemon->per_ip_connection_mutex);
         MHD_mutex_destroy_chk_ (&daemon->cleanup_connection_mutex);
@@ -8825,6 +8963,17 @@ MHD_start_daemon_va (unsigned int flags,
           MHD_mutex_destroy_chk_ (&d->cleanup_connection_mutex);
           goto thread_failed;
         }
+        if (! MHD_mutex_init_ (&d->epoll_listen_mutex))
+        {
+#ifdef HAVE_MESSAGES
+          MHD_DLOG (daemon,
+                    _ ("Failed to initialise mutex.\n"));
+#endif
+          MHD_mutex_destroy_chk_ (&d->new_connections_mutex);
+          MHD_mutex_destroy_chk_ (&d->cleanup_connection_mutex);
+          MHD_mutex_destroy_chk_ (&daemon->per_ip_connection_mutex);
+          goto free_and_fail;
+        }
         if (0 != (*pflags & MHD_USE_ITC))
         {
           if (! MHD_itc_init_ (d->itc))
@@ -8835,6 +8984,7 @@ MHD_start_daemon_va (unsigned int flags,
                          "communication channel: %s\n"),
                       MHD_itc_last_strerror_ () );
 #endif
+            MHD_mutex_destroy_chk_ (&d->epoll_listen_mutex);
             MHD_mutex_destroy_chk_ (&d->new_connections_mutex);
             MHD_mutex_destroy_chk_ (&d->cleanup_connection_mutex);
             goto thread_failed;
@@ -8848,6 +8998,7 @@ MHD_start_daemon_va (unsigned int flags,
                          "communication channel exceeds maximum value.\n"));
 #endif
             MHD_itc_destroy_chk_ (d->itc);
+            MHD_mutex_destroy_chk_ (&d->epoll_listen_mutex);
             MHD_mutex_destroy_chk_ (&d->new_connections_mutex);
             MHD_mutex_destroy_chk_ (&d->cleanup_connection_mutex);
             goto thread_failed;
@@ -8875,6 +9026,7 @@ MHD_start_daemon_va (unsigned int flags,
         {
           if (MHD_ITC_IS_VALID_ (d->itc))
             MHD_itc_destroy_chk_ (d->itc);
+          MHD_mutex_destroy_chk_ (&d->epoll_listen_mutex);
           MHD_mutex_destroy_chk_ (&d->new_connections_mutex);
           MHD_mutex_destroy_chk_ (&d->cleanup_connection_mutex);
           goto thread_failed;
@@ -8918,6 +9070,7 @@ MHD_start_daemon_va (unsigned int flags,
            * all previously-created workers. */
           if (MHD_ITC_IS_VALID_ (d->itc))
             MHD_itc_destroy_chk_ (d->itc);
+          MHD_mutex_destroy_chk_ (&d->epoll_listen_mutex);
           MHD_mutex_destroy_chk_ (&d->new_connections_mutex);
           MHD_mutex_destroy_chk_ (&d->cleanup_connection_mutex);
           goto thread_failed;
@@ -8942,6 +9095,17 @@ MHD_start_daemon_va (unsigned int flags,
       MHD_DLOG (daemon,
                 _ ("Failed to initialise mutex.\n"));
 #endif
+      MHD_mutex_destroy_chk_ (&daemon->cleanup_connection_mutex);
+      MHD_mutex_destroy_chk_ (&daemon->per_ip_connection_mutex);
+      goto free_and_fail;
+    }
+    if (! MHD_mutex_init_ (&daemon->epoll_listen_mutex))
+    {
+#ifdef HAVE_MESSAGES
+      MHD_DLOG (daemon,
+                _ ("Failed to initialise mutex.\n"));
+#endif
+      MHD_mutex_destroy_chk_ (&daemon->new_connections_mutex);
       MHD_mutex_destroy_chk_ (&daemon->cleanup_connection_mutex);
       MHD_mutex_destroy_chk_ (&daemon->per_ip_connection_mutex);
       goto free_and_fail;
@@ -9009,14 +9173,7 @@ free_and_fail:
 #endif
 #endif
 #ifdef HTTPS_SUPPORT
-  if (0 != (*pflags & MHD_USE_TLS))
-  {
-    gnutls_priority_deinit (daemon->priority_cache);
-    if (daemon->x509_cred)
-      gnutls_certificate_free_credentials (daemon->x509_cred);
-    if (daemon->psk_cred)
-      gnutls_psk_free_server_credentials (daemon->psk_cred);
-  }
+  tls_cleanup_failed_start (daemon);
 #endif /* HTTPS_SUPPORT */
   if (MHD_ITC_IS_VALID_ (daemon->itc))
     MHD_itc_destroy_chk_ (daemon->itc);
@@ -9058,12 +9215,19 @@ close_all_connections (struct MHD_Daemon *daemon)
   mhd_assert (daemon->shutdown);
 
 #ifdef MHD_USE_THREADS
-/* Remove externally added new connections that are
-   * not processed by the daemon thread. */
+/* Remove new connections that MHD_add_connection() queued and that were
+   * never processed.  This is not limited to daemons with an internal
+   * polling thread: internal_add_connection() queues whenever the daemon
+   * is thread-safe, which is every daemon that was not started with
+   * MHD_USE_NO_THREAD_SAFETY, and new_connections_list_process_()
+   * asserts the same condition.  An application driving an external
+   * event loop can therefore call MHD_add_connection() and then
+   * MHD_stop_daemon() before the next MHD_run(), and this list is what
+   * holds the connection at that point. */
   MHD_mutex_lock_chk_ (&daemon->new_connections_mutex);
   while (NULL != (pos = daemon->new_connections_tail))
   {
-    mhd_assert (MHD_D_IS_USING_THREADS_ (daemon));
+    mhd_assert (MHD_D_IS_THREAD_SAFE_ (daemon));
     DLL_remove (daemon->new_connections_head,
                 daemon->new_connections_tail,
                 pos);
@@ -9381,6 +9545,7 @@ MHD_stop_daemon (struct MHD_Daemon *daemon)
 
 #if defined(MHD_USE_POSIX_THREADS) || defined(MHD_USE_W32_THREADS)
     MHD_mutex_destroy_chk_ (&daemon->cleanup_connection_mutex);
+    MHD_mutex_destroy_chk_ (&daemon->epoll_listen_mutex);
     MHD_mutex_destroy_chk_ (&daemon->new_connections_mutex);
 #endif
   }

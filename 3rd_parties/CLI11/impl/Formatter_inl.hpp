@@ -13,6 +13,11 @@
 
 // [CLI11:public_includes:set]
 #include <algorithm>
+#include <functional>
+#include <iomanip>
+#include <map>
+#include <set>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -20,6 +25,39 @@
 
 namespace CLI {
 // [CLI11:formatter_inl_hpp:verbatim]
+namespace detail {
+CLI11_INLINE std::string indent_block(const std::string &input, const std::string &indent) {
+    std::stringstream out;
+    bool line_start = true;
+
+    for(char ch : input) {
+        if(line_start && ch != '\n') {
+            out << indent;
+        }
+        out << ch;
+        line_start = (ch == '\n');
+    }
+
+    return out.str();
+}
+}  // namespace detail
+
+CLI11_INLINE void FormatterBase::long_option_alignment_ratio(float ratio) {
+    long_option_alignment_ratio_ =
+        (ratio >= 0.0f) ? ((ratio <= 1.0f) ? ratio : 1.0f / ratio) : ((ratio < -1.0f) ? 1.0f / (-ratio) : -ratio);
+}
+
+CLI11_NODISCARD CLI11_INLINE std::string FormatterBase::get_label(std::string key) const {
+    auto it = labels_.find(key);
+    return it != labels_.end() ? it->second : default_label(key);
+}
+
+CLI11_INLINE FormatterLambda::FormatterLambda(funct_t funct) : lambda_(std::move(funct)) {}
+
+CLI11_INLINE std::string FormatterLambda::make_help(const App *app, std::string name, AppFormatMode mode) const {
+    return lambda_(app, name, mode);
+}
+
 CLI11_INLINE std::string
 Formatter::make_group(std::string group, bool is_positional, std::vector<const Option *> opts) const {
     std::stringstream out;
@@ -115,15 +153,17 @@ CLI11_INLINE std::string Formatter::make_usage(const App *app, std::string name)
         out << " [" << get_label("OPTIONS") << "]";
 
     // Positionals need to be listed here
-    std::vector<const Option *> positionals = app->get_options([](const Option *opt) { return opt->get_positional(); });
+    std::vector<const Option *> positionals =
+        app->get_options([](const Option *opt) { return !opt->get_group().empty() && opt->get_positional(); });
 
     // Print out positionals if any are left
     if(!positionals.empty()) {
         // Convert to help names
-        std::vector<std::string> positional_names(positionals.size());
-        std::transform(positionals.begin(), positionals.end(), positional_names.begin(), [this](const Option *opt) {
-            return make_option_usage(opt);
-        });
+        std::vector<std::string> positional_names;
+        positional_names.reserve(positionals.size());
+        for(const auto *opt : positionals) {
+            positional_names.push_back(make_option_usage(opt));
+        }
 
         out << " " << detail::join(positional_names, " ");
     }
@@ -166,7 +206,7 @@ CLI11_INLINE std::string Formatter::make_help(const App *app, std::string name, 
         detail::streamOutAsParagraph(
             out, make_description(app), description_paragraph_width_, "");  // Format description as paragraph
     } else {
-        out << make_description(app) << '\n';
+        out << make_description(app);
     }
     out << make_usage(app, name);
     out << make_positionals(app);
@@ -193,14 +233,17 @@ CLI11_INLINE std::string Formatter::make_subcommands(const App *app, AppFormatMo
     for(const App *com : subcommands) {
         if(com->get_name().empty()) {
             if(!com->get_group().empty() && com->get_group().front() != '+') {
-                out << make_expanded(com, mode);
+                auto expanded = make_expanded(com, mode);
+                // add expansion in one place so each group has subgroups beneath it
+                out << expanded;
             }
             continue;
         }
         std::string group_key = com->get_group();
+        std::string group_key_lower = detail::to_lower(group_key);
         if(!group_key.empty() &&
-           std::find_if(subcmd_groups_seen.begin(), subcmd_groups_seen.end(), [&group_key](std::string a) {
-               return detail::to_lower(a) == detail::to_lower(group_key);
+           std::find_if(subcmd_groups_seen.begin(), subcmd_groups_seen.end(), [&group_key_lower](const std::string &a) {
+               return detail::to_lower(a) == group_key_lower;
            }) == subcmd_groups_seen.end())
             subcmd_groups_seen.push_back(group_key);
     }
@@ -230,30 +273,42 @@ CLI11_INLINE std::string Formatter::make_subcommand(const App *sub) const {
     std::string name = "  " + sub->get_display_name(true) + (sub->get_required() ? " " + get_label("REQUIRED") : "");
 
     out << std::setw(static_cast<int>(column_width_)) << std::left << name;
-    detail::streamOutAsParagraph(
-        out, sub->get_description(), right_column_width_, std::string(column_width_, ' '), true);
+
+    const std::string desc = sub->get_description();
+    if(!desc.empty()) {
+        bool skipFirstLinePrefix = true;
+        if(name.length() >= column_width_) {
+            out << '\n';
+            skipFirstLinePrefix = false;
+        }
+        detail::streamOutAsParagraph(
+            out, desc, right_column_width_, std::string(column_width_, ' '), skipFirstLinePrefix);
+    }
     out << '\n';
     return out.str();
 }
 
 CLI11_INLINE std::string Formatter::make_expanded(const App *sub, AppFormatMode mode) const {
     std::stringstream out;
+    const bool is_option_group = sub->get_name().empty();
+    const std::string body_indent = is_option_group ? "  " : "";
+
     out << sub->get_display_name(true) << '\n';
 
     if(is_description_paragraph_formatting_enabled()) {
         detail::streamOutAsParagraph(
-            out, make_description(sub), description_paragraph_width_, "  ");  // Format description as paragraph
+            out, make_description(sub), description_paragraph_width_, body_indent);  // Format description as paragraph
     } else {
-        out << make_description(sub) << '\n';
+        out << detail::indent_block(make_description(sub), body_indent) << '\n';
     }
 
     if(sub->get_name().empty() && !sub->get_aliases().empty()) {
         detail::format_aliases(out, sub->get_aliases(), column_width_ + 2);
     }
 
-    out << make_positionals(sub);
-    out << make_groups(sub, mode);
-    out << make_subcommands(sub, mode);
+    out << detail::indent_block(make_positionals(sub), body_indent);
+    out << detail::indent_block(make_groups(sub, mode), body_indent);
+    out << detail::indent_block(make_subcommands(sub, mode), body_indent);
     std::string footer_string = make_footer(sub);
 
     if(mode == AppFormatMode::Sub && !footer_string.empty()) {
@@ -373,6 +428,15 @@ CLI11_INLINE std::string Formatter::make_option_name(const Option *opt, bool is_
 
 CLI11_INLINE std::string Formatter::make_option_opts(const Option *opt) const {
     std::stringstream out;
+    // Help output should be stable across runs, so sort pointer-based sets by option name before printing.
+    const auto print_option_set = [&out](const std::set<Option *> &options) {
+        std::vector<const Option *> sorted(options.begin(), options.end());
+        std::sort(sorted.begin(), sorted.end(), [](const Option *lhs, const Option *rhs) {
+            return lhs->get_name() < rhs->get_name();
+        });
+        for(const Option *op : sorted)
+            out << " " << op->get_name();
+    };
 
     if(!opt->get_option_text().empty()) {
         out << " " << opt->get_option_text();
@@ -398,13 +462,11 @@ CLI11_INLINE std::string Formatter::make_option_opts(const Option *opt) const {
             out << " (" << get_label("Env") << ":" << opt->get_envname() << ")";
         if(!opt->get_needs().empty()) {
             out << " " << get_label("Needs") << ":";
-            for(const Option *op : opt->get_needs())
-                out << " " << op->get_name();
+            print_option_set(opt->get_needs());
         }
         if(!opt->get_excludes().empty()) {
             out << " " << get_label("Excludes") << ":";
-            for(const Option *op : opt->get_excludes())
-                out << " " << op->get_name();
+            print_option_set(opt->get_excludes());
         }
     }
     return out.str();

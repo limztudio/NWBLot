@@ -16,16 +16,21 @@ lib_LTLIBRARIES = \
 noinst_DATA =
 MOSTLYCLEANFILES =
 
+# Test-only header, #included by every test program but not compiled on its
+# own and not part of the library; see mhd_panic_tripwire.h.
+EXTRA_DIST = \
+  mhd_panic_tripwire.h
+
 AM_V_LIB = $(am__v_LIB_@AM_V@)
 am__v_LIB_ = $(am__v_LIB_@AM_DEFAULT_V@)
 am__v_LIB_0 = @echo "  LIB     " $@;
-am__v_LIB_1 =
+am__v_LIB_1 = 
 
 if W32_SHARED_LIB_EXP
 AM_V_DLLTOOL = $(am__v_DLLTOOL_@AM_V@)
 am__v_DLLTOOL_ = $(am__v_DLLTOOL_@AM_DEFAULT_V@)
 am__v_DLLTOOL_0 = @echo "  DLLTOOL " $@;
-am__v_DLLTOOL_1 =
+am__v_DLLTOOL_1 = 
 
 W32_MHD_LIB_LDFLAGS = -Wl,--output-def,$(lt_cv_objdir)/libmicrohttpd.def -XCClinker -static-libgcc
 noinst_DATA += $(lt_cv_objdir)/libmicrohttpd.lib $(lt_cv_objdir)/libmicrohttpd.def
@@ -87,6 +92,7 @@ libmicrohttpd_la_SOURCES = \
   mhd_str.c mhd_str.h mhd_str_types.h\
   mhd_send.h mhd_send.c \
   mhd_assert.h \
+  mhd_check.h \
   mhd_sockets.c mhd_sockets.h \
   mhd_itc.c mhd_itc.h mhd_itc_types.h \
   mhd_compat.c mhd_compat.h \
@@ -126,7 +132,7 @@ libmicrohttpd_la_LIBADD = \
 AM_V_RC = $(am__v_RC_@AM_V@)
 am__v_RC_ = $(am__v_RC_@AM_DEFAULT_V@)
 am__v_RC_0 = @echo "  RC      " $@;
-am__v_RC_1 =
+am__v_RC_1 = 
 
 # General rule is not required, but keep it just in case
 # Note: windres does not understand '-isystem' flag, so all
@@ -144,7 +150,7 @@ libmicrohttpd_la-microhttpd_dll_res.lo: $(builddir)/microhttpd_dll_res.rc
 if HAVE_W32
 MHD_DLL_RES_LO = libmicrohttpd_la-microhttpd_dll_res.lo
 else
-MHD_DLL_RES_LO =
+MHD_DLL_RES_LO = 
 endif
 
 EXTRA_libmicrohttpd_la_DEPENDENCIES = $(MHD_DLL_RES_LO)
@@ -240,7 +246,11 @@ check_PROGRAMS = \
   test_client_put_chunked_steps_hard_close \
   test_options \
   test_mhd_version \
-  test_set_panic
+  test_set_panic \
+  test_rq_shift_back \
+  test_chunked_ext \
+  test_raw_requests \
+  test_option_matrix
 
 if ENABLE_MD5
 check_PROGRAMS += \
@@ -302,7 +312,8 @@ if ENABLE_DAUTH
 check_PROGRAMS += \
   test_str_quote \
   test_dauth_userdigest \
-  test_dauth_userhash
+  test_dauth_userhash \
+  test_dauth_malformed
 endif
 if ENABLE_BAUTH
 check_PROGRAMS += \
@@ -578,6 +589,42 @@ test_str_bin_hex_SOURCES = \
 test_options_SOURCES = \
   test_options.c
 test_options_LDADD = \
+  $(builddir)/libmicrohttpd.la
+
+# The environment-driven daemon option matrix (see mhd_opt_matrix.h and
+# contrib/run-option-matrix.sh).  It uses the public API only, so it is
+# simply compiled into every test that honours the matrix.
+MHD_OPT_MATRIX_SOURCES = \
+  mhd_opt_matrix.c mhd_opt_matrix.h
+
+test_rq_shift_back_SOURCES = \
+  test_rq_shift_back.c mhd_sockets.h mhd_assert.h \
+  $(MHD_OPT_MATRIX_SOURCES)
+test_rq_shift_back_LDADD = \
+  $(builddir)/libmicrohttpd.la
+
+test_chunked_ext_SOURCES = \
+  test_chunked_ext.c mhd_sockets.h mhd_assert.h \
+  $(MHD_OPT_MATRIX_SOURCES)
+test_chunked_ext_LDADD = \
+  $(builddir)/libmicrohttpd.la
+
+test_raw_requests_SOURCES = \
+  test_raw_requests.c mhd_sockets.h mhd_assert.h \
+  $(MHD_OPT_MATRIX_SOURCES)
+test_raw_requests_LDADD = \
+  $(builddir)/libmicrohttpd.la
+
+test_option_matrix_SOURCES = \
+  test_option_matrix.c mhd_sockets.h mhd_assert.h \
+  $(MHD_OPT_MATRIX_SOURCES)
+test_option_matrix_LDADD = \
+  $(builddir)/libmicrohttpd.la
+
+test_dauth_malformed_SOURCES = \
+  test_dauth_malformed.c mhd_sockets.h mhd_assert.h \
+  $(MHD_OPT_MATRIX_SOURCES)
+test_dauth_malformed_LDADD = \
   $(builddir)/libmicrohttpd.la
 
 test_client_put_shutdown_SOURCES = \

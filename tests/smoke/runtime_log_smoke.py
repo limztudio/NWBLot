@@ -7,7 +7,7 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from testbed_window_capture_smoke import (  # noqa: E402
+from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE,
     SmokeFailure,
     SmokeSkip,

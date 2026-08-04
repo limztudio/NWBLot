@@ -157,7 +157,7 @@ TEST(Crash, WriteCrashPackageCreatesRequiredFiles){
     request.triggerLine = 7u;
     CopyFixedBuffer(request.triggerCategory, AStringView("test"));
     CopyFixedBuffer(request.triggerMessage, AStringView("required-files"));
-    CopyFixedBuffer(request.triggerFile, AStringView("tests/integration/crash/tests.cpp"));
+    CopyFixedBuffer(request.triggerFile, AStringView("tests/integration/crash/crash_package_tests.cpp"));
 
     EXPECT_TRUE(NWB::Core::Crash::Detail::WriteCrashPackage(request));
 
@@ -385,7 +385,7 @@ TEST(Crash, DesktopInstalledHandlerWritesManualDumpPackage){
     options.waitMilliseconds = NWB::Core::Crash::Detail::s_PlatformCrashHandlerWaitMilliseconds;
     options.triggerCategory = AStringView("test");
     options.triggerMessage = AStringView("desktop handler runtime");
-    options.triggerFile = AStringView("tests/integration/crash/tests.cpp");
+    options.triggerFile = AStringView("tests/integration/crash/crash_package_tests.cpp");
     NWB::Core::Crash::Detail::ManualDumpContextStorage contextStorage;
     NWB::Core::Crash::Detail::CaptureManualDumpContext(options, contextStorage);
     const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::Detail::RequestCrashDump(

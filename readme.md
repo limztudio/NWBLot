@@ -34,7 +34,7 @@
   - Full Linux configure (includes internal validation targets): `cmake --preset linux-clang-x64`.
   - Debug test verification: `cmake --build --preset linux-clang-dbg`, then `ctest --test-dir __cmake/build/linux-clang-x64 -C dbg --output-on-failure`.
   - Transparent multi capture verification: configure with `cmake --preset linux-clang-x64`, build the executable/assets with `cmake --build --preset linux-clang-dbg --target nwb_transparent_multi_smoke`, then run `ctest --test-dir __cmake/build/linux-clang-x64 -C dbg -R "^nwb_transparent_multi_capture_smoke$" --output-on-failure`.
-  - `nwb_transparent_multi_capture_smoke` is a CTest entry, not a Ninja build target. The latest capture is written to `__cmake/build/linux-clang-x64/Testing/smoke/dbg/transparent_multi_capture_latest.png`.
+  - `nwb_transparent_multi_capture_smoke` is a CTest entry, not a Ninja build target. Its 24-bit BMP capture is written beneath `__cmake/build/linux-clang-x64/Testing/smoke/dbg/transparent_multi_capture.bmp`.
   - Window-capture smoke tests require a usable X11 display server. In headless Linux environments without `DISPLAY` or `Xvfb`, `nwb_testbed_window_capture_smoke` is expected to skip with `XOpenDisplay failed`.
   - fin skinning-culling benchmark verification: configure with `cmake --preset linux-clang-x64`, build `nwb_skinning_culling_benchmark` with `cmake --build --preset linux-clang-fin --target nwb_skinning_culling_benchmark`, then run `ctest --test-dir __cmake/build/linux-clang-x64 -C fin -R nwb_skinning_culling_benchmark --output-on-failure`.
   - The skinning-culling benchmark CTest entry is `fin`-only and is configured only when `tests/smoke/assets/characters/body.nwb` is present.
@@ -50,6 +50,7 @@
   - Smoke profile through root dispatch: `python launcher.py smoke transparent-multi --backend hw`
   - Smoke profile with profiling/logserver: `python launcher.py smoke transparent-multi --backend hw --with-profile`
   - Smoke-domain launcher script: `python tests/smoke/launch.py --scene transparent-multi --backend hw`
+  - A/B workflows through root dispatch: `python launcher.py async-shadow-m4`, `python launcher.py bindless-parity soft-shadows`, and `python launcher.py frame-lagged-async-lighting`
   - Root commands stay flat, but dispatch through every router in the directory hierarchy: `launcher.py` →
     `CoolStuff/launch.py`, `tests/launch.py`, or `utilities/launch.py` → any intermediate group launcher such as
     `tests/ab/launch.py` → the workflow's terminal `launch.py`. Every directory that groups child launchers must

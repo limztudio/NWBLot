@@ -35,7 +35,7 @@ from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
-from testbed_window_capture_smoke import (  # noqa: E402
+from window_capture_smoke import (  # noqa: E402
     SKIP_EXIT_CODE,
     SmokeFailure,
     SmokeSkip,
@@ -499,6 +499,7 @@ def run_frame_locked_capture(
     app_exit_code = None
     app_exit_tail = ""
     log_text = ""
+    window = None
     try:
         logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(
             launch_args, executable, environment
@@ -533,7 +534,7 @@ def run_frame_locked_capture(
         validate_capture_result(capture_result)
     finally:
         if app_process:
-            app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} frame-locked capture", args.window_title)
+            app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} frame-locked capture", window)
         # Let client messages written during normal teardown land before stopping the server and reading its delta.
         time.sleep(0.5)
         if log_directory:
@@ -589,6 +590,7 @@ def run_single_mode(
     app_exit_code = None
     app_exit_tail = ""
     measurement_log_text = ""
+    window = None
     try:
         logserver_process, log_port, log_directory, log_baseline, log_pattern = launch_logserver(
             launch_args, executable, environment
@@ -614,7 +616,7 @@ def run_single_mode(
         wait_while_running(app_process, args.measure_seconds, f"during {mode} measurement")
     finally:
         if app_process:
-            app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} benchmark", args.window_title)
+            app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} benchmark", window)
         # Let client messages written during normal teardown land before stopping the server and reading its delta.
         time.sleep(0.5)
         if log_directory:

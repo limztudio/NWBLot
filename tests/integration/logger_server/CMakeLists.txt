@@ -2,7 +2,7 @@ nwb_declare_gtest_executable(nwb_logserver_crash_tests)
 target_sources(nwb_logserver_crash_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/crash_test_helpers.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_test_helpers.h"
-    "${CMAKE_CURRENT_LIST_DIR}/tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/logserver_crash_tests.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_auth.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_ingest.cpp"
     "${PROJECT_SOURCE_DIR}/logger/server/crash_paths.cpp"

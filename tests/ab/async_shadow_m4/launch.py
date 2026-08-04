@@ -7,7 +7,7 @@ From the repository root, the usual invocation is simply:
 
 The launcher configures the M4 dependencies, builds the paired synchronous and asynchronous
 benchmarks (including their cooked runtime assets), enables Vulkan GPU validation, and writes a
-timestamped report beneath ``__artifacts``. Pass additional ``run.py`` options after ``--``; for
+timestamped report beneath ``.cozter/out/ab-results/async-shadow-m4``. Pass additional ``run.py`` options after ``--``; for
 example, ``python launcher.py async-shadow-m4 -- --measure-seconds 30``.
 """
 
@@ -55,7 +55,7 @@ def resolve_path(root: Path, path: Path) -> Path:
 
 def default_output_directory(root: Path) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return root / "__artifacts" / f"async_shadow_m4_{stamp}"
+    return root / ".cozter" / "out" / "ab-results" / "async-shadow-m4" / stamp
 
 
 def resolve_paths(args: argparse.Namespace, settings) -> M4Paths:
@@ -194,7 +194,7 @@ def run_self_test() -> int:
         sync_executable=None,
         async_executable=None,
         runtime_dir=None,
-        output_dir=root / "__artifacts" / "m4",
+        output_dir=root / ".cozter" / "out" / "ab-results" / "async-shadow-m4" / "self-test",
         dry_run=True,
         gpu_validation=True,
         no_logserver=False,

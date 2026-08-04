@@ -190,7 +190,7 @@ NWB_LOGSERVER_TEST_NOINLINE static void CaptureRecoverableErrorForCrashObservati
         .event = DiagnosticEventName::s_Error.data(),
         .category = NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError.data(),
         .message = message.data(),
-        .file = "tests/integration/logger_server/tests.cpp",
+        .file = "tests/integration/logger_server/logserver_crash_tests.cpp",
         .line = __LINE__,
     });
 }
@@ -346,7 +346,7 @@ TEST(LoggerServerCrash, LinuxCrashPackageSymbolicatesSelfFrame){
     EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
     EXPECT_TRUE(Contains(report, "platform=linux"));
     EXPECT_TRUE(Contains(report, "module frames are symbolized with DWARF"));
-    EXPECT_TRUE(Contains(report, "LinuxCrashSymbolicationProbe") || Contains(report, "tests/integration/logger_server/tests.cpp"));
+    EXPECT_TRUE(Contains(report, "LinuxCrashSymbolicationProbe") || Contains(report, "tests/integration/logger_server/logserver_crash_tests.cpp"));
     CrashTestText expectedSymbolicationIp(arena);
     expectedSymbolicationIp += "symbolication_relative_ip=";
     AppendHexAddressText(arena, expectedSymbolicationIp, expectedSymbolicationOffset);
@@ -420,7 +420,7 @@ TEST(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
             expectedAssertCategory,
             "false",
             AStringView(),
-            "tests/integration/logger_server/tests.cpp",
+            "tests/integration/logger_server/logserver_crash_tests.cpp",
             assertPackageDirectory
         ));
 
@@ -439,7 +439,7 @@ TEST(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
     EXPECT_TRUE(Contains(report, "status=callstack_captured"));
     EXPECT_TRUE(Contains(report, "callstack:"));
     EXPECT_EQ(FindText(report, "false\nat "), 0u);
-    EXPECT_TRUE(Contains(report, "tests/integration/logger_server/tests.cpp"));
+    EXPECT_TRUE(Contains(report, "tests/integration/logger_server/logserver_crash_tests.cpp"));
     if(LinuxExternalSymbolizerAvailable(arena)){
         EXPECT_TRUE(Contains(report, "LinuxForceAssertFalseForCrashObservation"));
     }
@@ -488,7 +488,7 @@ TEST(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerReport
             NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryError,
             AStringView(),
             s_ErrorMessage,
-            "tests/integration/logger_server/tests.cpp",
+            "tests/integration/logger_server/logserver_crash_tests.cpp",
             errorPackageDirectory
         ));
     EXPECT_TRUE(continuedAfterError);
@@ -505,7 +505,7 @@ TEST(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerReport
     EXPECT_TRUE(Contains(report, "[event]"));
     EXPECT_TRUE(Contains(report, "event=error"));
     EXPECT_TRUE(Contains(report, s_ErrorMessage));
-    EXPECT_TRUE(Contains(report, "tests/integration/logger_server/tests.cpp"));
+    EXPECT_TRUE(Contains(report, "tests/integration/logger_server/logserver_crash_tests.cpp"));
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     EXPECT_TRUE(Contains(report, "platform=linux"));
     EXPECT_TRUE(Contains(report, "status=callstack_captured"));
@@ -700,7 +700,7 @@ TEST(LoggerServerCrash, AssertCrashPackageUsesAssertLogType){
         .category = DiagnosticEventCategory::s_Assert,
         .expression = "value != nullptr",
         .message = "missing pointer",
-        .file = "tests/integration/logger_server/tests.cpp",
+        .file = "tests/integration/logger_server/logserver_crash_tests.cpp",
         .line = 123u,
     };
     BeginArchiveWithManifest(
@@ -719,12 +719,12 @@ TEST(LoggerServerCrash, AssertCrashPackageUsesAssertLogType){
     EXPECT_TRUE(result.accepted);
     EXPECT_EQ(result.type, NWB::Log::Type::Assert);
     EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("event=assert")));
-    EXPECT_EQ(result.message.find(NWB_TEXT("value != nullptr\nmissing pointer\nat tests/integration/logger_server/tests.cpp:123\n\ncallstack:\n")), 0u);
+    EXPECT_EQ(result.message.find(NWB_TEXT("value != nullptr\nmissing pointer\nat tests/integration/logger_server/logserver_crash_tests.cpp:123\n\ncallstack:\n")), 0u);
     EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("\ndetails:\n")));
 
     CrashTestText report(arena);
     EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
-    EXPECT_EQ(FindText(report, "value != nullptr\nmissing pointer\nat tests/integration/logger_server/tests.cpp:123\n\ncallstack:\n"), 0u);
+    EXPECT_EQ(FindText(report, "value != nullptr\nmissing pointer\nat tests/integration/logger_server/logserver_crash_tests.cpp:123\n\ncallstack:\n"), 0u);
 
     RemoveTestArtifacts(arena, s_Group);
 }
@@ -741,7 +741,7 @@ TEST(LoggerServerCrash, FatalCrashPackageUsesFatalLogType){
         .category = NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryFatal,
         .expression = "",
         .message = "fatal logger observation",
-        .file = "tests/integration/logger_server/tests.cpp",
+        .file = "tests/integration/logger_server/logserver_crash_tests.cpp",
         .line = 321u,
     };
     BeginArchiveWithManifest(
@@ -763,11 +763,11 @@ TEST(LoggerServerCrash, FatalCrashPackageUsesFatalLogType){
     EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("event=fatal")));
     EXPECT_FALSE(ContainsMessage(result.message, NWB_TEXT("category=logger_Fatal")));
     EXPECT_FALSE(ContainsMessage(result.message, NWB_TEXT("message=fatal logger observation")));
-    EXPECT_FALSE(ContainsMessage(result.message, NWB_TEXT("file=tests/integration/logger_server/tests.cpp")));
+    EXPECT_FALSE(ContainsMessage(result.message, NWB_TEXT("file=tests/integration/logger_server/logserver_crash_tests.cpp")));
 
     CrashTestText report(arena);
     EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
-    EXPECT_EQ(FindText(report, "fatal logger observation\nat tests/integration/logger_server/tests.cpp:321\n\ncallstack:\n"), 0u);
+    EXPECT_EQ(FindText(report, "fatal logger observation\nat tests/integration/logger_server/logserver_crash_tests.cpp:321\n\ncallstack:\n"), 0u);
 
     RemoveTestArtifacts(arena, s_Group);
 }

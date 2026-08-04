@@ -8,11 +8,11 @@ from pathlib import Path
 from unittest import mock
 
 
-SMOKE_DIRECTORY = Path(__file__).resolve().parents[2] / "smoke"
+SMOKE_DIRECTORY = Path(__file__).resolve().parents[1] / "smoke"
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 
-import testbed_window_capture_smoke as window_capture_smoke  # noqa: E402
-from testbed_window_capture_smoke import (  # noqa: E402
+import window_capture_smoke  # noqa: E402
+from window_capture_smoke import (  # noqa: E402
     launch_captured_process,
     read_process_tail,
     require_normal_testbed_exit,

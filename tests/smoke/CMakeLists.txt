@@ -38,7 +38,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
             NAME "${TEST_NAME}"
             COMMAND
                 "${Python3_EXECUTABLE}"
-                "${CMAKE_CURRENT_LIST_DIR}/testbed_window_capture_smoke.py"
+                "${CMAKE_CURRENT_LIST_DIR}/window_capture_smoke.py"
                 "--executable" "${EXECUTABLE_PATH}"
                 "--working-directory" "${WORKING_DIRECTORY}"
                 "--output" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/${OUTPUT_NAME}"

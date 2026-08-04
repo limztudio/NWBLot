@@ -1,6 +1,6 @@
 nwb_declare_gtest_executable(nwb_crash_tests)
 target_sources(nwb_crash_tests PRIVATE
-    "${CMAKE_CURRENT_LIST_DIR}/tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/crash_package_tests.cpp"
 )
 target_link_libraries(nwb_crash_tests PRIVATE
     nwb_crash_package

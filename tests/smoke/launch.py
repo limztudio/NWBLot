@@ -31,7 +31,11 @@ class SmokeScene:
 
 
 SMOKE_REQUIRED_DEFINES = {
+    "NWB_BUILD_LOADER": "ON",
+    "NWB_BUILD_LOGSERVER": "ON",
+    "NWB_BUILD_RESOURCE_COOKER": "ON",
     "NWB_BUILD_TESTS": "ON",
+    "NWB_BUILD_UTILITIES": "ON",
 }
 
 

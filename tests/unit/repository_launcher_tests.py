@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-ROOT = Path(__file__).resolve().parents[3]
+ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 import launcher
@@ -111,9 +111,10 @@ class LauncherPlatformTests(unittest.TestCase):
                 root / "tests" / "smoke" / "launcher.py",
                 root / "tests" / "ab" / "launch.py",
                 root / "tests" / "ab" / "async_shadow_m4" / "launch.py",
-                root / "tests" / "ab" / "frame_lagged" / "launch.py",
-                root / "tests" / "ab" / "frame_lagged" / "run.py",
-                root / "tests" / "ab" / "frame_lagged" / "helper.py",
+                root / "tests" / "ab" / "bindless_parity" / "launch.py",
+                root / "tests" / "ab" / "frame_lagged_async_lighting" / "launch.py",
+                root / "tests" / "ab" / "frame_lagged_async_lighting" / "run.py",
+                root / "tests" / "ab" / "frame_lagged_async_lighting" / "helper.py",
                 root / "utilities" / "launch.py",
                 root / "utilities" / "tex_conv" / "launch.py",
             )
@@ -126,7 +127,8 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertEqual(
             {
                 "async-shadow-m4": Path("tests/ab/async_shadow_m4/launch.py"),
-                "frame-lagged": Path("tests/ab/frame_lagged/launch.py"),
+                "bindless-parity": Path("tests/ab/bindless_parity/launch.py"),
+                "frame-lagged-async-lighting": Path("tests/ab/frame_lagged_async_lighting/launch.py"),
                 "smoke": Path("tests/smoke/launch.py"),
                 "testbed": Path("CoolStuff/Testbed/launch.py"),
                 "tex-conv": Path("utilities/tex_conv/launch.py"),
@@ -136,7 +138,8 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertEqual(
             {
                 "async-shadow-m4": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
-                "frame-lagged": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
+                "bindless-parity": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
+                "frame-lagged-async-lighting": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
                 "smoke": (Path("tests/launch.py"),),
                 "testbed": (Path("CoolStuff/launch.py"),),
                 "tex-conv": (Path("utilities/launch.py"),),
@@ -167,6 +170,7 @@ class LauncherPlatformTests(unittest.TestCase):
                 root / "tests" / "launch.py",
                 root / "tests" / "ab" / "launch.py",
                 root / "tests" / "ab" / "async_shadow_m4" / "launch.py",
+                root / "tests" / "ab" / "bindless_parity" / "launch.py",
                 root / "tests" / "ab" / "frame_lagged_async_lighting" / "launch.py",
                 root / "tests" / "smoke" / "launch.py",
             )
@@ -188,6 +192,7 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertEqual(
             {
                 "async-shadow-m4": Path("tests/ab/async_shadow_m4/launch.py"),
+                "bindless-parity": Path("tests/ab/bindless_parity/launch.py"),
                 "frame-lagged-async-lighting": Path("tests/ab/frame_lagged_async_lighting/launch.py"),
             },
             {command: discovered.script for command, discovered in ab_launchers.items()},

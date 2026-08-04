@@ -25,8 +25,9 @@ namespace __hidden_deferred_lighting{
 
 struct PushConstants{
     u32 resourceSlots = 0u;
+    u32 presentationMode = NWB_DEFERRED_PRESENTATION_SDR;
 };
-static_assert(sizeof(PushConstants) == sizeof(u32));
+static_assert(sizeof(PushConstants) == sizeof(u32) * 2u);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,8 +84,8 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::Compute)
         ;
-        // The target-generation selector is a UniformBuffer heap entry; the local layout contains only its four-byte
-        // slot.  That keeps both descriptor data and ordinary renderer resources on the global descriptor heap.
+        // The target-generation selector is a UniformBuffer heap entry; the local layout carries its slot plus the
+        // effective swap-chain mode so HDR can retain linear values until final presentation.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_lighting::PushConstants)));
 
         deferredState().m_lightingBindingLayout = device.createBindingLayout(bindingLayoutDesc);
@@ -286,7 +287,10 @@ bool RendererDeferredSystem::renderDeferredLighting(
     commandList.setComputeState(computeState);
     graphics().getDevice().getDescriptorHeap().bindCompute(commandList, *deferredState().m_lightingPipeline);
     const __hidden_deferred_lighting::PushConstants pushConstants{
-        resourceSlots.slot()
+        resourceSlots.slot(),
+        graphics().isHDR10OutputActive()
+            ? NWB_DEFERRED_PRESENTATION_HDR10
+            : NWB_DEFERRED_PRESENTATION_SDR
     };
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 

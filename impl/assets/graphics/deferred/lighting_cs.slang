@@ -32,13 +32,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
 
     const NwbBxdfSurface surface = nwbBxdfLoadSurface(int2(pixel));
-    const half3 shadedColor = surface.isBackground
+    const half3 resolvedColor = surface.isBackground
         ? surface.baseColor
-        : clamp(
-            nwbDeferredDispatchBxdf(surface.shadingModel, surface, int2(pixel)),
-            half3(0.0h),
-            half3(1.0h)
-        )
+        : nwbDeferredDispatchBxdf(surface.shadingModel, surface, int2(pixel))
+    ;
+    // SDR keeps the established LDR clamp. HDR10 carries values above one through the RGBA16F intermediate so
+    // highlights only roll off at the final PQ presentation transform.
+    const half3 shadedColor = nwbDeferredPresentationIsHdr10()
+        ? max(resolvedColor, half3(0.0h))
+        : clamp(resolvedColor, half3(0.0h), half3(1.0h))
     ;
     g_NwbDeferredLightingOutput[pixel] = float4(float3(shadedColor), 1.0);
 }

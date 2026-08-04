@@ -335,6 +335,7 @@ bool Graphics::init(const Common::FrameData& data){
     m_swapChainState.backBufferWidth = data.width();
     m_swapChainState.backBufferHeight = data.height();
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
+    m_swapChainState.outputMode = SwapChainOutputMode::SDR;
 
     m_backend->setPlatformFrameParam(data.frameParam());
 
@@ -419,6 +420,14 @@ bool Graphics::setAsyncComputeLaneEnabled(const bool enabled){
         return false;
 
     m_deviceCreationParams.enableAsyncComputeLane = enabled;
+    return true;
+}
+
+bool Graphics::setHDR10OutputEnabled(const bool enabled){
+    if(m_backend->getDevice())
+        return false;
+
+    m_deviceCreationParams.enableHDR10Output = enabled;
     return true;
 }
 

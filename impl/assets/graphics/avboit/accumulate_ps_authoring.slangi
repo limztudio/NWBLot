@@ -30,9 +30,13 @@
 // Transparent fragments bypass opaque-G-buffer shadow/caustic sampling and omit conflicting local bindings.
 #define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
 #define NWB_SCENE_GI_SAMPLING_DISABLED
+// Match the opaque deferred path: HDR10 keeps linear radiance until the final PQ presentation pass, while SDR
+// retains the material-facing tone-map behavior. AVBOIT coverage itself remains independent and bounded below.
+#define NWB_SCENE_PRESENTATION_IS_HDR10 nwbAvboitPresentationIsHdr10()
 
 // AVBOIT draw push constants expose the same material context as rasterization.
 #include "../scene/lighting.slangi"
+#undef NWB_SCENE_PRESENTATION_IS_HDR10
 #include "../mesh/gbuffer_io.slangi"
 
 #include "material_context_authoring.slangi"
@@ -113,11 +117,13 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     bxdfSurface.indirectIrradiance = nwbBxdfIndirectIrradiance(bxdfSurface.worldPosition, bxdfSurface.normal);
 
     // Negative pixel bypasses opaque-G-buffer shadow sampling.
-    const half3 shadedColor = clamp(
-        nwbDeferredDispatchBxdf(bxdfSurface.shadingModel, bxdfSurface, int2(-1, -1)),
-        half3(0.0h),
-        half3(1.0h)
-    );
+    const half3 resolvedColor = nwbDeferredDispatchBxdf(bxdfSurface.shadingModel, bxdfSurface, int2(-1, -1));
+    // Opacity belongs in weightedAlpha and never exceeds one. RGB is radiance: retain HDR highlights through the
+    // RGBA16F accumulation/composite targets, but preserve the prior SDR clamp for non-HDR presentation.
+    const half3 shadedColor = nwbAvboitPresentationIsHdr10()
+        ? max(resolvedColor, half3(0.0h))
+        : clamp(resolvedColor, half3(0.0h), half3(1.0h))
+    ;
 
     NwbAvboitAccumulatePixelOutput output;
     output.accumColor = half4(shadedColor * weightedAlpha, weightedAlpha);

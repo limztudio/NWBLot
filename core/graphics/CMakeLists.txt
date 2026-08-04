@@ -51,6 +51,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/arena_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context.h"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/swapchain_presentation.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/aftermath.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vma.h"
 )

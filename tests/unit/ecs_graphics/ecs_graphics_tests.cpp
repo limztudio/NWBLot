@@ -21,6 +21,7 @@
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
+#include <impl/ecs_render/avboit/avboit.h>
 #include <impl/ecs_render/material/material_typed_private.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
@@ -62,6 +63,30 @@ TEST(EcsGraphics, DeprecatedFeatureSlotsKeepUnsupportedAbiGaps){
     EXPECT_EQ(static_cast<u32>(NWB::Core::Feature::VirtualResources), 19u);
     EXPECT_EQ(static_cast<u32>(NWB::Core::Feature::WaveLaneCountMinMax), 20u);
     EXPECT_EQ(static_cast<u32>(NWB::Core::Feature::kCount), 23u);
+}
+
+TEST(EcsGraphics, AvboitPushConstantsCarryHdrPolicyWithoutChangingCoverageData){
+    NWB::Impl::AvboitFrameTargets targets;
+    targets.fullWidth = 1920u;
+    targets.fullHeight = 1080u;
+    targets.lowWidth = 480u;
+    targets.lowHeight = 270u;
+    targets.virtualSliceCount = 128u;
+    targets.physicalSliceCount = 64u;
+    targets.deferredSlotsBufferDescriptor = NWB::Core::GpuDescriptorHandle::make(
+        NWB::Core::GpuDescriptorClass::UniformBuffer,
+        23u
+    );
+
+    const NWB::Impl::RendererAvboitPushConstants sdr = NWB::Impl::BuildRendererAvboitPushConstants(targets, false);
+    const NWB::Impl::RendererAvboitPushConstants hdr10 = NWB::Impl::BuildRendererAvboitPushConstants(targets, true);
+
+    EXPECT_FLOAT_EQ(sdr.params.raw[NWB_AVBOIT_PUSH_PARAMS_PRESENTATION_MODE], NWB_AVBOIT_PRESENTATION_SDR);
+    EXPECT_FLOAT_EQ(hdr10.params.raw[NWB_AVBOIT_PUSH_PARAMS_PRESENTATION_MODE], NWB_AVBOIT_PRESENTATION_HDR10);
+    EXPECT_EQ(sdr.params.raw[NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE], hdr10.params.raw[NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE]);
+    EXPECT_EQ(sdr.params.raw[NWB_AVBOIT_PUSH_PARAMS_SELF_OCCLUSION_SLICE_BIAS], hdr10.params.raw[NWB_AVBOIT_PUSH_PARAMS_SELF_OCCLUSION_SLICE_BIAS]);
+    EXPECT_EQ(sdr.heapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES], 23u);
+    EXPECT_EQ(hdr10.heapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES], 23u);
 }
 
 

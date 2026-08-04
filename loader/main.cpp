@@ -88,6 +88,7 @@ struct LoaderOptions{
     AString<NWB::Core::Alloc::GlobalArena> logAddress;
     AString<NWB::Core::Alloc::GlobalArena> crashUploadToken;
     bool enableGpuDebug = false;
+    bool forceSdrOutput = false;
     bool useStandaloneLogger = false;
 
     explicit LoaderOptions(NWB::Core::Alloc::GlobalArena& arena)
@@ -170,6 +171,14 @@ void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options){
 }
 
 bool ApplyGraphicsOptions(NWB::Core::Graphics& graphics, const LoaderOptions& options){
+    if(options.forceSdrOutput){
+        if(!graphics.setHDR10OutputEnabled(false)){
+            NWB_LOGGER_FATAL(NWB_TEXT("Loader: SDR output must be selected before graphics initialization"));
+            return false;
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: forcing SDR presentation"));
+    }
+
 #if !defined(NWB_FINAL)
     if(options.enableGpuDebug){
         if(!graphics.setDebugRuntimeEnabled(true)){
@@ -458,6 +467,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
         NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogAddress>(app, address);
         NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, port);
         app.add_option("--crash-upload-token", options.crashUploadToken, "Bearer token sent with crash uploads");
+        app.add_flag("--sdr", options.forceSdrOutput, "Force SDR presentation even when the project requests HDR10");
         __hidden_loader::AddDebugCommandLineOptions(app, options);
 
         try{

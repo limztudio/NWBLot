@@ -1,0 +1,76 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_COMMON_HDR10_SLANGI
+#define NWB_GRAPHICS_COMMON_HDR10_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// HDR10 carries Rec.2020 primaries with a ST.2084 (PQ) transfer function. The renderer's scene and UI authoring
+// colors are Rec.709/sRGB, so conversion happens immediately before the UNORM10 swap-chain store.
+#define NWB_HDR10_MASTERING_PEAK_NITS 1000.0
+#define NWB_HDR10_SCENE_REFERENCE_WHITE_NITS 203.0
+#define NWB_HDR10_UI_PAPER_WHITE_NITS 203.0
+#define NWB_HDR10_PQ_ABSOLUTE_PEAK_NITS 10000.0
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+float3 nwbHdr10Rec709ToRec2020(float3 value){
+    return float3(
+        dot(value, float3(0.6274040, 0.3292820, 0.0433136)),
+        dot(value, float3(0.0690970, 0.9195400, 0.0113612)),
+        dot(value, float3(0.0163916, 0.0880132, 0.8955950))
+    );
+}
+
+float3 nwbHdr10PqEncodeNits(float3 luminanceNits){
+    // SMPTE ST.2084 constants. PQ is defined against an absolute 10,000-nit range, independent of the
+    // mastering display's peak value.
+    const float pqM1 = 2610.0 / 16384.0;
+    const float pqM2 = 2523.0 / 32.0;
+    const float pqC1 = 3424.0 / 4096.0;
+    const float pqC2 = 2413.0 / 128.0;
+    const float pqC3 = 2392.0 / 128.0;
+    const float3 normalized = saturate(max(luminanceNits, float3(0.0)) / NWB_HDR10_PQ_ABSOLUTE_PEAK_NITS);
+    const float3 raised = pow(normalized, pqM1);
+    return pow((pqC1 + pqC2 * raised) / (1.0 + pqC3 * raised), pqM2);
+}
+
+float3 nwbHdr10SrgbToLinear(float3 value){
+    const float3 srgb = saturate(value);
+    return lerp(
+        srgb / 12.92,
+        pow((srgb + 0.055) / 1.055, 2.4),
+        step(float3(0.04045), srgb)
+    );
+}
+
+float3 nwbHdr10EncodeScene(float3 linearRec709){
+    // The linear renderer may contain highlights above one. Map its reference white to 203 nits and use a smooth
+    // shoulder toward the declared 1,000-nit mastering peak, preserving highlight ordering until presentation.
+    const float3 linearRec2020 = max(nwbHdr10Rec709ToRec2020(max(linearRec709, float3(0.0))), float3(0.0));
+    const float3 referenceWhiteNits = linearRec2020 * NWB_HDR10_SCENE_REFERENCE_WHITE_NITS;
+    const float3 compressedNits = NWB_HDR10_MASTERING_PEAK_NITS * referenceWhiteNits / (
+        referenceWhiteNits + (NWB_HDR10_MASTERING_PEAK_NITS - NWB_HDR10_SCENE_REFERENCE_WHITE_NITS)
+    );
+    return nwbHdr10PqEncodeNits(compressedNits);
+}
+
+float3 nwbHdr10EncodeUiSrgb(float3 srgbRec709){
+    const float3 linearRec2020 = max(nwbHdr10Rec709ToRec2020(nwbHdr10SrgbToLinear(srgbRec709)), float3(0.0));
+    return nwbHdr10PqEncodeNits(linearRec2020 * NWB_HDR10_UI_PAPER_WHITE_NITS);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

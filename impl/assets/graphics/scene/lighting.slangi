@@ -227,6 +227,11 @@ half3 nwbSceneShadeLight(NwbSceneLight light, half3 baseColor, float3 normalVect
 #ifndef NWB_GI_HEMI_AMBIENT_GROUND
 #define NWB_GI_HEMI_AMBIENT_GROUND half3(0.008h, 0.012h, 0.02h)
 #endif
+#ifndef NWB_SCENE_PRESENTATION_IS_HDR10
+// Tracing and material-generation shaders share this lighting library without a presentation push block. They keep
+// the existing SDR material result unless their caller explicitly provides an HDR decision.
+#define NWB_SCENE_PRESENTATION_IS_HDR10 false
+#endif
 half3 nwbGiHemiAmbient(float3 normalVector){
     const half skyAmount = half(normalVector.z * 0.5 + 0.5);
     return lerp(NWB_GI_HEMI_AMBIENT_GROUND, NWB_GI_HEMI_AMBIENT_SKY, skyAmount);
@@ -267,7 +272,12 @@ half3 nwbSceneApplyLighting(half3 baseColor, float3 normal, float4 tangent, floa
 
     litColor += nwbBxdfCausticIrradiance(pixel) * baseColor;
 
-    return nwbSceneTonemap(litColor);
+    // Preserve linear highlight energy only when the active swap chain is HDR10. The SDR path intentionally
+    // keeps the established material-facing Reinhard result, so existing scenes retain their output.
+    return NWB_SCENE_PRESENTATION_IS_HDR10
+        ? max(litColor, half3(0.0h))
+        : nwbSceneTonemap(litColor)
+    ;
 }
 
 

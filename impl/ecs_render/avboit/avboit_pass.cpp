@@ -42,7 +42,8 @@ static void DispatchAvboitCompute(
     Core::ComputePipeline* pipeline,
     Core::GpuDescriptorHeap& heap,
     const AvboitFrameTargets& targets,
-    const u32 groupCountX
+    const u32 groupCountX,
+    const bool hdr10OutputActive
 ){
     NWB_ASSERT(pipeline);
     NWB_ASSERT(heap.isInitialized());
@@ -53,7 +54,7 @@ static void DispatchAvboitCompute(
     commandList.setComputeState(computeState);
     heap.bindCompute(commandList, *pipeline);
 
-    const RendererAvboitPushConstants pushConstants = BuildRendererAvboitPushConstants(targets);
+    const RendererAvboitPushConstants pushConstants = BuildRendererAvboitPushConstants(targets, hdr10OutputActive);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(groupCountX, 1, 1);
 }
@@ -137,7 +138,7 @@ Core::RenderState BuildRendererAvboitAccumulateRenderState(){
     return renderState;
 }
 
-RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets){
+RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets, const bool hdr10OutputActive){
     NWB_ASSERT(targets.deferredSlotsBufferDescriptor.valid());
     NWB_ASSERT(targets.deferredSlotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
 
@@ -153,6 +154,10 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTa
         static_cast<u64>(targets.lowWidth) * static_cast<u64>(targets.lowHeight) * static_cast<u64>(physicalExtinctionWordCount)
     );
     pushConstants.volume[NWB_AVBOIT_PUSH_VOLUME_COVERAGE_WORD_COUNT] = DivideUp(targets.virtualSliceCount, NWB_AVBOIT_COVERAGE_SLICES_PER_WORD);
+    pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_PRESENTATION_MODE] = hdr10OutputActive
+        ? NWB_AVBOIT_PRESENTATION_HDR10
+        : NWB_AVBOIT_PRESENTATION_SDR
+    ;
     pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE] = ECSRenderAvboitDetail::s_AvboitExtinctionFixedScale;
     pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_SELF_OCCLUSION_SLICE_BIAS] = ECSRenderAvboitDetail::s_AvboitSelfOcclusionSliceBias;
     pushConstants.heapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES] = targets.deferredSlotsBufferDescriptor.slot();
@@ -463,7 +468,8 @@ void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandLis
         avboitState().m_depthWarpPipeline.get(),
         heap,
         targets,
-        NWB_AVBOIT_DEPTH_WARP_DISPATCH_GROUP_COUNT_X
+        NWB_AVBOIT_DEPTH_WARP_DISPATCH_GROUP_COUNT_X,
+        graphics().isHDR10OutputActive()
     );
 }
 
@@ -490,7 +496,8 @@ void RendererAvboitSystem::dispatchAvboitIntegration(Core::CommandList& commandL
         avboitState().m_integratePipeline.get(),
         heap,
         targets,
-        DivideUp(pixelCount, static_cast<u32>(NWB_AVBOIT_INTEGRATE_GROUP_SIZE_X))
+        DivideUp(pixelCount, static_cast<u32>(NWB_AVBOIT_INTEGRATE_GROUP_SIZE_X)),
+        graphics().isHDR10OutputActive()
     );
 }
 

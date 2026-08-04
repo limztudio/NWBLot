@@ -13,6 +13,11 @@
 #define NWB_DEFERRED_LIGHTING_GROUP_SIZE 8
 #define NWB_DEFERRED_COMPOSITE_GROUP_SIZE 8
 
+// Push-constant value shared by the deferred lighting and final presentation passes. HDR10 means the final
+// color target is A2B10G10R10_UNORM with VK_COLOR_SPACE_HDR10_ST2084_EXT; SDR retains the sRGB surface path.
+#define NWB_DEFERRED_PRESENTATION_SDR 0u
+#define NWB_DEFERRED_PRESENTATION_HDR10 1u
+
 // Fullscreen Graphics semantic locations shared by the present blit and CSG cap-fill path.
 #define NWB_DEFERRED_FULLSCREEN_UV_LOCATION 0
 #define NWB_DEFERRED_COLOR_TARGET_LOCATION 0

@@ -98,8 +98,8 @@ private:
         Float4 scaleTranslate = Float4(0.0f, 0.0f, 0.0f, 0.0f);
         u32 textureSlot = 0u;
         u32 samplerSlot = 0u;
-        u32 padding0 = 0u;
-        u32 padding1 = 0u;
+        u32 presentationMode = static_cast<u32>(Core::SwapChainOutputMode::SDR);
+        u32 padding = 0u;
     };
     static_assert(sizeof(UiPushConstants) == sizeof(f32) * 4u + sizeof(u32) * 4u, "Ui push constants must match the ImGui shader block");
 

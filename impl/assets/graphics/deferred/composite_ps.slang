@@ -4,6 +4,7 @@
 
 #include "binding_slots.h"
 #include "bindless_resources.slangi"
+#include "../common/hdr10.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -11,6 +12,7 @@
 
 struct NwbDeferredCompositePushConstants{
     uint resourceSlots;
+    uint presentationMode;
 };
 
 [[vk::push_constant]]
@@ -23,7 +25,7 @@ struct NwbDeferredCompositePixelInput{
 };
 
 struct NwbDeferredCompositePixelOutput{
-    [[vk::location(NWB_DEFERRED_COLOR_TARGET_LOCATION)]] half4 color : SV_Target0;
+    [[vk::location(NWB_DEFERRED_COLOR_TARGET_LOCATION)]] float4 color : SV_Target0;
 };
 
 
@@ -32,13 +34,18 @@ struct NwbDeferredCompositePixelOutput{
 
 // Surface images commonly expose ColorAttachment and sampled usage but not storage writes. Composite math therefore
 // runs in composite_cs on AsyncCompute, while this tiny Graphics pass samples its linear result into the presentable
-// framebuffer and preserves the existing swapchain format conversion.
+// framebuffer. SDR uses the attachment's sRGB conversion; HDR10 explicitly converts Rec.709 scene color to
+// Rec.2020/PQ before writing its A2B10G10R10 surface.
 NwbDeferredCompositePixelOutput main(NwbDeferredCompositePixelInput input){
     const SamplerState sampler = NwbHeapSampler(g_NwbDeferredBindlessResources.lightingSlots.w);
-    const half3 compositeColor = half3(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.avboitWorkSlots1.z).Sample(sampler, input.uv).rgb);
+    const float3 compositeColor = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.avboitWorkSlots1.z).Sample(sampler, input.uv).rgb;
 
     NwbDeferredCompositePixelOutput output;
-    output.color = half4(compositeColor, half(1.0));
+    const float3 presentationColor = g_NwbDeferredCompositePushConstants.presentationMode == NWB_DEFERRED_PRESENTATION_HDR10
+        ? nwbHdr10EncodeScene(compositeColor)
+        : compositeColor
+    ;
+    output.color = float4(presentationColor, 1.0);
     return output;
 }
 

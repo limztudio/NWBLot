@@ -176,6 +176,7 @@ NWB_INLINE TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     const AvboitFrameTargets& targets,
     const MeshFrameHeapSlots& frameHeapSlots,
     const u32 dispatchFlags,
+    const bool hdr10OutputActive,
     const u32 csgContextHeapSlot = 0u
 ){
     TransparentDrawPushConstants pushConstants;
@@ -187,7 +188,7 @@ NWB_INLINE TransparentDrawPushConstants BuildTransparentDrawPushConstants(
         frameHeapSlots,
         dispatchFlags
     );
-    pushConstants.avboit = BuildRendererAvboitPushConstants(targets);
+    pushConstants.avboit = BuildRendererAvboitPushConstants(targets, hdr10OutputActive);
     pushConstants.avboit.heapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_CSG_CONTEXT] = csgContextHeapSlot;
     return pushConstants;
 }
@@ -221,6 +222,7 @@ NWB_INLINE void SetTransparentDrawPushConstants(
     const AvboitFrameTargets& targets,
     const MeshFrameHeapSlots& frameHeapSlots,
     const u32 dispatchFlags,
+    const bool hdr10OutputActive,
     const u32 csgContextHeapSlot = 0u
 ){
     const TransparentDrawPushConstants pushConstants = BuildTransparentDrawPushConstants(
@@ -231,6 +233,7 @@ NWB_INLINE void SetTransparentDrawPushConstants(
         targets,
         frameHeapSlots,
         dispatchFlags,
+        hdr10OutputActive,
         csgContextHeapSlot
     );
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));

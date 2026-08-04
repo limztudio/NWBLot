@@ -91,6 +91,7 @@ private:
         { VK_KHR_MAINTENANCE_4_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_EXT_SAMPLER_FILTER_MINMAX_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_KHR_SWAPCHAIN_MUTABLE_FORMAT_EXTENSION_NAME, DeviceExtensionFeature::None },
+        { VK_EXT_HDR_METADATA_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, DeviceExtensionFeature::None },
         { VK_EXT_MESH_SHADER_EXTENSION_NAME, DeviceExtensionFeature::MeshShader },
         { VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME, DeviceExtensionFeature::None },
@@ -217,6 +218,7 @@ private:
     u32 m_maxFramesInFlight = s_MaxFramesInFlight;
 
     bool m_swapChainMutableFormatSupported = false;
+    bool m_hdr10ColorSpaceExtensionEnabled = false;
     bool m_bufferDeviceAddressSupported = false;
     bool m_dynamicRenderingSupported = false;
     bool m_synchronization2Supported = false;

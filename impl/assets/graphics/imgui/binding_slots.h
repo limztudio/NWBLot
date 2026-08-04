@@ -17,6 +17,8 @@
 #define NWB_IMGUI_RASTER_UV_LOCATION 0
 #define NWB_IMGUI_RASTER_COLOR_LOCATION 1
 #define NWB_IMGUI_COLOR_TARGET_LOCATION 0
+#define NWB_IMGUI_PRESENTATION_SDR 0u
+#define NWB_IMGUI_PRESENTATION_HDR10 1u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

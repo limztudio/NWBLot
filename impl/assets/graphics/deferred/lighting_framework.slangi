@@ -14,7 +14,7 @@
 // (base color, normal, world position, the shading-model id + two BXDF params from the alpha channels), the
 // scene light list + per-light resolve, and the shadow-visibility accessor. The lighting pass itself owns
 // the loop: it loads the surface, dispatches on surface.shadingModel to a (user-authored) BXDF that walks the
-// lights, applies per-light visibility, and tonemaps. Nothing here hard-codes a shading model.
+// lights and applies per-light visibility. SDR tonemaps there; HDR10 preserves linear highlights for presentation.
 
 
 #include "binding_slots.h"
@@ -29,18 +29,27 @@
 // below and precedes the scene/lighting.slangi include, so the slot expressions resolve where they expand.
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbDeferredBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbDeferredBindlessResources.avboitSlots.w
-// G-buffer, screen-space shadow/caustic/GI inputs, and the shared sampler are global-heap entries.  The selector
-// payload is another heap UniformBuffer; a four-byte push block selects it, so deferred lighting has no local
-// descriptor set at all.  Keep the selector macro alive through the cook-generated material BXDF module: scene
+// G-buffer, screen-space shadow/caustic/GI inputs, and the shared sampler are global-heap entries. The selector
+// payload is another heap UniformBuffer; the push block selects it and carries the presentation mode, so deferred
+// lighting has no local descriptor set at all. Keep the selector macro alive through the cook-generated material BXDF module: scene
 // accessors expand there too, after this framework include has returned.
 struct NwbDeferredLightingPushConstants{
     uint resourceSlots;
+    uint presentationMode;
 };
 
 [[vk::push_constant]]
 ConstantBuffer<NwbDeferredLightingPushConstants> g_NwbDeferredLightingPushConstants;
 
 #define g_NwbDeferredBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbDeferredLightingPushConstants.resourceSlots]
+
+bool nwbDeferredPresentationIsHdr10(){
+    return g_NwbDeferredLightingPushConstants.presentationMode == NWB_DEFERRED_PRESENTATION_HDR10;
+}
+
+// scene/lighting.slangi is also shared by tracing shaders which do not carry deferred push constants. Scope the
+// HDR decision to this include site so those shaders retain their established SDR-material behavior.
+#define NWB_SCENE_PRESENTATION_IS_HDR10 nwbDeferredPresentationIsHdr10()
 
 #define NWB_SCENE_SHADOW_VISIBILITY_RESOURCE NwbHeapSampledImage2DArray(g_NwbDeferredBindlessResources.lightingSlots.x)
 #define NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.y)
@@ -49,6 +58,7 @@ ConstantBuffer<NwbDeferredLightingPushConstants> g_NwbDeferredLightingPushConsta
 // whole-surface model (nwbSceneApplyLighting). A project BXDF may use or ignore the default model.
 #include "../scene/lighting.slangi"
 
+#undef NWB_SCENE_PRESENTATION_IS_HDR10
 #undef NWB_SCENE_SHADOW_VISIBILITY_RESOURCE
 #undef NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE
 

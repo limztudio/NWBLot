@@ -463,6 +463,11 @@ void UiSystem::renderDrawData(Core::CommandList& commandList, Core::Framebuffer*
 
     UiPushConstants pushConstants;
     StoreFloat(__hidden_ui::BuildUiScaleTranslate(displayMin, displaySize), &pushConstants.scaleTranslate);
+    pushConstants.presentationMode = static_cast<u32>(
+        m_graphics.isHDR10OutputActive()
+            ? Core::SwapChainOutputMode::HDR10
+            : Core::SwapChainOutputMode::SDR
+    );
 
     i32 framebufferWidth = 0;
     i32 framebufferHeight = 0;

@@ -30,7 +30,10 @@ const tchar* NWB::QueryProjectWindowTitle(){
 }
 
 bool NWB::ConfigureProjectGraphics(Core::Graphics& graphics){
-    return graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi());
+    return
+        graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
+        && graphics.setHDR10OutputEnabled(true)
+    ;
 }
 
 

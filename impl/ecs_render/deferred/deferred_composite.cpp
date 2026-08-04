@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/kernel/renderer_private.h>
 
+#include <impl/assets/graphics/deferred/binding_slots.h>
 #include <impl/assets/graphics/deferred/names.h>
 
 
@@ -22,10 +23,16 @@ namespace __hidden_deferred_composite{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct PushConstants{
+struct CompositePushConstants{
     u32 resourceSlots = 0u;
 };
-static_assert(sizeof(PushConstants) == sizeof(u32));
+static_assert(sizeof(CompositePushConstants) == sizeof(u32));
+
+struct PresentPushConstants{
+    u32 resourceSlots = 0u;
+    u32 presentationMode = NWB_DEFERRED_PRESENTATION_SDR;
+};
+static_assert(sizeof(PresentPushConstants) == sizeof(u32) * 2u);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -50,7 +57,7 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::Compute)
         ;
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_composite::PushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_composite::CompositePushConstants)));
 
         deferredState().m_compositeComputeBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!deferredState().m_compositeComputeBindingLayout){
@@ -64,7 +71,7 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::Pixel)
         ;
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_composite::PushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_composite::PresentPushConstants)));
 
         deferredState().m_presentBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!deferredState().m_presentBindingLayout){
@@ -180,7 +187,7 @@ bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandL
     computeState.setPipeline(deferredState().m_compositeComputePipeline.get());
     commandList.setComputeState(computeState);
     graphics().getDevice().getDescriptorHeap().bindCompute(commandList, *deferredState().m_compositeComputePipeline);
-    const __hidden_deferred_composite::PushConstants pushConstants{
+    const __hidden_deferred_composite::CompositePushConstants pushConstants{
         targets.bindless.slotsBufferDescriptor.slot()
     };
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
@@ -219,8 +226,11 @@ bool RendererDeferredSystem::renderDeferredPresent(Core::CommandList& commandLis
 
     commandList.setGraphicsState(graphicsState);
     graphics().getDevice().getDescriptorHeap().bindGraphics(commandList, *deferredState().m_presentPipeline);
-    const __hidden_deferred_composite::PushConstants pushConstants{
-        targets.bindless.slotsBufferDescriptor.slot()
+    const __hidden_deferred_composite::PresentPushConstants pushConstants{
+        targets.bindless.slotsBufferDescriptor.slot(),
+        graphics().isHDR10OutputActive()
+            ? NWB_DEFERRED_PRESENTATION_HDR10
+            : NWB_DEFERRED_PRESENTATION_SDR
     };
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 

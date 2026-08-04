@@ -185,6 +185,7 @@ void RendererMaterialSystem::setMaterialPassDrawPushConstants(
             *context.avboitTargets,
             frameHeapSlots,
             dispatchFlags,
+            graphics().isHDR10OutputActive(),
             csgContextHeapSlot
         );
         return;

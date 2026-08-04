@@ -5,6 +5,7 @@
 #include "backend_context.h"
 #include "arena_names.h"
 #include "aftermath.h"
+#include "swapchain_presentation.h"
 
 #include <core/common/log.h>
 #include <global/environment.h>
@@ -217,6 +218,7 @@ static const char* PhysicalDeviceTypeToString(VkPhysicalDeviceType type){
 
 static const char* SwapChainFormatToString(VkFormat format){
     switch(format){
+    case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return "VK_FORMAT_A2B10G10R10_UNORM_PACK32";
     case VK_FORMAT_R8G8B8A8_UNORM: return "VK_FORMAT_R8G8B8A8_UNORM";
     case VK_FORMAT_R8G8B8A8_SRGB: return "VK_FORMAT_R8G8B8A8_SRGB";
     case VK_FORMAT_B8G8R8A8_UNORM: return "VK_FORMAT_B8G8R8A8_UNORM";
@@ -227,6 +229,7 @@ static const char* SwapChainFormatToString(VkFormat format){
 
 static const char* ColorSpaceToString(VkColorSpaceKHR colorSpace){
     switch(colorSpace){
+    case VK_COLOR_SPACE_HDR10_ST2084_EXT: return "VK_COLOR_SPACE_HDR10_ST2084_EXT";
     case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR: return "VK_COLOR_SPACE_SRGB_NONLINEAR_KHR";
     default: return "unknown";
     }
@@ -240,6 +243,25 @@ static const char* PresentModeToString(VkPresentModeKHR mode){
     case VK_PRESENT_MODE_FIFO_RELAXED_KHR: return "VK_PRESENT_MODE_FIFO_RELAXED_KHR";
     default: return "unknown";
     }
+}
+
+static void SetHdr10Metadata(const VkDevice device, const VkSwapchainKHR swapChain){
+    if(!vkSetHdrMetadataEXT || !device || !swapChain)
+        return;
+
+    VkHdrMetadataEXT metadata = {};
+    metadata.sType = VK_STRUCTURE_TYPE_HDR_METADATA_EXT;
+    // Rec.2020 primaries and D65 white point. These values match the HDR10/PQ transform used by the final
+    // presentation shaders, which maps scene highlights to a 1,000-nit mastering target.
+    metadata.displayPrimaryRed = { 0.708f, 0.292f };
+    metadata.displayPrimaryGreen = { 0.170f, 0.797f };
+    metadata.displayPrimaryBlue = { 0.131f, 0.046f };
+    metadata.whitePoint = { 0.3127f, 0.3290f };
+    metadata.maxLuminance = 1000.0f;
+    metadata.minLuminance = 0.005f;
+    metadata.maxContentLightLevel = 1000.0f;
+    metadata.maxFrameAverageLightLevel = 400.0f;
+    vkSetHdrMetadataEXT(device, 1u, &swapChain, &metadata);
 }
 
 static u64 GetDeviceLocalMemoryBytes(VkPhysicalDevice physicalDevice){
@@ -561,6 +583,7 @@ void BackendContext::initDefaultExtensions(){
 
 bool BackendContext::createVulkanInstance(){
     VkResult res = VK_SUCCESS;
+    m_hdr10ColorSpaceExtensionEnabled = false;
 
     {
         res = volkInitialize();
@@ -574,10 +597,14 @@ bool BackendContext::createVulkanInstance(){
     if(!m_deviceParams.headlessDevice){
         m_enabledExtensions.instance.emplace(VK_KHR_SURFACE_EXTENSION_NAME, m_arena);
         m_enabledExtensions.instance.emplace(VK_KHR_WIN32_SURFACE_EXTENSION_NAME, m_arena);
+        if(m_deviceParams.enableHDR10Output)
+            m_optionalExtensions.instance.emplace(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, m_arena);
     }
 #elif defined(NWB_PLATFORM_LINUX)
     if(!m_deviceParams.headlessDevice){
         m_enabledExtensions.instance.emplace(VK_KHR_SURFACE_EXTENSION_NAME, m_arena);
+        if(m_deviceParams.enableHDR10Output)
+            m_optionalExtensions.instance.emplace(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME, m_arena);
 
         Common::LinuxFrame frame;
         frame.frameParam() = m_platformFrameParam;
@@ -682,6 +709,11 @@ bool BackendContext::createVulkanInstance(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {}"), StringConvert(ss.str()));
         return false;
     }
+
+    // createDevice() rebuilds its device-extension sets, so retain this instance-level capability separately.
+    // VK_EXT_swapchain_colorspace must have been enabled on the already-created instance before HDR10 surface
+    // color spaces can be selected later.
+    m_hdr10ColorSpaceExtensionEnabled = isInstanceExtensionEnabled(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
 
     {
         auto ss = VulkanDetail::MakeScratchStringStream(scratchArena);
@@ -863,11 +895,15 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
 }
 
 bool BackendContext::pickPhysicalDevice(){
-    VkFormat requestedFormat = VulkanDetail::ConvertFormat(m_swapChainState.backBufferFormat);
-    if(!m_deviceParams.headlessDevice && requestedFormat == VK_FORMAT_UNDEFINED){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Requested swapchain format is unsupported"));
+    const Format::Enum requestedSdrFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
+    if(!m_deviceParams.headlessDevice && VulkanDetail::ConvertFormat(requestedSdrFormat) == VK_FORMAT_UNDEFINED){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Requested SDR swapchain format is unsupported"));
         return false;
     }
+    const bool hdr10Allowed =
+        m_deviceParams.enableHDR10Output
+        && m_hdr10ColorSpaceExtensionEnabled
+    ;
     VkExtent2D requestedExtent = { m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight };
 
     VkResult res = VK_SUCCESS;
@@ -1034,16 +1070,15 @@ bool BackendContext::pickPhysicalDevice(){
                     deviceIsGood = false;
                 }
 
-                bool surfaceFormatPresent = false;
-                for(const auto& surfaceFmt : surfaceFmts){
-                    if(surfaceFmt.format == requestedFormat){
-                        surfaceFormatPresent = true;
-                        break;
-                    }
-                }
-
-                if(!surfaceFormatPresent){
-                    errorStream << "\n  - does not support the requested swap chain format";
+                VulkanDetail::SwapChainSurfaceFormatSelection surfaceFormatSelection;
+                if(!VulkanDetail::SelectSurfaceFormat(
+                    surfaceFmts.data(),
+                    static_cast<u32>(surfaceFmts.size()),
+                    requestedSdrFormat,
+                    hdr10Allowed,
+                    surfaceFormatSelection
+                )){
+                    errorStream << "\n  - does not support HDR10 or the requested SDR swap chain format";
                     deviceIsGood = false;
                 }
             }
@@ -1612,12 +1647,53 @@ bool BackendContext::createVulkanSwapChain(){
 
     destroySwapChain();
 
-    m_swapChainFormat.format = VulkanDetail::ConvertFormat(m_swapChainState.backBufferFormat);
-    if(m_swapChainFormat.format == VK_FORMAT_UNDEFINED){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create swapchain: back buffer format is unsupported"));
+    const Format::Enum requestedSdrFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
+    if(VulkanDetail::ConvertFormat(requestedSdrFormat) == VK_FORMAT_UNDEFINED){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create swapchain: requested SDR back buffer format is unsupported"));
         return false;
     }
-    m_swapChainFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+
+    const bool hdr10ExtensionEnabled = m_hdr10ColorSpaceExtensionEnabled;
+    const bool hdr10Allowed = m_deviceParams.enableHDR10Output && hdr10ExtensionEnabled;
+
+    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_SwapChainPresentModeArena);
+
+    uint32_t surfaceFormatCount = 0u;
+    res = vkGetPhysicalDeviceSurfaceFormatsKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceFormatCount, nullptr);
+    if(res != VK_SUCCESS || surfaceFormatCount == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate surface formats for swapchain creation. {}"), ResultToString(res));
+        return false;
+    }
+
+    Vector<VkSurfaceFormatKHR, Alloc::ScratchArena> surfaceFormats(surfaceFormatCount, scratchArena);
+    res = vkGetPhysicalDeviceSurfaceFormatsKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceFormatCount, surfaceFormats.data());
+    if(res != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to retrieve surface formats for swapchain creation. {}"), ResultToString(res));
+        return false;
+    }
+
+    VulkanDetail::SwapChainSurfaceFormatSelection surfaceFormatSelection;
+    if(!VulkanDetail::SelectSurfaceFormat(
+        surfaceFormats.data(),
+        surfaceFormatCount,
+        requestedSdrFormat,
+        hdr10Allowed,
+        surfaceFormatSelection
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface exposes neither HDR10 nor a compatible SDR swapchain format."));
+        return false;
+    }
+
+    m_swapChainFormat = surfaceFormatSelection.surfaceFormat;
+    m_swapChainState.backBufferFormat = surfaceFormatSelection.backBufferFormat;
+    m_swapChainState.outputMode = surfaceFormatSelection.outputMode;
+    if(m_deviceParams.enableHDR10Output && m_swapChainState.outputMode != SwapChainOutputMode::HDR10){
+        const tchar* const reason = hdr10ExtensionEnabled
+            ? NWB_TEXT("the active surface does not advertise a HDR10/PQ format")
+            : NWB_TEXT("VK_EXT_swapchain_colorspace is unavailable")
+        ;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: HDR10 presentation unavailable; using SDR because {}."), reason);
+    }
 
     VkSurfaceCapabilitiesKHR surfaceCaps = {};
     res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vulkanPhysicalDevice, m_windowSurface, &surfaceCaps);
@@ -1648,8 +1724,6 @@ bool BackendContext::createVulkanSwapChain(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate present mode count. {}"), ResultToString(res));
         return false;
     }
-
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_SwapChainPresentModeArena);
 
     Vector<VkPresentModeKHR, Alloc::ScratchArena> presentModes(presentModeCount, scratchArena);
     res = vkGetPhysicalDeviceSurfacePresentModesKHR(m_vulkanPhysicalDevice, m_windowSurface, &presentModeCount, presentModes.data());
@@ -1761,6 +1835,12 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
+    if(
+        m_swapChainState.outputMode == SwapChainOutputMode::HDR10
+        && isDeviceExtensionEnabled(VK_EXT_HDR_METADATA_EXTENSION_NAME)
+    )
+        VulkanDetail::SetHdr10Metadata(m_vulkanDevice, m_swapChain);
+
     uint32_t imageCount = 0;
     res = vkGetSwapchainImagesKHR(m_vulkanDevice, m_swapChain, &imageCount, nullptr);
     if(res != VK_SUCCESS){
@@ -1825,6 +1905,7 @@ bool BackendContext::createVulkanSwapChain(){
            << " (" << static_cast<i32>(m_swapChainFormat.format) << ")"
            << "\n    color space: " << VulkanDetail::ColorSpaceToString(m_swapChainFormat.colorSpace)
            << " (" << static_cast<i32>(m_swapChainFormat.colorSpace) << ")"
+           << "\n    output mode: " << (m_swapChainState.outputMode == SwapChainOutputMode::HDR10 ? "HDR10/PQ" : "SDR/sRGB")
            << "\n    present mode: " << VulkanDetail::PresentModeToString(selectedPresentMode)
            << " (" << static_cast<i32>(selectedPresentMode) << ")"
            << "\n    requested images: " << m_deviceParams.swapChainBufferCount
@@ -1891,6 +1972,7 @@ bool BackendContext::createDevice(){
     }
 
     m_swapChainState.backBufferFormat = VulkanDetail::GetBackBufferFormat(m_deviceParams);
+    m_swapChainState.outputMode = SwapChainOutputMode::SDR;
     if(!m_deviceParams.headlessDevice)
         m_enabledExtensions.device.emplace(GraphicsString(VK_KHR_SWAPCHAIN_EXTENSION_NAME, m_arena), DeviceExtensionFeature::None);
     if(!m_deviceParams.headlessDevice){

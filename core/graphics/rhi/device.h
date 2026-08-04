@@ -288,6 +288,16 @@ struct InstanceParameters{
     {}
 };
 
+// The requested/effective presentation encoding for a windowed swap chain. HDR10 uses a
+// 10-bit Rec.2020/PQ surface; renderer code keeps scene color in linear RGBA16F until the
+// final presentation pass performs that encoding.
+namespace SwapChainOutputMode{
+    enum Enum : u8{
+        SDR = 0,
+        HDR10,
+    };
+};
+
 struct DeviceCreationParameters : public InstanceParameters{
     bool startMaximized = false;
     bool startFullscreen = false;
@@ -298,6 +308,9 @@ struct DeviceCreationParameters : public InstanceParameters{
     u32 refreshRate = 0;
     u32 swapChainBufferCount = s_SwapChainBufferCount;
     Format::Enum swapChainFormat = Format::RGBA8_UNORM_SRGB;
+    // Opt-in preference: if the current surface cannot expose HDR10, creation continues with the
+    // requested SDR format instead of rejecting the device or window.
+    bool enableHDR10Output = false;
     u32 swapChainSampleCount = 1;
     u32 swapChainSampleQuality = 0;
     u32 maxFramesInFlight = s_MaxFramesInFlight;
@@ -333,6 +346,7 @@ struct SwapChainRuntimeState{
     u32 backBufferWidth = s_BackBufferWidth;
     u32 backBufferHeight = s_BackBufferHeight;
     Format::Enum backBufferFormat = Format::RGBA8_UNORM_SRGB;
+    SwapChainOutputMode::Enum outputMode = SwapChainOutputMode::SDR;
     bool vsyncEnabled = false;
 };
 

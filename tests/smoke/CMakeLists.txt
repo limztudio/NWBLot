@@ -1,6 +1,14 @@
 find_package(Python3 COMPONENTS Interpreter)
 
-if(Python3_Interpreter_FOUND)
+if(TARGET nwb_frame AND TARGET nwb_graphics)
+    add_subdirectory(descriptor_buffer)
+endif()
+
+if(TARGET rgd_backend)
+    add_subdirectory(rgd_decode)
+endif()
+
+if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Python3_Interpreter_FOUND)
     # Object-cache paths contain long content hashes. Keep this root compact so Windows
     # builds remain below the legacy MAX_PATH limit.
     set(_nwb_smoke_asset_cache_directory "${PROJECT_SOURCE_DIR}/__build_obj/c/${NWB_OUTPUT_PLATFORM}/${NWB_OUTPUT_ARCH}/${NWB_OUTPUT_DOMAIN}")

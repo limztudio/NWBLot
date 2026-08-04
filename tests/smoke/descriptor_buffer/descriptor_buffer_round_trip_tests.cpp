@@ -1,0 +1,4960 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Descriptor-buffer round-trip proof — VK_EXT_descriptor_buffer.
+//
+// Stand up a real headless GPU device and exercise DescriptorBufferManager::allocate / writeDescriptor / free across
+// every descriptor class, asserting the vkGetDescriptorEXT path actually produces descriptor bytes into the
+// HOST-mapped segments and that the free-range sub-allocator is sound.
+//
+// Production descriptor-buffer-compatible pipelines consume the manager through the global heap. Alongside
+// allocation, byte encoding, layout, and heap-lifetime invariants, this suite verifies that pipeline-local layouts
+// are descriptor-free and that heap layouts are the sole resource-bearing descriptor transport.
+//
+// GPU-optional host: the suite SKIPS (never fails) when the required extension is absent. This is an environment
+// limitation, not evidence that an ordinary descriptor-set implementation satisfies the descriptor-buffer contract.
+
+
+#include <gtest/gtest.h>
+
+#include <global/global.h>
+#include <global/unique_ptr.h>
+#include <core/common/module.h>
+#include <core/alloc/general.h>
+#include <core/alloc/thread.h>
+#include <core/alloc/job.h>
+#include <core/graphics/module.h>
+#include <core/graphics/api.h>
+#include <core/perf/timing.h>
+#include <impl/assets/graphics/avboit/constants.h>
+#include <impl/assets/graphics/bindless/runtime_abi.h>
+#include <impl/assets/graphics/skinned_mesh/constants.h>
+#include <impl/ecs_ui/texture_submission.h>
+#include <tests/common/capturing_logger.h>
+
+// The manager lives in the Vulkan backend (Core::GraphicsBackend namespace). The test is inherently Vulkan-aware
+// (VkDescriptorType, descriptor-buffer entry points), so the concrete backend header is the right include here
+// rather than reaching through a forward declaration.
+#include <core/graphics/vulkan/backend.h>
+
+#include <volk/volk.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+using namespace Core;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Brings up a real headless GPU device with the minimum dependency set Graphics requires, mirroring Core::Frame's
+// construction. createHeadlessDevice() creates no window/swap chain, so this runs on any host with a Vulkan driver
+// that exposes the required descriptor-buffer capability.
+class HeadlessGraphicsScope final : NoCopy{
+public:
+    HeadlessGraphicsScope()
+        : m_objectArena(s_TestArenaName)
+        , m_allocator(m_objectArena)
+        , m_threadPool(s_TestWorkerThreadCount, CpuAffinity::Any)
+        , m_jobSystem(m_threadPool)
+        , m_gpuTiming(m_objectArena)
+        , m_graphics(m_allocator, m_threadPool, m_jobSystem, m_gpuTiming)
+    {}
+
+    ~HeadlessGraphicsScope(){}
+
+    // Returns false on driver/instance failure (no Vulkan, no physical device, etc.). The caller SKIPS in that case
+    // rather than failing — a CI runner without a GPU is an environment condition.
+    [[nodiscard]] bool initialize(){
+        if(!m_graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()))
+            return false;
+        return m_graphics.createHeadlessDevice();
+    }
+
+    [[nodiscard]] bool setAsyncComputeLaneEnabled(const bool enabled){
+        return m_graphics.setAsyncComputeLaneEnabled(enabled);
+    }
+
+    [[nodiscard]] Graphics& graphics(){ return m_graphics; }
+    [[nodiscard]] Alloc::GlobalArena& arena(){ return m_objectArena; }
+    [[nodiscard]] Perf::TimingRecorder& gpuTimingSink(){ return m_gpuTiming; }
+
+    void setGpuTimingEnabled(const bool enabled){
+        m_gpuTiming.setEnabled(enabled);
+        m_graphics.gpuTiming().setQueryCollectionEnabled(enabled);
+    }
+
+private:
+    static inline constexpr Name s_TestArenaName{"tests/descriptor_buffer/graphics_object_arena"};
+    static inline constexpr u32 s_TestWorkerThreadCount = 2u;
+
+    Alloc::GlobalArena m_objectArena;
+    GraphicsAllocator m_allocator;
+    Alloc::ThreadPool m_threadPool;
+    Alloc::JobSystem m_jobSystem;
+    Perf::TimingRecorder m_gpuTiming;
+    Graphics m_graphics;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Fixture: one headless device shared across the suite. The descriptor-buffer segments are HOST-mapped and persist
+// for device life, so per-case carve/free is exercised against the real global segments (resource + sampler).
+class DescriptorBufferRoundTripTest : public ::testing::Test{
+protected:
+    static void SetUpTestSuite(){
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+        // The hardening checks intentionally exercise diagnostic rejection paths.  This fixture owns a worker pool,
+        // so use Google Test's re-exec death-test mode rather than forking a live multi-threaded Vulkan process.
+        GTEST_FLAG_SET(death_test_style, "threadsafe");
+#endif
+
+        // The device-creation path emits log messages, and every NWB_LOGGER_* macro fatally asserts a logger is
+        // installed (log.h:276). Register the capturing logger before bring-up so failures are recorded rather than
+        // crashing the process, then keep it registered for the suite's lifetime.
+        s_logger.emplace();
+        s_loggerGuard.emplace(*s_logger);
+
+        s_scope = MakeUnique<HeadlessGraphicsScope>();
+        const bool initialized = s_scope->initialize();
+
+        // No usable Vulkan device on this host -> skip the whole suite. Reported as SKIPPED, not failed.
+        if(!initialized){
+            GTEST_SKIP() << "Descriptor-buffer round-trip: no usable headless Vulkan device on this host; skipping suite.";
+            return;
+        }
+
+        auto& device = s_scope->graphics().getDevice();
+        auto& mgr = device.getDescriptorBufferManager();
+
+        if(!mgr.isEnabled()){
+            // This suite proves the required descriptor-buffer path. A host without the extension cannot exercise
+            // that contract, so skip instead of treating an ordinary descriptor-set path as equivalent coverage.
+            GTEST_SKIP() << "Descriptor-buffer round-trip: VK_EXT_descriptor_buffer is not enabled on this device; "
+                            "skipping descriptor-buffer-only coverage.";
+        }
+    }
+
+    static void TearDownTestSuite(){
+        s_scope.reset();
+        s_loggerGuard.reset();
+        s_logger.reset();
+    }
+
+    [[nodiscard]] static GraphicsBackend::Device& device(){
+        return s_scope->graphics().getDevice();
+    }
+    [[nodiscard]] static GraphicsBackend::DescriptorBufferManager& manager(){
+        return device().getDescriptorBufferManager();
+    }
+    [[nodiscard]] static Alloc::GlobalArena& arena(){ return s_scope->arena(); }
+
+protected:
+    static UniquePtr<HeadlessGraphicsScope> s_scope;
+    static Optional<CapturingLogger> s_logger;
+    static Optional<Common::LoggerRegistrationGuard> s_loggerGuard;
+};
+
+UniquePtr<HeadlessGraphicsScope> DescriptorBufferRoundTripTest::s_scope;
+Optional<CapturingLogger> DescriptorBufferRoundTripTest::s_logger;
+Optional<Common::LoggerRegistrationGuard> DescriptorBufferRoundTripTest::s_loggerGuard;
+
+
+[[nodiscard]] static TextureHandle CreateConcurrentTestTexture(
+    GraphicsBackend::Device& device,
+    const bool keepInitialState = false
+){
+    TextureDesc desc;
+    desc
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Format::RGBA8_UNORM)
+        .setInUAV(true)
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    ;
+    if(keepInitialState)
+        desc.setKeepInitialState(true);
+    return device.createTexture(desc);
+}
+
+[[nodiscard]] static TextureHandle CreateExclusiveRayOutputTestTexture(GraphicsBackend::Device& device){
+    return device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+    );
+}
+
+
+// RendererSystem requests this terminal policy only when accepted cross-queue ownership cannot be recovered. The
+// Graphics owner must stop the current generation before it records another frame, leaving orderly teardown and
+// recreation to the caller that owns the device lifetime.
+TEST_F(DescriptorBufferRoundTripTest, DeviceRecreationRequestStopsTheCurrentGraphicsGeneration){
+    HeadlessGraphicsScope recoveryScope;
+    ASSERT_TRUE(recoveryScope.initialize());
+
+    auto& graphics = recoveryScope.graphics();
+    EXPECT_FALSE(graphics.isDeviceRecreationRequested());
+
+    graphics.requestDeviceRecreation();
+
+    EXPECT_TRUE(graphics.isDeviceRecreationRequested());
+    EXPECT_FALSE(graphics.runFrame());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// An external pixel capture must be able to hold the last completed image without accidentally opening another frame.
+// The suspension still observes terminal device state so it cannot conceal a recovery/recreation request.
+TEST_F(DescriptorBufferRoundTripTest, FrameSubmissionSuspensionFreezesTheFrameClockWithoutMaskingDeviceRecreation){
+    HeadlessGraphicsScope captureScope;
+    ASSERT_TRUE(captureScope.initialize());
+
+    auto& graphics = captureScope.graphics();
+    const u64 frameIndex = graphics.getFrameIndex();
+    graphics.setFrameSubmissionSuspended(true);
+
+    EXPECT_TRUE(graphics.isFrameSubmissionSuspended());
+    EXPECT_TRUE(graphics.runFrame());
+    EXPECT_EQ(frameIndex, graphics.getFrameIndex());
+
+    graphics.requestDeviceRecreation();
+    EXPECT_FALSE(graphics.runFrame());
+}
+
+
+inline constexpr GpuTimingScopeDefinition s_FrameTimingPreambleScope("tests/frame_timing_preamble");
+inline constexpr GpuTimingScopeDefinition s_FrameTimingLateActivationScope("tests/frame_timing_late_activation");
+inline constexpr GpuTimingScopeDefinition s_UnpreparedTimingScope("tests/timing_unprepared_scope");
+inline constexpr GpuTimingScopeDefinition s_SubmissionTicketScope("tests/timing_submission_ticket");
+inline constexpr GpuTimingScopeDefinition s_ConcurrentSubmissionTicketScope("tests/timing_submission_ticket_concurrent");
+inline constexpr GpuTimingScopeDefinition s_FrameTransactionScope("tests/timing_frame_transaction");
+
+
+// Records a timing scope inside dynamic rendering, where vkCmdResetQueryPool is illegal. The scope can therefore
+// only receive a query when Graphics submitted its timer-query reset preamble before invoking this render pass.
+class FrameTimingPreambleProbePass final : public IRenderPass{
+public:
+    explicit FrameTimingPreambleProbePass(
+        Graphics& graphics,
+        const GpuTimingScopeDefinition& timingScope = s_FrameTimingPreambleScope
+    )
+        : IRenderPass(graphics)
+        , m_timingScope(timingScope)
+    {}
+
+
+public:
+    [[nodiscard]] bool initialize(){
+        auto& device = getGraphics().getDevice();
+
+        m_target = device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setFormat(Format::RGBA8_UNORM)
+                .setInRenderTarget(true)
+                .setInitialState(ResourceStates::Common)
+        );
+        if(!m_target)
+            return false;
+
+        m_framebuffer = device.createFramebuffer(FramebufferDesc().addColorAttachment(m_target.get()));
+        if(!m_framebuffer)
+            return false;
+
+        m_commandList = device.createCommandList();
+        return m_commandList != nullptr;
+    }
+
+    virtual void render(Framebuffer*)override{
+        if(m_recorded || !m_framebuffer || !m_commandList)
+            return;
+
+        auto& device = getGraphics().getDevice();
+        CommandList* const commandList = m_commandList.get();
+
+        {
+            GpuTimingSubmissionTicket timingTicket(getGraphics().gpuTiming());
+            {
+                GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
+
+                commandList->open();
+                GraphicsState graphicsState;
+                graphicsState.setFramebuffer(m_framebuffer.get());
+                commandList->setGraphicsState(graphicsState);
+                {
+                    GpuTimingMeasure timing(getGraphics().gpuTiming(), m_timingScope, device, *commandList);
+                }
+                commandList->endRenderPass();
+                commandList->close();
+            }
+
+            CommandList* commandLists[] = { commandList };
+            m_recorded = timingTicket.submit(device, commandLists, 1u);
+        }
+    }
+
+    [[nodiscard]] bool recorded()const{ return m_recorded; }
+
+
+private:
+    const GpuTimingScopeDefinition& m_timingScope;
+    TextureHandle m_target;
+    FramebufferHandle m_framebuffer;
+    CommandListHandle m_commandList;
+    bool m_recorded = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Manager is enabled and its two global segments report a non-zero device address after device init. The bound
+// address is what vkCmdBindDescriptorBuffersEXT hands to the command buffer; a zero address would mean the segment
+// buffer was never allocated/mapped. This is the gate every subsequent case depends on.
+TEST_F(DescriptorBufferRoundTripTest, ManagerEnabledAndSegmentsMapped){
+    auto& mgr = manager();
+
+    ASSERT_TRUE(mgr.isEnabled());
+    EXPECT_NE(mgr.getResourceBindingInfo().address, 0u);
+    EXPECT_NE(mgr.getSamplerBindingInfo().address, 0u);
+    EXPECT_EQ(mgr.getResourceBufferIndex(), 0u);
+    EXPECT_EQ(mgr.getSamplerBufferIndex(), 1u);
+}
+
+
+// The global reset must precede every render pass. This probe places its timing scope inside dynamic rendering,
+// where it cannot reset a newly reserved query itself; a valid sample on the next frame proves the Graphics preamble
+// made the query device-ready before render-pass recording began.
+TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleResetsTimerQueriesBeforeRenderPasses){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingPreambleScope.identity, device, 1u));
+
+    FrameTimingPreambleProbePass probePass(graphics);
+    ASSERT_TRUE(probePass.initialize());
+
+    graphics.addRenderPassToBack(probePass);
+    ASSERT_TRUE(graphics.prepareFramePreamble());
+    graphics.render();
+    graphics.removeRenderPass(probePass);
+
+    ASSERT_TRUE(probePass.recorded());
+    ASSERT_TRUE(device.waitForIdle());
+
+    // collect() runs at the next frame open, before that frame's reset can overwrite the completed sample.
+    ASSERT_TRUE(graphics.prepareFramePreamble());
+    graphics.render();
+    ASSERT_TRUE(device.waitForIdle());
+    EXPECT_TRUE(timingSink.stats(s_FrameTimingPreambleScope.identity).valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
+// Renderer systems declare their timing capacities while resources validate, often before a project enables capture.
+// The next Graphics preamble must materialize those declarations before the first dynamic-rendering scope records.
+TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQueriesAfterCaptureActivation){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(false);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingLateActivationScope.identity, device, 1u));
+    s_scope->setGpuTimingEnabled(true);
+
+    FrameTimingPreambleProbePass probePass(graphics, s_FrameTimingLateActivationScope);
+    ASSERT_TRUE(probePass.initialize());
+
+    graphics.addRenderPassToBack(probePass);
+    ASSERT_TRUE(graphics.prepareFramePreamble());
+    graphics.render();
+    graphics.removeRenderPass(probePass);
+
+    ASSERT_TRUE(probePass.recorded());
+    ASSERT_TRUE(device.waitForIdle());
+
+    ASSERT_TRUE(graphics.prepareFramePreamble());
+    graphics.render();
+    ASSERT_TRUE(device.waitForIdle());
+    EXPECT_TRUE(timingSink.stats(s_FrameTimingLateActivationScope.identity).valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
+// Recording must not grow persistent timer-query pools. A scope that was not declared during preparation simply
+// produces no sample, even when the command list is outside dynamic rendering and could otherwise self-reset a new
+// query pool on the device timeline.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingScopesRequirePreparedQueryPools){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(graphics.prepareFramePreamble());
+
+    auto commandList = device.createCommandList();
+    ASSERT_NE(commandList.get(), nullptr);
+    GpuTimingSubmissionTicket timingTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
+        commandList->open();
+        {
+            GpuTimingMeasure timingMeasure(timing, s_UnpreparedTimingScope, device, *commandList);
+        }
+        commandList->close();
+    }
+
+    CommandList* commandLists[] = { commandList.get() };
+    ASSERT_TRUE(timingTicket.submit(device, commandLists, 1u));
+    ASSERT_TRUE(device.waitForIdle());
+    ASSERT_TRUE(graphics.prepareFramePreamble());
+    EXPECT_FALSE(timingSink.stats(s_UnpreparedTimingScope.identity).valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
+// A frame metric starts on the G-buffer primary and ends on the ordered post-G-buffer primary. If recording aborts
+// before its ending timestamp or that batch is rejected, the query slot must be released before the next
+// dynamic-rendering scope records; it cannot grow a new query pool there because vkCmdResetQueryPool is illegal
+// inside the render pass.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedSplitScope){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_SubmissionTicketScope.identity, device, 1u));
+
+    auto target = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInRenderTarget(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(target.get(), nullptr);
+    auto framebuffer = device.createFramebuffer(FramebufferDesc().addColorAttachment(target.get()));
+    ASSERT_NE(framebuffer.get(), nullptr);
+
+    // Establish the one prepared pool on the device timeline, exactly as Graphics::prepareFramePreamble() does
+    // before its passes.
+    auto resetCommandList = device.createCommandList();
+    ASSERT_NE(resetCommandList.get(), nullptr);
+    resetCommandList->open();
+    timing.recordFrameReset(*resetCommandList);
+    resetCommandList->close();
+    CommandList* resetCommandLists[] = { resetCommandList.get() };
+    bool resetSubmitted = false;
+    device.executeCommandLists(resetCommandLists, 1u, CommandQueue::Graphics, &resetSubmitted);
+    ASSERT_TRUE(resetSubmitted);
+    timing.confirmFrameReset();
+
+    auto abandonedCommandList = device.createCommandList();
+    ASSERT_NE(abandonedCommandList.get(), nullptr);
+    {
+        GpuTimingSubmissionTicket abandonedTicket(timing);
+        {
+            GpuTimingSubmissionTicket::RecordingScope timingRecording(abandonedTicket);
+            abandonedCommandList->open();
+            GraphicsState graphicsState;
+            graphicsState.setFramebuffer(framebuffer.get());
+            abandonedCommandList->setGraphicsState(graphicsState);
+            {
+                GpuTimingMeasure abandonedTiming(timing, s_SubmissionTicketScope, device, *abandonedCommandList);
+                abandonedTiming.discardTiming();
+            }
+            abandonedCommandList->endRenderPass();
+            abandonedCommandList->close();
+        }
+    }
+
+    auto producer = device.createCommandList();
+    auto consumer = device.createCommandList();
+    ASSERT_NE(producer.get(), nullptr);
+    ASSERT_NE(consumer.get(), nullptr);
+    {
+        GpuTimingSubmissionTicket rejectedTicket(timing);
+        {
+            GpuTimingSubmissionTicket::RecordingScope timingRecording(rejectedTicket);
+            producer->open();
+            GraphicsState graphicsState;
+            graphicsState.setFramebuffer(framebuffer.get());
+            producer->setGraphicsState(graphicsState);
+
+            GpuTimingMeasure rejectedTiming(timing, s_SubmissionTicketScope, device, *producer);
+            rejectedTiming.finishMarker();
+            producer->endRenderPass();
+            producer->close();
+
+            consumer->open();
+            rejectedTiming.finishTiming(*consumer);
+            consumer->close();
+        }
+
+        // A missing consumer must reject the whole batch rather than submit the producer alone. This is the same
+        // rollback path used when Vulkan rejects an otherwise complete submission.
+        CommandList* rejectedCommandLists[] = { producer.get(), nullptr };
+        EXPECT_FALSE(rejectedTicket.submit(device, rejectedCommandLists, 2u));
+    }
+    producer.reset();
+    consumer.reset();
+
+    auto acceptedCommandList = device.createCommandList();
+    ASSERT_NE(acceptedCommandList.get(), nullptr);
+    GpuTimingSubmissionTicket acceptedTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(acceptedTicket);
+        acceptedCommandList->open();
+        GraphicsState graphicsState;
+        graphicsState.setFramebuffer(framebuffer.get());
+        acceptedCommandList->setGraphicsState(graphicsState);
+        {
+            GpuTimingMeasure acceptedTiming(timing, s_SubmissionTicketScope, device, *acceptedCommandList);
+        }
+        acceptedCommandList->endRenderPass();
+        acceptedCommandList->close();
+    }
+
+    CommandList* acceptedCommandLists[] = { acceptedCommandList.get() };
+    ASSERT_TRUE(acceptedTicket.submit(device, acceptedCommandLists, 1u));
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 1u);
+    EXPECT_TRUE(timingSink.stats(s_SubmissionTicketScope.identity).valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
+// Independent packet jobs can share one submission ticket. Both workers reserve the same timing scope at the same
+// latch, so the recorder must claim distinct query slots before either command list reaches its ending timestamp.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurrentWorkerScopes){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_ConcurrentSubmissionTicketScope.identity, device, 2u));
+
+    auto resetCommandList = device.createCommandList();
+    ASSERT_NE(resetCommandList.get(), nullptr);
+    resetCommandList->open();
+    timing.recordFrameReset(*resetCommandList);
+    resetCommandList->close();
+    CommandList* resetCommandLists[] = { resetCommandList.get() };
+    bool resetSubmitted = false;
+    device.executeCommandLists(resetCommandLists, 1u, CommandQueue::Graphics, &resetSubmitted);
+    ASSERT_TRUE(resetSubmitted);
+    timing.confirmFrameReset();
+
+    auto firstCommandList = device.createCommandList();
+    auto secondCommandList = device.createCommandList();
+    ASSERT_NE(firstCommandList.get(), nullptr);
+    ASSERT_NE(secondCommandList.get(), nullptr);
+
+    GpuTimingSubmissionTicket timingTicket(timing);
+    Latch recordingStarted(2);
+    Latch queryReservationsStarted(2);
+    bool firstRecorded = false;
+    bool secondRecorded = false;
+    const Graphics::JobHandle firstJob = graphics.scheduleGraphicsJob([&](){
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
+        firstCommandList->open();
+        recordingStarted.count_down();
+        recordingStarted.wait();
+        {
+            GpuTimingMeasure measure(timing, s_ConcurrentSubmissionTicketScope, device, *firstCommandList);
+            queryReservationsStarted.count_down();
+            queryReservationsStarted.wait();
+        }
+        firstCommandList->close();
+        firstRecorded = firstCommandList->hasCommandBuffer();
+    });
+    const Graphics::JobHandle secondJob = graphics.scheduleGraphicsJob([&](){
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
+        secondCommandList->open();
+        recordingStarted.count_down();
+        recordingStarted.wait();
+        {
+            GpuTimingMeasure measure(timing, s_ConcurrentSubmissionTicketScope, device, *secondCommandList);
+            queryReservationsStarted.count_down();
+            queryReservationsStarted.wait();
+        }
+        secondCommandList->close();
+        secondRecorded = secondCommandList->hasCommandBuffer();
+    });
+    ASSERT_TRUE(firstJob.valid());
+    ASSERT_TRUE(secondJob.valid());
+
+    graphics.waitJob(firstJob);
+    graphics.waitJob(secondJob);
+    ASSERT_TRUE(firstRecorded);
+    ASSERT_TRUE(secondRecorded);
+
+    CommandList* commandLists[] = { firstCommandList.get(), secondCommandList.get() };
+    ASSERT_TRUE(timingTicket.submit(device, commandLists, 2u));
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 1u);
+    EXPECT_EQ(timingSink.stats(s_ConcurrentSubmissionTicketScope.identity).sampleCount, 2u);
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+
+// Texture uploads must leave ImGui's create/update status pending if the Vulkan submission is rejected. The next
+// recording batch then retries the request and commits its status only after the device accepts that retry.
+TEST_F(DescriptorBufferRoundTripTest, ImguiTextureUploadBatchCommitsOnlyAfterAcceptedSubmission){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name s_TestArenaName{"tests/descriptor_buffer/imgui_texture_upload_batch_arena"};
+    Alloc::GlobalArena arena{s_TestArenaName};
+    Impl::UiTextureUploadBatch uploads{arena};
+    ImTextureData createTexture;
+    ImTextureData updateTexture;
+    createTexture.SetStatus(ImTextureStatus_WantCreate);
+    updateTexture.SetStatus(ImTextureStatus_WantUpdates);
+
+    auto rejected = device.createCommandList();
+    ASSERT_NE(rejected.get(), nullptr);
+    rejected->open();
+    rejected->close();
+    ASSERT_TRUE(rejected->hasCommandBuffer());
+
+    uploads.add(createTexture);
+    uploads.add(updateTexture);
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    CommandList* rejectedCommandLists[] = { rejected.get() };
+    bool submitted = true;
+    device.executeCommandLists(rejectedCommandLists, 1u, CommandQueue::Graphics, &submitted);
+    EXPECT_FALSE(submitted);
+    uploads.complete(submitted);
+    EXPECT_EQ(createTexture.Status, ImTextureStatus_WantCreate);
+    EXPECT_EQ(updateTexture.Status, ImTextureStatus_WantUpdates);
+
+    auto accepted = device.createCommandList();
+    ASSERT_NE(accepted.get(), nullptr);
+    accepted->open();
+    accepted->close();
+    ASSERT_TRUE(accepted->hasCommandBuffer());
+
+    uploads.add(createTexture);
+    uploads.add(updateTexture);
+    CommandList* acceptedCommandLists[] = { accepted.get() };
+    submitted = false;
+    device.executeCommandLists(acceptedCommandLists, 1u, CommandQueue::Graphics, &submitted);
+    ASSERT_TRUE(submitted);
+    uploads.complete(submitted);
+    EXPECT_EQ(createTexture.Status, ImTextureStatus_OK);
+    EXPECT_EQ(updateTexture.Status, ImTextureStatus_OK);
+}
+
+
+// The async renderer records its Graphics-prefix timestamp before it knows whether the pre-recorded final packet will
+// submit. Reject that final submit after the prefix is accepted, then use a tiny Graphics recovery packet to complete
+// the query without publishing a misleading partial render.frame sample. A following valid transaction proves the
+// one reserved query slot was released rather than leaked.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPrefixAfterRejectedFinal){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTransactionScope.identity, device, 1u));
+    timing.beginFrame(90u);
+
+    auto prefix = device.createCommandList();
+    auto rejectedFinal = device.createCommandList();
+    auto recovery = device.createCommandList();
+    ASSERT_NE(prefix.get(), nullptr);
+    ASSERT_NE(rejectedFinal.get(), nullptr);
+    ASSERT_NE(recovery.get(), nullptr);
+
+    GpuTimingFrameTransaction rejectedTransaction(timing);
+    GpuTimingSubmissionTicket prefixTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(prefixTicket);
+        prefix->open();
+        ASSERT_TRUE(rejectedTransaction.begin(s_FrameTransactionScope, device, *prefix));
+        prefix->close();
+    }
+    GpuTimingSubmissionTicket finalTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(finalTicket);
+        rejectedFinal->open();
+        ASSERT_TRUE(rejectedTransaction.recordEnd(*rejectedFinal));
+        rejectedFinal->close();
+    }
+
+    CommandList* prefixCommandLists[] = { prefix.get() };
+    const QueueSubmissionToken prefixToken = prefixTicket.submit(
+        device,
+        prefixCommandLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(prefixToken.valid());
+    rejectedTransaction.confirmBeginSubmission();
+
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    CommandList* rejectedFinalCommandLists[] = { rejectedFinal.get() };
+    EXPECT_FALSE(finalTicket.submit(
+        device,
+        rejectedFinalCommandLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
+
+    rejectedTransaction.prepareForRecovery();
+    recovery->open();
+    ASSERT_TRUE(rejectedTransaction.recordEnd(*recovery));
+    recovery->close();
+    CommandList* recoveryCommandLists[] = { recovery.get() };
+    const QueueSubmissionToken recoveryToken = device.executeCommandLists(
+        recoveryCommandLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(recoveryToken.valid());
+    ASSERT_TRUE(rejectedTransaction.confirmEndSubmission(false));
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 91u);
+    EXPECT_FALSE(timingSink.stats(s_FrameTransactionScope.identity).valid());
+
+    timing.beginFrame(91u);
+    auto acceptedPrefix = device.createCommandList();
+    auto acceptedFinal = device.createCommandList();
+    ASSERT_NE(acceptedPrefix.get(), nullptr);
+    ASSERT_NE(acceptedFinal.get(), nullptr);
+
+    GpuTimingFrameTransaction acceptedTransaction(timing);
+    GpuTimingSubmissionTicket acceptedPrefixTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(acceptedPrefixTicket);
+        acceptedPrefix->open();
+        ASSERT_TRUE(acceptedTransaction.begin(s_FrameTransactionScope, device, *acceptedPrefix));
+        acceptedPrefix->close();
+    }
+    GpuTimingSubmissionTicket acceptedFinalTicket(timing);
+    {
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(acceptedFinalTicket);
+        acceptedFinal->open();
+        ASSERT_TRUE(acceptedTransaction.recordEnd(*acceptedFinal));
+        acceptedFinal->close();
+    }
+
+    CommandList* acceptedPrefixCommandLists[] = { acceptedPrefix.get() };
+    ASSERT_TRUE(acceptedPrefixTicket.submit(
+        device,
+        acceptedPrefixCommandLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
+    acceptedTransaction.confirmBeginSubmission();
+    CommandList* acceptedFinalCommandLists[] = { acceptedFinal.get() };
+    ASSERT_TRUE(acceptedFinalTicket.submit(
+        device,
+        acceptedFinalCommandLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
+    ASSERT_TRUE(acceptedTransaction.confirmEndSubmission(true));
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 92u);
+    EXPECT_TRUE(timingSink.stats(s_FrameTransactionScope.identity).valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+#endif
+
+
+// Ordered primary command buffers must carry the producer's final state into the consumer. The consumer's
+// ShaderResource transition therefore has CopyDest as its source, rather than treating the buffer as unknown.
+TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffTransfersFinalBufferState){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+    auto restoredBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_NE(restoredBuffer.get(), nullptr);
+    auto permanentBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(permanentBuffer.get(), nullptr);
+
+    CommandListResourceStateHandoff handoff(DescriptorBufferRoundTripTest::arena());
+    auto producer = device.createCommandList();
+    auto consumer = device.createCommandList();
+    ASSERT_NE(producer.get(), nullptr);
+    ASSERT_NE(consumer.get(), nullptr);
+
+    producer->open();
+    producer->setBufferState(buffer.get(), ResourceStates::CopyDest);
+    producer->setBufferState(restoredBuffer.get(), ResourceStates::CopyDest);
+    producer->setPermanentBufferState(permanentBuffer.get(), ResourceStates::ShaderResource);
+    producer->close(&handoff);
+    ASSERT_TRUE(handoff.valid());
+
+    consumer->open(&handoff);
+    EXPECT_EQ(consumer->getBufferState(buffer.get()), ResourceStates::CopyDest);
+    EXPECT_EQ(consumer->getBufferState(restoredBuffer.get()), ResourceStates::Common);
+    EXPECT_EQ(consumer->getBufferState(permanentBuffer.get()), ResourceStates::ShaderResource);
+    consumer->setBufferState(buffer.get(), ResourceStates::ShaderResource);
+    EXPECT_EQ(consumer->getBufferState(buffer.get()), ResourceStates::ShaderResource);
+    consumer->close();
+
+    CommandList* commandLists[] = { producer.get(), consumer.get() };
+    bool submitted = false;
+    EXPECT_GT(device.executeCommandLists(commandLists, 2u, CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_TRUE(submitted);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Cross-frame Compute scratch must not carry the preceding frame's state for resources that the current Graphics
+// prefix has already prepared. Select the private scratch state before fan-in so the current prefix remains authoritative
+// for shared inputs while the Compute-only resource retains its prior layout.
+TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffSeparatesCurrentInputsFromPersistentScratch){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto sharedInput = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    auto computeScratch = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setCanHaveUAVs(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(sharedInput.get(), nullptr);
+    ASSERT_NE(computeScratch.get(), nullptr);
+
+    CommandListResourceStateHandoff previousComputeState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff currentPrefixState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff persistentScratchState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff nextComputeState(DescriptorBufferRoundTripTest::arena());
+    auto previousCompute = device.createCommandList();
+    auto currentPrefix = device.createCommandList();
+    auto nextCompute = device.createCommandList();
+    ASSERT_NE(previousCompute.get(), nullptr);
+    ASSERT_NE(currentPrefix.get(), nullptr);
+    ASSERT_NE(nextCompute.get(), nullptr);
+
+    previousCompute->open();
+    previousCompute->setBufferState(sharedInput.get(), ResourceStates::UnorderedAccess);
+    previousCompute->setBufferState(computeScratch.get(), ResourceStates::UnorderedAccess);
+    previousCompute->close(&previousComputeState);
+    ASSERT_TRUE(previousComputeState.valid());
+
+    currentPrefix->open();
+    currentPrefix->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
+    currentPrefix->close(&currentPrefixState);
+    ASSERT_TRUE(currentPrefixState.valid());
+
+    Core::Buffer* const scratchBuffers[] = { computeScratch.get() };
+    ASSERT_TRUE(persistentScratchState.buildResourceSubset(
+        previousComputeState,
+        nullptr,
+        0u,
+        scratchBuffers,
+        1u
+    ));
+
+    const CommandListResourceStateHandoff* branches[] = { &persistentScratchState };
+    ASSERT_TRUE(nextComputeState.buildFanIn(currentPrefixState, branches, 1u));
+
+    nextCompute->open(&nextComputeState);
+    EXPECT_EQ(nextCompute->getBufferState(sharedInput.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(nextCompute->getBufferState(computeScratch.get()), ResourceStates::UnorderedAccess);
+    nextCompute->close();
+}
+
+
+// The logical AsyncCompute lane is always usable by packet code: when explicitly disabled, it resolves to Graphics,
+// preserves ordered execution, and returns a Graphics timeline token rather than inventing a second queue.
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneFallsBackToGraphicsWhenNotEnabled){
+    HeadlessGraphicsScope fallbackScope;
+    ASSERT_TRUE(fallbackScope.setAsyncComputeLaneEnabled(false));
+    ASSERT_TRUE(fallbackScope.initialize());
+
+    auto& device = fallbackScope.graphics().getDevice();
+    EXPECT_EQ(device.resolveRenderLane(RenderLane::AsyncCompute), CommandQueue::Graphics);
+    EXPECT_FALSE(device.isRenderLaneDedicated(RenderLane::AsyncCompute));
+
+    CommandListParameters asyncParams;
+    asyncParams.setRenderLane(RenderLane::AsyncCompute);
+    auto commandList = device.createCommandList(asyncParams);
+    ASSERT_NE(commandList.get(), nullptr);
+
+    commandList->open();
+    commandList->close();
+
+    CommandList* commandLists[] = { commandList.get() };
+    const QueueSubmissionToken token = device.executeCommandLists(
+        commandLists,
+        1u,
+        RenderLane::AsyncCompute,
+        QueueSubmissionDesc{}
+    );
+    EXPECT_TRUE(token.valid());
+    EXPECT_EQ(token.queue, CommandQueue::Graphics);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// A dedicated compute family is optional in CI, but when one exists this is the phase-zero ownership proof:
+// exclusive storage moves Compute -> Graphics -> Compute with paired release/acquire barriers and submission-local
+// timeline tokens. No rendering job has moved yet; this specifically validates the resource-lifecycle round trip
+// that a reused shadow-visibility frame slot will need.
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneTransfersExclusiveBufferOwnershipRoundTrip){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+
+    auto buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveUAVs(true)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+    auto sharedInput = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveUAVs(true)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    ASSERT_NE(sharedInput.get(), nullptr);
+
+    CommandListParameters computeParams;
+    computeParams.setRenderLane(RenderLane::AsyncCompute);
+
+    CommandListResourceStateHandoff computeToGraphics(asyncScope.arena());
+    auto computeProducer = device.createCommandList(computeParams);
+    ASSERT_NE(computeProducer.get(), nullptr);
+    computeProducer->open();
+    computeProducer->setBufferState(buffer.get(), ResourceStates::UnorderedAccess);
+    computeProducer->setBufferState(sharedInput.get(), ResourceStates::UnorderedAccess);
+    computeProducer->releaseBufferOwnership(buffer.get(), RenderLane::Graphics);
+    computeProducer->close(&computeToGraphics);
+    ASSERT_TRUE(computeToGraphics.valid());
+
+    CommandList* computeProducerLists[] = { computeProducer.get() };
+    const QueueSubmissionToken computeToken = device.executeCommandLists(
+        computeProducerLists,
+        1u,
+        RenderLane::AsyncCompute,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(computeToken.valid());
+    ASSERT_EQ(computeToken.queue, CommandQueue::Compute);
+
+    CommandListResourceStateHandoff graphicsToCompute(asyncScope.arena());
+    auto graphicsConsumer = device.createCommandList();
+    ASSERT_NE(graphicsConsumer.get(), nullptr);
+    graphicsConsumer->open(&computeToGraphics);
+    EXPECT_EQ(graphicsConsumer->getBufferState(buffer.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(graphicsConsumer->getBufferState(sharedInput.get()), ResourceStates::UnorderedAccess);
+    graphicsConsumer->setBufferState(buffer.get(), ResourceStates::ShaderResource);
+    graphicsConsumer->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
+    graphicsConsumer->releaseBufferOwnership(buffer.get(), RenderLane::AsyncCompute);
+    graphicsConsumer->close(&graphicsToCompute);
+    ASSERT_TRUE(graphicsToCompute.valid());
+
+    // Passing both producer tokens from one physical queue is legal API use. The submission folds them into the
+    // single greatest timeline wait Vulkan permits for that semaphore.
+    const QueueSubmissionToken computeWaits[] = { computeToken, computeToken };
+    const QueueSubmissionDesc graphicsSubmissionDesc = QueueSubmissionDesc().setWaitTokens(computeWaits, 2u);
+    CommandList* graphicsConsumerLists[] = { graphicsConsumer.get() };
+    const QueueSubmissionToken graphicsToken = device.executeCommandLists(
+        graphicsConsumerLists,
+        1u,
+        RenderLane::Graphics,
+        graphicsSubmissionDesc
+    );
+    ASSERT_TRUE(graphicsToken.valid());
+    ASSERT_EQ(graphicsToken.queue, CommandQueue::Graphics);
+
+    auto computeReuse = device.createCommandList(computeParams);
+    ASSERT_NE(computeReuse.get(), nullptr);
+    computeReuse->open(&graphicsToCompute);
+    EXPECT_EQ(computeReuse->getBufferState(buffer.get()), ResourceStates::ShaderResource);
+    computeReuse->setBufferState(buffer.get(), ResourceStates::UnorderedAccess);
+    computeReuse->close();
+
+    const QueueSubmissionToken graphicsWaits[] = { graphicsToken };
+    const QueueSubmissionDesc computeSubmissionDesc = QueueSubmissionDesc().setWaitTokens(graphicsWaits, 1u);
+    CommandList* computeReuseLists[] = { computeReuse.get() };
+    const QueueSubmissionToken reuseToken = device.executeCommandLists(
+        computeReuseLists,
+        1u,
+        RenderLane::AsyncCompute,
+        computeSubmissionDesc
+    );
+    EXPECT_TRUE(reuseToken.valid());
+    EXPECT_EQ(reuseToken.queue, CommandQueue::Compute);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// AVBOIT alternates raster and compute phases. Its shared work resources use concurrent queue sharing, while timeline
+// waits order the exact Graphics pre -> Compute warp -> Graphics extinction -> Compute integration -> Graphics
+// accumulation chain. Exercise the state subsets/fan-ins and every lane crossing on a real dedicated family.
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneChainsConcurrentAvboitWorkStates){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+
+    const auto makeSharedWorkBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveUAVs(true)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+                .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        );
+    };
+    auto coverage = makeSharedWorkBuffer();
+    auto depthWarp = makeSharedWorkBuffer();
+    auto control = makeSharedWorkBuffer();
+    auto extinction = makeSharedWorkBuffer();
+    auto extinctionOverflow = makeSharedWorkBuffer();
+    auto transmittance = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setDepth(4u)
+            .setDimension(TextureDimension::Texture3D)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    ASSERT_NE(coverage.get(), nullptr);
+    ASSERT_NE(depthWarp.get(), nullptr);
+    ASSERT_NE(control.get(), nullptr);
+    ASSERT_NE(extinction.get(), nullptr);
+    ASSERT_NE(extinctionOverflow.get(), nullptr);
+    ASSERT_NE(transmittance.get(), nullptr);
+
+    CommandListParameters computeParams;
+    computeParams.setRenderLane(RenderLane::AsyncCompute);
+    auto graphicsPre = device.createCommandList();
+    auto computeWarp = device.createCommandList(computeParams);
+    auto graphicsExtinction = device.createCommandList();
+    auto computeIntegration = device.createCommandList(computeParams);
+    auto graphicsAccumulate = device.createCommandList();
+    ASSERT_NE(graphicsPre.get(), nullptr);
+    ASSERT_NE(computeWarp.get(), nullptr);
+    ASSERT_NE(graphicsExtinction.get(), nullptr);
+    ASSERT_NE(computeIntegration.get(), nullptr);
+    ASSERT_NE(graphicsAccumulate.get(), nullptr);
+
+    CommandListResourceStateHandoff preState(asyncScope.arena());
+    CommandListResourceStateHandoff warpInputState(asyncScope.arena());
+    CommandListResourceStateHandoff warpState(asyncScope.arena());
+    CommandListResourceStateHandoff extinctionInputState(asyncScope.arena());
+    CommandListResourceStateHandoff extinctionState(asyncScope.arena());
+    CommandListResourceStateHandoff integrationInputState(asyncScope.arena());
+    CommandListResourceStateHandoff integrationState(asyncScope.arena());
+    CommandListResourceStateHandoff accumulateInputState(asyncScope.arena());
+    CommandListResourceStateHandoff finalState(asyncScope.arena());
+
+    graphicsPre->open();
+    graphicsPre->setBufferState(coverage.get(), ResourceStates::UnorderedAccess);
+    graphicsPre->setBufferState(depthWarp.get(), ResourceStates::CopyDest);
+    graphicsPre->setBufferState(control.get(), ResourceStates::CopyDest);
+    graphicsPre->setBufferState(extinction.get(), ResourceStates::CopyDest);
+    graphicsPre->setBufferState(extinctionOverflow.get(), ResourceStates::CopyDest);
+    graphicsPre->setTextureState(transmittance.get(), s_AllSubresources, ResourceStates::CopyDest);
+    graphicsPre->close(&preState);
+    ASSERT_TRUE(preState.valid());
+
+    Core::Buffer* const warpBuffers[] = { coverage.get(), depthWarp.get(), control.get() };
+    ASSERT_TRUE(warpInputState.buildResourceSubset(preState, nullptr, 0u, warpBuffers, 3u));
+    computeWarp->open(&warpInputState);
+    EXPECT_EQ(computeWarp->getBufferState(coverage.get()), ResourceStates::UnorderedAccess);
+    computeWarp->setBufferState(coverage.get(), ResourceStates::ShaderResource);
+    computeWarp->setBufferState(depthWarp.get(), ResourceStates::UnorderedAccess);
+    computeWarp->setBufferState(control.get(), ResourceStates::UnorderedAccess);
+    computeWarp->close(&warpState);
+    ASSERT_TRUE(warpState.valid());
+
+    const CommandListResourceStateHandoff* const extinctionBranches[] = { &warpState };
+    ASSERT_TRUE(extinctionInputState.buildFanIn(preState, extinctionBranches, 1u));
+    graphicsExtinction->open(&extinctionInputState);
+    EXPECT_EQ(graphicsExtinction->getBufferState(depthWarp.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(graphicsExtinction->getBufferState(control.get()), ResourceStates::UnorderedAccess);
+    graphicsExtinction->setBufferState(depthWarp.get(), ResourceStates::ShaderResource);
+    graphicsExtinction->setBufferState(control.get(), ResourceStates::ShaderResource);
+    graphicsExtinction->setBufferState(extinction.get(), ResourceStates::UnorderedAccess);
+    graphicsExtinction->setBufferState(extinctionOverflow.get(), ResourceStates::UnorderedAccess);
+    graphicsExtinction->close(&extinctionState);
+    ASSERT_TRUE(extinctionState.valid());
+
+    Core::Texture* const integrationTextures[] = { transmittance.get() };
+    Core::Buffer* const integrationBuffers[] = { extinction.get(), control.get(), extinctionOverflow.get() };
+    ASSERT_TRUE(integrationInputState.buildResourceSubset(
+        extinctionState,
+        integrationTextures,
+        1u,
+        integrationBuffers,
+        3u
+    ));
+    computeIntegration->open(&integrationInputState);
+    EXPECT_EQ(computeIntegration->getBufferState(extinction.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(computeIntegration->getTextureSubresourceState(transmittance.get(), 0u, 0u), ResourceStates::CopyDest);
+    computeIntegration->setBufferState(extinction.get(), ResourceStates::ShaderResource);
+    computeIntegration->setBufferState(control.get(), ResourceStates::ShaderResource);
+    computeIntegration->setBufferState(extinctionOverflow.get(), ResourceStates::ShaderResource);
+    computeIntegration->setTextureState(transmittance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    computeIntegration->close(&integrationState);
+    ASSERT_TRUE(integrationState.valid());
+
+    const CommandListResourceStateHandoff* const accumulateBranches[] = { &integrationState };
+    ASSERT_TRUE(accumulateInputState.buildFanIn(extinctionState, accumulateBranches, 1u));
+    graphicsAccumulate->open(&accumulateInputState);
+    EXPECT_EQ(graphicsAccumulate->getBufferState(depthWarp.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(graphicsAccumulate->getTextureSubresourceState(transmittance.get(), 0u, 0u), ResourceStates::UnorderedAccess);
+    graphicsAccumulate->setTextureState(transmittance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    graphicsAccumulate->close(&finalState);
+    ASSERT_TRUE(finalState.valid());
+
+    CommandList* graphicsPreLists[] = { graphicsPre.get() };
+    const QueueSubmissionToken graphicsPreToken = device.executeCommandLists(
+        graphicsPreLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(graphicsPreToken.valid());
+
+    const QueueSubmissionDesc warpSubmitDesc = QueueSubmissionDesc().setWaitTokens(&graphicsPreToken, 1u);
+    CommandList* computeWarpLists[] = { computeWarp.get() };
+    const QueueSubmissionToken warpToken = device.executeCommandLists(
+        computeWarpLists,
+        1u,
+        RenderLane::AsyncCompute,
+        warpSubmitDesc
+    );
+    ASSERT_TRUE(warpToken.valid());
+
+    const QueueSubmissionDesc extinctionSubmitDesc = QueueSubmissionDesc().setWaitTokens(&warpToken, 1u);
+    CommandList* graphicsExtinctionLists[] = { graphicsExtinction.get() };
+    const QueueSubmissionToken extinctionToken = device.executeCommandLists(
+        graphicsExtinctionLists,
+        1u,
+        RenderLane::Graphics,
+        extinctionSubmitDesc
+    );
+    ASSERT_TRUE(extinctionToken.valid());
+
+    const QueueSubmissionDesc integrationSubmitDesc = QueueSubmissionDesc().setWaitTokens(&extinctionToken, 1u);
+    CommandList* computeIntegrationLists[] = { computeIntegration.get() };
+    const QueueSubmissionToken integrationToken = device.executeCommandLists(
+        computeIntegrationLists,
+        1u,
+        RenderLane::AsyncCompute,
+        integrationSubmitDesc
+    );
+    ASSERT_TRUE(integrationToken.valid());
+
+    const QueueSubmissionDesc accumulationSubmitDesc = QueueSubmissionDesc().setWaitTokens(&integrationToken, 1u);
+    CommandList* graphicsAccumulateLists[] = { graphicsAccumulate.get() };
+    const QueueSubmissionToken accumulationToken = device.executeCommandLists(
+        graphicsAccumulateLists,
+        1u,
+        RenderLane::Graphics,
+        accumulationSubmitDesc
+    );
+    EXPECT_TRUE(accumulationToken.valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Hardware caustics can produce the resolved irradiance on Graphics while deferred lighting and the optional history
+// stash run on AsyncCompute. The output is intentionally concurrent, so timeline dependencies are sufficient and no
+// exclusive ownership release is required. Exercise both the bootstrap (lighting supplies the stash source) and the
+// active lagged path (the current Graphics producer supplies it directly).
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneLetsGraphicsCausticsFeedLightingAndLaggedStashThroughConcurrentIrradiance){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+
+    auto causticIrradiance = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    ASSERT_NE(causticIrradiance.get(), nullptr);
+    auto causticHistory = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    ASSERT_NE(causticHistory.get(), nullptr);
+
+    CommandListParameters computeParams;
+    computeParams.setRenderLane(RenderLane::AsyncCompute);
+    auto graphicsCaustics = device.createCommandList();
+    auto asyncLighting = device.createCommandList(computeParams);
+    auto bootstrapFinal = device.createCommandList();
+    auto bootstrapStash = device.createCommandList(computeParams);
+    auto activeGraphicsCaustics = device.createCommandList();
+    auto activeStash = device.createCommandList(computeParams);
+    ASSERT_NE(graphicsCaustics.get(), nullptr);
+    ASSERT_NE(asyncLighting.get(), nullptr);
+    ASSERT_NE(bootstrapFinal.get(), nullptr);
+    ASSERT_NE(bootstrapStash.get(), nullptr);
+    ASSERT_NE(activeGraphicsCaustics.get(), nullptr);
+    ASSERT_NE(activeStash.get(), nullptr);
+
+    CommandListResourceStateHandoff causticsState(asyncScope.arena());
+    CommandListResourceStateHandoff lightingState(asyncScope.arena());
+    CommandListResourceStateHandoff bootstrapCausticReturnState(asyncScope.arena());
+    CommandListResourceStateHandoff bootstrapStashState(asyncScope.arena());
+    CommandListResourceStateHandoff activeCausticsState(asyncScope.arena());
+    CommandListResourceStateHandoff activeStashState(asyncScope.arena());
+    graphicsCaustics->open();
+    graphicsCaustics->setTextureState(
+        causticIrradiance.get(),
+        s_AllSubresources,
+        ResourceStates::UnorderedAccess
+    );
+    graphicsCaustics->setTextureState(
+        causticIrradiance.get(),
+        s_AllSubresources,
+        ResourceStates::ShaderResource
+    );
+    graphicsCaustics->close(&causticsState);
+    ASSERT_TRUE(causticsState.valid());
+
+    asyncLighting->open(&causticsState);
+    ASSERT_TRUE(asyncLighting->hasCommandBuffer());
+    EXPECT_EQ(
+        asyncLighting->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u),
+        ResourceStates::ShaderResource
+    );
+    asyncLighting->close(&lightingState);
+    ASSERT_TRUE(lightingState.valid());
+    ASSERT_TRUE(bootstrapCausticReturnState.buildTextureSubset(
+        lightingState,
+        causticIrradiance.get()
+    ));
+
+    // Bootstrap consumes the live image in Async lighting, so the stash imports the post-lighting state.
+    bootstrapFinal->open();
+    bootstrapFinal->close();
+    ASSERT_TRUE(bootstrapFinal->hasCommandBuffer());
+    bootstrapStash->open(&bootstrapCausticReturnState);
+    EXPECT_EQ(
+        bootstrapStash->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u),
+        ResourceStates::ShaderResource
+    );
+    bootstrapStash->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::CopySource);
+    bootstrapStash->setTextureState(causticHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
+    bootstrapStash->commitBarriers();
+    const TextureSlice slice;
+    bootstrapStash->copyTexture(causticHistory.get(), slice, causticIrradiance.get(), slice);
+    bootstrapStash->close(&bootstrapStashState);
+    ASSERT_TRUE(bootstrapStashState.valid());
+
+    // Once history is accepted, Graphics lighting uses the immutable prior-frame image. The live caustic result now
+    // comes from the current Graphics producer, so the next stash must import that state rather than the old
+    // Async-lighting return state.
+    activeGraphicsCaustics->open();
+    activeGraphicsCaustics->setTextureState(
+        causticIrradiance.get(),
+        s_AllSubresources,
+        ResourceStates::UnorderedAccess
+    );
+    activeGraphicsCaustics->setTextureState(
+        causticIrradiance.get(),
+        s_AllSubresources,
+        ResourceStates::ShaderResource
+    );
+    activeGraphicsCaustics->close(&activeCausticsState);
+    ASSERT_TRUE(activeCausticsState.valid());
+
+    activeStash->open(&activeCausticsState);
+    EXPECT_EQ(
+        activeStash->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u),
+        ResourceStates::ShaderResource
+    );
+    activeStash->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::CopySource);
+    activeStash->setTextureState(causticHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
+    activeStash->commitBarriers();
+    activeStash->copyTexture(causticHistory.get(), slice, causticIrradiance.get(), slice);
+    activeStash->close(&activeStashState);
+    ASSERT_TRUE(activeStashState.valid());
+
+    CommandList* graphicsLists[] = { graphicsCaustics.get() };
+    const QueueSubmissionToken graphicsToken = device.executeCommandLists(
+        graphicsLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(graphicsToken.valid());
+
+    const QueueSubmissionDesc lightingSubmitDesc = QueueSubmissionDesc().setWaitTokens(&graphicsToken, 1u);
+    CommandList* lightingLists[] = { asyncLighting.get() };
+    const QueueSubmissionToken lightingToken = device.executeCommandLists(
+        lightingLists,
+        1u,
+        RenderLane::AsyncCompute,
+        lightingSubmitDesc
+    );
+    EXPECT_TRUE(lightingToken.valid());
+
+    const QueueSubmissionDesc bootstrapFinalSubmitDesc = QueueSubmissionDesc().setWaitTokens(&lightingToken, 1u);
+    CommandList* bootstrapFinalLists[] = { bootstrapFinal.get() };
+    const QueueSubmissionToken bootstrapFinalToken = device.executeCommandLists(
+        bootstrapFinalLists,
+        1u,
+        RenderLane::Graphics,
+        bootstrapFinalSubmitDesc
+    );
+    ASSERT_TRUE(bootstrapFinalToken.valid());
+
+    const QueueSubmissionDesc bootstrapStashSubmitDesc = QueueSubmissionDesc().setWaitTokens(&bootstrapFinalToken, 1u);
+    CommandList* bootstrapStashLists[] = { bootstrapStash.get() };
+    const QueueSubmissionToken bootstrapStashToken = device.executeCommandLists(
+        bootstrapStashLists,
+        1u,
+        RenderLane::AsyncCompute,
+        bootstrapStashSubmitDesc
+    );
+    ASSERT_TRUE(bootstrapStashToken.valid());
+
+    // This wait is the active-lagged plan's explicit cross-frame protection: do not overwrite the live image until
+    // the previous Async history copy has stopped reading it.
+    const QueueSubmissionDesc activeCausticsSubmitDesc = QueueSubmissionDesc().setWaitTokens(&bootstrapStashToken, 1u);
+    CommandList* activeCausticsLists[] = { activeGraphicsCaustics.get() };
+    const QueueSubmissionToken activeCausticsToken = device.executeCommandLists(
+        activeCausticsLists,
+        1u,
+        RenderLane::Graphics,
+        activeCausticsSubmitDesc
+    );
+    ASSERT_TRUE(activeCausticsToken.valid());
+
+    const QueueSubmissionDesc activeStashSubmitDesc = QueueSubmissionDesc().setWaitTokens(&activeCausticsToken, 1u);
+    CommandList* activeStashLists[] = { activeStash.get() };
+    const QueueSubmissionToken activeStashToken = device.executeCommandLists(
+        activeStashLists,
+        1u,
+        RenderLane::AsyncCompute,
+        activeStashSubmitDesc
+    );
+    EXPECT_TRUE(activeStashToken.valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Deferred lighting and the logical composite now join the dedicated Compute lane after AVBOIT. The exclusive
+// ray-effect outputs therefore remain Compute-local through their only consumer; Graphics imports only the linear
+// composite image for presentation. This exercises the narrow handoffs and verifies that no Graphics acquire/release
+// is needed before the next Compute reuse of shadow/caustic/surfel outputs.
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCompositeOnComputeUntilPresent){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+
+    auto gbuffer = CreateConcurrentTestTexture(device);
+    auto opaqueColor = CreateConcurrentTestTexture(device, true);
+    auto compositeColor = CreateConcurrentTestTexture(device, true);
+    auto avboitColor = CreateConcurrentTestTexture(device);
+    auto avboitExtinction = CreateConcurrentTestTexture(device);
+    auto shadowVisibility = CreateExclusiveRayOutputTestTexture(device);
+    auto causticIrradiance = CreateExclusiveRayOutputTestTexture(device);
+    auto surfelIrradiance = CreateExclusiveRayOutputTestTexture(device);
+    auto slotsBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    ASSERT_NE(gbuffer.get(), nullptr);
+    ASSERT_NE(opaqueColor.get(), nullptr);
+    ASSERT_NE(compositeColor.get(), nullptr);
+    ASSERT_NE(avboitColor.get(), nullptr);
+    ASSERT_NE(avboitExtinction.get(), nullptr);
+    ASSERT_NE(shadowVisibility.get(), nullptr);
+    ASSERT_NE(causticIrradiance.get(), nullptr);
+    ASSERT_NE(surfelIrradiance.get(), nullptr);
+    ASSERT_NE(slotsBuffer.get(), nullptr);
+
+    CommandListParameters computeParams;
+    computeParams.setRenderLane(RenderLane::AsyncCompute);
+    auto prefix = device.createCommandList();
+    auto rayEffects = device.createCommandList(computeParams);
+    auto avboit = device.createCommandList();
+    auto lighting = device.createCommandList(computeParams);
+    auto composite = device.createCommandList(computeParams);
+    auto present = device.createCommandList();
+    auto computeReuse = device.createCommandList(computeParams);
+    ASSERT_NE(prefix.get(), nullptr);
+    ASSERT_NE(rayEffects.get(), nullptr);
+    ASSERT_NE(avboit.get(), nullptr);
+    ASSERT_NE(lighting.get(), nullptr);
+    ASSERT_NE(composite.get(), nullptr);
+    ASSERT_NE(present.get(), nullptr);
+    ASSERT_NE(computeReuse.get(), nullptr);
+
+    CommandListResourceStateHandoff prefixState(asyncScope.arena());
+    CommandListResourceStateHandoff rayEffectsState(asyncScope.arena());
+    CommandListResourceStateHandoff shadowLightingState(asyncScope.arena());
+    CommandListResourceStateHandoff causticLightingState(asyncScope.arena());
+    CommandListResourceStateHandoff surfelLightingState(asyncScope.arena());
+    CommandListResourceStateHandoff avboitState(asyncScope.arena());
+    CommandListResourceStateHandoff lightingBaseState(asyncScope.arena());
+    CommandListResourceStateHandoff avboitLightingState(asyncScope.arena());
+    CommandListResourceStateHandoff lightingInputState(asyncScope.arena());
+    CommandListResourceStateHandoff lightingState(asyncScope.arena());
+    CommandListResourceStateHandoff opaqueCompositeState(asyncScope.arena());
+    CommandListResourceStateHandoff avboitCompositeState(asyncScope.arena());
+    CommandListResourceStateHandoff compositeBaseState(asyncScope.arena());
+    CommandListResourceStateHandoff compositeInputState(asyncScope.arena());
+    CommandListResourceStateHandoff compositeState(asyncScope.arena());
+    CommandListResourceStateHandoff compositePresentState(asyncScope.arena());
+    CommandListResourceStateHandoff presentBaseState(asyncScope.arena());
+    CommandListResourceStateHandoff presentInputState(asyncScope.arena());
+    CommandListResourceStateHandoff presentState(asyncScope.arena());
+    CommandListResourceStateHandoff shadowReturnState(asyncScope.arena());
+    CommandListResourceStateHandoff causticReturnState(asyncScope.arena());
+    CommandListResourceStateHandoff surfelReturnState(asyncScope.arena());
+    CommandListResourceStateHandoff computeReuseInputState(asyncScope.arena());
+
+    prefix->open();
+    prefix->setTextureState(gbuffer.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    prefix->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::CopyDest);
+    prefix->setBufferState(slotsBuffer.get(), ResourceStates::ConstantBuffer);
+    prefix->close(&prefixState);
+    ASSERT_TRUE(prefixState.valid());
+
+    rayEffects->open(&prefixState);
+    rayEffects->setTextureState(gbuffer.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    rayEffects->setBufferState(slotsBuffer.get(), ResourceStates::ConstantBuffer);
+    rayEffects->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    rayEffects->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    rayEffects->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    rayEffects->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    rayEffects->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    rayEffects->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    rayEffects->close(&rayEffectsState);
+    ASSERT_TRUE(rayEffectsState.valid());
+    ASSERT_TRUE(shadowLightingState.buildTextureSubset(rayEffectsState, shadowVisibility.get()));
+    ASSERT_TRUE(causticLightingState.buildTextureSubset(rayEffectsState, causticIrradiance.get()));
+    ASSERT_TRUE(surfelLightingState.buildTextureSubset(rayEffectsState, surfelIrradiance.get()));
+
+    avboit->open(&prefixState);
+    avboit->setTextureState(gbuffer.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    avboit->setTextureState(avboitColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    avboit->setTextureState(avboitExtinction.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    avboit->close(&avboitState);
+    ASSERT_TRUE(avboitState.valid());
+
+    Texture* const lightingBaseTextures[] = { gbuffer.get(), opaqueColor.get() };
+    Buffer* const lightingBaseBuffers[] = { slotsBuffer.get() };
+    ASSERT_TRUE(lightingBaseState.buildResourceSubset(
+        prefixState,
+        lightingBaseTextures,
+        2u,
+        lightingBaseBuffers,
+        1u
+    ));
+    Texture* const avboitLightingTextures[] = { gbuffer.get() };
+    ASSERT_TRUE(avboitLightingState.buildResourceSubset(
+        avboitState,
+        avboitLightingTextures,
+        1u,
+        nullptr,
+        0u
+    ));
+    const CommandListResourceStateHandoff* const lightingBranches[] = {
+        &shadowLightingState,
+        &causticLightingState,
+        &surfelLightingState,
+        &avboitLightingState,
+    };
+    ASSERT_TRUE(lightingInputState.buildFanIn(lightingBaseState, lightingBranches, 4u));
+
+    lighting->open(&lightingInputState);
+    EXPECT_EQ(lighting->getTextureSubresourceState(gbuffer.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(lighting->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(lighting->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(lighting->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(lighting->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::CopyDest);
+    lighting->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    lighting->close(&lightingState);
+    ASSERT_TRUE(lightingState.valid());
+    ASSERT_TRUE(opaqueCompositeState.buildTextureSubset(lightingState, opaqueColor.get()));
+
+    Texture* const compositeBaseTextures[] = { avboitColor.get(), avboitExtinction.get() };
+    ASSERT_TRUE(avboitCompositeState.buildResourceSubset(
+        avboitState,
+        compositeBaseTextures,
+        2u,
+        nullptr,
+        0u
+    ));
+    Buffer* const compositeBaseBuffers[] = { slotsBuffer.get() };
+    ASSERT_TRUE(compositeBaseState.buildResourceSubset(
+        lightingBaseState,
+        nullptr,
+        0u,
+        compositeBaseBuffers,
+        1u
+    ));
+    const CommandListResourceStateHandoff* const compositeBranches[] = {
+        &avboitCompositeState,
+        &opaqueCompositeState,
+    };
+    ASSERT_TRUE(compositeInputState.buildFanIn(compositeBaseState, compositeBranches, 2u));
+
+    composite->open(&compositeInputState);
+    EXPECT_EQ(composite->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);
+    EXPECT_EQ(composite->getTextureSubresourceState(avboitColor.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(composite->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::Unknown);
+    composite->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    composite->setTextureState(avboitColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    composite->setTextureState(avboitExtinction.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    composite->setTextureState(compositeColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    composite->close(&compositeState);
+    ASSERT_TRUE(compositeState.valid());
+
+    ASSERT_TRUE(compositePresentState.buildTextureSubset(compositeState, compositeColor.get()));
+    Buffer* const presentBaseBuffers[] = { slotsBuffer.get() };
+    ASSERT_TRUE(presentBaseState.buildResourceSubset(
+        compositeBaseState,
+        nullptr,
+        0u,
+        presentBaseBuffers,
+        1u
+    ));
+    const CommandListResourceStateHandoff* const presentBranches[] = { &compositePresentState };
+    ASSERT_TRUE(presentInputState.buildFanIn(presentBaseState, presentBranches, 1u));
+    present->open(&presentInputState);
+    EXPECT_EQ(present->getTextureSubresourceState(compositeColor.get(), 0u, 0u), ResourceStates::Common);
+    EXPECT_EQ(present->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Unknown);
+    present->setTextureState(compositeColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    present->close(&presentState);
+    ASSERT_TRUE(presentState.valid());
+
+    ASSERT_TRUE(shadowReturnState.buildTextureSubset(lightingState, shadowVisibility.get()));
+    ASSERT_TRUE(causticReturnState.buildTextureSubset(lightingState, causticIrradiance.get()));
+    ASSERT_TRUE(surfelReturnState.buildTextureSubset(lightingState, surfelIrradiance.get()));
+    const CommandListResourceStateHandoff* const computeReuseBranches[] = {
+        &shadowReturnState,
+        &causticReturnState,
+        &surfelReturnState,
+    };
+    ASSERT_TRUE(computeReuseInputState.buildFanIn(prefixState, computeReuseBranches, 3u));
+    computeReuse->open(&computeReuseInputState);
+    EXPECT_EQ(computeReuse->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(computeReuse->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(computeReuse->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
+    computeReuse->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    computeReuse->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    computeReuse->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    computeReuse->close();
+
+    CommandList* prefixLists[] = { prefix.get() };
+    const QueueSubmissionToken prefixToken = device.executeCommandLists(
+        prefixLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(prefixToken.valid());
+
+    const QueueSubmissionDesc rayEffectsSubmitDesc = QueueSubmissionDesc().setWaitTokens(&prefixToken, 1u);
+    CommandList* rayEffectsLists[] = { rayEffects.get() };
+    const QueueSubmissionToken rayEffectsToken = device.executeCommandLists(
+        rayEffectsLists,
+        1u,
+        RenderLane::AsyncCompute,
+        rayEffectsSubmitDesc
+    );
+    ASSERT_TRUE(rayEffectsToken.valid());
+
+    const QueueSubmissionDesc avboitSubmitDesc = QueueSubmissionDesc().setWaitTokens(&prefixToken, 1u);
+    CommandList* avboitLists[] = { avboit.get() };
+    const QueueSubmissionToken avboitToken = device.executeCommandLists(
+        avboitLists,
+        1u,
+        RenderLane::Graphics,
+        avboitSubmitDesc
+    );
+    ASSERT_TRUE(avboitToken.valid());
+
+    const QueueSubmissionDesc lightingSubmitDesc = QueueSubmissionDesc().setWaitTokens(&avboitToken, 1u);
+    CommandList* lightingLists[] = { lighting.get() };
+    const QueueSubmissionToken lightingToken = device.executeCommandLists(
+        lightingLists,
+        1u,
+        RenderLane::AsyncCompute,
+        lightingSubmitDesc
+    );
+    ASSERT_TRUE(lightingToken.valid());
+
+    CommandList* compositeLists[] = { composite.get() };
+    const QueueSubmissionToken compositeToken = device.executeCommandLists(
+        compositeLists,
+        1u,
+        RenderLane::AsyncCompute,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(compositeToken.valid());
+
+    const QueueSubmissionDesc presentSubmitDesc = QueueSubmissionDesc().setWaitTokens(&compositeToken, 1u);
+    CommandList* presentLists[] = { present.get() };
+    const QueueSubmissionToken presentToken = device.executeCommandLists(
+        presentLists,
+        1u,
+        RenderLane::Graphics,
+        presentSubmitDesc
+    );
+    ASSERT_TRUE(presentToken.valid());
+
+    // This reuse is ordered after composite by the same AsyncCompute queue. It deliberately does not wait for the
+    // Graphics present packet because that packet imports only the concurrent composite presentation image.
+    CommandList* reuseLists[] = { computeReuse.get() };
+    const QueueSubmissionToken reuseToken = device.executeCommandLists(
+        reuseLists,
+        1u,
+        RenderLane::AsyncCompute,
+        QueueSubmissionDesc{}
+    );
+    EXPECT_TRUE(reuseToken.valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// The optional latency trade-off keeps the three exclusive live ray-effect outputs on AsyncCompute, but copies an
+// accepted snapshot into concurrent, keep-initial-state history images. The next frame's Graphics lighting samples
+// only those history images while AsyncCompute writes a new live triple; final still joins the current producer before
+// the next snapshot. This verifies the precise queue and state topology without relying on a renderer pipeline.
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneUsesAcceptedLaggedLightingHistory){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+
+    auto gbuffer = CreateConcurrentTestTexture(device);
+    auto opaqueColor = CreateConcurrentTestTexture(device, true);
+    auto compositeColor = CreateConcurrentTestTexture(device, true);
+    auto shadowVisibility = CreateExclusiveRayOutputTestTexture(device);
+    auto causticIrradiance = CreateExclusiveRayOutputTestTexture(device);
+    auto surfelIrradiance = CreateExclusiveRayOutputTestTexture(device);
+    auto shadowHistory = CreateConcurrentTestTexture(device, true);
+    auto causticHistory = CreateConcurrentTestTexture(device, true);
+    auto surfelHistory = CreateConcurrentTestTexture(device, true);
+    ASSERT_NE(gbuffer.get(), nullptr);
+    ASSERT_NE(opaqueColor.get(), nullptr);
+    ASSERT_NE(compositeColor.get(), nullptr);
+    ASSERT_NE(shadowVisibility.get(), nullptr);
+    ASSERT_NE(causticIrradiance.get(), nullptr);
+    ASSERT_NE(surfelIrradiance.get(), nullptr);
+    ASSERT_NE(shadowHistory.get(), nullptr);
+    ASSERT_NE(causticHistory.get(), nullptr);
+    ASSERT_NE(surfelHistory.get(), nullptr);
+
+    CommandListParameters asyncParams;
+    asyncParams.setRenderLane(RenderLane::AsyncCompute);
+    auto seedPrefix = device.createCommandList();
+    auto seedProducer = device.createCommandList(asyncParams);
+    auto seedFinal = device.createCommandList();
+    auto seedStash = device.createCommandList(asyncParams);
+    auto nextPrefix = device.createCommandList();
+    auto nextProducer = device.createCommandList(asyncParams);
+    auto laggedLighting = device.createCommandList();
+    auto laggedComposite = device.createCommandList();
+    auto laggedFinal = device.createCommandList();
+    auto nextStash = device.createCommandList(asyncParams);
+    ASSERT_NE(seedPrefix.get(), nullptr);
+    ASSERT_NE(seedProducer.get(), nullptr);
+    ASSERT_NE(seedFinal.get(), nullptr);
+    ASSERT_NE(seedStash.get(), nullptr);
+    ASSERT_NE(nextPrefix.get(), nullptr);
+    ASSERT_NE(nextProducer.get(), nullptr);
+    ASSERT_NE(laggedLighting.get(), nullptr);
+    ASSERT_NE(laggedComposite.get(), nullptr);
+    ASSERT_NE(laggedFinal.get(), nullptr);
+    ASSERT_NE(nextStash.get(), nullptr);
+
+    CommandListResourceStateHandoff seedPrefixState(asyncScope.arena());
+    CommandListResourceStateHandoff seedProducerState(asyncScope.arena());
+    CommandListResourceStateHandoff seedShadowSourceState(asyncScope.arena());
+    CommandListResourceStateHandoff seedCausticSourceState(asyncScope.arena());
+    CommandListResourceStateHandoff seedSurfelSourceState(asyncScope.arena());
+    CommandListResourceStateHandoff seedStashInputState(asyncScope.arena());
+    CommandListResourceStateHandoff seedStashState(asyncScope.arena());
+    CommandListResourceStateHandoff seedShadowReturnState(asyncScope.arena());
+    CommandListResourceStateHandoff seedCausticReturnState(asyncScope.arena());
+    CommandListResourceStateHandoff seedSurfelReturnState(asyncScope.arena());
+    CommandListResourceStateHandoff nextPrefixState(asyncScope.arena());
+    CommandListResourceStateHandoff nextProducerInputState(asyncScope.arena());
+    CommandListResourceStateHandoff nextProducerState(asyncScope.arena());
+    CommandListResourceStateHandoff nextShadowSourceState(asyncScope.arena());
+    CommandListResourceStateHandoff nextCausticSourceState(asyncScope.arena());
+    CommandListResourceStateHandoff nextSurfelSourceState(asyncScope.arena());
+    CommandListResourceStateHandoff laggedLightingBaseState(asyncScope.arena());
+    CommandListResourceStateHandoff laggedLightingState(asyncScope.arena());
+    CommandListResourceStateHandoff laggedOpaqueCompositeState(asyncScope.arena());
+    CommandListResourceStateHandoff laggedCompositeState(asyncScope.arena());
+    CommandListResourceStateHandoff laggedCompositeFinalState(asyncScope.arena());
+    CommandListResourceStateHandoff laggedFinalState(asyncScope.arena());
+    CommandListResourceStateHandoff nextStashInputState(asyncScope.arena());
+    CommandListResourceStateHandoff nextStashState(asyncScope.arena());
+
+    seedPrefix->open();
+    seedPrefix->setTextureState(gbuffer.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    seedPrefix->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::CopyDest);
+    seedPrefix->close(&seedPrefixState);
+    ASSERT_TRUE(seedPrefixState.valid());
+
+    seedProducer->open(&seedPrefixState);
+    seedProducer->setTextureState(gbuffer.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    seedProducer->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    seedProducer->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    seedProducer->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    seedProducer->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    seedProducer->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    seedProducer->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    seedProducer->close(&seedProducerState);
+    ASSERT_TRUE(seedProducerState.valid());
+    ASSERT_TRUE(seedShadowSourceState.buildTextureSubset(seedProducerState, shadowVisibility.get()));
+    ASSERT_TRUE(seedCausticSourceState.buildTextureSubset(seedProducerState, causticIrradiance.get()));
+    ASSERT_TRUE(seedSurfelSourceState.buildTextureSubset(seedProducerState, surfelIrradiance.get()));
+
+    seedFinal->open();
+    seedFinal->close();
+    ASSERT_TRUE(seedFinal->hasCommandBuffer());
+
+    const CommandListResourceStateHandoff* const seedStashBranches[] = {
+        &seedCausticSourceState,
+        &seedSurfelSourceState,
+    };
+    ASSERT_TRUE(seedStashInputState.buildFanIn(
+        seedShadowSourceState,
+        seedStashBranches,
+        LengthOf(seedStashBranches)
+    ));
+    seedStash->open(&seedStashInputState);
+    EXPECT_EQ(seedStash->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(seedStash->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(seedStash->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
+    seedStash->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::CopySource);
+    seedStash->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::CopySource);
+    seedStash->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::CopySource);
+    seedStash->setTextureState(shadowHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
+    seedStash->setTextureState(causticHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
+    seedStash->setTextureState(surfelHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
+    seedStash->commitBarriers();
+    const TextureSlice slice;
+    seedStash->copyTexture(shadowHistory.get(), slice, shadowVisibility.get(), slice);
+    seedStash->copyTexture(causticHistory.get(), slice, causticIrradiance.get(), slice);
+    seedStash->copyTexture(surfelHistory.get(), slice, surfelIrradiance.get(), slice);
+    seedStash->close(&seedStashState);
+    ASSERT_TRUE(seedStashState.valid());
+    ASSERT_TRUE(seedShadowReturnState.buildTextureSubset(seedStashState, shadowVisibility.get()));
+    ASSERT_TRUE(seedCausticReturnState.buildTextureSubset(seedStashState, causticIrradiance.get()));
+    ASSERT_TRUE(seedSurfelReturnState.buildTextureSubset(seedStashState, surfelIrradiance.get()));
+
+    nextPrefix->open();
+    nextPrefix->setTextureState(gbuffer.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    nextPrefix->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::CopyDest);
+    nextPrefix->close(&nextPrefixState);
+    ASSERT_TRUE(nextPrefixState.valid());
+
+    const CommandListResourceStateHandoff* const nextProducerBranches[] = {
+        &seedShadowReturnState,
+        &seedCausticReturnState,
+        &seedSurfelReturnState,
+    };
+    ASSERT_TRUE(nextProducerInputState.buildFanIn(
+        nextPrefixState,
+        nextProducerBranches,
+        LengthOf(nextProducerBranches)
+    ));
+    nextProducer->open(&nextProducerInputState);
+    EXPECT_EQ(nextProducer->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::CopySource);
+    EXPECT_EQ(nextProducer->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::CopySource);
+    EXPECT_EQ(nextProducer->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::CopySource);
+    nextProducer->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    nextProducer->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    nextProducer->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    nextProducer->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    nextProducer->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    nextProducer->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    nextProducer->close(&nextProducerState);
+    ASSERT_TRUE(nextProducerState.valid());
+    ASSERT_TRUE(nextShadowSourceState.buildTextureSubset(nextProducerState, shadowVisibility.get()));
+    ASSERT_TRUE(nextCausticSourceState.buildTextureSubset(nextProducerState, causticIrradiance.get()));
+    ASSERT_TRUE(nextSurfelSourceState.buildTextureSubset(nextProducerState, surfelIrradiance.get()));
+
+    Texture* const laggedLightingBaseTextures[] = {
+        gbuffer.get(),
+        opaqueColor.get(),
+    };
+    ASSERT_TRUE(laggedLightingBaseState.buildResourceSubset(
+        nextPrefixState,
+        laggedLightingBaseTextures,
+        LengthOf(laggedLightingBaseTextures),
+        nullptr,
+        0u
+    ));
+    laggedLighting->open(&laggedLightingBaseState);
+    EXPECT_EQ(laggedLighting->getTextureSubresourceState(gbuffer.get(), 0u, 0u), ResourceStates::ShaderResource);
+    // The history is intentionally absent from the producer handoff. Its keep-initial-state close from the accepted
+    // stash makes the prior snapshot independently importable on Graphics after the stash token is waited.
+    EXPECT_EQ(laggedLighting->getTextureSubresourceState(shadowHistory.get(), 0u, 0u), ResourceStates::Common);
+    EXPECT_EQ(laggedLighting->getTextureSubresourceState(causticHistory.get(), 0u, 0u), ResourceStates::Common);
+    EXPECT_EQ(laggedLighting->getTextureSubresourceState(surfelHistory.get(), 0u, 0u), ResourceStates::Common);
+    EXPECT_EQ(laggedLighting->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::Unknown);
+    laggedLighting->setTextureState(shadowHistory.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    laggedLighting->setTextureState(causticHistory.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    laggedLighting->setTextureState(surfelHistory.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    laggedLighting->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    laggedLighting->close(&laggedLightingState);
+    ASSERT_TRUE(laggedLightingState.valid());
+    ASSERT_TRUE(laggedOpaqueCompositeState.buildTextureSubset(laggedLightingState, opaqueColor.get()));
+
+    laggedComposite->open(&laggedOpaqueCompositeState);
+    EXPECT_EQ(laggedComposite->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);
+    laggedComposite->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    laggedComposite->setTextureState(compositeColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    laggedComposite->close(&laggedCompositeState);
+    ASSERT_TRUE(laggedCompositeState.valid());
+    ASSERT_TRUE(laggedCompositeFinalState.buildTextureSubset(laggedCompositeState, compositeColor.get()));
+
+    laggedFinal->open(&laggedCompositeFinalState);
+    EXPECT_EQ(laggedFinal->getTextureSubresourceState(compositeColor.get(), 0u, 0u), ResourceStates::Common);
+    laggedFinal->setTextureState(compositeColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    laggedFinal->close(&laggedFinalState);
+    ASSERT_TRUE(laggedFinalState.valid());
+
+    const CommandListResourceStateHandoff* const nextStashBranches[] = {
+        &nextCausticSourceState,
+        &nextSurfelSourceState,
+    };
+    ASSERT_TRUE(nextStashInputState.buildFanIn(
+        nextShadowSourceState,
+        nextStashBranches,
+        LengthOf(nextStashBranches)
+    ));
+    nextStash->open(&nextStashInputState);
+    nextStash->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::CopySource);
+    nextStash->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::CopySource);
+    nextStash->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::CopySource);
+    nextStash->setTextureState(shadowHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
+    nextStash->setTextureState(causticHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
+    nextStash->setTextureState(surfelHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
+    nextStash->commitBarriers();
+    nextStash->copyTexture(shadowHistory.get(), slice, shadowVisibility.get(), slice);
+    nextStash->copyTexture(causticHistory.get(), slice, causticIrradiance.get(), slice);
+    nextStash->copyTexture(surfelHistory.get(), slice, surfelIrradiance.get(), slice);
+    nextStash->close(&nextStashState);
+    ASSERT_TRUE(nextStashState.valid());
+
+    CommandList* seedPrefixLists[] = { seedPrefix.get() };
+    const QueueSubmissionToken seedPrefixToken = device.executeCommandLists(
+        seedPrefixLists,
+        LengthOf(seedPrefixLists),
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(seedPrefixToken.valid());
+
+    const QueueSubmissionDesc seedProducerSubmitDesc = QueueSubmissionDesc().setWaitTokens(&seedPrefixToken, 1u);
+    CommandList* seedProducerLists[] = { seedProducer.get() };
+    const QueueSubmissionToken seedProducerToken = device.executeCommandLists(
+        seedProducerLists,
+        LengthOf(seedProducerLists),
+        RenderLane::AsyncCompute,
+        seedProducerSubmitDesc
+    );
+    ASSERT_TRUE(seedProducerToken.valid());
+
+    const QueueSubmissionDesc seedFinalSubmitDesc = QueueSubmissionDesc().setWaitTokens(&seedProducerToken, 1u);
+    CommandList* seedFinalLists[] = { seedFinal.get() };
+    const QueueSubmissionToken seedFinalToken = device.executeCommandLists(
+        seedFinalLists,
+        LengthOf(seedFinalLists),
+        RenderLane::Graphics,
+        seedFinalSubmitDesc
+    );
+    ASSERT_TRUE(seedFinalToken.valid());
+
+    const QueueSubmissionDesc seedStashSubmitDesc = QueueSubmissionDesc().setWaitTokens(&seedFinalToken, 1u);
+    CommandList* seedStashLists[] = { seedStash.get() };
+    const QueueSubmissionToken seedStashToken = device.executeCommandLists(
+        seedStashLists,
+        LengthOf(seedStashLists),
+        RenderLane::AsyncCompute,
+        seedStashSubmitDesc
+    );
+    ASSERT_TRUE(seedStashToken.valid());
+
+    CommandList* nextPrefixLists[] = { nextPrefix.get() };
+    const QueueSubmissionToken nextPrefixToken = device.executeCommandLists(
+        nextPrefixLists,
+        LengthOf(nextPrefixLists),
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(nextPrefixToken.valid());
+
+    const QueueSubmissionDesc nextProducerSubmitDesc = QueueSubmissionDesc().setWaitTokens(&nextPrefixToken, 1u);
+    CommandList* nextProducerLists[] = { nextProducer.get() };
+    const QueueSubmissionToken nextProducerToken = device.executeCommandLists(
+        nextProducerLists,
+        LengthOf(nextProducerLists),
+        RenderLane::AsyncCompute,
+        nextProducerSubmitDesc
+    );
+    ASSERT_TRUE(nextProducerToken.valid());
+
+    const QueueSubmissionDesc laggedLightingSubmitDesc = QueueSubmissionDesc().setWaitTokens(&seedStashToken, 1u);
+    CommandList* laggedLightingLists[] = { laggedLighting.get() };
+    const QueueSubmissionToken laggedLightingToken = device.executeCommandLists(
+        laggedLightingLists,
+        LengthOf(laggedLightingLists),
+        RenderLane::Graphics,
+        laggedLightingSubmitDesc
+    );
+    ASSERT_TRUE(laggedLightingToken.valid());
+
+    CommandList* laggedCompositeLists[] = { laggedComposite.get() };
+    const QueueSubmissionToken laggedCompositeToken = device.executeCommandLists(
+        laggedCompositeLists,
+        LengthOf(laggedCompositeLists),
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(laggedCompositeToken.valid());
+
+    const QueueSubmissionToken laggedFinalWaitTokens[] = { laggedCompositeToken, nextProducerToken };
+    const QueueSubmissionDesc laggedFinalSubmitDesc = QueueSubmissionDesc().setWaitTokens(
+        laggedFinalWaitTokens,
+        LengthOf(laggedFinalWaitTokens)
+    );
+    CommandList* laggedFinalLists[] = { laggedFinal.get() };
+    const QueueSubmissionToken laggedFinalToken = device.executeCommandLists(
+        laggedFinalLists,
+        LengthOf(laggedFinalLists),
+        RenderLane::Graphics,
+        laggedFinalSubmitDesc
+    );
+    ASSERT_TRUE(laggedFinalToken.valid());
+
+    const QueueSubmissionDesc nextStashSubmitDesc = QueueSubmissionDesc().setWaitTokens(&laggedFinalToken, 1u);
+    CommandList* nextStashLists[] = { nextStash.get() };
+    const QueueSubmissionToken nextStashToken = device.executeCommandLists(
+        nextStashLists,
+        LengthOf(nextStashLists),
+        RenderLane::AsyncCompute,
+        nextStashSubmitDesc
+    );
+    EXPECT_TRUE(nextStashToken.valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Caustics (including the hardware dispatch-rays producer) and surfel GI add two exclusive Compute results beside
+// shadowVisibility. If Graphics effects/final cannot consume them, the recovery packet must acquire and return all
+// three outputs together; the next Compute packet
+// then imports their shared return handoff alongside its ordinary concurrent prefix input.
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRecoversCausticSurfelAndShadowTextureOwnershipTogether){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+
+    const auto makeExclusiveOutput = [&device](){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setFormat(Format::RGBA8_UNORM)
+                .setInUAV(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    auto shadowVisibility = makeExclusiveOutput();
+    auto causticIrradiance = makeExclusiveOutput();
+    auto surfelIrradiance = makeExclusiveOutput();
+    auto sharedInput = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+    );
+    ASSERT_NE(shadowVisibility.get(), nullptr);
+    ASSERT_NE(causticIrradiance.get(), nullptr);
+    ASSERT_NE(surfelIrradiance.get(), nullptr);
+    ASSERT_NE(sharedInput.get(), nullptr);
+
+    CommandListParameters computeParams;
+    computeParams.setRenderLane(RenderLane::AsyncCompute);
+
+    CommandListResourceStateHandoff prefixState(asyncScope.arena());
+    CommandListResourceStateHandoff computeState(asyncScope.arena());
+    CommandListResourceStateHandoff shadowGraphicsState(asyncScope.arena());
+    CommandListResourceStateHandoff causticGraphicsState(asyncScope.arena());
+    CommandListResourceStateHandoff surfelGraphicsState(asyncScope.arena());
+    CommandListResourceStateHandoff recoveryInputState(asyncScope.arena());
+    CommandListResourceStateHandoff recoveryState(asyncScope.arena());
+    CommandListResourceStateHandoff nextComputeInputState(asyncScope.arena());
+
+    auto prefix = device.createCommandList();
+    auto compute = device.createCommandList(computeParams);
+    auto recovery = device.createCommandList();
+    auto computeReuse = device.createCommandList(computeParams);
+    ASSERT_NE(prefix.get(), nullptr);
+    ASSERT_NE(compute.get(), nullptr);
+    ASSERT_NE(recovery.get(), nullptr);
+    ASSERT_NE(computeReuse.get(), nullptr);
+
+    prefix->open();
+    prefix->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
+    prefix->close(&prefixState);
+    ASSERT_TRUE(prefixState.valid());
+
+    compute->open(&prefixState);
+    compute->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
+    compute->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    compute->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    compute->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    compute->releaseTextureOwnership(shadowVisibility.get(), s_AllSubresources, RenderLane::Graphics);
+    compute->releaseTextureOwnership(causticIrradiance.get(), s_AllSubresources, RenderLane::Graphics);
+    compute->releaseTextureOwnership(surfelIrradiance.get(), s_AllSubresources, RenderLane::Graphics);
+    compute->close(&computeState);
+    ASSERT_TRUE(computeState.valid());
+    ASSERT_TRUE(shadowGraphicsState.buildTextureSubset(computeState, shadowVisibility.get()));
+    ASSERT_TRUE(causticGraphicsState.buildTextureSubset(computeState, causticIrradiance.get()));
+    ASSERT_TRUE(surfelGraphicsState.buildTextureSubset(computeState, surfelIrradiance.get()));
+
+    const CommandListResourceStateHandoff* recoveryBranches[] = { &causticGraphicsState, &surfelGraphicsState };
+    ASSERT_TRUE(recoveryInputState.buildFanIn(shadowGraphicsState, recoveryBranches, 2u));
+
+    CommandList* prefixLists[] = { prefix.get() };
+    const QueueSubmissionToken prefixToken = device.executeCommandLists(
+        prefixLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(prefixToken.valid());
+
+    const QueueSubmissionDesc computeSubmitDesc = QueueSubmissionDesc().setWaitTokens(&prefixToken, 1u);
+    CommandList* computeLists[] = { compute.get() };
+    const QueueSubmissionToken computeToken = device.executeCommandLists(
+        computeLists,
+        1u,
+        RenderLane::AsyncCompute,
+        computeSubmitDesc
+    );
+    ASSERT_TRUE(computeToken.valid());
+
+    recovery->open(&recoveryInputState);
+    EXPECT_EQ(recovery->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(recovery->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(recovery->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::UnorderedAccess);
+    recovery->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    recovery->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    recovery->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    recovery->releaseTextureOwnership(shadowVisibility.get(), s_AllSubresources, RenderLane::AsyncCompute);
+    recovery->releaseTextureOwnership(causticIrradiance.get(), s_AllSubresources, RenderLane::AsyncCompute);
+    recovery->releaseTextureOwnership(surfelIrradiance.get(), s_AllSubresources, RenderLane::AsyncCompute);
+    recovery->close(&recoveryState);
+    ASSERT_TRUE(recoveryState.valid());
+
+    const QueueSubmissionDesc recoverySubmitDesc = QueueSubmissionDesc().setWaitTokens(&computeToken, 1u);
+    CommandList* recoveryLists[] = { recovery.get() };
+    const QueueSubmissionToken recoveryToken = device.executeCommandLists(
+        recoveryLists,
+        1u,
+        RenderLane::Graphics,
+        recoverySubmitDesc
+    );
+    ASSERT_TRUE(recoveryToken.valid());
+
+    const CommandListResourceStateHandoff* nextComputeBranches[] = { &recoveryState };
+    ASSERT_TRUE(nextComputeInputState.buildFanIn(prefixState, nextComputeBranches, 1u));
+    computeReuse->open(&nextComputeInputState);
+    EXPECT_EQ(computeReuse->getBufferState(sharedInput.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(computeReuse->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(computeReuse->getTextureSubresourceState(causticIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
+    EXPECT_EQ(computeReuse->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::ShaderResource);
+    computeReuse->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    computeReuse->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    computeReuse->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    computeReuse->close();
+
+    const QueueSubmissionDesc reuseSubmitDesc = QueueSubmissionDesc().setWaitTokens(&recoveryToken, 1u);
+    CommandList* reuseLists[] = { computeReuse.get() };
+    const QueueSubmissionToken reuseToken = device.executeCommandLists(
+        reuseLists,
+        1u,
+        RenderLane::AsyncCompute,
+        reuseSubmitDesc
+    );
+    EXPECT_TRUE(reuseToken.valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+#if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+
+// Exercise the four-submission shadow topology's rejection boundaries with the same pre-Vulkan injection seam used
+// by RendererSystem. Prefix and shadow rejections leave no ownership handoff; effects/final rejections repair the
+// accepted Compute release through a Graphics acquire/release; a rejected recovery deliberately stops before reuse,
+// matching the renderer's device-recreation/suspension policy.
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreservesOrSuspendsExclusiveOwnership){
+    HeadlessGraphicsScope asyncScope;
+    ASSERT_TRUE(asyncScope.setAsyncComputeLaneEnabled(true));
+    if(!asyncScope.initialize())
+        GTEST_SKIP() << "Async-compute lane: no usable dedicated-compute headless Vulkan device on this host.";
+
+    auto& device = asyncScope.graphics().getDevice();
+    if(!device.isRenderLaneDedicated(RenderLane::AsyncCompute))
+        GTEST_SKIP() << "Async-compute lane: adapter has no dedicated compute-only queue family.";
+
+    enum class FailurePoint : u8{
+        Prefix,
+        Shadow,
+        Effects,
+        Final,
+        Recovery,
+    };
+
+    const auto makeExclusiveBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveUAVs(true)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const auto makeSharedBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveUAVs(true)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+                .setQueueSharing(ResourceQueueSharing::GraphicsAndAsyncCompute)
+        );
+    };
+
+    CommandListParameters computeParams;
+    computeParams.setRenderLane(RenderLane::AsyncCompute);
+
+    // Executes the next valid Compute -> Graphics -> Compute cycle. `initialState` is present only after the
+    // ownership-recovery acquire/release; `initialWait` makes that handoff's accepted token explicit.
+    const auto executeNextValidCycle = [&](
+        Buffer* output,
+        Buffer* sharedInput,
+        const CommandListResourceStateHandoff* initialState,
+        const QueueSubmissionToken initialWait
+    ){
+        CommandListResourceStateHandoff computeToGraphics(asyncScope.arena());
+        CommandListResourceStateHandoff graphicsToCompute(asyncScope.arena());
+        auto compute = device.createCommandList(computeParams);
+        auto graphics = device.createCommandList();
+        auto computeReuse = device.createCommandList(computeParams);
+        ASSERT_NE(compute.get(), nullptr);
+        ASSERT_NE(graphics.get(), nullptr);
+        ASSERT_NE(computeReuse.get(), nullptr);
+
+        compute->open(initialState);
+        if(initialState)
+            EXPECT_EQ(compute->getBufferState(output), ResourceStates::ShaderResource);
+        compute->setBufferState(sharedInput, ResourceStates::ShaderResource);
+        compute->setBufferState(output, ResourceStates::UnorderedAccess);
+        compute->releaseBufferOwnership(output, RenderLane::Graphics);
+        compute->close(&computeToGraphics);
+        ASSERT_TRUE(computeToGraphics.valid());
+
+        QueueSubmissionDesc computeSubmitDesc;
+        if(initialWait.valid())
+            computeSubmitDesc.setWaitTokens(&initialWait, 1u);
+        CommandList* computeCommandLists[] = { compute.get() };
+        const QueueSubmissionToken computeToken = device.executeCommandLists(
+            computeCommandLists,
+            1u,
+            RenderLane::AsyncCompute,
+            computeSubmitDesc
+        );
+        ASSERT_TRUE(computeToken.valid());
+
+        graphics->open(&computeToGraphics);
+        EXPECT_EQ(graphics->getBufferState(output), ResourceStates::UnorderedAccess);
+        graphics->setBufferState(output, ResourceStates::ShaderResource);
+        graphics->releaseBufferOwnership(output, RenderLane::AsyncCompute);
+        graphics->close(&graphicsToCompute);
+        ASSERT_TRUE(graphicsToCompute.valid());
+
+        const QueueSubmissionDesc graphicsSubmitDesc = QueueSubmissionDesc().setWaitTokens(&computeToken, 1u);
+        CommandList* graphicsCommandLists[] = { graphics.get() };
+        const QueueSubmissionToken graphicsToken = device.executeCommandLists(
+            graphicsCommandLists,
+            1u,
+            RenderLane::Graphics,
+            graphicsSubmitDesc
+        );
+        ASSERT_TRUE(graphicsToken.valid());
+
+        computeReuse->open(&graphicsToCompute);
+        EXPECT_EQ(computeReuse->getBufferState(output), ResourceStates::ShaderResource);
+        computeReuse->setBufferState(output, ResourceStates::UnorderedAccess);
+        computeReuse->close();
+        const QueueSubmissionDesc reuseSubmitDesc = QueueSubmissionDesc().setWaitTokens(&graphicsToken, 1u);
+        CommandList* reuseCommandLists[] = { computeReuse.get() };
+        const QueueSubmissionToken reuseToken = device.executeCommandLists(
+            reuseCommandLists,
+            1u,
+            RenderLane::AsyncCompute,
+            reuseSubmitDesc
+        );
+        ASSERT_TRUE(reuseToken.valid());
+        ASSERT_TRUE(device.waitForIdle());
+    };
+
+    const FailurePoint failurePoints[] = {
+        FailurePoint::Prefix,
+        FailurePoint::Shadow,
+        FailurePoint::Effects,
+        FailurePoint::Final,
+        FailurePoint::Recovery,
+    };
+    for(const FailurePoint failurePoint : failurePoints){
+        SCOPED_TRACE(static_cast<u32>(failurePoint));
+        device.clearSubmissionRejectionsForTesting();
+
+        auto output = makeExclusiveBuffer();
+        auto sharedInput = makeSharedBuffer();
+        ASSERT_NE(output.get(), nullptr);
+        ASSERT_NE(sharedInput.get(), nullptr);
+
+        CommandListResourceStateHandoff computeToGraphics(asyncScope.arena());
+        CommandListResourceStateHandoff graphicsToCompute(asyncScope.arena());
+        auto prefix = device.createCommandList();
+        auto shadow = device.createCommandList(computeParams);
+        auto effects = device.createCommandList();
+        auto final = device.createCommandList();
+        ASSERT_NE(prefix.get(), nullptr);
+        ASSERT_NE(shadow.get(), nullptr);
+        ASSERT_NE(effects.get(), nullptr);
+        ASSERT_NE(final.get(), nullptr);
+
+        prefix->open();
+        prefix->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
+        prefix->close();
+        if(failurePoint == FailurePoint::Prefix)
+            device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+        CommandList* prefixCommandLists[] = { prefix.get() };
+        const QueueSubmissionToken prefixToken = device.executeCommandLists(
+            prefixCommandLists,
+            1u,
+            RenderLane::Graphics,
+            QueueSubmissionDesc{}
+        );
+        if(failurePoint == FailurePoint::Prefix){
+            EXPECT_FALSE(prefixToken.valid());
+            executeNextValidCycle(output.get(), sharedInput.get(), nullptr, {});
+            continue;
+        }
+        ASSERT_TRUE(prefixToken.valid());
+
+        shadow->open();
+        shadow->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
+        shadow->setBufferState(output.get(), ResourceStates::UnorderedAccess);
+        shadow->releaseBufferOwnership(output.get(), RenderLane::Graphics);
+        shadow->close(&computeToGraphics);
+        ASSERT_TRUE(computeToGraphics.valid());
+        if(failurePoint == FailurePoint::Shadow)
+            device.rejectNextSubmissionForTesting(CommandQueue::Compute);
+        const QueueSubmissionDesc shadowSubmitDesc = QueueSubmissionDesc().setWaitTokens(&prefixToken, 1u);
+        CommandList* shadowCommandLists[] = { shadow.get() };
+        const QueueSubmissionToken shadowToken = device.executeCommandLists(
+            shadowCommandLists,
+            1u,
+            RenderLane::AsyncCompute,
+            shadowSubmitDesc
+        );
+        if(failurePoint == FailurePoint::Shadow){
+            EXPECT_FALSE(shadowToken.valid());
+            executeNextValidCycle(output.get(), sharedInput.get(), nullptr, prefixToken);
+            continue;
+        }
+        ASSERT_TRUE(shadowToken.valid());
+
+        effects->open();
+        effects->setBufferState(sharedInput.get(), ResourceStates::ShaderResource);
+        effects->close();
+        if(failurePoint == FailurePoint::Effects || failurePoint == FailurePoint::Recovery)
+            device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+        if(failurePoint == FailurePoint::Recovery)
+            device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+        CommandList* effectsCommandLists[] = { effects.get() };
+        const QueueSubmissionToken effectsToken = device.executeCommandLists(
+            effectsCommandLists,
+            1u,
+            RenderLane::Graphics,
+            QueueSubmissionDesc{}
+        );
+        if(failurePoint == FailurePoint::Effects || failurePoint == FailurePoint::Recovery){
+            EXPECT_FALSE(effectsToken.valid());
+        }
+        else
+            ASSERT_TRUE(effectsToken.valid());
+
+        bool finalRejected = false;
+        if(failurePoint != FailurePoint::Effects && failurePoint != FailurePoint::Recovery){
+            final->open(&computeToGraphics);
+            EXPECT_EQ(final->getBufferState(output.get()), ResourceStates::UnorderedAccess);
+            final->setBufferState(output.get(), ResourceStates::ShaderResource);
+            final->releaseBufferOwnership(output.get(), RenderLane::AsyncCompute);
+            final->close(&graphicsToCompute);
+            ASSERT_TRUE(graphicsToCompute.valid());
+            if(failurePoint == FailurePoint::Final)
+                device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+            const QueueSubmissionToken finalWaitTokens[] = { shadowToken, effectsToken };
+            const QueueSubmissionDesc finalSubmitDesc = QueueSubmissionDesc().setWaitTokens(finalWaitTokens, 2u);
+            CommandList* finalCommandLists[] = { final.get() };
+            const QueueSubmissionToken finalToken = device.executeCommandLists(
+                finalCommandLists,
+                1u,
+                RenderLane::Graphics,
+                finalSubmitDesc
+            );
+            finalRejected = failurePoint == FailurePoint::Final;
+            if(finalRejected)
+                EXPECT_FALSE(finalToken.valid());
+            else
+                ASSERT_TRUE(finalToken.valid());
+
+            if(!finalRejected){
+                executeNextValidCycle(output.get(), sharedInput.get(), &graphicsToCompute, finalToken);
+                continue;
+            }
+        }
+
+        // Effects/final did not leave an accepted Graphics acquire, so return the accepted Compute release to its
+        // documented Compute owner. The second injected rejection covers the renderer's terminal recovery failure.
+        auto recovery = device.createCommandList();
+        ASSERT_NE(recovery.get(), nullptr);
+        recovery->open(&computeToGraphics);
+        EXPECT_EQ(recovery->getBufferState(output.get()), ResourceStates::UnorderedAccess);
+        recovery->setBufferState(output.get(), ResourceStates::ShaderResource);
+        recovery->releaseBufferOwnership(output.get(), RenderLane::AsyncCompute);
+        recovery->close(&graphicsToCompute);
+        ASSERT_TRUE(graphicsToCompute.valid());
+        const QueueSubmissionDesc recoverySubmitDesc = QueueSubmissionDesc().setWaitTokens(&shadowToken, 1u);
+        CommandList* recoveryCommandLists[] = { recovery.get() };
+        const QueueSubmissionToken recoveryToken = device.executeCommandLists(
+            recoveryCommandLists,
+            1u,
+            RenderLane::Graphics,
+            recoverySubmitDesc
+        );
+        if(failurePoint == FailurePoint::Recovery){
+            EXPECT_FALSE(recoveryToken.valid());
+            EXPECT_TRUE(device.waitForIdle());
+            continue;
+        }
+        ASSERT_TRUE(recoveryToken.valid());
+        executeNextValidCycle(output.get(), sharedInput.get(), &graphicsToCompute, recoveryToken);
+    }
+}
+
+#endif
+
+
+// A normalized prelude transitions shared inputs once before independently recorded primary command lists begin.
+// Each branch can therefore import the same ShaderResource state without emitting another stale RenderTarget ->
+// ShaderResource barrier. The fan-in preserves their disjoint output states for the later ordered consumer.
+TEST_F(DescriptorBufferRoundTripTest, NormalizedStatePreludeFansInIndependentBranches){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto sharedInput = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInRenderTarget(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    auto firstOutput = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    auto secondOutput = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(sharedInput.get(), nullptr);
+    ASSERT_NE(firstOutput.get(), nullptr);
+    ASSERT_NE(secondOutput.get(), nullptr);
+
+    CommandListResourceStateHandoff producerState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff normalizedState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff firstBranchState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff secondBranchState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff fanInState(DescriptorBufferRoundTripTest::arena());
+    auto producer = device.createCommandList();
+    auto prelude = device.createCommandList();
+    auto firstBranch = device.createCommandList();
+    auto secondBranch = device.createCommandList();
+    auto consumer = device.createCommandList();
+    ASSERT_NE(producer.get(), nullptr);
+    ASSERT_NE(prelude.get(), nullptr);
+    ASSERT_NE(firstBranch.get(), nullptr);
+    ASSERT_NE(secondBranch.get(), nullptr);
+    ASSERT_NE(consumer.get(), nullptr);
+
+    producer->open();
+    producer->setTextureState(sharedInput.get(), s_AllSubresources, ResourceStates::RenderTarget);
+    producer->close(&producerState);
+    ASSERT_TRUE(producerState.valid());
+
+    prelude->open(&producerState);
+    prelude->setTextureState(sharedInput.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    prelude->close(&normalizedState);
+    ASSERT_TRUE(normalizedState.valid());
+
+    Latch recordingStarted(2);
+    bool firstRecorded = false;
+    bool secondRecorded = false;
+    const Graphics::JobHandle firstJob = graphics.scheduleGraphicsJob([&](){
+        recordingStarted.count_down();
+        recordingStarted.wait();
+        firstBranch->open(&normalizedState);
+        firstBranch->setTextureState(sharedInput.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        firstBranch->setBufferState(firstOutput.get(), ResourceStates::UnorderedAccess);
+        firstBranch->close(&firstBranchState);
+        firstRecorded = firstBranchState.valid() && firstBranch->hasCommandBuffer();
+    });
+    const Graphics::JobHandle secondJob = graphics.scheduleGraphicsJob([&](){
+        recordingStarted.count_down();
+        recordingStarted.wait();
+        secondBranch->open(&normalizedState);
+        secondBranch->setTextureState(sharedInput.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        secondBranch->setBufferState(secondOutput.get(), ResourceStates::UnorderedAccess);
+        secondBranch->close(&secondBranchState);
+        secondRecorded = secondBranchState.valid() && secondBranch->hasCommandBuffer();
+    });
+    ASSERT_TRUE(firstJob.valid());
+    ASSERT_TRUE(secondJob.valid());
+
+    graphics.waitJob(firstJob);
+    graphics.waitJob(secondJob);
+    ASSERT_TRUE(firstRecorded);
+    ASSERT_TRUE(secondRecorded);
+
+    const CommandListResourceStateHandoff* branchStates[] = { &firstBranchState, &secondBranchState };
+    ASSERT_TRUE(fanInState.buildFanIn(normalizedState, branchStates, 2u));
+    ASSERT_TRUE(fanInState.valid());
+
+    consumer->open(&fanInState);
+    consumer->setTextureState(sharedInput.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    EXPECT_EQ(consumer->getBufferState(firstOutput.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(consumer->getBufferState(secondOutput.get()), ResourceStates::UnorderedAccess);
+    consumer->setBufferState(firstOutput.get(), ResourceStates::ShaderResource);
+    consumer->setBufferState(secondOutput.get(), ResourceStates::ShaderResource);
+    consumer->close();
+
+    CommandList* commandLists[] = {
+        producer.get(),
+        prelude.get(),
+        firstBranch.get(),
+        secondBranch.get(),
+        consumer.get()
+    };
+    bool submitted = false;
+    EXPECT_GT(device.executeCommandLists(commandLists, 5u, CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_TRUE(submitted);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Mirrors RendererSystem's split frame sequence: record mesh-view and scene-shading setup plus the non-CSG deferred
+// clear from the completed shadow-preparation snapshot, fan their disjoint outputs in for the opaque producer, then
+// normalize the G-buffer once. Shadow, caustics, surfel GI, and AVBOIT record from that same snapshot; their
+// four-way fan-in feeds compute lighting, then compute composite and the final Graphics presentation consumer.
+TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFanInThroughComputePresent){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const auto makeGbufferTarget = [&device](){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setFormat(Format::RGBA8_UNORM)
+                .setInRenderTarget(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const auto makeDepthTarget = [&device](){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setFormat(Format::D32)
+                .setInRenderTarget(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const auto makePacketOutput = [&device](){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setFormat(Format::RGBA8_UNORM)
+                .setInUAV(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const auto makeStorageTarget = [&device](){
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(4u)
+                .setHeight(4u)
+                .setFormat(Format::RGBA8_UNORM)
+                .setInUAV(true)
+                .setInitialState(ResourceStates::Common)
+                .setKeepInitialState(true)
+        );
+    };
+    const auto makeSetupBuffer = [&device](){
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+
+    auto meshViewBuffer = makeSetupBuffer();
+    auto sceneShadingBuffer = makeSetupBuffer();
+    auto lightBuffer = makeSetupBuffer();
+    auto slotsBuffer = makeSetupBuffer();
+    auto albedo = makeGbufferTarget();
+    auto worldPosition = makeGbufferTarget();
+    auto normal = makeGbufferTarget();
+    auto depth = makeDepthTarget();
+    auto shadowVisibility = makePacketOutput();
+    auto causticIrradiance = makePacketOutput();
+    auto surfelIrradiance = makePacketOutput();
+    auto opaqueColor = makeStorageTarget();
+    auto compositeColor = makeStorageTarget();
+    auto avboitAccumColor = makeGbufferTarget();
+    auto avboitAccumExtinction = makeGbufferTarget();
+    ASSERT_NE(meshViewBuffer.get(), nullptr);
+    ASSERT_NE(sceneShadingBuffer.get(), nullptr);
+    ASSERT_NE(lightBuffer.get(), nullptr);
+    ASSERT_NE(slotsBuffer.get(), nullptr);
+    ASSERT_NE(albedo.get(), nullptr);
+    ASSERT_NE(worldPosition.get(), nullptr);
+    ASSERT_NE(normal.get(), nullptr);
+    ASSERT_NE(depth.get(), nullptr);
+    ASSERT_NE(shadowVisibility.get(), nullptr);
+    ASSERT_NE(causticIrradiance.get(), nullptr);
+    ASSERT_NE(surfelIrradiance.get(), nullptr);
+    ASSERT_NE(opaqueColor.get(), nullptr);
+    ASSERT_NE(compositeColor.get(), nullptr);
+    ASSERT_NE(avboitAccumColor.get(), nullptr);
+    ASSERT_NE(avboitAccumExtinction.get(), nullptr);
+
+    CommandListResourceStateHandoff shadowPrepareState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff meshViewSetupState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff sceneShadingSetupState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredClearState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff frameSetupFanInState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff gbufferState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff normalizedState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff shadowState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff causticsState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff surfelGiState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff avboitState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredLightingBaseState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff shadowLightingState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff causticLightingState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff surfelLightingState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff avboitLightingState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredLightingInputState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredLightingState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff opaqueColorCompositeState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff avboitCompositeState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredCompositeBaseState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredCompositeInputState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredCompositeState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff compositeColorPresentState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredPresentBaseState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredPresentInputState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff deferredPresentState(DescriptorBufferRoundTripTest::arena());
+    auto shadowPrepare = device.createCommandList();
+    auto meshViewSetup = device.createCommandList();
+    auto sceneShadingSetup = device.createCommandList();
+    auto deferredClear = device.createCommandList();
+    auto gbuffer = device.createCommandList();
+    auto prelude = device.createCommandList();
+    auto shadow = device.createCommandList();
+    auto caustics = device.createCommandList();
+    auto surfelGi = device.createCommandList();
+    auto lighting = device.createCommandList();
+    auto avboit = device.createCommandList();
+    auto composite = device.createCommandList();
+    auto present = device.createCommandList();
+    ASSERT_NE(shadowPrepare.get(), nullptr);
+    ASSERT_NE(meshViewSetup.get(), nullptr);
+    ASSERT_NE(sceneShadingSetup.get(), nullptr);
+    ASSERT_NE(deferredClear.get(), nullptr);
+    ASSERT_NE(gbuffer.get(), nullptr);
+    ASSERT_NE(prelude.get(), nullptr);
+    ASSERT_NE(shadow.get(), nullptr);
+    ASSERT_NE(caustics.get(), nullptr);
+    ASSERT_NE(surfelGi.get(), nullptr);
+    ASSERT_NE(lighting.get(), nullptr);
+    ASSERT_NE(avboit.get(), nullptr);
+    ASSERT_NE(composite.get(), nullptr);
+    ASSERT_NE(present.get(), nullptr);
+
+    shadowPrepare->open();
+    shadowPrepare->setBufferState(slotsBuffer.get(), ResourceStates::CopyDest);
+    shadowPrepare->setBufferState(slotsBuffer.get(), ResourceStates::ConstantBuffer);
+    shadowPrepare->close(&shadowPrepareState);
+    ASSERT_TRUE(shadowPrepareState.valid());
+
+    CommandList* shadowPrepareCommandLists[] = { shadowPrepare.get() };
+    bool shadowPrepareSubmitted = false;
+    EXPECT_GT(device.executeCommandLists(shadowPrepareCommandLists, LengthOf(shadowPrepareCommandLists), CommandQueue::Graphics, &shadowPrepareSubmitted), 0u);
+    ASSERT_TRUE(shadowPrepareSubmitted);
+
+    Latch frameSetupRecordingStarted(2);
+    bool meshViewSetupRecorded = false;
+    bool sceneShadingSetupRecorded = false;
+    bool deferredClearRecorded = false;
+    const Graphics::JobHandle meshViewSetupJob = graphics.scheduleGraphicsJob([&](){
+        frameSetupRecordingStarted.count_down();
+        frameSetupRecordingStarted.wait();
+        meshViewSetup->open(&shadowPrepareState);
+        meshViewSetup->setBufferState(meshViewBuffer.get(), ResourceStates::CopyDest);
+        meshViewSetup->setBufferState(meshViewBuffer.get(), ResourceStates::ConstantBuffer);
+        meshViewSetup->close(&meshViewSetupState);
+        meshViewSetupRecorded = meshViewSetupState.valid() && meshViewSetup->hasCommandBuffer();
+    });
+    const Graphics::JobHandle sceneShadingSetupJob = graphics.scheduleGraphicsJob([&](){
+        frameSetupRecordingStarted.count_down();
+        frameSetupRecordingStarted.wait();
+        sceneShadingSetup->open(&shadowPrepareState);
+        sceneShadingSetup->setBufferState(sceneShadingBuffer.get(), ResourceStates::CopyDest);
+        sceneShadingSetup->setBufferState(sceneShadingBuffer.get(), ResourceStates::ConstantBuffer);
+        sceneShadingSetup->setBufferState(lightBuffer.get(), ResourceStates::CopyDest);
+        sceneShadingSetup->setBufferState(lightBuffer.get(), ResourceStates::ShaderResource);
+        sceneShadingSetup->close(&sceneShadingSetupState);
+        sceneShadingSetupRecorded = sceneShadingSetupState.valid() && sceneShadingSetup->hasCommandBuffer();
+    });
+    const Graphics::JobHandle deferredClearJob = graphics.scheduleGraphicsJob([&](){
+        deferredClear->open(&shadowPrepareState);
+        deferredClear->setTextureState(albedo.get(), s_AllSubresources, ResourceStates::CopyDest);
+        deferredClear->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::CopyDest);
+        deferredClear->setTextureState(normal.get(), s_AllSubresources, ResourceStates::CopyDest);
+        deferredClear->setTextureState(depth.get(), s_AllSubresources, ResourceStates::CopyDest);
+        deferredClear->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::CopyDest);
+        deferredClear->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::CopyDest);
+        deferredClear->close(&deferredClearState);
+        deferredClearRecorded = deferredClearState.valid() && deferredClear->hasCommandBuffer();
+    });
+    ASSERT_TRUE(meshViewSetupJob.valid());
+    ASSERT_TRUE(sceneShadingSetupJob.valid());
+    ASSERT_TRUE(deferredClearJob.valid());
+
+    graphics.waitJob(meshViewSetupJob);
+    graphics.waitJob(sceneShadingSetupJob);
+    graphics.waitJob(deferredClearJob);
+    ASSERT_TRUE(meshViewSetupRecorded);
+    ASSERT_TRUE(sceneShadingSetupRecorded);
+    ASSERT_TRUE(deferredClearRecorded);
+
+    const CommandListResourceStateHandoff* frameSetupBranchStates[] = {
+        &meshViewSetupState,
+        &sceneShadingSetupState,
+        &deferredClearState,
+    };
+    ASSERT_TRUE(frameSetupFanInState.buildFanIn(shadowPrepareState, frameSetupBranchStates, 3u));
+    ASSERT_TRUE(frameSetupFanInState.valid());
+
+    gbuffer->open(&frameSetupFanInState);
+    EXPECT_EQ(gbuffer->getBufferState(meshViewBuffer.get()), ResourceStates::ConstantBuffer);
+    EXPECT_EQ(gbuffer->getBufferState(sceneShadingBuffer.get()), ResourceStates::ConstantBuffer);
+    EXPECT_EQ(gbuffer->getBufferState(lightBuffer.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(gbuffer->getBufferState(slotsBuffer.get()), ResourceStates::ConstantBuffer);
+    EXPECT_EQ(gbuffer->getTextureSubresourceState(albedo.get(), 0u, 0u), ResourceStates::CopyDest);
+    EXPECT_EQ(gbuffer->getTextureSubresourceState(worldPosition.get(), 0u, 0u), ResourceStates::CopyDest);
+    EXPECT_EQ(gbuffer->getTextureSubresourceState(normal.get(), 0u, 0u), ResourceStates::CopyDest);
+    EXPECT_EQ(gbuffer->getTextureSubresourceState(depth.get(), 0u, 0u), ResourceStates::CopyDest);
+    EXPECT_EQ(gbuffer->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);
+    EXPECT_EQ(gbuffer->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::CopyDest);
+    gbuffer->setTextureState(albedo.get(), s_AllSubresources, ResourceStates::RenderTarget);
+    gbuffer->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::RenderTarget);
+    gbuffer->setTextureState(normal.get(), s_AllSubresources, ResourceStates::RenderTarget);
+    gbuffer->setTextureState(depth.get(), s_AllSubresources, ResourceStates::DepthWrite);
+    gbuffer->close(&gbufferState);
+    ASSERT_TRUE(gbufferState.valid());
+
+    prelude->open(&gbufferState);
+    prelude->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    prelude->setTextureState(normal.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    prelude->setTextureState(depth.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    prelude->close(&normalizedState);
+    ASSERT_TRUE(normalizedState.valid());
+
+    Latch recordingStarted(2);
+    bool shadowRecorded = false;
+    bool causticsRecorded = false;
+    bool surfelGiRecorded = false;
+    bool avboitRecorded = false;
+    const Graphics::JobHandle shadowJob = graphics.scheduleGraphicsJob([&](){
+        recordingStarted.count_down();
+        recordingStarted.wait();
+        shadow->open(&normalizedState);
+        shadow->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        shadow->setTextureState(normal.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        shadow->setTextureState(depth.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        shadow->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+        shadow->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        shadow->close(&shadowState);
+        shadowRecorded = shadowState.valid() && shadow->hasCommandBuffer();
+    });
+    const Graphics::JobHandle causticsJob = graphics.scheduleGraphicsJob([&](){
+        recordingStarted.count_down();
+        recordingStarted.wait();
+        caustics->open(&normalizedState);
+        caustics->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        caustics->setTextureState(depth.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        caustics->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+        caustics->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        caustics->close(&causticsState);
+        causticsRecorded = causticsState.valid() && caustics->hasCommandBuffer();
+    });
+    const Graphics::JobHandle surfelGiJob = graphics.scheduleGraphicsJob([&](){
+        surfelGi->open(&normalizedState);
+        surfelGi->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        surfelGi->setTextureState(normal.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        surfelGi->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+        surfelGi->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        surfelGi->close(&surfelGiState);
+        surfelGiRecorded = surfelGiState.valid() && surfelGi->hasCommandBuffer();
+    });
+    const Graphics::JobHandle avboitJob = graphics.scheduleGraphicsJob([&](){
+        avboit->open(&normalizedState);
+        // Transparent CSG temporarily binds the opaque G-buffer, then AVBOIT's accumulation path leaves depth in
+        // a depth-read layout. Restore the shared inputs before deferred lighting consumes the four-way fan-in.
+        avboit->setTextureState(normal.get(), s_AllSubresources, ResourceStates::RenderTarget);
+        avboit->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::RenderTarget);
+        avboit->setTextureState(depth.get(), s_AllSubresources, ResourceStates::DepthRead);
+        avboit->setTextureState(albedo.get(), s_AllSubresources, ResourceStates::RenderTarget);
+        avboit->setTextureState(normal.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        avboit->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        avboit->setTextureState(depth.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        avboit->setTextureState(avboitAccumColor.get(), s_AllSubresources, ResourceStates::RenderTarget);
+        avboit->setTextureState(avboitAccumExtinction.get(), s_AllSubresources, ResourceStates::RenderTarget);
+        avboit->close(&avboitState);
+        avboitRecorded = avboitState.valid() && avboit->hasCommandBuffer();
+    });
+    ASSERT_TRUE(shadowJob.valid());
+    ASSERT_TRUE(causticsJob.valid());
+    ASSERT_TRUE(surfelGiJob.valid());
+    ASSERT_TRUE(avboitJob.valid());
+
+    graphics.waitJob(shadowJob);
+    graphics.waitJob(causticsJob);
+    graphics.waitJob(surfelGiJob);
+    graphics.waitJob(avboitJob);
+    ASSERT_TRUE(shadowRecorded);
+    ASSERT_TRUE(causticsRecorded);
+    ASSERT_TRUE(surfelGiRecorded);
+    ASSERT_TRUE(avboitRecorded);
+
+    Texture* const deferredLightingBaseTextures[] = {
+        albedo.get(),
+        normal.get(),
+        worldPosition.get(),
+        depth.get(),
+        opaqueColor.get(),
+    };
+    Buffer* const deferredLightingBaseBuffers[] = {
+        sceneShadingBuffer.get(),
+        lightBuffer.get(),
+        slotsBuffer.get(),
+    };
+    ASSERT_TRUE(deferredLightingBaseState.buildResourceSubset(
+        normalizedState,
+        deferredLightingBaseTextures,
+        LengthOf(deferredLightingBaseTextures),
+        deferredLightingBaseBuffers,
+        LengthOf(deferredLightingBaseBuffers)
+    ));
+    ASSERT_TRUE(shadowLightingState.buildTextureSubset(shadowState, shadowVisibility.get()));
+    ASSERT_TRUE(causticLightingState.buildTextureSubset(causticsState, causticIrradiance.get()));
+    ASSERT_TRUE(surfelLightingState.buildTextureSubset(surfelGiState, surfelIrradiance.get()));
+    Texture* const avboitLightingTextures[] = {
+        albedo.get(),
+        normal.get(),
+        worldPosition.get(),
+        depth.get(),
+    };
+    ASSERT_TRUE(avboitLightingState.buildResourceSubset(
+        avboitState,
+        avboitLightingTextures,
+        LengthOf(avboitLightingTextures),
+        nullptr,
+        0u
+    ));
+    const CommandListResourceStateHandoff* deferredLightingBranchStates[] = {
+        &shadowLightingState,
+        &causticLightingState,
+        &surfelLightingState,
+        &avboitLightingState,
+    };
+    ASSERT_TRUE(deferredLightingInputState.buildFanIn(
+        deferredLightingBaseState,
+        deferredLightingBranchStates,
+        LengthOf(deferredLightingBranchStates)
+    ));
+
+    bool lightingInputsCorrect = false;
+    bool lightingRecorded = false;
+    const Graphics::JobHandle lightingJob = graphics.scheduleGraphicsJob([&](){
+        lighting->open(&deferredLightingInputState);
+        lightingInputsCorrect =
+            lighting->getBufferState(sceneShadingBuffer.get()) == ResourceStates::ConstantBuffer
+            && lighting->getBufferState(lightBuffer.get()) == ResourceStates::ShaderResource
+            && lighting->getBufferState(slotsBuffer.get()) == ResourceStates::ConstantBuffer
+        ;
+        lighting->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        lighting->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        lighting->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        lighting->setTextureState(albedo.get(), s_AllSubresources, ResourceStates::ShaderResource);
+        lighting->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+        lighting->close(&deferredLightingState);
+        lightingRecorded = deferredLightingState.valid() && lighting->hasCommandBuffer();
+    });
+    ASSERT_TRUE(lightingJob.valid());
+
+    graphics.waitJob(lightingJob);
+    ASSERT_TRUE(lightingInputsCorrect);
+    ASSERT_TRUE(lightingRecorded);
+
+    ASSERT_TRUE(opaqueColorCompositeState.buildTextureSubset(deferredLightingState, opaqueColor.get()));
+    Texture* const avboitCompositeTextures[] = {
+        avboitAccumColor.get(),
+        avboitAccumExtinction.get(),
+    };
+    ASSERT_TRUE(avboitCompositeState.buildResourceSubset(
+        avboitState,
+        avboitCompositeTextures,
+        LengthOf(avboitCompositeTextures),
+        nullptr,
+        0u
+    ));
+    Buffer* const deferredCompositeBaseBuffers[] = {
+        slotsBuffer.get(),
+    };
+    ASSERT_TRUE(deferredCompositeBaseState.buildResourceSubset(
+        deferredLightingBaseState,
+        nullptr,
+        0u,
+        deferredCompositeBaseBuffers,
+        LengthOf(deferredCompositeBaseBuffers)
+    ));
+    const CommandListResourceStateHandoff* deferredCompositeBranchStates[] = {
+        &opaqueColorCompositeState,
+        &avboitCompositeState,
+    };
+    ASSERT_TRUE(deferredCompositeInputState.buildFanIn(
+        deferredCompositeBaseState,
+        deferredCompositeBranchStates,
+        LengthOf(deferredCompositeBranchStates)
+    ));
+
+    composite->open(&deferredCompositeInputState);
+    EXPECT_EQ(composite->getBufferState(slotsBuffer.get()), ResourceStates::ConstantBuffer);
+    EXPECT_EQ(composite->getTextureSubresourceState(albedo.get(), 0u, 0u), ResourceStates::Unknown);
+    EXPECT_EQ(composite->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::Unknown);
+    EXPECT_EQ(composite->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);
+    EXPECT_EQ(composite->getTextureSubresourceState(avboitAccumColor.get(), 0u, 0u), ResourceStates::RenderTarget);
+    EXPECT_EQ(composite->getTextureSubresourceState(avboitAccumExtinction.get(), 0u, 0u), ResourceStates::RenderTarget);
+    composite->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    composite->setTextureState(avboitAccumColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    composite->setTextureState(avboitAccumExtinction.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    composite->setTextureState(compositeColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    composite->close(&deferredCompositeState);
+    ASSERT_TRUE(deferredCompositeState.valid());
+
+    ASSERT_TRUE(compositeColorPresentState.buildTextureSubset(deferredCompositeState, compositeColor.get()));
+    Buffer* const deferredPresentBaseBuffers[] = {
+        slotsBuffer.get(),
+    };
+    ASSERT_TRUE(deferredPresentBaseState.buildResourceSubset(
+        deferredCompositeBaseState,
+        nullptr,
+        0u,
+        deferredPresentBaseBuffers,
+        LengthOf(deferredPresentBaseBuffers)
+    ));
+    const CommandListResourceStateHandoff* deferredPresentBranchStates[] = { &compositeColorPresentState };
+    ASSERT_TRUE(deferredPresentInputState.buildFanIn(
+        deferredPresentBaseState,
+        deferredPresentBranchStates,
+        LengthOf(deferredPresentBranchStates)
+    ));
+
+    present->open(&deferredPresentInputState);
+    EXPECT_EQ(present->getBufferState(slotsBuffer.get()), ResourceStates::ConstantBuffer);
+    EXPECT_EQ(present->getTextureSubresourceState(compositeColor.get(), 0u, 0u), ResourceStates::Common);
+    // opaqueColor is deliberately absent from this handoff; its keepInitialState contract supplies Common locally.
+    EXPECT_EQ(present->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);
+    present->setTextureState(compositeColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    present->close(&deferredPresentState);
+    ASSERT_TRUE(deferredPresentState.valid());
+
+    CommandList* commandLists[] = {
+        meshViewSetup.get(),
+        sceneShadingSetup.get(),
+        deferredClear.get(),
+        gbuffer.get(),
+        prelude.get(),
+        shadow.get(),
+        caustics.get(),
+        surfelGi.get(),
+        avboit.get(),
+        lighting.get(),
+        composite.get(),
+        present.get(),
+    };
+    bool submitted = false;
+    EXPECT_GT(device.executeCommandLists(commandLists, LengthOf(commandLists), CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_TRUE(submitted);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Fan-in only accepts branch deltas that agree on every shared resource. A scheduler must split or serialize
+// conflicting packets instead of selecting one final layout arbitrarily.
+TEST_F(DescriptorBufferRoundTripTest, StateFanInRejectsConflictingBranchFinalStates){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto texture = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInRenderTarget(true)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(texture.get(), nullptr);
+
+    CommandListResourceStateHandoff baseState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff firstBranchState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff secondBranchState(DescriptorBufferRoundTripTest::arena());
+    CommandListResourceStateHandoff fanInState(DescriptorBufferRoundTripTest::arena());
+    auto base = device.createCommandList();
+    auto firstBranch = device.createCommandList();
+    auto secondBranch = device.createCommandList();
+    ASSERT_NE(base.get(), nullptr);
+    ASSERT_NE(firstBranch.get(), nullptr);
+    ASSERT_NE(secondBranch.get(), nullptr);
+
+    base->open();
+    base->setTextureState(texture.get(), s_AllSubresources, ResourceStates::RenderTarget);
+    base->close(&baseState);
+    ASSERT_TRUE(baseState.valid());
+
+    firstBranch->open(&baseState);
+    firstBranch->setTextureState(texture.get(), s_AllSubresources, ResourceStates::ShaderResource);
+    firstBranch->close(&firstBranchState);
+    ASSERT_TRUE(firstBranchState.valid());
+
+    secondBranch->open(&baseState);
+    secondBranch->setTextureState(texture.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
+    secondBranch->close(&secondBranchState);
+    ASSERT_TRUE(secondBranchState.valid());
+
+    const CommandListResourceStateHandoff* branchStates[] = { &firstBranchState, &secondBranchState };
+    EXPECT_FALSE(fanInState.buildFanIn(baseState, branchStates, 2u));
+    EXPECT_FALSE(fanInState.valid());
+}
+
+
+// Independent primary command lists use distinct Vulkan command pools. Start both recording jobs at the same latch
+// so this exercises the worker-thread path instead of merely submitting them in a fixed order on the main thread.
+TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcurrentlyOnGraphicsWorkers){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto firstBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    auto secondBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(firstBuffer.get(), nullptr);
+    ASSERT_NE(secondBuffer.get(), nullptr);
+
+    auto firstCommandList = device.createCommandList();
+    auto secondCommandList = device.createCommandList();
+    ASSERT_NE(firstCommandList.get(), nullptr);
+    ASSERT_NE(secondCommandList.get(), nullptr);
+
+    Latch recordingStarted(2);
+    bool firstRecorded = false;
+    bool secondRecorded = false;
+    const Graphics::JobHandle firstJob = graphics.scheduleGraphicsJob([&](){
+        recordingStarted.count_down();
+        recordingStarted.wait();
+        firstCommandList->open();
+        firstCommandList->setBufferState(firstBuffer.get(), ResourceStates::CopyDest);
+        firstCommandList->close();
+        firstRecorded = true;
+    });
+    const Graphics::JobHandle secondJob = graphics.scheduleGraphicsJob([&](){
+        recordingStarted.count_down();
+        recordingStarted.wait();
+        secondCommandList->open();
+        secondCommandList->setBufferState(secondBuffer.get(), ResourceStates::CopyDest);
+        secondCommandList->close();
+        secondRecorded = true;
+    });
+    ASSERT_TRUE(firstJob.valid());
+    ASSERT_TRUE(secondJob.valid());
+
+    graphics.waitJob(firstJob);
+    graphics.waitJob(secondJob);
+    EXPECT_TRUE(firstRecorded);
+    EXPECT_TRUE(secondRecorded);
+
+    CommandList* commandLists[] = { firstCommandList.get(), secondCommandList.get() };
+    bool submitted = false;
+    EXPECT_GT(device.executeCommandLists(commandLists, 2u, CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_TRUE(submitted);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Carve one storage-buffer descriptor out of the resource segment and confirm writeDescriptor succeeds via the
+// vkGetDescriptorEXT path. Free returns the range to the free list. Storage buffer is the descriptor class every
+// raytrace pass binds, so it is the most representative round trip.
+TEST_F(DescriptorBufferRoundTripTest, RoundTripsStorageBufferDescriptor){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& mgr = manager();
+
+    auto storageBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(4096u)
+            .setStructStride(16u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_NE(storageBuffer.get(), nullptr);
+
+    const u32 descriptorSize = mgr.getDescriptorSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+    ASSERT_GT(descriptorSize, 0u);
+
+    const auto segment = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, mgr.getOffsetAlignmentBytes());
+    ASSERT_TRUE(segment.valid());
+
+    // The authoritative round-trip signal is writeDescriptor's return: a failed vkGetDescriptorEXT returns false and
+    // logs at ERROR (the capturing logger would surface it). Byte-level inspection of the mapped segment is private
+    // to the manager; the conversion trusts the return value plus the non-zero-size gate below.
+    const DescriptorWriteItem item = DescriptorWriteItem::RawBuffer_UAV(0u, storageBuffer.get());
+    const bool wrote = mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+    EXPECT_TRUE(wrote);
+
+    mgr.free(segment);
+}
+
+
+// Uniform (constant) buffer descriptor: same carve/write/free shape, different VkDescriptorType arm. Ensures the
+// manager routes UNIFORM_BUFFER through VkDescriptorAddressInfoEXT (the non-texel buffer-info path).
+TEST_F(DescriptorBufferRoundTripTest, RoundTripsUniformBufferDescriptor){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& mgr = manager();
+
+    auto constantBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setIsConstantBuffer(true)
+            .setInitialState(ResourceStates::ConstantBuffer)
+            .setKeepInitialState(true)
+    );
+    ASSERT_NE(constantBuffer.get(), nullptr);
+
+    const u32 descriptorSize = mgr.getDescriptorSize(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    ASSERT_GT(descriptorSize, 0u);
+
+    const auto segment = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, mgr.getOffsetAlignmentBytes());
+    ASSERT_TRUE(segment.valid());
+
+    const DescriptorWriteItem item = DescriptorWriteItem::ConstantBuffer(0u, constantBuffer.get());
+    const bool wrote = mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    EXPECT_TRUE(wrote);
+
+    mgr.free(segment);
+}
+
+
+// Sampled-image descriptor: the Texture_SRV path, which routes through VkDescriptorImageInfo (image view + layout).
+// Together with storage/uniform buffers, this covers the descriptor classes the shadow/GI/caustics passes bind.
+TEST_F(DescriptorBufferRoundTripTest, RoundTripsSampledImageDescriptor){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& mgr = manager();
+
+    auto texture = device.createTexture(
+        TextureDesc()
+            .setWidth(64u)
+            .setHeight(64u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInitialState(ResourceStates::ShaderResource)
+            .setKeepInitialState(true)
+    );
+    ASSERT_NE(texture.get(), nullptr);
+
+    const u32 descriptorSize = mgr.getDescriptorSize(VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+    ASSERT_GT(descriptorSize, 0u);
+
+    const auto segment = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, mgr.getOffsetAlignmentBytes());
+    ASSERT_TRUE(segment.valid());
+
+    const DescriptorWriteItem item = DescriptorWriteItem::Texture_SRV(0u, texture.get());
+    const bool wrote = mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+    EXPECT_TRUE(wrote);
+
+    mgr.free(segment);
+}
+
+
+// Sampler descriptor: the one class that lives in the separate SAMPLER segment (RADV requires samplers in their own
+// descriptor buffer binding). Verifies the kind routing places the carve in the sampler segment, not the resource one.
+TEST_F(DescriptorBufferRoundTripTest, RoundTripsSamplerDescriptor){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& mgr = manager();
+
+    auto sampler = device.createSampler(SamplerDesc().setAllFilters(true));
+    ASSERT_NE(sampler.get(), nullptr);
+
+    const u32 descriptorSize = mgr.getDescriptorSize(VK_DESCRIPTOR_TYPE_SAMPLER);
+    ASSERT_GT(descriptorSize, 0u);
+
+    const auto segment = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Sampler, descriptorSize, mgr.getOffsetAlignmentBytes());
+    ASSERT_TRUE(segment.valid());
+    EXPECT_EQ(segment.kind, GraphicsBackend::DescriptorBufferSegmentKind::Sampler);
+
+    const DescriptorWriteItem item = DescriptorWriteItem::Sampler(0u, sampler.get());
+    const bool wrote = mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_SAMPLER);
+    EXPECT_TRUE(wrote);
+
+    mgr.free(segment);
+}
+
+
+// Free-list reuse: allocate a range, free it, allocate the same size again — the second carve must be satisfied from
+// the free list and succeed. This proves the sub-allocator remains safe under live allocate/free churn across frames.
+TEST_F(DescriptorBufferRoundTripTest, FreeListReusesFreedRange){
+    auto& mgr = manager();
+
+    const u32 descriptorSize = mgr.getDescriptorSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+    ASSERT_GT(descriptorSize, 0u);
+
+    const auto first = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, mgr.getOffsetAlignmentBytes());
+    ASSERT_TRUE(first.valid());
+
+    mgr.free(first);
+
+    const auto second = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, mgr.getOffsetAlignmentBytes());
+    ASSERT_TRUE(second.valid());
+    EXPECT_EQ(second.offsetBytes, first.offsetBytes);
+
+    mgr.free(second);
+}
+
+
+// Descriptor array elements advance by the driver-reported descriptor size. Every type the conversion routes through
+// writeDescriptor must report a non-zero size; a zero size would make allocation and writes reject the descriptor.
+TEST_F(DescriptorBufferRoundTripTest, EveryDescriptorTypeReportsNonZeroSize){
+    auto& mgr = manager();
+
+    static constexpr VkDescriptorType kTypes[] = {
+        VK_DESCRIPTOR_TYPE_SAMPLER,
+        VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+        VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
+        VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+        VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+    };
+
+    for(const VkDescriptorType type : kTypes){
+        EXPECT_GT(mgr.getDescriptorSize(type), 0u)
+            << "descriptor type " << static_cast<u32>(type) << " reported a zero size";
+    }
+}
+
+
+// Alignment: carve two adjacent ranges and confirm each block offset is descriptorBufferOffsetAlignment-aligned, and
+// the second does not overlap the first. That is the invariant vkCmdSetDescriptorBufferOffsetsEXT must honor.
+TEST_F(DescriptorBufferRoundTripTest, AllocationsAreDescriptorBufferOffsetAligned){
+    auto& mgr = manager();
+
+    const u32 descriptorSize = mgr.getDescriptorSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+    const u32 offsetAlignment = mgr.getOffsetAlignmentBytes();
+    ASSERT_GT(descriptorSize, 0u);
+    ASSERT_GT(offsetAlignment, 0u);
+
+    const auto a = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, offsetAlignment);
+    const auto b = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, offsetAlignment);
+    ASSERT_TRUE(a.valid());
+    ASSERT_TRUE(b.valid());
+
+    EXPECT_EQ(a.offsetBytes % offsetAlignment, 0u);
+    EXPECT_EQ(b.offsetBytes % offsetAlignment, 0u);
+    EXPECT_GE(b.offsetBytes, a.offsetBytes + a.sizeBytes);
+
+    mgr.free(a);
+    mgr.free(b);
+}
+
+
+// The manager's public byte-write entry point must not reinterpret a resource payload through the wrong
+// VkDescriptorDataEXT union arm, and allocation/free inputs must preserve the block-ownership invariant.
+TEST_F(DescriptorBufferRoundTripTest, ManagerRejectsMismatchedWritesAndInvalidBlocks){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& mgr = manager();
+
+    auto storageBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(4096u)
+            .setStructStride(16u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(storageBuffer);
+
+    const u32 descriptorSize = mgr.getDescriptorSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+    ASSERT_GT(descriptorSize, 0u);
+
+    // Invalid public descriptor-buffer operations are diagnostic contract failures in developer builds: the error
+    // logger deliberately raises a soft break after rejecting them. Exercise that policy in child processes so this
+    // suite can validate it without stopping the parent test run; final builds still verify the ordinary false return.
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        EXPECT_FALSE(mgr.allocate(
+            static_cast<GraphicsBackend::DescriptorBufferSegmentKind::Enum>(0xffu),
+            descriptorSize,
+            mgr.getOffsetAlignmentBytes()
+        ).valid());
+    }, "");
+    EXPECT_DEATH_IF_SUPPORTED({
+        EXPECT_FALSE(mgr.allocate(
+            GraphicsBackend::DescriptorBufferSegmentKind::Resource,
+            descriptorSize,
+            0u
+        ).valid());
+    }, "");
+#else
+    EXPECT_FALSE(mgr.allocate(
+        static_cast<GraphicsBackend::DescriptorBufferSegmentKind::Enum>(0xffu),
+        descriptorSize,
+        mgr.getOffsetAlignmentBytes()
+    ).valid());
+    EXPECT_FALSE(mgr.allocate(
+        GraphicsBackend::DescriptorBufferSegmentKind::Resource,
+        descriptorSize,
+        0u
+    ).valid());
+#endif
+
+    const auto segment = mgr.allocate(
+        GraphicsBackend::DescriptorBufferSegmentKind::Resource,
+        descriptorSize,
+        mgr.getOffsetAlignmentBytes()
+    );
+    ASSERT_TRUE(segment.valid());
+
+    const DescriptorWriteItem item = DescriptorWriteItem::RawBuffer_UAV(0u, storageBuffer.get());
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        EXPECT_FALSE(mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_SAMPLER));
+    }, "");
+#else
+    EXPECT_FALSE(mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_SAMPLER));
+#endif
+    EXPECT_TRUE(mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER));
+
+    mgr.free(segment);
+    // A duplicate free must be rejected instead of inserting a second copy of the range into the free list.
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        mgr.free(segment);
+    }, "");
+#else
+    mgr.free(segment);
+#endif
+
+    // Reusing the manager after a free gives the new owner a different allocation serial. A stale segment copy must
+    // not be allowed to write even if a future free-list allocation happens to recycle its byte range.
+    const auto replacement = mgr.allocate(
+        GraphicsBackend::DescriptorBufferSegmentKind::Resource,
+        descriptorSize,
+        mgr.getOffsetAlignmentBytes()
+    );
+    ASSERT_TRUE(replacement.valid());
+    EXPECT_NE(replacement.allocationSerial, segment.allocationSerial);
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        EXPECT_FALSE(mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER));
+    }, "");
+#else
+    EXPECT_FALSE(mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER));
+#endif
+    EXPECT_TRUE(mgr.writeDescriptor(item, replacement, replacement.offsetBytes, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER));
+    mgr.free(replacement);
+}
+
+
+// A sampler/resource mix is not segment-coherent. The renderer never falls back to ordinary descriptor sets, so
+// callers must split this shape into separate resource and sampler layouts.
+TEST_F(DescriptorBufferRoundTripTest, MixedDescriptorBufferLayoutIsRejected){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    BindlessLayoutDesc layoutDesc;
+    layoutDesc
+        .setLayoutType(BindlessLayoutType::Immutable)
+        .setMaxCapacity(1u)
+        .setDescriptorSetIndex(s_MaxBindingLayouts)
+        .setVisibility(ShaderType::Compute)
+        .addRegisterSpace(BindingLayoutItem::Texture_SRV(0u, 1u))
+        .addRegisterSpace(BindingLayoutItem::Sampler(1u, 1u))
+    ;
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        EXPECT_FALSE(device.createBindlessLayout(layoutDesc));
+    }, "");
+#else
+    auto layout = device.createBindlessLayout(layoutDesc);
+    EXPECT_FALSE(layout);
+#endif
+}
+
+
+// Heap slots are raw ABI values, so lifecycle bookkeeping must prevent a duplicate free from recycling the same raw
+// slot twice and must reject a write through a handle that is already in its deferred-free quarantine.
+TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetiredAndDoubleFreedHandles){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    GraphicsBackend::GpuDescriptorHeap heap(device);
+    GpuDescriptorHeapDesc heapDesc;
+    heapDesc
+        .setResourceCapacity(2u)
+        .setSamplerCapacity(1u)
+        .setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
+    ;
+    ASSERT_TRUE(heap.initialize(heapDesc));
+
+    auto storageBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(4096u)
+            .setStructStride(16u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(storageBuffer);
+
+    const GpuDescriptorHandle retired = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(retired.valid());
+    ASSERT_TRUE(heap.write(retired, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
+
+    heap.free(retired);
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        EXPECT_FALSE(heap.write(retired, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
+    }, "");
+    EXPECT_DEATH_IF_SUPPORTED({
+        heap.free(retired);
+    }, "");
+#else
+    EXPECT_FALSE(heap.write(retired, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
+    heap.free(retired);
+#endif
+
+    for(u32 frame = 0u; frame < 8u; ++frame)
+        heap.advanceFrame();
+
+    const GpuDescriptorHandle first = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    const GpuDescriptorHandle second = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(first.valid());
+    ASSERT_TRUE(second.valid());
+    EXPECT_NE(first, second);
+}
+
+
+// AVBOIT's material and compute passes share one push-only local layout. Their target-generation slot payload is a
+// global UniformBuffer descriptor, all work buffers are global StorageBuffer descriptors, and the writable
+// transmittance volume is a global StorageImage descriptor. Exercise the shared local shape and material heap
+// registrations together so a future pass-local CBV/buffer/image cannot silently reappear in the transparent path.
+TEST_F(DescriptorBufferRoundTripTest, AvboitSharedPushLayoutAndMaterialHeapResourcesBuildAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
+
+    static_assert(NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE == sizeof(u32) * 16u, "AVBOIT compute push ABI must remain four uint4 lanes");
+    static_assert(NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE == sizeof(u32) * 32u, "AVBOIT transparent draw ABI must remain 128 bytes");
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/avboit_depth_gate_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(64u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredUav = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 4096u)
+                .setStructStride(stride)
+                .setCanHaveUAVs(true)
+                .setInitialState(ResourceStates::UnorderedAccess)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto slots = makeConstantBuffer();
+    auto coverage = makeStructuredUav(4u);
+    auto depthWarp = makeStructuredUav(4u);
+    auto control = makeStructuredUav(4u);
+    auto extinction = makeStructuredUav(4u);
+    auto overflowDepth = makeStructuredUav(4u);
+    ASSERT_TRUE(slots && coverage && depthWarp && control && extinction && overflowDepth);
+
+    const GpuDescriptorHandle slotsHandle = heap.allocate(GpuDescriptorClass::UniformBuffer);
+    const GpuDescriptorHandle coverageHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    const GpuDescriptorHandle depthWarpHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    const GpuDescriptorHandle controlHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    const GpuDescriptorHandle extinctionHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    const GpuDescriptorHandle overflowDepthHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(
+        slotsHandle.valid()
+        && coverageHandle.valid()
+        && depthWarpHandle.valid()
+        && controlHandle.valid()
+        && extinctionHandle.valid()
+        && overflowDepthHandle.valid()
+    );
+    EXPECT_EQ(slotsHandle.descriptorClass(), GpuDescriptorClass::UniformBuffer);
+    EXPECT_EQ(coverageHandle.descriptorClass(), GpuDescriptorClass::StorageBuffer);
+    EXPECT_EQ(depthWarpHandle.descriptorClass(), GpuDescriptorClass::StorageBuffer);
+    EXPECT_EQ(controlHandle.descriptorClass(), GpuDescriptorClass::StorageBuffer);
+    EXPECT_EQ(extinctionHandle.descriptorClass(), GpuDescriptorClass::StorageBuffer);
+    EXPECT_EQ(overflowDepthHandle.descriptorClass(), GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(heap.write(slotsHandle, DescriptorWriteItem::ConstantBuffer(0u, slots.get())));
+    ASSERT_TRUE(heap.write(coverageHandle, DescriptorWriteItem::StructuredBuffer_UAV(0u, coverage.get())));
+    ASSERT_TRUE(heap.write(depthWarpHandle, DescriptorWriteItem::StructuredBuffer_UAV(0u, depthWarp.get())));
+    ASSERT_TRUE(heap.write(controlHandle, DescriptorWriteItem::StructuredBuffer_UAV(0u, control.get())));
+    ASSERT_TRUE(heap.write(extinctionHandle, DescriptorWriteItem::StructuredBuffer_UAV(0u, extinction.get())));
+    ASSERT_TRUE(heap.write(overflowDepthHandle, DescriptorWriteItem::StructuredBuffer_UAV(0u, overflowDepth.get())));
+
+    BindingLayoutDesc sharedLayoutDesc(descArena);
+    sharedLayoutDesc.setVisibility(ShaderType::All);
+    sharedLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE));
+    auto sharedLayout = device.createBindingLayout(sharedLayoutDesc);
+    ASSERT_NE(sharedLayout.get(), nullptr);
+    ASSERT_TRUE(sharedLayout->isDescriptorBufferCompatible());
+    EXPECT_EQ(sharedLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(sharedLayout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(sharedLayout->getDescriptorBufferBindingOffsets().empty());
+
+    EXPECT_TRUE(heap.getResourceLayout()->isDescriptorBufferCompatible());
+    EXPECT_TRUE(heap.getSamplerLayout()->isDescriptorBufferCompatible());
+
+    heap.free(slotsHandle);
+    heap.free(coverageHandle);
+    heap.free(depthWarpHandle);
+    heap.free(controlHandle);
+    heap.free(extinctionHandle);
+    heap.free(overflowDepthHandle);
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
+}
+
+
+// Both AVBOIT compute passes reuse the material path's shared 128-byte push-only layout. Depth warp selects
+// coverage/depth-warp/control through the global StorageBuffer heap, while integration selects its writable Texture3D
+// plus every source buffer through the same target-generation payload and global heap.
+TEST_F(DescriptorBufferRoundTripTest, AvboitComputeResourcesUseSharedPushLayout){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/avboit_compute_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto transmittance = device.createTexture(
+        TextureDesc()
+            .setWidth(16u)
+            .setHeight(16u)
+            .setDepth(4u)
+            .setDimension(TextureDimension::Texture3D)
+            .setFormat(NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::UnorderedAccess)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(transmittance);
+
+    const GpuDescriptorHandle transmittanceStorageHandle = heap.allocate(GpuDescriptorClass::StorageImage);
+    ASSERT_TRUE(transmittanceStorageHandle.valid());
+    EXPECT_EQ(transmittanceStorageHandle.descriptorClass(), GpuDescriptorClass::StorageImage);
+    ASSERT_TRUE(heap.write(transmittanceStorageHandle, DescriptorWriteItem::Texture_UAV(
+        0u,
+        transmittance.get(),
+        NWB_AVBOIT_TRANSMITTANCE_CORE_FORMAT,
+        TextureSubresourceSet(0u, 1u, 0u, 1u),
+        TextureDimension::Texture3D
+    )));
+
+    EXPECT_LE(NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE, NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE);
+    BindingLayoutDesc sharedLayoutDesc(descArena);
+    sharedLayoutDesc.setVisibility(ShaderType::All);
+    sharedLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, NWB_AVBOIT_DRAW_PUSH_CONSTANT_BYTE_SIZE));
+    auto sharedLayout = device.createBindingLayout(sharedLayoutDesc);
+    ASSERT_NE(sharedLayout.get(), nullptr);
+    ASSERT_TRUE(sharedLayout->isDescriptorBufferCompatible());
+    EXPECT_EQ(sharedLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(sharedLayout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(sharedLayout->getDescriptorBufferBindingOffsets().empty());
+
+    EXPECT_TRUE(heap.getResourceLayout()->isDescriptorBufferCompatible());
+    EXPECT_TRUE(heap.getSamplerLayout()->isDescriptorBufferCompatible());
+
+    heap.free(transmittanceStorageHandle);
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
+}
+
+
+// CSG's clip, cap-fill, and interval dispatch inputs all live in the global descriptor heap. The clip/cap-fill leaf
+// retains the shared 64-byte mesh push ABI, while each interval kernel uses its 48-byte dispatch selector ABI. Keep
+// both local layouts descriptor-free and prove the corresponding UniformBuffer/StorageBuffer heap writes separately.
+TEST_F(DescriptorBufferRoundTripTest, CsgMaterialTailShapesBuildAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/csg_material_tail_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(64u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredSrv = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 64u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setKeepInitialState(true)
+        );
+    };
+    auto receiverRanges = makeStructuredSrv(96u);
+    auto cutters = makeStructuredSrv(112u);
+    auto materialTyped = makeStructuredSrv(4u);
+    auto instances = makeStructuredSrv(64u);
+    auto clipContextSlots = makeConstantBuffer();
+    auto bindlessSlots = makeConstantBuffer();
+    auto sampleState = makeConstantBuffer();
+    auto meshView = makeConstantBuffer();
+    ASSERT_TRUE(
+        receiverRanges && cutters && materialTyped && instances && clipContextSlots && bindlessSlots && sampleState && meshView
+    );
+
+    const auto verifyPushOnlyLayout = [&](const char* name, const ShaderType::Mask visibility, const u32 pushConstantByteSize) {
+        SCOPED_TRACE(name);
+        BindingLayoutDesc layoutDesc(descArena);
+        layoutDesc.setVisibility(visibility);
+        layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, pushConstantByteSize));
+
+        auto layout = device.createBindingLayout(layoutDesc);
+        ASSERT_NE(layout.get(), nullptr);
+        ASSERT_TRUE(layout->isDescriptorBufferCompatible());
+        EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+        EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+        EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+    };
+    verifyPushOnlyLayout("clip/cap-fill", ShaderType::Mesh | ShaderType::Compute | ShaderType::Pixel, sizeof(u32) * 16u);
+    verifyPushOnlyLayout("interval dispatch", ShaderType::Compute, sizeof(u32) * 12u);
+
+    // The CSG shader aliases its uint/float Texture2DArray views onto the existing StorageImage heap binding. Prove
+    // the live heap accepts a typed array UAV descriptor there; the graphics cook verifies each Slang alias emitted
+    // against this same set-8 binding.
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
+    const auto registerCsgUniformBuffer = [&](Core::Buffer* buffer) {
+        const GpuDescriptorHandle handle = heap.allocate(GpuDescriptorClass::UniformBuffer);
+        EXPECT_TRUE(handle.valid());
+        if(handle.valid())
+            EXPECT_TRUE(heap.write(handle, DescriptorWriteItem::ConstantBuffer(0u, buffer)));
+        return handle;
+    };
+    const GpuDescriptorHandle clipContextHandle = registerCsgUniformBuffer(clipContextSlots.get());
+    const GpuDescriptorHandle bindlessSlotsHandle = registerCsgUniformBuffer(bindlessSlots.get());
+    const GpuDescriptorHandle sampleStateHandle = registerCsgUniformBuffer(sampleState.get());
+    const GpuDescriptorHandle meshViewHandle = registerCsgUniformBuffer(meshView.get());
+    auto csgStorageImage = device.createTexture(
+        TextureDesc()
+            .setWidth(16u)
+            .setHeight(16u)
+            .setArraySize(3u)
+            .setDimension(TextureDimension::Texture2DArray)
+            .setFormat(Format::RGBA32_UINT)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::UnorderedAccess)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(csgStorageImage);
+    const GpuDescriptorHandle csgStorageHandle = heap.allocate(GpuDescriptorClass::StorageImage);
+    ASSERT_TRUE(csgStorageHandle.valid());
+    EXPECT_TRUE(heap.write(
+        csgStorageHandle,
+        DescriptorWriteItem::Texture_UAV(
+            0u,
+            csgStorageImage.get(),
+            Format::RGBA32_UINT,
+            TextureSubresourceSet(0u, 1u, 0u, 3u),
+            TextureDimension::Texture2DArray
+        )
+    ));
+
+    // CSG's receiver/cutter buffers and the cap-fill material/instance inputs are each persistent StorageBuffer heap
+    // entries. The local clip layout above deliberately has no SRVs for them, so prove all four descriptor writes use
+    // the same global table instead.
+    const auto registerCsgContextBuffer = [&](Core::Buffer* buffer) {
+        const GpuDescriptorHandle handle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+        EXPECT_TRUE(handle.valid());
+        if(handle.valid())
+            EXPECT_TRUE(heap.write(handle, DescriptorWriteItem::StructuredBuffer_SRV(0u, buffer)));
+        return handle;
+    };
+    const GpuDescriptorHandle receiverRangeHandle = registerCsgContextBuffer(receiverRanges.get());
+    const GpuDescriptorHandle cutterHandle = registerCsgContextBuffer(cutters.get());
+    const GpuDescriptorHandle materialTypedHandle = registerCsgContextBuffer(materialTyped.get());
+    const GpuDescriptorHandle instanceHandle = registerCsgContextBuffer(instances.get());
+
+    if(clipContextHandle.valid())
+        heap.free(clipContextHandle);
+    if(bindlessSlotsHandle.valid())
+        heap.free(bindlessSlotsHandle);
+    if(sampleStateHandle.valid())
+        heap.free(sampleStateHandle);
+    if(meshViewHandle.valid())
+        heap.free(meshViewHandle);
+    heap.free(csgStorageHandle);
+    if(receiverRangeHandle.valid())
+        heap.free(receiverRangeHandle);
+    if(cutterHandle.valid())
+        heap.free(cutterHandle);
+    if(materialTypedHandle.valid())
+        heap.free(materialTypedHandle);
+    if(instanceHandle.valid())
+        heap.free(instanceHandle);
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
+}
+
+
+// Caustic resolve selects every sampled input and its writable output from the global descriptor heap. Its set 0 ABI
+// is therefore only the 14-word selector push block; a future local image or buffer must make this proof fail.
+TEST_F(DescriptorBufferRoundTripTest, CausticResolveShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    // A short-lived arena for the layout desc (it copies its bindings into object-arena storage on creation).
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/caustic_shape_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    // CausticResolvePushConstants is 14 scalar words in the C++/Slang ABI.
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "caustic resolve push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+}
+
+
+// Caustic geometry downsample reads its G-buffer inputs and writes its half-res geometry cache through global heap
+// slots. Its local ABI is only the eight-word selector push block.
+TEST_F(DescriptorBufferRoundTripTest, CausticGeometryDownsampleShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/caustic_geom_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    // CausticGeometryDownsamplePushConstants is eight scalar words in the C++/Slang ABI.
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 8u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "caustic geometry downsample push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Caustic accumulator decay selects its writable R32_UINT Texture2DArray from the global StorageImage heap. Its local
+// ABI is only the four-word push block.
+TEST_F(DescriptorBufferRoundTripTest, CausticAccumulatorDecayShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/caustic_decay_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    // CausticAccumulatorDecayPushConstants is four scalar words in the C++/Slang ABI.
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 4u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "caustic accumulator decay push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Both caustic photon producers fetch every selector, input, and accumulator output from the global descriptor heap.
+// Their identical local set ABI is only the shared 15-word photon push block; the fixed global-heap TLAS remains
+// outside set 0.
+TEST_F(DescriptorBufferRoundTripTest, CausticPhotonProducerShapesBuildAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/caustic_photon_producer_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    // CausticPhotonPushConstants is 15 scalar words and byte-identical for the SW and HW producers.
+    BindingLayoutDesc swLayoutDesc(descArena);
+    swLayoutDesc.setVisibility(ShaderType::Compute);
+    swLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 15u));
+
+    auto swLayout = device.createBindingLayout(swLayoutDesc);
+    ASSERT_NE(swLayout.get(), nullptr);
+    ASSERT_TRUE(swLayout->isDescriptorBufferCompatible())
+        << "caustic SW photon push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(swLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(swLayout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(swLayout->getDescriptorBufferBindingOffsets().empty());
+
+    // Descriptor layout compatibility is independent of shader stage, so Compute makes this HW local-shape proof
+    // runnable on descriptor-buffer-only test devices.
+    BindingLayoutDesc hwLayoutDesc(descArena);
+    hwLayoutDesc.setVisibility(ShaderType::Compute);
+    hwLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 15u));
+
+    auto hwLayout = device.createBindingLayout(hwLayoutDesc);
+    ASSERT_NE(hwLayout.get(), nullptr);
+    ASSERT_TRUE(hwLayout->isDescriptorBufferCompatible())
+        << "caustic HW photon push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(hwLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(hwLayout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(hwLayout->getDescriptorBufferBindingOffsets().empty());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Both surfel-GI trace backends select their target-generation, material-context, surfel, and scene data through the
+// global descriptor heap. Their pipeline-local layout is therefore only the shared 14-u32 selector push range.
+TEST_F(DescriptorBufferRoundTripTest, SurfelTraceShapesBuildAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/surfel_trace_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredSrv = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 256u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredUav = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 256u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::UnorderedAccess)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto bindlessResources = makeConstantBuffer();
+    auto materialContextSlots = makeConstantBuffer();
+    auto surfelConstants = makeConstantBuffer();
+    auto pool = makeStructuredUav(96u);
+    auto snapshotPool = makeStructuredSrv(96u);
+    auto snapshotCellHead = makeStructuredSrv(4u);
+    ASSERT_TRUE(
+        bindlessResources && materialContextSlots && surfelConstants && pool && snapshotPool && snapshotCellHead
+    );
+
+    // SW trace carries no local CBV/SRV/UAV entries.
+    BindingLayoutDesc swLayoutDesc(descArena);
+    swLayoutDesc.setVisibility(ShaderType::Compute);
+    swLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
+
+    auto swLayout = device.createBindingLayout(swLayoutDesc);
+    ASSERT_NE(swLayout.get(), nullptr);
+    ASSERT_TRUE(swLayout->isDescriptorBufferCompatible())
+        << "surfel SW trace shape did not route to the descriptor-buffer path";
+    EXPECT_TRUE(swLayout->getDescriptorBufferBindingOffsets().empty());
+
+    // HW trace differs only by its global TLAS heap layout; its local leaf is identical.
+    BindingLayoutDesc hwLayoutDesc(descArena);
+    hwLayoutDesc.setVisibility(ShaderType::Compute);
+    hwLayoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
+
+    auto hwLayout = device.createBindingLayout(hwLayoutDesc);
+    ASSERT_NE(hwLayout.get(), nullptr);
+    ASSERT_TRUE(hwLayout->isDescriptorBufferCompatible())
+        << "surfel HW trace shape did not route to the descriptor-buffer path";
+    EXPECT_TRUE(hwLayout->getDescriptorBufferBindingOffsets().empty());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Surfel upsample selects its half irradiance, G-buffer inputs, and storage output through the descriptor heap. Its
+// local layout must remain a 14-u32 push-only selector block.
+TEST_F(DescriptorBufferRoundTripTest, SurfelUpsampleShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/surfel_upsample_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeUavTexture = [&](const u32 w, const u32 h) {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(w).setHeight(h)
+                .setFormat(Format::RGBA16_FLOAT)
+                .setInitialState(ResourceStates::UnorderedAccess)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto output = makeUavTexture(32u, 32u);
+    ASSERT_TRUE(output);
+
+    // The local ABI carries no UAVs; the output uses the storage-image heap.
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "surfel upsample shape did not route to the descriptor-buffer path";
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+}
+
+
+// Hash-build's constants, pool, and cell-head are all persistent heap descriptors. Its local layout contains only the
+// shared selector push range.
+TEST_F(DescriptorBufferRoundTripTest, SurfelHashBuildShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/surfel_hash_build_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredUav = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 4096u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto constants = makeConstantBuffer();
+    auto pool = makeStructuredUav(16u);
+    auto cellHead = makeStructuredUav(4u);
+    ASSERT_TRUE(constants && pool && cellHead);
+
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "surfel hash-build shape did not route to the descriptor-buffer path";
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(DescriptorBufferRoundTripTest, SurfelAgeFreeShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/surfel_age_free_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredUav = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 4096u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto constants = makeConstantBuffer();
+    auto pool = makeStructuredUav(16u);
+    auto counter = makeStructuredUav(4u);
+    auto freeList = makeStructuredUav(4u);
+    ASSERT_TRUE(constants && pool && counter && freeList);
+
+    // Constants, pool, counter, and free-list are selected by the shared heap-slot block.
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "surfel age-free shape did not route to the descriptor-buffer path";
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TEST_F(DescriptorBufferRoundTripTest, SurfelTraceBuildArgsShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/surfel_trace_buildargs_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredUav = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 4096u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto constants = makeConstantBuffer();
+    auto counter = makeStructuredUav(4u);
+    auto args = makeStructuredUav(4u);
+    ASSERT_TRUE(constants && counter && args);
+
+    // Constants, counter, and indirect-argument output are heap descriptors.
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "surfel trace build-args shape did not route to the descriptor-buffer path";
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+}
+
+
+// Surfel spawn selects both G-buffer inputs and all persistent surfel buffers through the descriptor heap. The local
+// layout is only the common selector block.
+TEST_F(DescriptorBufferRoundTripTest, SurfelSpawnShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/surfel_spawn_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredUav = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 4096u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::Common)
+                .setKeepInitialState(true)
+        );
+    };
+    auto constants = makeConstantBuffer();
+    auto pool = makeStructuredUav(16u);
+    auto cellHead = makeStructuredUav(4u);
+    auto counter = makeStructuredUav(4u);
+    auto freeList = makeStructuredUav(4u);
+    ASSERT_TRUE(constants && pool && cellHead && counter && freeList);
+
+    // No local persistent-buffer descriptors remain.
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "surfel spawn shape did not route to the descriptor-buffer path";
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+}
+
+
+// Surfel resolve gathers persistent heap buffers and writes its half-resolution output through the storage-image heap.
+// Its local layout is the same 14-u32 selector block as every other surfel pass.
+TEST_F(DescriptorBufferRoundTripTest, SurfelResolveShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/surfel_resolve_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeConstantBuffer = [&]() {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(256u)
+                .setIsConstantBuffer(true)
+                .setInitialState(ResourceStates::ConstantBuffer)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeStructuredSrv = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 4096u)
+                .setStructStride(stride)
+                .setCanHaveRawViews(true)
+                .setInitialState(ResourceStates::ShaderResource)
+                .setKeepInitialState(true)
+        );
+    };
+    auto makeUavTexture = [&](const u32 w, const u32 h) {
+        return device.createTexture(
+            TextureDesc()
+                .setWidth(w).setHeight(h)
+                .setFormat(Format::RGBA16_FLOAT)
+                .setInitialState(ResourceStates::UnorderedAccess)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto constants = makeConstantBuffer();
+    auto pool = makeStructuredSrv(16u);
+    auto cellHead = makeStructuredSrv(4u);
+    auto output = makeUavTexture(32u, 32u);
+    ASSERT_TRUE(constants && pool && cellHead && output);
+
+    // No local CBV/SRV/UAV entries remain.
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 14u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "surfel resolve shape did not route to the descriptor-buffer path";
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+}
+
+
+// BVH bitonic-sort parity: its keys and payload are global StorageBuffer-heap entries selected by the push block.
+// The pipeline-local leaf therefore has no resource entries or descriptor object; it must stay descriptor-buffer-compatible
+// alongside the heap's persistent resource/sampler layouts.
+TEST_F(DescriptorBufferRoundTripTest, BvhSortPushOnlyHeapLayoutBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/bvh_sort_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 8u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "bvh sort push-only layout did not route to the descriptor-buffer path";
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+    EXPECT_TRUE(heap.getResourceLayout()->isDescriptorBufferCompatible());
+    EXPECT_TRUE(heap.getSamplerLayout()->isDescriptorBufferCompatible());
+}
+
+
+// BVH LBVH-build parity: all five scratch/work buffers are heap registrations. The local leaf only
+// carries the expanded push constants; heap writes retain each concrete buffer until deferred free retires its slot.
+TEST_F(DescriptorBufferRoundTripTest, BvhBuildPushOnlyHeapLayoutRegistersScratchBuffers){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/bvh_build_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto makeStructuredUav = [&](const u32 stride) {
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(stride * 4096u)
+                .setStructStride(stride)
+                .setCanHaveUAVs(true)
+                .setInitialState(ResourceStates::Common)
+                .setKeepInitialState(true)
+        );
+    };
+
+    auto buildKeys = makeStructuredUav(4u);
+    auto buildPayload = makeStructuredUav(4u);
+    auto nodes = makeStructuredUav(64u);
+    auto parent = makeStructuredUav(4u);
+    auto visitCounter = makeStructuredUav(4u);
+    ASSERT_TRUE(buildKeys && buildPayload && nodes && parent && visitCounter);
+
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 12u + sizeof(Float4) * 2u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "bvh build push-only layout did not route to the descriptor-buffer path";
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+
+    Core::Buffer* buffers[] = {
+        buildKeys.get(),
+        buildPayload.get(),
+        nodes.get(),
+        parent.get(),
+        visitCounter.get(),
+    };
+    Vector<GpuDescriptorHandle, Alloc::GlobalArena> handles(descArena);
+    for(Core::Buffer* buffer : buffers){
+        const GpuDescriptorHandle handle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+        ASSERT_TRUE(handle.valid());
+        ASSERT_TRUE(heap.write(handle, DescriptorWriteItem::StructuredBuffer_UAV(0u, buffer)));
+        EXPECT_EQ(handle.descriptorClass(), GpuDescriptorClass::StorageBuffer);
+        handles.push_back(handle);
+    }
+    for(const GpuDescriptorHandle handle : handles)
+        heap.free(handle);
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
+}
+
+
+// Shadow geometry-downsample reads its G-buffer inputs, scene payload, and output through the global heap. The local
+// leaf is therefore only the ten-word selector push ABI.
+TEST_F(DescriptorBufferRoundTripTest, ShadowGeometryDownsampleShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/shadow_geom_downsample_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 10u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "shadow geometry downsample push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+}
+
+
+// The SVGF a-trous resolve (and its RGB variant) selects every input, output, and scene payload from the global heap.
+// Its local leaf is the 21-word selector push ABI.
+TEST_F(DescriptorBufferRoundTripTest, ShadowResolveShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/shadow_resolve_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 21u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "shadow resolve push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+}
+
+
+// Shadow reproject-merge selects its temporal images and geometry from the global heap. Its local leaf retains the
+// 128-byte matrix-plus-selector push ABI only.
+TEST_F(DescriptorBufferRoundTripTest, ShadowReprojectMergeShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/shadow_reproject_merge_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 32u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "shadow reproject-merge push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+}
+
+
+// The HW hard and soft inline-RayQuery passes select their TLAS, G-buffer inputs, and visibility outputs from the
+// global heap. They differ only in their six-word hard and nine-word soft push selector ABIs.
+TEST_F(DescriptorBufferRoundTripTest, ShadowRtTraceShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/shadow_rt_trace_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    struct RayQueryShape{
+        const char* name = nullptr;
+        u32 pushConstantWordCount = 0u;
+    };
+    const RayQueryShape shapes[] = {
+        { "hard", 6u },
+        { "soft", 9u },
+    };
+    for(const RayQueryShape& shape : shapes){
+        SCOPED_TRACE(shape.name);
+        BindingLayoutDesc layoutDesc(descArena);
+        layoutDesc.setVisibility(ShaderType::Compute);
+        layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * shape.pushConstantWordCount));
+
+        auto layout = device.createBindingLayout(layoutDesc);
+        ASSERT_NE(layout.get(), nullptr);
+        ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+            << "shadow RT " << shape.name << " push-only shape did not route to the descriptor-buffer path";
+        EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+        EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+        EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+    }
+}
+
+
+// All nine software-shadow kernels share one 21-word selector push ABI. Their G-buffer, context, output, scratch,
+// and indirect resources are global-heap entries, leaving no local descriptor bindings.
+TEST_F(DescriptorBufferRoundTripTest, SwShadowTraceShapeBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/sw_shadow_trace_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    BindingLayoutDesc layoutDesc(descArena);
+    layoutDesc.setVisibility(ShaderType::Compute);
+    layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, sizeof(u32) * 21u));
+
+    auto layout = device.createBindingLayout(layoutDesc);
+    ASSERT_NE(layout.get(), nullptr);
+    ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+        << "SW shadow push-only shape did not route to the descriptor-buffer path";
+    EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+    EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+}
+
+
+// Skinned-mesh compute resolves every persistent stream and its per-runtime selector payload through the global heap.
+// Its three local leaves therefore retain only their dispatch push blocks. Verify those push-only layouts and their
+// composition with the global resource/sampler heap layouts.
+TEST_F(DescriptorBufferRoundTripTest, SkinnedMeshComputeShapesBuildAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/skinned_mesh_compute_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    struct ComputeShape{
+        const char* name = nullptr;
+        u32 pushConstantByteSize = 0u;
+    };
+    const ComputeShape shapes[] = {
+        { "skinning", NWB_SKINNED_MESH_PUSH_CONSTANT_BYTE_SIZE },
+        { "bounds", NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE },
+        { "repack", NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE },
+    };
+
+    for(const ComputeShape& shape : shapes){
+        SCOPED_TRACE(shape.name);
+
+        BindingLayoutDesc layoutDesc(descArena);
+        layoutDesc
+            .setVisibility(ShaderType::Compute)
+        ;
+        layoutDesc.addItem(BindingLayoutItem::PushConstants(0u, shape.pushConstantByteSize));
+
+        auto layout = device.createBindingLayout(layoutDesc);
+        ASSERT_NE(layout.get(), nullptr);
+        ASSERT_TRUE(layout->isDescriptorBufferCompatible())
+            << shape.name << " push-only layout did not route to the descriptor-buffer path";
+        EXPECT_EQ(layout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::None);
+        EXPECT_EQ(layout->getDescriptorBufferSetSizeBytes(), 0u);
+        EXPECT_TRUE(layout->getDescriptorBufferBindingOffsets().empty());
+
+        // This is the exact three-layout composition used by each production skinned compute pipeline: its local
+        // slot-CB set followed by the fixed resource/sampler heap sets. No shader is needed to validate descriptor
+        // layout composition, and creating this descriptor keeps the test headless and independent of cooked assets.
+        ComputePipelineDesc pipelineDesc;
+        pipelineDesc
+            .addBindingLayout(layout)
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+        ;
+        ASSERT_EQ(pipelineDesc.bindingLayouts.size(), 3u);
+        EXPECT_EQ(pipelineDesc.bindingLayouts[0].get(), layout.get());
+        EXPECT_EQ(pipelineDesc.bindingLayouts[1].get(), heap.getResourceLayout().get());
+        EXPECT_EQ(pipelineDesc.bindingLayouts[2].get(), heap.getSamplerLayout().get());
+    }
+}
+
+
+// Global-heap proof: the GpuDescriptorHeap requires the descriptor-buffer backend where the device advertises
+// VK_EXT_descriptor_buffer. Unlike the per-pass shape tests above (which exercise push-only pipeline layouts), this proves
+// the heap itself -- a persistent, per-slot-writable structure -- (1) selected the required backend, (2) built descriptor-buffer-
+// compatible bindless layouts at sets 8/9, (3) carved two persistent blocks from its segments, and (4)
+// routes write() through the descriptor-buffer path. This is the prerequisite the five heap-coupled tail pipelines
+// (surfel SW/HW trace, caustic SW/HW, SW shadow) embed, so their opt-in is only valid when these hold.
+TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRequiresDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized()) << "device-owned GpuDescriptorHeap was not initialized";
+
+    // Initialization proves the required descriptor-buffer path: no ordinary descriptor-set heap implementation exists.
+
+    // The heap's two bindless layouts must be descriptor-buffer-compatible so a pipeline that embeds them at sets 8/9
+    // passes the all-compatible wholesale-conversion gate. Each is pure-class by construction (resource / sampler).
+    const auto* resourceLayout = heap.getResourceLayout().get();
+    const auto* samplerLayout = heap.getSamplerLayout().get();
+    ASSERT_NE(resourceLayout, nullptr);
+    ASSERT_NE(samplerLayout, nullptr);
+    EXPECT_TRUE(resourceLayout->isDescriptorBufferCompatible())
+        << "heap resource bindless layout is not descriptor-buffer-compatible";
+    EXPECT_TRUE(samplerLayout->isDescriptorBufferCompatible())
+        << "heap sampler bindless layout is not descriptor-buffer-compatible";
+
+    // Each layout reports a non-zero driver-queried set size and resolves to its expected segment (resource set ->
+    // Resource segment, sampler set -> Sampler segment), the carve input for the persistent heap blocks.
+    EXPECT_GT(resourceLayout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(resourceLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    EXPECT_GT(samplerLayout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_EQ(samplerLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Sampler);
+
+    // The two persistent heap blocks were carved once at init and live for the heap's lifetime; their offsets are what
+    // vkCmdSetDescriptorBufferOffsetsEXT binds at sets 8/9. A zero/invalid block would mean no carve happened.
+    const auto& resourceBlock = heap.getResourceBufferBlock();
+    const auto& samplerBlock = heap.getSamplerBufferBlock();
+    EXPECT_TRUE(resourceBlock.valid())
+        << "heap resource descriptor-buffer block was not carved";
+    EXPECT_TRUE(samplerBlock.valid())
+        << "heap sampler descriptor-buffer block was not carved";
+
+    // write() must route through the descriptor-buffer path: allocate a slot in the StorageBuffer class
+    // and write a structured buffer into it. The write lands in the resource block at
+    // block.offsetBytes + classBindingOffset + slot*descriptorSize; success proves the carve + class-offset cache +
+    // write path.
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/heap_write_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    auto structuredBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(16u * 4096u)
+            .setStructStride(16u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(structuredBuffer);
+
+    const GpuDescriptorHandle handle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(handle.valid());
+    EXPECT_TRUE(heap.write(handle, DescriptorWriteItem::StructuredBuffer_SRV(0u, structuredBuffer.get())))
+        << "heap write() did not route through the descriptor-buffer path";
+
+    heap.free(handle);
+
+    // Deferred lighting consumes its per-light shadow visibility as Texture2DArray while ordinary G-buffer and
+    // compositor inputs remain Texture2D. Both use VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, but the shader types differ,
+    // so this distinct heap class/binding must have a valid descriptor-buffer write path as well.
+    auto sampledImageArray = device.createTexture(
+        TextureDesc()
+            .setWidth(32u)
+            .setHeight(32u)
+            .setArraySize(3u)
+            .setDimension(TextureDimension::Texture2DArray)
+            .setFormat(Format::RGBA16_FLOAT)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(sampledImageArray);
+    EXPECT_EQ(sampledImageArray->getReferenceCount(), 1u);
+
+    EXPECT_EQ(
+        heap.getRegisterSlot(GpuDescriptorClass::SampledImage2DArray),
+        NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY
+    );
+    const GpuDescriptorHandle sampledImageArrayHandle = heap.allocate(GpuDescriptorClass::SampledImage2DArray);
+    ASSERT_TRUE(sampledImageArrayHandle.valid());
+    EXPECT_TRUE(heap.write(
+        sampledImageArrayHandle,
+        DescriptorWriteItem::Texture_SRV(
+            0u,
+            sampledImageArray.get(),
+            Format::RGBA16_FLOAT,
+            TextureSubresourceSet(0u, 1u, 0u, 3u),
+            TextureDimension::Texture2DArray
+        )
+    )) << "heap Texture2DArray write() did not route through the descriptor-buffer path";
+    EXPECT_EQ(sampledImageArray->getReferenceCount(), 2u)
+        << "heap write() did not retain the persistent Texture2DArray resource";
+
+    heap.free(sampledImageArrayHandle);
+    EXPECT_EQ(sampledImageArray->getReferenceCount(), 2u)
+        << "heap free() released a descriptor resource before its in-flight quarantine matured";
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
+    EXPECT_EQ(sampledImageArray->getReferenceCount(), 1u)
+        << "heap did not release the descriptor resource after its in-flight quarantine matured";
+
+    // The caustic resolve reads its R32_UINT fixed-point accumulator through a dedicated typed uint Texture2DArray
+    // descriptor table. Its image-view format differs from the floating-point array above, so verify the distinct
+    // descriptor-buffer class/binding's write and resource-retention path too.
+    auto sampledImageArrayUint = device.createTexture(
+        TextureDesc()
+            .setWidth(32u)
+            .setHeight(32u)
+            .setArraySize(3u)
+            .setDimension(TextureDimension::Texture2DArray)
+            .setFormat(Format::R32_UINT)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(sampledImageArrayUint);
+    EXPECT_EQ(sampledImageArrayUint->getReferenceCount(), 1u);
+
+    EXPECT_EQ(
+        heap.getRegisterSlot(GpuDescriptorClass::SampledImage2DArrayUint),
+        NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY_UINT
+    );
+    const GpuDescriptorHandle sampledImageArrayUintHandle = heap.allocate(GpuDescriptorClass::SampledImage2DArrayUint);
+    ASSERT_TRUE(sampledImageArrayUintHandle.valid());
+    EXPECT_TRUE(heap.write(
+        sampledImageArrayUintHandle,
+        DescriptorWriteItem::Texture_SRV(
+            0u,
+            sampledImageArrayUint.get(),
+            Format::R32_UINT,
+            TextureSubresourceSet(0u, 1u, 0u, 3u),
+            TextureDimension::Texture2DArray
+        )
+    )) << "heap R32_UINT Texture2DArray write() did not route through the descriptor-buffer path";
+    EXPECT_EQ(sampledImageArrayUint->getReferenceCount(), 2u)
+        << "heap write() did not retain the typed Texture2DArray resource";
+
+    heap.free(sampledImageArrayUintHandle);
+    EXPECT_EQ(sampledImageArrayUint->getReferenceCount(), 2u)
+        << "heap free() released the typed descriptor resource before its in-flight quarantine matured";
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
+    EXPECT_EQ(sampledImageArrayUint->getReferenceCount(), 1u)
+        << "heap did not release the typed Texture2DArray resource after its in-flight quarantine matured";
+
+    // AVBOIT accumulation consumes its integrated transmittance as Texture3D. This needs a separate shader-side
+    // descriptor array from Texture2D/Texture2DArray even though all three encode VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE.
+    // Verify the new class routes through the descriptor-buffer path and retains the volume through the same in-flight quarantine.
+    auto sampledImage3D = device.createTexture(
+        TextureDesc()
+            .setWidth(32u)
+            .setHeight(32u)
+            .setDepth(8u)
+            .setDimension(TextureDimension::Texture3D)
+            .setFormat(Format::RGBA16_FLOAT)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(sampledImage3D);
+    EXPECT_EQ(sampledImage3D->getReferenceCount(), 1u);
+
+    EXPECT_EQ(
+        heap.getRegisterSlot(GpuDescriptorClass::SampledImage3D),
+        NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_3D
+    );
+    const GpuDescriptorHandle sampledImage3DHandle = heap.allocate(GpuDescriptorClass::SampledImage3D);
+    ASSERT_TRUE(sampledImage3DHandle.valid());
+    EXPECT_TRUE(heap.write(
+        sampledImage3DHandle,
+        DescriptorWriteItem::Texture_SRV(
+            0u,
+            sampledImage3D.get(),
+            Format::RGBA16_FLOAT,
+            TextureSubresourceSet(0u, 1u, 0u, 1u),
+            TextureDimension::Texture3D
+        )
+    )) << "heap Texture3D write() did not route through the descriptor-buffer path";
+    EXPECT_EQ(sampledImage3D->getReferenceCount(), 2u)
+        << "heap write() did not retain the persistent Texture3D resource";
+
+    heap.free(sampledImage3DHandle);
+    EXPECT_EQ(sampledImage3D->getReferenceCount(), 2u)
+        << "heap free() released the Texture3D resource before its in-flight quarantine matured";
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
+    EXPECT_EQ(sampledImage3D->getReferenceCount(), 1u)
+        << "heap did not release the Texture3D resource after its in-flight quarantine matured";
+
+    // TextureCube has a distinct image-view type from the other sampled-image arrays. The heap therefore gives it
+    // its own appended ABI binding/class instead of exposing a cube through the Texture2D table.
+    auto sampledImageCube = device.createTexture(
+        TextureDesc()
+            .setWidth(32u)
+            .setHeight(32u)
+            .setArraySize(6u)
+            .setDimension(TextureDimension::TextureCube)
+            .setFormat(Format::RGBA16_FLOAT)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(sampledImageCube);
+    EXPECT_EQ(sampledImageCube->getReferenceCount(), 1u);
+
+    EXPECT_EQ(
+        heap.getRegisterSlot(GpuDescriptorClass::SampledImageCube),
+        NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_CUBE
+    );
+    const GpuDescriptorHandle sampledImageCubeHandle = heap.allocate(GpuDescriptorClass::SampledImageCube);
+    ASSERT_TRUE(sampledImageCubeHandle.valid());
+    EXPECT_TRUE(heap.write(
+        sampledImageCubeHandle,
+        DescriptorWriteItem::Texture_SRV(
+            0u,
+            sampledImageCube.get(),
+            Format::RGBA16_FLOAT,
+            TextureSubresourceSet(0u, 1u, 0u, 6u),
+            TextureDimension::TextureCube
+        )
+    )) << "heap TextureCube write() did not route through the descriptor-buffer path";
+    EXPECT_EQ(sampledImageCube->getReferenceCount(), 2u)
+        << "heap write() did not retain the persistent TextureCube resource";
+
+    heap.free(sampledImageCubeHandle);
+    EXPECT_EQ(sampledImageCube->getReferenceCount(), 2u)
+        << "heap free() released the TextureCube resource before its in-flight quarantine matured";
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
+    EXPECT_EQ(sampledImageCube->getReferenceCount(), 1u)
+        << "heap did not release the TextureCube resource after its in-flight quarantine matured";
+}
+
+
+// A ray-tracing-capable device must expose the global TLAS through the required immutable descriptor-heap layout.
+// The renderer no longer has a supported local TLAS path, so a device that exposes RT but fails to create set 10
+// is a contract failure rather than a reason to skip the HW trace paths.
+TEST_F(DescriptorBufferRoundTripTest, RayTracingHeapRequiresDescriptorBufferTlasLayout){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
+
+    if(!device.queryFeatureSupport(Feature::RayTracingAccelStruct))
+        GTEST_SKIP() << "Ray tracing acceleration structures are not enabled on this device.";
+
+    ASSERT_TRUE(heap.hasAccelStructLayout())
+        << "ray-tracing-capable device has no required descriptor-buffer TLAS layout";
+    const auto* const tlasLayout = heap.getAccelStructLayout().get();
+    ASSERT_NE(tlasLayout, nullptr);
+    EXPECT_EQ(heap.getAccelStructSetIndex(), NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET);
+    EXPECT_TRUE(tlasLayout->isDescriptorBufferCompatible());
+    ASSERT_NE(tlasLayout->getBindlessDesc(), nullptr);
+    EXPECT_EQ(tlasLayout->getBindlessDesc()->layoutType, BindlessLayoutType::Immutable);
+    EXPECT_EQ(tlasLayout->getBindlessDesc()->maxCapacity, 1u);
+    EXPECT_EQ(tlasLayout->getDescriptorBufferSegmentKind(), GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    EXPECT_GT(tlasLayout->getDescriptorBufferSetSizeBytes(), 0u);
+    EXPECT_NE(
+        tlasLayout->getDescriptorBufferBindingOffsets().find(NWB_BINDLESS_HEAP_BINDING_ACCEL_STRUCT),
+        tlasLayout->getDescriptorBufferBindingOffsets().end()
+    );
+}
+
+
+// The descriptor-buffer TLAS surface is deliberately an immutable one-descriptor global-heap layout rather than an
+// mutable descriptor array: an AccelStruct handle selects its own carved block, letting a replacement TLAS coexist
+// with the block referenced by an in-flight frame. Exercise the actual heap write path rather than a standalone descriptor object on
+// RT-capable devices.
+TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapWritesImmutableTlasBlock){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
+    if(!device.queryFeatureSupport(Feature::RayTracingAccelStruct))
+        GTEST_SKIP() << "Ray tracing acceleration structures are not enabled on this device.";
+    ASSERT_TRUE(heap.hasAccelStructLayout())
+        << "ray-tracing-capable device has no required descriptor-buffer TLAS layout";
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/heap_tlas_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    RayTracingAccelStructDesc tlasDesc(descArena);
+    tlasDesc.setTopLevelMaxInstances(8u);
+    tlasDesc.setDebugName(Name{"tests/descriptor_buffer/heap_tlas"});
+    auto tlas = device.createAccelStruct(tlasDesc);
+    ASSERT_NE(tlas.get(), nullptr);
+
+    const GpuDescriptorHandle handle = heap.allocate(GpuDescriptorClass::AccelStruct);
+    ASSERT_TRUE(handle.valid());
+    ASSERT_TRUE(heap.write(handle, DescriptorWriteItem::RayTracingAccelStruct(0u, tlas.get())));
+
+    const auto block = heap.getAccelStructBufferBlock(handle);
+    EXPECT_TRUE(block.valid());
+    EXPECT_EQ(block.kind, GraphicsBackend::DescriptorBufferSegmentKind::Resource);
+    EXPECT_GT(block.sizeBytes, 0u);
+
+    heap.free(handle);
+    // The production heap intentionally quarantines handles for the in-flight-frame window. This headless test has
+    // no submitted work, so advance the synthetic frame counter to retire the block and its retained TLAS before the
+    // device fixture tears down.
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
+}
+
+
+// ImGui's leaf set contains only the 32-byte per-draw push block (scale/translate plus sampled-image and sampler
+// slots). The font atlas and dynamic ImTextureData images use the global SampledImage/Sampler tables, so this shape
+// must remain descriptor-buffer compatible with both heap layouts.
+TEST_F(DescriptorBufferRoundTripTest, ImguiHeapTextureAndSamplerLayoutBuildsAsDescriptorBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& heap = device.getDescriptorHeap();
+    ASSERT_TRUE(heap.isInitialized());
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/imgui_heap_desc_arena"};
+    static constexpr u32 kImguiPushConstantBytes = sizeof(f32) * 4u + sizeof(u32) * 4u;
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    // The production leaf has no descriptors at set 0. A zero-binding layout is the descriptor-buffer-compatible
+    // gap form; the persistent pure resource/sampler heap tables occupy sets 8/9.
+    BindingLayoutDesc leafDesc(descArena);
+    leafDesc.setVisibility(ShaderType::AllGraphics);
+    leafDesc.addItem(BindingLayoutItem::PushConstants(0u, kImguiPushConstantBytes));
+    auto leafLayout = device.createBindingLayout(leafDesc);
+    ASSERT_NE(leafLayout.get(), nullptr);
+    EXPECT_TRUE(leafLayout->isDescriptorBufferCompatible())
+        << "ImGui push-only leaf layout did not route to the descriptor-buffer path";
+    EXPECT_TRUE(heap.getResourceLayout()->isDescriptorBufferCompatible());
+    EXPECT_TRUE(heap.getSamplerLayout()->isDescriptorBufferCompatible());
+
+    auto texture = device.createTexture(
+        TextureDesc()
+            .setWidth(32u)
+            .setHeight(32u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInitialState(ResourceStates::ShaderResource)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(texture);
+
+    SamplerDesc samplerDesc;
+    samplerDesc.setAllFilters(true).setAllAddressModes(SamplerAddressMode::Clamp);
+    auto sampler = device.createSampler(samplerDesc);
+    ASSERT_TRUE(sampler);
+
+    EXPECT_EQ(heap.getRegisterSlot(GpuDescriptorClass::SampledImage), NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE);
+    EXPECT_EQ(heap.getRegisterSlot(GpuDescriptorClass::Sampler), NWB_BINDLESS_HEAP_BINDING_SAMPLER);
+    const GpuDescriptorHandle textureHandle = heap.allocate(GpuDescriptorClass::SampledImage);
+    const GpuDescriptorHandle samplerHandle = heap.allocate(GpuDescriptorClass::Sampler);
+    ASSERT_TRUE(textureHandle.valid());
+    ASSERT_TRUE(samplerHandle.valid());
+    EXPECT_TRUE(heap.write(
+        textureHandle,
+        DescriptorWriteItem::Texture_SRV(0u, texture.get(), Format::RGBA8_UNORM, s_AllSubresources, TextureDimension::Texture2D)
+    ));
+    EXPECT_TRUE(heap.write(samplerHandle, DescriptorWriteItem::Sampler(0u, sampler.get())));
+
+    // Free mirrors ImGui texture destruction: deferred retirement keeps both resources alive until recorded UI draws
+    // have drained, even though the owning ImTextureData resource may be erased immediately.
+    heap.free(textureHandle);
+    heap.free(samplerHandle);
+    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
+        heap.advanceFrame();
+}
+
+
+// The global heap is the only resource-bearing descriptor transport. A pipeline-local BindingLayout may carry push
+// constants, but creating a local CBV/SRV leaf must fail instead of recreating a local resource descriptor path.
+TEST_F(DescriptorBufferRoundTripTest, PipelineLocalResourceLayoutsAreRejected){
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    static constexpr Name kDescArenaName{"tests/descriptor_buffer/local_resource_layout_rejected_desc_arena"};
+    Alloc::GlobalArena descArena{kDescArenaName};
+
+    BindingLayoutDesc leafDesc(descArena);
+    leafDesc.setVisibility(ShaderType::Compute);
+    leafDesc.addItem(BindingLayoutItem::ConstantBuffer(0u, 1u));
+    leafDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(1u, 1u));
+    leafDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(2u, 1u));
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        EXPECT_FALSE(device.createBindingLayout(leafDesc));
+    }, "");
+#else
+    auto leafLayout = device.createBindingLayout(leafDesc);
+    EXPECT_FALSE(leafLayout);
+#endif
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+}; // namespace Tests
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

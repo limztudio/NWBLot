@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 
-SMOKE_DIRECTORY = Path(__file__).resolve().parent
+SMOKE_DIRECTORY = Path(__file__).resolve().parents[2] / "smoke"
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 
 import testbed_window_capture_smoke as window_capture_smoke  # noqa: E402

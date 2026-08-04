@@ -1,13 +1,12 @@
-#!/usr/bin/env python3
-import os
 import argparse
-from pathlib import Path
+import os
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 
 import launcher

@@ -3,11 +3,14 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import re
 import sys
+from pathlib import Path
 
 from return_value_handling import blank_non_code
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 
 SOURCE_SUFFIXES = frozenset((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".ixx"))
@@ -51,7 +54,7 @@ def main() -> int:
     if len(sys.argv) == 2 and sys.argv[1] == "--self-test":
         return run_self_test()
 
-    source_root = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else Path(__file__).resolve().parents[1]
+    source_root = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else REPOSITORY_ROOT
     violations: list[str] = []
     for path in source_files(source_root):
         source = path.read_text(encoding="utf-8", errors="replace")

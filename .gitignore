@@ -411,8 +411,10 @@ FodyWeavers.xsd
 # Claude Code local session data (memory, transcripts, settings) — local tooling, not part of the project.
 .claude/
 
-# A/B validation capture artifacts: generated screenshots and diff images from the tests/ab/
-# harness. The Python/shell harness scripts and expected-value .txt files there stay tracked;
-# only the generated image outputs are ignored.
+# A/B validation capture artifacts: generated screenshots, diff images, and ephemeral telemetry
+# from the tests/ab/ harness. Python/shell harness scripts and intentional expected-value .txt
+# files stay tracked; only the generated paths below are ignored.
 tests/ab/**/*.bmp
 tests/ab/**/*.png
+# The former hardware-temporal caustic capture has no harness; its timing dumps are generated output.
+tests/ab/caustic_hw_temporal_ab/timing_*.txt

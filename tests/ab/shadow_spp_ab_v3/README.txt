@@ -70,8 +70,10 @@ TRUSTED CONCLUSION
 
 FILES
 -----
-  timing_spp1.txt / timing_spp2.txt / timing_spp4.txt   raw NWB_GPU_TIMING_FILE dumps.
-  spp1_stdout.log / spp2_stdout.log / spp4_stdout.log   app stdout (empty: GUI, logs go to logserver).
+  .cozter/out/ab-results/shadow_spp_ab_v3/timing_spp{1,2,4}.txt
+                                                        raw NWB_GPU_TIMING_FILE dumps (local only).
+  .cozter/out/ab-results/shadow_spp_ab_v3/spp{1,2,4}_stdout.log
+                                                        app stdout (empty: GUI, logs go to logserver; local only).
   capture.sh                                            namesym-domain GPU-timing capture harness.
   screenshot.py                                         ctypes X11 screenshot (LinuxX11Capture from the repo).
   cook_and_shot.py                                      recook-a-given-SPP-then-screenshot driver.

@@ -3,6 +3,7 @@
 # namesym logserver, port selection, process cleanup, and bounded run.
 #
 # Usage: capture.sh <duration_sec> <timing_file_out> [stdout_file]
+# Omitted output paths default to the local .cozter/out/ab-results/ archive.
 # All output paths are made absolute.
 set -euo pipefail
 
@@ -11,10 +12,11 @@ readonly REPO="$(cd -- "$SCRIPT_DIR/../../.." && pwd -P)"
 # The SPP experiment recooks the full-domain runtime, while the namesym executable/logserver
 # retain readable timing scope names. Keep that deliberate cross-domain working directory.
 readonly RUNTIME="$REPO/__cmake/build/linux-clang-x64/Testing/skinning_culling_benchmark_runtime/opt"
+readonly RESULTS_DIR="$REPO/.cozter/out/ab-results/shadow_spp_ab_v3"
 
 DURATION="${1:-90}"
-TIMING_OUT_RAW="${2:-/tmp/timing.txt}"
-STDOUT_OUT_RAW="${3:-/tmp/app_stdout.log}"
+TIMING_OUT_RAW="${2:-$RESULTS_DIR/timing.txt}"
+STDOUT_OUT_RAW="${3:-$RESULTS_DIR/app_stdout.log}"
 
 absolute_output_path(){
     local path="$1"

@@ -65,7 +65,8 @@ for ~0.25 ms/frame per sample.
 
 FILES
 -----
-  timing_spp1.txt / timing_spp4.txt   raw NWB_GPU_TIMING_FILE dumps (readable-scope opt).
+  .cozter/out/ab-results/shadow_spp_ab_v2/timing_spp1.txt / timing_spp4.txt
+                                      raw NWB_GPU_TIMING_FILE dumps (local, readable-scope opt).
   decode_readable_timing.py           decoder for readable-scope opt timing files.
   ../shadow_spp_ab/                   v1 (confounded, focus-stall) -- kept for the method note.
   ../shadow_spp_ab/README.txt         v1 README documenting why v1 was untrustworthy.

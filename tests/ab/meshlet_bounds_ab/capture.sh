@@ -4,15 +4,17 @@
 # run; this wrapper only selects the runtime whose recook should be measured.
 #
 # Usage: capture.sh <duration_sec> <timing_file_out> [stdout_file]
+# Omitted output paths default to the local .cozter/out/ab-results/ archive.
 set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 readonly REPO="$(cd -- "$SCRIPT_DIR/../../.." && pwd -P)"
 readonly RUNTIME="$REPO/__cmake/build/linux-clang-namesym-x64/Testing/skinning_culling_benchmark_runtime/opt"
+readonly RESULTS_DIR="$REPO/.cozter/out/ab-results/meshlet_bounds_ab"
 
 DURATION="${1:-90}"
-TIMING_OUT_RAW="${2:-/tmp/timing.txt}"
-STDOUT_OUT_RAW="${3:-/tmp/app_stdout.log}"
+TIMING_OUT_RAW="${2:-$RESULTS_DIR/timing.txt}"
+STDOUT_OUT_RAW="${3:-$RESULTS_DIR/app_stdout.log}"
 
 absolute_output_path(){
     local path="$1"

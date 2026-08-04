@@ -33,6 +33,7 @@ CAPTURE  : tests/ab/shadow_spp_ab_v3/capture.sh (direct binary, namesym logserve
            READABLE scope names, NWB_RENDER_UNFOCUSED=1, NWB_GPU_TIMING_FILE, ~90s,
            0.5s report interval). baseline=143 intervals (frame in 100%), wave=133
            intervals (frame in 100%). Clean captures, no focus-stall.
+RAW FILES: local only at .cozter/out/ab-results/wave_ab/{baseline,wave}_timing.txt.
 
 RAW NONZERO-MEDIAN (ms)   -- median is the agreed sparse-comparison statistic
                                 baseline          wave             delta_ms   delta_%

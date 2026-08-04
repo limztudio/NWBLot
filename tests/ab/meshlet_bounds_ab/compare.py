@@ -5,10 +5,14 @@
 #
 # Statistic = nonzero-median (the agreed sparse-comparison statistic; see
 # tests/ab/wave_ab/README.txt and tests/ab/shadow_spp_ab_v3/README.txt).
-import sys, re, statistics
+import re
+import statistics
+from pathlib import Path
 
-BASELINE = "baseline_timing.txt"
-WAVE     = "wave_timing.txt"
+REPO = Path(__file__).resolve().parents[3]
+RESULTS_DIR = REPO / ".cozter/out/ab-results/meshlet_bounds_ab"
+BASELINE = RESULTS_DIR / "baseline_timing.txt"
+WAVE = RESULTS_DIR / "wave_timing.txt"
 
 # Scopes to report. mesh_skinning.meshlet_bounds is THE pass under test; render.frame is
 # the trustworthy whole-frame sum. The render.* entries are context passes to confirm the
@@ -45,6 +49,11 @@ def nz_median(avgs):
     return (statistics.median(nz) if nz else 0.0), len(nz), len(avgs)
 
 def main():
+    missing = [path for path in (BASELINE, WAVE) if not path.is_file()]
+    if missing:
+        paths = "\n".join(f"  {path}" for path in missing)
+        raise SystemExit(f"missing local A/B capture(s):\n{paths}")
+
     b = parse(BASELINE)
     w = parse(WAVE)
     print("Meshlet-bounds wave-intrinsic A/B   (nonzero-median ms)")

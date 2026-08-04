@@ -5,6 +5,7 @@ Scene    : stress_test_smoke (10 skinned chars, 1 dir + 1 point light, scene-BVH
 Arms     : SPP1 vs SPP4 in NWB_SW_SHADOW_SOFT_SPP (sw_binding_slots.h).
 Capture  : direct binary invocation, NWB_GPU_TIMING_FILE, ~45s each = 81 intervals
            (0.5s each). Decoded with decode_timing.py (nonzero-median intervals).
+Raw files: local only at .cozter/out/ab-results/shadow_spp_ab/timing_spp{1,4}.txt.
 HEAD     : 55f4d0dc (both arms same HEAD, .vol recooked per arm).
 .vol size: SPP1 = 4652431 B,  SPP4 = 4652591 B  (confirms shader edit landed each arm).
 
@@ -36,8 +37,8 @@ Proof the deltas are noise, not signal:
 
 To get a trustworthy shadow_visibility SPP1-vs-SPP4 delta, re-capture with the
 smoke window kept actively focused (interactive capture) so every interval fires
-the heavy pass, then compare nonzero-medians. Files in this dir are ready to
-re-decode once a focused capture replaces them.
+the heavy pass, then compare nonzero-medians. Re-captured files belong under
+.cozter/out/ab-results/shadow_spp_ab/.
 
 CONCLUSION (provisional): no reliable GPU-cost delta can be claimed from these
 captures. SPP=4 is the visually-better setting (user-confirmed); its perf cost

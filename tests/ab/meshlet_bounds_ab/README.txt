@@ -37,6 +37,7 @@ CAPTURE  : capture.sh (namesym-domain opt binary + namesym logserver for READABL
            names, NWB_RENDER_UNFOCUSED=1, NWB_GPU_TIMING_FILE, 90 s, 0.5 s report
            interval). RT points at the namesym build's skinning_culling_benchmark_runtime
           (where the just-flipped .vol recook lands). baseline=143 intervals, wave=154.
+RAW FILES: local only at .cozter/out/ab-results/meshlet_bounds_ab/{baseline,wave}_timing.txt.
 
 STATISTIC
   Nonzero-median (the agreed sparse-comparison statistic; see tests/ab/wave_ab/README.txt

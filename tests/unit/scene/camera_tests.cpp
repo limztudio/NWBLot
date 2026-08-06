@@ -23,70 +23,96 @@ namespace __hidden_scene_camera_tests{
 TEST(Scene, CameraProjectionHelpers){
     NWB::Impl::Scene::CameraComponent camera;
 
-    f32 tanHalfFov = 0.0f;
-    EXPECT_TRUE(NWB::Impl::Scene::TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov));
-    EXPECT_GT(tanHalfFov, 0.0f);
-    EXPECT_NEAR(tanHalfFov, 0.577350269f, 0.0001f);
-    EXPECT_TRUE(NWB::Impl::Scene::CameraClipRangeValid(camera));
-    EXPECT_EQ(NWB::Impl::Scene::ResolveCameraAspectRatio(camera, 1.5f), 1.5f);
+    SIMDVector tanHalfFov;
+    EXPECT_TRUE(NWB::Impl::Scene::TryComputeCameraTanHalfVerticalFov(VectorReplicate(camera.verticalFovRadians()), tanHalfFov));
+    EXPECT_GT(VectorGetX(tanHalfFov), 0.0f);
+    EXPECT_NEAR(VectorGetX(tanHalfFov), 0.577350269f, 0.0001f);
+    EXPECT_TRUE(NWB::Impl::Scene::CameraClipRangeValid(VectorReplicate(camera.nearPlane()), VectorReplicate(camera.farPlane())));
+    EXPECT_EQ(VectorGetX(NWB::Impl::Scene::ResolveCameraAspectRatio(VectorReplicate(camera.aspectRatio()), VectorReplicate(1.5f))), 1.5f);
 
     camera.setAspectRatio(2.0f);
-    EXPECT_EQ(NWB::Impl::Scene::ResolveCameraAspectRatio(camera, 1.5f), 2.0f);
+    EXPECT_EQ(VectorGetX(NWB::Impl::Scene::ResolveCameraAspectRatio(VectorReplicate(camera.aspectRatio()), VectorReplicate(1.5f))), 2.0f);
 
-    Float4 projectionParams;
-    EXPECT_TRUE(NWB::Impl::Scene::TryBuildCameraProjectionParams(camera, 1.5f, projectionParams));
-    EXPECT_GT(projectionParams.x, 0.0f);
-    EXPECT_GT(projectionParams.y, 0.0f);
-    EXPECT_GT(projectionParams.z, 0.0f);
-    EXPECT_LT(projectionParams.w, 0.0f);
+    NWB::Impl::Scene::CameraProjection projection;
+    EXPECT_TRUE(NWB::Impl::Scene::TryBuildCameraProjection(
+        VectorReplicate(camera.verticalFovRadians()),
+        VectorReplicate(camera.nearPlane()),
+        VectorReplicate(camera.farPlane()),
+        VectorReplicate(camera.aspectRatio()),
+        VectorReplicate(1.5f),
+        projection
+    ));
+    EXPECT_GT(VectorGetX(projection.projectionParams), 0.0f);
+    EXPECT_GT(VectorGetY(projection.projectionParams), 0.0f);
+    EXPECT_GT(VectorGetZ(projection.projectionParams), 0.0f);
+    EXPECT_LT(VectorGetW(projection.projectionParams), 0.0f);
     const f32 depthRange = camera.farPlane() - camera.nearPlane();
-    EXPECT_FLOAT_EQ(projectionParams.x, 1.0f / (tanHalfFov * camera.aspectRatio()));
-    EXPECT_FLOAT_EQ(projectionParams.y, 1.0f / tanHalfFov);
-    EXPECT_FLOAT_EQ(projectionParams.z, camera.farPlane() / depthRange);
-    EXPECT_FLOAT_EQ(projectionParams.w, -(camera.nearPlane() * camera.farPlane()) / depthRange);
+    EXPECT_FLOAT_EQ(VectorGetX(projection.projectionParams), 1.0f / (VectorGetX(tanHalfFov) * camera.aspectRatio()));
+    EXPECT_FLOAT_EQ(VectorGetY(projection.projectionParams), 1.0f / VectorGetX(tanHalfFov));
+    EXPECT_FLOAT_EQ(VectorGetZ(projection.projectionParams), camera.farPlane() / depthRange);
+    EXPECT_FLOAT_EQ(VectorGetW(projection.projectionParams), -(camera.nearPlane() * camera.farPlane()) / depthRange);
+    EXPECT_TRUE(NWB::Impl::Scene::CameraProjectionValid(projection));
+    EXPECT_EQ(VectorGetX(projection.aspectRatio), 2.0f);
+    EXPECT_GT(VectorGetX(projection.tanHalfVerticalFov), 0.0f);
+    EXPECT_EQ(VectorGetX(projection.nearPlane), camera.nearPlane());
+    EXPECT_EQ(VectorGetX(projection.farPlane), camera.farPlane());
 
-    NWB::Impl::Scene::CameraProjectionData projectionData;
-    EXPECT_TRUE(NWB::Impl::Scene::TryBuildCameraProjectionData(camera, 1.5f, projectionData));
-    EXPECT_TRUE(NWB::Impl::Scene::CameraProjectionDataValid(
-            LoadFloat(projectionData.projectionParams),
-            projectionData.aspectRatio,
-            projectionData.tanHalfVerticalFov
-        ));
-    EXPECT_EQ(projectionData.projectionParams.x, projectionParams.x);
-    EXPECT_EQ(projectionData.projectionParams.y, projectionParams.y);
-    EXPECT_EQ(projectionData.projectionParams.z, projectionParams.z);
-    EXPECT_EQ(projectionData.projectionParams.w, projectionParams.w);
-    EXPECT_EQ(projectionData.aspectRatio, 2.0f);
-    EXPECT_GT(projectionData.tanHalfVerticalFov, 0.0f);
+    const NWB::Impl::Scene::CameraProjection defaultProjection = NWB::Impl::Scene::BuildDefaultCameraProjection(1.5f);
+    EXPECT_TRUE(NWB::Impl::Scene::CameraProjectionValid(defaultProjection));
+    EXPECT_EQ(VectorGetX(defaultProjection.aspectRatio), 1.5f);
 
     camera.setNearPlane(0.0f);
-    EXPECT_FALSE(NWB::Impl::Scene::CameraClipRangeValid(camera));
-    EXPECT_FALSE(NWB::Impl::Scene::TryBuildCameraProjectionParams(camera, 1.5f, projectionParams));
-    const NWB::Impl::Scene::CameraProjectionData emptyProjectionData{};
-    EXPECT_FALSE(NWB::Impl::Scene::CameraProjectionDataValid(
-            LoadFloat(emptyProjectionData.projectionParams),
-            emptyProjectionData.aspectRatio,
-            emptyProjectionData.tanHalfVerticalFov
-        ));
+    EXPECT_FALSE(NWB::Impl::Scene::CameraClipRangeValid(VectorReplicate(camera.nearPlane()), VectorReplicate(camera.farPlane())));
+    EXPECT_FALSE(NWB::Impl::Scene::TryBuildCameraProjection(
+        VectorReplicate(camera.verticalFovRadians()),
+        VectorReplicate(camera.nearPlane()),
+        VectorReplicate(camera.farPlane()),
+        VectorReplicate(camera.aspectRatio()),
+        VectorReplicate(1.5f),
+        projection
+    ));
+    const NWB::Impl::Scene::CameraProjection emptyProjection{};
+    EXPECT_FALSE(NWB::Impl::Scene::CameraProjectionValid(emptyProjection));
 
     camera = NWB::Impl::Scene::CameraComponent{};
     camera.setNearPlane(2.0f);
     camera.setFarPlane(s_MaxF32);
-    EXPECT_TRUE(NWB::Impl::Scene::CameraClipRangeValid(camera));
-    EXPECT_FALSE(NWB::Impl::Scene::TryBuildCameraProjectionParams(camera, 1.5f, projectionParams));
+    EXPECT_TRUE(NWB::Impl::Scene::CameraClipRangeValid(VectorReplicate(camera.nearPlane()), VectorReplicate(camera.farPlane())));
+    EXPECT_FALSE(NWB::Impl::Scene::TryBuildCameraProjection(
+        VectorReplicate(camera.verticalFovRadians()),
+        VectorReplicate(camera.nearPlane()),
+        VectorReplicate(camera.farPlane()),
+        VectorReplicate(camera.aspectRatio()),
+        VectorReplicate(1.5f),
+        projection
+    ));
 
     camera = NWB::Impl::Scene::CameraComponent{};
     camera.setVerticalFovRadians(179.0f * (s_PI / 180.0f));
-    EXPECT_FALSE(NWB::Impl::Scene::TryBuildCameraProjectionParams(camera, s_MaxF32, projectionParams));
+    EXPECT_FALSE(NWB::Impl::Scene::TryBuildCameraProjection(
+        VectorReplicate(camera.verticalFovRadians()),
+        VectorReplicate(camera.nearPlane()),
+        VectorReplicate(camera.farPlane()),
+        VectorReplicate(camera.aspectRatio()),
+        VectorReplicate(s_MaxF32),
+        projection
+    ));
 
     camera.setAspectRatio(s_MaxF32);
-    EXPECT_FALSE(NWB::Impl::Scene::TryBuildCameraProjectionData(camera, 1.5f, projectionData));
+    EXPECT_FALSE(NWB::Impl::Scene::TryBuildCameraProjection(
+        VectorReplicate(camera.verticalFovRadians()),
+        VectorReplicate(camera.nearPlane()),
+        VectorReplicate(camera.farPlane()),
+        VectorReplicate(camera.aspectRatio()),
+        VectorReplicate(1.5f),
+        projection
+    ));
 
     camera = NWB::Impl::Scene::CameraComponent{};
     camera.setVerticalFovRadians(180.0f * (s_PI / 180.0f));
-    EXPECT_FALSE(NWB::Impl::Scene::TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov));
+    EXPECT_FALSE(NWB::Impl::Scene::TryComputeCameraTanHalfVerticalFov(VectorReplicate(camera.verticalFovRadians()), tanHalfFov));
     camera.setVerticalFovRadians(400.0f * (s_PI / 180.0f));
-    EXPECT_FALSE(NWB::Impl::Scene::TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov));
+    EXPECT_FALSE(NWB::Impl::Scene::TryComputeCameraTanHalfVerticalFov(VectorReplicate(camera.verticalFovRadians()), tanHalfFov));
 }
 
 

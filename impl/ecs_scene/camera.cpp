@@ -55,14 +55,21 @@ namespace __hidden_camera{
     if(!SceneCameraTransformValid(position, rotation, scale))
         return false;
 
-    CameraProjectionData projectionData;
-    if(!TryBuildCameraProjectionData(camera, fallbackAspectRatio, projectionData))
+    CameraProjection projection;
+    if(!TryBuildCameraProjection(
+        VectorReplicate(camera.verticalFovRadians()),
+        VectorReplicate(camera.nearPlane()),
+        VectorReplicate(camera.farPlane()),
+        VectorReplicate(camera.aspectRatio()),
+        VectorReplicate(fallbackAspectRatio),
+        projection
+    ))
         return false;
 
     outCameraView.entity = entity;
     outCameraView.transform = &transform;
     outCameraView.camera = &camera;
-    outCameraView.projectionData = projectionData;
+    outCameraView.projection = projection;
     return true;
 }
 

@@ -771,18 +771,14 @@ static void ResetPayload(
     return true;
 }
 
-static void AverageHdrVolumeTexels(const HdrImagePlanes& planes, const u32 x, const u32 y, basisu::vec4F& outColor){
+[[nodiscard]] static SIMDVector AverageHdrVolumeTexels(const HdrImagePlanes& planes, const u32 x, const u32 y){
     SIMDVector sum = VectorZero();
     for(const basisu::imagef& plane : planes){
         const basisu::vec4F& color = plane(x, y);
         sum = VectorAdd(sum, VectorSet(color[0u], color[1u], color[2u], color[3u]));
     }
 
-    const SIMDVector average = VectorScale(sum, 1.0f / static_cast<f32>(planes.size()));
-    outColor[0u] = VectorGetX(average);
-    outColor[1u] = VectorGetY(average);
-    outColor[2u] = VectorGetZ(average);
-    outColor[3u] = VectorGetW(average);
+    return VectorScale(sum, 1.0f / static_cast<f32>(planes.size()));
 }
 
 [[nodiscard]] static bool GenerateNextHdrVolumeMip(const HdrImagePlanes& sourcePlanes, HdrImagePlanes& outPlanes){
@@ -827,8 +823,14 @@ static void AverageHdrVolumeTexels(const HdrImagePlanes& planes, const u32 x, co
         basisu::imagef& targetPlane = outPlanes[targetZ];
         targetPlane.resize(targetWidth, targetHeight);
         for(u32 y = 0u; y < targetHeight; ++y){
-            for(u32 x = 0u; x < targetWidth; ++x)
-                AverageHdrVolumeTexels(filteredPlanes, x, y, targetPlane(x, y));
+            for(u32 x = 0u; x < targetWidth; ++x){
+                const SIMDVector average = AverageHdrVolumeTexels(filteredPlanes, x, y);
+                basisu::vec4F& targetColor = targetPlane(x, y);
+                targetColor[0u] = VectorGetX(average);
+                targetColor[1u] = VectorGetY(average);
+                targetColor[2u] = VectorGetZ(average);
+                targetColor[3u] = VectorGetW(average);
+            }
         }
     }
     return true;

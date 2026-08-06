@@ -19,34 +19,36 @@ NWB_IMPL_SCENE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct alignas(Float4) CameraProjectionData{
-    Float4 projectionParams = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-    f32 aspectRatio = CameraDefaults::s_FallbackAspectRatio;
-    f32 tanHalfVerticalFov = 0.0f;
+struct alignas(SIMDVector) CameraProjection{
+    SIMDVector projectionParams = s_SIMDZero;
+    SIMDVector aspectRatio = s_SIMDZero;
+    SIMDVector tanHalfVerticalFov = s_SIMDZero;
+    SIMDVector nearPlane = s_SIMDZero;
+    SIMDVector farPlane = s_SIMDZero;
 };
 
-static_assert(IsStandardLayout_V<CameraProjectionData>, "CameraProjectionData must stay layout-stable");
-static_assert(IsTriviallyCopyable_V<CameraProjectionData>, "CameraProjectionData must stay cheap to pass by value");
-static_assert(alignof(CameraProjectionData) >= alignof(Float4), "CameraProjectionData must keep projection params aligned");
+static_assert(IsStandardLayout_V<CameraProjection>, "CameraProjection must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<CameraProjection>, "CameraProjection must stay cheap to pass by value");
+static_assert(alignof(CameraProjection) >= alignof(SIMDVector), "CameraProjection must keep calculation vectors aligned");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool TryComputeCameraTanHalfVerticalFov(const f32 verticalFovRadians, f32& outTanHalfFov){
+[[nodiscard]] inline bool TryComputeCameraTanHalfVerticalFov(const SIMDVector verticalFovRadians, SIMDVector& outTanHalfFov){
     constexpr f32 s_CameraFovCosEpsilon = 0.000001f;
 
-    outTanHalfFov = 0.0f;
+    outTanHalfFov = s_SIMDZero;
     if(
-        !IsFinite(verticalFovRadians)
-        || verticalFovRadians <= 0.0f
-        || verticalFovRadians >= s_PI
+        !VectorIsFinite(verticalFovRadians, VectorComponentMask::s_XYZW)
+        || !Vector4Greater(verticalFovRadians, s_SIMDZero)
+        || !Vector4Less(verticalFovRadians, VectorReplicate(s_PI))
     )
         return false;
 
     SIMDVector sinHalfFovVector;
     SIMDVector cosHalfFovVector;
-    VectorSinCos(&sinHalfFovVector, &cosHalfFovVector, VectorReplicate(verticalFovRadians * 0.5f));
+    VectorSinCos(&sinHalfFovVector, &cosHalfFovVector, VectorScale(verticalFovRadians, 0.5f));
     if(
         !VectorIsFinite(sinHalfFovVector, VectorComponentMask::s_XYZW)
         || !VectorIsFinite(cosHalfFovVector, VectorComponentMask::s_XYZW)
@@ -61,121 +63,114 @@ static_assert(alignof(CameraProjectionData) >= alignof(Float4), "CameraProjectio
     if(!VectorIsFinite(tanHalfFovVector, VectorComponentMask::s_XYZW) || !Vector4Greater(tanHalfFovVector, VectorZero()))
         return false;
 
-    outTanHalfFov = VectorGetX(tanHalfFovVector);
+    outTanHalfFov = tanHalfFovVector;
     return true;
 }
 
-[[nodiscard]] inline bool CameraClipRangeValid(const CameraComponent& camera){
-    return IsFinite(camera.nearPlane()) && IsFinite(camera.farPlane()) && camera.nearPlane() > 0.0f && camera.nearPlane() < camera.farPlane();
-}
-
-[[nodiscard]] inline f32 ResolveCameraAspectRatio(const CameraComponent& camera, const f32 fallbackAspectRatio){
-    if(IsFinite(camera.aspectRatio()) && camera.aspectRatio() > 0.0f)
-        return camera.aspectRatio();
-    if(IsFinite(fallbackAspectRatio) && fallbackAspectRatio > 0.0f)
-        return fallbackAspectRatio;
-    return CameraDefaults::s_FallbackAspectRatio;
-}
-
-[[nodiscard]] inline bool CameraProjectionDataValid(
-    const SIMDVector projectionParams,
-    const f32 aspectRatio,
-    const f32 tanHalfVerticalFov
-){
+[[nodiscard]] inline bool CameraClipRangeValid(const SIMDVector nearPlane, const SIMDVector farPlane){
     return
-        IsFinite(aspectRatio)
-        && IsFinite(tanHalfVerticalFov)
-        && !Vector4IsNaN(projectionParams)
-        && !Vector4IsInfinite(projectionParams)
-        && aspectRatio > 0.0f
-        && tanHalfVerticalFov > 0.0f
-        && Vector3Greater(projectionParams, VectorZero())
-        && VectorGetW(projectionParams) < 0.0f
+        VectorIsFinite(nearPlane, VectorComponentMask::s_XYZW)
+        && VectorIsFinite(farPlane, VectorComponentMask::s_XYZW)
+        && Vector4Greater(nearPlane, s_SIMDZero)
+        && Vector4Less(nearPlane, farPlane)
     ;
 }
 
-[[nodiscard]] inline bool CameraProjectionStorageValid(
-    const Float4& projectionParams,
-    const f32 aspectRatio,
-    const f32 tanHalfVerticalFov
-){
+[[nodiscard]] inline SIMDVector ResolveCameraAspectRatio(const SIMDVector cameraAspectRatio, const SIMDVector fallbackAspectRatio){
+    const SIMDVector fallbackValid = VectorAndCInt(
+        VectorGreater(fallbackAspectRatio, s_SIMDZero),
+        VectorOrInt(VectorIsNaN(fallbackAspectRatio), VectorIsInfinite(fallbackAspectRatio))
+    );
+    const SIMDVector resolvedFallbackAspectRatio = VectorSelect(
+        s_SIMDOne,
+        fallbackAspectRatio,
+        fallbackValid
+    );
+    const SIMDVector cameraValid = VectorAndCInt(
+        VectorGreater(cameraAspectRatio, s_SIMDZero),
+        VectorOrInt(VectorIsNaN(cameraAspectRatio), VectorIsInfinite(cameraAspectRatio))
+    );
+    return VectorSelect(resolvedFallbackAspectRatio, cameraAspectRatio, cameraValid);
+}
+
+[[nodiscard]] inline bool CameraProjectionValid(const CameraProjection& projection){
+    const SIMDVector validProjectionParams = VectorOrInt(
+        VectorAndInt(VectorGreater(projection.projectionParams, s_SIMDZero), s_SIMDMask3),
+        VectorAndInt(VectorLess(projection.projectionParams, s_SIMDZero), s_SIMDMaskW)
+    );
     return
-        IsFinite(aspectRatio)
-        && IsFinite(tanHalfVerticalFov)
-        && IsFinite(projectionParams.x)
-        && IsFinite(projectionParams.y)
-        && IsFinite(projectionParams.z)
-        && IsFinite(projectionParams.w)
-        && aspectRatio > 0.0f
-        && tanHalfVerticalFov > 0.0f
-        && projectionParams.x > 0.0f
-        && projectionParams.y > 0.0f
-        && projectionParams.z > 0.0f
-        && projectionParams.w < 0.0f
+        !Vector4IsNaN(projection.projectionParams)
+        && !Vector4IsInfinite(projection.projectionParams)
+        && !Vector4IsNaN(projection.aspectRatio)
+        && !Vector4IsInfinite(projection.aspectRatio)
+        && !Vector4IsNaN(projection.tanHalfVerticalFov)
+        && !Vector4IsInfinite(projection.tanHalfVerticalFov)
+        && Vector4Greater(projection.aspectRatio, s_SIMDZero)
+        && Vector4Greater(projection.tanHalfVerticalFov, s_SIMDZero)
+        && CameraClipRangeValid(projection.nearPlane, projection.farPlane)
+        && VectorMoveMask(validProjectionParams) == VectorComponentMask::s_XYZW
     ;
 }
 
-[[nodiscard]] inline bool TryBuildCameraProjectionData(
-    const CameraComponent& camera,
-    const f32 fallbackAspectRatio,
-    CameraProjectionData& outProjectionData
+[[nodiscard]] inline bool TryBuildCameraProjection(
+    const SIMDVector verticalFovRadians,
+    const SIMDVector nearPlane,
+    const SIMDVector farPlane,
+    const SIMDVector cameraAspectRatio,
+    const SIMDVector fallbackAspectRatio,
+    CameraProjection& outProjection
 ){
-    outProjectionData = CameraProjectionData{};
+    outProjection = CameraProjection{};
 
-    f32 tanHalfFov = 0.0f;
+    SIMDVector tanHalfFov;
     if(
-        !TryComputeCameraTanHalfVerticalFov(camera.verticalFovRadians(), tanHalfFov)
-        || !CameraClipRangeValid(camera)
+        !TryComputeCameraTanHalfVerticalFov(verticalFovRadians, tanHalfFov)
+        || !CameraClipRangeValid(nearPlane, farPlane)
     )
         return false;
 
-    const f32 aspectRatio = ResolveCameraAspectRatio(camera, fallbackAspectRatio);
-    const f32 depthRange = camera.farPlane() - camera.nearPlane();
-    CameraProjectionData projectionData;
-    projectionData.aspectRatio = aspectRatio;
-    projectionData.tanHalfVerticalFov = tanHalfFov;
+    const SIMDVector aspectRatio = ResolveCameraAspectRatio(cameraAspectRatio, fallbackAspectRatio);
+    const SIMDVector depthRange = VectorSubtract(farPlane, nearPlane);
+    const SIMDVector selectZW = VectorOrInt(s_SIMDMaskZ, s_SIMDMaskW);
+    CameraProjection projection;
+    projection.aspectRatio = aspectRatio;
+    projection.tanHalfVerticalFov = tanHalfFov;
+    projection.nearPlane = nearPlane;
+    projection.farPlane = farPlane;
     const SIMDVector projectionDenominators = VectorMultiply(
-        VectorSet(tanHalfFov, tanHalfFov, depthRange, depthRange),
-        VectorSet(aspectRatio, 1.0f, 1.0f, 1.0f)
+        VectorSelect(tanHalfFov, depthRange, selectZW),
+        VectorSelect(s_SIMDOne, aspectRatio, s_SIMDMaskX)
     );
     const SIMDVector projectionNumerators = VectorMultiply(
-        VectorSet(1.0f, 1.0f, camera.farPlane(), camera.nearPlane()),
-        VectorSet(1.0f, 1.0f, 1.0f, -camera.farPlane())
+        VectorSelect(s_SIMDOne, VectorMergeXY(farPlane, nearPlane), selectZW),
+        VectorSelect(s_SIMDOne, VectorNegate(farPlane), s_SIMDMaskW)
     );
-    const SIMDVector projectionParams = VectorDivide(projectionNumerators, projectionDenominators);
-    if(!CameraProjectionDataValid(
-        projectionParams,
-        projectionData.aspectRatio,
-        projectionData.tanHalfVerticalFov
+    projection.projectionParams = VectorDivide(projectionNumerators, projectionDenominators);
+    if(!CameraProjectionValid(projection))
+        return false;
+
+    outProjection = projection;
+    return true;
+}
+
+[[nodiscard]] inline CameraProjection BuildDefaultCameraProjection(const f32 fallbackAspectRatio = CameraDefaults::s_FallbackAspectRatio){
+    CameraProjection projection;
+    if(TryBuildCameraProjection(
+        VectorReplicate(CameraDefaults::s_VerticalFovRadians),
+        VectorReplicate(CameraDefaults::s_NearPlane),
+        VectorReplicate(CameraDefaults::s_FarPlane),
+        VectorReplicate(CameraDefaults::s_AutoAspectRatio),
+        VectorReplicate(fallbackAspectRatio),
+        projection
     ))
-        return false;
+        return projection;
 
-    StoreFloat(projectionParams, &projectionData.projectionParams);
-    outProjectionData = projectionData;
-    return true;
-}
-
-[[nodiscard]] inline bool TryBuildCameraProjectionParams(
-    const CameraComponent& camera,
-    const f32 fallbackAspectRatio,
-    Float4& outProjectionParams
-){
-    CameraProjectionData projectionData;
-    if(!TryBuildCameraProjectionData(camera, fallbackAspectRatio, projectionData)){
-        outProjectionParams = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-        return false;
-    }
-
-    outProjectionParams = projectionData.projectionParams;
-    return true;
-}
-
-[[nodiscard]] inline Float4 BuildDefaultCameraProjectionParams(const f32 fallbackAspectRatio = CameraDefaults::s_FallbackAspectRatio){
-    Float4 projectionParams;
-    if(TryBuildCameraProjectionParams(CameraComponent{}, fallbackAspectRatio, projectionParams))
-        return projectionParams;
-
-    return Float4(1.0f, 1.0f, 1.0f, 0.0f);
+    projection.projectionParams = VectorSet(1.0f, 1.0f, 1.0f, 0.0f);
+    projection.aspectRatio = s_SIMDOne;
+    projection.tanHalfVerticalFov = s_SIMDOne;
+    projection.nearPlane = VectorReplicate(CameraDefaults::s_NearPlane);
+    projection.farPlane = VectorReplicate(CameraDefaults::s_FarPlane);
+    return projection;
 }
 
 
@@ -186,18 +181,14 @@ struct SceneCameraView{
     Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     TransformComponent* transform = nullptr;
     CameraComponent* camera = nullptr;
-    CameraProjectionData projectionData;
+    CameraProjection projection;
 
     [[nodiscard]] bool valid()const noexcept{
         return
             entity.valid()
             && transform != nullptr
             && camera != nullptr
-            && CameraProjectionStorageValid(
-                projectionData.projectionParams,
-                projectionData.aspectRatio,
-                projectionData.tanHalfVerticalFov
-            )
+            && CameraProjectionValid(projection)
         ;
     }
 };

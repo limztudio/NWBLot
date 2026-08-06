@@ -568,11 +568,11 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
     if(!MatrixTryBuildRigidRotationQuaternion(matrix, affineEpsilon, rigidEpsilon, outReal))
         return false;
 
-    const SIMDVector translation = VectorSet(
-        VectorGetW(matrix.v[0]),
-        VectorGetW(matrix.v[1]),
-        VectorGetW(matrix.v[2]),
-        0.0f
+    const SIMDVector translation = VectorMergeX(
+        VectorSplatW(matrix.v[0]),
+        VectorSplatW(matrix.v[1]),
+        VectorSplatW(matrix.v[2]),
+        VectorZero()
     );
     outDual = VectorScale(QuaternionMultiply(translation, outReal), 0.5f);
     return VectorIsFinite(outDual, VectorComponentMask::s_XYZW);

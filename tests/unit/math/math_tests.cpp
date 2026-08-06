@@ -513,6 +513,12 @@ TEST(Math, HalfFloat4Conversion){
     EXPECT_TRUE(NearlyEqual(unpacked.z, 65504.0f));
     EXPECT_EQ(unpacked.w, Limit<f32>::s_Infinity);
 
+    const SIMDVector simdUnpacked = LoadHalf(packed);
+    EXPECT_TRUE(NearlyEqual(VectorGetX(simdUnpacked), 0.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetY(simdUnpacked), -1.5f));
+    EXPECT_TRUE(NearlyEqual(VectorGetZ(simdUnpacked), 65504.0f));
+    EXPECT_EQ(VectorGetW(simdUnpacked), Limit<f32>::s_Infinity);
+
     const Half4U specialPacked = MakeHalf4U(-0.0f, 5.9604644775390625e-8f, Limit<f32>::s_QuietNaN, -Limit<f32>::s_Infinity);
     EXPECT_EQ(specialPacked.raw[0], static_cast<Half>(0x8000u));
     EXPECT_EQ(specialPacked.raw[1], static_cast<Half>(0x0001u));

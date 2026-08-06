@@ -51,18 +51,13 @@ Core::ECS::EntityID CreateSpotLightEntity(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct alignas(Float4) SceneLight{
+struct alignas(SIMDVector) SceneLight{
     // xyz = world position (point/spot); w = spot inner cone cosine.
-    Float4 position = Float4(0.0f, 0.0f, 0.0f, 1.0f);
+    SIMDVector position = s_SIMDIdentityR3;
     // Directional: normalized direction toward the light. Spot: normalized emission axis. w = spot outer cone cosine.
-    Float4 direction = Float4(0.0f, 0.0f, -1.0f, 1.0f);
+    SIMDVector direction = VectorSet(0.0f, 0.0f, -1.0f, 1.0f);
     // xyz = color, w = intensity.
-    Float4 colorIntensity = Float4(
-        LightDefaults::s_WhiteColorComponent,
-        LightDefaults::s_WhiteColorComponent,
-        LightDefaults::s_WhiteColorComponent,
-        LightDefaults::s_Intensity
-    );
+    SIMDVector colorIntensity = s_SIMDOne;
     f32 range = 0.0f;
     // Soft-shadow source size (see LightComponent): directional angular radius (radians) / punctual source radius (world units).
     f32 angularRadius = LightDefaults::s_DirectionalAngularRadius;
@@ -73,14 +68,26 @@ struct alignas(Float4) SceneLight{
 };
 
 static_assert(IsStandardLayout_V<SceneLight>, "SceneLight must stay layout-stable");
-static_assert(IsTriviallyCopyable_V<SceneLight>, "SceneLight must stay cheap to copy into GPU light lists");
-static_assert(alignof(SceneLight) >= alignof(Float4), "SceneLight must keep vectors aligned");
+static_assert(IsTriviallyCopyable_V<SceneLight>, "SceneLight must stay cheap to pass through scene preparation");
+static_assert(alignof(SceneLight) >= alignof(SIMDVector), "SceneLight must keep calculation vectors aligned");
 
 
 // Fallback used when a world declares no lights: a single neutral directional light aimed along the view.
-[[nodiscard]] SceneLight BuildDefaultSceneLight(const SceneViewBasis& basis);
-[[nodiscard]] bool TryBuildSceneLight(const TransformComponent& transform, const LightComponent& light, SceneLight& outLight);
-[[nodiscard]] usize GatherSceneLights(Core::ECS::World& world, const SceneViewBasis& defaultBasis, SceneLight* outLights, usize maxLights);
+[[nodiscard]] SceneLight BuildDefaultSceneLight(SIMDVector forward);
+[[nodiscard]] bool TryBuildSceneLight(
+    SIMDVector position,
+    SIMDVector rotation,
+    SIMDVector colorIntensity,
+    f32 range,
+    f32 innerConeCos,
+    f32 outerConeCos,
+    f32 angularRadius,
+    f32 sourceRadius,
+    LightType::Enum type,
+    bool enableCaustics,
+    SceneLight& outLight
+);
+[[nodiscard]] usize GatherSceneLights(Core::ECS::World& world, SIMDVector defaultForward, SceneLight* outLights, usize maxLights);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

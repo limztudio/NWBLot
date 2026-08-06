@@ -560,6 +560,32 @@ NWB_INLINE void SIMDCALL StoreInt4Sse(SIMDVector src, i32* dst)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+NWB_INLINE SIMDVector SIMDCALL LoadHalf(const Half2U& value)noexcept{
+#if defined(NWB_HAS_F16C)
+    return _mm_cvtph_ps(_mm_cvtsi32_si128(static_cast<i32>(value.packed)));
+#else
+    return SIMDConvertDetail::MakeF32(ConvertHalfToFloat(value.x), ConvertHalfToFloat(value.y), 0.0f, 0.0f);
+#endif
+}
+
+NWB_INLINE SIMDVector SIMDCALL LoadHalf(const Half4U& value)noexcept{
+#if defined(NWB_HAS_F16C)
+    const __m128i halfValue = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(value.raw));
+    return _mm_cvtph_ps(halfValue);
+#else
+    return SIMDConvertDetail::MakeF32(
+        ConvertHalfToFloat(value.x),
+        ConvertHalfToFloat(value.y),
+        ConvertHalfToFloat(value.z),
+        ConvertHalfToFloat(value.w)
+    );
+#endif
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // SIMDVector and SIMDMatrix are calculation values. Persistent CPU/GPU data must use the typed Float#/Int#/UInt#
 // storage layouts and cross into SIMD only through these conversion boundaries.
 NWB_INLINE SIMDVector SIMDCALL LoadFloat(const Float4& src)noexcept{

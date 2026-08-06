@@ -70,30 +70,16 @@ void BuildSceneViewBasisVectors(
 
 
 SceneViewBasis BuildDefaultSceneViewBasis(){
-    SIMDVector right;
-    SIMDVector up;
-    SIMDVector forward;
-    __hidden_scene::BuildDefaultSceneViewBasisVectors(right, up, forward);
-
     SceneViewBasis basis;
-    StoreFloat(right, &basis.right);
-    StoreFloat(up, &basis.up);
-    StoreFloat(forward, &basis.forward);
-    basis.positionDepthBias.w = __hidden_scene::s_DefaultSceneViewDepthOffset;
+    __hidden_scene::BuildDefaultSceneViewBasisVectors(basis.right, basis.up, basis.forward);
+    basis.positionDepthBias = VectorSet(0.0f, 0.0f, 0.0f, __hidden_scene::s_DefaultSceneViewDepthOffset);
     return basis;
 }
 
-SceneViewBasis BuildSceneViewBasis(const TransformComponent& transform){
+SceneViewBasis BuildSceneViewBasis(const SIMDVector position, const SIMDVector rotation){
     SceneViewBasis basis;
-    basis.positionDepthBias = transform.position;
-    const SIMDVector rotation = LoadFloat(transform.rotation);
-    SIMDVector right;
-    SIMDVector up;
-    SIMDVector forward;
-    __hidden_scene::BuildSceneViewBasisVectors(rotation, right, up, forward);
-    StoreFloat(right, &basis.right);
-    StoreFloat(up, &basis.up);
-    StoreFloat(forward, &basis.forward);
+    basis.positionDepthBias = position;
+    __hidden_scene::BuildSceneViewBasisVectors(rotation, basis.right, basis.up, basis.forward);
     return basis;
 }
 

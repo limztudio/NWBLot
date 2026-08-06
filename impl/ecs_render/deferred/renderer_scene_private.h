@@ -120,15 +120,14 @@ inline u32 ResolveSceneLights(
     const NWB::Impl::Scene::SceneViewBasis defaultBasis = NWB::Impl::Scene::BuildDefaultSceneViewBasis();
     NWB::Impl::Scene::SceneLight sceneLights[NWB_SCENE_MAX_LIGHTS];
     f32 shadowImportance[NWB_SCENE_MAX_LIGHTS] = {};
-    const usize gatheredCount = NWB::Impl::Scene::GatherSceneLights(world, defaultBasis, sceneLights, capacity);
+    const usize gatheredCount = NWB::Impl::Scene::GatherSceneLights(world, defaultBasis.forward, sceneLights, capacity);
 
     for(usize i = 0u; i < gatheredCount; ++i){
         const NWB::Impl::Scene::SceneLight& src = sceneLights[i];
         SceneLightGpuData& dst = outLights[i];
-        const SIMDVector colorIntensity = LoadFloat(src.colorIntensity);
-        dst.position = src.position;
-        dst.direction = src.direction;
-        dst.colorIntensity = src.colorIntensity;
+        StoreFloat(src.position, &dst.position);
+        StoreFloat(src.direction, &dst.direction);
+        StoreFloat(src.colorIntensity, &dst.colorIntensity);
         dst.params = Float4(
             src.range,
             static_cast<f32>(src.type),
@@ -136,7 +135,7 @@ inline u32 ResolveSceneLights(
             src.enableCaustics ? s_CausticSlotUnassigned : s_CausticSlotDisabled
         ); // z = shadow slot; w = caustic slot, or disabled when the light did not opt in
         dst.params2 = Float4(src.angularRadius, src.sourceRadius, 0.f, 0.f); // soft-shadow source size
-        outCausticImportance[i] = CausticSlotImportance(colorIntensity);
+        outCausticImportance[i] = CausticSlotImportance(src.colorIntensity);
     }
 
     // Importance-ranked shadow-slot allocator: hand the bounded pool of NWB_SCENE_SHADOW_SLOT_COUNT slots to
@@ -154,14 +153,14 @@ inline u32 ResolveSceneLights(
     for(u32 i = 0u; i < lightCount; ++i){
         const NWB::Impl::Scene::SceneLight& light = sceneLights[i];
         shadowImportance[i] = ShadowSlotImportance(
-            LoadFloat(light.colorIntensity),
+            light.colorIntensity,
             VectorSet(
                 light.range,
                 static_cast<f32>(light.type),
                 s_ShadowSlotUnassigned,
                 light.enableCaustics ? s_CausticSlotUnassigned : s_CausticSlotDisabled
             ),
-            LoadFloat(light.position),
+            light.position,
             cameraPosition
         );
     }
@@ -247,7 +246,7 @@ inline SceneShadingGpuData ResolveSceneShadingState(Core::ECS::World& world, con
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world, fallbackAspectRatio);
     const SIMDVector cameraPosition = cameraView.valid()
         ? LoadFloat(cameraView.transform->position)
-        : LoadFloat(defaultBasis.positionDepthBias)
+        : defaultBasis.positionDepthBias
     ;
     StoreFloat(VectorSetW(cameraPosition, static_cast<f32>(lightCount)), &state.cameraPositionLightCount);
     return state;

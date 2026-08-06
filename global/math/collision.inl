@@ -74,12 +74,8 @@ namespace FrustumPlaneIndex{
     return VectorSetW(centerRadius, 0.0f);
 }
 
-[[nodiscard]] NWB_INLINE f32 SphereRadius(const SIMDVector centerRadius)noexcept{
-    return VectorGetW(centerRadius);
-}
-
-[[nodiscard]] NWB_INLINE SIMDVector SphereCenterRadius(const SIMDVector center, const f32 radius)noexcept{
-    return VectorSetW(center, radius);
+[[nodiscard]] NWB_INLINE SIMDVector SphereRadius(const SIMDVector centerRadius)noexcept{
+    return VectorSplatW(centerRadius);
 }
 
 [[nodiscard]] NWB_INLINE SIMDVector SphereCenterRadius(const SIMDVector center, const SIMDVector radius)noexcept{
@@ -550,7 +546,7 @@ inline void FrustumPlanes(
 
 [[nodiscard]] inline bool FrustumPlanesIntersectSphere(const SIMDVector* planes, const SIMDVector centerRadius)noexcept{
     const SIMDVector center = SphereCenter(centerRadius);
-    const SIMDVector radius = VectorReplicate(SphereRadius(centerRadius));
+    const SIMDVector radius = SphereRadius(centerRadius);
     for(u32 planeIndex = 0u; planeIndex < s_FrustumPlaneCount; ++planeIndex){
         SIMDVector outside{};
         SIMDVector inside{};
@@ -1028,7 +1024,7 @@ inline void SIMDCALL BoundingSphere::transform(
 [[nodiscard]] inline ContainmentType::Enum SIMDCALL BoundingSphere::contains(const SIMDVector point)const noexcept{
     const SIMDVector sphereValue = LoadFloat(centerRadius);
     const SIMDVector delta = VectorSubtract(point, CollisionDetail::SphereCenter(sphereValue));
-    const SIMDVector sphereRadius = VectorReplicate(CollisionDetail::SphereRadius(sphereValue));
+    const SIMDVector sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     return CollisionDetail::Vector4AllTrue(VectorLessOrEqual(Vector3LengthSq(delta), VectorMultiply(sphereRadius, sphereRadius))) ? ContainmentType::Contains : ContainmentType::Disjoint;
 }
 
@@ -1039,7 +1035,7 @@ inline void SIMDCALL BoundingSphere::transform(
 )const noexcept{
     const SIMDVector points[CollisionDetail::s_TriangleVertexCount] = { v0, v1, v2 };
     const SIMDVector sphereValue = LoadFloat(centerRadius);
-    if(CollisionDetail::PointsInsideSphere(points, CollisionDetail::s_TriangleVertexCount, CollisionDetail::SphereCenter(sphereValue), VectorReplicate(CollisionDetail::SphereRadius(sphereValue))))
+    if(CollisionDetail::PointsInsideSphere(points, CollisionDetail::s_TriangleVertexCount, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return intersects(v0, v1, v2) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
@@ -1070,7 +1066,7 @@ inline void SIMDCALL BoundingSphere::transform(
     SIMDVector corners[BoundingBox::s_CornerCount];
     CollisionDetail::AabbCorners(LoadFloat(box.center), LoadFloat(box.extents), corners);
     const SIMDVector sphereValue = LoadFloat(centerRadius);
-    if(CollisionDetail::PointsInsideSphere(corners, BoundingBox::s_CornerCount, CollisionDetail::SphereCenter(sphereValue), VectorReplicate(CollisionDetail::SphereRadius(sphereValue))))
+    if(CollisionDetail::PointsInsideSphere(corners, BoundingBox::s_CornerCount, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
@@ -1082,7 +1078,7 @@ inline void SIMDCALL BoundingSphere::transform(
     SIMDVector corners[BoundingOrientedBox::s_CornerCount];
     CollisionDetail::ObbCorners(LoadFloat(box.center), LoadFloat(box.extents), LoadFloat(box.orientation), corners);
     const SIMDVector sphereValue = LoadFloat(centerRadius);
-    if(CollisionDetail::PointsInsideSphere(corners, BoundingOrientedBox::s_CornerCount, CollisionDetail::SphereCenter(sphereValue), VectorReplicate(CollisionDetail::SphereRadius(sphereValue))))
+    if(CollisionDetail::PointsInsideSphere(corners, BoundingOrientedBox::s_CornerCount, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
@@ -1104,7 +1100,7 @@ inline void SIMDCALL BoundingSphere::transform(
         corners
     );
     const SIMDVector sphereValue = LoadFloat(centerRadius);
-    if(CollisionDetail::PointsInsideSphere(corners, BoundingFrustum::s_CornerCount, CollisionDetail::SphereCenter(sphereValue), VectorReplicate(CollisionDetail::SphereRadius(sphereValue))))
+    if(CollisionDetail::PointsInsideSphere(corners, BoundingFrustum::s_CornerCount, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
@@ -1112,10 +1108,9 @@ inline void SIMDCALL BoundingSphere::transform(
 [[nodiscard]] inline bool BoundingSphere::intersects(const BoundingSphere& sphere)const noexcept{
     const SIMDVector sphereValue = LoadFloat(centerRadius);
     const SIMDVector otherSphereValue = LoadFloat(sphere.centerRadius);
-    const f32 radiusSum = CollisionDetail::SphereRadius(sphereValue) + CollisionDetail::SphereRadius(otherSphereValue);
+    const SIMDVector radiusSum = VectorAdd(CollisionDetail::SphereRadius(sphereValue), CollisionDetail::SphereRadius(otherSphereValue));
     const SIMDVector delta = VectorSubtract(CollisionDetail::SphereCenter(otherSphereValue), CollisionDetail::SphereCenter(sphereValue));
-    const SIMDVector radiusSumVector = VectorReplicate(radiusSum);
-    return CollisionDetail::Vector4AllTrue(VectorLessOrEqual(Vector3LengthSq(delta), VectorMultiply(radiusSumVector, radiusSumVector)));
+    return CollisionDetail::Vector4AllTrue(VectorLessOrEqual(Vector3LengthSq(delta), VectorMultiply(radiusSum, radiusSum)));
 }
 
 [[nodiscard]] inline bool BoundingSphere::intersects(const BoundingBox& box)const noexcept{
@@ -1124,14 +1119,14 @@ inline void SIMDCALL BoundingSphere::transform(
     CollisionDetail::MinMaxFromCenterExtents(LoadFloat(box.center), LoadFloat(box.extents), minBounds, maxBounds);
     const SIMDVector sphereValue = LoadFloat(centerRadius);
     const SIMDVector centerVector = CollisionDetail::SphereCenter(sphereValue);
-    const SIMDVector sphereRadius = VectorReplicate(CollisionDetail::SphereRadius(sphereValue));
+    const SIMDVector sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     const SIMDVector closestPoint = CollisionDetail::ClosestPointOnMinMax(centerVector, minBounds, maxBounds);
     return CollisionDetail::Vector4AllTrue(VectorLessOrEqual(Vector3LengthSq(VectorSubtract(closestPoint, centerVector)), VectorMultiply(sphereRadius, sphereRadius)));
 }
 
 [[nodiscard]] inline bool BoundingSphere::intersects(const BoundingOrientedBox& box)const noexcept{
     const SIMDVector sphereValue = LoadFloat(centerRadius);
-    const SIMDVector sphereRadius = VectorReplicate(CollisionDetail::SphereRadius(sphereValue));
+    const SIMDVector sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     const SIMDVector localCenter = CollisionDetail::PointToObbLocal(CollisionDetail::SphereCenter(sphereValue), LoadFloat(box.center), LoadFloat(box.orientation));
     const SIMDVector extents = LoadFloat(box.extents);
     const SIMDVector closestPoint = CollisionDetail::ClosestPointOnMinMax(localCenter, VectorNegate(extents), extents);
@@ -1149,7 +1144,7 @@ inline void SIMDCALL BoundingSphere::transform(
 )const noexcept{
     const SIMDVector sphereValue = LoadFloat(centerRadius);
     const SIMDVector centerVector = CollisionDetail::SphereCenter(sphereValue);
-    const SIMDVector sphereRadius = VectorReplicate(CollisionDetail::SphereRadius(sphereValue));
+    const SIMDVector sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     const SIMDVector closestPoint = CollisionDetail::ClosestPointOnTriangle(centerVector, v0, v1, v2);
     return CollisionDetail::Vector4AllTrue(VectorLessOrEqual(Vector3LengthSq(VectorSubtract(closestPoint, centerVector)), VectorMultiply(sphereRadius, sphereRadius)));
 }
@@ -1157,7 +1152,7 @@ inline void SIMDCALL BoundingSphere::transform(
 [[nodiscard]] inline PlaneIntersectionType::Enum SIMDCALL BoundingSphere::intersects(const SIMDVector plane)const noexcept{
     const SIMDVector sphereValue = LoadFloat(centerRadius);
     const SIMDVector distance = CollisionDetail::PlaneDistance(plane, CollisionDetail::SphereCenter(sphereValue));
-    const SIMDVector sphereRadius = VectorReplicate(CollisionDetail::SphereRadius(sphereValue));
+    const SIMDVector sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     if(CollisionDetail::Vector4AllTrue(VectorGreater(distance, sphereRadius)))
         return PlaneIntersectionType::Front;
     if(CollisionDetail::Vector4AllTrue(VectorLess(distance, VectorNegate(sphereRadius))))
@@ -1171,7 +1166,7 @@ inline void SIMDCALL BoundingSphere::transform(
     f32& outDistance
 )const noexcept{
     const SIMDVector sphereValue = LoadFloat(centerRadius);
-    const SIMDVector sphereRadius = VectorReplicate(CollisionDetail::SphereRadius(sphereValue));
+    const SIMDVector sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     const SIMDVector localOrigin = VectorSubtract(origin, CollisionDetail::SphereCenter(sphereValue));
     const SIMDVector bVector = Vector3Dot(localOrigin, direction);
     const SIMDVector cVector = VectorSubtract(Vector3LengthSq(localOrigin), VectorMultiply(sphereRadius, sphereRadius));
@@ -1198,7 +1193,7 @@ inline void SIMDCALL BoundingSphere::transform(
     const SIMDVector planes[CollisionDetail::s_FrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
     const SIMDVector sphereValue = LoadFloat(centerRadius);
     const SIMDVector centerVector = CollisionDetail::SphereCenter(sphereValue);
-    const SIMDVector sphereRadius = VectorReplicate(CollisionDetail::SphereRadius(sphereValue));
+    const SIMDVector sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     SIMDVector anyIntersecting = VectorFalseInt();
     for(const SIMDVector plane : planes){
         SIMDVector outside{};
@@ -1364,13 +1359,12 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{
     CollisionDetail::MinMaxFromCenterExtents(LoadFloat(center), LoadFloat(extents), minBounds, maxBounds);
     const SIMDVector sphereValue = LoadFloat(sphere.centerRadius);
     const SIMDVector sphereCenter = CollisionDetail::SphereCenter(sphereValue);
-    const f32 sphereRadius = CollisionDetail::SphereRadius(sphereValue);
+    const SIMDVector sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     const SIMDVector closestPoint = CollisionDetail::ClosestPointOnMinMax(sphereCenter, minBounds, maxBounds);
-    const SIMDVector radiusVector = VectorReplicate(sphereRadius);
-    if(CollisionDetail::Vector4AllTrue(VectorGreater(Vector3LengthSq(VectorSubtract(closestPoint, sphereCenter)), VectorMultiply(radiusVector, radiusVector))))
+    if(CollisionDetail::Vector4AllTrue(VectorGreater(Vector3LengthSq(VectorSubtract(closestPoint, sphereCenter)), VectorMultiply(sphereRadius, sphereRadius))))
         return ContainmentType::Disjoint;
 
-    if(Vector3GreaterOrEqual(VectorSubtract(sphereCenter, radiusVector), minBounds) && Vector3LessOrEqual(VectorAdd(sphereCenter, radiusVector), maxBounds))
+    if(Vector3GreaterOrEqual(VectorSubtract(sphereCenter, sphereRadius), minBounds) && Vector3LessOrEqual(VectorAdd(sphereCenter, sphereRadius), maxBounds))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
@@ -1514,7 +1508,7 @@ inline void BoundingBox::createMerged(BoundingBox& outBox, const BoundingBox& bo
 inline void BoundingBox::createFromSphere(BoundingBox& outBox, const BoundingSphere& sphere)noexcept{
     const SIMDVector sphereValue = LoadFloat(sphere.centerRadius);
     const SIMDVector centerVector = CollisionDetail::SphereCenter(sphereValue);
-    const SIMDVector extentsVector = VectorReplicate(CollisionDetail::SphereRadius(sphereValue));
+    const SIMDVector extentsVector = CollisionDetail::SphereRadius(sphereValue);
     StoreFloat(VectorSetW(centerVector, 0.0f), &outBox.center);
     StoreFloat(VectorSetW(extentsVector, 0.0f), &outBox.extents);
 }
@@ -1618,15 +1612,14 @@ inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{
 
 [[nodiscard]] inline ContainmentType::Enum BoundingOrientedBox::contains(const BoundingSphere& sphere)const noexcept{
     const SIMDVector sphereValue = LoadFloat(sphere.centerRadius);
-    const f32 sphereRadius = CollisionDetail::SphereRadius(sphereValue);
+    const SIMDVector sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     const SIMDVector localCenter = CollisionDetail::PointToObbLocal(CollisionDetail::SphereCenter(sphereValue), LoadFloat(center), LoadFloat(orientation));
     const SIMDVector extentsVector = LoadFloat(extents);
     const SIMDVector closestPoint = CollisionDetail::ClosestPointOnMinMax(localCenter, VectorNegate(extentsVector), extentsVector);
-    const SIMDVector radiusVector = VectorReplicate(sphereRadius);
-    if(CollisionDetail::Vector4AllTrue(VectorGreater(Vector3LengthSq(VectorSubtract(closestPoint, localCenter)), VectorMultiply(radiusVector, radiusVector))))
+    if(CollisionDetail::Vector4AllTrue(VectorGreater(Vector3LengthSq(VectorSubtract(closestPoint, localCenter)), VectorMultiply(sphereRadius, sphereRadius))))
         return ContainmentType::Disjoint;
 
-    if(Vector3LessOrEqual(VectorAbs(localCenter), VectorSubtract(extentsVector, radiusVector)))
+    if(Vector3LessOrEqual(VectorAbs(localCenter), VectorSubtract(extentsVector, sphereRadius)))
         return ContainmentType::Contains;
     return ContainmentType::Intersects;
 }
@@ -1870,7 +1863,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{
     CollisionDetail::FrustumPlanes(LoadFloat(origin), LoadFloat(orientation), rightSlope, leftSlope, topSlope, bottomSlope, nearPlane, farPlane, planes);
     const SIMDVector sphereValue = LoadFloat(sphere.centerRadius);
     const SIMDVector centerVector = CollisionDetail::SphereCenter(sphereValue);
-    const SIMDVector sphereRadius = VectorReplicate(CollisionDetail::SphereRadius(sphereValue));
+    const SIMDVector sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     SIMDVector anyIntersecting = VectorFalseInt();
     for(const SIMDVector plane : planes){
         SIMDVector outside{};

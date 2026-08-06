@@ -74,7 +74,7 @@
         );
     }
     for(usize i = 0u; i < normals.size(); ++i){
-        if(ValidDirectionVector(MakeMeshNormalVector(LoadFloat(LoadHalf4U(normals[i])))))
+        if(ValidDirectionVector(MakeMeshNormalVector(LoadHalf(normals[i]))))
             continue;
 
         return FailMeshPayloadIndexedValidation(
@@ -86,7 +86,7 @@
         );
     }
     for(usize i = 0u; i < tangents.size(); ++i){
-        if(ValidTangentVector(MakeMeshTangentVector(LoadFloat(LoadHalf4U(tangents[i])))))
+        if(ValidTangentVector(MakeMeshTangentVector(LoadHalf(tangents[i]))))
             continue;
 
         return FailMeshPayloadIndexedValidation(
@@ -110,7 +110,7 @@
         );
     }
     for(usize i = 0u; i < colors.size(); ++i){
-        if(VectorIsFinite(MakeMeshColorVector(LoadFloat(LoadHalf4U(colors[i]))), VectorComponentMask::s_XYZW))
+        if(VectorIsFinite(MakeMeshColorVector(LoadHalf(colors[i])), VectorComponentMask::s_XYZW))
             continue;
 
         return FailMeshPayloadIndexedValidation(

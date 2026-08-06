@@ -48,6 +48,13 @@ static constexpr f32 s_FrameFallbackTangentZAxisAlignmentThreshold = 0.999f;
     return fallbackHandedness < 0.0f ? -1.0f : 1.0f;
 }
 
+[[nodiscard]] NWB_INLINE SIMDVector FrameTangentHandedness(const SIMDVector handedness, const SIMDVector fallbackHandedness)noexcept{
+    const SIMDVector zero = VectorZero();
+    const SIMDVector sign = VectorSelect(s_SIMDOne, s_SIMDNegativeOne, VectorLess(handedness, zero));
+    const SIMDVector fallbackSign = VectorSelect(s_SIMDOne, s_SIMDNegativeOne, VectorLess(fallbackHandedness, zero));
+    return VectorSelect(fallbackSign, sign, VectorGreater(VectorAbs(handedness), VectorReplicate(s_FrameHandednessEpsilon)));
+}
+
 [[nodiscard]] NWB_INLINE SIMDVector FrameResolveTangent(const SIMDVector normal, const SIMDVector tangent, const SIMDVector fallbackTangent){
     const SIMDVector safeFallbackTangent = FrameFallbackTangent(normal);
 
@@ -83,9 +90,10 @@ static constexpr f32 s_FrameFallbackTangentZAxisAlignmentThreshold = 0.999f;
 
 NWB_INLINE void FrameOrthonormalize(SIMDVector& normal, SIMDVector& tangent, const SIMDVector fallbackNormal, const SIMDVector fallbackTangent){
     normal = FrameNormalizeDirection(normal, FrameNormalizeDirection(fallbackNormal, VectorSet(0.0f, 0.0f, 1.0f, 0.0f)));
-    tangent = VectorSetW(
+    tangent = VectorSelect(
         FrameResolveTangent(normal, tangent, fallbackTangent),
-        FrameTangentHandedness(VectorGetW(tangent), VectorGetW(fallbackTangent))
+        FrameTangentHandedness(tangent, fallbackTangent),
+        s_SIMDMaskW
     );
 }
 

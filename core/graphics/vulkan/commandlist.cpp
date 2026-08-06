@@ -53,6 +53,7 @@ void CommandList::discardUnsubmittedUploadChunks(){
 void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     discardUnsubmittedUploadChunks();
     m_currentCmdBuf.reset();
+    m_descriptorBuffersBound = false;
 
     if(initialStates && !initialStates->valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot open command list from an invalid resource-state handoff"));
@@ -154,6 +155,7 @@ void CommandList::clearState(){
     m_currentMeshletState = {};
     m_currentRayTracingState = {};
     m_renderPassActive = false;
+    m_descriptorBuffersBound = false;
     m_renderPassFramebuffer = nullptr;
 
     m_pendingImageBarriers.clear();

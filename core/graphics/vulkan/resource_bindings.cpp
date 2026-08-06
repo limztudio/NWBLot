@@ -1517,11 +1517,7 @@ void CommandList::bindDescriptorBufferHeap(
         return;
     }
 
-    VkDescriptorBufferBindingInfoEXT bindingInfos[2] = {
-        m_context.descriptorBufferManager->getResourceBindingInfo(),
-        m_context.descriptorBufferManager->getSamplerBindingInfo()
-    };
-    vkCmdBindDescriptorBuffersEXT(m_currentCmdBuf->m_cmdBuf, 2u, bindingInfos);
+    ensureDescriptorBuffersBound();
 
     // Resource, sampler, and TLAS heap sets are contiguous at 8/9/10.
     const u32 resourceIndex = m_context.descriptorBufferManager->getResourceBufferIndex();
@@ -1544,6 +1540,19 @@ void CommandList::bindDescriptorBufferHeap(
     );
 }
 
+void CommandList::ensureDescriptorBuffersBound(){
+    if(m_descriptorBuffersBound)
+        return;
+
+    const DescriptorBufferManager& manager = *m_context.descriptorBufferManager;
+    const VkDescriptorBufferBindingInfoEXT bindingInfos[2] = {
+        manager.getResourceBindingInfo(),
+        manager.getSamplerBindingInfo()
+    };
+    vkCmdBindDescriptorBuffersEXT(m_currentCmdBuf->m_cmdBuf, 2u, bindingInfos);
+    m_descriptorBuffersBound = true;
+}
+
 void CommandList::bindDescriptorBufferEmptySet(const VkPipelineBindPoint bindPoint, const VkPipelineLayout pipelineLayout){
     if(!m_currentCmdBuf || pipelineLayout == VK_NULL_HANDLE)
         return;
@@ -1551,11 +1560,7 @@ void CommandList::bindDescriptorBufferEmptySet(const VkPipelineBindPoint bindPoi
         return;
 
     // Select empty set 0 to establish descriptor-buffer state for push-only layouts.
-    VkDescriptorBufferBindingInfoEXT bindingInfos[2] = {
-        m_context.descriptorBufferManager->getResourceBindingInfo(),
-        m_context.descriptorBufferManager->getSamplerBindingInfo()
-    };
-    vkCmdBindDescriptorBuffersEXT(m_currentCmdBuf->m_cmdBuf, 2u, bindingInfos);
+    ensureDescriptorBuffersBound();
 
     const u32 resourceBufferIndex = m_context.descriptorBufferManager->getResourceBufferIndex();
     constexpr VkDeviceSize s_EmptySetOffsetBytes = 0u;

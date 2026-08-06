@@ -2106,6 +2106,7 @@ private:
     void appendPendingOwnershipReleaseBarriers();
     void retainResource(GraphicsResource* resource);
     void retainStagingBuffer(Buffer& buffer);
+    void ensureDescriptorBuffersBound();
     // Bind empty set 0 before global heap sets; no local descriptor transport.
     void bindDescriptorBufferEmptySet(VkPipelineBindPoint bindPoint, VkPipelineLayout pipelineLayout);
     void setViewportState(const ViewportState& viewport);
@@ -2149,6 +2150,7 @@ private:
     StateTracker m_stateTracker;
     bool m_enableAutomaticBarriers = true;
     bool m_renderPassActive = false;
+    bool m_descriptorBuffersBound = false;
     Framebuffer* m_renderPassFramebuffer = nullptr;
 
     GraphicsState m_currentGraphicsState;

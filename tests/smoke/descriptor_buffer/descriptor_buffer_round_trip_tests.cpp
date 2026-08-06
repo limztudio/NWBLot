@@ -564,6 +564,62 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReleasesRejectedS
 }
 
 
+// Both submit forms must reject an incomplete batch before Vulkan sees any part of it, and that rejection must
+// resolve the ticket so a later retry cannot accidentally submit a split timing scope.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketMalformedBatchesResolveAcrossSubmitOverloads){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = s_scope->graphics().gpuTiming();
+
+    auto queueCommandList = device.createCommandList();
+    auto laneCommandList = device.createCommandList();
+    ASSERT_NE(queueCommandList.get(), nullptr);
+    ASSERT_NE(laneCommandList.get(), nullptr);
+    queueCommandList->open();
+    queueCommandList->close();
+    laneCommandList->open();
+    laneCommandList->close();
+    ASSERT_TRUE(queueCommandList->hasCommandBuffer());
+    ASSERT_TRUE(laneCommandList->hasCommandBuffer());
+
+    CommandList* queueCommandLists[] = { queueCommandList.get() };
+    GpuTimingSubmissionTicket rejectedQueueTicket(timing);
+    EXPECT_FALSE(rejectedQueueTicket.submit(device, nullptr, 0u));
+    EXPECT_FALSE(rejectedQueueTicket.submit(device, queueCommandLists, 1u));
+    EXPECT_TRUE(queueCommandList->hasCommandBuffer());
+
+    CommandList* incompleteLaneCommandLists[] = { nullptr };
+    CommandList* laneCommandLists[] = { laneCommandList.get() };
+    GpuTimingSubmissionTicket rejectedLaneTicket(timing);
+    EXPECT_FALSE(rejectedLaneTicket.submit(
+        device,
+        incompleteLaneCommandLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
+    EXPECT_FALSE(rejectedLaneTicket.submit(
+        device,
+        laneCommandLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
+    EXPECT_TRUE(laneCommandList->hasCommandBuffer());
+
+    GpuTimingSubmissionTicket acceptedQueueTicket(timing);
+    ASSERT_TRUE(acceptedQueueTicket.submit(device, queueCommandLists, 1u));
+    GpuTimingSubmissionTicket acceptedLaneTicket(timing);
+    ASSERT_TRUE(acceptedLaneTicket.submit(
+        device,
+        laneCommandLists,
+        1u,
+        RenderLane::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
+    ASSERT_TRUE(device.waitForIdle());
+}
+
+
 // Independent packet jobs can share one submission ticket. Both workers reserve the same timing scope at the same
 // latch, so the recorder must claim distinct query slots before either command list reaches its ending timestamp.
 TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurrentWorkerScopes){

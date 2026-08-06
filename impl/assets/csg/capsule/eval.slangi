@@ -30,28 +30,11 @@ NwbCsgSample nwbEvalCsgCapsuleShape(const float3 shapePosition, const NwbCsgCutt
 }
 
 #if defined(NWB_CSG_ENABLE_SHAPE_EVAL_CHAIN)
-#if defined(NWB_CSG_SHAPE_EVAL_CHAIN)
-#define NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN NWB_CSG_SHAPE_EVAL_CHAIN
-#else
-#define NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN nwbTryEvalProjectCsgShape
-#endif
-
-bool nwbTryEvalCsgCapsuleShape(
-    const uint shapeType,
-    const float3 shapePosition,
-    const NwbCsgCutter cutter,
-    out NwbCsgSample outSample
-){
-    if(shapeType == NWB_CSG_EVAL_SHAPE_ID){
-        outSample = nwbEvalCsgCapsuleShape(shapePosition, cutter);
-        return true;
-    }
-    return NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN(shapeType, shapePosition, cutter, outSample);
-}
-
+#define NWB_CSG_SHAPE_EVAL_FUNCTION nwbEvalCsgCapsuleShape
+#define NWB_CSG_TRY_EVAL_SHAPE_FUNCTION nwbTryEvalCsgCapsuleShape
+#include "../shape_eval_chain.slangi"
 #undef NWB_CSG_SHAPE_EVAL_CHAIN
 #define NWB_CSG_SHAPE_EVAL_CHAIN nwbTryEvalCsgCapsuleShape
-#undef NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN
 #endif
 
 

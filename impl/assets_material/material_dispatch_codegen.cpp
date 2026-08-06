@@ -141,10 +141,11 @@ static Path BuildDeferredBxdfIncludeRoot(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool PrepareDeferredBxdfIncludeRoot(const Path& includeRoot){
+static bool PrepareGeneratedIncludeRoot(const Path& includeRoot, const AStringView generatorName){
     ErrorCode errorCode;
     if(!RemoveAllIfExists(includeRoot, errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to clear generated include directory '{}': {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to clear generated include directory '{}': {}")
+            , StringConvert(generatorName)
             , PathToString<tchar>(includeRoot)
             , StringConvert(errorCode.message())
         );
@@ -153,7 +154,8 @@ static bool PrepareDeferredBxdfIncludeRoot(const Path& includeRoot){
 
     errorCode.clear();
     if(!EnsureDirectories(includeRoot, errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to create generated include directory '{}': {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create generated include directory '{}': {}")
+            , StringConvert(generatorName)
             , PathToString<tchar>(includeRoot)
             , StringConvert(errorCode.message())
         );
@@ -176,7 +178,7 @@ bool EmitDeferredBxdfDispatchModuleImpl(
 ){
     outIncludeRoot.clear();
     outIncludeRoot = BuildDeferredBxdfIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
-    if(!PrepareDeferredBxdfIncludeRoot(outIncludeRoot))
+    if(!PrepareGeneratedIncludeRoot(outIncludeRoot, "Deferred bxdf dispatch"))
         return false;
 
     // Build a dense id -> bxdf-source table from the (already assigned) materials. Each unique bxdf appears at
@@ -301,32 +303,6 @@ static Path BuildShadowTransmittanceIncludeRoot(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool PrepareShadowTransmittanceIncludeRoot(const Path& includeRoot){
-    ErrorCode errorCode;
-    if(!RemoveAllIfExists(includeRoot, errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: failed to clear generated include directory '{}': {}")
-            , PathToString<tchar>(includeRoot)
-            , StringConvert(errorCode.message())
-        );
-        return false;
-    }
-
-    errorCode.clear();
-    if(!EnsureDirectories(includeRoot, errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shadow transmittance dispatch: failed to create generated include directory '{}': {}")
-            , PathToString<tchar>(includeRoot)
-            , StringConvert(errorCode.message())
-        );
-        return false;
-    }
-
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using ShadowTransmittanceBindEntryLookup = HashMap<
     Name,
     const MaterialBindEntry*,
@@ -348,60 +324,6 @@ using ShadowTransmittanceBindAliasVector = Vector<ScratchString, ScratchArena>;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-static void AppendShadowTransmittanceBindUpperIdentifier(const AStringView text, ScratchString& inOutText){
-    const usize beginSize = inOutText.size();
-    for(const char ch : text)
-        inOutText += IsAsciiAlphaNumeric(ch) ? ToAsciiUpper(ch) : '_';
-    if(inOutText.size() == beginSize)
-        inOutText += "VALUE";
-}
-
-static void AppendShadowTransmittanceBindPascalIdentifier(const AStringView text, ScratchString& inOutText){
-    const usize beginSize = inOutText.size();
-    bool upperNext = true;
-    for(const char ch : text){
-        if(ch == '_'){
-            upperNext = true;
-            continue;
-        }
-
-        if(upperNext)
-            inOutText += ToAsciiUpper(ch);
-        else
-            inOutText += ch;
-        upperNext = false;
-    }
-    if(inOutText.size() == beginSize)
-        inOutText += "Value";
-}
-
-static ScratchString BuildShadowTransmittanceBindGeneratedSymbol(
-    ScratchArena& scratchArena,
-    const InitializerList<AStringView> nameSegments,
-    const AStringView suffix
-){
-    ScratchString symbol("NWB_MATERIAL_BIND_", scratchArena);
-    bool firstSegment = true;
-    for(const AStringView nameSegment : nameSegments){
-        if(!firstSegment)
-            symbol += '_';
-        AppendShadowTransmittanceBindUpperIdentifier(nameSegment, symbol);
-        firstSegment = false;
-    }
-    symbol += suffix;
-    return symbol;
-}
-
-static ScratchString BuildShadowTransmittanceBindAccessorName(
-    ScratchArena& scratchArena,
-    const InitializerList<AStringView> nameSegments
-){
-    ScratchString functionName("nwbMaterialBindLoad", scratchArena);
-    for(const AStringView nameSegment : nameSegments)
-        AppendShadowTransmittanceBindPascalIdentifier(nameSegment, functionName);
-    return functionName;
-}
 
 static void AppendShadowTransmittanceBindAlias(
     const AStringView symbol,
@@ -445,7 +367,7 @@ static bool AppendShadowTransmittanceBindAliases(
         char laneDigits[TextDetail::s_DecimalTextBufferBytes] = {};
         ScratchString suffix("INTERFACE_HASH_", scratchArena);
         suffix += FormatDecimal(static_cast<usize>(lane), laneDigits);
-        const ScratchString symbol = BuildShadowTransmittanceBindGeneratedSymbol(scratchArena, {}, AStringView(suffix));
+        const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, AStringView(suffix));
         AppendShadowTransmittanceBindAlias(
             AStringView(symbol),
             bindNamespace,
@@ -466,7 +388,7 @@ static bool AppendShadowTransmittanceBindAliases(
         "MUTABLE_BYTE_SIZE"
     };
     for(const AStringView suffix : layoutSymbols){
-        const ScratchString symbol = BuildShadowTransmittanceBindGeneratedSymbol(scratchArena, {}, suffix);
+        const ScratchString symbol = BuildMaterialBindGeneratedSymbol(scratchArena, {}, suffix);
         AppendShadowTransmittanceBindAlias(
             AStringView(symbol),
             bindNamespace,
@@ -502,7 +424,7 @@ static bool AppendShadowTransmittanceBindAliases(
         const AStringView instanceName(instance.name);
         const AStringView blockSuffixes[] = { "_STORAGE", "_BYTE_OFFSET", "_BYTE_SIZE" };
         for(const AStringView suffix : blockSuffixes){
-            const ScratchString symbol = BuildShadowTransmittanceBindGeneratedSymbol(
+            const ScratchString symbol = BuildMaterialBindGeneratedSymbol(
                 scratchArena,
                 { instanceName },
                 suffix
@@ -517,7 +439,7 @@ static bool AppendShadowTransmittanceBindAliases(
             );
         }
 
-        const ScratchString blockAccessor = BuildShadowTransmittanceBindAccessorName(scratchArena, { instanceName });
+        const ScratchString blockAccessor = BuildMaterialBindAccessorName(scratchArena, { instanceName });
         AppendShadowTransmittanceBindAlias(
             AStringView(blockAccessor),
             bindNamespace,
@@ -531,7 +453,7 @@ static bool AppendShadowTransmittanceBindAliases(
             const AStringView fieldName(field.name);
             const AStringView fieldSuffixes[] = { "_BYTE_OFFSET", "_KEY", "_DEFAULT" };
             for(const AStringView suffix : fieldSuffixes){
-                const ScratchString symbol = BuildShadowTransmittanceBindGeneratedSymbol(
+                const ScratchString symbol = BuildMaterialBindGeneratedSymbol(
                     scratchArena,
                     { instanceName, fieldName },
                     suffix
@@ -546,7 +468,7 @@ static bool AppendShadowTransmittanceBindAliases(
                 );
             }
 
-            const ScratchString fieldAccessor = BuildShadowTransmittanceBindAccessorName(
+            const ScratchString fieldAccessor = BuildMaterialBindAccessorName(
                 scratchArena,
                 { instanceName, fieldName }
             );
@@ -614,7 +536,7 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
 ){
     outIncludeRoot.clear();
     outIncludeRoot = BuildShadowTransmittanceIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
-    if(!PrepareShadowTransmittanceIncludeRoot(outIncludeRoot))
+    if(!PrepareGeneratedIncludeRoot(outIncludeRoot, "Shadow transmittance dispatch"))
         return false;
 
     // Build a dense shadowTransmittanceModelId -> (surface source, .bind interface) table from the (already

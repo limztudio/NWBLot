@@ -110,38 +110,6 @@ NwbRayTraceVertexAttrib nwbGiSwLoadVertexAttrib(const uint attributeSlot, const 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct NwbGiSwTriangleHit{
-    bool hit;
-    float t;
-    float u;
-    float v;
-    float w;
-    float3 normal;
-};
-
-NwbGiSwTriangleHit nwbGiSwRayTriangle(const float3 origin, const float3 direction, const float tMin, const float tMax, const float3 v0, const float3 v1, const float3 v2){
-    NwbGiSwTriangleHit result;
-    result.hit = false;
-    result.t = 0.0;
-    result.u = 0.0;
-    result.v = 0.0;
-    result.w = 0.0;
-    result.normal = float3(0.0, 0.0, 1.0);
-
-    const NwbRayTriangleHit hit = nwbRayTriangleMollerTrumbore(origin, direction, tMin, tMax, v0, v1, v2);
-    result.hit = hit.hit;
-    result.t = hit.t;
-    result.u = hit.u;
-    result.v = hit.v;
-    result.w = hit.w;
-    result.normal = hit.normal;
-    return result;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Per-instance closest-hit refinement: push the world ray into object space, walk the mesh BVH front-to-back, keep the
 // nearest triangle crossing. On hit, compute the geometric face normal for Lambert lighting and reconstruct the
 // authored material-surface inputs (normal + uv0 + typed material context) for the GI bounce albedo.
@@ -166,7 +134,7 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
             const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
             const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
             const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-            const NwbGiSwTriangleHit triHit = nwbGiSwRayTriangle(origin, direction, tMin, closest.t, v0, v1, v2);
+            const NwbRayTriangleHit triHit = nwbRayTriangleMollerTrumbore(origin, direction, tMin, closest.t, v0, v1, v2);
             if(triHit.hit){
                 const uint attributeBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
                 const NwbRayTraceVertexAttrib a0 = nwbGiSwLoadVertexAttrib(material.attributeSlot, attributeBase);

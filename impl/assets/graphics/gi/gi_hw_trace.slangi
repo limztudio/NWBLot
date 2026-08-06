@@ -20,6 +20,7 @@
 
 #include "hw_binding_slots.h"
 #include "../bvh/constants.h"
+#include "../bvh/ray_vertex_attrib.slangi"
 #include "../raytrace/constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"
@@ -72,23 +73,11 @@ uint nwbMeshFrameViewHeapSlot(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-triangle-corner normal + uv0, in the shared NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES-byte ray-trace attribute layout. GI needs these inputs to
+// Per-triangle-corner normal + uv0 use the canonical shared ray-trace attribute decoder. GI needs these inputs to
 // evaluate the material surface hook exactly through its declared contract rather than inferring an interface field.
-struct NwbGiHwVertexAttrib{
-    half3 normal;
-    float2 uv0;
-};
-
-NwbGiHwVertexAttrib nwbGiHwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
+NwbRayTraceVertexAttrib nwbGiHwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
     // attributeSlot is a non-uniform global heap slot; NwbHeapRawBuffer() applies the required decoration per load.
-    const uint4 packed = NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES);
-    NwbGiHwVertexAttrib attrib;
-    attrib.normal = half3(float3(
-        nwbUnpackHalf2x16(packed.x),
-        nwbUnpackHalf2x16(packed.y).x
-    ));
-    attrib.uv0 = asfloat(packed.zw);
-    return attrib;
+    return nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
 }
 
 
@@ -150,9 +139,9 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     const float2 bary = query.CommittedTriangleBarycentrics();
     const float3 weights = float3(1.0 - bary.x - bary.y, bary.x, bary.y);
     const uint attributeBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-    const NwbGiHwVertexAttrib a0 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase);
-    const NwbGiHwVertexAttrib a1 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
-    const NwbGiHwVertexAttrib a2 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
+    const NwbRayTraceVertexAttrib a0 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase);
+    const NwbRayTraceVertexAttrib a1 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
+    const NwbRayTraceVertexAttrib a2 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
     const float3 objectShadingNormal = float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z;
 
     NwbShadowHit surfaceHit;

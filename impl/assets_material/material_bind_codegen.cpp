@@ -230,33 +230,6 @@ static void AppendMaterialBindGeneratedSeparator(CookString& inOutSource, const 
         inOutSource += '\n';
 }
 
-static void AppendGeneratedUpperIdentifier(const AStringView text, CookString& inOutText){
-    const usize beginSize = inOutText.size();
-    for(const char ch : text)
-        inOutText += IsAsciiAlphaNumeric(ch) ? ToAsciiUpper(ch) : '_';
-    if(inOutText.size() == beginSize)
-        inOutText += "VALUE";
-}
-
-static void AppendGeneratedPascalIdentifier(const AStringView text, CookString& inOutText){
-    const usize beginSize = inOutText.size();
-    bool upperNext = true;
-    for(const char ch : text){
-        if(ch == '_'){
-            upperNext = true;
-            continue;
-        }
-
-        if(upperNext)
-            inOutText += ToAsciiUpper(ch);
-        else
-            inOutText += ch;
-        upperNext = false;
-    }
-    if(inOutText.size() == beginSize)
-        inOutText += "Value";
-}
-
 static void AppendU32Slang(const u32 value, CookString& inOutText){
     char digits[TextDetail::s_DecimalTextBufferBytes] = {};
     inOutText += FormatDecimal(static_cast<usize>(value), digits);
@@ -274,35 +247,8 @@ static void AppendU64AsUint2Slang(const u64 value, CookString& inOutText){
 
 static CookString BuildMaterialBindIncludeGuard(CookArena& arena, const AStringView includePath){
     CookString guard("NWB_GENERATED_MATERIAL_BIND_", arena);
-    AppendGeneratedUpperIdentifier(AStringView(includePath), guard);
+    AppendMaterialBindGeneratedUpperIdentifier(AStringView(includePath), guard);
     return guard;
-}
-
-static CookString BuildMaterialBindGeneratedSymbol(
-    CookArena& arena,
-    const InitializerList<AStringView> nameSegments,
-    const AStringView suffix
-){
-    CookString symbol("NWB_MATERIAL_BIND_", arena);
-    bool firstSegment = true;
-    for(const AStringView nameSegment : nameSegments){
-        if(!firstSegment)
-            symbol += '_';
-        AppendGeneratedUpperIdentifier(nameSegment, symbol);
-        firstSegment = false;
-    }
-    symbol += suffix;
-    return symbol;
-}
-
-static CookString BuildMaterialBindAccessorName(
-    CookArena& arena,
-    const InitializerList<AStringView> nameSegments
-){
-    CookString functionName("nwbMaterialBindLoad", arena);
-    for(const AStringView nameSegment : nameSegments)
-        AppendGeneratedPascalIdentifier(nameSegment, functionName);
-    return functionName;
 }
 
 static bool RegisterGeneratedMaterialBindSymbol(

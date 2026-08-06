@@ -47,44 +47,6 @@ static constexpr AStringView s_MaxAnisotropyField = "max_anisotropy";
 static constexpr AStringView s_MipBiasField = "mip_bias";
 static constexpr AStringView s_BorderColorField = "border_color";
 
-[[nodiscard]] static bool ReadRequiredStringField(
-    const Path& nwbFilePath,
-    const Value& asset,
-    const AStringView fieldName,
-    AStringView& outValue
-){
-    outValue = {};
-    const Value* const field = asset.findField(fieldName);
-    if(!field){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-    if(!field->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a string")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    const MStringView text = field->asString();
-    outValue = AStringView(text.data(), text.size());
-    if(outValue.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must not be empty")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-    return true;
-}
-
 [[nodiscard]] static bool ReadFiniteF32Value(
     const Path& nwbFilePath,
     const Value& value,
@@ -144,7 +106,7 @@ static constexpr AStringView s_BorderColorField = "border_color";
     bool& outLinear
 ){
     AStringView value;
-    if(!ReadRequiredStringField(nwbFilePath, asset, fieldName, value))
+    if(!Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, fieldName, true, value))
         return false;
     if(value == "nearest"){
         outLinear = false;
@@ -170,7 +132,7 @@ static constexpr AStringView s_BorderColorField = "border_color";
     Core::SamplerAddressMode::Enum& outAddressMode
 ){
     AStringView value;
-    if(!ReadRequiredStringField(nwbFilePath, asset, fieldName, value))
+    if(!Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, fieldName, true, value))
         return false;
 
     if(value == "clamp")
@@ -200,7 +162,7 @@ static constexpr AStringView s_BorderColorField = "border_color";
     Core::SamplerReductionType::Enum& outReductionType
 ){
     AStringView value;
-    if(!ReadRequiredStringField(nwbFilePath, asset, s_ReductionField, value))
+    if(!Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_ReductionField, true, value))
         return false;
 
     if(value == "standard")

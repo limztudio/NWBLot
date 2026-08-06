@@ -368,18 +368,21 @@ template<typename MetadataValue>
     );
 }
 
-// Shared cooker-side metadata field readers. Asset names and typed references always validate the same missing,
-// string-type, and required-nonempty contract before a cooker consumes them.
+// Shared cooker-side metadata field readers keep string, name, and typed-reference missing/type/nonempty validation
+// consistent before a cooker consumes them.
 template<typename MetadataValue>
-[[nodiscard]] inline bool ReadMetadataNameField(
+[[nodiscard]] inline bool ReadMetadataStringField(
     const Path& nwbFilePath,
     const MetadataValue& object,
     const AStringView diagnosticPrefix,
     const AStringView fieldName,
     const bool required,
-    Name& outName
+    AStringView& outText,
+    bool* const outPresent = nullptr
 ){
-    outName = NAME_NONE;
+    outText = {};
+    if(outPresent)
+        *outPresent = false;
 
     const auto* fieldValue = object.findField(fieldName);
     if(!fieldValue){
@@ -393,6 +396,8 @@ template<typename MetadataValue>
         );
         return false;
     }
+    if(outPresent)
+        *outPresent = true;
     if(!fieldValue->isString()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a string")
             , StringConvert(diagnosticPrefix)
@@ -403,7 +408,38 @@ template<typename MetadataValue>
     }
 
     const auto text = fieldValue->asString();
-    outName = Name(AStringView(text.data(), text.size()));
+    outText = AStringView(text.data(), text.size());
+    if(required && outText.empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must not be empty")
+            , StringConvert(diagnosticPrefix)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(fieldName)
+        );
+        return false;
+    }
+    return true;
+}
+
+template<typename MetadataValue>
+[[nodiscard]] inline bool ReadMetadataNameField(
+    const Path& nwbFilePath,
+    const MetadataValue& object,
+    const AStringView diagnosticPrefix,
+    const AStringView fieldName,
+    const bool required,
+    Name& outName
+){
+    outName = NAME_NONE;
+
+    AStringView text;
+    bool present = false;
+    if(!ReadMetadataStringField(nwbFilePath, object, diagnosticPrefix, fieldName, required, text, &present))
+        return false;
+    // An absent optional field must remain NAME_NONE. Name("") is a valid, non-null hash.
+    if(!present)
+        return true;
+
+    outName = Name(text);
     if(required && !outName){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must not be empty")
             , StringConvert(diagnosticPrefix)

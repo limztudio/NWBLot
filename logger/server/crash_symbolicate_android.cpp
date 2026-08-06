@@ -40,16 +40,10 @@ void AppendAndroidTombstoneSummary(LogArena& arena, const Path& packageDirectory
     }
 
     CrashReportText frames{arena};
+    const AStringView tombstoneText(tombstone.data(), tombstone.size());
     usize cursor = 0u;
-    while(cursor < tombstone.size()){
-        const usize begin = cursor;
-        while(cursor < tombstone.size() && tombstone[cursor] != '\n' && tombstone[cursor] != '\r')
-            ++cursor;
-
-        const AStringView line(tombstone.data() + begin, cursor - begin);
-        while(cursor < tombstone.size() && (tombstone[cursor] == '\n' || tombstone[cursor] == '\r'))
-            ++cursor;
-
+    AStringView line;
+    while(NextTextLine(tombstoneText, cursor, line)){
         const AStringView trimmed = TrimLeftView(line);
         if(trimmed.size() < s_AndroidTombstoneFrameMinimumTextLength || trimmed.front() != '#' || trimmed.find(" pc ") == AStringView::npos)
             continue;

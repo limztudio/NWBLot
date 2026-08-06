@@ -94,45 +94,6 @@ using TextureFormat::s_UastcSpecificationRevision;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ReadRequiredStringField(
-    const Path& nwbFilePath,
-    const Value& asset,
-    const AStringView fieldName,
-    AStringView& outValue
-){
-    outValue = {};
-
-    const Value* const field = FindField(asset, fieldName);
-    if(!field){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-    if(!field->isString()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a string")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    const MStringView text = field->asString();
-    outValue = AStringView(text.data(), text.size());
-    if(outValue.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must not be empty")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-    return true;
-}
-
 template<typename IntegerT>
 [[nodiscard]] static bool ReadRequiredUnsignedField(
     const Path& nwbFilePath,
@@ -194,7 +155,7 @@ template<typename IntegerT>
     const AStringView expectedValue
 ){
     AStringView value;
-    if(!ReadRequiredStringField(nwbFilePath, asset, fieldName, value))
+    if(!Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, fieldName, true, value))
         return false;
     if(value == expectedValue)
         return true;
@@ -214,7 +175,7 @@ template<typename IntegerT>
     TextureDimension::Enum& outDimension
 ){
     AStringView text;
-    if(!ReadRequiredStringField(nwbFilePath, asset, s_DimensionField, text))
+    if(!Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_DimensionField, true, text))
         return false;
     if(text == s_Texture2DDimension)
         outDimension = TextureDimension::Texture2D;
@@ -603,7 +564,7 @@ bool ParseTextureCookMetadata(
     u64 alphaPayloadOffsetBytes = 0u;
     u64 alphaPayloadByteCount = 0u;
     AStringView format;
-    if(!ReadRequiredStringField(nwbFilePath, asset, s_FormatField, format))
+    if(!Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_FormatField, true, format))
         return false;
 
     u32 expectedBlockWidth = 0u;
@@ -700,7 +661,7 @@ bool ParseTextureCookMetadata(
         return false;
 
     AStringView colorSpace;
-    if(!ReadRequiredStringField(nwbFilePath, asset, s_ColorSpaceField, colorSpace))
+    if(!Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_ColorSpaceField, true, colorSpace))
         return false;
     if(colorSpace == s_LinearColorSpace)
         outEntry.colorSpace = TextureColorSpace::Linear;
@@ -764,7 +725,7 @@ bool ParseTextureCookMetadata(
         return false;
 
     AStringView dataFileName;
-    if(!ReadRequiredStringField(nwbFilePath, asset, s_DataField, dataFileName))
+    if(!Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_DataField, true, dataFileName))
         return false;
     if(!ValidateTextureDataFileName(nwbFilePath, dataFileName, scratchArena))
         return false;
@@ -800,7 +761,7 @@ bool ParseTextureCookMetadata(
     }
     else{
         AStringView alphaModeText;
-        if(!ReadRequiredStringField(nwbFilePath, asset, s_AlphaModeField, alphaModeText))
+        if(!Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_AlphaModeField, true, alphaModeText))
             return false;
         if(alphaModeText == s_AlphaOpaqueMode){
             outEntry.alphaMode = TextureAlphaMode::Opaque;

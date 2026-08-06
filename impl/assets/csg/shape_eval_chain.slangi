@@ -1,0 +1,57 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Intentionally no include guard: every shape evaluator includes this once to append itself to the evaluator chain.
+// The including file must provide the two stable function identifiers below, then update
+// NWB_CSG_SHAPE_EVAL_CHAIN to its concrete try-function after this body is emitted.
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_CSG_SHAPE_EVAL_FUNCTION
+#error "CSG shape evaluator chain requires NWB_CSG_SHAPE_EVAL_FUNCTION"
+#endif
+
+#ifndef NWB_CSG_TRY_EVAL_SHAPE_FUNCTION
+#error "CSG shape evaluator chain requires NWB_CSG_TRY_EVAL_SHAPE_FUNCTION"
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_CSG_SHAPE_EVAL_CHAIN)
+#define NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN NWB_CSG_SHAPE_EVAL_CHAIN
+#else
+#define NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN nwbTryEvalProjectCsgShape
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool NWB_CSG_TRY_EVAL_SHAPE_FUNCTION(
+    const uint shapeType,
+    const float3 shapePosition,
+    const NwbCsgCutter cutter,
+    out NwbCsgSample outSample
+){
+    if(shapeType == NWB_CSG_EVAL_SHAPE_ID){
+        outSample = NWB_CSG_SHAPE_EVAL_FUNCTION(shapePosition, cutter);
+        return true;
+    }
+    return NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN(shapeType, shapePosition, cutter, outSample);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#undef NWB_CSG_PREVIOUS_SHAPE_EVAL_CHAIN
+#undef NWB_CSG_TRY_EVAL_SHAPE_FUNCTION
+#undef NWB_CSG_SHAPE_EVAL_FUNCTION
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

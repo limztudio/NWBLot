@@ -59,6 +59,68 @@ using CookHashSet = MaterialCookHashSet<T>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename StringT>
+void AppendMaterialBindGeneratedUpperIdentifier(const AStringView text, StringT& inOutText){
+    const usize beginSize = inOutText.size();
+    for(const char ch : text)
+        inOutText += IsAsciiAlphaNumeric(ch) ? ToAsciiUpper(ch) : '_';
+    if(inOutText.size() == beginSize)
+        inOutText += "VALUE";
+}
+
+template<typename StringT>
+void AppendMaterialBindGeneratedPascalIdentifier(const AStringView text, StringT& inOutText){
+    const usize beginSize = inOutText.size();
+    bool upperNext = true;
+    for(const char ch : text){
+        if(ch == '_'){
+            upperNext = true;
+            continue;
+        }
+
+        if(upperNext)
+            inOutText += ToAsciiUpper(ch);
+        else
+            inOutText += ch;
+        upperNext = false;
+    }
+    if(inOutText.size() == beginSize)
+        inOutText += "Value";
+}
+
+template<typename ArenaT>
+[[nodiscard]] AString<ArenaT> BuildMaterialBindGeneratedSymbol(
+    ArenaT& arena,
+    const InitializerList<AStringView> nameSegments,
+    const AStringView suffix
+){
+    AString<ArenaT> symbol("NWB_MATERIAL_BIND_", arena);
+    bool firstSegment = true;
+    for(const AStringView nameSegment : nameSegments){
+        if(!firstSegment)
+            symbol += '_';
+        AppendMaterialBindGeneratedUpperIdentifier(nameSegment, symbol);
+        firstSegment = false;
+    }
+    symbol += suffix;
+    return symbol;
+}
+
+template<typename ArenaT>
+[[nodiscard]] AString<ArenaT> BuildMaterialBindAccessorName(
+    ArenaT& arena,
+    const InitializerList<AStringView> nameSegments
+){
+    AString<ArenaT> functionName("nwbMaterialBindLoad", arena);
+    for(const AStringView nameSegment : nameSegments)
+        AppendMaterialBindGeneratedPascalIdentifier(nameSegment, functionName);
+    return functionName;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Cross-TU helper declarations (definitions de-static'd in their domain .cpp).
 
 bool ResolveMaterialBindDependencyInterface(

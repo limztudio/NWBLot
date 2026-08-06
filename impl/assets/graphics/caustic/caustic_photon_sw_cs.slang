@@ -94,31 +94,6 @@ ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> nwbCausticSwView(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct NwbCausticSwTriangleHit{
-    bool hit;
-    float t;
-    float u;
-    float v;
-    float w;
-};
-
-NwbCausticSwTriangleHit nwbCausticSwRayTriangle(const float3 origin, const float3 direction, const float tMin, const float tMax, const float3 v0, const float3 v1, const float3 v2){
-    NwbCausticSwTriangleHit result;
-    result.hit = false;
-    result.t = 0.0;
-    result.u = 0.0;
-    result.v = 0.0;
-    result.w = 0.0;
-
-    const NwbRayTriangleHit hit = nwbRayTriangleMollerTrumbore(origin, direction, tMin, tMax, v0, v1, v2);
-    result.hit = hit.hit;
-    result.t = hit.t;
-    result.u = hit.u;
-    result.v = hit.v;
-    result.w = hit.w;
-    return result;
-}
-
 NwbRayTraceVertexAttrib nwbCausticSwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
     // Per-mesh attribute slots are non-uniform heap indices.
     return nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
@@ -155,7 +130,7 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
             const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(i0 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
             const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(i1 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
             const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(i2 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-            const NwbCausticSwTriangleHit triangleHit = nwbCausticSwRayTriangle(origin, direction, tMin, closest.t, v0, v1, v2);
+            const NwbRayTriangleHit triangleHit = nwbRayTriangleMollerTrumbore(origin, direction, tMin, closest.t, v0, v1, v2);
             if(triangleHit.hit){
                 closest.hit = true;
                 closest.t = triangleHit.t;

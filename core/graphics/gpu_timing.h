@@ -295,6 +295,10 @@ public:
 private:
     friend class GpuTimingRecorder;
 
+    // Rejects incomplete batches before they can partially submit a split timing scope. Invalid command-list input
+    // releases reservations; a ticket that is already resolved or still recording is left unchanged.
+    [[nodiscard]] bool prepareSubmission(CommandList* const* commandLists, usize commandListCount);
+    void resolveSubmission(bool accepted);
     void trackScope(const GpuTimingScope& scope);
     [[nodiscard]] GpuTimingSubmissionTicket* activateOnCurrentThread();
     void deactivateOnCurrentThread(GpuTimingSubmissionTicket* previousTicket);

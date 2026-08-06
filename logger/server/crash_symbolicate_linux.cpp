@@ -278,15 +278,8 @@ static void AppendLinuxClientCallstack(
 #endif
 
     usize cursor = 0u;
-    while(cursor < callstackText.size()){
-        const usize begin = cursor;
-        while(cursor < callstackText.size() && callstackText[cursor] != '\n' && callstackText[cursor] != '\r')
-            ++cursor;
-
-        const AStringView line(callstackText.data() + begin, cursor - begin);
-        while(cursor < callstackText.size() && (callstackText[cursor] == '\n' || callstackText[cursor] == '\r'))
-            ++cursor;
-
+    AStringView line;
+    while(NextTextLine(callstackText, cursor, line)){
         const AStringView trimmed = TrimLeftView(line);
         if(trimmed.empty())
             continue;

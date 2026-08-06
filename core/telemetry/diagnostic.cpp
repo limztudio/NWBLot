@@ -25,6 +25,9 @@ namespace __hidden_telemetry_diagnostic{
 
 
 inline Atomic<DiagnosticCaptureGuard*> g_CaptureGuard{ nullptr };
+#if defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+inline Atomic<DiagnosticCaptureTestHook> g_CaptureTestHook{ nullptr };
+#endif
 
 [[nodiscard]] static bool AddTextBytes(usize& inOutPayloadBytes, const AStringView text)noexcept{
     return FitsU32(text.size()) && AddBinaryReserveBytes(inOutPayloadBytes, text.size());
@@ -57,6 +60,12 @@ static void CaptureCallback(const DiagnosticEventRecord& record)noexcept{
     if(!guard)
         return;
 
+#if defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+    const DiagnosticCaptureTestHook testHook = g_CaptureTestHook.load(MemoryOrder::acquire);
+    if(testHook)
+        testHook(DiagnosticCaptureTestHookStage::AfterGuardLoad);
+#endif
+
     try{
         if(!guard->capture(record))
             NWB_LOGGER_WARNING(NWB_TEXT("Telemetry: diagnostic event record dropped"));
@@ -69,6 +78,16 @@ static void CaptureCallback(const DiagnosticEventRecord& record)noexcept{
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+void SetDiagnosticCaptureTestHook(const DiagnosticCaptureTestHook hook)noexcept{
+    __hidden_telemetry_diagnostic::g_CaptureTestHook.store(hook, MemoryOrder::release);
+}
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -210,6 +229,15 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard(){
     if(!m_installed)
         return;
 
+    while(::DiagnosticDetail::g_EventActive.test_and_set(MemoryOrder::acquire)){
+#if defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+        const DiagnosticCaptureTestHook testHook = __hidden_telemetry_diagnostic::g_CaptureTestHook.load(MemoryOrder::acquire);
+        if(testHook)
+            testHook(DiagnosticCaptureTestHookStage::WaitingForActiveCallback);
+#endif
+        ::DiagnosticDetail::g_EventActive.wait(true, MemoryOrder::relaxed);
+    }
+
     DiagnosticEventCallback expectedCallback = __hidden_telemetry_diagnostic::CaptureCallback;
     if(!::DiagnosticDetail::g_EventCallback.compare_exchange_strong(
         expectedCallback,
@@ -229,6 +257,9 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard(){
         NWB_LOGGER_WARNING(NWB_TEXT("Telemetry: diagnostic capture guard ownership changed before destruction"));
         NWB_ASSERT(false);
     }
+
+    ::DiagnosticDetail::g_EventActive.clear(MemoryOrder::release);
+    ::DiagnosticDetail::g_EventActive.notify_all();
 }
 
 bool DiagnosticCaptureGuard::capture(const DiagnosticEventRecord& record){

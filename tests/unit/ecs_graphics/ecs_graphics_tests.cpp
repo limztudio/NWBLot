@@ -4,6 +4,7 @@
 
 #include <impl/ecs_mesh/skinning/resource_names.h>
 #include <impl/ecs_mesh/skinning/skin_payload.h>
+#include <impl/ecs_mesh/skinning/submission_state.h>
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/ecs_test_world.h>
@@ -26,6 +27,7 @@
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
+#include <impl/ecs_render/shared/renderer_state.h>
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skin_types.h>
@@ -65,6 +67,16 @@ TEST(EcsGraphics, DeprecatedFeatureSlotsKeepUnsupportedAbiGaps){
     EXPECT_EQ(static_cast<u32>(NWB::Core::Feature::kCount), 23u);
 }
 
+TEST(EcsGraphics, RayTracingStateInvalidationClearsSurfelAgeFreePipelineFailureLatch){
+    NWB::Tests::TestArena<> testArena;
+    NWB::Impl::RendererRayTracingState state(testArena.arena);
+    state.m_surfelAgeFreePipelineFailed = true;
+
+    state.invalidateResources();
+
+    EXPECT_FALSE(state.m_surfelAgeFreePipelineFailed);
+}
+
 TEST(EcsGraphics, AvboitPushConstantsCarryHdrPolicyWithoutChangingCoverageData){
     NWB::Impl::AvboitFrameTargets targets;
     targets.fullWidth = 1920u;
@@ -99,6 +111,74 @@ TEST(EcsGraphics, RuntimeResourceNameBuilderMatchesFormattedSuffix){
     const Name builtName = NWB::Impl::DeriveRuntimeResourceName(sourceName, 42u, 17u, "mesh_skinning_ranges");
     const Name formattedName = DeriveName(sourceName, AStringView(":runtime_42_revision_17_mesh_skinning_ranges"));
     EXPECT_EQ(builtName, formattedName);
+}
+
+TEST(EcsGraphics, MeshSkinningSubmissionCommitRejectKeepsPoseAndSelectorPending){
+    NWB::Impl::RuntimeMeshDirtyFlags dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
+        NWB::Impl::RuntimeMeshDirtyFlag::AttributesDirty
+        | NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty
+        | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty
+    );
+    bool bindlessResourceSlotsUploaded = false;
+    NWB::Impl::MeshSkinningSubmissionCommit commit;
+    commit.editRevision = 17u;
+    commit.handledDirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
+        NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty
+        | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty
+    );
+    commit.bindlessResourceSlotsUploadRecorded = true;
+
+    NWB::Impl::ApplyMeshSkinningSubmissionCommit(
+        false,
+        17u,
+        dirtyFlags,
+        bindlessResourceSlotsUploaded,
+        commit
+    );
+
+    EXPECT_EQ(dirtyFlags, static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
+        NWB::Impl::RuntimeMeshDirtyFlag::AttributesDirty
+        | NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty
+        | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty
+    ));
+    EXPECT_FALSE(bindlessResourceSlotsUploaded);
+
+    NWB::Impl::ApplyMeshSkinningSubmissionCommit(
+        true,
+        17u,
+        dirtyFlags,
+        bindlessResourceSlotsUploaded,
+        commit
+    );
+
+    EXPECT_EQ(dirtyFlags, NWB::Impl::RuntimeMeshDirtyFlag::AttributesDirty);
+    EXPECT_TRUE(bindlessResourceSlotsUploaded);
+}
+
+TEST(EcsGraphics, MeshSkinningSubmissionCommitPreservesNewerEditRevision){
+    NWB::Impl::RuntimeMeshDirtyFlags dirtyFlags = static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
+        NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty
+        | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty
+    );
+    bool bindlessResourceSlotsUploaded = false;
+    NWB::Impl::MeshSkinningSubmissionCommit commit;
+    commit.editRevision = 17u;
+    commit.handledDirtyFlags = dirtyFlags;
+    commit.bindlessResourceSlotsUploadRecorded = true;
+
+    NWB::Impl::ApplyMeshSkinningSubmissionCommit(
+        true,
+        18u,
+        dirtyFlags,
+        bindlessResourceSlotsUploaded,
+        commit
+    );
+
+    EXPECT_EQ(dirtyFlags, static_cast<NWB::Impl::RuntimeMeshDirtyFlags>(
+        NWB::Impl::RuntimeMeshDirtyFlag::SkinningInputDirty
+        | NWB::Impl::RuntimeMeshDirtyFlag::MeshletBoundsDirty
+    ));
+    EXPECT_FALSE(bindlessResourceSlotsUploaded);
 }
 
 TEST(EcsGraphics, CsgNonFiniteReceiverBoundsDisableAabbCulling){

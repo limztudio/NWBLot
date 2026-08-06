@@ -199,8 +199,12 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
     Core::CommandList& commandList,
     MeshSkinningRuntimeInstance& instance,
     const SkeletonJointPaletteComponent* jointPalette,
-    const SkeletonPoseComponent* skeletonPose
+    const SkeletonPoseComponent* skeletonPose,
+    MeshSkinningSubmissionCommit& outCommit
 ){
+    outCommit = MeshSkinningSubmissionCommit{};
+    outCommit.editRevision = instance.editRevision;
+
     Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_DispatchRuntimeArena);
     __hidden_skinning::RuntimeSkinPayloadScratch payload{ scratchArena };
     if(!__hidden_skinning::BuildRuntimeSkinPayload(instance, jointPalette, skeletonPose, payload))
@@ -233,26 +237,27 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
-    if(!uploadRuntimeResourceBindlessSlots(commandList, *resources))
+    bool bindlessResourceSlotsUploadRecorded = false;
+    if(!uploadRuntimeResourceBindlessSlots(commandList, *resources, bindlessResourceSlotsUploadRecorded))
         return false;
 
     if(!hasActiveSkin){
-        if(skinnedMeshInputDirty || hadSkinningResources){
+        const bool copiesRestBuffers = skinnedMeshInputDirty || hadSkinningResources;
+        if(copiesRestBuffers){
             if(!copyRestToSkinned(commandList, instance))
                 return false;
-            instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-                instance.dirtyFlags | RuntimeMeshDirtyFlag::MeshletBoundsDirty
-            );
         }
 
-        if((instance.dirtyFlags & RuntimeMeshDirtyFlag::MeshletBoundsDirty) != 0u){
+        if(meshletBoundsDirty || copiesRestBuffers){
             if(!dispatchMeshletBounds(commandList, instance, *resources))
                 return false;
         }
 
-        instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-            instance.dirtyFlags & ~(RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)
+        outCommit.handledDirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
+            (skinnedMeshInputDirty ? RuntimeMeshDirtyFlag::SkinningInputDirty : RuntimeMeshDirtyFlag::None)
+            | (meshletBoundsDirty ? RuntimeMeshDirtyFlag::MeshletBoundsDirty : RuntimeMeshDirtyFlag::None)
         );
+        outCommit.bindlessResourceSlotsUploadRecorded = bindlessResourceSlotsUploadRecorded;
         return true;
     }
 
@@ -314,9 +319,6 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
     );
     commandList.commitBarriers();
 
-    instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-        instance.dirtyFlags | RuntimeMeshDirtyFlag::MeshletBoundsDirty
-    );
     if(!dispatchMeshletBounds(commandList, instance, *resources))
         return false;
     // Re-derive the RT attribute buffer's shading normals from this frame's deformed normals so the shadow + caustic
@@ -325,9 +327,11 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
     if(!dispatchRepackNormals(commandList, instance, *resources))
         return false;
 
-    instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
-        instance.dirtyFlags & ~(RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)
+    outCommit.handledDirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
+        (skinnedMeshInputDirty ? RuntimeMeshDirtyFlag::SkinningInputDirty : RuntimeMeshDirtyFlag::None)
+        | (meshletBoundsDirty ? RuntimeMeshDirtyFlag::MeshletBoundsDirty : RuntimeMeshDirtyFlag::None)
     );
+    outCommit.bindlessResourceSlotsUploadRecorded = bindlessResourceSlotsUploadRecorded;
     return true;
 }
 

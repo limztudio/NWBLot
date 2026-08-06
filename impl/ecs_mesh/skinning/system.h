@@ -6,6 +6,7 @@
 
 
 #include "runtime_cache.h"
+#include "submission_state.h"
 
 #include <core/ecs/system.h>
 #include <core/graphics/render_pass.h>
@@ -242,7 +243,8 @@ private:
         Core::CommandList& commandList,
         MeshSkinningRuntimeInstance& instance,
         const SkeletonJointPaletteComponent* jointPalette,
-        const SkeletonPoseComponent* skeletonPose
+        const SkeletonPoseComponent* skeletonPose,
+        MeshSkinningSubmissionCommit& outCommit
     );
     [[nodiscard]] bool prepareRuntimeMeshResources(
         MeshSkinningRuntimeInstance& instance,
@@ -267,7 +269,11 @@ private:
         bool& outResourcesRebuilt
     );
     [[nodiscard]] bool createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources);
-    [[nodiscard]] bool uploadRuntimeResourceBindlessSlots(Core::CommandList& commandList, RuntimeResources& resources);
+    [[nodiscard]] bool uploadRuntimeResourceBindlessSlots(
+        Core::CommandList& commandList,
+        RuntimeResources& resources,
+        bool& outUploadRecorded
+    );
     void releaseRuntimeResourceBindlessHeapHandles(RuntimeResources& resources);
     void pruneRuntimeResources();
 

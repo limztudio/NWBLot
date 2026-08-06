@@ -219,7 +219,12 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
     return true;
 }
 
-bool MeshSkinningSystem::uploadRuntimeResourceBindlessSlots(Core::CommandList& commandList, RuntimeResources& resources){
+bool MeshSkinningSystem::uploadRuntimeResourceBindlessSlots(
+    Core::CommandList& commandList,
+    RuntimeResources& resources,
+    bool& outUploadRecorded
+){
+    outUploadRecorded = false;
     if(resources.bindlessResourceSlotsUploaded)
         return true;
     if(!resources.bindlessResourceSlotsBuffer){
@@ -236,7 +241,7 @@ bool MeshSkinningSystem::uploadRuntimeResourceBindlessSlots(Core::CommandList& c
     );
     commandList.setBufferState(resources.bindlessResourceSlotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
     commandList.commitBarriers();
-    resources.bindlessResourceSlotsUploaded = true;
+    outUploadRecorded = true;
     return true;
 }
 

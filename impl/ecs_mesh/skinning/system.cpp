@@ -4,9 +4,11 @@
 
 #include "system.h"
 
+#include "arena_names.h"
 #include "resource_names.h"
 #include "timing_names.h"
 
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
@@ -60,6 +62,11 @@ static void ResolveSkeletonComponents(
 
 static constexpr bool s_RuntimeSkinningMeshletFrustumCullingEnabled = true;
 static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Runtime deformations can make meshlet cones unsafe; benchmarks override through a test provider only.
+
+struct PendingRuntimeMeshSubmission{
+    RuntimeMeshHandle handle;
+    MeshSkinningSubmissionCommit commit;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -261,6 +268,11 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* commandList = m_renderCommandList.get();
     NWB_ASSERT(commandList);
 
+    Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_SubmissionArena);
+    Vector<__hidden_system::PendingRuntimeMeshSubmission, Core::Alloc::ScratchArena> pendingSubmissions{ scratchArena };
+    auto skinningBindings = m_world.view<SkinnedMeshBindingComponent>();
+    pendingSubmissions.reserve(skinningBindings.candidateCount());
+
     Core::GpuTimingSubmissionTicket timingTicket(m_graphics.gpuTiming());
     bool submittedWork = false;
 
@@ -268,7 +280,7 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
         commandList->open();
 
-        m_world.view<SkinnedMeshBindingComponent>().each(
+        skinningBindings.each(
             [&](Core::ECS::EntityID entity, SkinnedMeshBindingComponent& binding){
                 if(!binding.runtimeMesh.valid())
                     return;
@@ -289,8 +301,16 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
                     skeletonPose
                 ) && !hadSkinningResources)
                     return;
-                if(dispatchRuntimeMesh(*commandList, *instance, jointPalette, skeletonPose))
+                MeshSkinningSubmissionCommit submissionCommit;
+                if(dispatchRuntimeMesh(*commandList, *instance, jointPalette, skeletonPose, submissionCommit)){
                     submittedWork = true;
+                    if(!submissionCommit.empty()){
+                        __hidden_system::PendingRuntimeMeshSubmission pendingSubmission;
+                        pendingSubmission.handle = instance->handle;
+                        pendingSubmission.commit = submissionCommit;
+                        pendingSubmissions.push_back(pendingSubmission);
+                    }
+                }
             }
         );
 
@@ -299,7 +319,29 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
 
     if(submittedWork){
         Core::CommandList* commandLists[] = { commandList };
-        if(!timingTicket.submit(device, commandLists, 1u))
+        const bool submissionAccepted = timingTicket.submit(device, commandLists, 1u);
+        // CPU visibility follows GPU queue acceptance. If this submission is rejected, both the deformation dirty
+        // state and the selector upload remain pending so the next frame records the complete pose again.
+        for(const __hidden_system::PendingRuntimeMeshSubmission& pendingSubmission : pendingSubmissions){
+            MeshSkinningRuntimeInstance* submittedInstance = m_runtimeMeshCache.findInstance(pendingSubmission.handle);
+            if(!submittedInstance)
+                continue;
+            const auto foundResources = m_runtimeResources.find(pendingSubmission.handle.value);
+            if(
+                foundResources == m_runtimeResources.end()
+                || foundResources.value().editRevision != pendingSubmission.commit.editRevision
+            )
+                continue;
+
+            ApplyMeshSkinningSubmissionCommit(
+                submissionAccepted,
+                submittedInstance->editRevision,
+                submittedInstance->dirtyFlags,
+                foundResources.value().bindlessResourceSlotsUploaded,
+                pendingSubmission.commit
+            );
+        }
+        if(!submissionAccepted)
             NWB_LOGGER_WARNING(NWB_TEXT("MeshSkinningSystem: skinning command submission was rejected"));
     }
 }

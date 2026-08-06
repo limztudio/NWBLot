@@ -437,11 +437,15 @@ inline void ClearDiagnosticEventCallback(const DiagnosticEventCallback callback)
 }
 
 NWB_NOINLINE inline void CaptureDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{
-    const DiagnosticEventCallback callback = DiagnosticDetail::g_EventCallback.load(MemoryOrder::acquire);
-    if(!callback)
-        return;
     if(DiagnosticDetail::g_EventActive.test_and_set(MemoryOrder::acquire))
         return;
+
+    const DiagnosticEventCallback callback = DiagnosticDetail::g_EventCallback.load(MemoryOrder::acquire);
+    if(!callback){
+        DiagnosticDetail::g_EventActive.clear(MemoryOrder::release);
+        DiagnosticDetail::g_EventActive.notify_all();
+        return;
+    }
 
     DiagnosticEventRecord normalizedRecord = record;
     if(!normalizedRecord.event)
@@ -462,6 +466,7 @@ NWB_NOINLINE inline void CaptureDiagnosticEvent(const DiagnosticEventRecord& rec
     callback(normalizedRecord);
 
     DiagnosticDetail::g_EventActive.clear(MemoryOrder::release);
+    DiagnosticDetail::g_EventActive.notify_all();
 }
 
 inline void CaptureDiagnosticEvent(const char* category, const char* message, const char* file = nullptr, const u32 line = 0u)noexcept{

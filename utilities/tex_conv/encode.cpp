@@ -6,7 +6,7 @@
 
 #include <core/common/log.h>
 
-#include <global/math/convert.h>
+#include <global/simdmath.h>
 
 #include <basisu_comp.h>
 #include <basisu_enc.h>
@@ -772,16 +772,17 @@ static void ResetPayload(
 }
 
 static void AverageHdrVolumeTexels(const HdrImagePlanes& planes, const u32 x, const u32 y, basisu::vec4F& outColor){
-    f32 sums[s_HdrChannelCount]{};
+    SIMDVector sum = VectorZero();
     for(const basisu::imagef& plane : planes){
         const basisu::vec4F& color = plane(x, y);
-        for(u32 channel = 0u; channel < s_HdrChannelCount; ++channel)
-            sums[channel] += color[channel];
+        sum = VectorAdd(sum, VectorSet(color[0u], color[1u], color[2u], color[3u]));
     }
 
-    const f32 inverseCount = 1.0f / static_cast<f32>(planes.size());
-    for(u32 channel = 0u; channel < s_HdrChannelCount; ++channel)
-        outColor[channel] = sums[channel] * inverseCount;
+    const SIMDVector average = VectorScale(sum, 1.0f / static_cast<f32>(planes.size()));
+    outColor[0u] = VectorGetX(average);
+    outColor[1u] = VectorGetY(average);
+    outColor[2u] = VectorGetZ(average);
+    outColor[3u] = VectorGetW(average);
 }
 
 [[nodiscard]] static bool GenerateNextHdrVolumeMip(const HdrImagePlanes& sourcePlanes, HdrImagePlanes& outPlanes){

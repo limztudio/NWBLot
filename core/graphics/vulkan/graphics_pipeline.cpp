@@ -88,11 +88,20 @@ void CommandList::setViewportState(const ViewportState& viewportState){
         return;
 
     const auto& vp = viewportState.viewports[0];
+    const SIMDVector viewportMinimum = VectorSet(vp.minX, vp.minY, 0.0f, 0.0f);
+    const SIMDVector viewportMaximum = VectorSet(vp.maxX, vp.maxY, 0.0f, 0.0f);
+    const SIMDVector viewportExtent = VectorSubtract(viewportMaximum, viewportMinimum);
+    const SIMDVector viewportOrigin = VectorPermute<0, 5, 0, 0>(viewportMinimum, viewportMaximum);
+    const SIMDVector signedViewportExtent = VectorPermute<0, 5, 0, 0>(viewportExtent, VectorNegate(viewportExtent));
+    const SIMDVector viewportXYWH = VectorPermute<0, 1, 4, 5>(viewportOrigin, signedViewportExtent);
+    Float4U viewportValues;
+    StoreFloat(viewportXYWH, &viewportValues);
+
     VkViewport viewport{};
-    viewport.x = vp.minX;
-    viewport.y = vp.maxY;
-    viewport.width = vp.maxX - vp.minX;
-    viewport.height = -(vp.maxY - vp.minY);
+    viewport.x = viewportValues.x;
+    viewport.y = viewportValues.y;
+    viewport.width = viewportValues.z;
+    viewport.height = viewportValues.w;
     viewport.minDepth = vp.minZ;
     viewport.maxDepth = vp.maxZ;
     vkCmdSetViewport(m_currentCmdBuf->m_cmdBuf, 0, 1, &viewport);

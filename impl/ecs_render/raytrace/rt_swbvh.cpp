@@ -69,10 +69,8 @@ void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTracingIn
         const SceneSwBvhInstanceGpu& instance = instances[index];
         Float4 aabbMin{};
         Float4 aabbMax{};
-        StoreFloat(primitives[index].aabbMin, &aabbMin);
-        StoreFloat(primitives[index].aabbMax, &aabbMax);
-        aabbMin.w = 0.f;
-        aabbMax.w = 0.f;
+        StoreFloat(VectorSetW(primitives[index].aabbMin, 0.0f), &aabbMin);
+        StoreFloat(VectorSetW(primitives[index].aabbMax, 0.0f), &aabbMax);
 
         Fnv64AppendValue(hash, instance.worldToObject);
         Fnv64AppendValue(hash, instance.primitiveCount);

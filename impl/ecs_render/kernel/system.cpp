@@ -1334,6 +1334,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!meshViewSetupCommandList->hasCommandBuffer())
             return;
 
+        // The serialized Graphics route still needs the frame label in GPU-debug and crash traces.  Its timestamp
+        // endpoint now spans later packets, but markers must remain balanced in this command list.
+        const bool recordsGraphicsFrameMarker = !asyncShadowSchedule && RendererGpuTimingScope::s_Frame.valid();
+        if(recordsGraphicsFrameMarker)
+            meshViewSetupCommandList->beginMarker(RendererGpuTimingScope::s_Frame.markerLabel);
         const bool frameTimingStarted = frameTimingTransaction.begin(
             RendererGpuTimingScope::s_Frame,
             device,
@@ -1350,6 +1355,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
 
         const bool meshViewReady = m_meshSystem.updateMeshViewBuffer(*meshViewSetupCommandList, meshViewAspectRatio);
+        if(recordsGraphicsFrameMarker)
+            meshViewSetupCommandList->endMarker();
         meshViewSetupCommandList->close(&m_meshViewSetupStateHandoff);
         meshViewSetupReady = meshViewReady;
         meshViewSetupCommandListReady =
@@ -2889,10 +2896,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         return true;
     };
-    const auto retireFrameTiming = [&](){
-        if(frameTimingTransaction.needsRetirement())
-            submitFrameRecoveryPacket(nullptr);
-    };
     const auto recoverPendingFrameSubmission = [&]() -> bool {
         const Core::QueueSubmissionToken* const asyncWaitToken = frameExecutionSubmissionState.asyncRecoveryWaitToken();
         return (asyncWaitToken || frameTimingTransaction.needsRetirement())
@@ -2944,7 +2947,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_raytracingSystem.discardSoftShadowTemporalHistory();
                 m_raytracingSystem.discardSurfelResourceInitialization();
                 resetRejectedAsyncRayEffectsStateHandoffs();
-                retireFrameTiming();
+                if(!recoverPendingFrameSubmission())
+                    failFrameRenderRecovery();
                 return;
             }
 

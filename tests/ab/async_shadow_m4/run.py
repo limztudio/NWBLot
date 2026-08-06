@@ -77,8 +77,7 @@ DEFAULT_FORBIDDEN_LOGS = (
     "[ERROR]",
     "VUID-",
     "Validation Error",
-    "async shadow ownership recovery failed",
-    "cannot safely continue after an unresolved async shadow ownership release",
+    "cannot safely continue after an unresolved frame recovery submission",
 )
 M4_PIXEL_CAPTURE_READY_LOG = "StressTestSmokeProject: M4 pixel capture ready after"
 M4_PIXEL_CAPTURE_SUBMISSION_PAUSED_LOG = "render submission suspended"
@@ -907,6 +906,10 @@ def run_self_test() -> int:
         "(no dedicated compute-only family)"
     )
     assert graphics_route_lane == LaneStatus(True, False, 0, -1)
+    assert find_forbidden_log_messages(
+        "RendererSystem: cannot safely continue after an unresolved frame recovery submission",
+        DEFAULT_FORBIDDEN_LOGS,
+    ) == ["cannot safely continue after an unresolved frame recovery submission"]
 
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)

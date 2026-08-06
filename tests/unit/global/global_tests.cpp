@@ -39,6 +39,10 @@
 #include <core/alloc/scratch.h>
 #include <core/common/name_symbols.h>
 
+#if defined(NWB_PLATFORM_LINUX)
+#include <sched.h>
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -308,7 +312,31 @@ TEST(Global, AutoRegistrationQueueDeduplicatesAndSnapshots){
 
 TEST(Global, CpuTopologyQueriesAreSafe){
     EXPECT_EQ(QueryCpuAffinityMask(CpuAffinity::Any), 0u);
+#if defined(NWB_PLATFORM_LINUX)
+    cpu_set_t originalCpuSet;
+    ASSERT_EQ(::sched_getaffinity(0, sizeof(originalCpuSet), &originalCpuSet), 0);
+
+    int allowedCpu = -1;
+    for(int cpuIndex = 0; cpuIndex < CPU_SETSIZE; ++cpuIndex){
+        if(CPU_ISSET(cpuIndex, &originalCpuSet)){
+            allowedCpu = cpuIndex;
+            break;
+        }
+    }
+    ASSERT_GE(allowedCpu, 0);
+
+    cpu_set_t singleCpuSet;
+    CPU_ZERO(&singleCpuSet);
+    CPU_SET(allowedCpu, &singleCpuSet);
+    ASSERT_EQ(::sched_setaffinity(0, sizeof(singleCpuSet), &singleCpuSet), 0);
+    const u32 restrictedCoreCount = QueryCpuCoreCount(CpuAffinity::Any);
+    const int restoreResult = ::sched_setaffinity(0, sizeof(originalCpuSet), &originalCpuSet);
+
+    EXPECT_EQ(restoreResult, 0);
+    EXPECT_EQ(restrictedCoreCount, 1u);
+#else
     EXPECT_EQ(QueryCpuCoreCount(CpuAffinity::Any), static_cast<u32>(Thread::hardware_concurrency()));
+#endif
     SetCurrentThreadCpuAffinity(0u);
 }
 

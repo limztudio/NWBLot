@@ -13,6 +13,9 @@
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
+#if defined(NWB_PLATFORM_LINUX)
+#include <sched.h>
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -105,6 +108,20 @@ AffinityMasks& GetAffinityMasks(){
 }
 
 
+u32 QueryCurrentThreadCpuCoreCount(){
+#if defined(NWB_PLATFORM_LINUX)
+    cpu_set_t cpuSet;
+    CPU_ZERO(&cpuSet);
+    if(::sched_getaffinity(0, sizeof(cpuSet), &cpuSet) == 0){
+        const int coreCount = CPU_COUNT(&cpuSet);
+        if(coreCount > 0)
+            return static_cast<u32>(coreCount);
+    }
+#endif
+    return 0u;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -125,8 +142,16 @@ u64 QueryCpuAffinityMask(CpuAffinity::Enum type){
 
 u32 QueryCpuCoreCount(CpuAffinity::Enum type){
     u64 mask = QueryCpuAffinityMask(type);
-    if(mask == 0)
+    if(mask == 0){
+        // Linux callers inherit their effective cpuset/taskset mask. Honor it when no platform-specific
+        // performance/efficiency mask is available so worker pools do not oversubscribe constrained processes.
+        if(type == CpuAffinity::Any){
+            const u32 currentThreadCoreCount = __hidden_cpu_topology::QueryCurrentThreadCpuCoreCount();
+            if(currentThreadCoreCount > 0u)
+                return currentThreadCoreCount;
+        }
         return static_cast<u32>(Thread::hardware_concurrency());
+    }
 
     u32 count = 0;
     while(mask){

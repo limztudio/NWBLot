@@ -14,6 +14,38 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
+    if(!createMeshGeometryHeapHandles(mesh))
+        return false;
+
+    // Devices without mesh shaders use the compute-emulation path for every material pass.  Establish its output
+    // buffer and descriptor with the mesh resource so a material pass never has to allocate them while preparing
+    // or drawing a frame.
+    if(
+        !graphics().queryFeatureSupport(Core::Feature::Meshlets)
+        && !createComputeEmulationHeapHandle(mesh)
+    ){
+        releaseMeshGeometryHeapHandles(mesh);
+        return false;
+    }
+
+    NWB_ASSERT(meshRenderBindingsReady(mesh));
+    return true;
+}
+
+bool RendererMeshSystem::meshRenderBindingsReady(const MeshResources& mesh)const{
+    if(!mesh.valid() || !meshGeometryHeapHandlesReady(mesh))
+        return false;
+
+    return graphics().queryFeatureSupport(Core::Feature::Meshlets)
+        || (
+            mesh.emulationVertexBuffer
+            && mesh.emulationVertexHeapHandle.valid()
+            && mesh.emulationVertexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        )
+    ;
+}
+
 bool RendererMeshSystem::createComputeEmulationHeapHandle(MeshResources& mesh){
     if(mesh.emulationVertexHeapHandle.valid())
         return true;

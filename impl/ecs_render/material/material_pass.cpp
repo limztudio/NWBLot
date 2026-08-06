@@ -385,11 +385,9 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     ) -> bool{
         NWB_ASSERT(mesh.valid());
 
-        const bool meshGeometryHeapReady = lookupMode == RendererResourceLookupMode::CreateMissing
-            ? m_renderer.meshSystem().createMeshGeometryHeapHandles(mesh)
-            : m_renderer.meshSystem().meshGeometryHeapHandlesReady(mesh)
-        ;
-        if(!meshGeometryHeapReady)
+        // Mesh resource creation establishes every persistent source-stream descriptor.  Preparation and render
+        // merely validate those bindings, keeping descriptor allocation outside material-pass hot paths.
+        if(!m_renderer.meshSystem().meshGeometryHeapHandlesReady(mesh))
             return false;
 
         const NWB::Impl::Scene::TransformComponent* transform = world().tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);

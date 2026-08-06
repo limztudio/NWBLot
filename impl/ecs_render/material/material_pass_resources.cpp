@@ -120,7 +120,7 @@ bool RendererMaterialSystem::prepareMeshMaterialPassResourceBindings(const Mater
             ready = false;
             return;
         }
-        if(!m_renderer.meshSystem().createMeshGeometryHeapHandles(mesh)){
+        if(!m_renderer.meshSystem().meshGeometryHeapHandlesReady(mesh)){
             ready = false;
             return;
         }
@@ -142,11 +142,12 @@ bool RendererMaterialSystem::prepareComputeMaterialPassResourceBindings(const Ma
             ready = false;
             return;
         }
-        if(!m_renderer.meshSystem().createMeshGeometryHeapHandles(mesh)){
-            ready = false;
-            return;
-        }
-        if(!m_renderer.meshSystem().createComputeEmulationHeapHandle(mesh)){
+        if(
+            !m_renderer.meshSystem().meshGeometryHeapHandlesReady(mesh)
+            || !mesh.emulationVertexBuffer
+            || !mesh.emulationVertexHeapHandle.valid()
+            || mesh.emulationVertexHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
+        ){
             ready = false;
             return;
         }

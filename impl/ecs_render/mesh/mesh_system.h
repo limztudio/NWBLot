@@ -37,12 +37,10 @@ public:
     void pruneRuntimeMeshResources();
     [[nodiscard]] bool createMeshViewBuffer();
     [[nodiscard]] bool updateMeshViewBuffer(Core::CommandList& commandList, f32 fallbackAspectRatio);
-    [[nodiscard]] bool createComputeEmulationHeapHandle(MeshResources& mesh);
     [[nodiscard]] bool createMeshFrameHeapHandles();
     [[nodiscard]] bool meshFrameHeapHandlesReady()const;
     void populateMeshFrameHeapSlots(ECSRenderDetail::MeshFrameHeapSlots& outSlots)const;
     void releaseMeshFrameHeapHandles();
-    [[nodiscard]] bool createMeshGeometryHeapHandles(MeshResources& mesh);
     [[nodiscard]] bool meshGeometryHeapHandlesReady(const MeshResources& mesh)const;
     void populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const;
     [[nodiscard]] bool ensureMeshSwBvhInputHeapHandles(MeshResources& mesh);
@@ -88,6 +86,13 @@ public:
     }
 
 private:
+    // Persistent mesh descriptors are established while the resource is created.  Material preparation and draw
+    // paths may only consume the ready handles so neither can allocate descriptor-heap entries mid-frame.
+    [[nodiscard]] bool createMeshRenderBindings(MeshResources& mesh);
+    [[nodiscard]] bool meshRenderBindingsReady(const MeshResources& mesh)const;
+    [[nodiscard]] bool createComputeEmulationHeapHandle(MeshResources& mesh);
+    [[nodiscard]] bool createMeshGeometryHeapHandles(MeshResources& mesh);
+
     static constexpr u32 s_MeshPositionBindingSlot = NWB_MESH_BINDING_POSITION;
     static constexpr u32 s_MeshNormalBindingSlot = NWB_MESH_BINDING_NORMAL;
     static constexpr u32 s_MeshTangentBindingSlot = NWB_MESH_BINDING_TANGENT;

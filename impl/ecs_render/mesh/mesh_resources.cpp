@@ -240,6 +240,12 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
 
     const auto foundMesh = meshState().m_meshes.find(meshPath);
     if(foundMesh != meshState().m_meshes.end()){
+        if(!meshRenderBindingsReady(foundMesh.value())){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached mesh '{}' is missing creation-time render bindings")
+                , StringConvert(meshPath.c_str())
+            );
+            return false;
+        }
         outMesh = &foundMesh.value();
         NWB_ASSERT(outMesh->valid());
         return true;
@@ -491,6 +497,8 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     }
 
     NWB_ASSERT(createdMesh.valid());
+    if(!createMeshRenderBindings(createdMesh))
+        return false;
 
     auto result = meshState().m_meshes.try_emplace(meshPath, Move(createdMesh));
     auto it = result.first;
@@ -509,6 +517,9 @@ bool RendererMeshSystem::findMeshResources(const Core::Assets::AssetRef<Mesh>& m
 
     const auto foundMesh = meshState().m_meshes.find(meshPath);
     if(foundMesh == meshState().m_meshes.end())
+        return false;
+
+    if(!meshRenderBindingsReady(foundMesh.value()))
         return false;
 
     outMesh = &foundMesh.value();
@@ -534,6 +545,12 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
             meshState().m_meshes.erase(foundMesh);
         }
         else{
+            if(!meshRenderBindingsReady(foundMesh.value())){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached runtime mesh '{}' is missing creation-time render bindings")
+                    , StringConvert(desc.meshKey.c_str())
+                );
+                return false;
+            }
             outMesh = &foundMesh.value();
             NWB_ASSERT(outMesh->valid());
             return true;
@@ -584,6 +601,8 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
     ))
         return false;
     NWB_ASSERT(createdMesh.valid());
+    if(!createMeshRenderBindings(createdMesh))
+        return false;
 
     auto result = meshState().m_meshes.try_emplace(desc.meshKey, Move(createdMesh));
     auto it = result.first;
@@ -603,6 +622,9 @@ bool RendererMeshSystem::findRuntimeMeshResources(const RuntimeMeshDesc& desc, M
 
     MeshResources& mesh = foundMesh.value();
     if(!mesh.runtimeMesh || mesh.runtimeMeshVersion != desc.version)
+        return false;
+
+    if(!meshRenderBindingsReady(mesh))
         return false;
 
     outMesh = &mesh;

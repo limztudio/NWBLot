@@ -2,7 +2,7 @@
 """Run the M4 async-shadow queue-validation and critical-path A/B benchmark.
 
 The paired smoke executables are intentionally identical except that the synchronous baseline explicitly disables
-the default AsyncCompute request before Vulkan device creation. This runner refuses a Graphics fallback, captures
+the default AsyncCompute request before Vulkan device creation. This runner refuses a Graphics queue route, captures
 fixed-yaw pixel output from both binaries, collects the renderer's
 timestamp envelopes, and makes the M4 rollout gate explicit:
 
@@ -85,7 +85,7 @@ M4_PIXEL_CAPTURE_SUBMISSION_PAUSED_LOG = "render submission suspended"
 
 
 class DedicatedComputeUnavailable(SmokeSkip):
-    """The async binary requested a lane, but the adapter resolved it to the mandated fallback."""
+    """The async binary requested a lane, but the adapter routed it through Graphics."""
 
 
 @dataclass(frozen=True)
@@ -902,11 +902,11 @@ def run_self_test() -> int:
     )
     assert lane == LaneStatus(True, True, 1, 3)
 
-    fallback_lane = parse_lane_status(
+    graphics_route_lane = parse_lane_status(
         "Vulkan: async compute lane requested=yes effective=no graphicsFamily=0 computeFamily=-1 "
         "(no dedicated compute-only family)"
     )
-    assert fallback_lane == LaneStatus(True, False, 0, -1)
+    assert graphics_route_lane == LaneStatus(True, False, 0, -1)
 
     with tempfile.TemporaryDirectory() as directory:
         root = Path(directory)
@@ -957,7 +957,7 @@ def run(args: argparse.Namespace) -> int:
     capture_backend = None
     try:
         # Run async first. A no-dedicated-compute host exits 77 before spending time on an A/B whose asynchronous half
-        # would only exercise the intentional Graphics fallback.
+        # would only exercise the intentional Graphics queue route.
         capture_backend = create_capture_backend()
         async_capture = (
             run_frame_locked_capture(args, "async", args.async_executable, capture_backend)

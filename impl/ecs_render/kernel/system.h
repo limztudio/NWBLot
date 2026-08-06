@@ -75,7 +75,7 @@ private:
         NoDedicatedAsyncCompute,
         BootstrapAccepted,
         ActiveHistoryAccepted,
-        CurrentFrameFallbackAccepted,
+        CurrentFrameAccepted,
     };
 
 public:
@@ -112,7 +112,7 @@ public:
             return;
         // Preserve a one-shot proof when the opt-in mode is explicitly turned off: the next accepted normal frame
         // confirms that the renderer returned to its established current-frame path instead of merely planning it.
-        m_laggedLightingCurrentFrameFallbackPending = m_frameLaggedAsyncLightingEnabled && !enabled;
+        m_laggedLightingCurrentFrameAcceptancePending = m_frameLaggedAsyncLightingEnabled && !enabled;
         m_frameLaggedAsyncLightingEnabled = enabled;
         m_laggedLightingReport = LaggedLightingReport::Unreported;
         m_laggedLightingReportGeneration = 0u;
@@ -243,9 +243,9 @@ private:
     Core::CommandListHandle m_gbufferCommandList;
     Core::CommandListHandle m_postGbufferNormalizeCommandList;
     Core::CommandListHandle m_shadowVisibilityCommandList;
-    // A small Graphics join packet retires accepted AsyncCompute work when a later dependent packet is rejected.
-    // It never assumes a queue-family ownership transfer because all remaining cross-lane resources are concurrent.
-    Core::CommandListHandle m_asyncRecoveryCommandList;
+    // A small Graphics recovery packet retires an accepted frame timing scope when a later dependent packet is
+    // rejected.  If it joins AsyncCompute, cross-lane resources remain concurrently shared.
+    Core::CommandListHandle m_frameRecoveryCommandList;
     // Empty Graphics packets that bracket the independently recorded effects submission for an aggregate queue-time
     // envelope. They are submitted only on the dedicated async-shadow schedule.
     Core::CommandListHandle m_asyncEffectsTimingBeginCommandList;
@@ -255,7 +255,7 @@ private:
     Core::CommandListHandle m_asyncCausticsCommandList;
     Core::CommandListHandle m_causticsCommandList;
     // Surfel GI uses only compute dispatches on both its SW-BVH and HW-RayQuery branches, so a dedicated compute
-    // family can record it independently of the Graphics fallback list.
+    // family can record it independently; otherwise its planned packet executes on Graphics.
     Core::CommandListHandle m_asyncSurfelGiCommandList;
     Core::CommandListHandle m_surfelGiCommandList;
     Core::CommandListHandle m_asyncDeferredLightingCommandList;
@@ -280,14 +280,14 @@ private:
     bool m_frameLaggedAsyncLightingEnabled = false;
     LaggedLightingReport m_laggedLightingReport = LaggedLightingReport::Unreported;
     u64 m_laggedLightingReportGeneration = 0u;
-    bool m_laggedLightingCurrentFrameFallbackPending = false;
+    bool m_laggedLightingCurrentFrameAcceptancePending = false;
     Core::QueueSubmissionToken m_laggedLightingHistorySubmissionToken;
     // Deferred target creation increments this identity for every target generation. It prevents a recycled descriptor
     // slot or allocator address from making a freshly recreated history look accepted.
     u64 m_laggedLightingHistoryGeneration = 0u;
-    // An accepted AsyncCompute packet whose Graphics recovery join cannot be submitted is not recoverable by guessing.
-    // End this device generation and rebuild resources before rendering resumes.
-    bool m_asyncRenderRecoveryFailed = false;
+    // A partially accepted frame whose recovery packet cannot be submitted is not recoverable by guessing. End this
+    // device generation and rebuild resources before rendering resumes.
+    bool m_frameRenderRecoveryFailed = false;
 
 private:
     RendererShaderSystem m_shaderSystem;

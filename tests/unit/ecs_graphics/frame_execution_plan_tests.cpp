@@ -98,7 +98,7 @@ void ExpectSubmissionBatchesResolvePacketDependencies(const FrameExecutionPlan& 
 }
 
 
-TEST(EcsGraphics, FrameExecutionPlanKeepsGraphicsFallbackAsOnePacket){
+TEST(EcsGraphics, FrameExecutionPlanRoutesNoDedicatedComputeWorkThroughGraphicsPackets){
     const FrameExecutionPlan plan(FrameExecutionPlanInput{
         false,
         true,
@@ -107,18 +107,29 @@ TEST(EcsGraphics, FrameExecutionPlanKeepsGraphicsFallbackAsOnePacket){
         true,
     });
 
-    EXPECT_TRUE(plan.packet(FrameExecutionPacket::GraphicsFallback).enabled);
     EXPECT_FALSE(plan.workRunsOnLane(FrameExecutionWork::RayEffects, RenderLane::AsyncCompute));
+    EXPECT_TRUE(plan.workRunsOnLane(FrameExecutionWork::RayEffects, RenderLane::Graphics));
     EXPECT_FALSE(plan.workWaitsForExternalToken(
         FrameExecutionWork::DeferredLighting,
         FrameExecutionExternalWait::LaggedLightingHistory
     ));
     EXPECT_FALSE(plan.hasWork(FrameExecutionWork::LaggedLightingStash));
     EXPECT_FALSE(plan.workRunsOnLane(FrameExecutionWork::AvboitDepthWarp, RenderLane::AsyncCompute));
-    EXPECT_EQ(plan.packet(FrameExecutionPacket::GraphicsFallback).lane, RenderLane::Graphics);
-    EXPECT_FALSE(plan.packet(FrameExecutionPacket::GraphicsPrefix).enabled);
-    EXPECT_FALSE(plan.packet(FrameExecutionPacket::AsyncRayEffects).enabled);
-    EXPECT_FALSE(plan.packet(FrameExecutionPacket::DeferredLighting).enabled);
+    EXPECT_TRUE(plan.packet(FrameExecutionPacket::GraphicsPrefix).enabled);
+    EXPECT_TRUE(plan.packet(FrameExecutionPacket::AsyncRayEffects).enabled);
+    EXPECT_TRUE(plan.packet(FrameExecutionPacket::GraphicsEffects).enabled);
+    EXPECT_TRUE(plan.packet(FrameExecutionPacket::DeferredLighting).enabled);
+    EXPECT_EQ(plan.packet(FrameExecutionPacket::AsyncRayEffects).lane, RenderLane::Graphics);
+    EXPECT_EQ(plan.packet(FrameExecutionPacket::DeferredLighting).lane, RenderLane::Graphics);
+    EXPECT_EQ(plan.packetForWork(FrameExecutionWork::GraphicsPrefix), FrameExecutionPacket::GraphicsPrefix);
+    EXPECT_EQ(plan.packetForWork(FrameExecutionWork::RayEffects), FrameExecutionPacket::AsyncRayEffects);
+    EXPECT_EQ(plan.packetForWork(FrameExecutionWork::Caustics), FrameExecutionPacket::GraphicsEffects);
+    EXPECT_EQ(plan.packetForWork(FrameExecutionWork::SurfelGi), FrameExecutionPacket::AsyncRayEffects);
+    for(usize packetIndex = 0u; packetIndex < FrameExecutionPacket::kCount; ++packetIndex){
+        const FrameExecutionPacket::Enum packet = static_cast<FrameExecutionPacket::Enum>(packetIndex);
+        if(plan.packet(packet).enabled)
+            EXPECT_EQ(plan.packet(packet).lane, RenderLane::Graphics);
+    }
 }
 
 
@@ -228,29 +239,7 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
 
 
 TEST(EcsGraphics, FrameExecutionPlanOwnsOrderedSubmissionBatches){
-    const FrameExecutionSubmissionBatch::Enum fallbackBatches[] = {
-        FrameExecutionSubmissionBatch::GraphicsFallback,
-    };
-    const FrameExecutionPacket::Enum fallbackPackets[] = {
-        FrameExecutionPacket::GraphicsFallback,
-    };
-    const FrameExecutionPlan fallbackPlan(FrameExecutionPlanInput{
-        false,
-        true,
-        true,
-        true,
-        true,
-    });
-    ExpectSubmissionBatchOrder(fallbackPlan, fallbackBatches, LengthOf(fallbackBatches));
-    ExpectSubmissionBatch(
-        fallbackPlan,
-        FrameExecutionSubmissionBatch::GraphicsFallback,
-        fallbackPackets,
-        LengthOf(fallbackPackets)
-    );
-    ExpectSubmissionBatchesResolvePacketDependencies(fallbackPlan);
-
-    const FrameExecutionSubmissionBatch::Enum dedicatedBatches[] = {
+    const FrameExecutionSubmissionBatch::Enum standardBatches[] = {
         FrameExecutionSubmissionBatch::GraphicsPrefix,
         FrameExecutionSubmissionBatch::AsyncRayEffects,
         FrameExecutionSubmissionBatch::GraphicsEffects,
@@ -261,6 +250,22 @@ TEST(EcsGraphics, FrameExecutionPlanOwnsOrderedSubmissionBatches){
     const FrameExecutionPacket::Enum opaqueEffectsPackets[] = {
         FrameExecutionPacket::GraphicsEffects,
     };
+    const FrameExecutionPlan graphicsPlan(FrameExecutionPlanInput{
+        false,
+        true,
+        true,
+        true,
+        true,
+    });
+    ExpectSubmissionBatchOrder(graphicsPlan, standardBatches, LengthOf(standardBatches));
+    ExpectSubmissionBatch(
+        graphicsPlan,
+        FrameExecutionSubmissionBatch::GraphicsEffects,
+        opaqueEffectsPackets,
+        LengthOf(opaqueEffectsPackets)
+    );
+    ExpectSubmissionBatchesResolvePacketDependencies(graphicsPlan);
+
     const FrameExecutionPlan opaquePlan(FrameExecutionPlanInput{
         true,
         false,
@@ -268,7 +273,7 @@ TEST(EcsGraphics, FrameExecutionPlanOwnsOrderedSubmissionBatches){
         false,
         false,
     });
-    ExpectSubmissionBatchOrder(opaquePlan, dedicatedBatches, LengthOf(dedicatedBatches));
+    ExpectSubmissionBatchOrder(opaquePlan, standardBatches, LengthOf(standardBatches));
     ExpectSubmissionBatch(
         opaquePlan,
         FrameExecutionSubmissionBatch::GraphicsEffects,
@@ -291,7 +296,7 @@ TEST(EcsGraphics, FrameExecutionPlanOwnsOrderedSubmissionBatches){
         false,
         true,
     });
-    ExpectSubmissionBatchOrder(asyncAvboitPlan, dedicatedBatches, LengthOf(dedicatedBatches));
+    ExpectSubmissionBatchOrder(asyncAvboitPlan, standardBatches, LengthOf(standardBatches));
     ExpectSubmissionBatch(
         asyncAvboitPlan,
         FrameExecutionSubmissionBatch::GraphicsEffects,
@@ -307,7 +312,7 @@ TEST(EcsGraphics, FrameExecutionPlanOwnsOrderedSubmissionBatches){
         true,
         true,
     });
-    ExpectSubmissionBatchOrder(laggedPlan, dedicatedBatches, LengthOf(dedicatedBatches));
+    ExpectSubmissionBatchOrder(laggedPlan, standardBatches, LengthOf(standardBatches));
     ExpectSubmissionBatch(
         laggedPlan,
         FrameExecutionSubmissionBatch::GraphicsEffects,
@@ -319,7 +324,7 @@ TEST(EcsGraphics, FrameExecutionPlanOwnsOrderedSubmissionBatches){
 
 
 TEST(EcsGraphics, FrameExecutionPlanAssignsRecordedWorkAndTimingToPlanPackets){
-    const FrameExecutionPlan fallbackPlan(FrameExecutionPlanInput{
+    const FrameExecutionPlan graphicsPlan(FrameExecutionPlanInput{
         false,
         true,
         true,
@@ -328,20 +333,22 @@ TEST(EcsGraphics, FrameExecutionPlanAssignsRecordedWorkAndTimingToPlanPackets){
     });
 
     EXPECT_EQ(
-        fallbackPlan.packetForWork(FrameExecutionWork::GraphicsPrefix),
-        FrameExecutionPacket::GraphicsFallback
+        graphicsPlan.packetForWork(FrameExecutionWork::GraphicsPrefix),
+        FrameExecutionPacket::GraphicsPrefix
     );
     EXPECT_EQ(
-        fallbackPlan.packetForWork(FrameExecutionWork::RayEffects),
-        FrameExecutionPacket::GraphicsFallback
+        graphicsPlan.packetForWork(FrameExecutionWork::RayEffects),
+        FrameExecutionPacket::AsyncRayEffects
     );
     EXPECT_EQ(
-        fallbackPlan.packetForWork(FrameExecutionWork::AvboitRaster),
-        FrameExecutionPacket::GraphicsFallback
+        graphicsPlan.packetForWork(FrameExecutionWork::AvboitRaster),
+        FrameExecutionPacket::GraphicsEffects
     );
-    EXPECT_TRUE(fallbackPlan.packet(FrameExecutionPacket::GraphicsFallback).recordsTiming);
-    EXPECT_FALSE(fallbackPlan.hasWork(FrameExecutionWork::AsyncEffectsTiming));
-    EXPECT_FALSE(fallbackPlan.hasWork(FrameExecutionWork::AvboitDepthWarp));
+    EXPECT_TRUE(graphicsPlan.packet(FrameExecutionPacket::GraphicsPrefix).recordsTiming);
+    EXPECT_TRUE(graphicsPlan.packet(FrameExecutionPacket::AsyncRayEffects).recordsTiming);
+    EXPECT_TRUE(graphicsPlan.packet(FrameExecutionPacket::GraphicsEffects).recordsTiming);
+    EXPECT_FALSE(graphicsPlan.hasWork(FrameExecutionWork::AsyncEffectsTiming));
+    EXPECT_FALSE(graphicsPlan.hasWork(FrameExecutionWork::AvboitDepthWarp));
 
     const FrameExecutionPlan splitPlan(FrameExecutionPlanInput{
         true,
@@ -539,34 +546,34 @@ TEST(EcsGraphics, FrameExecutionPlanSelectsWorkCommandListFromResolvedLane){
         asyncComputeCommandList,
     };
 
-    const FrameExecutionPlan fallbackPlan(FrameExecutionPlanInput{
+    const FrameExecutionPlan graphicsPlan(FrameExecutionPlanInput{
         false,
         true,
         true,
         true,
         true,
     });
-    EXPECT_EQ(fallbackPlan.laneForWork(FrameExecutionWork::Caustics), RenderLane::Graphics);
-    EXPECT_TRUE(fallbackPlan.workRunsOnLane(FrameExecutionWork::Caustics, RenderLane::Graphics));
-    EXPECT_FALSE(fallbackPlan.workRunsOnLane(FrameExecutionWork::Caustics, RenderLane::AsyncCompute));
+    EXPECT_EQ(graphicsPlan.laneForWork(FrameExecutionWork::Caustics), RenderLane::Graphics);
+    EXPECT_TRUE(graphicsPlan.workRunsOnLane(FrameExecutionWork::Caustics, RenderLane::Graphics));
+    EXPECT_FALSE(graphicsPlan.workRunsOnLane(FrameExecutionWork::Caustics, RenderLane::AsyncCompute));
     EXPECT_EQ(
-        fallbackPlan.commandListForWork(FrameExecutionWork::Caustics, commandLists),
+        graphicsPlan.commandListForWork(FrameExecutionWork::Caustics, commandLists),
         graphicsCommandList
     );
     EXPECT_EQ(
-        fallbackPlan.commandListForWork(FrameExecutionWork::SurfelGi, commandLists),
+        graphicsPlan.commandListForWork(FrameExecutionWork::SurfelGi, commandLists),
         graphicsCommandList
     );
     EXPECT_EQ(
-        fallbackPlan.commandListForWork(FrameExecutionWork::DeferredLighting, commandLists),
+        graphicsPlan.commandListForWork(FrameExecutionWork::DeferredLighting, commandLists),
         graphicsCommandList
     );
     EXPECT_EQ(
-        fallbackPlan.commandListForWork(FrameExecutionWork::DeferredComposite, commandLists),
+        graphicsPlan.commandListForWork(FrameExecutionWork::DeferredComposite, commandLists),
         graphicsCommandList
     );
     EXPECT_EQ(
-        fallbackPlan.commandListForWork(FrameExecutionWork::AsyncEffectsTiming, commandLists),
+        graphicsPlan.commandListForWork(FrameExecutionWork::AsyncEffectsTiming, commandLists),
         nullptr
     );
 
@@ -630,7 +637,7 @@ TEST(EcsGraphics, FrameExecutionPlanSelectsWorkCommandListFromResolvedLane){
 }
 
 
-TEST(EcsGraphics, FrameExecutionPacketCommandListsKeepsFallbackOrderAndRejectsAbsentWork){
+TEST(EcsGraphics, FrameExecutionPacketCommandListsRoutesGraphicsWorkAndRejectsAbsentWork){
     const FrameExecutionPlan plan(FrameExecutionPlanInput{
         false,
         true,
@@ -656,7 +663,7 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsKeepsFallbackOrderAndRejectsAb
 
     EXPECT_FALSE(commandLists.appendForWork(FrameExecutionWork::GraphicsPrefix, nullptr));
     EXPECT_FALSE(commandLists.appendForWork(FrameExecutionWork::AsyncEffectsTiming, TestCommandList(13u)));
-    EXPECT_EQ(commandLists.commandLists(FrameExecutionPacket::GraphicsFallback).commandListCount, 0u);
+    EXPECT_EQ(commandLists.commandLists(FrameExecutionPacket::GraphicsPrefix).commandListCount, 0u);
     const FrameExecutionWorkCommandListBinding bindings[] = {
         { FrameExecutionWork::GraphicsPrefix, recordedLists[0u] },
         { FrameExecutionWork::GraphicsPrefix, recordedLists[1u] },
@@ -666,7 +673,7 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsKeepsFallbackOrderAndRejectsAb
         { FrameExecutionWork::RayEffects, recordedLists[5u] },
         { FrameExecutionWork::Caustics, recordedLists[6u] },
         { FrameExecutionWork::SurfelGi, recordedLists[7u] },
-        // Fallback does not create this work, so a complete binding table can retain its optional entry.
+        // This schedule does not create the dedicated timing bracket, so a complete binding table can retain it.
         { FrameExecutionWork::AsyncEffectsTiming, TestCommandList(13u) },
         { FrameExecutionWork::AvboitRaster, recordedLists[8u] },
         { FrameExecutionWork::DeferredLighting, recordedLists[9u] },
@@ -675,16 +682,23 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsKeepsFallbackOrderAndRejectsAb
     };
     ASSERT_TRUE(commandLists.appendPlannedWorkCommandLists(bindings, LengthOf(bindings)));
 
-    const auto fallbackLists = commandLists.commandLists(FrameExecutionPacket::GraphicsFallback);
-    ASSERT_EQ(fallbackLists.commandListCount, LengthOf(recordedLists));
-    for(usize commandListIndex = 0u; commandListIndex < LengthOf(recordedLists); ++commandListIndex)
-        EXPECT_EQ(fallbackLists.commandLists[commandListIndex], recordedLists[commandListIndex]);
+    const auto prefixLists = commandLists.commandLists(FrameExecutionPacket::GraphicsPrefix);
+    ASSERT_EQ(prefixLists.commandListCount, 5u);
+    for(usize commandListIndex = 0u; commandListIndex < prefixLists.commandListCount; ++commandListIndex)
+        EXPECT_EQ(prefixLists.commandLists[commandListIndex], recordedLists[commandListIndex]);
 
-    EXPECT_FALSE(commandLists.appendForWork(FrameExecutionWork::GraphicsPrefix, TestCommandList(14u)));
-    EXPECT_EQ(
-        commandLists.commandLists(FrameExecutionPacket::GraphicsFallback).commandListCount,
-        LengthOf(recordedLists)
-    );
+    const auto rayEffectsLists = commandLists.commandLists(FrameExecutionPacket::AsyncRayEffects);
+    ASSERT_EQ(rayEffectsLists.commandListCount, 2u);
+    EXPECT_EQ(rayEffectsLists.commandLists[0], recordedLists[5u]);
+    EXPECT_EQ(rayEffectsLists.commandLists[1], recordedLists[7u]);
+
+    const auto graphicsEffectsLists = commandLists.commandLists(FrameExecutionPacket::GraphicsEffects);
+    ASSERT_EQ(graphicsEffectsLists.commandListCount, 2u);
+    EXPECT_EQ(graphicsEffectsLists.commandLists[0], recordedLists[6u]);
+    EXPECT_EQ(graphicsEffectsLists.commandLists[1], recordedLists[8u]);
+
+    EXPECT_TRUE(commandLists.appendForWork(FrameExecutionWork::GraphicsPrefix, TestCommandList(14u)));
+    EXPECT_EQ(commandLists.commandLists(FrameExecutionPacket::GraphicsPrefix).commandListCount, 6u);
 }
 
 
@@ -790,7 +804,7 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsRouteSplitWorkAndKeepTimingBra
 }
 
 
-TEST(EcsGraphics, FrameExecutionPlanSubmissionStateAcceptsPlannedGraphicsFallbackBatch){
+TEST(EcsGraphics, FrameExecutionPlanSubmissionStateKeepsNoDedicatedPacketsOnGraphics){
     const FrameExecutionPlan plan(FrameExecutionPlanInput{
         false,
         true,
@@ -798,33 +812,72 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateAcceptsPlannedGraphicsFallbac
         true,
         true,
     });
-    const FrameExecutionPacket::Enum fallbackPackets[] = {
-        FrameExecutionPacket::GraphicsFallback,
-    };
-    ExpectSubmissionBatch(
-        plan,
-        FrameExecutionSubmissionBatch::GraphicsFallback,
-        fallbackPackets,
-        LengthOf(fallbackPackets)
-    );
-
     FrameExecutionPlanSubmissionState submissions(plan);
     NWB::Core::QueueSubmissionToken waitTokens[FrameExecutionPlan::s_MaxSubmissionWaits] = {};
     NWB::Core::QueueSubmissionDesc submitDesc;
     ASSERT_TRUE(submissions.prepareSubmission(
-        FrameExecutionPacket::GraphicsFallback,
+        FrameExecutionPacket::GraphicsPrefix,
         submitDesc,
         waitTokens,
         LengthOf(waitTokens)
     ));
     EXPECT_EQ(submitDesc.waitTokenCount, 0u);
 
-    const NWB::Core::QueueSubmissionToken fallbackToken{ CommandQueue::Graphics, 11u };
-    submissions.acceptSubmission(FrameExecutionPacket::GraphicsFallback, fallbackToken);
-    ExpectSubmissionToken(
-        submissions.token(FrameExecutionPacket::GraphicsFallback),
-        fallbackToken
-    );
+    const NWB::Core::QueueSubmissionToken prefixToken{ CommandQueue::Graphics, 11u };
+    submissions.acceptSubmission(FrameExecutionPacket::GraphicsPrefix, prefixToken);
+    ASSERT_TRUE(submissions.prepareSubmission(
+        FrameExecutionPacket::AsyncRayEffects,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
+    ExpectSubmissionToken(waitTokens[0], prefixToken);
+
+    const NWB::Core::QueueSubmissionToken rayEffectsToken{ CommandQueue::Graphics, 22u };
+    submissions.acceptSubmission(FrameExecutionPacket::AsyncRayEffects, rayEffectsToken);
+    ASSERT_TRUE(submissions.prepareSubmission(
+        FrameExecutionPacket::GraphicsEffects,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
+    ExpectSubmissionToken(waitTokens[0], prefixToken);
+
+    const NWB::Core::QueueSubmissionToken graphicsEffectsToken{ CommandQueue::Graphics, 33u };
+    submissions.acceptSubmission(FrameExecutionPacket::GraphicsEffects, graphicsEffectsToken);
+    ASSERT_TRUE(submissions.prepareSubmission(
+        FrameExecutionPacket::DeferredLighting,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 2u);
+    ExpectSubmissionToken(waitTokens[0], graphicsEffectsToken);
+    ExpectSubmissionToken(waitTokens[1], rayEffectsToken);
+
+    const NWB::Core::QueueSubmissionToken lightingToken{ CommandQueue::Graphics, 44u };
+    submissions.acceptSubmission(FrameExecutionPacket::DeferredLighting, lightingToken);
+    ASSERT_TRUE(submissions.prepareSubmission(
+        FrameExecutionPacket::DeferredComposite,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
+    ExpectSubmissionToken(waitTokens[0], lightingToken);
+
+    const NWB::Core::QueueSubmissionToken compositeToken{ CommandQueue::Graphics, 55u };
+    submissions.acceptSubmission(FrameExecutionPacket::DeferredComposite, compositeToken);
+    ASSERT_TRUE(submissions.prepareSubmission(
+        FrameExecutionPacket::GraphicsPresent,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
+    ExpectSubmissionToken(waitTokens[0], compositeToken);
     EXPECT_EQ(submissions.asyncRecoveryWaitToken(), nullptr);
 }
 

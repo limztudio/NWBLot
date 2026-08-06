@@ -89,7 +89,7 @@ static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_m
 
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
 // The target-hardware runner sends F1 only after it observes an accepted history. Keeping the toggle in the smoke
-// project makes the fallback -> re-bootstrap transition deterministic without adding a renderer test control.
+// project makes the current-frame -> re-bootstrap transition deterministic without adding a renderer test control.
 class FrameLaggedAsyncLightingToggleInputHandler final : public NWB::Core::IInputEventHandler{
 public:
     bool keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods)override{
@@ -279,7 +279,7 @@ private:
         }
         rendererSystem->setFrameLaggedAsyncLightingEnabled(true);
         NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("FrameLaggedAsyncLightingSmoke: requested frame-lagged async lighting; F1 toggles the current-frame fallback")
+            NWB_TEXT("FrameLaggedAsyncLightingSmoke: requested frame-lagged async lighting; F1 toggles the current-frame path")
         );
 #endif
         if(!world->getSystem<NWB::Impl::MeshSystem>()){
@@ -327,7 +327,7 @@ public:
         m_context.input.addHandlerToBack(m_arrowYawInput);
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
         // The target-hardware harness presses F1 only after an accepted history is observed. It then proves the
-        // normal current-frame fallback and the following bootstrap without exposing a renderer-only test switch.
+        // normal current-frame path and the following bootstrap without exposing a renderer-only test switch.
         m_context.input.addHandlerToBack(m_frameLaggedAsyncLightingToggleInput);
 #endif
 
@@ -485,7 +485,7 @@ public:
             if(m_frameLaggedAsyncLightingEnabled)
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FrameLaggedAsyncLightingSmoke: F1 re-enabled frame-lagged async lighting"));
             else
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FrameLaggedAsyncLightingSmoke: F1 requested current-frame fallback"));
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FrameLaggedAsyncLightingSmoke: F1 requested current-frame path"));
         }
 #endif
         // Yaw selection, in priority order:

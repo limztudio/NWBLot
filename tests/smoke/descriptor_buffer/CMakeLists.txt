@@ -7,7 +7,7 @@
 # minimal production compute pipeline and verifies GPU readback through descriptor-buffer offsets.
 #
 # GPU-optional: the suite skips cleanly (not fails) when the host cannot run VK_EXT_descriptor_buffer. This is
-# descriptor-buffer-only contract coverage; a skipped run is an environment limitation, not renderer fallback.
+# descriptor-buffer-only contract coverage; a skipped run is an environment limitation, not a renderer queue-routing test.
 nwb_declare_gtest_executable(nwb_descriptor_buffer_tests)
 target_sources(nwb_descriptor_buffer_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/descriptor_buffer_round_trip_tests.cpp"

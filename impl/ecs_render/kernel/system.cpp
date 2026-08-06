@@ -210,7 +210,7 @@ void RendererSystem::reportLaggedLightingTransition(const LaggedLightingReport r
         break;
     case LaggedLightingReport::NoDedicatedAsyncCompute:
         NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("RendererSystem: frame-lagged async lighting fallback accepted (no dedicated AsyncCompute lane, target generation {})"),
+            NWB_TEXT("RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated AsyncCompute lane, target generation {})"),
             targetGeneration
         );
         break;
@@ -226,9 +226,9 @@ void RendererSystem::reportLaggedLightingTransition(const LaggedLightingReport r
             targetGeneration
         );
         break;
-    case LaggedLightingReport::CurrentFrameFallbackAccepted:
+    case LaggedLightingReport::CurrentFrameAccepted:
         NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("RendererSystem: frame-lagged async lighting current-frame fallback accepted (target generation {})"),
+            NWB_TEXT("RendererSystem: frame-lagged async lighting current-frame path accepted (target generation {})"),
             targetGeneration
         );
         break;
@@ -490,7 +490,7 @@ void RendererSystem::invalidateResources(){
     m_gbufferCommandList.reset();
     m_postGbufferNormalizeCommandList.reset();
     m_shadowVisibilityCommandList.reset();
-    m_asyncRecoveryCommandList.reset();
+    m_frameRecoveryCommandList.reset();
     m_asyncEffectsTimingBeginCommandList.reset();
     m_asyncEffectsTimingEndCommandList.reset();
     m_asyncCausticsCommandList.reset();
@@ -510,7 +510,7 @@ void RendererSystem::invalidateResources(){
     m_deferredPresentCommandList.reset();
     m_shadowPrepareCommandList.reset();
     resetLaggedLightingHistoryTracking();
-    m_asyncRenderRecoveryFailed = false;
+    m_frameRenderRecoveryFailed = false;
     // Retire heap-retained TLAS resources before releasing their backing state.
     if(m_rayTracingState.m_tlasHeapHandle.valid()){
         auto& device = m_graphics.getDevice();
@@ -592,10 +592,10 @@ bool RendererSystem::ensureFrameCommandLists(){
         }
     }
 
-    if(!m_asyncRecoveryCommandList){
-        m_asyncRecoveryCommandList = device.createCommandList();
-        if(!m_asyncRecoveryCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async recovery command list"));
+    if(!m_frameRecoveryCommandList){
+        m_frameRecoveryCommandList = device.createCommandList();
+        if(!m_frameRecoveryCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create frame recovery command list"));
             return false;
         }
     }
@@ -924,7 +924,8 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
 
     auto& device = m_graphics.getDevice();
 
-    // Preparation uploads target slots and initializes surfels on the Graphics fallback.
+    // Preparation uploads target slots and initializes surfels on the Graphics lane when no dedicated Compute lane
+    // is available.
     const bool deferredBindlessSlotsWereUploaded = deferredTargets.bindless.slotsUploaded;
     m_raytracingSystem.discardSurfelResourceInitialization();
     Core::GpuTimingSubmissionTicket shadowPrepareTimingTicket(m_graphics.gpuTiming());
@@ -1018,8 +1019,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_graphics.requestDeviceRecreation();
         return;
     }
-    if(m_asyncRenderRecoveryFailed){
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async render recovery failed; rendering is suspended until resources are recreated"));
+    if(m_frameRenderRecoveryFailed){
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame render recovery failed; rendering is suspended until resources are recreated"));
         return;
     }
     const bool dedicatedAsyncCompute = device.isRenderLaneDedicated(Core::RenderLane::AsyncCompute);
@@ -1091,7 +1092,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* gbufferCommandList = m_gbufferCommandList.get();
     Core::CommandList* postGbufferNormalizeCommandList = m_postGbufferNormalizeCommandList.get();
     Core::CommandList* shadowVisibilityCommandList = m_shadowVisibilityCommandList.get();
-    Core::CommandList* asyncRecoveryCommandList = m_asyncRecoveryCommandList.get();
+    Core::CommandList* frameRecoveryCommandList = m_frameRecoveryCommandList.get();
     Core::CommandList* asyncEffectsTimingBeginCommandList = m_asyncEffectsTimingBeginCommandList.get();
     Core::CommandList* asyncEffectsTimingEndCommandList = m_asyncEffectsTimingEndCommandList.get();
     Core::CommandList* const causticsCommandList = frameExecutionPlan.commandListForWork(
@@ -1135,7 +1136,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(gbufferCommandList);
     NWB_ASSERT(postGbufferNormalizeCommandList);
     NWB_ASSERT(shadowVisibilityCommandList);
-    NWB_ASSERT(asyncRecoveryCommandList);
+    NWB_ASSERT(frameRecoveryCommandList);
     NWB_ASSERT(!recordsAsyncEffectsTiming || asyncEffectsTimingBeginCommandList);
     NWB_ASSERT(!recordsAsyncEffectsTiming || asyncEffectsTimingEndCommandList);
     NWB_ASSERT(m_causticsCommandList);
@@ -1271,14 +1272,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         restoreEffectsCpuState();
     };
 
-    // Dedicated queues use one timing ticket per accepted packet.
+    // Every timed packet owns a ticket; the frame scope itself spans the accepted prefix and present submissions.
     ECSRenderDetail::FrameExecutionPlanTimingTickets frameExecutionTimingTickets(
         frameExecutionPlan,
         m_graphics.gpuTiming()
     );
-    Optional<Core::GpuTimingMeasure> frameTiming;
-    // Publish the dedicated frame endpoint only after Graphics final accepts.
-    Core::GpuTimingFrameTransaction asyncFrameTiming(m_graphics.gpuTiming());
+    // Publish the frame endpoint only after the final Graphics packet accepts.  This also covers the serialized
+    // Graphics-only route when no dedicated compute family exists.
+    Core::GpuTimingFrameTransaction frameTimingTransaction(m_graphics.gpuTiming());
     Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
     Optional<Core::GpuTimingMeasure> asyncEffectsTiming;
     Optional<Core::GpuTimingMeasure> asyncFinalTiming;
@@ -1286,10 +1287,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         frameExecutionTimingTickets.discardAll();
     };
     const auto discardRenderPackets = [&](){
-        if(frameTiming){
-            frameTiming->discardTiming();
-            frameTiming.reset();
-        }
         if(asyncPrefixTiming){
             asyncPrefixTiming->discardTiming();
             asyncPrefixTiming.reset();
@@ -1302,7 +1299,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             asyncFinalTiming->discardTiming();
             asyncFinalTiming.reset();
         }
-        asyncFrameTiming.discard();
+        frameTimingTransaction.discard();
         discardTimingTickets();
         restorePostGbufferPacketCpuState();
         m_raytracingSystem.discardSoftShadowTemporalHistory();
@@ -1322,8 +1319,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         meshViewAspectRatio,
         &device,
         meshViewSetupCommandList,
-        &frameTiming,
-        &asyncFrameTiming,
+        &frameTimingTransaction,
         &asyncPrefixTiming,
         asyncShadowSchedule,
         &meshViewSetupReady,
@@ -1338,18 +1334,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(!meshViewSetupCommandList->hasCommandBuffer())
             return;
 
-        bool asyncFrameTimingStarted = true;
-        if(!asyncShadowSchedule){
-            frameTiming.emplace(
-                m_graphics.gpuTiming(),
-                RendererGpuTimingScope::s_Frame,
-                device,
-                *meshViewSetupCommandList
-            );
-            if(!frameTiming)
-                return;
-        }
-        else{
+        const bool frameTimingStarted = frameTimingTransaction.begin(
+            RendererGpuTimingScope::s_Frame,
+            device,
+            *meshViewSetupCommandList
+        );
+        if(asyncShadowSchedule){
             asyncPrefixTiming.emplace(
                 m_graphics.gpuTiming(),
                 RendererGpuTimingScope::s_AsyncPrefix,
@@ -1357,21 +1347,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 *meshViewSetupCommandList
             );
             asyncPrefixTiming->finishMarker();
-            asyncFrameTimingStarted = asyncFrameTiming.begin(
-                RendererGpuTimingScope::s_Frame,
-                device,
-                *meshViewSetupCommandList
-            );
         }
 
         const bool meshViewReady = m_meshSystem.updateMeshViewBuffer(*meshViewSetupCommandList, meshViewAspectRatio);
-        // Close this split scope here; deferred composite records its endpoint.
-        if(frameTiming)
-            frameTiming->finishMarker();
         meshViewSetupCommandList->close(&m_meshViewSetupStateHandoff);
         meshViewSetupReady = meshViewReady;
         meshViewSetupCommandListReady =
-            asyncFrameTimingStarted
+            frameTimingStarted
             && m_meshViewSetupStateHandoff.valid()
             && meshViewSetupCommandList->hasCommandBuffer()
         ;
@@ -1452,7 +1434,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         !meshViewSetupCommandListReady
         || !sceneShadingSetupCommandListReady
         || !deferredClearCommandListReady
-        || (!asyncShadowSchedule && !frameTiming)
     ){
         discardRenderPackets();
         return;
@@ -2632,8 +2613,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         framebuffer,
         &deferredTargets,
         deferredPresentCommandList,
-        &frameTiming,
-        &asyncFrameTiming,
+        &frameTimingTransaction,
         &asyncFinalTiming,
         &deferredPresentCommandListReady,
         asyncShadowSchedule,
@@ -2663,21 +2643,20 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             framebuffer
         );
 
-        bool asyncFrameTimingEnded = true;
-        // Publish the dedicated timing endpoint only after presentation accepts.
-        if(frameTiming)
-            frameTiming->finishTiming(*deferredPresentCommandList);
+        // Publish the frame timing endpoint only after presentation accepts.
+        bool frameTimingEnded = true;
+        if(deferredPresentRecorded)
+            frameTimingEnded = frameTimingTransaction.recordEnd(*deferredPresentCommandList);
         if(asyncShadowSchedule && deferredPresentRecorded){
             if(asyncFinalTiming){
                 asyncFinalTiming->finishTiming(*deferredPresentCommandList);
                 asyncFinalTiming.reset();
             }
-            asyncFrameTimingEnded = asyncFrameTiming.recordEnd(*deferredPresentCommandList);
         }
         deferredPresentCommandList->close(&m_deferredPresentStateHandoff);
         deferredPresentCommandListReady =
             deferredPresentRecorded
-            && asyncFrameTimingEnded
+            && frameTimingEnded
             && m_deferredPresentStateHandoff.valid()
             && deferredPresentCommandList->hasCommandBuffer()
         ;
@@ -2858,40 +2837,41 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return lastSubmissionToken;
     };
 
-    const auto submitAsyncRecoveryJoin = [&](const Core::QueueSubmissionToken* waitToken) -> bool {
-        // Join accepted async work after rejection without queue-family ownership repair.
+    const auto submitFrameRecoveryPacket = [&](const Core::QueueSubmissionToken* asyncWaitToken) -> bool {
+        // Retire the accepted frame scope after a rejected packet and, when applicable, join accepted async work
+        // without queue-family ownership repair.
         if(device.isDeviceLost()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async recovery join skipped because the graphics device is lost"));
-            asyncFrameTiming.discard();
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery packet skipped because the graphics device is lost"));
+            frameTimingTransaction.discard();
             return false;
         }
-        NWB_ASSERT(!waitToken || waitToken->valid());
+        NWB_ASSERT(!asyncWaitToken || asyncWaitToken->valid());
 
-        const bool retireTiming = asyncFrameTiming.needsRetirement();
+        const bool retireTiming = frameTimingTransaction.needsRetirement();
         if(retireTiming)
-            asyncFrameTiming.prepareForRecovery();
-        asyncRecoveryCommandList->open();
-        if(!asyncRecoveryCommandList->hasCommandBuffer()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to record async recovery join"));
-            asyncFrameTiming.discard();
+            frameTimingTransaction.prepareForRecovery();
+        frameRecoveryCommandList->open();
+        if(!frameRecoveryCommandList->hasCommandBuffer()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to record frame recovery packet"));
+            frameTimingTransaction.discard();
             return false;
         }
-        if(retireTiming && !asyncFrameTiming.recordEnd(*asyncRecoveryCommandList)){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to write async recovery timing endpoint"));
-            asyncFrameTiming.discard();
+        if(retireTiming && !frameTimingTransaction.recordEnd(*frameRecoveryCommandList)){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to write frame recovery timing endpoint"));
+            frameTimingTransaction.discard();
             return false;
         }
-        asyncRecoveryCommandList->close();
-        if(!asyncRecoveryCommandList->hasCommandBuffer()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to close async recovery join"));
-            asyncFrameTiming.discard();
+        frameRecoveryCommandList->close();
+        if(!frameRecoveryCommandList->hasCommandBuffer()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to close frame recovery packet"));
+            frameTimingTransaction.discard();
             return false;
         }
 
         Core::QueueSubmissionDesc recoverySubmitDesc;
-        if(waitToken)
-            recoverySubmitDesc.setWaitTokens(waitToken, 1u);
-        Core::CommandList* recoveryCommandLists[] = { asyncRecoveryCommandList };
+        if(asyncWaitToken)
+            recoverySubmitDesc.setWaitTokens(asyncWaitToken, 1u);
+        Core::CommandList* recoveryCommandLists[] = { frameRecoveryCommandList };
         const Core::QueueSubmissionToken recoveryToken = device.executeCommandLists(
             recoveryCommandLists,
             1u,
@@ -2899,30 +2879,33 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             recoverySubmitDesc
         );
         if(!recoveryToken.valid()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: async recovery join submission was rejected"));
-            asyncFrameTiming.discard();
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery submission was rejected"));
+            frameTimingTransaction.discard();
             return false;
         }
-        if(retireTiming && !asyncFrameTiming.confirmEndSubmission(false)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire async recovery timing query"));
-            asyncFrameTiming.discard();
+        if(retireTiming && !frameTimingTransaction.confirmEndSubmission(false)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire frame recovery timing query"));
+            frameTimingTransaction.discard();
         }
         return true;
     };
-    const auto retireAsyncFrameTiming = [&](){
-        if(asyncFrameTiming.needsRetirement())
-            submitAsyncRecoveryJoin(nullptr);
+    const auto retireFrameTiming = [&](){
+        if(frameTimingTransaction.needsRetirement())
+            submitFrameRecoveryPacket(nullptr);
     };
-    const auto recoverPendingAsyncComputeSubmission = [&]() -> bool {
-        const Core::QueueSubmissionToken* const waitToken = frameExecutionSubmissionState.asyncRecoveryWaitToken();
-        return !waitToken || submitAsyncRecoveryJoin(waitToken);
+    const auto recoverPendingFrameSubmission = [&]() -> bool {
+        const Core::QueueSubmissionToken* const asyncWaitToken = frameExecutionSubmissionState.asyncRecoveryWaitToken();
+        return (asyncWaitToken || frameTimingTransaction.needsRetirement())
+            ? submitFrameRecoveryPacket(asyncWaitToken)
+            : true
+        ;
     };
-    const auto failAsyncRenderRecovery = [&](){
-        if(m_asyncRenderRecoveryFailed)
+    const auto failFrameRenderRecovery = [&](){
+        if(m_frameRenderRecoveryFailed)
             return;
-        m_asyncRenderRecoveryFailed = true;
-        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: cannot safely continue after an unresolved async Compute recovery join; requesting device recreation"));
-        // Defer device recreation until accepted compute work cannot be invalidated.
+        m_frameRenderRecoveryFailed = true;
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: cannot safely continue after an unresolved frame recovery submission; requesting device recreation"));
+        // Defer device recreation until accepted work cannot be invalidated.
         m_graphics.requestDeviceRecreation();
     };
 
@@ -2935,36 +2918,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             frameExecutionPlan.submissionBatchID(submissionBatchIndex)
         ;
         switch(submissionBatch){
-        case ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsFallback:{
-            const Core::QueueSubmissionToken fallbackSubmissionToken = dispatchRecordedFrameBatch(
-                ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsFallback
-            );
-            if(!fallbackSubmissionToken.valid()){
-                discardRenderPackets();
-                return;
-            }
-
-            frameTiming.reset();
-            m_raytracingSystem.confirmShadowVisibilitySubmission(fallbackSubmissionToken);
-            m_raytracingSystem.confirmSurfelGiSubmission(fallbackSubmissionToken);
-            m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-            if(m_frameLaggedAsyncLightingEnabled){
-                reportLaggedLightingTransition(
-                    LaggedLightingReport::NoDedicatedAsyncCompute,
-                    deferredTargets.laggedLightingHistory.generation
-                );
-            }
-            else if(m_laggedLightingCurrentFrameFallbackPending){
-                reportLaggedLightingTransition(
-                    LaggedLightingReport::CurrentFrameFallbackAccepted,
-                    deferredTargets.laggedLightingHistory.generation
-                );
-                m_laggedLightingCurrentFrameFallbackPending = false;
-            }
-            return;
-        }
         case ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPrefix:{
-            // Compute waits for the Graphics producer on distinct queues.
+            // Effects use a distinct queue when available; otherwise Graphics queue order covers this edge.
             const Core::QueueSubmissionToken prefixSubmissionToken = dispatchRecordedFrameBatch(
                 ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPrefix
             );
@@ -2972,12 +2927,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 discardRenderPackets();
                 return;
             }
-            asyncFrameTiming.confirmBeginSubmission();
+            frameTimingTransaction.confirmBeginSubmission();
 
             break;
         }
         case ECSRenderDetail::FrameExecutionSubmissionBatch::AsyncRayEffects:{
-            // Shadow, software caustics, and surfel GI share Compute; hardware caustics stay on Graphics.
+            // Ray effects always follow the prefix.  On Graphics-only adapters this packet is submitted to Graphics;
+            // the dedicated schedule keeps its compute-local producer state below.
             const Core::QueueSubmissionToken shadowSubmissionToken = dispatchRecordedFrameBatch(
                 ECSRenderDetail::FrameExecutionSubmissionBatch::AsyncRayEffects
             );
@@ -2988,15 +2944,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_raytracingSystem.discardSoftShadowTemporalHistory();
                 m_raytracingSystem.discardSurfelResourceInitialization();
                 resetRejectedAsyncRayEffectsStateHandoffs();
-                retireAsyncFrameTiming();
+                retireFrameTiming();
                 return;
             }
 
-            // Retain only private compute scratch; shared inputs come from next frame's prefix.
             m_raytracingSystem.confirmShadowVisibilitySubmission(shadowSubmissionToken);
+            // Surfel work is recorded in this packet on both routes.  Confirm its readback against the submission
+            // that actually contains it; the Graphics-only route must not defer that ownership to a later packet.
             m_raytracingSystem.confirmSurfelGiSubmission(shadowSubmissionToken);
             m_raytracingSystem.finalizeSurfelResourceInitialization();
+            if(!dedicatedAsyncCompute){
+                m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
+                break;
+            }
 
+            // Retain only private compute scratch; shared inputs come from next frame's prefix.
             // Retain accepted producer state for recovery after later rejection.
             const bool producerReturnStatesReady =
                 m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
@@ -3016,10 +2978,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 discardTimingTickets();
                 restoreUnacceptedGraphicsEffectsCpuState();
                 m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-                if(!recoverPendingAsyncComputeSubmission())
-                    failAsyncRenderRecovery();
+                if(!recoverPendingFrameSubmission())
+                    failFrameRenderRecovery();
                 // Missing accepted producer state leaves no safe next layout.
-                failAsyncRenderRecovery();
+                failFrameRenderRecovery();
                 return;
             }
             Core::Texture* const shadowComputeScratchTextures[] = {
@@ -3055,9 +3017,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 discardTimingTickets();
                 restoreUnacceptedGraphicsEffectsCpuState();
                 m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-                recoverPendingAsyncComputeSubmission();
+                recoverPendingFrameSubmission();
                 // Missing compute scratch leaves no safe layout restoration.
-                failAsyncRenderRecovery();
+                failFrameRenderRecovery();
                 return;
             }
             m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
@@ -3078,8 +3040,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 )){
                     discardTimingTickets();
                     restoreGraphicsEffectsCpuState();
-                    recoverPendingAsyncComputeSubmission();
-                    failAsyncRenderRecovery();
+                    recoverPendingFrameSubmission();
+                    failFrameRenderRecovery();
                     return;
                 }
             }
@@ -3107,8 +3069,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 )){
                     discardTimingTickets();
                     restoreUnacceptedGraphicsEffectsCpuState();
-                    recoverPendingAsyncComputeSubmission();
-                    failAsyncRenderRecovery();
+                    recoverPendingFrameSubmission();
+                    failFrameRenderRecovery();
                     return;
                 }
             }
@@ -3124,10 +3086,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 // Accepted-token tracking starts when this batch begins.
                 if(!frameExecutionSubmissionState.batchHasAcceptedPacket(
                     ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsEffects
-                ))
-                    restoreUnacceptedGraphicsEffectsCpuState();
-                if(!recoverPendingAsyncComputeSubmission())
-                    failAsyncRenderRecovery();
+                )){
+                    if(dedicatedAsyncCompute)
+                        restoreUnacceptedGraphicsEffectsCpuState();
+                    else{
+                        // Ray effects were already accepted by the preceding Graphics submission.  Only the work
+                        // recorded in this rejected packet can be rolled back.
+                        restoreCausticsCpuState();
+                        restoreGraphicsEffectsCpuState();
+                    }
+                }
+                if(!recoverPendingFrameSubmission())
+                    failFrameRenderRecovery();
                 return;
             }
 
@@ -3140,13 +3110,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             );
             if(!lightingSubmissionToken.valid()){
                 discardTimingTickets();
-                if(!recoverPendingAsyncComputeSubmission())
-                    failAsyncRenderRecovery();
+                if(!recoverPendingFrameSubmission())
+                    failFrameRenderRecovery();
                 return;
             }
             if(laggedAsyncLightingSchedule)
                 deferredTargets.laggedLightingHistory.slotsUploaded = true;
-            const bool lightingReturnStatesReady = laggedAsyncLightingSchedule || (
+            const bool lightingReturnStatesReady = !dedicatedAsyncCompute || laggedAsyncLightingSchedule || (
                 m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
                     m_deferredLightingStateHandoff,
                     deferredTargets.shadowVisibility.get()
@@ -3163,10 +3133,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             );
             if(!lightingReturnStatesReady){
                 discardTimingTickets();
-                if(!recoverPendingAsyncComputeSubmission())
-                    failAsyncRenderRecovery();
+                if(!recoverPendingFrameSubmission())
+                    failFrameRenderRecovery();
                 // Lost post-lighting state leaves no safe producer layout.
-                failAsyncRenderRecovery();
+                failFrameRenderRecovery();
                 return;
             }
             if(laggedAsyncLightingSchedule){
@@ -3185,8 +3155,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             );
             if(!compositeSubmissionToken.valid()){
                 discardTimingTickets();
-                if(!recoverPendingAsyncComputeSubmission())
-                    failAsyncRenderRecovery();
+                if(!recoverPendingFrameSubmission())
+                    failFrameRenderRecovery();
                 return;
             }
             break;
@@ -3197,20 +3167,26 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPresent
             );
             if(!finalSubmissionToken.valid()){
-                if(!recoverPendingAsyncComputeSubmission())
-                    failAsyncRenderRecovery();
+                if(!recoverPendingFrameSubmission())
+                    failFrameRenderRecovery();
                 return;
             }
-            if(!asyncFrameTiming.confirmEndSubmission(true)){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm async frame critical-path timing"));
-                asyncFrameTiming.discard();
+            if(!frameTimingTransaction.confirmEndSubmission(true)){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm frame critical-path timing"));
+                frameTimingTransaction.discard();
             }
-            if(m_laggedLightingCurrentFrameFallbackPending){
+            if(!dedicatedAsyncCompute && m_frameLaggedAsyncLightingEnabled){
                 reportLaggedLightingTransition(
-                    LaggedLightingReport::CurrentFrameFallbackAccepted,
+                    LaggedLightingReport::NoDedicatedAsyncCompute,
                     deferredTargets.laggedLightingHistory.generation
                 );
-                m_laggedLightingCurrentFrameFallbackPending = false;
+            }
+            else if(m_laggedLightingCurrentFrameAcceptancePending){
+                reportLaggedLightingTransition(
+                    LaggedLightingReport::CurrentFrameAccepted,
+                    deferredTargets.laggedLightingHistory.generation
+                );
+                m_laggedLightingCurrentFrameAcceptancePending = false;
             }
 
             break;
@@ -3349,10 +3325,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                         )
                     ;
                     if(!stashReturnStatesReady){
-                        if(!recoverPendingAsyncComputeSubmission())
-                            failAsyncRenderRecovery();
+                        if(!recoverPendingFrameSubmission())
+                            failFrameRenderRecovery();
                         // Lost retained copy state leaves no safe producer layout.
-                        failAsyncRenderRecovery();
+                        failFrameRenderRecovery();
                         return;
                     }
 

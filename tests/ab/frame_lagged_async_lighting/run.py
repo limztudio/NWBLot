@@ -4,7 +4,7 @@
 The smoke application starts with frame-lagged lighting enabled. This runner waits for accepted bootstrap and
 history-use submissions, uses F1 to request the established current-frame path, then re-enables the feature and
 requires the second bootstrap/history-use pair. A host without a dedicated compute-only queue reports the accepted
-Graphics fallback and exits with the standard smoke skip code instead of claiming async coverage.
+Graphics queue route and exits with the standard smoke skip code instead of claiming async coverage.
 """
 
 from __future__ import annotations
@@ -35,22 +35,22 @@ from window_capture_smoke import (  # noqa: E402
 )
 
 
-NO_DEDICATED_ASYNC_COMPUTE = "RendererSystem: frame-lagged async lighting fallback accepted (no dedicated AsyncCompute lane"
+NO_DEDICATED_ASYNC_COMPUTE = "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated AsyncCompute lane"
 BOOTSTRAP_ACCEPTED = "RendererSystem: frame-lagged async lighting bootstrap accepted"
 ACTIVE_HISTORY_ACCEPTED = "RendererSystem: frame-lagged async lighting active history accepted"
-CURRENT_FRAME_FALLBACK_ACCEPTED = "RendererSystem: frame-lagged async lighting current-frame fallback accepted"
+CURRENT_FRAME_ACCEPTED = "RendererSystem: frame-lagged async lighting current-frame path accepted"
 FORBIDDEN_LOG_MESSAGES = (
     "[ERROR]",
     "VUID-",
     "Validation Error",
-    "cannot safely continue after an unresolved async Compute recovery join",
+    "cannot safely continue after an unresolved frame recovery submission",
     "failed to record lagged lighting-history capture",
     "lagged lighting-history capture submission was rejected",
 )
 
 
 class DedicatedComputeUnavailable(SmokeSkip):
-    """The application accepted its mandated Graphics fallback rather than running the opt-in async topology."""
+    """The application uses its Graphics queue route rather than the opt-in async topology."""
 
 
 def marker_count(log_text: str, marker: str) -> int:
@@ -80,7 +80,7 @@ def wait_for_marker(
         latest_log = collect_log_delta(log_directory, log_baseline, log_pattern)
         if NO_DEDICATED_ASYNC_COMPUTE in latest_log:
             raise DedicatedComputeUnavailable(
-                "frame-lagged async-lighting smoke skipped: the requested feature accepted the Graphics fallback "
+                "frame-lagged async-lighting smoke skipped: the requested feature accepted the Graphics queue route "
                 "because this adapter has no dedicated AsyncCompute lane"
             )
         reject_forbidden_messages(latest_log)
@@ -188,10 +188,10 @@ def run(args: argparse.Namespace) -> int:
             log_directory,
             log_baseline,
             log_pattern,
-            CURRENT_FRAME_FALLBACK_ACCEPTED,
+            CURRENT_FRAME_ACCEPTED,
             1,
             args.transition_timeout,
-            "while waiting for the accepted current-frame fallback",
+            "while waiting for the accepted current-frame path",
         )
 
         capture_backend.send_named_key(window, "F1")
@@ -229,14 +229,14 @@ def run(args: argparse.Namespace) -> int:
     require_normal_testbed_exit(app_exit_code, app_exit_tail)
     if NO_DEDICATED_ASYNC_COMPUTE in final_log:
         raise DedicatedComputeUnavailable(
-            "frame-lagged async-lighting smoke skipped: the requested feature accepted the Graphics fallback "
+            "frame-lagged async-lighting smoke skipped: the requested feature accepted the Graphics queue route "
             "because this adapter has no dedicated AsyncCompute lane"
         )
     reject_forbidden_messages(final_log)
-    for marker, count in ((BOOTSTRAP_ACCEPTED, 2), (ACTIVE_HISTORY_ACCEPTED, 2), (CURRENT_FRAME_FALLBACK_ACCEPTED, 1)):
+    for marker, count in ((BOOTSTRAP_ACCEPTED, 2), (ACTIVE_HISTORY_ACCEPTED, 2), (CURRENT_FRAME_ACCEPTED, 1)):
         if marker_count(final_log, marker) < count:
             raise SmokeFailure(f"lagged-lighting smoke completed without {count} occurrence(s) of '{marker}'")
-    print("frame-lagged async-lighting smoke passed: bootstrap -> active history -> fallback -> bootstrap -> active history")
+    print("frame-lagged async-lighting smoke passed: bootstrap -> active history -> current frame -> bootstrap -> active history")
     return 0
 
 
@@ -244,17 +244,17 @@ def run_self_test() -> int:
     log = "\n".join((
         f"{BOOTSTRAP_ACCEPTED} (target generation 7)",
         f"{ACTIVE_HISTORY_ACCEPTED} (target generation 7)",
-        f"{CURRENT_FRAME_FALLBACK_ACCEPTED} (target generation 7)",
+        f"{CURRENT_FRAME_ACCEPTED} (target generation 7)",
         f"{BOOTSTRAP_ACCEPTED} (target generation 7)",
         f"{ACTIVE_HISTORY_ACCEPTED} (target generation 7)",
     ))
     assert marker_count(log, BOOTSTRAP_ACCEPTED) == 2
     assert marker_count(log, ACTIVE_HISTORY_ACCEPTED) == 2
-    assert marker_count(log, CURRENT_FRAME_FALLBACK_ACCEPTED) == 1
+    assert marker_count(log, CURRENT_FRAME_ACCEPTED) == 1
     reject_forbidden_messages(log)
     assert NO_DEDICATED_ASYNC_COMPUTE not in log
-    fallback_log = f"{NO_DEDICATED_ASYNC_COMPUTE}, target generation 3)"
-    assert NO_DEDICATED_ASYNC_COMPUTE in fallback_log
+    graphics_route_log = f"{NO_DEDICATED_ASYNC_COMPUTE}, target generation 3)"
+    assert NO_DEDICATED_ASYNC_COMPUTE in graphics_route_log
     print("frame-lagged async-lighting harness self-test passed")
     return 0
 

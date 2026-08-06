@@ -799,7 +799,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_resource_cooker)) AND Py
         # M4 target-hardware A/B pair. Both binaries use the same fixed-friendly stress scene and cooked runtime
         # assets; the synchronous baseline explicitly disables the default async-lane request. The runner under
         # tests/ab/async_shadow_m4/ validates that the normal request resolves to a distinct queue rather than
-        # accepting the Graphics fallback as an async result.
+        # accepting the Graphics queue route as an async result.
         nwb_declare_executable(nwb_async_shadow_m4_sync_benchmark)
         target_sources(nwb_async_shadow_m4_sync_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"

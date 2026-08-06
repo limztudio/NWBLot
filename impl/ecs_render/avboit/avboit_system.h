@@ -35,7 +35,7 @@ public:
     [[nodiscard]] bool prepareAvboitPassResources(DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
     void clearAvboitTargets(Core::CommandList& commandList, AvboitFrameTargets& targets);
     void buildTransparentCsgIntervals(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
-    // AVBOIT alternates raster and compute work. The Graphics-only fallback calls the three slices consecutively,
+    // AVBOIT alternates raster and compute work. The Graphics-routed plan calls the three slices consecutively,
     // while the dedicated AsyncCompute schedule brackets the two compute dispatches with Graphics submissions.
     void renderAvboitPreDepthWarpPasses(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
     void renderAvboitExtinctionPass(Core::CommandList& commandList, AvboitFrameTargets& targets, const CsgFrameState& csgFrameState);

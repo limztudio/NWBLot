@@ -1020,7 +1020,7 @@ void RendererDeferredSystem::clearDeferredTargets(
     commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
     commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
 
-    // On the Graphics fallback this is reset here. A dedicated AsyncCompute surfel packet owns the same clear so its
+    // On a Graphics-routed plan this is reset here. A dedicated AsyncCompute surfel packet owns the same clear so its
     // exclusive result never has to make a Graphics -> Compute ownership trip before the producer can write it.
     if(clearSurfelIrradiance && targets.surfelIrradiance)
         commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);

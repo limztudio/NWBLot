@@ -28,7 +28,6 @@ namespace ECSRenderDetail{
 // The plan owns lane routing and dependencies; RendererSystem owns state and recovery.
 namespace FrameExecutionPacket{
     enum Enum : u8{
-        GraphicsFallback,
         GraphicsPrefix,
         AsyncRayEffects,
         GraphicsEffects,
@@ -50,7 +49,6 @@ namespace FrameExecutionPacket{
 // Batches preserve packet order without duplicating topology in RendererSystem.
 namespace FrameExecutionSubmissionBatch{
     enum Enum : u8{
-        GraphicsFallback,
         GraphicsPrefix,
         AsyncRayEffects,
         GraphicsEffects,
@@ -161,6 +159,12 @@ public:
 public:
     explicit FrameExecutionPlan(const FrameExecutionPlanInput& input){
         const bool usesDedicatedAsyncCompute = input.dedicatedAsyncCompute;
+        // Keep one packet topology on every adapter.  Without a distinct compute-only family the plan routes this
+        // work to Graphics, preserving packet order without a renderer-specific alternate path.
+        const Core::RenderLane::Enum computeWorkLane = usesDedicatedAsyncCompute
+            ? Core::RenderLane::AsyncCompute
+            : Core::RenderLane::Graphics
+        ;
         const bool capturesLaggedLightingHistory =
             input.dedicatedAsyncCompute
             && input.frameLaggedAsyncLightingEnabled
@@ -180,23 +184,9 @@ public:
             && !input.hardwareCaustics
         ;
 
-        if(!usesDedicatedAsyncCompute){
-            enablePacket(FrameExecutionPacket::GraphicsFallback, Core::RenderLane::Graphics);
-            assignWork(FrameExecutionWork::GraphicsPrefix, FrameExecutionPacket::GraphicsFallback);
-            assignWork(FrameExecutionWork::RayEffects, FrameExecutionPacket::GraphicsFallback);
-            assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::GraphicsFallback);
-            assignWork(FrameExecutionWork::SurfelGi, FrameExecutionPacket::GraphicsFallback);
-            assignWork(FrameExecutionWork::AvboitRaster, FrameExecutionPacket::GraphicsFallback);
-            assignWork(FrameExecutionWork::DeferredLighting, FrameExecutionPacket::GraphicsFallback);
-            assignWork(FrameExecutionWork::DeferredComposite, FrameExecutionPacket::GraphicsFallback);
-            assignWork(FrameExecutionWork::GraphicsPresent, FrameExecutionPacket::GraphicsFallback);
-            configureSubmissionBatches();
-            return;
-        }
-
         enablePacket(FrameExecutionPacket::GraphicsPrefix, Core::RenderLane::Graphics);
         assignWork(FrameExecutionWork::GraphicsPrefix, FrameExecutionPacket::GraphicsPrefix);
-        enablePacket(FrameExecutionPacket::AsyncRayEffects, Core::RenderLane::AsyncCompute);
+        enablePacket(FrameExecutionPacket::AsyncRayEffects, computeWorkLane);
         addPacketWait(FrameExecutionPacket::AsyncRayEffects, FrameExecutionPacket::GraphicsPrefix);
         assignWork(FrameExecutionWork::RayEffects, FrameExecutionPacket::AsyncRayEffects);
         if(usesAsyncCaustics)
@@ -248,12 +238,15 @@ public:
                     );
             }
             assignWork(FrameExecutionWork::AvboitRaster, FrameExecutionPacket::GraphicsEffects);
-            assignWork(FrameExecutionWork::AsyncEffectsTiming, FrameExecutionPacket::GraphicsEffects);
+            // This envelope measures inter-queue async effects, so it is intentionally absent when the same work
+            // is serialized on Graphics.
+            if(usesDedicatedAsyncCompute)
+                assignWork(FrameExecutionWork::AsyncEffectsTiming, FrameExecutionPacket::GraphicsEffects);
         }
 
         const Core::RenderLane::Enum deferredLane = usesLaggedAsyncLighting
             ? Core::RenderLane::Graphics
-            : Core::RenderLane::AsyncCompute
+            : computeWorkLane
         ;
         enablePacket(FrameExecutionPacket::DeferredLighting, deferredLane);
         addPacketWait(FrameExecutionPacket::DeferredLighting, graphicsEffectsCompletionPacket);
@@ -434,14 +427,6 @@ private:
         m_submissionPacketScheduled[packetIndex] = true;
     }
     void configureSubmissionBatches()noexcept{
-        if(packet(FrameExecutionPacket::GraphicsFallback).enabled){
-            appendSubmissionPacket(
-                FrameExecutionSubmissionBatch::GraphicsFallback,
-                FrameExecutionPacket::GraphicsFallback
-            );
-            return;
-        }
-
         appendSubmissionPacket(
             FrameExecutionSubmissionBatch::GraphicsPrefix,
             FrameExecutionPacket::GraphicsPrefix

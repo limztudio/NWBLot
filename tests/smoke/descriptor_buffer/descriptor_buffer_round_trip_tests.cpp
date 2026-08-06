@@ -939,12 +939,12 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffSeparatesCurrentInp
 
 // The logical AsyncCompute lane is always usable by packet code: when explicitly disabled, it resolves to Graphics,
 // preserves ordered execution, and returns a Graphics timeline token rather than inventing a second queue.
-TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneFallsBackToGraphicsWhenNotEnabled){
-    HeadlessGraphicsScope fallbackScope;
-    ASSERT_TRUE(fallbackScope.setAsyncComputeLaneEnabled(false));
-    ASSERT_TRUE(fallbackScope.initialize());
+TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRoutesToGraphicsWhenNotEnabled){
+    HeadlessGraphicsScope graphicsRouteScope;
+    ASSERT_TRUE(graphicsRouteScope.setAsyncComputeLaneEnabled(false));
+    ASSERT_TRUE(graphicsRouteScope.initialize());
 
-    auto& device = fallbackScope.graphics().getDevice();
+    auto& device = graphicsRouteScope.graphics().getDevice();
     EXPECT_EQ(device.resolveRenderLane(RenderLane::AsyncCompute), CommandQueue::Graphics);
     EXPECT_FALSE(device.isRenderLaneDedicated(RenderLane::AsyncCompute));
 

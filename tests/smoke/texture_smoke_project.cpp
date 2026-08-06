@@ -61,10 +61,6 @@ private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("TextureSmokeProject"));
         AddSmokeRenderSystems(*world, context);
-        if(!world->getSystem<NWB::Impl::MeshSystem>() || !world->getSystem<NWB::Impl::RendererSystem>()){
-            NWB_LOGGER_FATAL(NWB_TEXT("TextureSmokeProject initialization failed: required render systems are missing"));
-            throw RuntimeException("TextureSmokeProject initialization failed");
-        }
         return world;
     }
 

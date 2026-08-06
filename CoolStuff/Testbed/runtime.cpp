@@ -89,12 +89,14 @@ static constexpr tchar s_DefaultSceneDescription[] = NWB_TEXT("45-degree directi
 
 [[nodiscard]] static bool UiWantsKeyboardCapture(NWB::Core::ECS::World& world){
     auto* uiSystem = world.getSystem<NWB::Impl::UiSystem>();
-    return uiSystem && uiSystem->wantsKeyboardCapture();
+    NWB_ASSERT(uiSystem);
+    return uiSystem->wantsKeyboardCapture();
 }
 
 [[nodiscard]] static bool UiWantsMouseCapture(NWB::Core::ECS::World& world){
     auto* uiSystem = world.getSystem<NWB::Impl::UiSystem>();
-    return uiSystem && uiSystem->wantsMouseCapture();
+    NWB_ASSERT(uiSystem);
+    return uiSystem->wantsMouseCapture();
 }
 
 static void ResolveFlyCameraAnglesFromRotation(
@@ -313,8 +315,9 @@ bool ProjectTestbed::onStartup(){
         __hidden_runtime::s_CameraStartDepth
     );
     activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, cameraPosition);
-    if(auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera))
-        StoreFloat(QuaternionRotationRollPitchYaw(0.0f, __hidden_runtime::s_CameraStartYaw, 0.0f), &cameraTransform->rotation);
+    auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera);
+    NWB_ASSERT(cameraTransform);
+    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, __hidden_runtime::s_CameraStartYaw, 0.0f), &cameraTransform->rotation);
     NWB::Impl::Scene::CreateDirectionalLightEntity(
         *m_world,
         __hidden_runtime::s_DefaultDirectionalLightPitch,
@@ -344,8 +347,9 @@ bool ProjectTestbed::onStartup(){
     );
 
     createDefaultScene();
-    if(auto* modelSystem = m_world->getSystem<NWB::Impl::ModelSystem>())
-        modelSystem->syncModelRuntimes();
+    auto* modelSystem = m_world->getSystem<NWB::Impl::ModelSystem>();
+    NWB_ASSERT(modelSystem);
+    modelSystem->syncModelRuntimes();
     registerInputHandler();
     return m_characterEntity.valid();
 }

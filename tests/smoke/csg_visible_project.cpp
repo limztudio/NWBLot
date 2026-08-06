@@ -256,14 +256,6 @@ private:
         }
 
         AddSmokeRenderSystems(*world, context);
-        if(!world->getSystem<NWB::Impl::MeshSystem>()){
-            NWB_LOGGER_FATAL(NWB_TEXT("CsgVisibleSmokeProject initialization failed: mesh system is missing"));
-            throw RuntimeException("CsgVisibleSmokeProject initialization failed");
-        }
-        if(!world->getSystem<NWB::Impl::RendererSystem>()){
-            NWB_LOGGER_FATAL(NWB_TEXT("CsgVisibleSmokeProject initialization failed: renderer system is missing"));
-            throw RuntimeException("CsgVisibleSmokeProject initialization failed");
-        }
 
         return MakeNotNullUnique(Move(world));
     }

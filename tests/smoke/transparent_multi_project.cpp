@@ -270,26 +270,15 @@ private:
         NWB::Tests::Smoke::DisableSmokeRayTracingForTesting(context);
 #endif
 
-        AddSmokeRenderSystems(*world, context);
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
-        auto* const rendererSystem = world->getSystem<NWB::Impl::RendererSystem>();
-        if(!rendererSystem){
-            NWB_LOGGER_FATAL(NWB_TEXT("FrameLaggedAsyncLightingSmokeProject initialization failed: renderer system is missing"));
-            throw RuntimeException("FrameLaggedAsyncLightingSmokeProject initialization failed");
-        }
-        rendererSystem->setFrameLaggedAsyncLightingEnabled(true);
+        auto& rendererSystem = AddSmokeRenderSystems(*world, context);
+        rendererSystem.setFrameLaggedAsyncLightingEnabled(true);
         NWB_LOGGER_ESSENTIAL_INFO(
             NWB_TEXT("FrameLaggedAsyncLightingSmoke: requested frame-lagged async lighting; F1 toggles the current-frame path")
         );
+#else
+        AddSmokeRenderSystems(*world, context);
 #endif
-        if(!world->getSystem<NWB::Impl::MeshSystem>()){
-            NWB_LOGGER_FATAL(NWB_TEXT("TransparentMultiSmokeProject initialization failed: mesh system is missing"));
-            throw RuntimeException("TransparentMultiSmokeProject initialization failed");
-        }
-        if(!world->getSystem<NWB::Impl::RendererSystem>()){
-            NWB_LOGGER_FATAL(NWB_TEXT("TransparentMultiSmokeProject initialization failed: renderer system is missing"));
-            throw RuntimeException("TransparentMultiSmokeProject initialization failed");
-        }
 
         return world;
     }

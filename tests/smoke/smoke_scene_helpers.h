@@ -168,10 +168,9 @@ inline void RemoveSmokeRendererSystem(
     Core::ECS::World& world
 ){
     auto* rendererSystem = world.getSystem<Impl::RendererSystem>();
-    if(rendererSystem){
-        context.frameGraphRegistry.unregisterContributor(*rendererSystem);
-        context.graphics.removeRenderPass(*rendererSystem);
-    }
+    NWB_ASSERT(rendererSystem);
+    context.frameGraphRegistry.unregisterContributor(*rendererSystem);
+    context.graphics.removeRenderPass(*rendererSystem);
 }
 
 inline void DestroySmokeRenderWorld(

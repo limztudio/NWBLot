@@ -10,7 +10,6 @@
 
 #include "smoke_scene_helpers.h"
 
-#include <core/common/log.h>
 #include <impl/assets_model/asset.h>
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_model/module.h>
@@ -59,8 +58,8 @@ inline void DestroySmokeSkinnedRenderWorld(
         return;
 
     auto* meshSkinningSystem = world->getSystem<Impl::MeshSkinningSystem>();
-    if(meshSkinningSystem)
-        context.graphics.removeRenderPass(*meshSkinningSystem);
+    NWB_ASSERT(meshSkinningSystem);
+    context.graphics.removeRenderPass(*meshSkinningSystem);
 
     RemoveSmokeRendererSystem(context, *world);
     FinishDestroyingSmokeWorld(context, world);
@@ -68,11 +67,7 @@ inline void DestroySmokeSkinnedRenderWorld(
 
 inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
     auto* modelSystem = world.getSystem<Impl::ModelSystem>();
-    if(!modelSystem){
-        NWB_LOGGER_ERROR(NWB_TEXT("Smoke: failed to sync model runtimes because the model system is missing"));
-        return;
-    }
-
+    NWB_ASSERT(modelSystem);
     modelSystem->syncModelRuntimes();
 }
 

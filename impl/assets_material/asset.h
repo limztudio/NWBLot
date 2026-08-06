@@ -23,7 +23,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class Sampler;
 class Shader;
+class Texture;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -363,10 +365,12 @@ struct MaterialTypedLayoutField{
 
 // A cooked material keeps resource identity separate from its numeric/default typed payload. `constantByteOffset`
 // points at the four-byte slot word the renderer patches after it has resolved the device-lifetime descriptor handle.
+// Exactly one typed asset reference is valid, selected by resourceKind.
 struct MaterialResourceReference{
     Name blockName = NAME_NONE;
     Name fieldName = NAME_NONE;
-    Name resourceName = NAME_NONE;
+    Core::Assets::AssetRef<Texture> textureAsset;
+    Core::Assets::AssetRef<Sampler> samplerAsset;
     MaterialResourceKind::Enum resourceKind = MaterialResourceKind::None;
     MaterialResourceSource::Enum resourceSource = MaterialResourceSource::None;
     u32 constantByteOffset = 0u;

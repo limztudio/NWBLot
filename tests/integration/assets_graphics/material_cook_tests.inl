@@ -173,17 +173,19 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         const NWB::Impl::Material& resourceMaterial = static_cast<const NWB::Impl::Material&>(*loadedResourceAsset);
         ASSERT_EQ(resourceMaterial.resourceReferences().size(), 2u);
         EXPECT_EQ(
-            resourceMaterial.resourceReferences()[0u].resourceName,
+            resourceMaterial.resourceReferences()[0u].textureAsset.name(),
             Name("project/textures/test_checker")
         );
+        EXPECT_FALSE(resourceMaterial.resourceReferences()[0u].samplerAsset.valid());
         EXPECT_EQ(
             resourceMaterial.resourceReferences()[0u].resourceSource,
             NWB::Impl::MaterialResourceSource::Asset
         );
         EXPECT_EQ(
-            resourceMaterial.resourceReferences()[1u].resourceName,
+            resourceMaterial.resourceReferences()[1u].samplerAsset.name(),
             Name("engine/samplers/linear_clamp")
         );
+        EXPECT_FALSE(resourceMaterial.resourceReferences()[1u].textureAsset.valid());
         EXPECT_EQ(
             resourceMaterial.resourceReferences()[1u].resourceSource,
             NWB::Impl::MaterialResourceSource::Asset

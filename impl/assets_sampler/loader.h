@@ -8,6 +8,7 @@
 #include "asset.h"
 
 #include <core/assets/manager.h>
+#include <core/assets/ref.h>
 #include <core/graphics/module.h>
 
 
@@ -48,7 +49,7 @@ namespace SamplerAssetLoader{
 );
 [[nodiscard]] bool Load(
     SamplerGpuResource& outResource,
-    const Name& samplerVirtualPath,
+    const Core::Assets::AssetRef<Sampler>& samplerAsset,
     const Name& debugName,
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,

@@ -937,19 +937,21 @@ bool TextureAssetLoader::Create(
 
 bool TextureAssetLoader::Load(
     TextureGpuResource& outResource,
-    const Name& textureVirtualPath,
+    const Core::Assets::AssetRef<Texture>& textureAsset,
     const Name& debugName,
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,
     const tchar* const ownerName
 ){
     const tchar* const owner = ownerName ? ownerName : NWB_TEXT("TextureAssetLoader");
-    if(outResource.valid())
-        return true;
-    if(!textureVirtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: texture virtual path is empty"), owner);
+    if(!textureAsset.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: texture asset reference is empty"), owner);
         return false;
     }
+    if(outResource.valid())
+        return true;
+
+    const Name& textureVirtualPath = textureAsset.name();
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     if(!assetManager.loadSync(Texture::AssetTypeName(), textureVirtualPath, loadedAsset)){

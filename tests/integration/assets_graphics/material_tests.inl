@@ -1695,13 +1695,15 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourcePaths){
         const NWB::Impl::MaterialResourceReference& samplerReference = material.resourceReferences()[1u];
         EXPECT_EQ(imageReference.blockName, Name("surface"));
         EXPECT_EQ(imageReference.fieldName, Name("base_color_map"));
-        EXPECT_EQ(imageReference.resourceName, Name("project/textures/test_checker"));
+        EXPECT_EQ(imageReference.textureAsset.name(), Name("project/textures/test_checker"));
+        EXPECT_FALSE(imageReference.samplerAsset.valid());
         EXPECT_EQ(imageReference.resourceKind, NWB::Impl::MaterialResourceKind::SampledImage2D);
         EXPECT_EQ(imageReference.resourceSource, NWB::Impl::MaterialResourceSource::Asset);
         EXPECT_EQ(imageReference.constantByteOffset, 16u);
         EXPECT_EQ(samplerReference.blockName, Name("surface"));
         EXPECT_EQ(samplerReference.fieldName, Name("base_color_sampler"));
-        EXPECT_EQ(samplerReference.resourceName, Name("engine/samplers/linear_clamp"));
+        EXPECT_FALSE(samplerReference.textureAsset.valid());
+        EXPECT_EQ(samplerReference.samplerAsset.name(), Name("engine/samplers/linear_clamp"));
         EXPECT_EQ(samplerReference.resourceKind, NWB::Impl::MaterialResourceKind::Sampler);
         EXPECT_EQ(samplerReference.resourceSource, NWB::Impl::MaterialResourceSource::Asset);
         EXPECT_EQ(samplerReference.constantByteOffset, 20u);
@@ -1711,10 +1713,12 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourcePaths){
         if(RoundTripMaterialAssetCodec(testArena, codec, material, loadedAsset)){
             const NWB::Impl::Material& loadedMaterial = static_cast<const NWB::Impl::Material&>(*loadedAsset);
             ASSERT_EQ(loadedMaterial.resourceReferences().size(), 2u);
-            EXPECT_EQ(loadedMaterial.resourceReferences()[0u].resourceName, imageReference.resourceName);
+            EXPECT_EQ(loadedMaterial.resourceReferences()[0u].textureAsset, imageReference.textureAsset);
+            EXPECT_FALSE(loadedMaterial.resourceReferences()[0u].samplerAsset.valid());
             EXPECT_EQ(loadedMaterial.resourceReferences()[0u].resourceSource, imageReference.resourceSource);
             EXPECT_EQ(loadedMaterial.resourceReferences()[0u].constantByteOffset, imageReference.constantByteOffset);
-            EXPECT_EQ(loadedMaterial.resourceReferences()[1u].resourceName, samplerReference.resourceName);
+            EXPECT_FALSE(loadedMaterial.resourceReferences()[1u].textureAsset.valid());
+            EXPECT_EQ(loadedMaterial.resourceReferences()[1u].samplerAsset, samplerReference.samplerAsset);
             EXPECT_EQ(loadedMaterial.resourceReferences()[1u].resourceSource, samplerReference.resourceSource);
             EXPECT_EQ(loadedMaterial.resourceReferences()[1u].constantByteOffset, samplerReference.constantByteOffset);
         }
@@ -1809,7 +1813,8 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourceValidation){
     ASSERT_TRUE(built);
     ASSERT_EQ(material.resourceReferences().size(), 2u);
     const NWB::Impl::MaterialResourceReference& imageReference = material.resourceReferences()[0u];
-    EXPECT_EQ(imageReference.resourceName, Name("project/textures/test_checker"));
+    EXPECT_EQ(imageReference.textureAsset.name(), Name("project/textures/test_checker"));
+    EXPECT_FALSE(imageReference.samplerAsset.valid());
     EXPECT_EQ(imageReference.resourceKind, NWB::Impl::MaterialResourceKind::SampledImage2D);
     EXPECT_EQ(imageReference.resourceSource, NWB::Impl::MaterialResourceSource::Asset);
     EXPECT_EQ(imageReference.constantByteOffset, 16u);
@@ -1819,7 +1824,8 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourceValidation){
     ASSERT_TRUE(RoundTripMaterialAssetCodec(testArena, codec, material, loadedAsset));
     const NWB::Impl::Material& loadedMaterial = static_cast<const NWB::Impl::Material&>(*loadedAsset);
     ASSERT_EQ(loadedMaterial.resourceReferences().size(), 2u);
-    EXPECT_EQ(loadedMaterial.resourceReferences()[0u].resourceName, imageReference.resourceName);
+    EXPECT_EQ(loadedMaterial.resourceReferences()[0u].textureAsset, imageReference.textureAsset);
+    EXPECT_FALSE(loadedMaterial.resourceReferences()[0u].samplerAsset.valid());
     EXPECT_EQ(loadedMaterial.resourceReferences()[0u].resourceSource, imageReference.resourceSource);
     EXPECT_EQ(logger.errorCount(), 0u);
 }

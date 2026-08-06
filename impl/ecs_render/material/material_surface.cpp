@@ -43,18 +43,24 @@ static void ReleaseMaterialResourceState(Core::Graphics& graphics, RendererMater
 
 [[nodiscard]] static bool ResolveTextureAssetSlot(
     RendererMaterialResourceState& resources,
-    const Name& texturePath,
+    const Core::Assets::AssetRef<Texture>& textureAsset,
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,
     u32& outHeapSlot
 ){
     outHeapSlot = 0u;
+    if(!textureAsset.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material Texture2D asset reference is empty"));
+        return false;
+    }
+
+    const Name& texturePath = textureAsset.name();
     auto textureAssetIt = resources.textureAssetCache.find(texturePath);
     if(textureAssetIt == resources.textureAssetCache.end()){
         UniquePtr<TextureGpuResource> textureResource = MakeUnique<TextureGpuResource>();
         if(!TextureAssetLoader::Load(
             *textureResource,
-            texturePath,
+            textureAsset,
             texturePath,
             graphics,
             assetManager,
@@ -91,18 +97,24 @@ static void ReleaseMaterialResourceState(Core::Graphics& graphics, RendererMater
 
 [[nodiscard]] static bool ResolveSamplerAssetSlot(
     RendererMaterialResourceState& resources,
-    const Name& samplerPath,
+    const Core::Assets::AssetRef<Sampler>& samplerAsset,
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,
     u32& outHeapSlot
 ){
     outHeapSlot = 0u;
+    if(!samplerAsset.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material sampler asset reference is empty"));
+        return false;
+    }
+
+    const Name& samplerPath = samplerAsset.name();
     auto samplerAssetIt = resources.samplerAssetCache.find(samplerPath);
     if(samplerAssetIt == resources.samplerAssetCache.end()){
         UniquePtr<SamplerGpuResource> samplerResource = MakeUnique<SamplerGpuResource>();
         if(!SamplerAssetLoader::Load(
             *samplerResource,
-            samplerPath,
+            samplerAsset,
             samplerPath,
             graphics,
             assetManager,
@@ -173,14 +185,14 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
         case MaterialResourceKind::SampledImage2D:
             if(!__hidden_material_surface::ResolveTextureAssetSlot(
                 resources,
-                resourceReference.resourceName,
+                resourceReference.textureAsset,
                 graphicsModule,
                 assetManager(),
                 heapSlot
             )){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load Texture2D asset '{}'")
                     , StringConvert(materialInfo.materialName.c_str())
-                    , StringConvert(resourceReference.resourceName.c_str())
+                    , StringConvert(resourceReference.textureAsset.name().c_str())
                 );
                 return false;
             }
@@ -188,14 +200,14 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
         case MaterialResourceKind::Sampler:
             if(!__hidden_material_surface::ResolveSamplerAssetSlot(
                 resources,
-                resourceReference.resourceName,
+                resourceReference.samplerAsset,
                 graphicsModule,
                 assetManager(),
                 heapSlot
             )){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' failed to load sampler asset '{}'")
                     , StringConvert(materialInfo.materialName.c_str())
-                    , StringConvert(resourceReference.resourceName.c_str())
+                    , StringConvert(resourceReference.samplerAsset.name().c_str())
                 );
                 return false;
             }

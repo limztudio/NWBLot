@@ -8,6 +8,7 @@
 #include "asset.h"
 
 #include <core/assets/manager.h>
+#include <core/assets/ref.h>
 #include <core/graphics/module.h>
 
 
@@ -57,7 +58,7 @@ namespace TextureAssetLoader{
 // Loads a cooked Texture asset through the normal asset manager, then delegates to Create().
 [[nodiscard]] bool Load(
     TextureGpuResource& outResource,
-    const Name& textureVirtualPath,
+    const Core::Assets::AssetRef<Texture>& textureAsset,
     const Name& debugName,
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,

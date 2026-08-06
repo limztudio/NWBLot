@@ -74,19 +74,21 @@ bool SamplerAssetLoader::Create(
 
 bool SamplerAssetLoader::Load(
     SamplerGpuResource& outResource,
-    const Name& samplerVirtualPath,
+    const Core::Assets::AssetRef<Sampler>& samplerAsset,
     const Name& debugName,
     Core::Graphics& graphics,
     Core::Assets::AssetManager& assetManager,
     const tchar* const ownerName
 ){
     const tchar* const owner = ownerName ? ownerName : NWB_TEXT("SamplerAssetLoader");
-    if(outResource.valid())
-        return true;
-    if(!samplerVirtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: sampler virtual path is empty"), owner);
+    if(!samplerAsset.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: sampler asset reference is empty"), owner);
         return false;
     }
+    if(outResource.valid())
+        return true;
+
+    const Name& samplerVirtualPath = samplerAsset.name();
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     if(!assetManager.loadSync(Sampler::AssetTypeName(), samplerVirtualPath, loadedAsset)){

@@ -83,9 +83,9 @@ static_assert(
     "MaterialTypedLayoutFieldBinary must stay binary-serializable"
 );
 
-// Per-material resource identity. The renderer resolves resourceName according to resourceSource to a
-// device-lifetime global-heap handle and writes that handle's slot into constantByteOffset; no device-specific
-// descriptor value is serialized here.
+// Per-material resource identity. resourceNameHash is MTL8 transport only: deserialization immediately initializes
+// the matching typed asset reference. The renderer resolves that reference to a device-lifetime global-heap handle
+// and writes its slot into constantByteOffset; no device-specific descriptor value is serialized here.
 struct MaterialResourceReferenceBinary{
     NameHash blockNameHash = {};
     NameHash fieldNameHash = {};
@@ -160,16 +160,24 @@ template<typename BlockVector, typename FieldVector, typename ResourceReferenceV
                 if(foundReference)
                     return false;
                 if(
-                    !resourceReference.resourceName
-                    || resourceReference.resourceKind != expectedKind
-                    || !IsValidSerializedMaterialResourceReference(
-                        resourceReference.resourceKind,
-                        resourceReference.resourceSource,
-                        resourceReference.resourceName
-                    )
+                    resourceReference.resourceKind != expectedKind
+                    || resourceReference.resourceSource != MaterialResourceSource::Asset
                     || resourceReference.constantByteOffset != expectedByteOffset
                 )
                     return false;
+
+                switch(expectedKind){
+                case MaterialResourceKind::SampledImage2D:
+                    if(!resourceReference.textureAsset.valid() || resourceReference.samplerAsset.valid())
+                        return false;
+                    break;
+                case MaterialResourceKind::Sampler:
+                    if(!resourceReference.samplerAsset.valid() || resourceReference.textureAsset.valid())
+                        return false;
+                    break;
+                default:
+                    return false;
+                }
 
                 foundReference = true;
             }

@@ -277,13 +277,33 @@ static bool ReadMaterialTypedLayout(
             return false;
         }
 
+        const MaterialResourceKind::Enum resourceKind =
+            static_cast<MaterialResourceKind::Enum>(resourceReferenceBinary.resourceKind);
+        const MaterialResourceSource::Enum resourceSource =
+            static_cast<MaterialResourceSource::Enum>(resourceReferenceBinary.resourceSource);
+        const Name resourceName(resourceReferenceBinary.resourceNameHash);
+        if(!IsValidSerializedMaterialResourceReference(resourceKind, resourceSource, resourceName)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource reference at index {} has an invalid asset identity"), i);
+            return false;
+        }
+
         MaterialResourceReference resourceReference;
         resourceReference.blockName = Name(resourceReferenceBinary.blockNameHash);
         resourceReference.fieldName = Name(resourceReferenceBinary.fieldNameHash);
-        resourceReference.resourceName = Name(resourceReferenceBinary.resourceNameHash);
-        resourceReference.resourceKind = static_cast<MaterialResourceKind::Enum>(resourceReferenceBinary.resourceKind);
-        resourceReference.resourceSource = static_cast<MaterialResourceSource::Enum>(resourceReferenceBinary.resourceSource);
+        resourceReference.resourceKind = resourceKind;
+        resourceReference.resourceSource = resourceSource;
         resourceReference.constantByteOffset = resourceReferenceBinary.constantByteOffset;
+        switch(resourceKind){
+        case MaterialResourceKind::SampledImage2D:
+            resourceReference.textureAsset.virtualPath = resourceName;
+            break;
+        case MaterialResourceKind::Sampler:
+            resourceReference.samplerAsset.virtualPath = resourceName;
+            break;
+        default:
+            NWB_ASSERT(false);
+            return false;
+        }
         outResourceReferences.push_back(resourceReference);
     }
 

@@ -1423,6 +1423,13 @@ private:
 
 
 public:
+    // Resource and sampler descriptor buffers are always bound in this order. A TLAS set reuses the resource
+    // descriptor buffer, so the optional third offset extends this fixed topology.
+    static constexpr u32 s_ResourceDescriptorBufferIndex = 0u;
+    static constexpr u32 s_SamplerDescriptorBufferIndex = 1u;
+    static constexpr u32 s_PersistentDescriptorBufferCount = 2u;
+    static constexpr u32 s_DescriptorBufferCountWithAccelStruct = 3u;
+
     DescriptorBufferManager(const VulkanContext& context, VulkanAllocator& allocator);
     ~DescriptorBufferManager();
 
@@ -1441,8 +1448,8 @@ public:
     [[nodiscard]] const VkDescriptorBufferBindingInfoEXT& getResourceBindingInfo()const{ return m_resourceSegment.bindingInfo; }
     [[nodiscard]] const VkDescriptorBufferBindingInfoEXT& getSamplerBindingInfo()const{ return m_samplerSegment.bindingInfo; }
     // Resource and sampler buffer indices in bind order.
-    [[nodiscard]] u32 getResourceBufferIndex()const{ return 0; }
-    [[nodiscard]] u32 getSamplerBufferIndex()const{ return 1; }
+    [[nodiscard]] u32 getResourceBufferIndex()const{ return s_ResourceDescriptorBufferIndex; }
+    [[nodiscard]] u32 getSamplerBufferIndex()const{ return s_SamplerDescriptorBufferIndex; }
 
     // Allocates aligned, zeroed descriptor bytes from free ranges or the bump pointer.
     [[nodiscard]] DescriptorBufferSegment allocate(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes);

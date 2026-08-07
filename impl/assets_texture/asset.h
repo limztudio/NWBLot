@@ -85,7 +85,7 @@ public:
         const u32 depth = 1u,
         const TexturePayloadFormat::Enum payloadFormat = TexturePayloadFormat::UastcLdr4x4,
         const TextureAlphaMode::Enum alphaMode = TextureAlphaMode::Opaque,
-        const u8 alphaConstantUnorm8 = 255u
+        const u8 alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8
     ){
         m_colorSpace = colorSpace;
         m_hasAlpha = hasAlpha;
@@ -144,7 +144,7 @@ private:
     TexturePayloadFormat::Enum m_payloadFormat = TexturePayloadFormat::UastcLdr4x4;
     TextureAlphaMode::Enum m_alphaMode = TextureAlphaMode::Opaque;
     bool m_hasAlpha = false;
-    u8 m_alphaConstantUnorm8 = 255u;
+    u8 m_alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
 
     MipLevelVector m_mipLevels;
     Core::Assets::AssetBytes m_payloadBytes;

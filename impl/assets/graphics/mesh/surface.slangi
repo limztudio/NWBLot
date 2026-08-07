@@ -19,6 +19,7 @@
 #define NWB_SURFACE_IOR_VACUUM        half(1.0)              // no refraction / no Fresnel
 #define NWB_SURFACE_IOR_GLASS         half(1.5)              // typical glass Fresnel -- a convenience preset a material MAY author
 #define NWB_SURFACE_ABSORPTION_NONE   half3(1.0h, 1.0h, 1.0h) // per-unit survival = perfectly clear -> casts no shadow
+#define NWB_SURFACE_ABSORPTION_TRANSMISSION_MIN 1e-4
 #define NWB_SURFACE_COVERAGE_OPAQUE   half(1.0)              // render coverage = fully opaque
 
 // Material hooks populate this shared G-buffer, shadow/caustic, and AVBOIT contract.
@@ -72,7 +73,7 @@ float nwbShadowFresnelTransmittedFraction(float ior, float cosI){
 }
 
 float3 nwbShadowAbsorptionCoefficient(half3 transmission){
-    return -log(clamp(float3(transmission), float3(1e-4), float3(1.0)));
+    return -log(clamp(float3(transmission), float3(NWB_SURFACE_ABSORPTION_TRANSMISSION_MIN), float3(1.0)));
 }
 
 

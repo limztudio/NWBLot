@@ -12,11 +12,14 @@
 
 
 half3 nwbProjectUvDebug(const float2 uv0){
+    const half checkerCellsPerAxis = half(8.0);
+    const half checkerPeriod = half(2.0);
+    const half checkerDarkScale = half(0.55);
     const half2 wrappedUv = half2(frac(uv0));
-    const half2 checkerCell = floor(wrappedUv * half(8.0));
-    const half checker = fmod(checkerCell.x + checkerCell.y, half(2.0));
+    const half2 checkerCell = floor(wrappedUv * checkerCellsPerAxis);
+    const half checker = fmod(checkerCell.x + checkerCell.y, checkerPeriod);
     const half3 uvColor = half3(wrappedUv, half(1.0) - wrappedUv.x);
-    return lerp(uvColor * half(0.55), uvColor, checker);
+    return lerp(uvColor * checkerDarkScale, uvColor, checker);
 }
 
 

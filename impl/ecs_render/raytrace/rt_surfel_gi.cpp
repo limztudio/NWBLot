@@ -21,7 +21,7 @@ struct NwbSurfelConstantsGpu{
     Float4 ageRaysTileScreen;       // x = max age, y = maximum rays/surfel, z = spawn tile (px), w = screen width
     Float4 screenHeightPad;         // x = screen height, yzw = pad
 };
-static_assert(sizeof(NwbSurfelConstantsGpu) == sizeof(f32) * 4u * 5u, "NwbSurfelConstantsGpu must match the shader NwbSurfelConstants layout");
+static_assert(sizeof(NwbSurfelConstantsGpu) == sizeof(Float4) * NWB_SURFEL_CONSTANTS_FLOAT4_COUNT, "NwbSurfelConstantsGpu must match the shader NwbSurfelConstants layout");
 
 // Offset trace and gather points to avoid self-intersection.
 inline constexpr f32 s_SurfelNormalBias = 0.05f;

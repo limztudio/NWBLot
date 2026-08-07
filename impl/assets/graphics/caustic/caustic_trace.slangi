@@ -149,7 +149,7 @@ struct NwbCausticEmission{
 };
 
 void nwbCausticEmissionBasis(float3 axis, out float3 right, out float3 up){
-    const float3 reference = abs(axis.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(0.0, 1.0, 0.0);
+    const float3 reference = abs(axis.z) < NWB_FRAME_FALLBACK_AXIS_Z_MAX ? float3(0.0, 0.0, 1.0) : float3(0.0, 1.0, 0.0);
     right = nwbSafeNormalize(cross(reference, axis), float3(1.0, 0.0, 0.0));
     up = nwbSafeNormalize(cross(axis, right), float3(0.0, 1.0, 0.0));
 }

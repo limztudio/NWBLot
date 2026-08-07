@@ -20,27 +20,34 @@
 // is clamped >= 0. Shared by the trace (project), the gather (reconstruct), and the spawn spatial seed (reconstruct is
 // coefficient-only, no buffer binding, so it works over both the SRV gather pool and the UAV spawn pool).
 
+#include "../constants.h"
+
+// Real two-band SH basis and cosine-convolution coefficients shared by every surfel projection/reconstruction path.
+#define NWB_SURFEL_SH_Y00_SCALE 0.2820947918
+#define NWB_SURFEL_SH_Y1_SCALE 0.4886025119
+#define NWB_SURFEL_SH_L1_COSINE_RECONSTRUCTION_SCALE (2.0 / 3.0)
+
 
 // Real 2-band SH basis at a unit direction: (Y_00, Y_1-1, Y_10, Y_11).
 float4 nwbSurfelShBasis(const float3 dir){
     return float4(
-        0.2820947918,          // Y_00  = 1 / (2 sqrt(pi))
-        0.4886025119 * dir.y,  // Y_1-1 = sqrt(3 / (4 pi)) * y
-        0.4886025119 * dir.z,  // Y_10  = sqrt(3 / (4 pi)) * z
-        0.4886025119 * dir.x   // Y_11  = sqrt(3 / (4 pi)) * x
+        NWB_SURFEL_SH_Y00_SCALE,         // Y_00  = 1 / (2 sqrt(pi))
+        NWB_SURFEL_SH_Y1_SCALE * dir.y,  // Y_1-1 = sqrt(3 / (4 pi)) * y
+        NWB_SURFEL_SH_Y1_SCALE * dir.z,  // Y_10  = sqrt(3 / (4 pi)) * z
+        NWB_SURFEL_SH_Y1_SCALE * dir.x   // Y_11  = sqrt(3 / (4 pi)) * x
     );
 }
 
 // Per-ray projection weight: the upper hemisphere is sampled with pdf 1/(2*pi), so the summed radiance*basis products
 // over N rays are scaled by 2*pi/N to estimate the SH projection integral.
 float nwbSurfelShProjectionScale(const uint rayCount){
-    return 6.2831853072 / float(max(rayCount, 1u));   // 2 * pi / N
+    return NWB_GI_FULL_TURN_RADIANS / float(max(rayCount, 1u));   // 2 * pi / N
 }
 
 // Reconstruct one colour channel's cosine-weighted mean radiance for a query normal from its 4 SH coefficients:
 // (1/pi) * [A_0 c_00 Y_00 + A_1 (c_1-1 Y_1-1 + c_10 Y_10 + c_11 Y_11)] = c_00 Y_00 + (2/3)(c_1m Y_1m), clamped >= 0.
 float nwbSurfelShReconstructChannel(const float4 sh, const float4 basis){
-    const float value = sh.x * basis.x + (2.0 / 3.0) * (sh.y * basis.y + sh.z * basis.z + sh.w * basis.w);
+    const float value = sh.x * basis.x + NWB_SURFEL_SH_L1_COSINE_RECONSTRUCTION_SCALE * (sh.y * basis.y + sh.z * basis.z + sh.w * basis.w);
     return max(value, 0.0);
 }
 

@@ -55,6 +55,7 @@
 #define NWB_AVBOIT_PUSH_PARAMS_PRESENTATION_MODE 0u
 #define NWB_AVBOIT_PRESENTATION_SDR 0.0
 #define NWB_AVBOIT_PRESENTATION_HDR10 1.0
+#define NWB_AVBOIT_PRESENTATION_HDR10_THRESHOLD 0.5
 // AVBOIT consumes the shared DeferredBindlessResourceSlots payload through the global UniformBuffer heap. The
 // descriptor slot selecting that payload stays in this one uint4 lane, so transparent draw constants remain within
 // the portable 128-byte budget after the four mesh lanes.

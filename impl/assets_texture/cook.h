@@ -37,7 +37,7 @@ struct TextureCookEntry{
     TexturePayloadFormat::Enum payloadFormat = TexturePayloadFormat::UastcLdr4x4;
     TextureAlphaMode::Enum alphaMode = TextureAlphaMode::Opaque;
     bool hasAlpha = false;
-    u8 alphaConstantUnorm8 = 255u;
+    u8 alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
 
     Texture::MipLevelVector mipLevels;
     Core::Assets::AssetBytes payloadBytes;

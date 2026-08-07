@@ -10,6 +10,7 @@
 
 
 #include "pixel_input.slangi"
+#include "../common/math.slangi"
 
 // Every raster material pixel shader uses the same heap-backed frame buffers as its mesh/compute producer. The
 // trace and cap-fill paths establish their own material-context route before including shared surface code.
@@ -49,7 +50,7 @@ NwbMeshGBufferOutput nwbBuildMeshGBufferOutput(){
 
 half3 nwbGBufferEncodeNormal(float3 normal){
     const float lengthSquared = dot(normal, normal);
-    const float3 normalVector = lengthSquared > 0.000001
+    const float3 normalVector = lengthSquared > NWB_SAFE_NORMALIZE_MIN_LENGTH_SQUARED
         ? normal * rsqrt(lengthSquared)
         : float3(0.0, 0.0, 1.0)
     ;

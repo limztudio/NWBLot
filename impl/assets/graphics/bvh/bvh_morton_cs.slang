@@ -25,7 +25,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const float3 centroid = (p0 + p1 + p2) * (1.0 / 3.0);
     const float3 boundsMin = g_NwbBvhBuildPushConstants.aabbMin.xyz;
-    const float3 boundsExtent = max(g_NwbBvhBuildPushConstants.aabbMax.xyz - boundsMin, float3(1e-8, 1e-8, 1e-8));
+    const float3 boundsExtent = max(
+        g_NwbBvhBuildPushConstants.aabbMax.xyz - boundsMin,
+        float3(NWB_BVH_MORTON_BOUNDS_EXTENT_MIN, NWB_BVH_MORTON_BOUNDS_EXTENT_MIN, NWB_BVH_MORTON_BOUNDS_EXTENT_MIN)
+    );
     const float3 normalized = (centroid - boundsMin) / boundsExtent;
 
     g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBuildPushConstants.keysHeapSlot][triangle] = nwbBvhMorton3D(normalized);

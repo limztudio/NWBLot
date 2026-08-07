@@ -82,12 +82,12 @@ struct BvhSortPushConstants{
     u32 elementCount = 0u;
     u32 compareDistance = 0u;
     u32 sequenceSize = 0u;
-    u32 mode = 0u;
+    u32 mode = NWB_BVH_SORT_MODE_LOCAL_TILE;
     u32 keysHeapSlot = Limit<u32>::s_Max;
     u32 payloadHeapSlot = Limit<u32>::s_Max;
     u32 pad[2] = {};
 };
-static_assert(sizeof(BvhSortPushConstants) == sizeof(u32) * 8u, "BvhSortPushConstants must match the shader NwbBvhBitonicSortPushConstants layout");
+static_assert(sizeof(BvhSortPushConstants) == sizeof(u32) * NWB_BVH_SORT_PUSH_CONSTANT_WORD_COUNT, "BvhSortPushConstants must match the shader NwbBvhBitonicSortPushConstants layout");
 
 inline constexpr usize s_BvhBuildInitialCapacity = 1024u;
 
@@ -121,7 +121,7 @@ struct SceneBvhNodeCalculation{
 struct BvhBuildPushConstants{
     u32 primitiveCount = 0u;
     u32 internalCount = 0u;
-    u32 refitMode = 0u;
+    u32 refitMode = NWB_BVH_BUILD_MODE_FULL;
     u32 pad0 = 0u;
     u32 positionHeapSlot = Limit<u32>::s_Max;
     u32 triangleIndexHeapSlot = Limit<u32>::s_Max;

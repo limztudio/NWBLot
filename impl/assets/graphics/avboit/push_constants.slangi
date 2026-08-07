@@ -57,7 +57,7 @@ float nwbAvboitExtinctionFixedScale(){
 // The value is present on both the compute and transparent-draw layouts so their shared prefix stays intact.
 bool nwbAvboitPresentationIsHdr10(){
     return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitParams[NWB_AVBOIT_PUSH_PARAMS_PRESENTATION_MODE]
-        >= (NWB_AVBOIT_PRESENTATION_HDR10 * 0.5)
+        >= (NWB_AVBOIT_PRESENTATION_HDR10 * NWB_AVBOIT_PRESENTATION_HDR10_THRESHOLD)
     ;
 }
 

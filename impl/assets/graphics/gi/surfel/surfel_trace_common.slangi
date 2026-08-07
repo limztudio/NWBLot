@@ -15,6 +15,7 @@
 
 #include "../constants.h"
 #include "../sampling.slangi"        // nwbGiFibonacciDirection + nwbGiFrameRotation
+#include "../../common/math.slangi"
 #include "surfel_runtime.slangi"
 #include "surfel_sh.slangi"          // nwbSurfelShBasis / nwbSurfelShProjectionScale
 #include "surfel_hash.slangi"        // nwbSurfelCellCoord / nwbSurfelHashCell
@@ -114,7 +115,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         const float2 rotation = nwbGiFrameRotation(frameIndex);
 
         const float3 n = surfel.normal;
-        const float3 up = abs(n.z) < 0.999 ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
+        const float3 up = abs(n.z) < NWB_FRAME_FALLBACK_AXIS_Z_MAX ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
         const float3 tangent = normalize(cross(up, n));
         const float3 bitangent = cross(n, tangent);
         float3 dirLocal = nwbGiFibonacciDirection(rayIndex, rayCount, rotation);

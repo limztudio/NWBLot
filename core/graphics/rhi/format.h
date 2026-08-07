@@ -18,6 +18,11 @@ NWB_CORE_BEGIN
 
 
 namespace Format{
+    // Every ASTC block footprint has these three consecutive storage variants in Enum: UNORM, UNORM_SRGB, and
+    // HDR float. Keep the classifier tied to those semantic layout values instead of the raw enum offsets.
+    inline constexpr u32 s_AstcVariantsPerBlockFootprint = 3u;
+    inline constexpr u32 s_AstcHdrVariantOffset = 2u;
+
     enum Enum : u8{
         UNKNOWN,
 
@@ -150,7 +155,9 @@ namespace Format{
     }
 
     [[nodiscard]] constexpr bool IsASTCHdrFormat(const Enum format)noexcept{
-        return IsASTCCompressedFormat(format) && (static_cast<u32>(format) - static_cast<u32>(ASTC_4x4_UNORM)) % 3u == 2u;
+        return IsASTCCompressedFormat(format)
+            && (static_cast<u32>(format) - static_cast<u32>(ASTC_4x4_UNORM)) % s_AstcVariantsPerBlockFootprint == s_AstcHdrVariantOffset
+        ;
     }
 
     [[nodiscard]] constexpr bool IsBlockCompressedFormat(const Enum format)noexcept{

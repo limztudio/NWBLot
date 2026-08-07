@@ -702,7 +702,7 @@ bool DescriptorBufferManager::initialize(){
 
     const u32 offsetAlignment = static_cast<u32>(props.descriptorBufferOffsetAlignment);
     if(
-        props.maxDescriptorBufferBindings < 2u
+        props.maxDescriptorBufferBindings < DescriptorBufferManager::s_PersistentDescriptorBufferCount
         || props.maxResourceDescriptorBufferBindings == 0u
         || props.maxSamplerDescriptorBufferBindings == 0u
     ){
@@ -1522,8 +1522,8 @@ void CommandList::bindDescriptorBufferHeap(
     // Resource, sampler, and TLAS heap sets are contiguous at 8/9/10.
     const u32 resourceIndex = m_context.descriptorBufferManager->getResourceBufferIndex();
     const u32 samplerIndex = m_context.descriptorBufferManager->getSamplerBufferIndex();
-    const u32 bufferIndices[3] = { resourceIndex, samplerIndex, resourceIndex };
-    const VkDeviceSize offsets[3] = {
+    const u32 bufferIndices[DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct] = { resourceIndex, samplerIndex, resourceIndex };
+    const VkDeviceSize offsets[DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct] = {
         resourceBlock.offsetBytes,
         samplerBlock.offsetBytes,
         accelStructBlock.offsetBytes
@@ -1534,7 +1534,9 @@ void CommandList::bindDescriptorBufferHeap(
         bindPoint,
         pipelineLayout,
         heap.getResourceSetIndex(),
-        bindAccelStruct ? 3u : 2u,
+        bindAccelStruct
+            ? DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct
+            : DescriptorBufferManager::s_PersistentDescriptorBufferCount,
         bufferIndices,
         offsets
     );
@@ -1545,11 +1547,15 @@ void CommandList::ensureDescriptorBuffersBound(){
         return;
 
     const DescriptorBufferManager& manager = *m_context.descriptorBufferManager;
-    const VkDescriptorBufferBindingInfoEXT bindingInfos[2] = {
+    const VkDescriptorBufferBindingInfoEXT bindingInfos[DescriptorBufferManager::s_PersistentDescriptorBufferCount] = {
         manager.getResourceBindingInfo(),
         manager.getSamplerBindingInfo()
     };
-    vkCmdBindDescriptorBuffersEXT(m_currentCmdBuf->m_cmdBuf, 2u, bindingInfos);
+    vkCmdBindDescriptorBuffersEXT(
+        m_currentCmdBuf->m_cmdBuf,
+        DescriptorBufferManager::s_PersistentDescriptorBufferCount,
+        bindingInfos
+    );
     m_descriptorBuffersBound = true;
 }
 

@@ -78,7 +78,9 @@ using TextureFormat::s_AlphaConstantUnorm8Mode;
 using TextureFormat::s_AlphaOpaqueMode;
 using TextureFormat::s_AlphaUastcLdr4x4Mode;
 using TextureFormat::s_LinearColorSpace;
+using TextureFormat::s_MaxConstantAlphaUnorm8;
 using TextureFormat::s_MipMajorSliceMajorBlocksPayloadLayout;
+using TextureFormat::s_OpaqueAlphaUnorm8;
 using TextureFormat::s_SrgbColorSpace;
 using TextureFormat::s_Texture2DDimension;
 using TextureFormat::s_Texture3DDimension;
@@ -757,7 +759,7 @@ bool ParseTextureCookMetadata(
     u64 expectedTotalPayloadBytes = expectedPayloadBytes;
     if(outEntry.payloadFormat == TexturePayloadFormat::UastcLdr4x4){
         outEntry.alphaMode = hasAlpha != 0u ? TextureAlphaMode::EmbeddedLdr : TextureAlphaMode::Opaque;
-        outEntry.alphaConstantUnorm8 = 255u;
+        outEntry.alphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
     }
     else{
         AStringView alphaModeText;
@@ -765,7 +767,7 @@ bool ParseTextureCookMetadata(
             return false;
         if(alphaModeText == s_AlphaOpaqueMode){
             outEntry.alphaMode = TextureAlphaMode::Opaque;
-            outEntry.alphaConstantUnorm8 = 255u;
+            outEntry.alphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
             if(
                 hasAlpha != 0u
                 || FindField(asset, s_AlphaConstantUnorm8Field)
@@ -789,7 +791,7 @@ bool ParseTextureCookMetadata(
                     asset,
                     s_AlphaConstantUnorm8Field,
                     0u,
-                    254u,
+                    s_MaxConstantAlphaUnorm8,
                     alphaConstant
                 )
                 || FindField(asset, s_AlphaPayloadOffsetBytesField)
@@ -851,7 +853,7 @@ bool ParseTextureCookMetadata(
             }
             expectedTotalPayloadBytes += expectedPayloadBytes;
             outEntry.alphaMode = TextureAlphaMode::SeparateUastcLdr4x4;
-            outEntry.alphaConstantUnorm8 = 255u;
+            outEntry.alphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
         }
         else{
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' has an unsupported HDR alpha mode")

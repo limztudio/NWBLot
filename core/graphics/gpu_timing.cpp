@@ -18,6 +18,10 @@ NWB_CORE_BEGIN
 
 thread_local GpuTimingSubmissionTicket* GpuTimingRecorder::s_activeSubmissionTicket = nullptr;
 
+// Retain enough rejected-frame endpoints to pair an asynchronously arriving overlap timestamp without allowing the
+// correlation cache to grow unbounded.
+static constexpr u64 s_PendingOverlapRetentionFramesPerInFlightFrame = 8u;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -448,7 +452,7 @@ void GpuTimingRecorder::recordTimestampRange(
 ){
     // collectLocked() holds m_mutex. Keep this deliberately bounded: a rejected packet yields at most one endpoint,
     // and that orphan must not turn a long-running capture into an unbounded correlation cache.
-    constexpr u64 s_PendingOverlapFrameRetention = static_cast<u64>(s_MaxFramesInFlight) * 8u;
+    constexpr u64 s_PendingOverlapFrameRetention = static_cast<u64>(s_MaxFramesInFlight) * s_PendingOverlapRetentionFramesPerInFlightFrame;
 
     for(OverlapRecord& record : m_overlapRecords){
         if(scopeName != record.firstScope && scopeName != record.secondScope)

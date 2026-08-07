@@ -39,6 +39,16 @@ using ScratchStringSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<S
 
 static constexpr u64 s_BytesPerMiB = 1024ull * 1024ull;
 static constexpr usize s_SwapChainQueueFamilyIndexCount = 2u;
+// HDR10 metadata mirrors the Rec.2020/ST.2084 presentation transform. Keep the mastering display values named so
+// a presentation-policy adjustment cannot silently leave Vulkan's advertised metadata behind.
+static constexpr VkXYColorEXT s_Hdr10DisplayPrimaryRed = { 0.708f, 0.292f };
+static constexpr VkXYColorEXT s_Hdr10DisplayPrimaryGreen = { 0.170f, 0.797f };
+static constexpr VkXYColorEXT s_Hdr10DisplayPrimaryBlue = { 0.131f, 0.046f };
+static constexpr VkXYColorEXT s_Hdr10WhitePointD65 = { 0.3127f, 0.3290f };
+static constexpr f32 s_Hdr10MasteringPeakLuminance = 1000.0f;
+static constexpr f32 s_Hdr10MinimumLuminance = 0.005f;
+static constexpr f32 s_Hdr10MaximumFrameAverageLightLevel = 400.0f;
+static constexpr u32 s_Hdr10MetadataSwapChainCount = 1u;
 
 static ScratchStringStream MakeScratchStringStream(Alloc::ScratchArena& arena){
     return ScratchStringStream(std::ios_base::out, arena);
@@ -257,15 +267,15 @@ static void SetHdr10Metadata(const VkDevice device, const VkSwapchainKHR swapCha
     metadata.sType = VK_STRUCTURE_TYPE_HDR_METADATA_EXT;
     // Rec.2020 primaries and D65 white point. These values match the HDR10/PQ transform used by the final
     // presentation shaders, which maps scene highlights to a 1,000-nit mastering target.
-    metadata.displayPrimaryRed = { 0.708f, 0.292f };
-    metadata.displayPrimaryGreen = { 0.170f, 0.797f };
-    metadata.displayPrimaryBlue = { 0.131f, 0.046f };
-    metadata.whitePoint = { 0.3127f, 0.3290f };
-    metadata.maxLuminance = 1000.0f;
-    metadata.minLuminance = 0.005f;
-    metadata.maxContentLightLevel = 1000.0f;
-    metadata.maxFrameAverageLightLevel = 400.0f;
-    vkSetHdrMetadataEXT(device, 1u, &swapChain, &metadata);
+    metadata.displayPrimaryRed = s_Hdr10DisplayPrimaryRed;
+    metadata.displayPrimaryGreen = s_Hdr10DisplayPrimaryGreen;
+    metadata.displayPrimaryBlue = s_Hdr10DisplayPrimaryBlue;
+    metadata.whitePoint = s_Hdr10WhitePointD65;
+    metadata.maxLuminance = s_Hdr10MasteringPeakLuminance;
+    metadata.minLuminance = s_Hdr10MinimumLuminance;
+    metadata.maxContentLightLevel = s_Hdr10MasteringPeakLuminance;
+    metadata.maxFrameAverageLightLevel = s_Hdr10MaximumFrameAverageLightLevel;
+    vkSetHdrMetadataEXT(device, s_Hdr10MetadataSwapChainCount, &swapChain, &metadata);
 }
 
 static u64 GetDeviceLocalMemoryBytes(VkPhysicalDevice physicalDevice){

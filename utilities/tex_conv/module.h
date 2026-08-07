@@ -32,6 +32,7 @@ using Impl::TextureFormat::s_AlphaOpaqueMode;
 using Impl::TextureFormat::s_AlphaUastcLdr4x4Mode;
 using Impl::TextureFormat::s_LinearColorSpace;
 using Impl::TextureFormat::s_MipMajorSliceMajorBlocksPayloadLayout;
+using Impl::TextureFormat::s_OpaqueAlphaUnorm8;
 using Impl::TextureFormat::s_SrgbColorSpace;
 using Impl::TextureFormat::s_Texture2DDimension;
 using Impl::TextureFormat::s_Texture3DDimension;
@@ -90,7 +91,7 @@ struct TexturePayload{
     TextureDimension::Enum dimension = TextureDimension::Texture2D;
     TexturePayloadFormat::Enum format = TexturePayloadFormat::UastcLdr4x4;
     TextureAlphaMode::Enum alphaMode = TextureAlphaMode::Opaque;
-    u8 alphaConstantUnorm8 = 255u;
+    u8 alphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
     bool srgb = false;
     bool hasAlpha = false;
 };

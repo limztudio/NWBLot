@@ -120,7 +120,7 @@ AString BuildMetadata(const TexturePayload& payload, const Path& dataPath){
         || (hdr && payload.alphaMode == TextureAlphaMode::EmbeddedLdr)
         || (hdr && payload.alphaMode == TextureAlphaMode::SeparateUastcLdr4x4 && payload.alphaBytes.size() != payload.bytes.size())
         || (hdr && payload.alphaMode != TextureAlphaMode::SeparateUastcLdr4x4 && !payload.alphaBytes.empty())
-        || (hdr && payload.alphaMode != TextureAlphaMode::ConstantUnorm8 && payload.alphaConstantUnorm8 != 255u)
+        || (hdr && payload.alphaMode != TextureAlphaMode::ConstantUnorm8 && payload.alphaConstantUnorm8 != s_OpaqueAlphaUnorm8)
     )
         return {};
     u32 blockWidth = 0u;

@@ -195,7 +195,7 @@ bool Texture::validatePayload()const{
         );
         return false;
     }
-    if(m_alphaMode != TextureAlphaMode::ConstantUnorm8 && m_alphaConstantUnorm8 != 255u){
+    if(m_alphaMode != TextureAlphaMode::ConstantUnorm8 && m_alphaConstantUnorm8 != TextureFormat::s_OpaqueAlphaUnorm8){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an unexpected alpha constant")
             , StringConvert(virtualPath().c_str())
         );
@@ -256,7 +256,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
     m_depth = 1u;
     m_payloadFormat = TexturePayloadFormat::UastcLdr4x4;
     m_alphaMode = TextureAlphaMode::Opaque;
-    m_alphaConstantUnorm8 = 255u;
+    m_alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
     m_mipLevels.clear();
     m_payloadBytes.clear();
 
@@ -293,7 +293,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
     u32 mipCount = 0u;
     TexturePayloadFormat::Enum payloadFormat = TexturePayloadFormat::UastcLdr4x4;
     TextureAlphaMode::Enum alphaMode = TextureAlphaMode::Opaque;
-    u8 alphaConstantUnorm8 = 255u;
+    u8 alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
     u64 payloadByteCount64 = 0u;
     if(headerPrefix.version == TextureBinaryPayload::s_TextureVersionV2){
         TextureBinaryPayload::HeaderBinaryV2 header;

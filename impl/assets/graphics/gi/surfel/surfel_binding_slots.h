@@ -36,6 +36,9 @@
 #define NWB_SURFEL_UPSAMPLE_TAP_SIDE 2
 #define NWB_SURFEL_UPSAMPLE_COVERAGE_MIN 0.5f
 
+// Per-frame surfel cbuffer ABI: NwbSurfelConstants contains five float4 lanes.
+#define NWB_SURFEL_CONSTANTS_FLOAT4_COUNT 5u
+
 // Shared CPU/shader one-thread indirect-args build ABI.
 #define NWB_SURFEL_TRACE_BUILDARGS_GROUP_SIZE_X 1u
 #define NWB_SURFEL_TRACE_BUILDARGS_GROUP_SIZE_Y 1u

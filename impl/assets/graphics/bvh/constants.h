@@ -27,6 +27,9 @@
 #define NWB_RAYTRACE_VERTEX_ATTRIBUTE_NORMAL_BYTE_OFFSET 0u
 #define NWB_RAYTRACE_VERTEX_ATTRIBUTE_UV0_BYTE_OFFSET 8u
 
+// Prevent degenerate mesh bounds from producing an undefined Morton normalization divide.
+#define NWB_BVH_MORTON_BOUNDS_EXTENT_MIN 1e-8
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

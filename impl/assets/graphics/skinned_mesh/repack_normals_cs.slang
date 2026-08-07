@@ -3,6 +3,7 @@
 
 
 #include "binding_slots.h"
+#include "../bvh/constants.h"
 #include "bindless_resources.slangi"
 #include "constants.h"
 
@@ -75,7 +76,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         // AttribGpu stride = 16: Half4 normal @ +0 (xy, zw), Float2 uv0 @ +8. Write ONLY the 8-byte normal halves;
         // uv0 (bytes 8..15) is pose-invariant and stays as uploaded.
         const NwbMeshHalf4 skinnedNormal = nwbSkinnedMeshHeapHalf4s(g_NwbSkinnedMeshRepackBindlessResources.streamSlots0.w)[attributeRef.normal];
-        nwbSkinnedMeshHeapWritableRawBuffer(g_NwbSkinnedMeshRepackBindlessResources.streamSlots3.w).Store2(primitiveByte * 16u, uint2(skinnedNormal.xy, skinnedNormal.zw));
+        nwbSkinnedMeshHeapWritableRawBuffer(g_NwbSkinnedMeshRepackBindlessResources.streamSlots3.w).Store2(primitiveByte * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES, uint2(skinnedNormal.xy, skinnedNormal.zw));
     }
 }
 

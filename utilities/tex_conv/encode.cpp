@@ -88,7 +88,7 @@ static void ResetPayload(
     outPayload.srgb = srgb;
     outPayload.hasAlpha = false;
     outPayload.alphaMode = TextureAlphaMode::Opaque;
-    outPayload.alphaConstantUnorm8 = 255u;
+    outPayload.alphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
     outPayload.mips.clear();
     outPayload.bytes.clear();
     outPayload.alphaBytes.clear();
@@ -848,7 +848,7 @@ static void ResetPayload(
     bool foundAlpha = false;
     bool allOpaque = true;
     bool allConstant = true;
-    u8 constantAlpha = 255u;
+    u8 constantAlpha = s_OpaqueAlphaUnorm8;
     outAlphaMips.clear();
     outAlphaMips.resize(inOutMipPlanes.size());
     for(usize mipIndex = 0u; mipIndex < inOutMipPlanes.size(); ++mipIndex){
@@ -879,7 +879,7 @@ static void ResetPayload(
                         quantizedAlpha,
                         quantizedAlpha,
                         quantizedAlpha,
-                        255u
+                        s_OpaqueAlphaUnorm8
                     );
                     hdrColor[3u] = 1.0f;
 
@@ -889,7 +889,7 @@ static void ResetPayload(
                     }
                     else if(quantizedAlpha != constantAlpha)
                         allConstant = false;
-                    if(quantizedAlpha != 255u)
+                    if(quantizedAlpha != s_OpaqueAlphaUnorm8)
                         allOpaque = false;
                 }
             }
@@ -900,7 +900,7 @@ static void ResetPayload(
 
     if(allOpaque){
         outAlphaMode = TextureAlphaMode::Opaque;
-        outAlphaConstantUnorm8 = 255u;
+        outAlphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
     }
     else if(allConstant){
         outAlphaMode = TextureAlphaMode::ConstantUnorm8;
@@ -908,7 +908,7 @@ static void ResetPayload(
     }
     else{
         outAlphaMode = TextureAlphaMode::SeparateUastcLdr4x4;
-        outAlphaConstantUnorm8 = 255u;
+        outAlphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
     }
     return true;
 }
@@ -1103,7 +1103,7 @@ static void ResetPayload(
 
     VolumeMips alphaMips;
     TextureAlphaMode::Enum alphaMode = TextureAlphaMode::Opaque;
-    u8 alphaConstantUnorm8 = 255u;
+    u8 alphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
     if(!ExtractHdrAlphaMips(inOutMipPlanes, alphaMips, alphaMode, alphaConstantUnorm8))
         return false;
 

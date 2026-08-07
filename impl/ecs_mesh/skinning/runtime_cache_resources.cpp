@@ -33,6 +33,10 @@ namespace __hidden_runtime_cache_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Each reconstructed runtime-BLAS stream needs a small allocator/control overhead in addition to its typed payload.
+static constexpr usize s_RuntimeBlasScratchArenaOverheadBytes = 4096u;
+
+
 #include <impl/assets_mesh/meshlet_ref_range_validation.inl>
 
 [[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::GlobalArena& arena, const MeshSkinningRuntimeInstance& instance){
@@ -507,7 +511,10 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
     // reads it as a raw byte buffer.
     if(uploaded){
         const usize indexCount = instance.meshletPrimitiveIndices.size();
-        Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_RuntimeBlasIndexArena, indexCount * sizeof(u32) + 4096u);
+        Core::Alloc::ScratchArena scratchArena(
+            SkinningArenaScope::s_RuntimeBlasIndexArena,
+            indexCount * sizeof(u32) + __hidden_runtime_cache_resources::s_RuntimeBlasScratchArenaOverheadBytes
+        );
         Vector<u32, Core::Alloc::ScratchArena> triangleIndices{ scratchArena };
         triangleIndices.reserve(indexCount);
         if(!BuildMeshletTriangleIndices(
@@ -554,7 +561,10 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
     // ByteAddressBuffer, so it carries a raw view; canHaveUavs lets the repack pass write it as a raw UAV in place.
     if(uploaded){
         const usize attributeCount = instance.meshletPrimitiveIndices.size();
-        Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_RuntimeBlasAttributeArena, attributeCount * sizeof(AttribGpu) + 4096u);
+        Core::Alloc::ScratchArena scratchArena(
+            SkinningArenaScope::s_RuntimeBlasAttributeArena,
+            attributeCount * sizeof(AttribGpu) + __hidden_runtime_cache_resources::s_RuntimeBlasScratchArenaOverheadBytes
+        );
         Vector<AttribGpu, Core::Alloc::ScratchArena> triangleAttributes{ scratchArena };
         if(!BuildMeshletTriangleAttributes(
             instance.meshlets,

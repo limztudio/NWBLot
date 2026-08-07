@@ -16,37 +16,76 @@
 #define NWB_HDR10_UI_PAPER_WHITE_NITS 203.0
 #define NWB_HDR10_PQ_ABSOLUTE_PEAK_NITS 10000.0
 
+// Rec.709 -> Rec.2020 linear-primary conversion matrix. Keep the rows as individual macro-only values so this
+// header remains consumable by both generated shader variants without introducing a shared global variable.
+#define NWB_HDR10_REC709_TO_REC2020_ROW0_R 0.6274040
+#define NWB_HDR10_REC709_TO_REC2020_ROW0_G 0.3292820
+#define NWB_HDR10_REC709_TO_REC2020_ROW0_B 0.0433136
+#define NWB_HDR10_REC709_TO_REC2020_ROW1_R 0.0690970
+#define NWB_HDR10_REC709_TO_REC2020_ROW1_G 0.9195400
+#define NWB_HDR10_REC709_TO_REC2020_ROW1_B 0.0113612
+#define NWB_HDR10_REC709_TO_REC2020_ROW2_R 0.0163916
+#define NWB_HDR10_REC709_TO_REC2020_ROW2_G 0.0880132
+#define NWB_HDR10_REC709_TO_REC2020_ROW2_B 0.8955950
+
+// SMPTE ST.2084 (PQ) transfer-function constants.
+#define NWB_HDR10_PQ_M1 0.1593017578125
+#define NWB_HDR10_PQ_M2 78.84375
+#define NWB_HDR10_PQ_C1 0.8359375
+#define NWB_HDR10_PQ_C2 18.8515625
+#define NWB_HDR10_PQ_C3 18.6875
+
+// sRGB EOTF constants used for UI colors before HDR10/PQ presentation.
+#define NWB_HDR10_SRGB_LINEAR_DIVISOR 12.92
+#define NWB_HDR10_SRGB_NONLINEAR_OFFSET 0.055
+#define NWB_HDR10_SRGB_NONLINEAR_DIVISOR 1.055
+#define NWB_HDR10_SRGB_NONLINEAR_EXPONENT 2.4
+#define NWB_HDR10_SRGB_LINEAR_THRESHOLD 0.04045
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 float3 nwbHdr10Rec709ToRec2020(float3 value){
     return float3(
-        dot(value, float3(0.6274040, 0.3292820, 0.0433136)),
-        dot(value, float3(0.0690970, 0.9195400, 0.0113612)),
-        dot(value, float3(0.0163916, 0.0880132, 0.8955950))
+        dot(value, float3(
+            NWB_HDR10_REC709_TO_REC2020_ROW0_R,
+            NWB_HDR10_REC709_TO_REC2020_ROW0_G,
+            NWB_HDR10_REC709_TO_REC2020_ROW0_B
+        )),
+        dot(value, float3(
+            NWB_HDR10_REC709_TO_REC2020_ROW1_R,
+            NWB_HDR10_REC709_TO_REC2020_ROW1_G,
+            NWB_HDR10_REC709_TO_REC2020_ROW1_B
+        )),
+        dot(value, float3(
+            NWB_HDR10_REC709_TO_REC2020_ROW2_R,
+            NWB_HDR10_REC709_TO_REC2020_ROW2_G,
+            NWB_HDR10_REC709_TO_REC2020_ROW2_B
+        ))
     );
 }
 
 float3 nwbHdr10PqEncodeNits(float3 luminanceNits){
     // SMPTE ST.2084 constants. PQ is defined against an absolute 10,000-nit range, independent of the
     // mastering display's peak value.
-    const float pqM1 = 2610.0 / 16384.0;
-    const float pqM2 = 2523.0 / 32.0;
-    const float pqC1 = 3424.0 / 4096.0;
-    const float pqC2 = 2413.0 / 128.0;
-    const float pqC3 = 2392.0 / 128.0;
     const float3 normalized = saturate(max(luminanceNits, float3(0.0)) / NWB_HDR10_PQ_ABSOLUTE_PEAK_NITS);
-    const float3 raised = pow(normalized, pqM1);
-    return pow((pqC1 + pqC2 * raised) / (1.0 + pqC3 * raised), pqM2);
+    const float3 raised = pow(normalized, NWB_HDR10_PQ_M1);
+    return pow(
+        (NWB_HDR10_PQ_C1 + NWB_HDR10_PQ_C2 * raised) / (1.0 + NWB_HDR10_PQ_C3 * raised),
+        NWB_HDR10_PQ_M2
+    );
 }
 
 float3 nwbHdr10SrgbToLinear(float3 value){
     const float3 srgb = saturate(value);
     return lerp(
-        srgb / 12.92,
-        pow((srgb + 0.055) / 1.055, 2.4),
-        step(float3(0.04045), srgb)
+        srgb / NWB_HDR10_SRGB_LINEAR_DIVISOR,
+        pow(
+            (srgb + NWB_HDR10_SRGB_NONLINEAR_OFFSET) / NWB_HDR10_SRGB_NONLINEAR_DIVISOR,
+            NWB_HDR10_SRGB_NONLINEAR_EXPONENT
+        ),
+        step(float3(NWB_HDR10_SRGB_LINEAR_THRESHOLD), srgb)
     );
 }
 

@@ -1211,7 +1211,7 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
     {
         BvhSortPushConstants pushConstants;
         pushConstants.elementCount = elementCount;
-        pushConstants.mode = 0u;        // LOCAL_TILE
+        pushConstants.mode = NWB_BVH_SORT_MODE_LOCAL_TILE;
         dispatchSort(pushConstants, groupCount);
         bvhSortBarrier();
     }
@@ -1223,7 +1223,7 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
             pushConstants.elementCount = elementCount;
             pushConstants.compareDistance = compareDistance;
             pushConstants.sequenceSize = sequenceSize;
-            pushConstants.mode = 1u;    // GLOBAL
+            pushConstants.mode = NWB_BVH_SORT_MODE_GLOBAL;
             dispatchSort(pushConstants, groupCount);
             bvhSortBarrier();
         }
@@ -1231,7 +1231,7 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
         BvhSortPushConstants tailPushConstants;
         tailPushConstants.elementCount = elementCount;
         tailPushConstants.sequenceSize = sequenceSize;
-        tailPushConstants.mode = 2u;    // GLOBAL_TAIL
+        tailPushConstants.mode = NWB_BVH_SORT_MODE_GLOBAL_TAIL;
         dispatchSort(tailPushConstants, groupCount);
         bvhSortBarrier();
     }
@@ -1692,7 +1692,7 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     BvhBuildPushConstants pushConstants;
     pushConstants.primitiveCount = primitiveCount;
     pushConstants.internalCount = primitiveCount - 1u;
-    pushConstants.refitMode = 1u;
+    pushConstants.refitMode = NWB_BVH_BUILD_MODE_REFIT;
     pushConstants.positionHeapSlot = positionHeapSlot;
     pushConstants.triangleIndexHeapSlot = triangleIndexHeapSlot;
     pushConstants.keysHeapSlot = rayTracingState().m_bvhSortKeysHeapHandle.slot();

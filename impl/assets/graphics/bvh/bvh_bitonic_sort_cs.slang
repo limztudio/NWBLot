@@ -17,7 +17,7 @@ struct NwbBvhBitonicSortPushConstants{
     uint elementCount;       // real element count (tail beyond it holds the 0xFFFFFFFF sentinel padding)
     uint compareDistance;    // GLOBAL only: XOR distance for this merge step
     uint sequenceSize;       // GLOBAL / GLOBAL_TAIL only: current bitonic sequence size (a power of two)
-    uint mode;               // 0 = LOCAL_TILE, 1 = GLOBAL, 2 = GLOBAL_TAIL
+    uint mode;               // NWB_BVH_SORT_MODE_*
     uint keysHeapSlot;
     uint payloadHeapSlot;
     uint2 pad;
@@ -66,7 +66,7 @@ void main(
 ){
     const uint mode = g_NwbBvhBitonicSortPushConstants.mode;
 
-    if(mode == 1u){
+    if(mode == NWB_BVH_SORT_MODE_GLOBAL){
         // Inter-tile global-memory compare/swap.
         const uint index = dispatchThreadID.x;
         const uint partner = index ^ g_NwbBvhBitonicSortPushConstants.compareDistance;
@@ -98,7 +98,7 @@ void main(
     s_tilePayload[local] = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.payloadHeapSlot][global];
     GroupMemoryBarrierWithGroupSync();
 
-    if(mode == 0u){
+    if(mode == NWB_BVH_SORT_MODE_LOCAL_TILE){
         [unroll]
         for(uint sequenceSize = 2u; sequenceSize <= NWB_BVH_SORT_GROUP_SIZE; sequenceSize <<= 1u){
             [unroll]

@@ -113,6 +113,10 @@ inline constexpr u32 s_UastcBytesPerBlock = 16u;
 inline constexpr u32 s_UastcLdrTextureMetadataVersion = 1u;
 inline constexpr u32 s_UastcHdrTextureMetadataVersion = 2u;
 inline constexpr u32 s_TextureCubeFaceCount = 6u;
+// HDR alpha transport reserves the fully opaque UNORM8 value for the explicit opaque mode. Constant-alpha payloads
+// therefore carry the inclusive [0, 254] range and never alias the opaque-mode sentinel.
+inline constexpr u32 s_OpaqueAlphaUnorm8 = 255u;
+inline constexpr u32 s_MaxConstantAlphaUnorm8 = s_OpaqueAlphaUnorm8 - 1u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -13,6 +13,7 @@
 
 #include "assert.h"
 #include "generic.h"
+#include "limit.h"
 #include "type.h"
 #include "container/adaptor.h"
 
@@ -349,10 +350,13 @@ inline TString<ArenaT> StringConvert(ArenaT& arena, const In& raw){
         return dst;
 
 #if defined(NWB_PLATFORM_WINDOWS)
-    const auto len = MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0);
-    NWB_ASSERT(len != 0);
+    NWB_FATAL_ASSERT(src.length() <= static_cast<usize>(Limit<int>::s_Max));
+    const int inputLength = static_cast<int>(src.length());
+    const auto len = MultiByteToWideChar(CP_UTF8, 0, src.data(), inputLength, nullptr, 0);
+    NWB_FATAL_ASSERT(len != 0);
     dst.resize(len);
-    MultiByteToWideChar(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len);
+    const auto written = MultiByteToWideChar(CP_UTF8, 0, src.data(), inputLength, dst.data(), len);
+    NWB_FATAL_ASSERT(written == len);
     return dst;
 #else
     dst.resize(src.size());
@@ -374,11 +378,14 @@ inline TString<ArenaT> StringConvert(ArenaT& arena, const In& raw){
         return TString<ArenaT>{arena};
 
 #if defined(NWB_PLATFORM_WINDOWS)
-    const auto len = WideCharToMultiByte(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), nullptr, 0, nullptr, nullptr);
-    NWB_ASSERT(len != 0);
+    NWB_FATAL_ASSERT(src.length() <= static_cast<usize>(Limit<int>::s_Max));
+    const int inputLength = static_cast<int>(src.length());
+    const auto len = WideCharToMultiByte(CP_UTF8, 0, src.data(), inputLength, nullptr, 0, nullptr, nullptr);
+    NWB_FATAL_ASSERT(len != 0);
     TString<ArenaT> dst{arena};
     dst.resize(len);
-    WideCharToMultiByte(CP_UTF8, 0, src.data(), static_cast<int>(src.length()), dst.data(), len, nullptr, nullptr);
+    const auto written = WideCharToMultiByte(CP_UTF8, 0, src.data(), inputLength, dst.data(), len, nullptr, nullptr);
+    NWB_FATAL_ASSERT(written == len);
     return dst;
 #else
     return BasicStringDetail::WideToUtf8(arena, src);

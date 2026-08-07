@@ -85,14 +85,20 @@ private:
             return;
         }
 
-        do{
+        while(true){
             const TStringView fileName(data.cFileName);
-            if(fileName == NWB_TEXT(".") || fileName == NWB_TEXT(".."))
-                continue;
-            this->m_entries.emplace_back(path / fileName);
-        }while(FindNextFile(findHandle, &data));
+            if(fileName != NWB_TEXT(".") && fileName != NWB_TEXT(".."))
+                this->m_entries.emplace_back(path / fileName);
 
-        FindClose(findHandle);
+            if(FindNextFile(findHandle, &data))
+                continue;
+            GlobalFilesystemDetail::CaptureDirectoryIterationError(outError);
+            break;
+        }
+
+        GlobalFilesystemDetail::CloseDirectory(findHandle, outError);
+        if(outError)
+            return;
         GlobalFilesystemDetail::ClearError(outError);
 #else
         DIR* directory = opendir(path.c_str());
@@ -101,14 +107,23 @@ private:
             return;
         }
 
-        for(dirent* entry = readdir(directory); entry != nullptr; entry = readdir(directory)){
+        while(true){
+            errno = 0;
+            dirent* entry = readdir(directory);
+            if(entry == nullptr){
+                GlobalFilesystemDetail::CaptureDirectoryIterationError(outError);
+                break;
+            }
+
             const AStringView fileName(entry->d_name);
             if(fileName == "." || fileName == "..")
                 continue;
             this->m_entries.emplace_back(path / fileName);
         }
 
-        closedir(directory);
+        GlobalFilesystemDetail::CloseDirectory(directory, outError);
+        if(outError)
+            return;
         GlobalFilesystemDetail::ClearError(outError);
 #endif
     }

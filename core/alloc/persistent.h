@@ -46,6 +46,7 @@ public:
         , m_maxSize(maxSize)
         , m_handle(tlsf_create_with_pool(m_bucket, m_maxSize))
     {
+        NWB_FATAL_ASSERT(m_handle);
         m_memoryStats.reset(static_cast<u64>(m_maxSize));
     }
     ~PersistentArena(){

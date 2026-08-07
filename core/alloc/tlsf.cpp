@@ -1077,8 +1077,21 @@ tlsf_t tlsf_create(void* mem){
 }
 
 tlsf_t tlsf_create_with_pool(void* mem, size_t bytes){
+    const size_t controlBytes = tlsf_size();
+    if(mem == nullptr || bytes < controlBytes)
+        return nullptr;
+
+    const size_t poolBytes = bytes - controlBytes;
+    if(poolBytes < tlsf_pool_overhead())
+        return nullptr;
+
     tlsf_t tlsf = tlsf_create(mem);
-    tlsf_add_pool(tlsf, static_cast<char*>(mem) + tlsf_size(), bytes - tlsf_size());
+    if(tlsf == nullptr)
+        return nullptr;
+
+    const pool_t pool = tlsf_add_pool(tlsf, static_cast<char*>(mem) + controlBytes, poolBytes);
+    if(pool == nullptr)
+        return nullptr;
     return tlsf;
 }
 

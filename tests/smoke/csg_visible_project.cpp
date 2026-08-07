@@ -287,7 +287,7 @@ public:
             *m_world,
             Float4(s_CameraStartX, s_CameraStartY, -s_CameraStartDepth)
         );
-        NWB::Impl::Scene::CreateDirectionalLightEntity(
+        const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,
             s_DefaultDirectionalLightPitch,
             s_DefaultDirectionalLightYaw,
@@ -320,7 +320,7 @@ public:
             m_receiverCenters[shapeSlot] = receiverPosition;
         }
 
-        bool allEntitiesValid = activeCamera.camera.valid();
+        bool allEntitiesValid = activeCamera.camera.valid() && directionalLight.valid();
         for(usize shapeSlot = 0u; shapeSlot < s_CsgVisibleShapeCount; ++shapeSlot)
             allEntitiesValid = allEntitiesValid && m_receivers[shapeSlot].valid() && m_cutters[shapeSlot].valid();
         NWB_FATAL_ASSERT_MSG(

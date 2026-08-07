@@ -334,7 +334,7 @@ public:
             *m_world,
             Float4(0.0f, s_CameraHeight, -s_CameraDistance, 0.0f)
         );
-        NWB::Impl::Scene::CreateDirectionalLightEntity(
+        const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,
             s_DefaultDirectionalLightPitch,
             s_DefaultDirectionalLightYaw,
@@ -350,7 +350,7 @@ public:
         StoreFloat(cutterLocalCenter, &m_cutterLocalCenter);
         createCutter(cutterLocalCenter);
         NWB_FATAL_ASSERT_MSG(
-            activeCamera.camera.valid()
+            activeCamera.camera.valid() && directionalLight.valid()
                 && m_plainReceiver.valid()
                 && m_receiver.valid()
                 && m_receiverObject.valid()

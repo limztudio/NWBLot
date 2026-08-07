@@ -506,7 +506,7 @@ public:
         auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
         activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, Float4(0.0f, s_CameraHeight, -s_FrontCameraDistance, 0.0f));
         m_cameraEntity = activeCamera.camera;
-        NWB::Impl::Scene::CreateDirectionalLightEntity(
+        const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,
             s_DefaultDirectionalLightPitch,
             s_DefaultDirectionalLightYaw,
@@ -514,6 +514,12 @@ public:
             Float4(1.0f, 0.96f, 0.88f),
             s_DefaultDirectionalLightIntensity
         );
+
+        if(!activeCamera.camera.valid() || !directionalLight.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to create the benchmark camera or directional light"));
+            requestQuit();
+            return true;
+        }
 
         BenchmarkModelRef model;
         model.virtualPath = Name(s_BenchmarkModelPath);

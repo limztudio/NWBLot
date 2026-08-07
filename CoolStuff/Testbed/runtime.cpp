@@ -239,8 +239,9 @@ static void ApplyFlyCameraInputToMainCamera(
     return CreateModelEntity(world, s_FemaleModelPath, s_ModelMaterialPath);
 }
 
-static NWB::Core::ECS::EntityID CreateStaticGroundPlaneEntity(NWB::Core::ECS::World& world){
-    return CreateModelEntity(world, s_GroundPlaneModelPath, s_GroundPlaneMaterialPath);
+static void CreateStaticGroundPlaneEntity(NWB::Core::ECS::World& world){
+    const auto groundEntity = CreateModelEntity(world, s_GroundPlaneModelPath, s_GroundPlaneMaterialPath);
+    NWB_FATAL_ASSERT(groundEntity.valid());
 }
 
 
@@ -316,9 +317,12 @@ bool ProjectTestbed::onStartup(){
     );
     activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, cameraPosition);
     auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera);
-    NWB_ASSERT(cameraTransform);
+    if(!activeCamera.camera.valid() || !cameraTransform){
+        NWB_LOGGER_ERROR(NWB_TEXT("ProjectTestbed: failed to create the startup camera"));
+        return false;
+    }
     StoreFloat(QuaternionRotationRollPitchYaw(0.0f, __hidden_runtime::s_CameraStartYaw, 0.0f), &cameraTransform->rotation);
-    NWB::Impl::Scene::CreateDirectionalLightEntity(
+    const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
         *m_world,
         __hidden_runtime::s_DefaultDirectionalLightPitch,
         __hidden_runtime::s_DefaultDirectionalLightYaw,
@@ -330,7 +334,7 @@ bool ProjectTestbed::onStartup(){
         ),
         __hidden_runtime::s_DefaultDirectionalLightIntensity
     );
-    NWB::Impl::Scene::CreatePointLightEntity(
+    const auto pointLight = NWB::Impl::Scene::CreatePointLightEntity(
         *m_world,
         Float4(
             __hidden_runtime::s_PointLightPositionX,
@@ -345,16 +349,24 @@ bool ProjectTestbed::onStartup(){
         __hidden_runtime::s_PointLightIntensity,
         __hidden_runtime::s_PointLightRange
     );
+    if(!directionalLight.valid() || !pointLight.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("ProjectTestbed: failed to create the startup lights"));
+        return false;
+    }
 
-    createDefaultScene();
+    if(!createDefaultScene())
+        return false;
     auto* modelSystem = m_world->getSystem<NWB::Impl::ModelSystem>();
-    NWB_ASSERT(modelSystem);
+    if(!modelSystem){
+        NWB_LOGGER_ERROR(NWB_TEXT("ProjectTestbed: missing model system during startup"));
+        return false;
+    }
     modelSystem->syncModelRuntimes();
     registerInputHandler();
     return m_characterEntity.valid();
 }
 
-void ProjectTestbed::createDefaultScene(){
+bool ProjectTestbed::createDefaultScene(){
     m_characterEntity = __hidden_runtime::CreateSkinnedCharacterEntity(*m_world);
     __hidden_runtime::CreateStaticGroundPlaneEntity(*m_world);
 
@@ -369,6 +381,7 @@ void ProjectTestbed::createDefaultScene(){
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
         __hidden_runtime::s_DefaultSceneDescription
     );
+    return m_characterEntity.valid() && uiEntity.id().valid();
 }
 
 void ProjectTestbed::onShutdown(){

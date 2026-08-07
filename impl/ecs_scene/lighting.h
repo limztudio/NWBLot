@@ -19,7 +19,7 @@ NWB_IMPL_SCENE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::ECS::EntityID CreateDirectionalLightEntity(
+[[nodiscard]] Core::ECS::EntityID CreateDirectionalLightEntity(
     Core::ECS::World& world,
     f32 pitchRadians,
     f32 yawRadians,
@@ -27,14 +27,14 @@ Core::ECS::EntityID CreateDirectionalLightEntity(
     const Float4& color,
     f32 intensity
 );
-Core::ECS::EntityID CreatePointLightEntity(
+[[nodiscard]] Core::ECS::EntityID CreatePointLightEntity(
     Core::ECS::World& world,
     const Float4& position,
     const Float4& color,
     f32 intensity,
     f32 range
 );
-Core::ECS::EntityID CreateSpotLightEntity(
+[[nodiscard]] Core::ECS::EntityID CreateSpotLightEntity(
     Core::ECS::World& world,
     const Float4& position,
     f32 pitchRadians,

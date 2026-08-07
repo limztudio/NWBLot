@@ -66,9 +66,29 @@ inline void ClearError(ErrorCode& outError)noexcept{
 inline void SetLastSystemError(ErrorCode& outError)noexcept{
     outError = ErrorCode(static_cast<i32>(GetLastError()), std::system_category());
 }
+
+inline void CloseDirectory(const HANDLE findHandle, ErrorCode& outError)noexcept{
+    if(!FindClose(findHandle) && !outError)
+        SetLastSystemError(outError);
+}
+
+inline void CaptureDirectoryIterationError(ErrorCode& outError)noexcept{
+    if(GetLastError() != ERROR_NO_MORE_FILES && !outError)
+        SetLastSystemError(outError);
+}
 #else
 inline void SetLastSystemError(ErrorCode& outError)noexcept{
     outError = ErrorCode(errno, std::generic_category());
+}
+
+inline void CloseDirectory(DIR* const directory, ErrorCode& outError)noexcept{
+    if(closedir(directory) != 0 && !outError)
+        SetLastSystemError(outError);
+}
+
+inline void CaptureDirectoryIterationError(ErrorCode& outError)noexcept{
+    if(errno != 0 && !outError)
+        SetLastSystemError(outError);
 }
 #endif
 
@@ -561,19 +581,25 @@ template<typename ArenaT>
     WIN32_FIND_DATA data = {};
     HANDLE findHandle = FindFirstFile(pattern.c_str(), &data);
     if(findHandle != INVALID_HANDLE_VALUE){
-        do{
+        while(true){
             const TStringView fileName(data.cFileName);
-            if(fileName == NWB_TEXT(".") || fileName == NWB_TEXT(".."))
-                continue;
-
-            const Path<ArenaT> child = path / fileName;
-            removedCount += RemoveAllImpl(child, outError);
-            if(outError){
-                FindClose(findHandle);
-                return removedCount;
+            if(fileName != NWB_TEXT(".") && fileName != NWB_TEXT("..")){
+                const Path<ArenaT> child = path / fileName;
+                removedCount += RemoveAllImpl(child, outError);
+                if(outError){
+                    CloseDirectory(findHandle, outError);
+                    return removedCount;
+                }
             }
-        }while(FindNextFile(findHandle, &data));
-        FindClose(findHandle);
+
+            if(FindNextFile(findHandle, &data))
+                continue;
+            CaptureDirectoryIterationError(outError);
+            break;
+        }
+        CloseDirectory(findHandle, outError);
+        if(outError)
+            return removedCount;
     }
 
     if(RemoveDirectory(path.c_str())){
@@ -610,7 +636,14 @@ template<typename ArenaT>
         return 0u;
     }
 
-    for(dirent* entry = readdir(directory); entry != nullptr; entry = readdir(directory)){
+    while(true){
+        errno = 0;
+        dirent* entry = readdir(directory);
+        if(entry == nullptr){
+            CaptureDirectoryIterationError(outError);
+            break;
+        }
+
         const AStringView name(entry->d_name);
         if(name == "." || name == "..")
             continue;
@@ -618,11 +651,13 @@ template<typename ArenaT>
         const Path<ArenaT> child = path / name;
         removedCount += RemoveAllImpl(child, outError);
         if(outError){
-            closedir(directory);
+            CloseDirectory(directory, outError);
             return removedCount;
         }
     }
-    closedir(directory);
+    CloseDirectory(directory, outError);
+    if(outError)
+        return removedCount;
 
     if(rmdir(path.c_str()) != 0){
         SetLastSystemError(outError);

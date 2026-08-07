@@ -293,7 +293,7 @@ public:
 
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
 
-        NWB::Impl::Scene::CreateDirectionalLightEntity(
+        const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,
             s_DirectionalLightPitch,
             s_DirectionalLightYaw,
@@ -301,7 +301,7 @@ public:
             Float4(1.0f, 0.96f, 0.88f),
             s_DirectionalLightIntensity
         );
-        NWB::Impl::Scene::CreatePointLightEntity(
+        const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(
             *m_world,
             Float4(0.8f, s_PointLightHeight, -0.6f, 0.0f),
             Float4(0.60f, 0.76f, 1.00f),
@@ -338,7 +338,7 @@ public:
             allCharactersValid = allCharactersValid && owner.valid();
 
         NWB_FATAL_ASSERT_MSG(
-            activeCamera.valid() && m_groundEntity.valid() && allCharactersValid
+            activeCamera.valid() && directionalLight.valid() && pointLight.valid() && m_groundEntity.valid() && allCharactersValid
             && m_wallPosX.valid() && m_wallNegX.valid() && m_wallPosZ.valid() && m_ceiling.valid(),
             NWB_TEXT("StressTestSmokeProject failed to create all scene entities")
         );

@@ -59,7 +59,7 @@ struct MemoryDelta{
 [[nodiscard]] inline MemorySnapshot MakeMemorySnapshot(
     const Name& scopeName,
     const u64 frameIndex,
-    const Alloc::ArenaMemoryStats& stats
+    const ::ArenaMemoryStats& stats
 ){
     MemorySnapshot snapshot;
     snapshot.scopeName = scopeName;
@@ -130,8 +130,8 @@ public:
     void setEnabled(bool enabled);
     void clear();
     [[nodiscard]] MemoryScopeId registerScope(const Name& scopeName);
-    void recordSnapshot(MemoryScopeId scope, const Alloc::ArenaMemoryStats& stats, u64 frameIndex);
-    void recordSnapshot(const Name& scopeName, const Alloc::ArenaMemoryStats& stats, u64 frameIndex);
+    void recordSnapshot(MemoryScopeId scope, const ::ArenaMemoryStats& stats, u64 frameIndex);
+    void recordSnapshot(const Name& scopeName, const ::ArenaMemoryStats& stats, u64 frameIndex);
 
     template<typename Arena>
     void recordArenaSnapshot(const MemoryScopeId scope, const Arena& arena, const u64 frameIndex){

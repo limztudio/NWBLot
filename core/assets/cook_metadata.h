@@ -91,7 +91,7 @@ template<typename T, typename... Args>
     if(T* existing = FindParsedMetadataExtension<T>(metadata, extensionName))
         return *existing;
 
-    T* created = Core::Alloc::NewArenaObject<T>(metadata.arena, Forward<Args>(args)...);
+    T* created = ::NewArenaObject<T>(metadata.arena, Forward<Args>(args)...);
     metadata.extensions.emplace(extensionName, created);
     return *created;
 }

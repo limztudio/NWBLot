@@ -33,7 +33,7 @@ Alloc::PersistentArena& DumpArena(){
 }
 
 void InitializeDumpArena()noexcept{
-    const Alloc::ArenaMemoryStats stats = DumpArena().memoryStats();
+    const ::ArenaMemoryStats stats = DumpArena().memoryStats();
     if(stats.reservedBytes != 0u)
         return;
 }

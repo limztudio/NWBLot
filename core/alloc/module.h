@@ -9,13 +9,14 @@
 
 #include "core.h"
 
-#include "base.h"
 #include "general.h"
-#include "arena_object.h"
 #include "scratch.h"
 #include "persistent.h"
 #include "thread.h"
 #include "job.h"
+
+#include <global/arena_base.h>
+#include <global/arena_object.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -5,10 +5,11 @@
 #pragma once
 
 
-#include "base.h"
 #include "global.h"
 #include "core.h"
-#include "arena_object.h"
+
+#include <global/arena_base.h>
+#include <global/arena_object.h>
 
 #include "tlsf.h"
 
@@ -22,9 +23,9 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class PersistentArena : public ArenaBaseT<PersistentArena>{
+class PersistentArena : public ::ArenaBaseT<PersistentArena>{
 public:
-    using Base = ArenaBaseT<PersistentArena>;
+    using Base = ::ArenaBaseT<PersistentArena>;
 
 
 public:
@@ -134,15 +135,15 @@ NWB_CORE_BEGIN
 
 
 template<typename T>
-using PersistentUniquePtr = Alloc::ArenaUniquePtr<T, Alloc::PersistentArena>;
+using PersistentUniquePtr = ::ArenaUniquePtr<T, Alloc::PersistentArena>;
 
 template<typename T, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, PersistentUniquePtr<T>>::type MakePersistentUnique(NWB::Core::Alloc::PersistentArena& arena, Args&&... args){
-    return Alloc::MakeArenaUnique<T>(arena, Forward<Args>(args)...);
+    return ::MakeArenaUnique<T>(arena, Forward<Args>(args)...);
 }
 template<typename T>
 inline typename EnableIf<IsUnboundedArray<T>::value, PersistentUniquePtr<T>>::type MakePersistentUnique(NWB::Core::Alloc::PersistentArena& arena, usize n){
-    return Alloc::MakeArenaUnique<T>(arena, n);
+    return ::MakeArenaUnique<T>(arena, n);
 }
 template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type

@@ -9,6 +9,7 @@
 #include <global/algorithm.h>
 #include <global/allocation_size.h>
 #include <global/auto_registration.h>
+#include <global/arena_base.h>
 #include <global/arena_c_allocator.h>
 #include <global/arena_object.h>
 #include <global/binary.h>
@@ -273,6 +274,24 @@ TEST(Global, GenericAllocationAndTypeHelpers){
     EXPECT_EQ(firstId, ::TypeCounter<TypeCounterFirstTag>::id<u32>());
     EXPECT_NE(firstId, ::TypeCounter<TypeCounterFirstTag>::id<u64>());
     EXPECT_EQ(::TypeCounter<TypeCounterSecondTag>::id<u32>(), 0u);
+}
+
+TEST(Global, ArenaMemoryTrackerRecordsLifetimeStatistics){
+    ::ArenaMemoryTracker tracker;
+    tracker.reset(128u);
+    tracker.addReservedBytes(64u);
+    tracker.recordAllocation(32u);
+    tracker.recordReallocation(32u, 48u);
+    tracker.recordDeallocation(48u);
+    tracker.removeReservedBytes(16u);
+
+    const ::ArenaMemoryStats stats = tracker.snapshot();
+    EXPECT_EQ(stats.reservedBytes, 176u);
+    EXPECT_EQ(stats.usedBytes, 0u);
+    EXPECT_EQ(stats.peakUsedBytes, 48u);
+    EXPECT_EQ(stats.allocationCount, 1u);
+    EXPECT_EQ(stats.reallocationCount, 1u);
+    EXPECT_EQ(stats.deallocationCount, 1u);
 }
 
 TEST(Global, ArenaRefDeleterUsesAssociatedNamespaceHook){

@@ -1,6 +1,7 @@
 nwb_declare_static_library(nwb_global)
 target_sources(nwb_global PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/allocation_size.h"
+    "${CMAKE_CURRENT_LIST_DIR}/arena_base.h"
     "${CMAKE_CURRENT_LIST_DIR}/auto_registration.h"
     "${CMAKE_CURRENT_LIST_DIR}/container/adaptor.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/container/adaptor.h"

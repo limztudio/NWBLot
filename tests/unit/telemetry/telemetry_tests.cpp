@@ -1128,7 +1128,7 @@ TEST(Telemetry, RecordPerfMemoryUsesTelemetryEvent){
     EXPECT_EQ(parsed.delta.usedBytes, delta.usedBytes);
 }
 
-static NWB::Core::Alloc::ArenaMemoryStats MakeTestArenaStats(
+static ::ArenaMemoryStats MakeTestArenaStats(
     const u64 reservedBytes,
     const u64 usedBytes,
     const u64 peakUsedBytes,
@@ -1136,7 +1136,7 @@ static NWB::Core::Alloc::ArenaMemoryStats MakeTestArenaStats(
     const u64 reallocationCount,
     const u64 deallocationCount
 ){
-    NWB::Core::Alloc::ArenaMemoryStats stats;
+    ::ArenaMemoryStats stats;
     stats.reservedBytes = reservedBytes;
     stats.usedBytes = usedBytes;
     stats.peakUsedBytes = peakUsedBytes;

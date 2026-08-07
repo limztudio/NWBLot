@@ -5,9 +5,10 @@
 #pragma once
 
 
-#include "base.h"
 #include "core.h"
-#include "arena_object.h"
+
+#include <global/arena_base.h>
+#include <global/arena_object.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,9 +20,9 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class GlobalArena : public ArenaBaseT<GlobalArena>{
+class GlobalArena : public ::ArenaBaseT<GlobalArena>{
 public:
-    using Base = ArenaBaseT<GlobalArena>;
+    using Base = ::ArenaBaseT<GlobalArena>;
 
 
 public:
@@ -98,15 +99,15 @@ NWB_CORE_BEGIN
 
 
 template<typename T>
-using GlobalUniquePtr = Alloc::ArenaUniquePtr<T, Alloc::GlobalArena>;
+using GlobalUniquePtr = ::ArenaUniquePtr<T, Alloc::GlobalArena>;
 
 template<typename T, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, GlobalUniquePtr<T>>::type MakeGlobalUnique(NWB::Core::Alloc::GlobalArena& arena, Args&&... args){
-    return Alloc::MakeArenaUnique<T>(arena, Forward<Args>(args)...);
+    return ::MakeArenaUnique<T>(arena, Forward<Args>(args)...);
 }
 template<typename T>
 inline typename EnableIf<IsUnboundedArray<T>::value, GlobalUniquePtr<T>>::type MakeGlobalUnique(NWB::Core::Alloc::GlobalArena& arena, usize n){
-    return Alloc::MakeArenaUnique<T>(arena, n);
+    return ::MakeArenaUnique<T>(arena, n);
 }
 template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type

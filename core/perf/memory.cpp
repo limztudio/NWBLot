@@ -52,7 +52,7 @@ MemoryScopeId MemoryRecorder::registerScope(const Name& scopeName){
 
 void MemoryRecorder::recordSnapshot(
     const MemoryScopeId scope,
-    const Alloc::ArenaMemoryStats& stats,
+    const ::ArenaMemoryStats& stats,
     const u64 frameIndex
 ){
     if(!m_enabled)
@@ -70,7 +70,7 @@ void MemoryRecorder::recordSnapshot(
 
 void MemoryRecorder::recordSnapshot(
     const Name& scopeName,
-    const Alloc::ArenaMemoryStats& stats,
+    const ::ArenaMemoryStats& stats,
     const u64 frameIndex
 ){
     if(!m_enabled || !scopeName)

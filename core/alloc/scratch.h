@@ -5,9 +5,10 @@
 #pragma once
 
 
-#include "base.h"
 #include "global.h"
 #include "core.h"
+
+#include <global/arena_base.h>
 
 #include <new>
 
@@ -21,9 +22,9 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ScratchArena : public ArenaBaseT<ScratchArena>{
+class ScratchArena : public ::ArenaBaseT<ScratchArena>{
 private:
-    using Base = ArenaBaseT<ScratchArena>;
+    using Base = ::ArenaBaseT<ScratchArena>;
 
 
 public:

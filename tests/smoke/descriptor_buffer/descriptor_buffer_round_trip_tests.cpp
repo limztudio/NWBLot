@@ -127,7 +127,7 @@ protected:
 #endif
 
         // The device-creation path emits log messages, and every NWB_LOGGER_* macro fatally asserts a logger is
-        // installed (log.h:276). Register the capturing logger before bring-up so failures are recorded rather than
+        // installed. Register the capturing logger before bring-up so failures are recorded rather than
         // crashing the process, then keep it registered for the suite's lifetime.
         s_logger.emplace();
         s_loggerGuard.emplace(*s_logger);

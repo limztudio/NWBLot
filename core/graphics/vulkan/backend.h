@@ -639,7 +639,6 @@ struct VulkanContext{
     {}
 };
 
-// Temporary Vulkan queue-sharing view; familyIndices follow the source lifetime.
 struct QueueFamilySharingInfo{
     VkSharingMode mode = VK_SHARING_MODE_EXCLUSIVE;
     Array<u32, 2u> familyIndices = {};

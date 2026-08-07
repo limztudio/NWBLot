@@ -566,9 +566,19 @@ struct VulkanContext{
     VkDescriptorSetLayout emptyDescriptorBufferSetLayout = VK_NULL_HANDLE;
 
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};
+    // These are the feature bits actually enabled through vkCreateDevice's pNext chain.  Extension names alone
+    // are not capability answers because an enabled extension may have had its feature bit disabled.
+    bool accelerationStructureFeatureEnabled = false;
+    bool rayTracingPipelineFeatureEnabled = false;
+    bool rayQueryFeatureEnabled = false;
+    bool opacityMicromapFeatureEnabled = false;
+    bool clusterAccelerationStructureFeatureEnabled = false;
+    bool rayTracingInvocationReorderFeatureEnabled = false;
+    bool rayTracingInvocationReorderExtFeatureEnabled = false;
     // Descriptor-buffer limits used for layout and offsets.
     VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties{};
     VkPhysicalDeviceCooperativeVectorPropertiesNV coopVecProperties{};
+    // Retains the cooperative-vector feature bits enabled in the device-create chain, not a later physical-device probe.
     VkPhysicalDeviceCooperativeVectorFeaturesNV coopVecFeatures{};
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
     VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV rayTracingLinearSweptSpheresFeatures{};

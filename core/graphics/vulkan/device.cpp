@@ -180,6 +180,13 @@ Device::Device(const DeviceDesc& desc)
     m_context.extensions.buffer_device_address = desc.bufferDeviceAddressSupported;
     m_context.extensions.KHR_dynamic_rendering = desc.dynamicRenderingSupported;
     m_context.extensions.KHR_synchronization2 = desc.synchronization2Supported;
+    m_context.accelerationStructureFeatureEnabled = desc.accelerationStructureFeatureEnabled;
+    m_context.rayTracingPipelineFeatureEnabled = desc.rayTracingPipelineFeatureEnabled;
+    m_context.rayQueryFeatureEnabled = desc.rayQueryFeatureEnabled;
+    m_context.opacityMicromapFeatureEnabled = desc.opacityMicromapFeatureEnabled;
+    m_context.clusterAccelerationStructureFeatureEnabled = desc.clusterAccelerationStructureFeatureEnabled;
+    m_context.rayTracingInvocationReorderFeatureEnabled = desc.rayTracingInvocationReorderFeatureEnabled;
+    m_context.rayTracingInvocationReorderExtFeatureEnabled = desc.rayTracingInvocationReorderExtFeatureEnabled;
 
     for(usize i = 0; i < desc.numInstanceExtensions; ++i){
         const char* ext = desc.instanceExtensions[i];
@@ -241,6 +248,12 @@ Device::Device(const DeviceDesc& desc)
         m_context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres = desc.rayTracingLinearSweptSpheresSupported ? VK_TRUE : VK_FALSE;
     }
 
+    m_context.coopVecFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV;
+    if(m_context.extensions.NV_cooperative_vector){
+        m_context.coopVecFeatures.cooperativeVector = desc.cooperativeVectorFeatureEnabled ? VK_TRUE : VK_FALSE;
+        m_context.coopVecFeatures.cooperativeVectorTraining = desc.cooperativeVectorTrainingFeatureEnabled ? VK_TRUE : VK_FALSE;
+    }
+
     if(m_context.extensions.EXT_debug_utils && (!vkCmdBeginDebugUtilsLabelEXT || !vkCmdEndDebugUtilsLabelEXT)){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Debug utils marker entry points are unavailable."));
         m_context.extensions.EXT_debug_utils = false;
@@ -284,6 +297,7 @@ Device::Device(const DeviceDesc& desc)
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Acceleration structure entry points are unavailable."));
         m_context.extensions.KHR_acceleration_structure = false;
+        m_context.accelerationStructureFeatureEnabled = false;
     }
 
     if(
@@ -296,6 +310,7 @@ Device::Device(const DeviceDesc& desc)
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Ray tracing pipeline entry points are unavailable."));
         m_context.extensions.KHR_ray_tracing_pipeline = false;
+        m_context.rayTracingPipelineFeatureEnabled = false;
     }
 
     if(
@@ -309,6 +324,7 @@ Device::Device(const DeviceDesc& desc)
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Opacity micromap entry points are unavailable."));
         m_context.extensions.EXT_opacity_micromap = false;
+        m_context.opacityMicromapFeatureEnabled = false;
     }
 
     if(
@@ -320,6 +336,7 @@ Device::Device(const DeviceDesc& desc)
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Cluster acceleration structure entry points are unavailable."));
         m_context.extensions.NV_cluster_acceleration_structure = false;
+        m_context.clusterAccelerationStructureFeatureEnabled = false;
     }
 
     if(
@@ -332,6 +349,8 @@ Device::Device(const DeviceDesc& desc)
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Cooperative vector entry points are unavailable."));
         m_context.extensions.NV_cooperative_vector = false;
+        m_context.coopVecFeatures.cooperativeVector = VK_FALSE;
+        m_context.coopVecFeatures.cooperativeVectorTraining = VK_FALSE;
     }
 
     if(m_context.extensions.EXT_mesh_shader && !vkCmdDrawMeshTasksEXT){
@@ -383,13 +402,6 @@ Device::Device(const DeviceDesc& desc)
             props2.pNext = pNext;
             vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &props2);
         }
-    }
-
-    if(m_context.extensions.NV_cooperative_vector){
-        auto features2 = VulkanDetail::MakeVkStruct<VkPhysicalDeviceFeatures2>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2);
-        m_context.coopVecFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV;
-        features2.pNext = &m_context.coopVecFeatures;
-        vkGetPhysicalDeviceFeatures2(m_context.physicalDevice, &features2);
     }
 
     // Resolve every ASTC and BC sampled-image path up front. Texture loading consults this
@@ -1177,29 +1189,74 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
     case Feature::DeferredCommandLists:
         return true;
     case Feature::RayTracingAccelStruct:
-        return m_context.extensions.KHR_acceleration_structure;
+        return m_context.extensions.KHR_acceleration_structure && m_context.accelerationStructureFeatureEnabled;
     case Feature::RayTracingPipeline:
-        return m_context.extensions.KHR_ray_tracing_pipeline;
+        return
+            m_context.extensions.KHR_ray_tracing_pipeline
+            && m_context.rayTracingPipelineFeatureEnabled
+            && m_context.extensions.KHR_acceleration_structure
+            && m_context.accelerationStructureFeatureEnabled
+        ;
     case Feature::RayQuery:
-        return m_context.extensions.KHR_ray_query;
+        return
+            m_context.extensions.KHR_ray_query
+            && m_context.rayQueryFeatureEnabled
+            && m_context.extensions.KHR_acceleration_structure
+            && m_context.accelerationStructureFeatureEnabled
+        ;
     case Feature::ShaderExecutionReordering:
-        return m_context.extensions.EXT_ray_tracing_invocation_reorder || m_context.extensions.NV_ray_tracing_invocation_reorder;
+        return
+            (m_context.extensions.EXT_ray_tracing_invocation_reorder && m_context.rayTracingInvocationReorderExtFeatureEnabled)
+            || (m_context.extensions.NV_ray_tracing_invocation_reorder && m_context.rayTracingInvocationReorderFeatureEnabled)
+        ;
     case Feature::Spheres:
-        return m_context.extensions.NV_ray_tracing_linear_swept_spheres && m_context.rayTracingLinearSweptSpheresFeatures.spheres == VK_TRUE;
+        return
+            m_context.extensions.NV_ray_tracing_linear_swept_spheres
+            && m_context.rayTracingLinearSweptSpheresFeatures.spheres == VK_TRUE
+            && queryFeatureSupport(Feature::RayTracingPipeline)
+        ;
     case Feature::LinearSweptSpheres:
-        return m_context.extensions.NV_ray_tracing_linear_swept_spheres && m_context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres == VK_TRUE;
+        return
+            m_context.extensions.NV_ray_tracing_linear_swept_spheres
+            && m_context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres == VK_TRUE
+            && queryFeatureSupport(Feature::RayTracingPipeline)
+        ;
     case Feature::RayTracingOpacityMicromap:
-        return m_context.extensions.EXT_opacity_micromap && m_context.extensions.KHR_synchronization2;
+        return
+            m_context.extensions.EXT_opacity_micromap
+            && m_context.opacityMicromapFeatureEnabled
+            && m_context.extensions.KHR_synchronization2
+            && m_context.extensions.KHR_acceleration_structure
+            && m_context.accelerationStructureFeatureEnabled
+        ;
     case Feature::RayTracingClusters:
-        return m_context.extensions.NV_cluster_acceleration_structure;
+        return
+            m_context.extensions.NV_cluster_acceleration_structure
+            && m_context.clusterAccelerationStructureFeatureEnabled
+            && m_context.extensions.KHR_acceleration_structure
+            && m_context.accelerationStructureFeatureEnabled
+        ;
     case Feature::SamplerFeedback:
     case Feature::VirtualResources:
         // Retained unsupported feature ordinal for ABI compatibility.
         return false;
     case Feature::CooperativeVectorInferencing:
-        return m_context.extensions.NV_cooperative_vector && m_context.coopVecFeatures.cooperativeVector;
+        return
+            m_context.extensions.NV_cooperative_vector
+            && m_context.coopVecFeatures.cooperativeVector == VK_TRUE
+            && vkGetPhysicalDeviceCooperativeVectorPropertiesNV
+            && vkConvertCooperativeVectorMatrixNV
+            && vkCmdConvertCooperativeVectorMatrixNV
+        ;
     case Feature::CooperativeVectorTraining:
-        return m_context.extensions.NV_cooperative_vector && m_context.coopVecFeatures.cooperativeVectorTraining;
+        return
+            m_context.extensions.NV_cooperative_vector
+            && m_context.coopVecFeatures.cooperativeVector == VK_TRUE
+            && m_context.coopVecFeatures.cooperativeVectorTraining == VK_TRUE
+            && vkGetPhysicalDeviceCooperativeVectorPropertiesNV
+            && vkConvertCooperativeVectorMatrixNV
+            && vkCmdConvertCooperativeVectorMatrixNV
+        ;
     case Feature::Meshlets:
         return m_context.extensions.EXT_mesh_shader && m_context.meshShaderFeatures.meshShader == VK_TRUE && vkCmdDrawMeshTasksEXT;
     case Feature::VariableRateShading:

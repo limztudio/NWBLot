@@ -1141,6 +1141,15 @@ bool BackendContext::createVulkanDevice(){
     m_bufferDeviceAddressSupported = false;
     m_dynamicRenderingSupported = false;
     m_synchronization2Supported = false;
+    m_accelerationStructureFeatureEnabled = false;
+    m_rayTracingPipelineFeatureEnabled = false;
+    m_rayQueryFeatureEnabled = false;
+    m_opacityMicromapFeatureEnabled = false;
+    m_clusterAccelerationStructureFeatureEnabled = false;
+    m_rayTracingInvocationReorderFeatureEnabled = false;
+    m_rayTracingInvocationReorderExtFeatureEnabled = false;
+    m_cooperativeVectorFeatureEnabled = false;
+    m_cooperativeVectorTrainingFeatureEnabled = false;
     m_meshTaskShaderSupported = false;
     m_rayTracingSpheresSupported = false;
     m_rayTracingLinearSweptSpheresSupported = false;
@@ -1356,6 +1365,34 @@ bool BackendContext::createVulkanDevice(){
     m_dynamicRenderingSupported = true;
     m_synchronization2Supported = true;
     VulkanDetail::FinalizeOptionalDeviceFeatureEnablement(requestedOptionalFeatures, supportedOptionalFeatures);
+    m_accelerationStructureFeatureEnabled =
+        isDeviceExtensionEnabled(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME)
+        && requestedOptionalFeatures.accelerationStructure.accelerationStructure == VK_TRUE
+    ;
+    m_rayTracingPipelineFeatureEnabled =
+        isDeviceExtensionEnabled(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME)
+        && requestedOptionalFeatures.rayTracingPipeline.rayTracingPipeline == VK_TRUE
+    ;
+    m_rayQueryFeatureEnabled =
+        isDeviceExtensionEnabled(VK_KHR_RAY_QUERY_EXTENSION_NAME)
+        && requestedOptionalFeatures.rayQuery.rayQuery == VK_TRUE
+    ;
+    m_opacityMicromapFeatureEnabled =
+        isDeviceExtensionEnabled(VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME)
+        && requestedOptionalFeatures.opacityMicromap.micromap == VK_TRUE
+    ;
+    m_clusterAccelerationStructureFeatureEnabled =
+        isDeviceExtensionEnabled(VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME)
+        && requestedOptionalFeatures.clusterAccelerationStructure.clusterAccelerationStructure == VK_TRUE
+    ;
+    m_rayTracingInvocationReorderFeatureEnabled =
+        isDeviceExtensionEnabled(VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME)
+        && requestedOptionalFeatures.rayTracingInvocationReorder.rayTracingInvocationReorder == VK_TRUE
+    ;
+    m_rayTracingInvocationReorderExtFeatureEnabled =
+        isDeviceExtensionEnabled(VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME)
+        && requestedOptionalFeatures.rayTracingInvocationReorderExt.rayTracingInvocationReorder == VK_TRUE
+    ;
     m_meshTaskShaderSupported =
         isDeviceExtensionEnabled(VK_EXT_MESH_SHADER_EXTENSION_NAME)
         && requestedOptionalFeatures.meshShader.taskShader == VK_TRUE
@@ -1413,6 +1450,12 @@ bool BackendContext::createVulkanDevice(){
 
     if(coopVecExtensionEnabled && cooperativeVectorFeatures.cooperativeVector)
         VulkanDetail::AppendFeatureStruct(pNext, &cooperativeVectorFeatures);
+
+    m_cooperativeVectorFeatureEnabled = coopVecExtensionEnabled && cooperativeVectorFeatures.cooperativeVector == VK_TRUE;
+    m_cooperativeVectorTrainingFeatureEnabled =
+        m_cooperativeVectorFeatureEnabled
+        && cooperativeVectorFeatures.cooperativeVectorTraining == VK_TRUE
+    ;
 
     if(apiSupportsVulkan13)
         VulkanDetail::AppendFeatureStruct(pNext, &vulkan13features);
@@ -1543,7 +1586,7 @@ bool BackendContext::createVulkanDevice(){
             )
            << " spheres=" << VulkanDetail::BoolToString(m_rayTracingSpheresSupported)
            << " linearSweptSpheres=" << VulkanDetail::BoolToString(m_rayTracingLinearSweptSpheresSupported)
-           << " cooperativeVector=" << VulkanDetail::BoolToString(coopVecExtensionEnabled && cooperativeVectorFeatures.cooperativeVector == VK_TRUE)
+           << " cooperativeVector=" << VulkanDetail::BoolToString(m_cooperativeVectorFeatureEnabled)
            << "\n    enabled device extensions: " << m_enabledExtensions.device.size()
         ;
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(ss.str()));
@@ -2028,6 +2071,15 @@ bool BackendContext::createDevice(){
     deviceDesc.bufferDeviceAddressSupported = m_bufferDeviceAddressSupported;
     deviceDesc.dynamicRenderingSupported = m_dynamicRenderingSupported;
     deviceDesc.synchronization2Supported = m_synchronization2Supported;
+    deviceDesc.accelerationStructureFeatureEnabled = m_accelerationStructureFeatureEnabled;
+    deviceDesc.rayTracingPipelineFeatureEnabled = m_rayTracingPipelineFeatureEnabled;
+    deviceDesc.rayQueryFeatureEnabled = m_rayQueryFeatureEnabled;
+    deviceDesc.opacityMicromapFeatureEnabled = m_opacityMicromapFeatureEnabled;
+    deviceDesc.clusterAccelerationStructureFeatureEnabled = m_clusterAccelerationStructureFeatureEnabled;
+    deviceDesc.rayTracingInvocationReorderFeatureEnabled = m_rayTracingInvocationReorderFeatureEnabled;
+    deviceDesc.rayTracingInvocationReorderExtFeatureEnabled = m_rayTracingInvocationReorderExtFeatureEnabled;
+    deviceDesc.cooperativeVectorFeatureEnabled = m_cooperativeVectorFeatureEnabled;
+    deviceDesc.cooperativeVectorTrainingFeatureEnabled = m_cooperativeVectorTrainingFeatureEnabled;
     deviceDesc.meshTaskShaderSupported = m_meshTaskShaderSupported;
     deviceDesc.rayTracingSpheresSupported = m_rayTracingSpheresSupported;
     deviceDesc.rayTracingLinearSweptSpheresSupported = m_rayTracingLinearSweptSpheresSupported;

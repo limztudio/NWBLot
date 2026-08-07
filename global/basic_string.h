@@ -419,6 +419,10 @@ inline WString<ArenaT> StringFormat(ArenaT& arena, WFormatString<T...> fmt, T&&.
     std::vformat_to(std::back_inserter(output), fmt.get(), std::make_format_args<WFormatContext>(args...));
     return output;
 }
+template<typename ArenaT, typename... T>
+inline void StringAppendFormat(AString<ArenaT>& output, AFormatString<T...> fmt, T&&... args){
+    std::vformat_to(std::back_inserter(output), fmt.get(), std::make_format_args<AFormatContext>(args...));
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -37,11 +37,6 @@ static constexpr usize s_TimedGraphDotBytesPerEdge = 40u;
 static constexpr usize s_TimedGraphDotTimingLabelExtraBytes = 16u;
 static constexpr usize s_JsonReportReserveBytes = 1024u;
 
-template<typename... Args>
-void AppendFormat(AString<TelemetryArena>& out, AFormatString<Args...> fmt, Args&&... args){
-    std::vformat_to(BackInserter(out), fmt.get(), std::make_format_args<AFormatContext>(args...));
-}
-
 [[nodiscard]] usize EventKindBucket(const Telemetry::EventKind::Enum kind)noexcept{
     const usize index = static_cast<usize>(kind);
     return index < s_TelemetryReportEventKindCount ? index : static_cast<usize>(Telemetry::EventKind::Unknown);
@@ -73,7 +68,7 @@ void AppendPerfCsvRow(
     out += PerfTimingSourceText(source);
     out += ',';
     AppendCsvCell(out, payload.scopeText);
-    AppendFormat(
+    StringAppendFormat(
         out,
         ",{},{:.9},{:.9},{:.9},{:.9},{},{},{}\n",
         payload.stats.publishFrameIndex,
@@ -186,13 +181,13 @@ void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayloa
 
         const auto timed = timing.find(node.name);
         const AStringView labelView(node.label.data(), node.label.size());
-        AppendFormat(out, "  n{} [shape={}, label=", i, FrameGraphNodeShape(node.kind));
+        StringAppendFormat(out, "  n{} [shape={}, label=", i, FrameGraphNodeShape(node.kind));
         if(timed != timing.end()){
             timedLabel.clear();
             timedLabel.reserve(labelView.size() + s_TimedGraphDotTimingLabelExtraBytes);
             timedLabel.append(labelView.data(), labelView.size());
             timedLabel += '\n';
-            AppendFormat(timedLabel, "{:.3f} ms", timed.value() * s_MillisecondsPerSecond);
+            StringAppendFormat(timedLabel, "{:.3f} ms", timed.value() * s_MillisecondsPerSecond);
 
             AppendDotQuotedText(out, AStringView(timedLabel.data(), timedLabel.size()));
         }
@@ -202,7 +197,7 @@ void BuildTimedGraphDot(TelemetryArena& arena, const Telemetry::FrameGraphPayloa
     }
 
     for(const Telemetry::FrameGraphEdgePayload& edge : graph.edges){
-        AppendFormat(out, "  n{} -> n{} [label=", edge.fromNodeIndex, edge.toNodeIndex);
+        StringAppendFormat(out, "  n{} -> n{} [label=", edge.fromNodeIndex, edge.toNodeIndex);
         AppendDotQuotedText(out, AStringView(FrameGraphEdgeLabel(edge.kind)));
         out += "];\n";
     }
@@ -214,44 +209,44 @@ void BuildJson(const TelemetryReportSummary& summary, AString<TelemetryArena>& o
     out.clear();
     out.reserve(s_JsonReportReserveBytes);
     out += "{\n";
-    AppendFormat(out, "  \"eventCount\": {},\n", summary.eventCount);
+    StringAppendFormat(out, "  \"eventCount\": {},\n", summary.eventCount);
     out += "  \"frameRange\": {";
-    AppendFormat(out, "\"present\": {}", summary.hasFrameRange ? "true" : "false");
+    StringAppendFormat(out, "\"present\": {}", summary.hasFrameRange ? "true" : "false");
     if(summary.hasFrameRange)
-        AppendFormat(out, ", \"min\": {}, \"max\": {}", summary.minFrameIndex, summary.maxFrameIndex);
+        StringAppendFormat(out, ", \"min\": {}, \"max\": {}", summary.minFrameIndex, summary.maxFrameIndex);
     out += "},\n";
 
     out += "  \"events\": {\n";
     for(usize i = 0u; i < s_TelemetryReportEventKindCount; ++i){
         out += "    ";
         AppendJsonQuotedText(out, EventKindText(static_cast<Telemetry::EventKind::Enum>(i)));
-        AppendFormat(out, ": {}{}", summary.eventKindCounts[i], i + 1u == s_TelemetryReportEventKindCount ? "\n" : ",\n");
+        StringAppendFormat(out, ": {}{}", summary.eventKindCounts[i], i + 1u == s_TelemetryReportEventKindCount ? "\n" : ",\n");
     }
     out += "  },\n";
 
     out += "  \"perf\": {\n";
-    AppendFormat(out, "    \"cpuTimingEvents\": {},\n", summary.cpuTimingEventCount);
-    AppendFormat(out, "    \"cpuTimingSamples\": {},\n", summary.cpuTimingSampleCount);
-    AppendFormat(out, "    \"cpuTimingSeconds\": {:.9},\n", summary.cpuTimingSeconds);
-    AppendFormat(out, "    \"maxCpuTimingSeconds\": {:.9},\n", summary.maxCpuTimingSeconds);
-    AppendFormat(out, "    \"gpuTimingEvents\": {},\n", summary.gpuTimingEventCount);
-    AppendFormat(out, "    \"gpuTimingSamples\": {},\n", summary.gpuTimingSampleCount);
-    AppendFormat(out, "    \"gpuTimingSeconds\": {:.9},\n", summary.gpuTimingSeconds);
-    AppendFormat(out, "    \"maxGpuTimingSeconds\": {:.9},\n", summary.maxGpuTimingSeconds);
-    AppendFormat(out, "    \"memoryEvents\": {},\n", summary.memoryEventCount);
-    AppendFormat(out, "    \"maxMemoryUsedBytes\": {},\n", summary.maxMemoryUsedBytes);
-    AppendFormat(out, "    \"maxMemoryPeakUsedBytes\": {},\n", summary.maxMemoryPeakUsedBytes);
-    AppendFormat(out, "    \"totalMemoryUsedDeltaBytes\": {}\n", summary.totalMemoryUsedDeltaBytes);
+    StringAppendFormat(out, "    \"cpuTimingEvents\": {},\n", summary.cpuTimingEventCount);
+    StringAppendFormat(out, "    \"cpuTimingSamples\": {},\n", summary.cpuTimingSampleCount);
+    StringAppendFormat(out, "    \"cpuTimingSeconds\": {:.9},\n", summary.cpuTimingSeconds);
+    StringAppendFormat(out, "    \"maxCpuTimingSeconds\": {:.9},\n", summary.maxCpuTimingSeconds);
+    StringAppendFormat(out, "    \"gpuTimingEvents\": {},\n", summary.gpuTimingEventCount);
+    StringAppendFormat(out, "    \"gpuTimingSamples\": {},\n", summary.gpuTimingSampleCount);
+    StringAppendFormat(out, "    \"gpuTimingSeconds\": {:.9},\n", summary.gpuTimingSeconds);
+    StringAppendFormat(out, "    \"maxGpuTimingSeconds\": {:.9},\n", summary.maxGpuTimingSeconds);
+    StringAppendFormat(out, "    \"memoryEvents\": {},\n", summary.memoryEventCount);
+    StringAppendFormat(out, "    \"maxMemoryUsedBytes\": {},\n", summary.maxMemoryUsedBytes);
+    StringAppendFormat(out, "    \"maxMemoryPeakUsedBytes\": {},\n", summary.maxMemoryPeakUsedBytes);
+    StringAppendFormat(out, "    \"totalMemoryUsedDeltaBytes\": {}\n", summary.totalMemoryUsedDeltaBytes);
     out += "  },\n";
 
     out += "  \"frameGraph\": {\n";
-    AppendFormat(out, "    \"frames\": {},\n", summary.frameGraphFrameCount);
-    AppendFormat(out, "    \"nodes\": {},\n", summary.frameGraphNodeCount);
-    AppendFormat(out, "    \"edges\": {},\n", summary.frameGraphEdgeCount);
-    AppendFormat(out, "    \"maxNodes\": {},\n", summary.maxFrameGraphNodeCount);
-    AppendFormat(out, "    \"maxEdges\": {}\n", summary.maxFrameGraphEdgeCount);
+    StringAppendFormat(out, "    \"frames\": {},\n", summary.frameGraphFrameCount);
+    StringAppendFormat(out, "    \"nodes\": {},\n", summary.frameGraphNodeCount);
+    StringAppendFormat(out, "    \"edges\": {},\n", summary.frameGraphEdgeCount);
+    StringAppendFormat(out, "    \"maxNodes\": {},\n", summary.maxFrameGraphNodeCount);
+    StringAppendFormat(out, "    \"maxEdges\": {}\n", summary.maxFrameGraphEdgeCount);
     out += "  },\n";
-    AppendFormat(out, "  \"parseFailures\": {}\n", summary.parseFailureCount);
+    StringAppendFormat(out, "  \"parseFailures\": {}\n", summary.parseFailureCount);
     out += "}\n";
 }
 

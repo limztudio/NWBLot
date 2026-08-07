@@ -226,6 +226,15 @@ private:
     bool m_bufferDeviceAddressSupported = false;
     bool m_dynamicRenderingSupported = false;
     bool m_synchronization2Supported = false;
+    bool m_accelerationStructureFeatureEnabled = false;
+    bool m_rayTracingPipelineFeatureEnabled = false;
+    bool m_rayQueryFeatureEnabled = false;
+    bool m_opacityMicromapFeatureEnabled = false;
+    bool m_clusterAccelerationStructureFeatureEnabled = false;
+    bool m_rayTracingInvocationReorderFeatureEnabled = false;
+    bool m_rayTracingInvocationReorderExtFeatureEnabled = false;
+    bool m_cooperativeVectorFeatureEnabled = false;
+    bool m_cooperativeVectorTrainingFeatureEnabled = false;
     bool m_asyncComputeLaneEnabled = false;
     bool m_meshTaskShaderSupported = false;
     bool m_rayTracingSpheresSupported = false;

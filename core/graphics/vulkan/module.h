@@ -70,6 +70,18 @@ struct DeviceDesc{
     bool dynamicRenderingSupported = false;
     // Indicates if synchronization2 was enabled at device creation time (via Vulkan 1.3 core or KHR extension)
     bool synchronization2Supported = false;
+    // Enabled feature-chain state for optional ray-tracing capabilities.  Keep this distinct from extension-name
+    // presence so runtime feature queries do not advertise an extension whose required feature bit was not enabled.
+    bool accelerationStructureFeatureEnabled = false;
+    bool rayTracingPipelineFeatureEnabled = false;
+    bool rayQueryFeatureEnabled = false;
+    bool opacityMicromapFeatureEnabled = false;
+    bool clusterAccelerationStructureFeatureEnabled = false;
+    bool rayTracingInvocationReorderFeatureEnabled = false;
+    bool rayTracingInvocationReorderExtFeatureEnabled = false;
+    // Indicates if VK_NV_cooperative_vector feature bits were enabled at device creation time.
+    bool cooperativeVectorFeatureEnabled = false;
+    bool cooperativeVectorTrainingFeatureEnabled = false;
     // Indicates if VK_EXT_mesh_shader taskShader was enabled at device creation time
     bool meshTaskShaderSupported = false;
     // Indicates if VK_NV_ray_tracing_linear_swept_spheres spheres was enabled at device creation time

@@ -62,8 +62,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    const float3 worldPosition = NwbHeapSampledImage2D(g_NwbShadowRqPushConstants.worldPositionSlot).Load(texel).xyz;
-    const float3 normal = normalize(NwbHeapSampledImage2D(g_NwbShadowRqPushConstants.normalSlot).Load(texel).xyz * 2.0 - 1.0);
+    // The deferred vector attachments are RGBA16F. Preserve their fetch payload as half before promoting to the
+    // FP32 ray origin and normalized direction required by RayQuery.
+    const half3 worldPositionSample = half3(NwbHeapSampledImage2D(g_NwbShadowRqPushConstants.worldPositionSlot).Load(texel).xyz);
+    const half3 normalSample = half3(NwbHeapSampledImage2D(g_NwbShadowRqPushConstants.normalSlot).Load(texel).xyz);
+    const float3 worldPosition = float3(worldPositionSample);
+    const float3 normal = normalize(float3(normalSample) * 2.0 - 1.0);
 
     // Trace only the lights that hold a shadow slot (params.z >= 0); write each light's visibility into its own slot
     // layer. Lights without a slot are left at the cleared "all lit" white default.

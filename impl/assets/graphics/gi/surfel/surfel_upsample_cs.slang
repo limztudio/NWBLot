@@ -53,20 +53,26 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
 
     const int3 fullCoord = int3(int2(pixel), 0);
-    const float3 rawNormal = nwbSurfelUpsampleGbufferNormal().Load(fullCoord).xyz;
+    // G-buffer vector attachments are RGBA16F. Keep their fetched transport compact, then widen at the normal and
+    // world-distance calculations where filtering precision matters.
+    const half3 rawNormalSample = half3(nwbSurfelUpsampleGbufferNormal().Load(fullCoord).xyz);
+    const float3 rawNormal = float3(rawNormalSample);
     if(dot(rawNormal, rawNormal) < NWB_SURFEL_GBUFFER_NORMAL_LENGTH_SQUARED_MIN){
         g_NwbSurfelUpsampleOutput[pixel] = float4(0.0, 0.0, 0.0, 0.0);   // background -> hemiAmbient in lighting
         return;
     }
     const float3 centerNormal = normalize(rawNormal * 2.0 - 1.0);
-    const float3 centerWorld = nwbSurfelUpsampleGbufferWorldPosition().Load(fullCoord).xyz;
+    const half3 centerWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(fullCoord).xyz);
+    const float3 centerWorld = float3(centerWorldSample);
 
     // World-distance edge-stop sigma from this pixel's own world spacing (max of +x/+y to survive a grazing/foreshortened
     // surface). A few pixels of tolerance keeps same-surface taps but rejects a silhouette jump to a far surface.
     const int2 rightFull = int2(min(int(pixel.x) + 1, int(fullWidth) - 1), int(pixel.y));
     const int2 downFull = int2(int(pixel.x), min(int(pixel.y) + 1, int(fullHeight) - 1));
-    const float3 dxWorld = nwbSurfelUpsampleGbufferWorldPosition().Load(int3(rightFull, 0)).xyz - centerWorld;
-    const float3 dyWorld = nwbSurfelUpsampleGbufferWorldPosition().Load(int3(downFull, 0)).xyz - centerWorld;
+    const half3 rightWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(int3(rightFull, 0)).xyz);
+    const half3 downWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(int3(downFull, 0)).xyz);
+    const float3 dxWorld = float3(rightWorldSample) - centerWorld;
+    const float3 dyWorld = float3(downWorldSample) - centerWorld;
     const float spacing = max(max(length(dxWorld), length(dyWorld)), NWB_SURFEL_UPSAMPLE_WORLD_SPACING_MIN);
     const float sigmaWorld = spacing * NWB_SURFEL_UPSAMPLE_WORLD_SIGMA_SCALE;
     const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
@@ -95,13 +101,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 continue;   // this half texel had no surfel coverage -> nothing to upsample from
             // Recover the tap's geometry from the SAME full texel the resolve gathered at (tap * factor, top-left).
             const int2 tapFull = int2(min(uint(tap.x) * factor, fullWidth - 1u), min(uint(tap.y) * factor, fullHeight - 1u));
-            const float3 tapRawNormal = nwbSurfelUpsampleGbufferNormal().Load(int3(tapFull, 0)).xyz;
+            const half3 tapRawNormalSample = half3(nwbSurfelUpsampleGbufferNormal().Load(int3(tapFull, 0)).xyz);
+            const float3 tapRawNormal = float3(tapRawNormalSample);
             if(dot(tapRawNormal, tapRawNormal) < NWB_SURFEL_GBUFFER_NORMAL_LENGTH_SQUARED_MIN)
                 continue;   // tap's geometry is background
             const float3 tapNormal = normalize(tapRawNormal * 2.0 - 1.0);
             if(dot(tapNormal, centerNormal) < NWB_SURFEL_UPSAMPLE_NORMAL_GATE)
                 continue;   // different surface (crease) -> would leak GI across the edge
-            const float3 tapWorld = nwbSurfelUpsampleGbufferWorldPosition().Load(int3(tapFull, 0)).xyz;
+            const half3 tapWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(int3(tapFull, 0)).xyz);
+            const float3 tapWorld = float3(tapWorldSample);
             const float3 d = tapWorld - centerWorld;
             const float bilinearWeight = (i == 0 ? (1.0 - lerpFrac.x) : lerpFrac.x) * (j == 0 ? (1.0 - lerpFrac.y) : lerpFrac.y);
             const float weight = bilinearWeight * exp(-dot(d, d) * invTwoSigmaWorldSq);

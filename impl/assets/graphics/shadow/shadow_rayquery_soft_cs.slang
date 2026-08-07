@@ -75,8 +75,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    const float3 worldPosition = NwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.worldPositionSlot).Load(texel).xyz;
-    const float3 normal = normalize(NwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.normalSlot).Load(texel).xyz * 2.0 - 1.0);
+    // The deferred vector attachments are RGBA16F. Keep the half payload through the fetch and expand only for
+    // the ray origin/normal calculations, which must remain FP32 for stable soft-shadow tracing.
+    const half3 worldPositionSample = half3(NwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.worldPositionSlot).Load(texel).xyz);
+    const half3 normalSample = half3(NwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.normalSlot).Load(texel).xyz);
+    const float3 worldPosition = float3(worldPositionSample);
+    const float3 normal = normalize(float3(normalSample) * 2.0 - 1.0);
     for(uint i = 0u; i < lightCount; ++i){
         const float slot = g_NwbSceneLights[i].params.z;
         if(slot < 0.0)

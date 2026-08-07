@@ -242,7 +242,10 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestRemovedIntervalCapAtPixel(const uint2 
         const float3 capWorldPosition = nwbCsgIntervalSamplePixelDepthToWorldPosition(outputPixel, capDepth);
         result.visible = true;
         result.depth = capDepth;
-        result.normal = nwbCsgIntervalSampleVisibleCapNormal(g_NwbCsgRemovedIntervalCapNormal.Load(texel).xyz, capWorldPosition);
+        // The removed-cap normal attachment is RGBA16F. Its normalization and facing test remain FP32, but the
+        // fetch itself should retain the attachment's native half payload.
+        const half3 capNormalSample = half3(g_NwbCsgRemovedIntervalCapNormal.Load(texel).xyz);
+        result.normal = nwbCsgIntervalSampleVisibleCapNormal(float3(capNormalSample), capWorldPosition);
         result.worldPosition = capWorldPosition;
         result.receiverIndex = intervalData.x;
     }

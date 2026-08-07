@@ -49,12 +49,20 @@ groupshared uint   s_NwbCausticResolveTileActive;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+half4 nwbCausticResolveGeometryAtHalf(const int2 halfTexel){
+    return half4(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.geometrySlot).Load(int3(halfTexel, 0)));
+}
+
 half3 nwbCausticResolveWorldAtHalf(const int2 halfTexel){
-    return half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.geometrySlot).Load(int3(halfTexel, 0)).xyz);
+    return nwbCausticResolveGeometryAtHalf(halfTexel).xyz;
 }
 
 bool nwbCausticResolveValidAtHalf(const int2 halfTexel){
-    return NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.geometrySlot).Load(int3(halfTexel, 0)).w > 0.5;
+    return nwbCausticResolveGeometryAtHalf(halfTexel).w > half(0.5h);
+}
+
+half3 nwbCausticResolveWorldAtFull(const int2 fullTexel){
+    return half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.worldPositionSlot).Load(int3(fullTexel, 0)).xyz);
 }
 
 // World-space area subtended by one half-resolution pixel.
@@ -89,11 +97,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             return;
         }
 
-        const float3 centerWorld = NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.worldPositionSlot).Load(int3(fullTexel, 0)).xyz;
+        // The full-resolution world-position G-buffer is RGBA16F. Retain its transport precision and promote only
+        // for the distance-based edge stop, matching the half-resolution geometry cache below.
+        const float3 centerWorld = float3(nwbCausticResolveWorldAtFull(fullTexel));
         const int2 rightFull = int2(min(fullTexel.x + 1, fw - 1), fullTexel.y);
         const int2 downFull = int2(fullTexel.x, min(fullTexel.y + 1, fh - 1));
-        const float3 dxWorld = NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.worldPositionSlot).Load(int3(rightFull, 0)).xyz - centerWorld;
-        const float3 dyWorld = NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.worldPositionSlot).Load(int3(downFull, 0)).xyz - centerWorld;
+        const float3 dxWorld = float3(nwbCausticResolveWorldAtFull(rightFull)) - centerWorld;
+        const float3 dyWorld = float3(nwbCausticResolveWorldAtFull(downFull)) - centerWorld;
         const float spacing = max(max(length(dxWorld), length(dyWorld)), 1e-4);
         const float sigmaWorld = spacing * 3.0;
         const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);

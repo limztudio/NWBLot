@@ -41,11 +41,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
 
     const int3 loadCoord = int3(int2(pixel), 0);
-    const float3 rawNormal = NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.normalSlot).Load(loadCoord).xyz;
+    // The source G-buffer vectors are RGBA16F; the surfel pool and hash calculations below intentionally use FP32.
+    const half3 rawNormalSample = half3(NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.normalSlot).Load(loadCoord).xyz);
+    const float3 rawNormal = float3(rawNormalSample);
     if(dot(rawNormal, rawNormal) < NWB_SURFEL_GBUFFER_NORMAL_LENGTH_SQUARED_MIN)
         return;   // no geometry at this tile (background)
 
-    const float3 worldPosition = NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.worldPositionSlot).Load(loadCoord).xyz;
+    const half3 worldPositionSample = half3(NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.worldPositionSlot).Load(loadCoord).xyz);
+    const float3 worldPosition = float3(worldPositionSample);
     const float3 worldNormal = normalize(rawNormal);
 
     const float cellSize = g_NwbSurfelConstants.cameraPositionCellSize.w;

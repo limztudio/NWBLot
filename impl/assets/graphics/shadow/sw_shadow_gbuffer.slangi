@@ -34,13 +34,17 @@ bool nwbSwShadowIsBackground(const int3 texel){
 
 // The world-space surface position at this texel (the shade point the occlusion ray leaves from).
 float3 nwbSwShadowLoadWorldPosition(const int3 texel){
-    return NwbHeapSampledImage2D(NWB_SW_SHADOW_DEFERRED_RESOURCES.gbufferSlots.z).Load(texel).xyz;
+    // Both deferred vector attachments are RGBA16F. Keep the sampled payload compact and widen at this FP32
+    // ray-geometry boundary, shared by the opaque, transparent, coarse, and soft software paths.
+    const half3 worldPositionSample = half3(NwbHeapSampledImage2D(NWB_SW_SHADOW_DEFERRED_RESOURCES.gbufferSlots.z).Load(texel).xyz);
+    return float3(worldPositionSample);
 }
 
 // The world-space surface normal at this texel, unpacked from the [0,1] G-buffer encoding back to [-1,1] and
 // renormalised (the ray origin is biased along it to avoid self-intersection).
 float3 nwbSwShadowLoadNormal(const int3 texel){
-    return normalize(NwbHeapSampledImage2D(NWB_SW_SHADOW_DEFERRED_RESOURCES.gbufferSlots.y).Load(texel).xyz * 2.0 - 1.0);
+    const half3 normalSample = half3(NwbHeapSampledImage2D(NWB_SW_SHADOW_DEFERRED_RESOURCES.gbufferSlots.y).Load(texel).xyz);
+    return normalize(float3(normalSample) * 2.0 - 1.0);
 }
 
 

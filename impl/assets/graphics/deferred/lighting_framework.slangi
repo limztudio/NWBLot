@@ -98,7 +98,9 @@ NwbBxdfSurface nwbBxdfLoadSurface(const int2 pixel){
     const int3 texel = int3(pixel, 0);
     const half4 baseColorSample = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.x).Load(texel));
     const half4 normalSample = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.y).Load(texel));
-    const float4 worldSample = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.z).Load(texel);
+    // Every G-buffer color/vector attachment is RGBA16F. Keep this packed payload native-half until the world-space
+    // shading calculations below, which are deliberately FP32.
+    const half4 worldSample = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.z).Load(texel));
     const float depth = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w).Load(texel).r;
 
     NwbBxdfSurface surface;
@@ -106,8 +108,8 @@ NwbBxdfSurface nwbBxdfLoadSurface(const int2 pixel){
     surface.shadingModel = uint(float(baseColorSample.a) + 0.5);
     surface.normal = nwbDeferredDecodeNormal(normalSample.rgb);
     surface.param0 = normalSample.a;
-    surface.worldPosition = worldSample.xyz;
-    surface.param1 = half(worldSample.a);
+    surface.worldPosition = float3(worldSample.xyz);
+    surface.param1 = worldSample.a;
     surface.viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - surface.worldPosition, float3(0.0, 0.0, 1.0));
     surface.isBackground = depth >= NWB_SCENE_BACKGROUND_DEPTH;
     surface.indirectIrradiance = nwbBxdfResolvedIndirect(pixel, surface.normal);

@@ -67,12 +67,16 @@ void nwbCausticSplat(const float3 worldPos, const float3 flux){
     if(sceneDepth >= NWB_SCENE_BACKGROUND_DEPTH)
         return;
 
-    const float3 sceneWorldPos = NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION.Load(int3(baseTexel, 0)).xyz;
+    // Both caustic backends bind the deferred RGBA16F world-position G-buffer here. Preserve that compact payload
+    // until the FP32 receiver-distance test so the shared HW/SW splat path has the same mobile-friendly transport.
+    const half3 sceneWorldPosSample = half3(NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION.Load(int3(baseTexel, 0)).xyz);
+    const float3 sceneWorldPos = float3(sceneWorldPosSample);
     const int2 rightTexel = int2(
         min(baseTexel.x + 1, (int)NWB_CAUSTIC_SPLAT_PUSH.width - 1),
         baseTexel.y
     );
-    const float3 sceneWorldPosRight = NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION.Load(int3(rightTexel, 0)).xyz;
+    const half3 sceneWorldPosRightSample = half3(NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION.Load(int3(rightTexel, 0)).xyz);
+    const float3 sceneWorldPosRight = float3(sceneWorldPosRightSample);
     const float rejectTolerance = max(length(sceneWorldPosRight - sceneWorldPos) * 4.0, 0.05);
     if(length(worldPos - sceneWorldPos) > rejectTolerance)
         return;

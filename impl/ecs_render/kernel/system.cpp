@@ -1321,15 +1321,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     bool deferredClearCommandListReady = false;
     const Core::Graphics::JobHandle meshViewSetupRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
-        meshViewAspectRatio,
         &device,
         meshViewSetupCommandList,
         &frameTimingTransaction,
         &asyncPrefixTiming,
-        asyncShadowSchedule,
         &meshViewSetupReady,
         &meshViewSetupCommandListReady,
-        &frameExecutionTimingTickets
+        &frameExecutionTimingTickets,
+        meshViewAspectRatio,
+        asyncShadowSchedule
     ](){
         ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
             frameExecutionTimingTickets,
@@ -1903,12 +1903,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::Graphics::JobHandle shadowVisibilityRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
         &deferredTargets,
-        shadowVisibilityPrepared,
-        hardwareShadowSupported,
         shadowVisibilityCommandList,
         &shadowVisibilityCommandListReady,
-        asyncShadowSchedule,
-        &frameExecutionTimingTickets
+        &frameExecutionTimingTickets,
+        shadowVisibilityPrepared,
+        hardwareShadowSupported,
+        asyncShadowSchedule
     ](){
         ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
             frameExecutionTimingTickets,
@@ -1963,12 +1963,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::Graphics::JobHandle causticsRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
         &deferredTargets,
-        shadowVisibilityPrepared,
-        hardwareShadowSupported,
         causticsCommandList,
         &causticsCommandListReady,
-        asyncCausticsSchedule,
-        &frameExecutionTimingTickets
+        &frameExecutionTimingTickets,
+        shadowVisibilityPrepared,
+        hardwareShadowSupported,
+        asyncCausticsSchedule
     ](){
         ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
             frameExecutionTimingTickets,

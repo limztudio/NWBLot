@@ -554,11 +554,6 @@ struct VulkanContext{
     VkAllocationCallbacks* allocationCallbacks = nullptr;
     VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 
-    // Physical families used for Graphics/AsyncCompute resource sharing.
-    i32 graphicsQueueFamilyIndex = s_InvalidQueueFamilyIndex;
-    i32 asyncComputeQueueFamilyIndex = s_InvalidQueueFamilyIndex;
-    bool asyncComputeLaneEnabled = false;
-
     Alloc::GlobalArena& objectArena;
     GraphicsAllocator& allocator;
     Alloc::ThreadPool& threadPool;
@@ -569,6 +564,23 @@ struct VulkanContext{
 
     // Lazily created descriptor-buffer gap-set layout for explicit heap sets.
     VkDescriptorSetLayout emptyDescriptorBufferSetLayout = VK_NULL_HANDLE;
+
+    VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};
+    // Descriptor-buffer limits used for layout and offsets.
+    VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties{};
+    VkPhysicalDeviceCooperativeVectorPropertiesNV coopVecProperties{};
+    VkPhysicalDeviceCooperativeVectorFeaturesNV coopVecFeatures{};
+    VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
+    VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV rayTracingLinearSweptSpheresFeatures{};
+    VkPhysicalDeviceClusterAccelerationStructurePropertiesNV nvClusterAccelerationStructureProperties{};
+    // Core subgroup properties (the engine requires Vulkan 1.3).
+    VkPhysicalDeviceSubgroupProperties subgroupProperties{};
+    DescriptorBufferManager* descriptorBufferManager = nullptr;
+
+    // Physical families used for Graphics/AsyncCompute resource sharing.
+    i32 graphicsQueueFamilyIndex = s_InvalidQueueFamilyIndex;
+    i32 asyncComputeQueueFamilyIndex = s_InvalidQueueFamilyIndex;
+    bool asyncComputeLaneEnabled = false;
 
     struct Extensions{
         bool KHR_synchronization2 = false;
@@ -593,18 +605,6 @@ struct VulkanContext{
         bool NV_ray_tracing_invocation_reorder = false;
         bool NV_ray_tracing_linear_swept_spheres = false;
     } extensions;
-
-    VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};
-    // Descriptor-buffer limits used for layout and offsets.
-    VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties{};
-    VkPhysicalDeviceCooperativeVectorPropertiesNV coopVecProperties{};
-    VkPhysicalDeviceCooperativeVectorFeaturesNV coopVecFeatures{};
-    VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
-    VkPhysicalDeviceRayTracingLinearSweptSpheresFeaturesNV rayTracingLinearSweptSpheresFeatures{};
-    VkPhysicalDeviceClusterAccelerationStructurePropertiesNV nvClusterAccelerationStructureProperties{};
-    // Core subgroup properties (the engine requires Vulkan 1.3).
-    VkPhysicalDeviceSubgroupProperties subgroupProperties{};
-    DescriptorBufferManager* descriptorBufferManager = nullptr;
 
 
     explicit VulkanContext(GraphicsAllocator& allocatorRef, Alloc::ThreadPool& threadPoolRef)

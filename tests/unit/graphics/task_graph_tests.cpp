@@ -1423,6 +1423,210 @@ TEST(GpuTaskGraph, PlansPacketBoundaryTransitionsAndUavDependencies){
 }
 
 
+TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    const auto importTexture = [&](
+        const Name& identity,
+        const AStringView label,
+        const Graphics::ResourceQueueSharing::Mask queueSharing,
+        const Graphics::ResourceStates::Mask initialState = Graphics::ResourceStates::Common
+    ){
+        Graphics::GpuGraphResourceDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(initialState)
+            .setQueueSharing(queueSharing)
+        ;
+        return graph.importResource(desc);
+    };
+    const Graphics::GpuGraphResourceId concurrentTexture = importTexture(
+        Name("tests/task_graph/concurrent_read_only"),
+        "Concurrent Read Only",
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        Graphics::ResourceStates::ShaderResource
+    );
+    const Graphics::GpuGraphResourceId defaultConcurrentTexture = importTexture(
+        Name("tests/task_graph/default_concurrent_read_only"),
+        "Default Concurrent Read Only",
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId exclusiveTexture = importTexture(
+        Name("tests/task_graph/exclusive_read_only"),
+        "Exclusive Read Only",
+        Graphics::ResourceQueueSharing::Exclusive
+    );
+    ASSERT_TRUE(concurrentTexture.valid());
+    ASSERT_TRUE(defaultConcurrentTexture.valid());
+    ASSERT_TRUE(exclusiveTexture.valid());
+
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    const auto addReadTask = [&](
+        const Name& identity,
+        const AStringView label,
+        const Graphics::GpuGraphResourceId resource,
+        const Graphics::GpuQueueRequest& queue,
+        const bool hasIndependentStateSource
+    ){
+        const Graphics::GpuTaskResourceUse uses[] = {
+            Graphics::GpuTaskResourceUse{
+                .resource = resource,
+                .range = {},
+                .requiredState = Graphics::ResourceStates::ShaderResource,
+                .access = Graphics::GpuTaskResourceAccess::Read,
+                .hasIndependentStateSource = hasIndependentStateSource,
+            },
+        };
+        Graphics::GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(queue)
+            .setScheduling(scheduling)
+            .setResourceUses(uses, LengthOf(uses))
+        ;
+        return graph.addTask(desc);
+    };
+    const Graphics::GpuTaskId concurrentGraphics = addReadTask(
+        Name("tests/task_graph/concurrent_read_graphics"),
+        "Concurrent Graphics Read",
+        concurrentTexture,
+        graphicsRequest,
+        false
+    );
+    const Graphics::GpuTaskId concurrentCompute = addReadTask(
+        Name("tests/task_graph/concurrent_read_compute"),
+        "Concurrent Compute Read",
+        concurrentTexture,
+        computeRequest,
+        true
+    );
+    const Graphics::GpuTaskId defaultConcurrentGraphics = addReadTask(
+        Name("tests/task_graph/default_concurrent_read_graphics"),
+        "Default Concurrent Graphics Read",
+        defaultConcurrentTexture,
+        graphicsRequest,
+        false
+    );
+    const Graphics::GpuTaskId defaultConcurrentCompute = addReadTask(
+        Name("tests/task_graph/default_concurrent_read_compute"),
+        "Default Concurrent Compute Read",
+        defaultConcurrentTexture,
+        computeRequest,
+        false
+    );
+    const Graphics::GpuTaskId exclusiveGraphics = addReadTask(
+        Name("tests/task_graph/exclusive_read_graphics"),
+        "Exclusive Graphics Read",
+        exclusiveTexture,
+        graphicsRequest,
+        false
+    );
+    const Graphics::GpuTaskId exclusiveCompute = addReadTask(
+        Name("tests/task_graph/exclusive_read_compute"),
+        "Exclusive Compute Read",
+        exclusiveTexture,
+        computeRequest,
+        true
+    );
+    ASSERT_TRUE(concurrentGraphics.valid());
+    ASSERT_TRUE(concurrentCompute.valid());
+    ASSERT_TRUE(defaultConcurrentGraphics.valid());
+    ASSERT_TRUE(defaultConcurrentCompute.valid());
+    ASSERT_TRUE(exclusiveGraphics.valid());
+    ASSERT_TRUE(exclusiveCompute.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    EXPECT_EQ(FindEdge(analysis, concurrentGraphics, concurrentCompute), nullptr);
+    EXPECT_EQ(FindEdge(analysis, defaultConcurrentGraphics, defaultConcurrentCompute), nullptr);
+    EXPECT_EQ(FindEdge(analysis, exclusiveGraphics, exclusiveCompute), nullptr);
+
+    ASSERT_EQ(compiledGraph.packetCount(), 6u);
+    const Graphics::GpuSubmissionPacketId concurrentGraphicsPacket = compiledGraph.packetForTask(concurrentGraphics);
+    const Graphics::GpuSubmissionPacketId concurrentComputePacket = compiledGraph.packetForTask(concurrentCompute);
+    const Graphics::GpuSubmissionPacketId defaultConcurrentGraphicsPacket = compiledGraph.packetForTask(
+        defaultConcurrentGraphics
+    );
+    const Graphics::GpuSubmissionPacketId defaultConcurrentComputePacket = compiledGraph.packetForTask(
+        defaultConcurrentCompute
+    );
+    const Graphics::GpuSubmissionPacketId exclusiveGraphicsPacket = compiledGraph.packetForTask(exclusiveGraphics);
+    const Graphics::GpuSubmissionPacketId exclusiveComputePacket = compiledGraph.packetForTask(exclusiveCompute);
+    ASSERT_TRUE(concurrentGraphicsPacket.valid());
+    ASSERT_TRUE(concurrentComputePacket.valid());
+    ASSERT_TRUE(defaultConcurrentGraphicsPacket.valid());
+    ASSERT_TRUE(defaultConcurrentComputePacket.valid());
+    ASSERT_TRUE(exclusiveGraphicsPacket.valid());
+    ASSERT_TRUE(exclusiveComputePacket.valid());
+    EXPECT_EQ(compiledGraph.packetIdAt(0u), concurrentGraphicsPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(1u), concurrentComputePacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(2u), defaultConcurrentGraphicsPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(3u), defaultConcurrentComputePacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(4u), exclusiveGraphicsPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(5u), exclusiveComputePacket);
+
+    const Graphics::GpuCompiledTask* const compiledConcurrentCompute = compiledGraph.findTask(concurrentCompute);
+    const Graphics::GpuCompiledTask* const compiledDefaultConcurrentCompute = compiledGraph.findTask(
+        defaultConcurrentCompute
+    );
+    const Graphics::GpuCompiledTask* const compiledExclusiveCompute = compiledGraph.findTask(exclusiveCompute);
+    ASSERT_NE(compiledConcurrentCompute, nullptr);
+    ASSERT_NE(compiledDefaultConcurrentCompute, nullptr);
+    ASSERT_NE(compiledExclusiveCompute, nullptr);
+    EXPECT_EQ(compiledConcurrentCompute->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledDefaultConcurrentCompute->prologueStateSeedCount, 1u);
+    ASSERT_EQ(compiledExclusiveCompute->prologueStateSeedCount, 1u);
+    EXPECT_EQ(compiledConcurrentCompute->prologueBarrierCount, 0u);
+    EXPECT_EQ(compiledDefaultConcurrentCompute->prologueBarrierCount, 0u);
+    EXPECT_EQ(compiledExclusiveCompute->prologueBarrierCount, 0u);
+    const Graphics::GpuPacketStateSeed* const defaultConcurrentSeed = compiledGraph.taskPrologueStateSeeds(
+        defaultConcurrentCompute
+    );
+    const Graphics::GpuPacketStateSeed* const exclusiveSeed = compiledGraph.taskPrologueStateSeeds(exclusiveCompute);
+    EXPECT_EQ(compiledGraph.taskPrologueStateSeeds(concurrentCompute), nullptr);
+    ASSERT_NE(defaultConcurrentSeed, nullptr);
+    ASSERT_NE(exclusiveSeed, nullptr);
+    EXPECT_EQ(defaultConcurrentSeed[0u].sourcePacket, defaultConcurrentGraphicsPacket);
+    EXPECT_EQ(exclusiveSeed[0u].sourcePacket, exclusiveGraphicsPacket);
+    EXPECT_EQ(compiledGraph.packet(concurrentComputePacket).dependencyCount, 0u);
+    ASSERT_EQ(compiledGraph.packet(defaultConcurrentComputePacket).dependencyCount, 1u);
+    EXPECT_EQ(
+        compiledGraph.packetDependencies(defaultConcurrentComputePacket)[0u].producer,
+        defaultConcurrentGraphicsPacket
+    );
+    ASSERT_EQ(compiledGraph.packet(exclusiveComputePacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(exclusiveComputePacket)[0u].producer, exclusiveGraphicsPacket);
+}
+
+
 TEST(GpuTaskGraph, PlansTextureStatesPerDeclaredSubresourceRange){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

@@ -1036,11 +1036,46 @@ bool GpuTaskGraphCompiler::compile(
                     return false;
                 }
                 if(sourcePacket != compiledTask->packet){
-                    outCompiledGraph.m_prologueStateSeeds.push_back(GpuPacketStateSeed{
-                        .resource = use.resource,
-                        .range = use.range,
-                        .sourcePacket = sourcePacket,
-                    });
+                    const GpuPhysicalQueueInfo* const sourceQueue = outCompiledGraph.queueInfo(
+                        previousState->queue
+                    );
+                    const GpuPhysicalQueueInfo* const destinationQueue = outCompiledGraph.queueInfo(
+                        compiledTask->queue
+                    );
+                    const bool readOnlySameState =
+                        previousState->access == GpuTaskResourceAccess::Read
+                        && use.access == GpuTaskResourceAccess::Read
+                        && before == use.requiredState
+                        && !needsUavDependency
+                    ;
+                    const bool sameQueueFamily =
+                        sourceQueue
+                        && destinationQueue
+                        && sourceQueue->familyIndex == destinationQueue->familyIndex
+                    ;
+                    const u8 requiredConcurrentSharing = static_cast<u8>(
+                        ResourceQueueSharing::GraphicsAndAsyncCompute
+                    );
+                    const bool concurrentGraphicsAndCompute =
+                        sourceQueue
+                        && destinationQueue
+                        && sourceQueue->queueClass != destinationQueue->queueClass
+                        && (
+                            static_cast<u8>(resource.queueSharing) & requiredConcurrentSharing
+                        ) == requiredConcurrentSharing
+                    ;
+                    const bool mayOmitInternalStateSeed =
+                        use.hasIndependentStateSource
+                        && readOnlySameState
+                        && (sameQueueFamily || concurrentGraphicsAndCompute)
+                    ;
+                    if(!mayOmitInternalStateSeed){
+                        outCompiledGraph.m_prologueStateSeeds.push_back(GpuPacketStateSeed{
+                            .resource = use.resource,
+                            .range = use.range,
+                            .sourcePacket = sourcePacket,
+                        });
+                    }
                 }
             }
             if(before != use.requiredState || needsUavDependency){

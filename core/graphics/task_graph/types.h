@@ -217,6 +217,10 @@ struct GpuTaskResourceUse{
     GpuTaskResourceRange range;
     ResourceStates::Mask requiredState = ResourceStates::Unknown;
     GpuTaskResourceAccess::Enum access = GpuTaskResourceAccess::Read;
+    // The consumer supplies an equivalent externally synchronized state source, so a matching concurrent read may
+    // omit a graph-internal producer seed and its submission dependency. The compiler accepts this only for a
+    // same-state Read-to-Read handoff on compatible concurrent queues.
+    bool hasIndependentStateSource = false;
 };
 
 struct GpuTaskDependencyEdge{

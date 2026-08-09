@@ -201,13 +201,6 @@ private:
         const Core::GpuTaskId& effectsTask,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
-    void buildHardwareCausticsTaskGraph(
-        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
-        DeferredFrameTargets& deferredTargets,
-        bool shadowVisibilityPrepared,
-        bool waitsForLaggedLightingHistory,
-        Core::GpuTimingSubmissionTicket& timingTicket
-    );
     void buildAvboitTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         DeferredFrameTargets& deferredTargets,
@@ -223,6 +216,8 @@ private:
     void buildDeferredLightingTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         DeferredFrameTargets& deferredTargets,
+        bool shadowVisibilityPrepared,
+        Core::GpuTimingSubmissionTicket& hardwareCausticsTimingTicket,
         Core::GpuTimingSubmissionTicket& lightingTimingTicket,
         Core::GpuTimingSubmissionTicket& compositeTimingTicket
     );
@@ -327,18 +322,6 @@ private:
     Core::GpuTaskId m_surfelGiTask;
     Core::GpuExternalCompletionId m_shadowVisibilityPrefixCompletion;
     bool m_shadowVisibilityTaskGraphValid = false;
-    // Hardware dispatch-rays caustics stay on Graphics but own their graph packet and completion imports. The manual
-    // state handoff remains only until the automatic-barrier phase.
-    Core::GpuTaskGraph m_hardwareCausticsTaskGraph;
-    Core::GpuTaskGraphAnalysis m_hardwareCausticsTaskGraphAnalysis;
-    Core::GpuTaskGraphQueueAssignments m_hardwareCausticsTaskGraphQueueAssignments;
-    Core::GpuCompiledGraph m_hardwareCausticsCompiledGraph;
-    Core::GpuRecordedGraph m_hardwareCausticsRecordedGraph;
-    Core::GpuGraphSubmissionTransaction m_hardwareCausticsSubmissionTransaction;
-    Core::GpuTaskId m_hardwareCausticsTask;
-    Core::GpuExternalCompletionId m_hardwareCausticsPrefixCompletion;
-    Core::GpuExternalCompletionId m_hardwareCausticsLaggedHistoryCompletion;
-    bool m_hardwareCausticsTaskGraphValid = false;
     // AVBOIT owns its complete raster/compute chain as one graph. The split topology is selected only when a
     // distinct Compute family exists; otherwise the complete chain records as one Graphics packet.
     Core::GpuTaskGraph m_avboitTaskGraph;
@@ -354,18 +337,19 @@ private:
     Core::GpuTaskId m_avboitAccumulationTask;
     Core::GpuExternalCompletionId m_avboitPrefixCompletion;
     bool m_avboitTaskGraphValid = false;
-    // Deferred lighting and composite share one packet graph. Lighting imports AVBOIT plus the selected effect
-    // producer; composite is its graph-internal successor, so no renderer-side completion/token bridge remains.
+    // Hardware Caustics, Deferred Lighting, and Composite share one packet graph. Hardware remains a staged
+    // Graphics producer; live Lighting consumes it through an internal edge, while lagged Lighting reads history.
     Core::GpuTaskGraph m_deferredLightingTaskGraph;
     Core::GpuTaskGraphAnalysis m_deferredLightingTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_deferredLightingTaskGraphQueueAssignments;
     Core::GpuCompiledGraph m_deferredLightingCompiledGraph;
     Core::GpuRecordedGraph m_deferredLightingRecordedGraph;
     Core::GpuGraphSubmissionTransaction m_deferredLightingSubmissionTransaction;
+    Core::GpuTaskId m_deferredHardwareCausticsTask;
     Core::GpuTaskId m_deferredLightingTask;
     Core::GpuTaskId m_deferredCompositeTask;
+    Core::GpuExternalCompletionId m_deferredHardwareCausticsPrefixCompletion;
     Core::GpuExternalCompletionId m_deferredLightingAvboitCompletion;
-    Core::GpuExternalCompletionId m_deferredLightingHardwareCausticsCompletion;
     Core::GpuExternalCompletionId m_deferredLightingSurfelGiCompletion;
     Core::GpuExternalCompletionId m_deferredLightingHistoryCompletion;
     bool m_deferredLightingTaskGraphValid = false;

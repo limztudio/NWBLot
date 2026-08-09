@@ -905,6 +905,248 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketChain){
 }
 
 
+TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareLightingCompositeSharedTransaction){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId resource = graph.importBuffer(
+        buffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/staged_deferred_buffer"))
+            .setMarkerLabel("Staged Deferred Buffer")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    ASSERT_TRUE(resource.valid());
+
+    GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+
+    const GpuTaskResourceUse hardwareUses[] = {
+        GpuTaskResourceUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    GpuTaskDesc hardwareDesc;
+    hardwareDesc
+        .setIdentity(Name("tests/descriptor_buffer/staged_hardware_caustics"))
+        .setMarkerLabel("Hardware Caustics")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(scheduling)
+        .setResourceUses(hardwareUses, LengthOf(hardwareUses))
+    ;
+    bool hardwareRecorded = false;
+    const GpuTaskId hardwareTask = graph.addTask<NativePacketPrefixTask>(
+        hardwareDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = buffer.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .recorded = &hardwareRecorded,
+        }
+    );
+    ASSERT_TRUE(hardwareTask.valid());
+
+    const GpuTaskResourceUse lightingUses[] = {
+        GpuTaskResourceUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    GpuTaskDesc lightingDesc;
+    lightingDesc
+        .setIdentity(Name("tests/descriptor_buffer/staged_deferred_lighting"))
+        .setMarkerLabel("Deferred Lighting")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Compute,
+            GpuQueuePreference::Compute,
+            true,
+            true,
+        })
+        .setScheduling(scheduling)
+        .setDependencies(&hardwareTask, 1u)
+        .setResourceUses(lightingUses, LengthOf(lightingUses))
+    ;
+    bool lightingRecorded = false;
+    const GpuTaskId lightingTask = graph.addTask<NativePacketPrefixTask>(
+        lightingDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = buffer.get(),
+            .expectedState = ResourceStates::UnorderedAccess,
+            .recorded = &lightingRecorded,
+        }
+    );
+    ASSERT_TRUE(lightingTask.valid());
+
+    const GpuTaskResourceUse compositeUses[] = {
+        GpuTaskResourceUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskDesc compositeDesc;
+    compositeDesc
+        .setIdentity(Name("tests/descriptor_buffer/staged_deferred_composite"))
+        .setMarkerLabel("Deferred Composite")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Compute,
+            GpuQueuePreference::Compute,
+            true,
+            true,
+        })
+        .setScheduling(scheduling)
+        .setDependencies(&lightingTask, 1u)
+        .setResourceUses(compositeUses, LengthOf(compositeUses))
+    ;
+    bool compositeRecorded = false;
+    const GpuTaskId compositeTask = graph.addTask<NativePacketPrefixTask>(
+        compositeDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = buffer.get(),
+            .expectedState = ResourceStates::ShaderResource,
+            .recorded = &compositeRecorded,
+        }
+    );
+    ASSERT_TRUE(compositeTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/staged_deferred_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+
+    const GpuTaskQueueAssignment* const hardwareAssignment = assignments.find(hardwareTask);
+    const GpuTaskQueueAssignment* const lightingAssignment = assignments.find(lightingTask);
+    const GpuTaskQueueAssignment* const compositeAssignment = assignments.find(compositeTask);
+    ASSERT_NE(hardwareAssignment, nullptr);
+    ASSERT_NE(lightingAssignment, nullptr);
+    ASSERT_NE(compositeAssignment, nullptr);
+    EXPECT_EQ(hardwareAssignment->queueClass, CommandQueue::Graphics);
+    EXPECT_EQ(hardwareAssignment->reason, GpuTaskQueueAssignmentReason::RequiredGraphics);
+    EXPECT_EQ(lightingAssignment->queueClass, CommandQueue::Graphics);
+    EXPECT_EQ(lightingAssignment->reason, GpuTaskQueueAssignmentReason::Fallback);
+    EXPECT_EQ(compositeAssignment->queueClass, CommandQueue::Graphics);
+    EXPECT_EQ(compositeAssignment->reason, GpuTaskQueueAssignmentReason::Fallback);
+
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    const GpuSubmissionPacketId hardwarePacket = compiledGraph.packetForTask(hardwareTask);
+    const GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lightingTask);
+    const GpuSubmissionPacketId compositePacket = compiledGraph.packetForTask(compositeTask);
+    ASSERT_TRUE(hardwarePacket.valid());
+    ASSERT_TRUE(lightingPacket.valid());
+    ASSERT_TRUE(compositePacket.valid());
+    EXPECT_EQ(compiledGraph.packetIdAt(0u), hardwarePacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(1u), lightingPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(2u), compositePacket);
+    EXPECT_EQ(compiledGraph.packet(hardwarePacket).dependencyCount, 0u);
+    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(lightingPacket)[0u].producer, hardwarePacket);
+    ASSERT_EQ(compiledGraph.packet(compositePacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(compositePacket)[0u].producer, lightingPacket);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecordDesc recordDescs[] = {
+        GpuNativePacketRecordDesc{ .packet = hardwarePacket },
+        GpuNativePacketRecordDesc{ .packet = lightingPacket },
+        GpuNativePacketRecordDesc{ .packet = compositePacket },
+    };
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketsInCompileOrder(
+        graph,
+        compiledGraph,
+        recordDescs,
+        LengthOf(recordDescs),
+        recordedGraph
+    ));
+    EXPECT_TRUE(hardwareRecorded);
+    EXPECT_TRUE(lightingRecorded);
+    EXPECT_TRUE(compositeRecorded);
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        hardwarePacket,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken hardwareToken = transaction.packetToken(hardwarePacket);
+    ASSERT_TRUE(hardwareToken.valid());
+    EXPECT_FALSE(transaction.packetToken(lightingPacket).valid());
+    EXPECT_FALSE(transaction.packetToken(compositePacket).valid());
+
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        lightingPacket,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken lightingToken = transaction.packetToken(lightingPacket);
+    ASSERT_TRUE(lightingToken.valid());
+    EXPECT_EQ(transaction.packetToken(hardwarePacket).value, hardwareToken.value);
+    EXPECT_FALSE(transaction.packetToken(compositePacket).valid());
+
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compositePacket,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    ASSERT_TRUE(transaction.packetToken(compositePacket).valid());
+    EXPECT_EQ(transaction.packetToken(hardwarePacket).value, hardwareToken.value);
+    EXPECT_EQ(transaction.packetToken(lightingPacket).value, lightingToken.value);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 inline constexpr GpuTimingScopeDefinition s_FrameTimingPreambleScope("tests/frame_timing_preamble");
 inline constexpr GpuTimingScopeDefinition s_FrameTimingLateActivationScope("tests/frame_timing_late_activation");
 inline constexpr GpuTimingScopeDefinition s_UnpreparedTimingScope("tests/timing_unprepared_scope");

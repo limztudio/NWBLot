@@ -143,6 +143,12 @@ RendererSystem::RendererSystem(
     , m_deferredCompositeCompiledGraph(arena)
     , m_deferredCompositeRecordedGraph(arena)
     , m_deferredCompositeSubmissionTransaction(arena)
+    , m_surfelGiTaskGraph(arena)
+    , m_surfelGiTaskGraphAnalysis(arena)
+    , m_surfelGiTaskGraphQueueAssignments(arena)
+    , m_surfelGiCompiledGraph(arena)
+    , m_surfelGiRecordedGraph(arena)
+    , m_surfelGiSubmissionTransaction(arena)
     , m_meshState(arena)
     , m_materialState(arena)
     , m_rayTracingState(arena)
@@ -529,6 +535,15 @@ void RendererSystem::invalidateResources(){
     m_deferredCompositeCompiledGraph.reset();
     m_deferredCompositeRecordedGraph.reset(m_deferredCompositeCompiledGraph);
     m_deferredCompositeSubmissionTransaction.reset(m_deferredCompositeCompiledGraph);
+    m_surfelGiTaskGraphValid = false;
+    m_surfelGiTask = {};
+    m_surfelGiEffectsCompletion = {};
+    m_surfelGiTaskGraph.reset();
+    m_surfelGiTaskGraphAnalysis.reset();
+    m_surfelGiTaskGraphQueueAssignments.reset();
+    m_surfelGiCompiledGraph.reset();
+    m_surfelGiRecordedGraph.reset(m_surfelGiCompiledGraph);
+    m_surfelGiSubmissionTransaction.reset(m_surfelGiCompiledGraph);
     m_gpuTaskGraphDeviceGeneration = m_gpuTaskGraphDeviceGeneration == Limit<u16>::s_Max
         ? 1u
         : static_cast<u16>(m_gpuTaskGraphDeviceGeneration + 1u)
@@ -545,8 +560,6 @@ void RendererSystem::invalidateResources(){
     m_asyncEffectsTimingEndCommandList.reset();
     m_asyncCausticsCommandList.reset();
     m_causticsCommandList.reset();
-    m_asyncSurfelGiCommandList.reset();
-    m_surfelGiCommandList.reset();
     m_asyncDeferredLightingCommandList.reset();
     m_deferredLightingCommandList.reset();
     m_avboitCommandList.reset();
@@ -671,15 +684,6 @@ bool RendererSystem::ensureFrameCommandLists(){
                 return false;
             }
         }
-        if(!m_asyncSurfelGiCommandList){
-            Core::CommandListParameters asyncSurfelGiCommandListParameters;
-            asyncSurfelGiCommandListParameters.setRenderLane(Core::RenderLane::AsyncCompute);
-            m_asyncSurfelGiCommandList = device.createCommandList(asyncSurfelGiCommandListParameters);
-            if(!m_asyncSurfelGiCommandList){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async surfel-GI command list"));
-                return false;
-            }
-        }
         if(!m_asyncDeferredLightingCommandList){
             Core::CommandListParameters asyncDeferredLightingCommandListParameters;
             asyncDeferredLightingCommandListParameters.setRenderLane(Core::RenderLane::AsyncCompute);
@@ -727,14 +731,6 @@ bool RendererSystem::ensureFrameCommandLists(){
         m_causticsCommandList = device.createCommandList();
         if(!m_causticsCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustics command list"));
-            return false;
-        }
-    }
-
-    if(!m_surfelGiCommandList){
-        m_surfelGiCommandList = device.createCommandList();
-        if(!m_surfelGiCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel-GI command list"));
             return false;
         }
     }
@@ -938,8 +934,6 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     NWB_ASSERT(m_postGbufferNormalizeCommandList);
     NWB_ASSERT(m_shadowVisibilityCommandList);
     NWB_ASSERT(m_causticsCommandList);
-    NWB_ASSERT(!m_graphics.getDevice().isRenderLaneDedicated(Core::RenderLane::AsyncCompute) || m_asyncSurfelGiCommandList);
-    NWB_ASSERT(m_surfelGiCommandList);
     NWB_ASSERT(!m_graphics.getDevice().isRenderLaneDedicated(Core::RenderLane::AsyncCompute) || m_asyncDeferredLightingCommandList);
     NWB_ASSERT(m_deferredLightingCommandList);
     NWB_ASSERT(m_avboitCommandList);
@@ -1049,6 +1043,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredCompositeCompiledGraph.reset();
     m_deferredCompositeRecordedGraph.reset(m_deferredCompositeCompiledGraph);
     m_deferredCompositeSubmissionTransaction.reset(m_deferredCompositeCompiledGraph);
+    m_surfelGiTaskGraphValid = false;
+    m_surfelGiTask = {};
+    m_surfelGiEffectsCompletion = {};
+    m_surfelGiTaskGraph.reset();
+    m_surfelGiTaskGraphAnalysis.reset();
+    m_surfelGiTaskGraphQueueAssignments.reset();
+    m_surfelGiCompiledGraph.reset();
+    m_surfelGiRecordedGraph.reset(m_surfelGiCompiledGraph);
+    m_surfelGiSubmissionTransaction.reset(m_surfelGiCompiledGraph);
 
     if(!framebuffer)
         return;
@@ -1128,10 +1131,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ECSRenderDetail::FrameExecutionWork::Caustics,
         Core::RenderLane::AsyncCompute
     );
-    const bool asyncSurfelGiSchedule = frameExecutionPlan.workRunsOnLane(
-        ECSRenderDetail::FrameExecutionWork::SurfelGi,
-        Core::RenderLane::AsyncCompute
-    );
     // Split AVBOIT only when transparent work needs its compute stages.
     const bool asyncAvboitSchedule = frameExecutionPlan.workRunsOnLane(
         ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp,
@@ -1179,13 +1178,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_asyncCausticsCommandList.get(),
         }
     );
-    Core::CommandList* const surfelGiCommandList = commandListForWork(
-        ECSRenderDetail::FrameExecutionWork::SurfelGi,
-        ECSRenderDetail::FrameExecutionLaneCommandListPair{
-            m_surfelGiCommandList.get(),
-            m_asyncSurfelGiCommandList.get(),
-        }
-    );
     Core::CommandList* const deferredLightingCommandList = commandListForWork(
         ECSRenderDetail::FrameExecutionWork::DeferredLighting,
         ECSRenderDetail::FrameExecutionLaneCommandListPair{
@@ -1210,8 +1202,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(!recordsAsyncEffectsTiming || asyncEffectsTimingEndCommandList);
     NWB_ASSERT(m_causticsCommandList);
     NWB_ASSERT(causticsCommandList);
-    NWB_ASSERT(m_surfelGiCommandList);
-    NWB_ASSERT(surfelGiCommandList);
     NWB_ASSERT(m_deferredLightingCommandList);
     NWB_ASSERT(deferredLightingCommandList);
     NWB_ASSERT(avboitCommandList);
@@ -1327,8 +1317,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const auto restoreUnacceptedGraphicsEffectsCpuState = [&](){
         if(!asyncCausticsSchedule)
             restoreCausticsCpuState();
-        if(!asyncSurfelGiSchedule)
-            restoreSurfelGiCpuState();
         restoreGraphicsEffectsCpuState();
     };
     const auto restorePostGbufferPacketCpuState = [&](){
@@ -1343,6 +1331,20 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         frameExecutionPlan,
         m_graphics.gpuTiming()
     );
+    Core::GpuTimingSubmissionTicket surfelGiTimingTicket(m_graphics.gpuTiming());
+    buildSurfelGiTaskGraph(taskGraphInput, deferredTargets, surfelGiTimingTicket);
+    const Core::GpuSubmissionPacketId surfelGiPacket = m_surfelGiCompiledGraph.packetForTask(m_surfelGiTask);
+    const Core::GpuPhysicalQueueInfo* const surfelGiQueue = surfelGiPacket.valid()
+        ? m_surfelGiCompiledGraph.queueInfo(m_surfelGiCompiledGraph.packet(surfelGiPacket).queue)
+        : nullptr
+    ;
+    if(!m_surfelGiTaskGraphValid || !m_surfelGiEffectsCompletion.valid() || !surfelGiQueue){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned surfel GI was unavailable"));
+        surfelGiTimingTicket.discard();
+        frameExecutionTimingTickets.discardAll();
+        return;
+    }
+    const bool surfelGiRunsOnCompute = surfelGiQueue->queueClass == Core::CommandQueue::Compute;
     Core::GpuTimingSubmissionTicket deferredCompositeTimingTicket(m_graphics.gpuTiming());
     buildDeferredCompositeTaskGraph(taskGraphInput, deferredTargets, deferredCompositeTimingTicket);
     // Publish the frame endpoint only after the final Graphics packet accepts.  This also covers the serialized
@@ -1351,8 +1353,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
     Optional<Core::GpuTimingMeasure> asyncEffectsTiming;
     Optional<Core::GpuTimingMeasure> asyncFinalTiming;
-    const auto discardTimingTickets = [&frameExecutionTimingTickets, &deferredCompositeTimingTicket](){
+    const auto discardTimingTickets = [&frameExecutionTimingTickets, &surfelGiTimingTicket, &deferredCompositeTimingTicket](){
         frameExecutionTimingTickets.discardAll();
+        surfelGiTimingTicket.discard();
         deferredCompositeTimingTicket.discard();
     };
     const auto discardRenderPackets = [&](){
@@ -1374,9 +1377,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredCompositeTaskGraph,
             m_deferredCompositeCompiledGraph
         );
+        m_surfelGiSubmissionTransaction.discardUnaccepted(
+            m_surfelGiTaskGraph,
+            m_surfelGiCompiledGraph
+        );
         restorePostGbufferPacketCpuState();
         m_raytracingSystem.discardSoftShadowTemporalHistory();
-        m_raytracingSystem.discardSurfelResourceInitialization();
         resetAbandonedFrameStateHandoffs();
     };
 
@@ -1467,7 +1473,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &deferredTargets,
         deferredClearCommandList,
         &deferredClearCommandListReady,
-        asyncSurfelGiSchedule,
+        surfelGiRunsOnCompute,
         &frameExecutionTimingTickets
     ](){
         ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
@@ -1484,7 +1490,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             deferredTargets,
             false,
             Core::Rect{},
-            !asyncSurfelGiSchedule
+            !surfelGiRunsOnCompute
         );
         deferredClearCommandList->close(&m_deferredClearStateHandoff);
         deferredClearCommandListReady =
@@ -1872,8 +1878,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    // Surfel GI stays compute-only; import current G-buffer inputs and retained field state.
-    if(asyncSurfelGiSchedule){
+    // The graph-selected Compute route imports current G-buffer inputs and retained field state. Graphics uses the
+    // established prefix handoff directly.
+    if(surfelGiRunsOnCompute){
         Core::Alloc::ScratchArena surfelGiInputScratchArena(RendererArenaScope::s_RenderArena);
         Vector<Core::Texture*, Core::Alloc::ScratchArena> surfelGiInputTextures{ surfelGiInputScratchArena };
         Vector<Core::Buffer*, Core::Alloc::ScratchArena> surfelGiInputBuffers{ surfelGiInputScratchArena };
@@ -1938,12 +1945,41 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
+    // Surfel GI records only after the graph resolved its physical queue.  The imported ray-effects completion keeps
+    // the original packet order until the remaining producers migrate; state fan-in stays manual until Phase 6.
+    Core::GpuNativePacketRecorder surfelGiRecorder(device);
+    const Core::GpuNativePacketRecordDesc surfelGiRecordDesc{
+        .packet = surfelGiPacket,
+        .initialStates = surfelGiRunsOnCompute
+            ? &m_surfelGiComputeInputStateHandoff
+            : &m_postGbufferNormalizedStateHandoff,
+        .finalStates = &m_surfelGiStateHandoff,
+    };
+    const bool surfelGiRecorded = surfelGiPacket.valid()
+        && surfelGiRecorder.recordPacket(
+            m_surfelGiTaskGraph,
+            m_surfelGiCompiledGraph,
+            surfelGiRecordDesc,
+            m_surfelGiRecordedGraph
+        )
+        && m_surfelGiStateHandoff.valid()
+    ;
+    if(!surfelGiRecorded){
+        m_surfelGiSubmissionTransaction.discardUnaccepted(
+            m_surfelGiTaskGraph,
+            m_surfelGiCompiledGraph
+        );
+        surfelGiTimingTicket.discard();
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned surfel GI"));
+        discardRenderPackets();
+        return;
+    }
+
     const bool shadowVisibilityPrepared = m_preparedShadowVisibilityReady;
 
     // Independent effect packets share normalized inputs and converge at deferred lighting.
     bool shadowVisibilityCommandListReady = false;
     bool causticsCommandListReady = false;
-    bool surfelGiCommandListReady = false;
     bool avboitCommandListReady = false;
     bool asyncEffectsTimingBeginCommandListReady = !recordsAsyncEffectsTiming;
     if(recordsAsyncEffectsTiming){
@@ -2071,54 +2107,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && causticsCommandList->hasCommandBuffer()
         ;
     });
-    const Core::Graphics::JobHandle surfelGiRecordingJob = m_graphics.scheduleGraphicsJob([
-        this,
-        &deferredTargets,
-        surfelGiCommandList,
-        &surfelGiCommandListReady,
-        asyncSurfelGiSchedule,
-        &frameExecutionTimingTickets
-    ](){
-        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
-            frameExecutionTimingTickets,
-            ECSRenderDetail::FrameExecutionWork::SurfelGi
-        );
-        surfelGiCommandList->open(
-            asyncSurfelGiSchedule
-                ? &m_surfelGiComputeInputStateHandoff
-                : &m_postGbufferNormalizedStateHandoff
-        );
-        if(!surfelGiCommandList->hasCommandBuffer())
-            return;
-
-        Optional<Core::GpuTimingMeasure> asyncSurfelGiTiming;
-        if(asyncSurfelGiSchedule){
-            asyncSurfelGiTiming.emplace(
-                m_graphics.gpuTiming(),
-                RendererGpuTimingScope::s_AsyncSurfelGi,
-                m_graphics.getDevice(),
-                *surfelGiCommandList
-            );
-        }
-
-        if(asyncSurfelGiSchedule)
-            m_raytracingSystem.clearSurfelIrradiance(*surfelGiCommandList, deferredTargets);
-
-        // Surfel field updates remain in one ordered packet.
-        if(!m_raytracingSystem.renderSurfelGi(*surfelGiCommandList, deferredTargets))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel GI render pass failed"));
-
-        if(asyncSurfelGiTiming){
-            asyncSurfelGiTiming->finishTiming(*surfelGiCommandList);
-            asyncSurfelGiTiming.reset();
-        }
-
-        surfelGiCommandList->close(&m_surfelGiStateHandoff);
-        surfelGiCommandListReady =
-            m_surfelGiStateHandoff.valid()
-            && surfelGiCommandList->hasCommandBuffer()
-        ;
-    });
     const Core::Graphics::JobHandle avboitPreRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
         &deferredTargets,
@@ -2184,15 +2172,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(
         !shadowVisibilityRecordingJob.valid()
         || !causticsRecordingJob.valid()
-        || !surfelGiRecordingJob.valid()
         || !avboitPreRecordingJob.valid()
     ){
         if(shadowVisibilityRecordingJob.valid())
             m_graphics.waitJob(shadowVisibilityRecordingJob);
         if(causticsRecordingJob.valid())
             m_graphics.waitJob(causticsRecordingJob);
-        if(surfelGiRecordingJob.valid())
-            m_graphics.waitJob(surfelGiRecordingJob);
         if(avboitPreRecordingJob.valid())
             m_graphics.waitJob(avboitPreRecordingJob);
         discardRenderPackets();
@@ -2201,9 +2186,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     m_graphics.waitJob(shadowVisibilityRecordingJob);
     m_graphics.waitJob(causticsRecordingJob);
-    m_graphics.waitJob(surfelGiRecordingJob);
     m_graphics.waitJob(avboitPreRecordingJob);
-    if(!shadowVisibilityCommandListReady || !causticsCommandListReady || !surfelGiCommandListReady || !avboitCommandListReady){
+    if(!shadowVisibilityCommandListReady || !causticsCommandListReady || !avboitCommandListReady){
         discardRenderPackets();
         return;
     }
@@ -2761,7 +2745,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         { ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming, asyncEffectsTimingBeginCommandList },
         { ECSRenderDetail::FrameExecutionWork::RayEffects, shadowVisibilityCommandList },
         { ECSRenderDetail::FrameExecutionWork::Caustics, causticsCommandList },
-        { ECSRenderDetail::FrameExecutionWork::SurfelGi, surfelGiCommandList },
         { ECSRenderDetail::FrameExecutionWork::AvboitRaster, avboitCommandList },
         { ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming, asyncEffectsTimingEndCommandList },
         { ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp, asyncAvboitDepthWarpCommandList },
@@ -2966,9 +2949,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         return true;
     };
+    Core::QueueSubmissionToken surfelGiSubmissionToken;
     Core::QueueSubmissionToken deferredCompositeSubmissionToken;
     const auto recoverPendingFrameSubmission = [&]() -> bool {
         const Core::QueueSubmissionToken* asyncWaitToken = frameExecutionSubmissionState.asyncRecoveryWaitToken();
+        if(
+            surfelGiSubmissionToken.valid()
+            && surfelGiSubmissionToken.queue == Core::CommandQueue::Compute
+        )
+            asyncWaitToken = &surfelGiSubmissionToken;
         if(
             deferredCompositeSubmissionToken.valid()
             && deferredCompositeSubmissionToken.queue == Core::CommandQueue::Compute
@@ -3018,11 +3007,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 ECSRenderDetail::FrameExecutionSubmissionBatch::AsyncRayEffects
             );
             if(!shadowSubmissionToken.valid()){
+                m_surfelGiSubmissionTransaction.discardUnaccepted(
+                    m_surfelGiTaskGraph,
+                    m_surfelGiCompiledGraph
+                );
                 discardTimingTickets();
                 restoreShadowCpuState();
                 restoreEffectsCpuState();
                 m_raytracingSystem.discardSoftShadowTemporalHistory();
-                m_raytracingSystem.discardSurfelResourceInitialization();
                 resetRejectedAsyncRayEffectsStateHandoffs();
                 if(!recoverPendingFrameSubmission())
                     failFrameRenderRecovery();
@@ -3030,104 +3022,163 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             }
 
             m_raytracingSystem.confirmShadowVisibilitySubmission(shadowSubmissionToken);
-            // Surfel work is recorded in this packet on both routes.  Confirm its readback against the submission
-            // that actually contains it; the Graphics-only route must not defer that ownership to a later packet.
-            m_raytracingSystem.confirmSurfelGiSubmission(shadowSubmissionToken);
-            m_raytracingSystem.finalizeSurfelResourceInitialization();
-            if(!dedicatedAsyncCompute){
-                m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-                break;
-            }
-
-            // Retain only private compute scratch; shared inputs come from next frame's prefix.
-            // Retain accepted producer state for recovery after later rejection.
-            const bool producerReturnStatesReady =
-                m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
-                    m_shadowVisibilityStateHandoff,
-                    deferredTargets.shadowVisibility.get()
-                )
-                && (!asyncCausticsSchedule || m_causticIrradianceReturnStateHandoff.buildTextureSubset(
-                    m_causticsStateHandoff,
-                    deferredTargets.causticIrradiance.get()
-                ))
-                && (!asyncSurfelGiSchedule || m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
-                    m_surfelGiStateHandoff,
-                    deferredTargets.surfelIrradiance.get()
-                ))
-            ;
-            if(!producerReturnStatesReady){
-                discardTimingTickets();
-                restoreUnacceptedGraphicsEffectsCpuState();
-                m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-                if(!recoverPendingFrameSubmission())
-                    failFrameRenderRecovery();
-                // Missing accepted producer state leaves no safe next layout.
-                failFrameRenderRecovery();
-                return;
-            }
-            Core::Texture* const shadowComputeScratchTextures[] = {
-                deferredTargets.shadowCoarseTransmittance.get(),
-                deferredTargets.shadowSoftHalfA.get(),
-                deferredTargets.shadowSoftHalfB.get(),
-                deferredTargets.shadowSoftGeometry.get(),
-                deferredTargets.shadowSoftGeometryPrev.get(),
-                deferredTargets.shadowHistA.get(),
-                deferredTargets.shadowHistB.get(),
-                deferredTargets.shadowMomentsA.get(),
-                deferredTargets.shadowMomentsB.get(),
-                deferredTargets.transparentSoftHalf.get(),
-                deferredTargets.transparentHistA.get(),
-                deferredTargets.transparentHistB.get(),
-                deferredTargets.transparentMomentsA.get(),
-                deferredTargets.transparentMomentsB.get(),
-            };
-            Core::Buffer* const shadowComputeScratchBuffers[] = {
-                m_rayTracingState.m_swShadowEdgeStatsBuffer.get(),
-                m_rayTracingState.m_swShadowEdgeStatsReadback.get(),
-                m_rayTracingState.m_swShadowEdgeCounterBuffer.get(),
-                m_rayTracingState.m_swShadowEdgeListBuffer.get(),
-                m_rayTracingState.m_swShadowIndirectArgsBuffer.get(),
-            };
-            if(!m_shadowComputePersistentStateHandoff.buildResourceSubset(
-                m_shadowVisibilityStateHandoff,
-                shadowComputeScratchTextures,
-                LengthOf(shadowComputeScratchTextures),
-                shadowComputeScratchBuffers,
-                LengthOf(shadowComputeScratchBuffers)
-            )){
-                discardTimingTickets();
-                restoreUnacceptedGraphicsEffectsCpuState();
-                m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-                recoverPendingFrameSubmission();
-                // Missing compute scratch leaves no safe layout restoration.
-                failFrameRenderRecovery();
-                return;
-            }
-            m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-
-            if(asyncCausticsSchedule){
-                Core::Texture* const causticsComputeScratchTextures[] = {
-                    deferredTargets.causticAccumulator.get(),
-                    deferredTargets.causticHistory.get(),
-                    deferredTargets.causticResolveHalf.get(),
-                    deferredTargets.causticResolveGeometry.get(),
-                };
-                if(!m_causticsComputePersistentStateHandoff.buildResourceSubset(
-                    m_causticsStateHandoff,
-                    causticsComputeScratchTextures,
-                    LengthOf(causticsComputeScratchTextures),
-                    nullptr,
-                    0u
-                )){
+            if(dedicatedAsyncCompute){
+                // Retain only private compute scratch; shared inputs come from next frame's prefix.
+                // Retain accepted producer state for recovery after later rejection.
+                const bool producerReturnStatesReady =
+                    m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
+                        m_shadowVisibilityStateHandoff,
+                        deferredTargets.shadowVisibility.get()
+                    )
+                    && (!asyncCausticsSchedule || m_causticIrradianceReturnStateHandoff.buildTextureSubset(
+                        m_causticsStateHandoff,
+                        deferredTargets.causticIrradiance.get()
+                    ))
+                ;
+                if(!producerReturnStatesReady){
+                    m_surfelGiSubmissionTransaction.discardUnaccepted(
+                        m_surfelGiTaskGraph,
+                        m_surfelGiCompiledGraph
+                    );
                     discardTimingTickets();
-                    restoreGraphicsEffectsCpuState();
-                    recoverPendingFrameSubmission();
+                    restoreUnacceptedGraphicsEffectsCpuState();
+                    restoreSurfelGiCpuState();
+                    m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
+                    if(!recoverPendingFrameSubmission())
+                        failFrameRenderRecovery();
+                    // Missing accepted producer state leaves no safe next layout.
                     failFrameRenderRecovery();
                     return;
                 }
+                Core::Texture* const shadowComputeScratchTextures[] = {
+                    deferredTargets.shadowCoarseTransmittance.get(),
+                    deferredTargets.shadowSoftHalfA.get(),
+                    deferredTargets.shadowSoftHalfB.get(),
+                    deferredTargets.shadowSoftGeometry.get(),
+                    deferredTargets.shadowSoftGeometryPrev.get(),
+                    deferredTargets.shadowHistA.get(),
+                    deferredTargets.shadowHistB.get(),
+                    deferredTargets.shadowMomentsA.get(),
+                    deferredTargets.shadowMomentsB.get(),
+                    deferredTargets.transparentSoftHalf.get(),
+                    deferredTargets.transparentHistA.get(),
+                    deferredTargets.transparentHistB.get(),
+                    deferredTargets.transparentMomentsA.get(),
+                    deferredTargets.transparentMomentsB.get(),
+                };
+                Core::Buffer* const shadowComputeScratchBuffers[] = {
+                    m_rayTracingState.m_swShadowEdgeStatsBuffer.get(),
+                    m_rayTracingState.m_swShadowEdgeStatsReadback.get(),
+                    m_rayTracingState.m_swShadowEdgeCounterBuffer.get(),
+                    m_rayTracingState.m_swShadowEdgeListBuffer.get(),
+                    m_rayTracingState.m_swShadowIndirectArgsBuffer.get(),
+                };
+                if(!m_shadowComputePersistentStateHandoff.buildResourceSubset(
+                    m_shadowVisibilityStateHandoff,
+                    shadowComputeScratchTextures,
+                    LengthOf(shadowComputeScratchTextures),
+                    shadowComputeScratchBuffers,
+                    LengthOf(shadowComputeScratchBuffers)
+                )){
+                    m_surfelGiSubmissionTransaction.discardUnaccepted(
+                        m_surfelGiTaskGraph,
+                        m_surfelGiCompiledGraph
+                    );
+                    discardTimingTickets();
+                    restoreUnacceptedGraphicsEffectsCpuState();
+                    restoreSurfelGiCpuState();
+                    m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
+                    recoverPendingFrameSubmission();
+                    // Missing compute scratch leaves no safe layout restoration.
+                    failFrameRenderRecovery();
+                    return;
+                }
+
+                if(asyncCausticsSchedule){
+                    Core::Texture* const causticsComputeScratchTextures[] = {
+                        deferredTargets.causticAccumulator.get(),
+                        deferredTargets.causticHistory.get(),
+                        deferredTargets.causticResolveHalf.get(),
+                        deferredTargets.causticResolveGeometry.get(),
+                    };
+                    if(!m_causticsComputePersistentStateHandoff.buildResourceSubset(
+                        m_causticsStateHandoff,
+                        causticsComputeScratchTextures,
+                        LengthOf(causticsComputeScratchTextures),
+                        nullptr,
+                        0u
+                    )){
+                        m_surfelGiSubmissionTransaction.discardUnaccepted(
+                            m_surfelGiTaskGraph,
+                            m_surfelGiCompiledGraph
+                        );
+                        discardTimingTickets();
+                        restoreGraphicsEffectsCpuState();
+                        restoreSurfelGiCpuState();
+                        recoverPendingFrameSubmission();
+                        failFrameRenderRecovery();
+                        return;
+                    }
+                }
             }
 
-            if(asyncSurfelGiSchedule){
+            m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
+            Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+            const Core::GpuTaskGraphExternalCompletionToken effectsCompletionToken{
+                .completion = m_surfelGiEffectsCompletion,
+                .token = shadowSubmissionToken,
+            };
+            const Core::GpuTaskGraphSubmitter surfelGiSubmitter(device);
+            const bool surfelGiAccepted =
+                m_surfelGiTaskGraphValid
+                && m_surfelGiTask.valid()
+                && m_surfelGiEffectsCompletion.valid()
+                && surfelGiSubmitter.submitPacket(
+                    m_surfelGiTaskGraph,
+                    m_surfelGiCompiledGraph,
+                    m_surfelGiRecordedGraph,
+                    surfelGiPacket,
+                    &effectsCompletionToken,
+                    1u,
+                    m_surfelGiSubmissionTransaction,
+                    scratchArena,
+                    &surfelGiTimingTicket
+                )
+            ;
+            surfelGiSubmissionToken = surfelGiAccepted
+                ? m_surfelGiSubmissionTransaction.packetToken(surfelGiPacket)
+                : Core::QueueSubmissionToken{}
+            ;
+            if(!surfelGiSubmissionToken.valid()){
+                m_surfelGiSubmissionTransaction.discardUnaccepted(
+                    m_surfelGiTaskGraph,
+                    m_surfelGiCompiledGraph
+                );
+                discardTimingTickets();
+                restoreSurfelGiCpuState();
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned surfel GI submission was rejected"));
+                if(!recoverPendingFrameSubmission())
+                    failFrameRenderRecovery();
+                return;
+            }
+            frameExecutionSubmissionState.setExternalWaitToken(
+                ECSRenderDetail::FrameExecutionExternalWait::SurfelGi,
+                surfelGiSubmissionToken
+            );
+
+            if(!m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
+                m_surfelGiStateHandoff,
+                deferredTargets.surfelIrradiance.get()
+            )){
+                discardTimingTickets();
+                if(!recoverPendingFrameSubmission())
+                    failFrameRenderRecovery();
+                // An accepted graph producer without a retained state cannot safely feed a later frame.
+                failFrameRenderRecovery();
+                return;
+            }
+
+            if(surfelGiRunsOnCompute){
                 Core::Texture* const surfelGiComputeScratchTextures[] = {
                     deferredTargets.surfelIrradianceHalf.get(),
                 };
@@ -3149,8 +3200,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     LengthOf(surfelGiComputeScratchBuffers)
                 )){
                     discardTimingTickets();
-                    restoreUnacceptedGraphicsEffectsCpuState();
-                    recoverPendingFrameSubmission();
+                    if(!recoverPendingFrameSubmission())
+                        failFrameRenderRecovery();
                     failFrameRenderRecovery();
                     return;
                 }
@@ -3207,10 +3258,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     m_deferredLightingStateHandoff,
                     deferredTargets.causticIrradiance.get()
                 )
-                && (!asyncSurfelGiSchedule || m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
+                && m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
                     m_deferredLightingStateHandoff,
                     deferredTargets.surfelIrradiance.get()
-                ))
+                )
             );
             if(!lightingReturnStatesReady){
                 discardTimingTickets();

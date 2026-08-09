@@ -199,6 +199,19 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
         ))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred-composite graph telemetry export failed"));
     }
+    if(m_surfelGiTaskGraphValid){
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+        const Core::GpuTaskGraphTelemetryOptions surfelGiTelemetryOptions{
+            .queueAssignments = &m_surfelGiTaskGraphQueueAssignments,
+        };
+        if(!m_surfelGiTaskGraph.appendFrameGraphTelemetry(
+            builder,
+            m_surfelGiTaskGraphAnalysis,
+            scratchArena,
+            surfelGiTelemetryOptions
+        ))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel-GI graph telemetry export failed"));
+    }
 
     return true;
 }

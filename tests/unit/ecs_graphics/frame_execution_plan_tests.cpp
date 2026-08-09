@@ -124,7 +124,10 @@ TEST(EcsGraphics, FrameExecutionPlanRoutesNoDedicatedComputeWorkThroughGraphicsP
     EXPECT_EQ(plan.packetForWork(FrameExecutionWork::GraphicsPrefix), FrameExecutionPacket::GraphicsPrefix);
     EXPECT_EQ(plan.packetForWork(FrameExecutionWork::RayEffects), FrameExecutionPacket::AsyncRayEffects);
     EXPECT_EQ(plan.packetForWork(FrameExecutionWork::Caustics), FrameExecutionPacket::GraphicsEffects);
-    EXPECT_EQ(plan.packetForWork(FrameExecutionWork::SurfelGi), FrameExecutionPacket::AsyncRayEffects);
+    EXPECT_TRUE(plan.packetWaitsForExternalToken(
+        FrameExecutionPacket::DeferredLighting,
+        FrameExecutionExternalWait::SurfelGi
+    ));
     for(usize packetIndex = 0u; packetIndex < FrameExecutionPacket::kCount; ++packetIndex){
         const FrameExecutionPacket::Enum packet = static_cast<FrameExecutionPacket::Enum>(packetIndex);
         if(plan.packet(packet).enabled)
@@ -188,7 +191,6 @@ TEST(EcsGraphics, FrameExecutionPlanExposesLegacyPhysicalQueueParityOracle){
     });
     EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::RayEffects), CommandQueue::Compute);
     EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::Caustics), CommandQueue::Compute);
-    EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::SurfelGi), CommandQueue::Compute);
     EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::DeferredLighting), CommandQueue::Compute);
     EXPECT_TRUE(dedicatedPlan.workMatchesExpectedQueue(FrameExecutionWork::DeferredLighting, CommandQueue::Compute));
     EXPECT_FALSE(dedicatedPlan.workMatchesExpectedQueue(FrameExecutionWork::DeferredLighting, CommandQueue::Graphics));
@@ -318,6 +320,11 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
         opaquePlan.packet(FrameExecutionPacket::DeferredLighting).waitPackets[1],
         FrameExecutionPacket::AsyncRayEffects
     );
+    EXPECT_EQ(opaquePlan.packet(FrameExecutionPacket::DeferredLighting).externalWaitCount, 1u);
+    EXPECT_EQ(
+        opaquePlan.packet(FrameExecutionPacket::DeferredLighting).externalWaits[0],
+        FrameExecutionExternalWait::SurfelGi
+    );
     EXPECT_EQ(opaquePlan.packet(FrameExecutionPacket::GraphicsPresent).externalWaitCount, 1u);
     EXPECT_EQ(
         opaquePlan.packet(FrameExecutionPacket::GraphicsPresent).externalWaits[0],
@@ -356,6 +363,10 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
         FrameExecutionWork::DeferredLighting,
         FrameExecutionExternalWait::LaggedLightingHistory
     ));
+    EXPECT_TRUE(bootstrapPlan.workWaitsForExternalToken(
+        FrameExecutionWork::DeferredLighting,
+        FrameExecutionExternalWait::SurfelGi
+    ));
 
     const FrameExecutionPlan laggedPlan(FrameExecutionPlanInput{
         true,
@@ -389,10 +400,14 @@ TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologi
         laggedPlan.packet(FrameExecutionPacket::GraphicsPresent).waitPackets[0],
         FrameExecutionPacket::AsyncRayEffects
     );
-    EXPECT_EQ(laggedPlan.packet(FrameExecutionPacket::GraphicsPresent).externalWaitCount, 1u);
+    EXPECT_EQ(laggedPlan.packet(FrameExecutionPacket::GraphicsPresent).externalWaitCount, 2u);
     EXPECT_EQ(
         laggedPlan.packet(FrameExecutionPacket::GraphicsPresent).externalWaits[0],
         FrameExecutionExternalWait::DeferredComposite
+    );
+    EXPECT_EQ(
+        laggedPlan.packet(FrameExecutionPacket::GraphicsPresent).externalWaits[1],
+        FrameExecutionExternalWait::SurfelGi
     );
 }
 
@@ -529,10 +544,6 @@ TEST(EcsGraphics, FrameExecutionPlanAssignsRecordedWorkAndTimingToPlanPackets){
         FrameExecutionPacket::AsyncRayEffects
     );
     EXPECT_EQ(
-        splitPlan.packetForWork(FrameExecutionWork::SurfelGi),
-        FrameExecutionPacket::AsyncRayEffects
-    );
-    EXPECT_EQ(
         splitPlan.packetForWork(FrameExecutionWork::AvboitRaster),
         FrameExecutionPacket::GraphicsAvboitPre
     );
@@ -599,10 +610,6 @@ TEST(EcsGraphics, FrameExecutionPlanKeepsHardwareCausticsInTheGraphicsOverlapPac
         FrameExecutionPacket::AsyncRayEffects
     );
     EXPECT_EQ(
-        plan.packetForWork(FrameExecutionWork::SurfelGi),
-        FrameExecutionPacket::AsyncRayEffects
-    );
-    EXPECT_EQ(
         plan.packetForWork(FrameExecutionWork::Caustics),
         FrameExecutionPacket::GraphicsAvboitPre
     );
@@ -623,7 +630,6 @@ TEST(EcsGraphics, FrameExecutionPlanKeepsHardwareCausticsInTheGraphicsOverlapPac
     NWB::Core::CommandList* const timingBegin = TestCommandList(202u);
     NWB::Core::CommandList* const shadow = TestCommandList(203u);
     NWB::Core::CommandList* const caustics = TestCommandList(204u);
-    NWB::Core::CommandList* const surfelGi = TestCommandList(205u);
     NWB::Core::CommandList* const avboitRaster = TestCommandList(206u);
     NWB::Core::CommandList* const timingEnd = TestCommandList(207u);
     const FrameExecutionWorkCommandListBinding bindings[] = {
@@ -631,16 +637,14 @@ TEST(EcsGraphics, FrameExecutionPlanKeepsHardwareCausticsInTheGraphicsOverlapPac
         { FrameExecutionWork::AsyncEffectsTiming, timingBegin },
         { FrameExecutionWork::RayEffects, shadow },
         { FrameExecutionWork::Caustics, caustics },
-        { FrameExecutionWork::SurfelGi, surfelGi },
         { FrameExecutionWork::AvboitRaster, avboitRaster },
         { FrameExecutionWork::AsyncEffectsTiming, timingEnd },
     };
     ASSERT_TRUE(commandLists.appendPlannedWorkCommandLists(bindings, LengthOf(bindings)));
 
     const auto rayEffectsLists = commandLists.commandLists(FrameExecutionPacket::AsyncRayEffects);
-    ASSERT_EQ(rayEffectsLists.commandListCount, 2u);
+    ASSERT_EQ(rayEffectsLists.commandListCount, 1u);
     EXPECT_EQ(rayEffectsLists.commandLists[0], shadow);
-    EXPECT_EQ(rayEffectsLists.commandLists[1], surfelGi);
     const auto graphicsSupportLists = commandLists.commandLists(FrameExecutionPacket::GraphicsAvboitPre);
     ASSERT_EQ(graphicsSupportLists.commandListCount, 4u);
     EXPECT_EQ(graphicsSupportLists.commandLists[0], timingBegin);
@@ -718,10 +722,6 @@ TEST(EcsGraphics, FrameExecutionPlanSelectsWorkCommandListFromResolvedLane){
         graphicsCommandList
     );
     EXPECT_EQ(
-        graphicsPlan.commandListForWork(FrameExecutionWork::SurfelGi, commandLists),
-        graphicsCommandList
-    );
-    EXPECT_EQ(
         graphicsPlan.commandListForWork(FrameExecutionWork::DeferredLighting, commandLists),
         graphicsCommandList
     );
@@ -739,14 +739,9 @@ TEST(EcsGraphics, FrameExecutionPlanSelectsWorkCommandListFromResolvedLane){
     });
     EXPECT_EQ(splitPlan.laneForWork(FrameExecutionWork::RayEffects), RenderLane::AsyncCompute);
     EXPECT_TRUE(splitPlan.workRunsOnLane(FrameExecutionWork::Caustics, RenderLane::AsyncCompute));
-    EXPECT_TRUE(splitPlan.workRunsOnLane(FrameExecutionWork::SurfelGi, RenderLane::AsyncCompute));
     EXPECT_TRUE(splitPlan.workRunsOnLane(FrameExecutionWork::DeferredLighting, RenderLane::AsyncCompute));
     EXPECT_EQ(
         splitPlan.commandListForWork(FrameExecutionWork::Caustics, commandLists),
-        asyncComputeCommandList
-    );
-    EXPECT_EQ(
-        splitPlan.commandListForWork(FrameExecutionWork::SurfelGi, commandLists),
         asyncComputeCommandList
     );
     EXPECT_EQ(
@@ -762,14 +757,9 @@ TEST(EcsGraphics, FrameExecutionPlanSelectsWorkCommandListFromResolvedLane){
         true,
     });
     EXPECT_TRUE(laggedPlan.workRunsOnLane(FrameExecutionWork::Caustics, RenderLane::AsyncCompute));
-    EXPECT_TRUE(laggedPlan.workRunsOnLane(FrameExecutionWork::SurfelGi, RenderLane::AsyncCompute));
     EXPECT_EQ(laggedPlan.laneForWork(FrameExecutionWork::DeferredLighting), RenderLane::Graphics);
     EXPECT_EQ(
         laggedPlan.commandListForWork(FrameExecutionWork::Caustics, commandLists),
-        asyncComputeCommandList
-    );
-    EXPECT_EQ(
-        laggedPlan.commandListForWork(FrameExecutionWork::SurfelGi, commandLists),
         asyncComputeCommandList
     );
     EXPECT_EQ(
@@ -813,7 +803,6 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsRoutesGraphicsWorkAndRejectsAb
         { FrameExecutionWork::GraphicsPrefix, recordedLists[4u] },
         { FrameExecutionWork::RayEffects, recordedLists[5u] },
         { FrameExecutionWork::Caustics, recordedLists[6u] },
-        { FrameExecutionWork::SurfelGi, recordedLists[7u] },
         // This schedule does not create the dedicated timing bracket, so a complete binding table can retain it.
         { FrameExecutionWork::AsyncEffectsTiming, TestCommandList(13u) },
         { FrameExecutionWork::AvboitRaster, recordedLists[8u] },
@@ -828,9 +817,8 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsRoutesGraphicsWorkAndRejectsAb
         EXPECT_EQ(prefixLists.commandLists[commandListIndex], recordedLists[commandListIndex]);
 
     const auto rayEffectsLists = commandLists.commandLists(FrameExecutionPacket::AsyncRayEffects);
-    ASSERT_EQ(rayEffectsLists.commandListCount, 2u);
+    ASSERT_EQ(rayEffectsLists.commandListCount, 1u);
     EXPECT_EQ(rayEffectsLists.commandLists[0], recordedLists[5u]);
-    EXPECT_EQ(rayEffectsLists.commandLists[1], recordedLists[7u]);
 
     const auto graphicsEffectsLists = commandLists.commandLists(FrameExecutionPacket::GraphicsEffects);
     ASSERT_EQ(graphicsEffectsLists.commandListCount, 2u);
@@ -854,7 +842,6 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsRouteSplitWorkAndKeepTimingBra
     NWB::Core::CommandList* const prefix = TestCommandList(21u);
     NWB::Core::CommandList* const shadow = TestCommandList(22u);
     NWB::Core::CommandList* const caustics = TestCommandList(23u);
-    NWB::Core::CommandList* const surfelGi = TestCommandList(24u);
     NWB::Core::CommandList* const timingBegin = TestCommandList(25u);
     NWB::Core::CommandList* const avboitRaster = TestCommandList(26u);
     NWB::Core::CommandList* const timingEnd = TestCommandList(27u);
@@ -870,7 +857,6 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsRouteSplitWorkAndKeepTimingBra
         { FrameExecutionWork::AsyncEffectsTiming, timingBegin },
         { FrameExecutionWork::RayEffects, shadow },
         { FrameExecutionWork::Caustics, caustics },
-        { FrameExecutionWork::SurfelGi, surfelGi },
         { FrameExecutionWork::AvboitRaster, avboitRaster },
         { FrameExecutionWork::AsyncEffectsTiming, timingEnd },
         { FrameExecutionWork::AvboitDepthWarp, depthWarp },
@@ -886,10 +872,9 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsRouteSplitWorkAndKeepTimingBra
     ASSERT_EQ(prefixLists.commandListCount, 1u);
     EXPECT_EQ(prefixLists.commandLists[0], prefix);
     const auto rayEffectsLists = commandLists.commandLists(FrameExecutionPacket::AsyncRayEffects);
-    ASSERT_EQ(rayEffectsLists.commandListCount, 3u);
+    ASSERT_EQ(rayEffectsLists.commandListCount, 2u);
     EXPECT_EQ(rayEffectsLists.commandLists[0], shadow);
     EXPECT_EQ(rayEffectsLists.commandLists[1], caustics);
-    EXPECT_EQ(rayEffectsLists.commandLists[2], surfelGi);
     const auto avboitPreLists = commandLists.commandLists(FrameExecutionPacket::GraphicsAvboitPre);
     ASSERT_EQ(avboitPreLists.commandListCount, 3u);
     EXPECT_EQ(avboitPreLists.commandLists[0], timingBegin);
@@ -943,6 +928,27 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateKeepsNoDedicatedPacketsOnGrap
     FrameExecutionPlanSubmissionState submissions(plan);
     NWB::Core::QueueSubmissionToken waitTokens[FrameExecutionPlan::s_MaxSubmissionWaits] = {};
     NWB::Core::QueueSubmissionDesc submitDesc;
+
+    FrameExecutionPlanSubmissionState missingSurfelGiSubmission(plan);
+    missingSurfelGiSubmission.acceptSubmission(
+        FrameExecutionPacket::GraphicsPrefix,
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 1u }
+    );
+    missingSurfelGiSubmission.acceptSubmission(
+        FrameExecutionPacket::AsyncRayEffects,
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 2u }
+    );
+    missingSurfelGiSubmission.acceptSubmission(
+        FrameExecutionPacket::GraphicsEffects,
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 3u }
+    );
+    EXPECT_FALSE(missingSurfelGiSubmission.prepareSubmission(
+        FrameExecutionPacket::DeferredLighting,
+        submitDesc,
+        waitTokens,
+        LengthOf(waitTokens)
+    ));
+
     ASSERT_TRUE(submissions.prepareSubmission(
         FrameExecutionPacket::GraphicsPrefix,
         submitDesc,
@@ -975,15 +981,19 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateKeepsNoDedicatedPacketsOnGrap
 
     const NWB::Core::QueueSubmissionToken graphicsEffectsToken{ CommandQueue::Graphics, 33u };
     submissions.acceptSubmission(FrameExecutionPacket::GraphicsEffects, graphicsEffectsToken);
+    // Surfel GI is graph-owned and publishes its accepted completion after ray effects.
+    const NWB::Core::QueueSubmissionToken surfelGiToken{ CommandQueue::Graphics, 40u };
+    submissions.setExternalWaitToken(FrameExecutionExternalWait::SurfelGi, surfelGiToken);
     ASSERT_TRUE(submissions.prepareSubmission(
         FrameExecutionPacket::DeferredLighting,
         submitDesc,
         waitTokens,
         LengthOf(waitTokens)
     ));
-    ASSERT_EQ(submitDesc.waitTokenCount, 2u);
+    ASSERT_EQ(submitDesc.waitTokenCount, 3u);
     ExpectSubmissionToken(waitTokens[0], graphicsEffectsToken);
     ExpectSubmissionToken(waitTokens[1], rayEffectsToken);
+    ExpectSubmissionToken(waitTokens[2], surfelGiToken);
 
     const NWB::Core::QueueSubmissionToken lightingToken{ CommandQueue::Graphics, 44u };
     submissions.acceptSubmission(FrameExecutionPacket::DeferredLighting, lightingToken);
@@ -1133,15 +1143,18 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateResolvesAcceptedDependenciesA
     submissions.acceptSubmission(FrameExecutionPacket::DeferredLighting, lightingToken);
     const NWB::Core::QueueSubmissionToken compositeToken{ CommandQueue::Graphics, 55u };
     submissions.setExternalWaitToken(FrameExecutionExternalWait::DeferredComposite, compositeToken);
+    const NWB::Core::QueueSubmissionToken surfelGiToken{ CommandQueue::Compute, 56u };
+    submissions.setExternalWaitToken(FrameExecutionExternalWait::SurfelGi, surfelGiToken);
     EXPECT_TRUE(submissions.prepareSubmission(
         FrameExecutionPacket::GraphicsPresent,
         submitDesc,
         waitTokens,
         LengthOf(waitTokens)
     ));
-    EXPECT_EQ(submitDesc.waitTokenCount, 2u);
+    EXPECT_EQ(submitDesc.waitTokenCount, 3u);
     EXPECT_EQ(waitTokens[0].value, 22u);
     EXPECT_EQ(waitTokens[1].value, 55u);
+    EXPECT_EQ(waitTokens[2].value, 56u);
 
     const NWB::Core::QueueSubmissionToken presentToken{ CommandQueue::Graphics, 66u };
     submissions.acceptSubmission(FrameExecutionPacket::GraphicsPresent, presentToken);
@@ -1196,6 +1209,11 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateUsesPublishedHistoryTokenAsNe
     ExpectSubmissionToken(waitTokens[0], bootstrapPrefixToken);
     const NWB::Core::QueueSubmissionToken bootstrapEffectsToken{ CommandQueue::Graphics, 33u };
     bootstrapSubmissions.acceptSubmission(FrameExecutionPacket::GraphicsEffects, bootstrapEffectsToken);
+    const NWB::Core::QueueSubmissionToken bootstrapSurfelGiToken{ CommandQueue::Compute, 40u };
+    bootstrapSubmissions.setExternalWaitToken(
+        FrameExecutionExternalWait::SurfelGi,
+        bootstrapSurfelGiToken
+    );
 
     ASSERT_TRUE(bootstrapSubmissions.prepareSubmission(
         FrameExecutionPacket::DeferredLighting,
@@ -1203,9 +1221,10 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateUsesPublishedHistoryTokenAsNe
         waitTokens,
         LengthOf(waitTokens)
     ));
-    ASSERT_EQ(submitDesc.waitTokenCount, 2u);
+    ASSERT_EQ(submitDesc.waitTokenCount, 3u);
     ExpectSubmissionToken(waitTokens[0], bootstrapEffectsToken);
     ExpectSubmissionToken(waitTokens[1], bootstrapRayEffectsToken);
+    ExpectSubmissionToken(waitTokens[2], bootstrapSurfelGiToken);
     const NWB::Core::QueueSubmissionToken bootstrapLightingToken{ CommandQueue::Compute, 44u };
     bootstrapSubmissions.acceptSubmission(FrameExecutionPacket::DeferredLighting, bootstrapLightingToken);
     const NWB::Core::QueueSubmissionToken bootstrapCompositeToken{ CommandQueue::Compute, 55u };
@@ -1291,6 +1310,11 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateUsesPublishedHistoryTokenAsNe
         FrameExecutionExternalWait::DeferredComposite,
         activeCompositeToken
     );
+    const NWB::Core::QueueSubmissionToken activeSurfelGiToken{ CommandQueue::Compute, 106u };
+    activeSubmissions.setExternalWaitToken(
+        FrameExecutionExternalWait::SurfelGi,
+        activeSurfelGiToken
+    );
 
     ASSERT_TRUE(activeSubmissions.prepareSubmission(
         FrameExecutionPacket::GraphicsPresent,
@@ -1298,10 +1322,11 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateUsesPublishedHistoryTokenAsNe
         waitTokens,
         LengthOf(waitTokens)
     ));
-    ASSERT_EQ(submitDesc.waitTokenCount, 2u);
+    ASSERT_EQ(submitDesc.waitTokenCount, 3u);
     ExpectSubmissionToken(waitTokens[0], activeRayEffectsToken);
     ExpectSubmissionToken(waitTokens[1], activeCompositeToken);
-    const NWB::Core::QueueSubmissionToken activePresentToken{ CommandQueue::Graphics, 106u };
+    ExpectSubmissionToken(waitTokens[2], activeSurfelGiToken);
+    const NWB::Core::QueueSubmissionToken activePresentToken{ CommandQueue::Graphics, 107u };
     activeSubmissions.acceptSubmission(FrameExecutionPacket::GraphicsPresent, activePresentToken);
 }
 

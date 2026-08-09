@@ -184,8 +184,6 @@ struct LaggedLightingHistoryCopyTask{
             "Caustics",
             hardwareCaustics ? GraphicsQueueRequest() : ComputeQueueRequest(),
         };
-    case Work::SurfelGi:
-        return WorkMetadata{ Name("render.task_graph.surfel_gi"), "Surfel GI", ComputeQueueRequest() };
     case Work::AvboitRaster:
         return WorkMetadata{ Name("render.task_graph.avboit_raster"), "AVBOIT Raster", GraphicsQueueRequest() };
     case Work::AsyncEffectsTiming:
@@ -546,12 +544,6 @@ void RendererSystem::buildGpuTaskGraph(
         ReadUse(depth, Core::ResourceStates::DepthRead),
         WriteUse(causticIrradiance, Core::ResourceStates::UnorderedAccess),
     };
-    const Core::GpuTaskResourceUse surfelGiUses[] = {
-        ReadUse(worldPosition),
-        ReadUse(normal),
-        ReadUse(depth, Core::ResourceStates::DepthRead),
-        WriteUse(surfelIrradiance, Core::ResourceStates::UnorderedAccess),
-    };
     const Core::GpuTaskResourceUse avboitRasterUses[] = {
         ReadUse(depth, Core::ResourceStates::DepthRead),
         WriteUse(avboitLowRaster, Core::ResourceStates::RenderTarget),
@@ -603,7 +595,6 @@ void RendererSystem::buildGpuTaskGraph(
         addWorkTask(Work::GraphicsPrefix, graphicsPrefixUses, LengthOf(graphicsPrefixUses))
         && addWorkTask(Work::RayEffects, rayEffectsUses, LengthOf(rayEffectsUses))
         && addWorkTask(Work::Caustics, causticsUses, LengthOf(causticsUses))
-        && addWorkTask(Work::SurfelGi, surfelGiUses, LengthOf(surfelGiUses))
         && addWorkTask(Work::AvboitRaster, avboitRasterUses, LengthOf(avboitRasterUses))
         && addWorkTask(Work::AsyncEffectsTiming, nullptr, 0u)
         && addWorkTask(Work::AvboitDepthWarp, avboitDepthWarpUses, LengthOf(avboitDepthWarpUses))
@@ -963,6 +954,270 @@ void RendererSystem::buildLaggedLightingHistoryTaskGraph(
     m_laggedLightingHistoryRecordedGraph.reset(m_laggedLightingHistoryCompiledGraph);
     m_laggedLightingHistorySubmissionTransaction.reset(m_laggedLightingHistoryCompiledGraph);
     m_laggedLightingHistoryTaskGraphValid = true;
+}
+
+
+void RendererSystem::buildSurfelGiTaskGraph(
+    const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+    DeferredFrameTargets& deferredTargets,
+    Core::GpuTimingSubmissionTicket& timingTicket
+){
+    using namespace __hidden_renderer_task_graph;
+
+    m_surfelGiTaskGraphValid = false;
+    m_surfelGiTask = {};
+    m_surfelGiEffectsCompletion = {};
+    m_surfelGiTaskGraph.reset();
+    m_surfelGiTaskGraphAnalysis.reset();
+    m_surfelGiTaskGraphQueueAssignments.reset();
+    m_surfelGiCompiledGraph.reset();
+    m_surfelGiRecordedGraph.reset(m_surfelGiCompiledGraph);
+    m_surfelGiSubmissionTransaction.reset(m_surfelGiCompiledGraph);
+
+    if(!deferredTargets.valid() || !deferredTargets.bindless.valid())
+        return;
+
+    const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
+        return m_surfelGiTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
+    };
+    const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
+        return m_surfelGiTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
+    };
+    const Core::GpuGraphResourceId worldPosition = importTexture(
+        deferredTargets.worldPosition,
+        Name("render.surfel_gi.world_position"),
+        "G-Buffer World Position"
+    );
+    const Core::GpuGraphResourceId normal = importTexture(
+        deferredTargets.normal,
+        Name("render.surfel_gi.normal"),
+        "G-Buffer Normal"
+    );
+    const Core::GpuGraphResourceId surfelIrradianceHalf = importTexture(
+        deferredTargets.surfelIrradianceHalf,
+        Name("render.surfel_gi.irradiance_half"),
+        "Surfel Irradiance Half"
+    );
+    const Core::GpuGraphResourceId surfelIrradiance = importTexture(
+        deferredTargets.surfelIrradiance,
+        Name("render.surfel_gi.irradiance"),
+        "Surfel Irradiance"
+    );
+    const Core::GpuGraphResourceId bindlessSlots = importBuffer(
+        deferredTargets.bindless.slotsBuffer,
+        Name("render.surfel_gi.bindless_slots"),
+        "Deferred Bindless Slots"
+    );
+    const Core::GpuGraphResourceId sceneGeometryDomain = m_surfelGiTaskGraph.importHazardDomain(
+        HazardDomainDesc(Name("render.surfel_gi.scene_geometry"), "Scene Acceleration and Geometry")
+    );
+    if(
+        !worldPosition.valid()
+        || !normal.valid()
+        || !surfelIrradianceHalf.valid()
+        || !surfelIrradiance.valid()
+        || !bindlessSlots.valid()
+        || !sceneGeometryDomain.valid()
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import surfel-GI graph resources"));
+        return;
+    }
+
+    Core::GpuExternalCompletionDesc effectsCompletionDesc;
+    effectsCompletionDesc
+        .setIdentity(Name("render.surfel_gi.ray_effects_complete"))
+        .setMarkerLabel("Ray Effects Complete")
+    ;
+    m_surfelGiEffectsCompletion = m_surfelGiTaskGraph.importExternalCompletion(effectsCompletionDesc);
+    if(!m_surfelGiEffectsCompletion.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import ray-effects completion for surfel GI"));
+        return;
+    }
+
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
+    resourceUses.reserve(20u);
+    resourceUses.push_back(ReadUse(worldPosition));
+    resourceUses.push_back(ReadUse(normal));
+    resourceUses.push_back(ReadUse(bindlessSlots, Core::ResourceStates::ConstantBuffer));
+    resourceUses.push_back(WriteUse(surfelIrradianceHalf, Core::ResourceStates::UnorderedAccess));
+    resourceUses.push_back(WriteUse(surfelIrradiance, Core::ResourceStates::UnorderedAccess));
+    resourceUses.push_back(ReadUse(sceneGeometryDomain));
+
+    const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
+        if(!buffer)
+            return true;
+        const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
+        if(!resource.valid())
+            return false;
+        resourceUses.push_back(ReadUse(resource, state));
+        return true;
+    };
+    const auto appendOptionalWriteBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
+        if(!buffer)
+            return true;
+        const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
+        if(!resource.valid())
+            return false;
+        resourceUses.push_back(WriteUse(resource, state));
+        return true;
+    };
+    const bool optionalResourcesImported =
+        appendOptionalReadBuffer(
+            m_deferredState.m_sceneShadingBuffer,
+            Name("render.surfel_gi.scene_shading"),
+            "Scene Shading",
+            Core::ResourceStates::ConstantBuffer
+        )
+        && appendOptionalReadBuffer(
+            m_deferredState.m_lightBuffer,
+            Name("render.surfel_gi.lights"),
+            "Lights",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalReadBuffer(
+            m_rayTracingState.m_surfelConstants,
+            Name("render.surfel_gi.constants"),
+            "Surfel Constants",
+            Core::ResourceStates::ConstantBuffer
+        )
+        && appendOptionalReadBuffer(
+            m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer,
+            Name("render.surfel_gi.material_context_slots"),
+            "Ray Trace Material Context Slots",
+            Core::ResourceStates::ConstantBuffer
+        )
+        && appendOptionalWriteBuffer(
+            m_rayTracingState.m_surfelPoolBuffer,
+            Name("render.surfel_gi.pool"),
+            "Surfel Pool",
+            Core::ResourceStates::UnorderedAccess
+        )
+        && appendOptionalWriteBuffer(
+            m_rayTracingState.m_surfelCellHeadBuffer,
+            Name("render.surfel_gi.cell_heads"),
+            "Surfel Cell Heads",
+            Core::ResourceStates::UnorderedAccess
+        )
+        && appendOptionalWriteBuffer(
+            m_rayTracingState.m_surfelCounterBuffer,
+            Name("render.surfel_gi.counter"),
+            "Surfel Counter",
+            Core::ResourceStates::UnorderedAccess
+        )
+        && appendOptionalWriteBuffer(
+            m_rayTracingState.m_surfelTraceIndirectArgsBuffer,
+            Name("render.surfel_gi.trace_args"),
+            "Surfel Trace Arguments",
+            Core::ResourceStates::UnorderedAccess
+        )
+        && appendOptionalWriteBuffer(
+            m_rayTracingState.m_surfelFreeListBuffer,
+            Name("render.surfel_gi.free_list"),
+            "Surfel Free List",
+            Core::ResourceStates::UnorderedAccess
+        )
+        && appendOptionalWriteBuffer(
+            m_rayTracingState.m_surfelPoolSnapshotBuffer,
+            Name("render.surfel_gi.pool_snapshot"),
+            "Surfel Pool Snapshot",
+            Core::ResourceStates::UnorderedAccess
+        )
+        && appendOptionalWriteBuffer(
+            m_rayTracingState.m_surfelCellHeadSnapshotBuffer,
+            Name("render.surfel_gi.cell_head_snapshot"),
+            "Surfel Cell Head Snapshot",
+            Core::ResourceStates::UnorderedAccess
+        )
+        && appendOptionalWriteBuffer(
+            m_rayTracingState.m_surfelCounterReadback,
+            Name("render.surfel_gi.counter_readback"),
+            "Surfel Counter Readback",
+            Core::ResourceStates::CopyDest
+        )
+    ;
+    if(!optionalResourcesImported){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a surfel-GI dynamic resource domain"));
+        return;
+    }
+
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Large;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Core::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("render.surfel_gi"))
+        .setMarkerLabel("Surfel GI")
+        .setQueue(ComputeQueueRequest())
+        .setScheduling(scheduling)
+        .setExternalDependencies(&m_surfelGiEffectsCompletion, 1u)
+        .setResourceUses(resourceUses.data(), resourceUses.size())
+    ;
+    m_surfelGiTask = m_raytracingSystem.declareSurfelGiTask(
+        m_surfelGiTaskGraph,
+        desc,
+        deferredTargets,
+        timingTicket
+    );
+    if(!m_surfelGiTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare surfel-GI graph task"));
+        return;
+    }
+
+    const auto& device = graphics().getDevice();
+    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
+    const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
+    const bool dedicatedAsyncCompute = input.dedicatedAsyncCompute
+        && computeFamilyIndex != Limit<u32>::s_Max
+        && computeFamilyIndex != graphicsFamilyIndex
+    ;
+    const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
+        static_cast<u8>(Core::GpuQueueCapability::Graphics)
+        | static_cast<u8>(Core::GpuQueueCapability::Compute)
+        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
+    );
+    const Core::GpuQueueCapability::Mask computeQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
+        static_cast<u8>(Core::GpuQueueCapability::Compute)
+        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
+    );
+    const Core::GpuPhysicalQueueInfo queues[] = {
+        Core::GpuPhysicalQueueInfo{
+            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
+            .queueClass = Core::CommandQueue::Graphics,
+            .capabilities = graphicsQueueCapabilities,
+            .familyIndex = graphicsFamilyIndex,
+            .queueIndex = 0u,
+            .dedicated = false,
+        },
+        Core::GpuPhysicalQueueInfo{
+            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphDeviceGeneration },
+            .queueClass = Core::CommandQueue::Compute,
+            .capabilities = computeQueueCapabilities,
+            .familyIndex = computeFamilyIndex,
+            .queueIndex = 0u,
+            .dedicated = true,
+        },
+    };
+    const Core::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = dedicatedAsyncCompute ? LengthOf(queues) : 1u,
+    };
+    const Core::GpuTaskGraphCompiler compiler;
+    if(!compiler.compile(
+        m_surfelGiTaskGraph,
+        m_surfelGiTaskGraphAnalysis,
+        topology,
+        m_surfelGiTaskGraphQueueAssignments,
+        m_surfelGiCompiledGraph,
+        scratchArena
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile surfel-GI task graph"));
+        return;
+    }
+    m_surfelGiRecordedGraph.reset(m_surfelGiCompiledGraph);
+    m_surfelGiSubmissionTransaction.reset(m_surfelGiCompiledGraph);
+    m_surfelGiTaskGraphValid = true;
 }
 
 

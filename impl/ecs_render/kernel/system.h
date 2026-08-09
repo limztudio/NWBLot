@@ -152,6 +152,11 @@ private:
         DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
+    void buildSurfelGiTaskGraph(
+        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+        DeferredFrameTargets& deferredTargets,
+        Core::GpuTimingSubmissionTicket& timingTicket
+    );
     void reportLaggedLightingTransition(LaggedLightingReport report, u64 targetGeneration);
     [[nodiscard]] Core::Alloc::GlobalArena& arena()noexcept{ return m_arena; }
     [[nodiscard]] Core::ECS::World& world()noexcept{ return m_world; }
@@ -215,6 +220,17 @@ private:
     Core::GpuTaskId m_deferredCompositeTask;
     Core::GpuExternalCompletionId m_deferredCompositeLightingCompletion;
     bool m_deferredCompositeTaskGraphValid = false;
+    // Surfel GI is a coarse graph-owned compute task. Its manual state handoffs remain until the barrier phase,
+    // while its producer and consumer completion edges are already graph submissions.
+    Core::GpuTaskGraph m_surfelGiTaskGraph;
+    Core::GpuTaskGraphAnalysis m_surfelGiTaskGraphAnalysis;
+    Core::GpuTaskGraphQueueAssignments m_surfelGiTaskGraphQueueAssignments;
+    Core::GpuCompiledGraph m_surfelGiCompiledGraph;
+    Core::GpuRecordedGraph m_surfelGiRecordedGraph;
+    Core::GpuGraphSubmissionTransaction m_surfelGiSubmissionTransaction;
+    Core::GpuTaskId m_surfelGiTask;
+    Core::GpuExternalCompletionId m_surfelGiEffectsCompletion;
+    bool m_surfelGiTaskGraphValid = false;
 
 private:
     RendererMeshState m_meshState;
@@ -307,10 +323,6 @@ private:
     // dedicated AsyncCompute path. Hardware dispatch-rays caustics stay on the Graphics overlap packet.
     Core::CommandListHandle m_asyncCausticsCommandList;
     Core::CommandListHandle m_causticsCommandList;
-    // Surfel GI uses only compute dispatches on both its SW-BVH and HW-RayQuery branches, so a dedicated compute
-    // family can record it independently; otherwise its planned packet executes on Graphics.
-    Core::CommandListHandle m_asyncSurfelGiCommandList;
-    Core::CommandListHandle m_surfelGiCommandList;
     Core::CommandListHandle m_asyncDeferredLightingCommandList;
     Core::CommandListHandle m_deferredLightingCommandList;
     // The hybrid AVBOIT packet uses Graphics lists for raster phases and AsyncCompute lists for its two pure dispatches.

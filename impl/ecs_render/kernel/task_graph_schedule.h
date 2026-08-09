@@ -66,7 +66,6 @@ public:
         enable(FrameExecutionWork::GraphicsPrefix);
         enable(FrameExecutionWork::RayEffects);
         enable(FrameExecutionWork::Caustics);
-        enable(FrameExecutionWork::SurfelGi);
         enable(FrameExecutionWork::AvboitRaster);
         enable(FrameExecutionWork::DeferredLighting);
         enable(FrameExecutionWork::GraphicsPresent);
@@ -110,7 +109,6 @@ public:
         switch(consumer){
         case FrameExecutionWork::RayEffects:
         case FrameExecutionWork::Caustics:
-        case FrameExecutionWork::SurfelGi:
         case FrameExecutionWork::AvboitRaster:
         case FrameExecutionWork::AsyncEffectsTiming:
             return producer == FrameExecutionWork::GraphicsPrefix;
@@ -131,7 +129,6 @@ public:
                 && (
                     producer == FrameExecutionWork::RayEffects
                     || producer == FrameExecutionWork::Caustics
-                    || producer == FrameExecutionWork::SurfelGi
                 )
             ;
         case FrameExecutionWork::GraphicsPresent:

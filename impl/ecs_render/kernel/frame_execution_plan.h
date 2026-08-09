@@ -64,7 +64,6 @@ namespace FrameExecutionWork{
         GraphicsPrefix,
         RayEffects,
         Caustics,
-        SurfelGi,
         AvboitRaster,
         AsyncEffectsTiming,
         AvboitDepthWarp,
@@ -85,6 +84,8 @@ namespace FrameExecutionExternalWait{
         LaggedLightingHistory,
         // Graph-owned deferred composite publishes this accepted token before legacy presentation submits.
         DeferredComposite,
+        // Graph-owned surfel GI publishes this accepted token before its remaining legacy consumers submit.
+        SurfelGi,
 
         kCount,
     };
@@ -188,7 +189,6 @@ public:
         assignWork(FrameExecutionWork::RayEffects, FrameExecutionPacket::AsyncRayEffects);
         if(usesAsyncCaustics)
             assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::AsyncRayEffects);
-        assignWork(FrameExecutionWork::SurfelGi, FrameExecutionPacket::AsyncRayEffects);
 
         FrameExecutionPacket::Enum graphicsEffectsCompletionPacket = FrameExecutionPacket::GraphicsEffects;
         if(usesAsyncAvboit){
@@ -253,14 +253,18 @@ public:
                 FrameExecutionPacket::DeferredLighting,
                 FrameExecutionExternalWait::LaggedLightingHistory
             );
-        else
+        else{
             addPacketWait(FrameExecutionPacket::DeferredLighting, FrameExecutionPacket::AsyncRayEffects);
+            addExternalWait(FrameExecutionPacket::DeferredLighting, FrameExecutionExternalWait::SurfelGi);
+        }
 
         enablePacket(FrameExecutionPacket::GraphicsPresent, Core::RenderLane::Graphics);
         addExternalWait(FrameExecutionPacket::GraphicsPresent, FrameExecutionExternalWait::DeferredComposite);
         assignWork(FrameExecutionWork::GraphicsPresent, FrameExecutionPacket::GraphicsPresent);
-        if(usesLaggedAsyncLighting)
+        if(usesLaggedAsyncLighting){
             addPacketWait(FrameExecutionPacket::GraphicsPresent, FrameExecutionPacket::AsyncRayEffects);
+            addExternalWait(FrameExecutionPacket::GraphicsPresent, FrameExecutionExternalWait::SurfelGi);
+        }
 
         configureSubmissionBatches();
     }

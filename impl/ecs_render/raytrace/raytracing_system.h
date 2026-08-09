@@ -8,6 +8,8 @@
 #include <impl/ecs_render/kernel/subsystem_base.h>
 
 #include <core/alloc/scratch.h>
+#include <core/graphics/gpu_timing.h>
+#include <core/graphics/task_graph/task_graph.h>
 #include <global/simdmath.h>
 
 
@@ -73,6 +75,12 @@ public:
     // Clear ownership commits only after the producer packet accepts.
     void finalizeSurfelResourceInitialization();
     void discardSurfelResourceInitialization();
+    [[nodiscard]] Core::GpuTaskId declareSurfelGiTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        Core::GpuTimingSubmissionTicket& timingTicket
+    );
     [[nodiscard]] bool renderSurfelGi(Core::CommandList& commandList, DeferredFrameTargets& targets);
     // Persistent surfel storage survives resize.
     [[nodiscard]] bool ensureSurfelResources();

@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/raytrace/rt_private.h>
 
+#include <core/graphics/task_graph/compiled_graph.h>
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -29,6 +31,68 @@ inline constexpr f32 s_SurfelNormalBias = 0.05f;
 // Delayed counter readback avoids stalling on the asynchronous copy.
 inline constexpr u32 s_SurfelCountLogInterval = 120u;
 inline constexpr u32 s_SurfelCountLogDelay = 3u;
+
+
+namespace __hidden_surfel_gi_task{
+
+
+struct SurfelGiGraphTask{
+    struct Payload{
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+        Core::Graphics* graphics = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        if(!payload.raytracingSystem || !payload.graphics || !payload.targets || !payload.timingTicket)
+            return false;
+
+        const Core::GpuPhysicalQueueInfo* const queue = context.graph.queueInfo(context.queue);
+        if(!queue)
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        Optional<Core::GpuTimingMeasure> asyncTiming;
+        if(queue->queueClass == Core::CommandQueue::Compute){
+            asyncTiming.emplace(
+                payload.graphics->gpuTiming(),
+                RendererGpuTimingScope::s_AsyncSurfelGi,
+                payload.graphics->getDevice(),
+                commandList
+            );
+            payload.raytracingSystem->clearSurfelIrradiance(commandList, *payload.targets);
+        }
+
+        if(!payload.raytracingSystem->renderSurfelGi(commandList, *payload.targets))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel GI render pass failed"));
+
+        if(asyncTiming){
+            asyncTiming->finishTiming(commandList);
+            asyncTiming.reset();
+        }
+        return true;
+    }
+
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        if(!payload.raytracingSystem)
+            return;
+        payload.raytracingSystem->confirmSurfelGiSubmission(token);
+        payload.raytracingSystem->finalizeSurfelResourceInitialization();
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.raytracingSystem)
+            payload.raytracingSystem->discardSurfelResourceInitialization();
+    }
+};
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -820,6 +884,24 @@ void RendererRayTracingSystem::clearSurfelIrradiance(Core::CommandList& commandL
     commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
 }
+
+Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket
+){
+    return graph.addTask<__hidden_surfel_gi_task::SurfelGiGraphTask>(
+        desc,
+        __hidden_surfel_gi_task::SurfelGiGraphTask::Payload{
+            .raytracingSystem = this,
+            .graphics = &graphics(),
+            .targets = &targets,
+            .timingTicket = &timingTicket,
+        }
+    );
+}
+
 
 bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!hasSurfelWork())

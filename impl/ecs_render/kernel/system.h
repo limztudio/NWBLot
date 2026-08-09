@@ -152,6 +152,12 @@ private:
         DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
+    void buildSoftwareCausticsTaskGraph(
+        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+        DeferredFrameTargets& deferredTargets,
+        bool shadowVisibilityPrepared,
+        Core::GpuTimingSubmissionTicket& timingTicket
+    );
     void buildSurfelGiTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         DeferredFrameTargets& deferredTargets,
@@ -189,20 +195,16 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;
-    // The graph compiles before native recording. Its resolved CommandQueue selects paired command lists only after
-    // its work set, semantic dependencies, and queue assignments agree with FrameExecutionPlan's parity contract;
-    // the legacy plan retains packet grouping, submissions, timing, recovery, and the fallback route. FrameGraph
-    // remains telemetry only.
+    // The semantic sidecar remains the parity oracle for still-legacy packet work. Migrated tasks own independent
+    // graphs and submissions; FrameGraph remains observational telemetry only.
     Core::GpuTaskGraph m_gpuTaskGraph;
     Core::GpuTaskGraphAnalysis m_gpuTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_gpuTaskGraphQueueAssignments;
     Core::GraphicsVector<Core::GpuTaskId> m_gpuTaskGraphWorkTasks;
-    Core::GraphicsVector<Core::CommandQueue::Enum> m_gpuTaskGraphWorkQueues;
     Core::GraphicsVector<Core::GpuTaskDependencyEdge> m_gpuTaskGraphLegacyMismatches;
     Core::GraphicsVector<Core::GpuTaskId> m_gpuTaskGraphLegacyQueueMismatches;
     u16 m_gpuTaskGraphDeviceGeneration = 1u;
     bool m_gpuTaskGraphValid = false;
-    bool m_gpuTaskGraphLiveRoutingValid = false;
     // Live graph tasks are intentionally isolated from the telemetry sidecar. Each owns its packet submission while
     // the remaining renderer work continues through the legacy plan until it is individually migrated.
     Core::GpuTaskGraph m_laggedLightingHistoryTaskGraph;
@@ -225,6 +227,17 @@ private:
     Core::GpuTaskId m_deferredCompositeTask;
     Core::GpuExternalCompletionId m_deferredCompositeLightingCompletion;
     bool m_deferredCompositeTaskGraphValid = false;
+    // Software caustics own their graph task and native packet. The manual state handoff remains only until the
+    // automatic-barrier phase; the hardware dispatch-rays variant retains its separate legacy migration step.
+    Core::GpuTaskGraph m_softwareCausticsTaskGraph;
+    Core::GpuTaskGraphAnalysis m_softwareCausticsTaskGraphAnalysis;
+    Core::GpuTaskGraphQueueAssignments m_softwareCausticsTaskGraphQueueAssignments;
+    Core::GpuCompiledGraph m_softwareCausticsCompiledGraph;
+    Core::GpuRecordedGraph m_softwareCausticsRecordedGraph;
+    Core::GpuGraphSubmissionTransaction m_softwareCausticsSubmissionTransaction;
+    Core::GpuTaskId m_softwareCausticsTask;
+    Core::GpuExternalCompletionId m_softwareCausticsRayEffectsCompletion;
+    bool m_softwareCausticsTaskGraphValid = false;
     // Surfel GI is a coarse graph-owned compute task. Its manual state handoffs remain until the barrier phase,
     // while its producer and consumer completion edges are already graph submissions.
     Core::GpuTaskGraph m_surfelGiTaskGraph;
@@ -337,10 +350,8 @@ private:
     // envelope. They are submitted only on the dedicated async-shadow schedule.
     Core::CommandListHandle m_asyncEffectsTimingBeginCommandList;
     Core::CommandListHandle m_asyncEffectsTimingEndCommandList;
-    // Software caustics are ordinary Compute dispatches, so this sibling list serves the no-hardware-ray-tracing
-    // dedicated AsyncCompute path. Hardware dispatch-rays caustics stay on the Graphics overlap packet.
-    Core::CommandListHandle m_asyncCausticsCommandList;
-    Core::CommandListHandle m_causticsCommandList;
+    // Hardware dispatch-rays caustics retain this Graphics list until their later graph-migration step.
+    Core::CommandListHandle m_hardwareCausticsCommandList;
     // The hybrid AVBOIT packet uses Graphics lists for raster phases and AsyncCompute lists for its two pure dispatches.
     Core::CommandListHandle m_avboitCommandList;
     Core::CommandListHandle m_asyncAvboitDepthWarpCommandList;

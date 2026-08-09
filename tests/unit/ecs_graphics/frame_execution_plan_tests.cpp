@@ -21,7 +21,6 @@ using FrameExecutionPlan = NWB::Impl::ECSRenderDetail::FrameExecutionPlan;
 using FrameExecutionPlanInput = NWB::Impl::ECSRenderDetail::FrameExecutionPlanInput;
 using GpuTaskGraphFrameSchedule = NWB::Impl::ECSRenderDetail::GpuTaskGraphFrameSchedule;
 using GpuTaskGraphFrameScheduleInput = NWB::Impl::ECSRenderDetail::GpuTaskGraphFrameScheduleInput;
-using FrameExecutionLaneCommandListPair = NWB::Impl::ECSRenderDetail::FrameExecutionLaneCommandListPair;
 using FrameExecutionPacketCommandLists = NWB::Impl::ECSRenderDetail::FrameExecutionPacketCommandLists;
 using FrameExecutionWorkCommandListBinding = NWB::Impl::ECSRenderDetail::FrameExecutionWorkCommandListBinding;
 using FrameExecutionPlanSubmissionState = NWB::Impl::ECSRenderDetail::FrameExecutionPlanSubmissionState;
@@ -157,21 +156,13 @@ TEST(EcsGraphics, FrameExecutionPlanKeepsOnlyRemainingWorkInTheParityOracle){
         true, false, false, false, true, false,
     });
     EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::RayEffects), CommandQueue::Compute);
-    EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::Caustics), CommandQueue::Compute);
+    EXPECT_FALSE(dedicatedPlan.hasWork(FrameExecutionWork::HardwareCaustics));
     EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::GraphicsPresent), CommandQueue::Graphics);
 
-    const FrameExecutionLaneCommandListPair commandLists{
-        TestCommandList(1u),
-        TestCommandList(2u),
-    };
-    EXPECT_EQ(
-        FrameExecutionPlan::commandListForResolvedQueue(CommandQueue::Graphics, commandLists),
-        commandLists.graphics
-    );
-    EXPECT_EQ(
-        FrameExecutionPlan::commandListForResolvedQueue(CommandQueue::Compute, commandLists),
-        commandLists.asyncCompute
-    );
+    const FrameExecutionPlan hardwarePlan(FrameExecutionPlanInput{
+        true, false, false, false, true, true,
+    });
+    EXPECT_EQ(hardwarePlan.expectedQueueForWork(FrameExecutionWork::HardwareCaustics), CommandQueue::Graphics);
 }
 
 
@@ -225,13 +216,13 @@ TEST(EcsGraphics, GpuTaskGraphFrameScheduleMatchesTheRemainingLegacyPlan){
     });
     EXPECT_TRUE(activeHardwareLagged.usesLaggedLightingHistory());
     EXPECT_TRUE(activeHardwareLagged.capturesLaggedLightingHistory());
-    EXPECT_TRUE(activeHardwareLagged.workWaitsForLaggedLightingHistory(FrameExecutionWork::Caustics));
+    EXPECT_TRUE(activeHardwareLagged.workWaitsForLaggedLightingHistory(FrameExecutionWork::HardwareCaustics));
 
     const GpuTaskGraphFrameSchedule activeSoftwareLagged(GpuTaskGraphFrameScheduleInput{
         true, true, true, true, false, false,
     });
-    EXPECT_TRUE(activeSoftwareLagged.usesAsyncCaustics());
-    EXPECT_FALSE(activeSoftwareLagged.workWaitsForLaggedLightingHistory(FrameExecutionWork::Caustics));
+    EXPECT_FALSE(activeSoftwareLagged.hasWork(FrameExecutionWork::HardwareCaustics));
+    EXPECT_FALSE(activeSoftwareLagged.workWaitsForLaggedLightingHistory(FrameExecutionWork::HardwareCaustics));
 }
 
 

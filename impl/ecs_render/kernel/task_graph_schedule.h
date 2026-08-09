@@ -23,8 +23,8 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// This is deliberately separate from FrameExecutionPlan.  It declares the renderer's semantic work graph; the
-// legacy packet plan consumes the same frame facts only as a migration-parity oracle and submission fallback.
+// This is deliberately separate from FrameExecutionPlan. It declares the remaining packet-owned semantic work for
+// parity telemetry; each migrated renderer task declares and submits its own graph independently.
 struct GpuTaskGraphFrameScheduleInput{
     bool dedicatedAsyncCompute = false;
     bool frameLaggedAsyncLightingEnabled = false;
@@ -54,10 +54,6 @@ public:
             && input.hasTransparentRenderers
             && !m_usesLaggedLightingHistory
         )
-        , m_usesAsyncCaustics(
-            input.dedicatedAsyncCompute
-            && !input.hardwareCaustics
-        )
         , m_hardwareCaustics(input.hardwareCaustics)
     {
         const auto enable = [&](const FrameExecutionWork::Enum work){
@@ -65,7 +61,8 @@ public:
         };
         enable(FrameExecutionWork::GraphicsPrefix);
         enable(FrameExecutionWork::RayEffects);
-        enable(FrameExecutionWork::Caustics);
+        if(m_hardwareCaustics)
+            enable(FrameExecutionWork::HardwareCaustics);
         enable(FrameExecutionWork::AvboitRaster);
         enable(FrameExecutionWork::GraphicsPresent);
         if(m_usesDedicatedAsyncCompute)
@@ -87,13 +84,12 @@ public:
     [[nodiscard]] bool usesLaggedLightingHistory()const noexcept{ return m_usesLaggedLightingHistory; }
     [[nodiscard]] bool capturesLaggedLightingHistory()const noexcept{ return m_capturesLaggedLightingHistory; }
     [[nodiscard]] bool usesAsyncAvboit()const noexcept{ return m_usesAsyncAvboit; }
-    [[nodiscard]] bool usesAsyncCaustics()const noexcept{ return m_usesAsyncCaustics; }
     [[nodiscard]] bool workWaitsForLaggedLightingHistory(
         const FrameExecutionWork::Enum work
     )const noexcept{
         if(!m_usesLaggedLightingHistory || !hasWork(work))
             return false;
-        return work == FrameExecutionWork::Caustics && m_hardwareCaustics;
+        return work == FrameExecutionWork::HardwareCaustics && m_hardwareCaustics;
     }
     // These are semantic ordering constraints, not packet-copying. Resource hazards provide the remaining edges.
     [[nodiscard]] bool workDependsOn(
@@ -105,7 +101,7 @@ public:
 
         switch(consumer){
         case FrameExecutionWork::RayEffects:
-        case FrameExecutionWork::Caustics:
+        case FrameExecutionWork::HardwareCaustics:
         case FrameExecutionWork::AvboitRaster:
         case FrameExecutionWork::AsyncEffectsTiming:
             return producer == FrameExecutionWork::GraphicsPrefix;
@@ -131,7 +127,6 @@ private:
     bool m_usesLaggedLightingHistory = false;
     bool m_capturesLaggedLightingHistory = false;
     bool m_usesAsyncAvboit = false;
-    bool m_usesAsyncCaustics = false;
     bool m_hardwareCaustics = false;
 };
 

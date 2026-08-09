@@ -65,6 +65,13 @@ public:
     // Hybrid mode folds software transparent transmittance onto hardware opaque visibility.
     [[nodiscard]] bool renderGpuBvhShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets, bool multiplyOntoOpaque = false);
     [[nodiscard]] bool prepareGpuBvhCausticResources(DeferredFrameTargets& targets);
+    [[nodiscard]] Core::GpuTaskId declareSoftwareCausticsTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        bool shadowVisibilityPrepared,
+        Core::GpuTimingSubmissionTicket& timingTicket
+    );
     [[nodiscard]] bool renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool hasCausticWork()const noexcept;
     [[nodiscard]] bool prepareHwCausticResources(DeferredFrameTargets& targets);

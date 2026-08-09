@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/raytrace/rt_private.h>
 
+#include <core/graphics/task_graph/compiled_graph.h>
+
 #include <global/algorithm.h>
 
 
@@ -25,6 +27,40 @@ namespace __hidden_caustics{
 static constexpr AStringView s_HwRaygenExportName = "CausticHwRayGen";
 static constexpr AStringView s_HwMissExportName = "CausticHwMiss";
 static constexpr AStringView s_HwHitGroupExportName = "CausticHwHitGroup";
+
+// Software caustics are graph-owned independently of the remaining hardware-ray-tracing packet. The renderer
+// still supplies the temporary manual state handoff until graph barriers replace that migration bridge.
+struct SoftwareCausticsGraphTask{
+    struct Payload{
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        bool shadowVisibilityPrepared = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.raytracingSystem || !payload.targets || !payload.timingTicket)
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        // Retain black caustics whenever no software producer dispatches.
+        payload.raytracingSystem->clearCausticTargets(commandList, *payload.targets);
+        if(payload.shadowVisibilityPrepared){
+            const bool causticsDispatched = payload.raytracingSystem->renderGpuBvhCaustics(
+                commandList,
+                *payload.targets
+            );
+            if(!causticsDispatched && payload.raytracingSystem->hasCausticWork())
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software caustic render pass failed"));
+        }
+        return true;
+    }
+};
 
 // A ping-pong resolve target with sampled and storage slots.
 struct CausticResolvePassResources{
@@ -552,6 +588,24 @@ bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTarget
         || ensureCausticAccumulatorDecayPipeline()
     ;
     return producerReady && resolveReady && temporalReady;
+}
+
+Core::GpuTaskId RendererRayTracingSystem::declareSoftwareCausticsTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    const bool shadowVisibilityPrepared,
+    Core::GpuTimingSubmissionTicket& timingTicket
+){
+    return graph.addTask<__hidden_caustics::SoftwareCausticsGraphTask>(
+        desc,
+        __hidden_caustics::SoftwareCausticsGraphTask::Payload{
+            .raytracingSystem = this,
+            .targets = &targets,
+            .timingTicket = &timingTicket,
+            .shadowVisibilityPrepared = shadowVisibilityPrepared,
+        }
+    );
 }
 
 bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameTargets& targets, const f32 temporalDecay)const{

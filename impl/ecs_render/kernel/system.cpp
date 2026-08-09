@@ -128,7 +128,6 @@ RendererSystem::RendererSystem(
     , m_gpuTaskGraphAnalysis(arena)
     , m_gpuTaskGraphQueueAssignments(arena)
     , m_gpuTaskGraphWorkTasks(arena)
-    , m_gpuTaskGraphWorkQueues(arena)
     , m_gpuTaskGraphLegacyMismatches(arena)
     , m_gpuTaskGraphLegacyQueueMismatches(arena)
     , m_laggedLightingHistoryTaskGraph(arena)
@@ -143,6 +142,12 @@ RendererSystem::RendererSystem(
     , m_deferredCompositeCompiledGraph(arena)
     , m_deferredCompositeRecordedGraph(arena)
     , m_deferredCompositeSubmissionTransaction(arena)
+    , m_softwareCausticsTaskGraph(arena)
+    , m_softwareCausticsTaskGraphAnalysis(arena)
+    , m_softwareCausticsTaskGraphQueueAssignments(arena)
+    , m_softwareCausticsCompiledGraph(arena)
+    , m_softwareCausticsRecordedGraph(arena)
+    , m_softwareCausticsSubmissionTransaction(arena)
     , m_surfelGiTaskGraph(arena)
     , m_surfelGiTaskGraphAnalysis(arena)
     , m_surfelGiTaskGraphQueueAssignments(arena)
@@ -515,9 +520,7 @@ void RendererSystem::invalidateResources(){
     m_preparedHasTransparentRenderers = false;
     m_preparedShadowVisibilityReady = false;
     m_gpuTaskGraphValid = false;
-    m_gpuTaskGraphLiveRoutingValid = false;
     m_gpuTaskGraphWorkTasks.clear();
-    m_gpuTaskGraphWorkQueues.clear();
     m_gpuTaskGraphLegacyMismatches.clear();
     m_gpuTaskGraphLegacyQueueMismatches.clear();
     m_gpuTaskGraph.reset();
@@ -541,6 +544,15 @@ void RendererSystem::invalidateResources(){
     m_deferredCompositeCompiledGraph.reset();
     m_deferredCompositeRecordedGraph.reset(m_deferredCompositeCompiledGraph);
     m_deferredCompositeSubmissionTransaction.reset(m_deferredCompositeCompiledGraph);
+    m_softwareCausticsTaskGraphValid = false;
+    m_softwareCausticsTask = {};
+    m_softwareCausticsRayEffectsCompletion = {};
+    m_softwareCausticsTaskGraph.reset();
+    m_softwareCausticsTaskGraphAnalysis.reset();
+    m_softwareCausticsTaskGraphQueueAssignments.reset();
+    m_softwareCausticsCompiledGraph.reset();
+    m_softwareCausticsRecordedGraph.reset(m_softwareCausticsCompiledGraph);
+    m_softwareCausticsSubmissionTransaction.reset(m_softwareCausticsCompiledGraph);
     m_surfelGiTaskGraphValid = false;
     m_surfelGiTask = {};
     m_surfelGiEffectsCompletion = {};
@@ -575,8 +587,7 @@ void RendererSystem::invalidateResources(){
     m_frameRecoveryCommandList.reset();
     m_asyncEffectsTimingBeginCommandList.reset();
     m_asyncEffectsTimingEndCommandList.reset();
-    m_asyncCausticsCommandList.reset();
-    m_causticsCommandList.reset();
+    m_hardwareCausticsCommandList.reset();
     m_avboitCommandList.reset();
     m_asyncAvboitDepthWarpCommandList.reset();
     m_avboitExtinctionCommandList.reset();
@@ -690,15 +701,6 @@ bool RendererSystem::ensureFrameCommandLists(){
                 return false;
             }
         }
-        if(!m_asyncCausticsCommandList){
-            Core::CommandListParameters asyncCausticsCommandListParameters;
-            asyncCausticsCommandListParameters.setRenderLane(Core::RenderLane::AsyncCompute);
-            m_asyncCausticsCommandList = device.createCommandList(asyncCausticsCommandListParameters);
-            if(!m_asyncCausticsCommandList){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async caustics command list"));
-                return false;
-            }
-        }
         if(!m_asyncAvboitDepthWarpCommandList){
             Core::CommandListParameters asyncAvboitDepthWarpCommandListParameters;
             asyncAvboitDepthWarpCommandListParameters.setRenderLane(Core::RenderLane::AsyncCompute);
@@ -733,10 +735,10 @@ bool RendererSystem::ensureFrameCommandLists(){
         }
     }
 
-    if(!m_causticsCommandList){
-        m_causticsCommandList = device.createCommandList();
-        if(!m_causticsCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustics command list"));
+    if(!m_hardwareCausticsCommandList){
+        m_hardwareCausticsCommandList = device.createCommandList();
+        if(!m_hardwareCausticsCommandList){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware caustics command list"));
             return false;
         }
     }
@@ -931,7 +933,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     NWB_ASSERT(m_gbufferCommandList);
     NWB_ASSERT(m_postGbufferNormalizeCommandList);
     NWB_ASSERT(m_shadowVisibilityCommandList);
-    NWB_ASSERT(m_causticsCommandList);
+    NWB_ASSERT(m_hardwareCausticsCommandList);
     NWB_ASSERT(m_avboitCommandList);
     NWB_ASSERT(m_deferredPresentCommandList);
     NWB_ASSERT(m_shadowPrepareCommandList);
@@ -1013,9 +1015,7 @@ bool RendererSystem::recordShadowPrepareCommandList(DeferredFrameTargets& deferr
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_gpuTaskGraphValid = false;
-    m_gpuTaskGraphLiveRoutingValid = false;
     m_gpuTaskGraphWorkTasks.clear();
-    m_gpuTaskGraphWorkQueues.clear();
     m_gpuTaskGraphLegacyMismatches.clear();
     m_gpuTaskGraphLegacyQueueMismatches.clear();
     m_gpuTaskGraph.reset();
@@ -1039,6 +1039,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredCompositeCompiledGraph.reset();
     m_deferredCompositeRecordedGraph.reset(m_deferredCompositeCompiledGraph);
     m_deferredCompositeSubmissionTransaction.reset(m_deferredCompositeCompiledGraph);
+    m_softwareCausticsTaskGraphValid = false;
+    m_softwareCausticsTask = {};
+    m_softwareCausticsRayEffectsCompletion = {};
+    m_softwareCausticsTaskGraph.reset();
+    m_softwareCausticsTaskGraphAnalysis.reset();
+    m_softwareCausticsTaskGraphQueueAssignments.reset();
+    m_softwareCausticsCompiledGraph.reset();
+    m_softwareCausticsRecordedGraph.reset(m_softwareCausticsCompiledGraph);
+    m_softwareCausticsSubmissionTransaction.reset(m_softwareCausticsCompiledGraph);
     m_surfelGiTaskGraphValid = false;
     m_surfelGiTask = {};
     m_surfelGiEffectsCompletion = {};
@@ -1134,18 +1143,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // History capture is now a graph-owned copy task.  It remains available whenever the opt-in path has a distinct
     // compute transport, independent of the remaining legacy packet plan.
     const bool captureLaggedLightingHistory = laggedAsyncLightingRequested;
-    // Hardware caustics remain on Graphics while software caustics use Compute.
-    const bool asyncCausticsSchedule = frameExecutionPlan.workRunsOnLane(
-        ECSRenderDetail::FrameExecutionWork::Caustics,
-        Core::RenderLane::AsyncCompute
-    );
+    // Software caustics are graph-owned. A distinct Compute family is the only route that may resolve to Compute;
+    // otherwise the compiler routes the same task through Graphics without a renderer fallback topology.
+    const bool softwareCausticsExpectedCompute = dedicatedAsyncCompute && !hardwareShadowSupported;
+    const bool shadowVisibilityPrepared = m_preparedShadowVisibilityReady;
     // Split AVBOIT only when transparent work needs its compute stages.
     const bool asyncAvboitSchedule = frameExecutionPlan.workRunsOnLane(
         ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp,
         Core::RenderLane::AsyncCompute
     );
-    // Compile the graph before native recording.  Its physical queue result may choose a paired command list only
-    // after it matches every legacy-plan route; packet grouping and submission remain legacy-owned for this slice.
+    // Compile the semantic sidecar before native recording. Remaining packet work stays under FrameExecutionPlan
+    // while each migrated task owns its own compiled graph and submission.
     const ECSRenderDetail::GpuTaskGraphFrameScheduleInput taskGraphInput{
         .dedicatedAsyncCompute = dedicatedAsyncCompute,
         .frameLaggedAsyncLightingEnabled = m_frameLaggedAsyncLightingEnabled,
@@ -1164,28 +1172,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* frameRecoveryCommandList = m_frameRecoveryCommandList.get();
     Core::CommandList* asyncEffectsTimingBeginCommandList = m_asyncEffectsTimingBeginCommandList.get();
     Core::CommandList* asyncEffectsTimingEndCommandList = m_asyncEffectsTimingEndCommandList.get();
-    const auto commandListForWork = [&](const ECSRenderDetail::FrameExecutionWork::Enum work,
-                                        const ECSRenderDetail::FrameExecutionLaneCommandListPair& commandLists){
-        if(!m_gpuTaskGraphLiveRoutingValid)
-            return frameExecutionPlan.commandListForWork(work, commandLists);
-
-        const usize workIndex = static_cast<usize>(work);
-        if(workIndex >= m_gpuTaskGraphWorkQueues.size()){
-            NWB_ASSERT(false);
-            return frameExecutionPlan.commandListForWork(work, commandLists);
-        }
-        return ECSRenderDetail::FrameExecutionPlan::commandListForResolvedQueue(
-            m_gpuTaskGraphWorkQueues[workIndex],
-            commandLists
-        );
-    };
-    Core::CommandList* const causticsCommandList = commandListForWork(
-        ECSRenderDetail::FrameExecutionWork::Caustics,
-        ECSRenderDetail::FrameExecutionLaneCommandListPair{
-            m_causticsCommandList.get(),
-            m_asyncCausticsCommandList.get(),
-        }
-    );
+    Core::CommandList* const hardwareCausticsCommandList = hardwareShadowSupported
+        ? m_hardwareCausticsCommandList.get()
+        : nullptr
+    ;
     Core::CommandList* avboitCommandList = m_avboitCommandList.get();
     Core::CommandList* asyncAvboitDepthWarpCommandList = m_asyncAvboitDepthWarpCommandList.get();
     Core::CommandList* avboitExtinctionCommandList = m_avboitExtinctionCommandList.get();
@@ -1201,8 +1191,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(frameRecoveryCommandList);
     NWB_ASSERT(!recordsAsyncEffectsTiming || asyncEffectsTimingBeginCommandList);
     NWB_ASSERT(!recordsAsyncEffectsTiming || asyncEffectsTimingEndCommandList);
-    NWB_ASSERT(m_causticsCommandList);
-    NWB_ASSERT(causticsCommandList);
+    NWB_ASSERT(!hardwareShadowSupported || m_hardwareCausticsCommandList);
+    NWB_ASSERT(!hardwareShadowSupported || hardwareCausticsCommandList);
     NWB_ASSERT(avboitCommandList);
     NWB_ASSERT(!asyncAvboitSchedule || asyncAvboitDepthWarpCommandList);
     NWB_ASSERT(!asyncAvboitSchedule || avboitExtinctionCommandList);
@@ -1312,9 +1302,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         restoreSurfelGiCpuState();
         restoreGraphicsEffectsCpuState();
     };
-    // Accepted compute work owns its temporal and readback state.
+    // Accepted graph-owned software caustics survive later legacy-effects rejection; only the remaining hardware
+    // caustics list belongs to the Graphics-effects rollback.
     const auto restoreUnacceptedGraphicsEffectsCpuState = [&](){
-        if(!asyncCausticsSchedule)
+        if(hardwareShadowSupported)
             restoreCausticsCpuState();
         restoreGraphicsEffectsCpuState();
     };
@@ -1330,6 +1321,46 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         frameExecutionPlan,
         m_graphics.gpuTiming()
     );
+    Core::GpuTimingSubmissionTicket softwareCausticsTimingTicket(m_graphics.gpuTiming());
+    buildSoftwareCausticsTaskGraph(
+        taskGraphInput,
+        deferredTargets,
+        shadowVisibilityPrepared,
+        softwareCausticsTimingTicket
+    );
+    const Core::GpuSubmissionPacketId softwareCausticsPacket = m_softwareCausticsCompiledGraph.packetForTask(
+        m_softwareCausticsTask
+    );
+    const Core::GpuPhysicalQueueInfo* const softwareCausticsQueue = softwareCausticsPacket.valid()
+        ? m_softwareCausticsCompiledGraph.queueInfo(
+            m_softwareCausticsCompiledGraph.packet(softwareCausticsPacket).queue
+        )
+        : nullptr
+    ;
+    if(
+        !hardwareShadowSupported
+        && (
+            !m_softwareCausticsTaskGraphValid
+            || !m_softwareCausticsTask.valid()
+            || !m_softwareCausticsRayEffectsCompletion.valid()
+            || !softwareCausticsQueue
+        )
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned software caustics were unavailable"));
+        softwareCausticsTimingTicket.discard();
+        frameExecutionTimingTickets.discardAll();
+        return;
+    }
+    const bool softwareCausticsRunsOnCompute =
+        !hardwareShadowSupported
+        && softwareCausticsQueue->queueClass == Core::CommandQueue::Compute
+    ;
+    if(!hardwareShadowSupported && softwareCausticsRunsOnCompute != softwareCausticsExpectedCompute){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software-caustics graph queue disagrees with renderer topology"));
+        softwareCausticsTimingTicket.discard();
+        frameExecutionTimingTickets.discardAll();
+        return;
+    }
     Core::GpuTimingSubmissionTicket surfelGiTimingTicket(m_graphics.gpuTiming());
     buildSurfelGiTaskGraph(taskGraphInput, deferredTargets, surfelGiTimingTicket);
     const Core::GpuSubmissionPacketId surfelGiPacket = m_surfelGiCompiledGraph.packetForTask(m_surfelGiTask);
@@ -1340,6 +1371,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!m_surfelGiTaskGraphValid || !m_surfelGiEffectsCompletion.valid() || !surfelGiQueue){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned surfel GI was unavailable"));
         surfelGiTimingTicket.discard();
+        softwareCausticsTimingTicket.discard();
         frameExecutionTimingTickets.discardAll();
         return;
     }
@@ -1367,6 +1399,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred lighting was unavailable"));
         deferredLightingTimingTicket.discard();
         surfelGiTimingTicket.discard();
+        softwareCausticsTimingTicket.discard();
         frameExecutionTimingTickets.discardAll();
         return;
     }
@@ -1381,11 +1414,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Optional<Core::GpuTimingMeasure> asyncFinalTiming;
     const auto discardTimingTickets = [
         &frameExecutionTimingTickets,
+        &softwareCausticsTimingTicket,
         &surfelGiTimingTicket,
         &deferredLightingTimingTicket,
         &deferredCompositeTimingTicket
     ](){
         frameExecutionTimingTickets.discardAll();
+        softwareCausticsTimingTicket.discard();
         surfelGiTimingTicket.discard();
         deferredLightingTimingTicket.discard();
         deferredCompositeTimingTicket.discard();
@@ -1398,6 +1433,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingSubmissionTransaction.discardUnaccepted(
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph
+        );
+        m_softwareCausticsSubmissionTransaction.discardUnaccepted(
+            m_softwareCausticsTaskGraph,
+            m_softwareCausticsCompiledGraph
         );
         m_surfelGiSubmissionTransaction.discardUnaccepted(
             m_surfelGiTaskGraph,
@@ -1844,8 +1883,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    // Both caustic producers import trace inputs; private scratch stays on Compute.
-    if(asyncCausticsSchedule){
+    // The graph-selected Compute route imports software-caustics inputs plus retained private scratch. Graphics
+    // fallback records from the normalized G-buffer handoff directly.
+    if(softwareCausticsRunsOnCompute){
         Core::Alloc::ScratchArena causticsInputScratchArena(RendererArenaScope::s_RenderArena);
         Vector<Core::Texture*, Core::Alloc::ScratchArena> causticsInputTextures{ causticsInputScratchArena };
         Vector<Core::Buffer*, Core::Alloc::ScratchArena> causticsInputBuffers{ causticsInputScratchArena };
@@ -1871,22 +1911,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         appendBuffer(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get());
         appendBuffer(m_rayTracingState.m_causticEmissionTargetBuffer.get());
         appendBuffer(m_drawState.m_meshViewBuffer.get());
-        if(hardwareShadowSupported){
-            if(m_rayTracingState.m_tlas)
-                appendBuffer(m_rayTracingState.m_tlas->getBackingBuffer());
-            for(Core::Buffer* buffer : m_rayTracingState.m_shadowMeshAttributeBuffers)
-                appendBuffer(buffer);
-        }
-        else{
-            for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshNodeBuffers)
-                appendBuffer(buffer);
-            for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshPositionBuffers)
-                appendBuffer(buffer);
-            for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshIndexBuffers)
-                appendBuffer(buffer);
-            for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshAttributeBuffers)
-                appendBuffer(buffer);
-        }
+        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshNodeBuffers)
+            appendBuffer(buffer);
+        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshPositionBuffers)
+            appendBuffer(buffer);
+        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshIndexBuffers)
+            appendBuffer(buffer);
+        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshAttributeBuffers)
+            appendBuffer(buffer);
 
         if(!m_causticsComputeBaseStateHandoff.buildResourceSubset(
             m_postGbufferNormalizedStateHandoff,
@@ -1984,8 +2016,44 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    // Surfel GI records only after the graph resolved its physical queue.  The imported ray-effects completion keeps
-    // the original packet order until the remaining producers migrate; state fan-in stays manual until Phase 6.
+    // Software caustics own their native packet rather than an async persistent list. The ray-effects completion
+    // retains their historical order, while the manual state bridge remains until the barrier phase.
+    if(!hardwareShadowSupported){
+        Core::GpuNativePacketRecorder softwareCausticsRecorder(device);
+        const Core::GpuNativePacketRecordDesc softwareCausticsRecordDesc{
+            .packet = softwareCausticsPacket,
+            .initialStates = softwareCausticsRunsOnCompute
+                ? &m_causticsComputeInputStateHandoff
+                : &m_postGbufferNormalizedStateHandoff,
+            .finalStates = &m_causticsStateHandoff,
+        };
+        const bool softwareCausticsRecorded =
+            m_softwareCausticsTaskGraphValid
+            && m_softwareCausticsTask.valid()
+            && m_softwareCausticsRayEffectsCompletion.valid()
+            && softwareCausticsPacket.valid()
+            && softwareCausticsRecorder.recordPacket(
+                m_softwareCausticsTaskGraph,
+                m_softwareCausticsCompiledGraph,
+                softwareCausticsRecordDesc,
+                m_softwareCausticsRecordedGraph
+            )
+            && m_causticsStateHandoff.valid()
+        ;
+        if(!softwareCausticsRecorded){
+            m_softwareCausticsSubmissionTransaction.discardUnaccepted(
+                m_softwareCausticsTaskGraph,
+                m_softwareCausticsCompiledGraph
+            );
+            softwareCausticsTimingTicket.discard();
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned software caustics"));
+            discardRenderPackets();
+            return;
+        }
+    }
+
+    // Surfel GI records only after the graph resolved its physical queue. Its imported completion now follows
+    // software caustics (or legacy ray effects for hardware caustics); state fan-in stays manual until Phase 6.
     Core::GpuNativePacketRecorder surfelGiRecorder(device);
     const Core::GpuNativePacketRecordDesc surfelGiRecordDesc{
         .packet = surfelGiPacket,
@@ -2014,11 +2082,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    const bool shadowVisibilityPrepared = m_preparedShadowVisibilityReady;
-
     // Independent effect packets share normalized inputs and converge at deferred lighting.
     bool shadowVisibilityCommandListReady = false;
-    bool causticsCommandListReady = false;
+    bool hardwareCausticsCommandListReady = false;
     bool avboitCommandListReady = false;
     bool asyncEffectsTimingBeginCommandListReady = !recordsAsyncEffectsTiming;
     if(recordsAsyncEffectsTiming){
@@ -2103,49 +2169,42 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && shadowVisibilityCommandList->hasCommandBuffer()
         ;
     });
-    const Core::Graphics::JobHandle causticsRecordingJob = m_graphics.scheduleGraphicsJob([
-        this,
-        &deferredTargets,
-        causticsCommandList,
-        &causticsCommandListReady,
-        &frameExecutionTimingTickets,
-        shadowVisibilityPrepared,
-        hardwareShadowSupported,
-        asyncCausticsSchedule
-    ](){
-        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
-            frameExecutionTimingTickets,
-            ECSRenderDetail::FrameExecutionWork::Caustics
-        );
-        causticsCommandList->open(
-            asyncCausticsSchedule
-                ? &m_causticsComputeInputStateHandoff
-                : &m_postGbufferNormalizedStateHandoff
-        );
-        if(!causticsCommandList->hasCommandBuffer())
-            return;
+    Core::Graphics::JobHandle hardwareCausticsRecordingJob;
+    if(hardwareShadowSupported){
+        hardwareCausticsRecordingJob = m_graphics.scheduleGraphicsJob([
+            this,
+            &deferredTargets,
+            hardwareCausticsCommandList,
+            &hardwareCausticsCommandListReady,
+            &frameExecutionTimingTickets,
+            shadowVisibilityPrepared
+        ](){
+            ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
+                frameExecutionTimingTickets,
+                ECSRenderDetail::FrameExecutionWork::HardwareCaustics
+            );
+            hardwareCausticsCommandList->open(&m_postGbufferNormalizedStateHandoff);
+            if(!hardwareCausticsCommandList->hasCommandBuffer())
+                return;
 
-        // Retain black caustics when no producer records.
-        m_raytracingSystem.clearCausticTargets(*causticsCommandList, deferredTargets);
-        if(shadowVisibilityPrepared){
-            if(hardwareShadowSupported){
-                const bool causticsDispatched = m_raytracingSystem.renderHwCaustics(*causticsCommandList, deferredTargets);
+            // Retain black caustics when no hardware producer records.
+            m_raytracingSystem.clearCausticTargets(*hardwareCausticsCommandList, deferredTargets);
+            if(shadowVisibilityPrepared){
+                const bool causticsDispatched = m_raytracingSystem.renderHwCaustics(
+                    *hardwareCausticsCommandList,
+                    deferredTargets
+                );
                 if(!causticsDispatched && m_raytracingSystem.hasHwCausticWork())
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic render pass failed"));
             }
-            else{
-                const bool causticsDispatched = m_raytracingSystem.renderGpuBvhCaustics(*causticsCommandList, deferredTargets);
-                if(!causticsDispatched && m_raytracingSystem.hasCausticWork())
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software caustic render pass failed"));
-            }
-        }
 
-        causticsCommandList->close(&m_causticsStateHandoff);
-        causticsCommandListReady =
-            m_causticsStateHandoff.valid()
-            && causticsCommandList->hasCommandBuffer()
-        ;
-    });
+            hardwareCausticsCommandList->close(&m_causticsStateHandoff);
+            hardwareCausticsCommandListReady =
+                m_causticsStateHandoff.valid()
+                && hardwareCausticsCommandList->hasCommandBuffer()
+            ;
+        });
+    }
     const Core::Graphics::JobHandle avboitPreRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
         &deferredTargets,
@@ -2210,13 +2269,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     });
     if(
         !shadowVisibilityRecordingJob.valid()
-        || !causticsRecordingJob.valid()
+        || (hardwareShadowSupported && !hardwareCausticsRecordingJob.valid())
         || !avboitPreRecordingJob.valid()
     ){
         if(shadowVisibilityRecordingJob.valid())
             m_graphics.waitJob(shadowVisibilityRecordingJob);
-        if(causticsRecordingJob.valid())
-            m_graphics.waitJob(causticsRecordingJob);
+        if(hardwareCausticsRecordingJob.valid())
+            m_graphics.waitJob(hardwareCausticsRecordingJob);
         if(avboitPreRecordingJob.valid())
             m_graphics.waitJob(avboitPreRecordingJob);
         discardRenderPackets();
@@ -2224,9 +2283,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
 
     m_graphics.waitJob(shadowVisibilityRecordingJob);
-    m_graphics.waitJob(causticsRecordingJob);
+    if(hardwareCausticsRecordingJob.valid())
+        m_graphics.waitJob(hardwareCausticsRecordingJob);
     m_graphics.waitJob(avboitPreRecordingJob);
-    if(!shadowVisibilityCommandListReady || !causticsCommandListReady || !avboitCommandListReady){
+    if(
+        !shadowVisibilityCommandListReady
+        || (hardwareShadowSupported && !hardwareCausticsCommandListReady)
+        || !avboitCommandListReady
+    ){
         discardRenderPackets();
         return;
     }
@@ -2775,7 +2839,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, postGbufferNormalizeCommandList },
         { ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming, asyncEffectsTimingBeginCommandList },
         { ECSRenderDetail::FrameExecutionWork::RayEffects, shadowVisibilityCommandList },
-        { ECSRenderDetail::FrameExecutionWork::Caustics, causticsCommandList },
+        { ECSRenderDetail::FrameExecutionWork::HardwareCaustics, hardwareCausticsCommandList },
         { ECSRenderDetail::FrameExecutionWork::AvboitRaster, avboitCommandList },
         { ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming, asyncEffectsTimingEndCommandList },
         { ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp, asyncAvboitDepthWarpCommandList },
@@ -2979,11 +3043,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         return true;
     };
+    Core::QueueSubmissionToken softwareCausticsSubmissionToken;
     Core::QueueSubmissionToken surfelGiSubmissionToken;
     Core::QueueSubmissionToken deferredLightingSubmissionToken;
     Core::QueueSubmissionToken deferredCompositeSubmissionToken;
     const auto recoverPendingFrameSubmission = [&]() -> bool {
         const Core::QueueSubmissionToken* asyncWaitToken = frameExecutionSubmissionState.asyncRecoveryWaitToken();
+        if(
+            softwareCausticsSubmissionToken.valid()
+            && softwareCausticsSubmissionToken.queue == Core::CommandQueue::Compute
+        )
+            asyncWaitToken = &softwareCausticsSubmissionToken;
         if(
             surfelGiSubmissionToken.valid()
             && surfelGiSubmissionToken.queue == Core::CommandQueue::Compute
@@ -3063,10 +3133,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                         m_shadowVisibilityStateHandoff,
                         deferredTargets.shadowVisibility.get()
                     )
-                    && (!asyncCausticsSchedule || m_causticIrradianceReturnStateHandoff.buildTextureSubset(
-                        m_causticsStateHandoff,
-                        deferredTargets.causticIrradiance.get()
-                    ))
                 ;
                 if(!producerReturnStatesReady){
                     discardUnacceptedGraphPackets();
@@ -3120,8 +3186,67 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     failFrameRenderRecovery();
                     return;
                 }
+            }
 
-                if(asyncCausticsSchedule){
+            m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
+            if(!hardwareShadowSupported){
+                Core::Alloc::ScratchArena softwareCausticsScratchArena(RendererArenaScope::s_TaskGraphArena);
+                const Core::GpuTaskGraphExternalCompletionToken rayEffectsCompletionToken{
+                    .completion = m_softwareCausticsRayEffectsCompletion,
+                    .token = shadowSubmissionToken,
+                };
+                const Core::GpuTaskGraphSubmitter softwareCausticsSubmitter(device);
+                const bool softwareCausticsAccepted =
+                    m_softwareCausticsTaskGraphValid
+                    && m_softwareCausticsTask.valid()
+                    && m_softwareCausticsRayEffectsCompletion.valid()
+                    && softwareCausticsSubmitter.submitPacket(
+                        m_softwareCausticsTaskGraph,
+                        m_softwareCausticsCompiledGraph,
+                        m_softwareCausticsRecordedGraph,
+                        softwareCausticsPacket,
+                        &rayEffectsCompletionToken,
+                        1u,
+                        m_softwareCausticsSubmissionTransaction,
+                        softwareCausticsScratchArena,
+                        &softwareCausticsTimingTicket
+                    )
+                ;
+                softwareCausticsSubmissionToken = softwareCausticsAccepted
+                    ? m_softwareCausticsSubmissionTransaction.packetToken(softwareCausticsPacket)
+                    : Core::QueueSubmissionToken{}
+                ;
+                if(!softwareCausticsSubmissionToken.valid()){
+                    discardUnacceptedGraphPackets();
+                    discardTimingTickets();
+                    restoreCausticsCpuState();
+                    restoreSurfelGiCpuState();
+                    restoreGraphicsEffectsCpuState();
+                    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned software caustics submission was rejected"));
+                    if(!recoverPendingFrameSubmission())
+                        failFrameRenderRecovery();
+                    return;
+                }
+
+                if(softwareCausticsRunsOnCompute){
+                    const bool softwareCausticsStateReady =
+                        m_causticIrradianceReturnStateHandoff.buildTextureSubset(
+                            m_causticsStateHandoff,
+                            deferredTargets.causticIrradiance.get()
+                        )
+                    ;
+                    if(!softwareCausticsStateReady){
+                        discardUnacceptedGraphPackets();
+                        discardTimingTickets();
+                        restoreSurfelGiCpuState();
+                        restoreGraphicsEffectsCpuState();
+                        if(!recoverPendingFrameSubmission())
+                            failFrameRenderRecovery();
+                        // An accepted Compute producer without retained output state cannot safely span frames.
+                        failFrameRenderRecovery();
+                        return;
+                    }
+
                     Core::Texture* const causticsComputeScratchTextures[] = {
                         deferredTargets.causticAccumulator.get(),
                         deferredTargets.causticHistory.get(),
@@ -3137,20 +3262,24 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     )){
                         discardUnacceptedGraphPackets();
                         discardTimingTickets();
-                        restoreGraphicsEffectsCpuState();
                         restoreSurfelGiCpuState();
-                        recoverPendingFrameSubmission();
+                        restoreGraphicsEffectsCpuState();
+                        if(!recoverPendingFrameSubmission())
+                            failFrameRenderRecovery();
                         failFrameRenderRecovery();
                         return;
                     }
                 }
             }
 
-            m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
+            const Core::QueueSubmissionToken surfelGiProducerToken = hardwareShadowSupported
+                ? shadowSubmissionToken
+                : softwareCausticsSubmissionToken
+            ;
             Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
             const Core::GpuTaskGraphExternalCompletionToken effectsCompletionToken{
                 .completion = m_surfelGiEffectsCompletion,
-                .token = shadowSubmissionToken,
+                .token = surfelGiProducerToken,
             };
             const Core::GpuTaskGraphSubmitter surfelGiSubmitter(device);
             const bool surfelGiAccepted =
@@ -3242,16 +3371,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 // Accepted-token tracking starts when this batch begins.
                 if(!frameExecutionSubmissionState.batchHasAcceptedPacket(
                     ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsEffects
-                )){
-                    if(dedicatedAsyncCompute)
-                        restoreUnacceptedGraphicsEffectsCpuState();
-                    else{
-                        // Ray effects were already accepted by the preceding Graphics submission.  Only the work
-                        // recorded in this rejected packet can be rolled back.
-                        restoreCausticsCpuState();
-                        restoreGraphicsEffectsCpuState();
-                    }
-                }
+                ))
+                    restoreUnacceptedGraphicsEffectsCpuState();
                 if(!recoverPendingFrameSubmission())
                     failFrameRenderRecovery();
                 return;

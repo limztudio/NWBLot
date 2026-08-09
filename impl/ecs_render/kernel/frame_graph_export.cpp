@@ -199,6 +199,19 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
         ))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred-composite graph telemetry export failed"));
     }
+    if(m_softwareCausticsTaskGraphValid){
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+        const Core::GpuTaskGraphTelemetryOptions softwareCausticsTelemetryOptions{
+            .queueAssignments = &m_softwareCausticsTaskGraphQueueAssignments,
+        };
+        if(!m_softwareCausticsTaskGraph.appendFrameGraphTelemetry(
+            builder,
+            m_softwareCausticsTaskGraphAnalysis,
+            scratchArena,
+            softwareCausticsTelemetryOptions
+        ))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software-caustics graph telemetry export failed"));
+    }
     if(m_surfelGiTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphTelemetryOptions surfelGiTelemetryOptions{

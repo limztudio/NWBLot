@@ -61,7 +61,8 @@ namespace FrameExecutionWork{
     enum Enum : u8{
         GraphicsPrefix,
         RayEffects,
-        Caustics,
+        // Only hardware dispatch-rays caustics still use the legacy packet plan. Software caustics are graph-owned.
+        HardwareCaustics,
         AvboitRaster,
         AsyncEffectsTiming,
         AvboitDepthWarp,
@@ -95,7 +96,7 @@ struct FrameExecutionPlanInput{
     bool laggedLightingHistoryReady = false;
     bool laggedLightingHistoryAccepted = false;
     bool hasTransparentRenderers = false;
-    // Hardware caustics run on Graphics; software caustics run on Compute.
+    // Hardware caustics remain on Graphics until their graph-migration step.
     bool hardwareCaustics = false;
 };
 
@@ -138,13 +139,6 @@ struct FrameExecutionExternalWaitTokens{
 };
 
 
-// The plan routes work to RendererSystem-owned command lists.
-struct FrameExecutionLaneCommandListPair{
-    Core::CommandList* graphics = nullptr;
-    Core::CommandList* asyncCompute = nullptr;
-};
-
-
 class FrameExecutionPlan final{
 public:
     static constexpr usize s_MaxPacketWaits = 2u;
@@ -174,24 +168,18 @@ public:
             && input.hasTransparentRenderers
             && !usesLaggedAsyncLighting
         ;
-        const bool usesAsyncCaustics =
-            input.dedicatedAsyncCompute
-            && !input.hardwareCaustics
-        ;
 
         enablePacket(FrameExecutionPacket::GraphicsPrefix, Core::RenderLane::Graphics);
         assignWork(FrameExecutionWork::GraphicsPrefix, FrameExecutionPacket::GraphicsPrefix);
         enablePacket(FrameExecutionPacket::AsyncRayEffects, computeWorkLane);
         addPacketWait(FrameExecutionPacket::AsyncRayEffects, FrameExecutionPacket::GraphicsPrefix);
         assignWork(FrameExecutionWork::RayEffects, FrameExecutionPacket::AsyncRayEffects);
-        if(usesAsyncCaustics)
-            assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::AsyncRayEffects);
 
         if(usesAsyncAvboit){
             enablePacket(FrameExecutionPacket::GraphicsAvboitPre, Core::RenderLane::Graphics);
             addPacketWait(FrameExecutionPacket::GraphicsAvboitPre, FrameExecutionPacket::GraphicsPrefix);
-            if(!usesAsyncCaustics){
-                assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::GraphicsAvboitPre);
+            if(input.hardwareCaustics){
+                assignWork(FrameExecutionWork::HardwareCaustics, FrameExecutionPacket::GraphicsAvboitPre);
                 // The accepted history-copy token must finish before Graphics hardware caustics rewrite live irradiance.
                 if(usesLaggedAsyncLighting)
                     addExternalWait(
@@ -221,8 +209,8 @@ public:
         else{
             enablePacket(FrameExecutionPacket::GraphicsEffects, Core::RenderLane::Graphics);
             addPacketWait(FrameExecutionPacket::GraphicsEffects, FrameExecutionPacket::GraphicsPrefix);
-            if(!usesAsyncCaustics){
-                assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::GraphicsEffects);
+            if(input.hardwareCaustics){
+                assignWork(FrameExecutionWork::HardwareCaustics, FrameExecutionPacket::GraphicsEffects);
                 if(usesLaggedAsyncLighting)
                     addExternalWait(
                         FrameExecutionPacket::GraphicsEffects,
@@ -318,25 +306,6 @@ public:
             && hasWork(work)
             && packetWaitsForExternalToken(packetForWork(work), externalWait)
         ;
-    }
-    [[nodiscard]] Core::CommandList* commandListForWork(
-        const FrameExecutionWork::Enum work,
-        const FrameExecutionLaneCommandListPair& commandLists
-    )const noexcept{
-        return commandListForResolvedQueue(expectedQueueForWork(work), commandLists);
-    }
-    [[nodiscard]] static Core::CommandList* commandListForResolvedQueue(
-        const Core::CommandQueue::Enum queue,
-        const FrameExecutionLaneCommandListPair& commandLists
-    )noexcept{
-        switch(queue){
-            case Core::CommandQueue::Graphics:
-                return commandLists.graphics;
-            case Core::CommandQueue::Compute:
-                return commandLists.asyncCompute;
-            default:
-                return nullptr;
-        }
     }
     [[nodiscard]] usize submissionBatchCount()const noexcept{ return m_submissionBatchCount; }
     [[nodiscard]] FrameExecutionSubmissionBatch::Enum submissionBatchID(const usize batchIndex)const noexcept{

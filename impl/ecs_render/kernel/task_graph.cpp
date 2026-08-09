@@ -81,38 +81,8 @@ struct LaggedLightingHistoryCopyTask{
         )
             return false;
 
-        commandList.setTextureState(
-            payload.sourceShadowVisibility.get(),
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::ResourceStates::CopySource
-        );
-        commandList.setTextureState(
-            payload.destinationShadowVisibility.get(),
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::ResourceStates::CopyDest
-        );
-        commandList.setTextureState(
-            payload.sourceCausticIrradiance.get(),
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::CopySource
-        );
-        commandList.setTextureState(
-            payload.destinationCausticIrradiance.get(),
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::CopyDest
-        );
-        commandList.setTextureState(
-            payload.sourceSurfelIrradiance.get(),
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::CopySource
-        );
-        commandList.setTextureState(
-            payload.destinationSurfelIrradiance.get(),
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::CopyDest
-        );
-        commandList.commitBarriers();
-
+        // Packet-boundary states are declared with the task and lowered by GpuNativePacketRecorder before this
+        // thunk runs.  The copy body keeps only the work intrinsic to this task.
         for(u32 shadowSlot = 0u; shadowSlot < NWB_SCENE_SHADOW_SLOT_COUNT; ++shadowSlot){
             Core::TextureSlice shadowSlice;
             shadowSlice.setArraySlice(shadowSlot);

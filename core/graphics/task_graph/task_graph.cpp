@@ -99,18 +99,24 @@ GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, con
     if(!texture || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphResourceType::Texture)
         return {};
 
+    GpuGraphResourceDesc resolvedDesc = desc;
+    if(resolvedDesc.initialState == ResourceStates::Unknown)
+        resolvedDesc.initialState = texture->getDescription().initialState;
+    if(resolvedDesc.queueSharing == ResourceQueueSharing::Exclusive)
+        resolvedDesc.queueSharing = texture->getDescription().queueSharing;
+
     for(usize resourceIndex = 0u; resourceIndex < m_resources.size(); ++resourceIndex){
         const GpuGraphResourceNode& existing = m_resources[resourceIndex];
         if(existing.type == GpuGraphResourceType::Texture && existing.texture.get() == texture.get()){
-            if(!__hidden_gpu_task_graph::CompatibleResourceMetadata(resourceAt(resourceIndex), desc))
+            if(!__hidden_gpu_task_graph::CompatibleResourceMetadata(resourceAt(resourceIndex), resolvedDesc))
                 return {};
             return GpuGraphResourceId{ static_cast<u32>(resourceIndex), m_generation };
         }
-        if(existing.identity == desc.identity)
+        if(existing.identity == resolvedDesc.identity)
             return {};
     }
 
-    const GpuGraphResourceId resource = appendResource(desc);
+    const GpuGraphResourceId resource = appendResource(resolvedDesc);
     if(resource.valid())
         m_resources[resource.index].texture = texture;
     return resource;
@@ -120,18 +126,24 @@ GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const 
     if(!buffer || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphResourceType::Buffer)
         return {};
 
+    GpuGraphResourceDesc resolvedDesc = desc;
+    if(resolvedDesc.initialState == ResourceStates::Unknown)
+        resolvedDesc.initialState = buffer->getDescription().initialState;
+    if(resolvedDesc.queueSharing == ResourceQueueSharing::Exclusive)
+        resolvedDesc.queueSharing = buffer->getDescription().queueSharing;
+
     for(usize resourceIndex = 0u; resourceIndex < m_resources.size(); ++resourceIndex){
         const GpuGraphResourceNode& existing = m_resources[resourceIndex];
         if(existing.type == GpuGraphResourceType::Buffer && existing.buffer.get() == buffer.get()){
-            if(!__hidden_gpu_task_graph::CompatibleResourceMetadata(resourceAt(resourceIndex), desc))
+            if(!__hidden_gpu_task_graph::CompatibleResourceMetadata(resourceAt(resourceIndex), resolvedDesc))
                 return {};
             return GpuGraphResourceId{ static_cast<u32>(resourceIndex), m_generation };
         }
-        if(existing.identity == desc.identity)
+        if(existing.identity == resolvedDesc.identity)
             return {};
     }
 
-    const GpuGraphResourceId resource = appendResource(desc);
+    const GpuGraphResourceId resource = appendResource(resolvedDesc);
     if(resource.valid())
         m_resources[resource.index].buffer = buffer;
     return resource;
@@ -144,18 +156,22 @@ GpuGraphResourceId GpuTaskGraph::importAccelStruct(
     if(!accelStruct || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphResourceType::AccelStruct)
         return {};
 
+    GpuGraphResourceDesc resolvedDesc = desc;
+    if(resolvedDesc.queueSharing == ResourceQueueSharing::Exclusive)
+        resolvedDesc.queueSharing = accelStruct->getDescription().queueSharing;
+
     for(usize resourceIndex = 0u; resourceIndex < m_resources.size(); ++resourceIndex){
         const GpuGraphResourceNode& existing = m_resources[resourceIndex];
         if(existing.type == GpuGraphResourceType::AccelStruct && existing.accelStruct.get() == accelStruct.get()){
-            if(!__hidden_gpu_task_graph::CompatibleResourceMetadata(resourceAt(resourceIndex), desc))
+            if(!__hidden_gpu_task_graph::CompatibleResourceMetadata(resourceAt(resourceIndex), resolvedDesc))
                 return {};
             return GpuGraphResourceId{ static_cast<u32>(resourceIndex), m_generation };
         }
-        if(existing.identity == desc.identity)
+        if(existing.identity == resolvedDesc.identity)
             return {};
     }
 
-    const GpuGraphResourceId resource = appendResource(desc);
+    const GpuGraphResourceId resource = appendResource(resolvedDesc);
     if(resource.valid())
         m_resources[resource.index].accelStruct = accelStruct;
     return resource;
@@ -258,6 +274,49 @@ bool GpuTaskGraph::recordTask(
 
     const GpuTaskNode& task = m_tasks[taskID.index];
     return task.payload && task.recordPayload && task.recordPayload(task.payload, commandList, context);
+}
+
+bool GpuTaskGraph::applyCompiledBarrier(
+    const GpuCompiledBarrier& barrier,
+    CommandList& commandList
+)const{
+    if(!validResource(barrier.resource) || barrier.type >= GpuCompiledBarrierType::kCount)
+        return false;
+
+    const GpuGraphResourceNode& resource = m_resources[barrier.resource.index];
+    switch(barrier.type){
+    case GpuCompiledBarrierType::TextureTransition:
+    case GpuCompiledBarrierType::TextureUav:
+        if(resource.type != GpuGraphResourceType::Texture || !resource.texture)
+            return false;
+        commandList.setTextureState(
+            resource.texture.get(),
+            barrier.range.textureSubresources,
+            barrier.after
+        );
+        return true;
+    case GpuCompiledBarrierType::BufferTransition:
+    case GpuCompiledBarrierType::BufferUav:
+        if(resource.type != GpuGraphResourceType::Buffer || !resource.buffer)
+            return false;
+        commandList.setBufferState(resource.buffer.get(), barrier.after);
+        return true;
+    case GpuCompiledBarrierType::AccelStructTransition:
+    case GpuCompiledBarrierType::AccelStructUav:
+        if(resource.type != GpuGraphResourceType::AccelStruct || !resource.accelStruct)
+            return false;
+        commandList.setAccelStructState(resource.accelStruct.get(), barrier.after);
+        return true;
+    case GpuCompiledBarrierType::TextureOwnershipRelease:
+    case GpuCompiledBarrierType::TextureOwnershipAcquire:
+    case GpuCompiledBarrierType::BufferOwnershipRelease:
+    case GpuCompiledBarrierType::BufferOwnershipAcquire:
+        // Ownership records require the packet state-seed and physical-queue release/acquire lowering added after
+        // this transition/UAV slice.  Reject them rather than silently omitting an exclusive-family transfer.
+        return false;
+    default:
+        return false;
+    }
 }
 
 void GpuTaskGraph::acceptTask(const GpuTaskId& taskID, const QueueSubmissionToken& token)noexcept{

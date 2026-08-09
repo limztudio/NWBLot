@@ -22,6 +22,7 @@ NWB_CORE_BEGIN
 
 class GpuTaskGraphAnalysis;
 class GpuTaskGraphQueueAssignments;
+struct GpuCompiledBarrier;
 
 namespace Telemetry{
     class FrameGraphBuilder;
@@ -191,6 +192,9 @@ public:
         CommandList& commandList,
         const GpuTaskRecordContext& context
     )const;
+    // Lowers a compiler-owned packet-boundary barrier through the existing CommandList state tracker.  Task thunks
+    // retain responsibility only for barriers internal to their own command sequence.
+    [[nodiscard]] bool applyCompiledBarrier(const GpuCompiledBarrier& barrier, CommandList& commandList)const;
     void acceptTask(const GpuTaskId& task, const QueueSubmissionToken& token)noexcept;
     void discardTask(const GpuTaskId& task)noexcept;
     [[nodiscard]] bool appendFrameGraphTelemetry(

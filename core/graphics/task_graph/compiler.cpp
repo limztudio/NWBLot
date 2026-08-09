@@ -230,6 +230,50 @@ struct TrackedResourceAccess{
     bool active = true;
 };
 
+// This is deliberately separate from hazard analysis.  Hazards decide execution order; the barrier planner retains
+// the last state required for each overlapping declared range so native recording can establish the next task's
+// state without renderer-owned subset/fan-in bookkeeping.
+struct TrackedCompiledResourceState{
+    GpuGraphResourceId resource;
+    GpuTaskResourceRange range;
+    ResourceStates::Mask state = ResourceStates::Unknown;
+    GpuTaskResourceAccess::Enum access = GpuTaskResourceAccess::Read;
+    GpuTaskId task;
+    GpuPhysicalQueueId queue;
+};
+
+[[nodiscard]] static GpuCompiledBarrierType::Enum TransitionBarrierType(
+    const GpuGraphResourceType::Enum resourceType
+)noexcept{
+    switch(resourceType){
+    case GpuGraphResourceType::Texture:
+        return GpuCompiledBarrierType::TextureTransition;
+    case GpuGraphResourceType::Buffer:
+        return GpuCompiledBarrierType::BufferTransition;
+    case GpuGraphResourceType::AccelStruct:
+        return GpuCompiledBarrierType::AccelStructTransition;
+    default:
+        NWB_ASSERT(false);
+        return GpuCompiledBarrierType::TextureTransition;
+    }
+}
+
+[[nodiscard]] static GpuCompiledBarrierType::Enum UavBarrierType(
+    const GpuGraphResourceType::Enum resourceType
+)noexcept{
+    switch(resourceType){
+    case GpuGraphResourceType::Texture:
+        return GpuCompiledBarrierType::TextureUav;
+    case GpuGraphResourceType::Buffer:
+        return GpuCompiledBarrierType::BufferUav;
+    case GpuGraphResourceType::AccelStruct:
+        return GpuCompiledBarrierType::AccelStructUav;
+    default:
+        NWB_ASSERT(false);
+        return GpuCompiledBarrierType::TextureUav;
+    }
+}
+
 static bool BuildTopologicalOrder(
     const GpuTaskGraph& graph,
     const GraphicsVector<GpuTaskDependencyEdge>& edges,
@@ -850,6 +894,7 @@ bool GpuTaskGraphCompiler::compile(
     outCompiledGraph.m_tasks.reserve(graph.taskCount());
     outCompiledGraph.m_packets.reserve(graph.taskCount());
     outCompiledGraph.m_packetTasks.reserve(graph.taskCount());
+    outCompiledGraph.m_prologueBarriers.reserve(graph.taskCount());
     outCompiledGraph.m_queueTopology.reserve(topology.queueCount);
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex)
         outCompiledGraph.m_queueTopology.push_back(topology.queues[queueIndex]);
@@ -879,6 +924,97 @@ bool GpuTaskGraphCompiler::compile(
             .queue = assignment->queue,
             .packet = packetID,
         });
+    }
+
+    // Start with graph-planned prologue transitions and UAV dependencies.  Existing command-list handoffs still
+    // seed cross-graph state during the migration, but no renderer task needs to issue its own boundary transition
+    // once it relies on this plan.  Ownership release/acquire records are intentionally a later extension: they
+    // require packet-state seeds across graph boundaries, whereas concurrent Graphics/Compute resources can already
+    // use this transition plan with the current timeline-token dependencies.
+    Vector<TrackedCompiledResourceState, Alloc::ScratchArena> trackedResourceStates(scratchArena);
+    trackedResourceStates.reserve(graph.taskCount());
+    for(const GpuTaskId taskID : outAnalysis.topologicalOrder()){
+        GpuCompiledTask* compiledTask = nullptr;
+        for(GpuCompiledTask& candidate : outCompiledGraph.m_tasks){
+            if(candidate.task == taskID){
+                compiledTask = &candidate;
+                break;
+            }
+        }
+        if(!compiledTask){
+            outCompiledGraph.reset();
+            return false;
+        }
+
+        const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
+        compiledTask->prologueBarrierOffset = static_cast<u32>(outCompiledGraph.m_prologueBarriers.size());
+        for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
+            const GpuTaskResourceUse& use = task.resourceUses[useIndex];
+            const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
+            if(resource.type == GpuGraphResourceType::HazardDomain || use.requiredState == ResourceStates::Unknown)
+                continue;
+
+            // A task owns its internal resource ordering.  Only its first declared use becomes a packet-boundary
+            // transition; later conflicting uses remain local CommandList work inside the task thunk.
+            bool alreadyPlannedByTask = false;
+            for(usize previousUseIndex = 0u; previousUseIndex < useIndex; ++previousUseIndex){
+                const GpuTaskResourceUse& previousUse = task.resourceUses[previousUseIndex];
+                if(
+                    previousUse.resource == use.resource
+                    && RangesOverlap(resource, previousUse.range, use.range)
+                ){
+                    alreadyPlannedByTask = true;
+                    break;
+                }
+            }
+            if(alreadyPlannedByTask)
+                continue;
+
+            const TrackedCompiledResourceState* previousState = nullptr;
+            for(usize stateIndex = trackedResourceStates.size(); stateIndex > 0u; --stateIndex){
+                const TrackedCompiledResourceState& candidate = trackedResourceStates[stateIndex - 1u];
+                if(
+                    candidate.resource == use.resource
+                    && RangesOverlap(resource, candidate.range, use.range)
+                ){
+                    previousState = &candidate;
+                    break;
+                }
+            }
+
+            const ResourceStates::Mask before = previousState ? previousState->state : resource.initialState;
+            const bool needsUavDependency =
+                previousState
+                && before == ResourceStates::UnorderedAccess
+                && use.requiredState == ResourceStates::UnorderedAccess
+                && (IsWriteAccess(previousState->access) || IsWriteAccess(use.access))
+            ;
+            if(before != use.requiredState || needsUavDependency){
+                outCompiledGraph.m_prologueBarriers.push_back(GpuCompiledBarrier{
+                    .type = before == use.requiredState
+                        ? UavBarrierType(resource.type)
+                        : TransitionBarrierType(resource.type),
+                    .resource = use.resource,
+                    .range = use.range,
+                    .before = before,
+                    .after = use.requiredState,
+                    .sourceQueue = previousState ? previousState->queue : compiledTask->queue,
+                    .destinationQueue = compiledTask->queue,
+                });
+            }
+
+            trackedResourceStates.push_back(TrackedCompiledResourceState{
+                .resource = use.resource,
+                .range = use.range,
+                .state = use.requiredState,
+                .access = use.access,
+                .task = taskID,
+                .queue = compiledTask->queue,
+            });
+        }
+        compiledTask->prologueBarrierCount = static_cast<u32>(outCompiledGraph.m_prologueBarriers.size())
+            - compiledTask->prologueBarrierOffset
+        ;
     }
 
     for(usize consumerPacketIndex = 0u; consumerPacketIndex < outCompiledGraph.m_packets.size(); ++consumerPacketIndex){

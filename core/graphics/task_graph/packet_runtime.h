@@ -59,12 +59,16 @@ private:
 };
 
 
-// Phase 3 still imports existing state handoffs at packet open/close.  This bridge disappears when the compiler
-// supplies packet state seeds in the automatic-barrier phase; it does not retain a pass-specific command list.
+// Transitional packet state handoffs seed imported/existing work at open and export final state at close.  Graph
+// barriers already lower through this recorder; the remaining bridge disappears once compiler-produced packet
+// state seeds cover cross-graph and cross-frame imports.
 struct GpuNativePacketRecordDesc{
     GpuSubmissionPacketId packet;
     const CommandListResourceStateHandoff* initialStates = nullptr;
     CommandListResourceStateHandoff* finalStates = nullptr;
+    // Transitional opt-in while renderer tasks shed their local boundary transitions.  New graph-owned tasks set
+    // this true; imported or not-yet-migrated record thunks retain their established state bridge.
+    bool applyCompiledBarriers = false;
 };
 
 

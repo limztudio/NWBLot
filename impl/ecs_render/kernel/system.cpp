@@ -3544,6 +3544,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 .packet = historyPacket,
                 .initialStates = &m_laggedLightingHistoryCopyInputStateHandoff,
                 .finalStates = &m_laggedLightingHistoryCopyStateHandoff,
+                .applyCompiledBarriers = true,
             };
             const bool historyCopyRecorded = historyPacket.valid()
                 && recorder.recordPacket(

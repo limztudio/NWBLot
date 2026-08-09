@@ -52,8 +52,8 @@ struct GpuGraphResourceDesc{
     Name identity = NAME_NONE;
     AStringView markerLabel;
     GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
-    // Phase 1 does not consume initial state for barriers. Unknown is intentional unless the importer has an
-    // authoritative state handoff; later barrier planning must reject backend imports whose state is still unknown.
+    // Compiler-generated packet-boundary transitions begin from this state. Unknown remains valid only while a
+    // transitional CommandListResourceStateHandoff supplies the authoritative imported state at recording time.
     ResourceStates::Mask initialState = ResourceStates::Unknown;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
 

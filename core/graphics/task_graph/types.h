@@ -234,6 +234,37 @@ struct GpuTaskExternalDependencyEdge{
 };
 
 
+// A compiled barrier is a graph-level transition request.  It deliberately names only engine resources and
+// resource states; the packet recorder lowers it through CommandList so the task graph stays independent of raw
+// Vulkan barrier objects.
+namespace GpuCompiledBarrierType{
+    enum Enum : u8{
+        TextureTransition,
+        BufferTransition,
+        AccelStructTransition,
+        TextureUav,
+        BufferUav,
+        AccelStructUav,
+        TextureOwnershipRelease,
+        TextureOwnershipAcquire,
+        BufferOwnershipRelease,
+        BufferOwnershipAcquire,
+
+        kCount,
+    };
+};
+
+struct GpuCompiledBarrier{
+    GpuCompiledBarrierType::Enum type = GpuCompiledBarrierType::TextureTransition;
+    GpuGraphResourceId resource;
+    GpuTaskResourceRange range;
+    ResourceStates::Mask before = ResourceStates::Unknown;
+    ResourceStates::Mask after = ResourceStates::Unknown;
+    GpuPhysicalQueueId sourceQueue;
+    GpuPhysicalQueueId destinationQueue;
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

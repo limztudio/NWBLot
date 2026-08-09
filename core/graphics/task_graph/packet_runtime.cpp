@@ -76,15 +76,41 @@ bool GpuNativePacketRecorder::recordPacket(
     for(u32 taskIndex = 0u; recorded && taskIndex < packet.taskCount; ++taskIndex){
         const GpuTaskId task = tasks[taskIndex];
         const GpuTaskGraphTaskView taskView = graph.taskAt(task.index);
+        const GpuCompiledTask* const compiledTask = compiledGraph.findTask(task);
+        if(!compiledTask || compiledTask->packet != desc.packet){
+            recorded = false;
+            break;
+        }
         const GpuTaskRecordContext context{
             .graph = compiledGraph,
             .task = task,
             .packet = desc.packet,
             .queue = packet.queue,
         };
+        if(desc.applyCompiledBarriers){
+            const GpuCompiledBarrier* const prologueBarriers = compiledGraph.taskPrologueBarriers(task);
+            if(compiledTask->prologueBarrierCount > 0u && !prologueBarriers){
+                recorded = false;
+                break;
+            }
+            for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex)
+                recorded = graph.applyCompiledBarrier(prologueBarriers[barrierIndex], *commandList);
+            if(recorded)
+                commandList->commitBarriers();
+        }
         commandList->beginMarker(taskView.markerLabel);
-        recorded = graph.recordTask(task, *commandList, context);
+        if(recorded)
+            recorded = graph.recordTask(task, *commandList, context);
         commandList->endMarker();
+        if(desc.applyCompiledBarriers){
+            const GpuCompiledBarrier* const epilogueBarriers = compiledGraph.taskEpilogueBarriers(task);
+            if(compiledTask->epilogueBarrierCount > 0u && !epilogueBarriers)
+                recorded = false;
+            for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledTask->epilogueBarrierCount; ++barrierIndex)
+                recorded = graph.applyCompiledBarrier(epilogueBarriers[barrierIndex], *commandList);
+            if(recorded)
+                commandList->commitBarriers();
+        }
     }
     commandList->close(desc.finalStates);
     if(!recorded || !commandList->hasCommandBuffer())

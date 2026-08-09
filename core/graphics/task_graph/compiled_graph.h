@@ -44,6 +44,10 @@ struct GpuCompiledTask{
     GpuTaskId task;
     GpuPhysicalQueueId queue;
     GpuSubmissionPacketId packet;
+    u32 prologueBarrierOffset = 0u;
+    u32 prologueBarrierCount = 0u;
+    u32 epilogueBarrierOffset = 0u;
+    u32 epilogueBarrierCount = 0u;
 };
 
 
@@ -73,6 +77,8 @@ public:
     [[nodiscard]] const GpuExternalCompletionId* packetExternalDependencies(
         const GpuSubmissionPacketId& packet
     )const noexcept;
+    [[nodiscard]] const GpuCompiledBarrier* taskPrologueBarriers(const GpuTaskId& task)const noexcept;
+    [[nodiscard]] const GpuCompiledBarrier* taskEpilogueBarriers(const GpuTaskId& task)const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* queueInfo(const GpuPhysicalQueueId& queue)const noexcept;
 
 
@@ -82,6 +88,8 @@ private:
     GraphicsVector<GpuTaskId> m_packetTasks;
     GraphicsVector<GpuPacketDependency> m_packetDependencies;
     GraphicsVector<GpuExternalCompletionId> m_packetExternalDependencies;
+    GraphicsVector<GpuCompiledBarrier> m_prologueBarriers;
+    GraphicsVector<GpuCompiledBarrier> m_epilogueBarriers;
     GraphicsVector<GpuPhysicalQueueInfo> m_queueTopology;
     u64 m_generation = 0u;
     u16 m_deviceGeneration = 0u;

@@ -216,7 +216,11 @@ private:
     void buildDeferredLightingTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         DeferredFrameTargets& deferredTargets,
+        const CsgFrameState& csgFrameState,
+        bool clearAvboitTargets,
+        bool hasTransparentRenderers,
         bool shadowVisibilityPrepared,
+        Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
         Core::GpuTimingSubmissionTicket& hardwareCausticsTimingTicket,
         Core::GpuTimingSubmissionTicket& lightingTimingTicket,
         Core::GpuTimingSubmissionTicket& compositeTimingTicket
@@ -337,8 +341,9 @@ private:
     Core::GpuTaskId m_avboitAccumulationTask;
     Core::GpuExternalCompletionId m_avboitPrefixCompletion;
     bool m_avboitTaskGraphValid = false;
-    // Hardware Caustics, Deferred Lighting, and Composite share one packet graph. Hardware remains a staged
-    // Graphics producer; live Lighting consumes it through an internal edge, while lagged Lighting reads history.
+    // Active-lagged AVBOIT Pre, Hardware Caustics, Deferred Lighting, and Composite share one packet graph.
+    // Hardware and AVBOIT remain staged Graphics producers; live Lighting consumes Hardware through an internal
+    // edge, while lagged Lighting reads history and can run independently on the dedicated Compute lane.
     Core::GpuTaskGraph m_deferredLightingTaskGraph;
     Core::GpuTaskGraphAnalysis m_deferredLightingTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_deferredLightingTaskGraphQueueAssignments;
@@ -346,6 +351,7 @@ private:
     Core::GpuRecordedGraph m_deferredLightingRecordedGraph;
     Core::GpuGraphSubmissionTransaction m_deferredLightingSubmissionTransaction;
     Core::GpuTaskId m_deferredHardwareCausticsTask;
+    Core::GpuTaskId m_deferredAvboitPreTask;
     Core::GpuTaskId m_deferredLightingTask;
     Core::GpuTaskId m_deferredCompositeTask;
     Core::GpuExternalCompletionId m_deferredHardwareCausticsPrefixCompletion;

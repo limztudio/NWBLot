@@ -905,7 +905,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketChain){
 }
 
 
-TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareLightingCompositeSharedTransaction){
+TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCompositeSharedTransaction){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto buffer = device.createBuffer(
         BufferDesc()
@@ -914,6 +914,15 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareLightingComposit
             .setInitialState(ResourceStates::Common)
     );
     ASSERT_NE(buffer.get(), nullptr);
+    auto avboitPrefixBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(avboitPrefixBuffer.get(), nullptr);
+    auto avboitOutput = CreateConcurrentTestTexture(device);
+    ASSERT_NE(avboitOutput.get(), nullptr);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId resource = graph.importBuffer(
@@ -923,7 +932,23 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareLightingComposit
             .setMarkerLabel("Staged Deferred Buffer")
             .setType(GpuGraphResourceType::Buffer)
     );
+    const GpuGraphResourceId avboitPrefix = graph.importBuffer(
+        avboitPrefixBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/staged_avboit_prefix"))
+            .setMarkerLabel("AVBOIT Prefix")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId avboitAccumulation = graph.importTexture(
+        avboitOutput,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/staged_avboit_accumulation"))
+            .setMarkerLabel("AVBOIT Accumulation")
+            .setType(GpuGraphResourceType::Texture)
+    );
     ASSERT_TRUE(resource.valid());
+    ASSERT_TRUE(avboitPrefix.valid());
+    ASSERT_TRUE(avboitAccumulation.valid());
 
     GpuTaskSchedulingHint scheduling;
     scheduling.forceSubmissionBoundary = true;
@@ -960,6 +985,46 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareLightingComposit
         }
     );
     ASSERT_TRUE(hardwareTask.valid());
+
+    const GpuTaskResourceUse avboitPreUses[] = {
+        GpuTaskResourceUse{
+            .resource = avboitPrefix,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = avboitAccumulation,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    GpuTaskDesc avboitPreDesc;
+    avboitPreDesc
+        .setIdentity(Name("tests/descriptor_buffer/staged_avboit_pre"))
+        .setMarkerLabel("AVBOIT Pre")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(scheduling)
+        .setResourceUses(avboitPreUses, LengthOf(avboitPreUses))
+    ;
+    bool avboitPreRecorded = false;
+    const GpuTaskId avboitPreTask = graph.addTask<NativePacketPrefixTask>(
+        avboitPreDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = avboitPrefixBuffer.get(),
+            .expectedState = ResourceStates::ConstantBuffer,
+            .texture = avboitOutput.get(),
+            .expectedTextureState = ResourceStates::UnorderedAccess,
+            .recorded = &avboitPreRecorded,
+        }
+    );
+    ASSERT_TRUE(avboitPreTask.valid());
 
     const GpuTaskResourceUse lightingUses[] = {
         GpuTaskResourceUse{
@@ -1001,6 +1066,16 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareLightingComposit
             .requiredState = ResourceStates::ShaderResource,
             .access = GpuTaskResourceAccess::Read,
         },
+        GpuTaskResourceUse{
+            .resource = avboitAccumulation,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    const GpuTaskId compositeTaskDependencies[] = {
+        lightingTask,
+        avboitPreTask,
     };
     GpuTaskDesc compositeDesc;
     compositeDesc
@@ -1013,7 +1088,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareLightingComposit
             true,
         })
         .setScheduling(scheduling)
-        .setDependencies(&lightingTask, 1u)
+        .setDependencies(compositeTaskDependencies, LengthOf(compositeTaskDependencies))
         .setResourceUses(compositeUses, LengthOf(compositeUses))
     ;
     bool compositeRecorded = false;
@@ -1022,6 +1097,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareLightingComposit
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
             .expectedState = ResourceStates::ShaderResource,
+            .texture = avboitOutput.get(),
+            .expectedTextureState = ResourceStates::ShaderResource,
             .recorded = &compositeRecorded,
         }
     );
@@ -1051,51 +1128,73 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareLightingComposit
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
 
     const GpuTaskQueueAssignment* const hardwareAssignment = assignments.find(hardwareTask);
+    const GpuTaskQueueAssignment* const avboitPreAssignment = assignments.find(avboitPreTask);
     const GpuTaskQueueAssignment* const lightingAssignment = assignments.find(lightingTask);
     const GpuTaskQueueAssignment* const compositeAssignment = assignments.find(compositeTask);
     ASSERT_NE(hardwareAssignment, nullptr);
+    ASSERT_NE(avboitPreAssignment, nullptr);
     ASSERT_NE(lightingAssignment, nullptr);
     ASSERT_NE(compositeAssignment, nullptr);
     EXPECT_EQ(hardwareAssignment->queueClass, CommandQueue::Graphics);
     EXPECT_EQ(hardwareAssignment->reason, GpuTaskQueueAssignmentReason::RequiredGraphics);
+    EXPECT_EQ(avboitPreAssignment->queueClass, CommandQueue::Graphics);
+    EXPECT_EQ(avboitPreAssignment->reason, GpuTaskQueueAssignmentReason::RequiredGraphics);
     EXPECT_EQ(lightingAssignment->queueClass, CommandQueue::Graphics);
     EXPECT_EQ(lightingAssignment->reason, GpuTaskQueueAssignmentReason::Fallback);
     EXPECT_EQ(compositeAssignment->queueClass, CommandQueue::Graphics);
     EXPECT_EQ(compositeAssignment->reason, GpuTaskQueueAssignmentReason::Fallback);
 
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    ASSERT_EQ(compiledGraph.packetCount(), 4u);
     const GpuSubmissionPacketId hardwarePacket = compiledGraph.packetForTask(hardwareTask);
+    const GpuSubmissionPacketId avboitPrePacket = compiledGraph.packetForTask(avboitPreTask);
     const GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lightingTask);
     const GpuSubmissionPacketId compositePacket = compiledGraph.packetForTask(compositeTask);
     ASSERT_TRUE(hardwarePacket.valid());
+    ASSERT_TRUE(avboitPrePacket.valid());
     ASSERT_TRUE(lightingPacket.valid());
     ASSERT_TRUE(compositePacket.valid());
     EXPECT_EQ(compiledGraph.packetIdAt(0u), hardwarePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(1u), lightingPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(2u), compositePacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(1u), avboitPrePacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(2u), lightingPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(3u), compositePacket);
     EXPECT_EQ(compiledGraph.packet(hardwarePacket).dependencyCount, 0u);
+    EXPECT_EQ(compiledGraph.packet(avboitPrePacket).dependencyCount, 0u);
     ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(lightingPacket)[0u].producer, hardwarePacket);
-    ASSERT_EQ(compiledGraph.packet(compositePacket).dependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetDependencies(compositePacket)[0u].producer, lightingPacket);
+    ASSERT_EQ(compiledGraph.packet(compositePacket).dependencyCount, 2u);
+    const GpuPacketDependency* const compositePacketDependencies = compiledGraph.packetDependencies(compositePacket);
+    ASSERT_NE(compositePacketDependencies, nullptr);
+    bool compositeWaitsForLighting = false;
+    bool compositeWaitsForAvboit = false;
+    for(usize index = 0u; index < compiledGraph.packet(compositePacket).dependencyCount; ++index){
+        compositeWaitsForLighting = compositeWaitsForLighting || compositePacketDependencies[index].producer == lightingPacket;
+        compositeWaitsForAvboit = compositeWaitsForAvboit || compositePacketDependencies[index].producer == avboitPrePacket;
+    }
+    EXPECT_TRUE(compositeWaitsForLighting);
+    EXPECT_TRUE(compositeWaitsForAvboit);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecordDesc recordDescs[] = {
         GpuNativePacketRecordDesc{ .packet = hardwarePacket },
+        GpuNativePacketRecordDesc{ .packet = avboitPrePacket },
         GpuNativePacketRecordDesc{ .packet = lightingPacket },
         GpuNativePacketRecordDesc{ .packet = compositePacket },
     };
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacketsInCompileOrder(
+    GpuSubmissionPacketId failedPacket;
+    const bool allPacketsRecorded = recorder.recordPacketsInCompileOrder(
         graph,
         compiledGraph,
         recordDescs,
         LengthOf(recordDescs),
-        recordedGraph
-    ));
+        recordedGraph,
+        &failedPacket
+    );
+    ASSERT_TRUE(allPacketsRecorded) << "failed packet index: " << failedPacket.index;
     EXPECT_TRUE(hardwareRecorded);
+    EXPECT_TRUE(avboitPreRecorded);
     EXPECT_TRUE(lightingRecorded);
     EXPECT_TRUE(compositeRecorded);
 
@@ -1112,6 +1211,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareLightingComposit
     ));
     const QueueSubmissionToken hardwareToken = transaction.packetToken(hardwarePacket);
     ASSERT_TRUE(hardwareToken.valid());
+    EXPECT_FALSE(transaction.packetToken(avboitPrePacket).valid());
     EXPECT_FALSE(transaction.packetToken(lightingPacket).valid());
     EXPECT_FALSE(transaction.packetToken(compositePacket).valid());
 
@@ -1128,6 +1228,21 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareLightingComposit
     const QueueSubmissionToken lightingToken = transaction.packetToken(lightingPacket);
     ASSERT_TRUE(lightingToken.valid());
     EXPECT_EQ(transaction.packetToken(hardwarePacket).value, hardwareToken.value);
+    EXPECT_FALSE(transaction.packetToken(avboitPrePacket).valid());
+    EXPECT_FALSE(transaction.packetToken(compositePacket).valid());
+
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        avboitPrePacket,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken avboitPreToken = transaction.packetToken(avboitPrePacket);
+    ASSERT_TRUE(avboitPreToken.valid());
     EXPECT_FALSE(transaction.packetToken(compositePacket).valid());
 
     ASSERT_TRUE(submitter.submitPacket(
@@ -1142,6 +1257,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareLightingComposit
     ));
     ASSERT_TRUE(transaction.packetToken(compositePacket).valid());
     EXPECT_EQ(transaction.packetToken(hardwarePacket).value, hardwareToken.value);
+    EXPECT_EQ(transaction.packetToken(avboitPrePacket).value, avboitPreToken.value);
     EXPECT_EQ(transaction.packetToken(lightingPacket).value, lightingToken.value);
     EXPECT_TRUE(device.waitForIdle());
 }

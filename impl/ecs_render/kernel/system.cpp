@@ -317,6 +317,7 @@ void RendererSystem::invalidateResources(){
     m_avboitSubmissionTransaction.reset(m_avboitCompiledGraph);
     m_deferredLightingTaskGraphValid = false;
     m_deferredHardwareCausticsTask = {};
+    m_deferredAvboitPreTask = {};
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredHardwareCausticsPrefixCompletion = {};
@@ -679,6 +680,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_avboitSubmissionTransaction.reset(m_avboitCompiledGraph);
     m_deferredLightingTaskGraphValid = false;
     m_deferredHardwareCausticsTask = {};
+    m_deferredAvboitPreTask = {};
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredHardwareCausticsPrefixCompletion = {};
@@ -982,6 +984,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
     const bool surfelGiRunsOnCompute = surfelGiQueue->queueClass == Core::CommandQueue::Compute;
     const bool clearAvboitTargets = hasTransparentRenderers || m_avboitState.m_targetsNeedClear;
+    const bool foldsAvboitPreIntoDeferredGraph = laggedAsyncLightingSchedule;
     Core::GpuTimingSubmissionTicket avboitPreTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket avboitDepthWarpTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket avboitExtinctionTimingTicket(m_graphics.gpuTiming());
@@ -1033,7 +1036,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? m_avboitCompiledGraph.queueInfo(m_avboitCompiledGraph.packet(avboitAccumulationPacket).queue)
         : nullptr
     ;
-    if(
+    if(!foldsAvboitPreIntoDeferredGraph && (
         !m_avboitTaskGraphValid
         || !m_avboitPreTask.valid()
         || !m_avboitPrefixCompletion.valid()
@@ -1055,7 +1058,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 || avboitAccumulationQueue->queueClass != Core::CommandQueue::Graphics
             )
         )
-    ){
+    )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned AVBOIT was unavailable"));
         avboitPreTimingTicket.discard();
         avboitDepthWarpTimingTicket.discard();
@@ -1074,13 +1077,20 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     buildDeferredLightingTaskGraph(
         taskGraphInput,
         deferredTargets,
+        csgFrameState,
+        clearAvboitTargets,
+        hasTransparentRenderers,
         shadowVisibilityPrepared,
+        avboitPreTimingTicket,
         hardwareCausticsTimingTicket,
         deferredLightingTimingTicket,
         deferredCompositeTimingTicket
     );
     const Core::GpuSubmissionPacketId hardwareCausticsPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredHardwareCausticsTask
+    );
+    const Core::GpuSubmissionPacketId deferredAvboitPrePacket = m_deferredLightingCompiledGraph.packetForTask(
+        m_deferredAvboitPreTask
     );
     const Core::GpuSubmissionPacketId deferredLightingPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredLightingTask
@@ -1102,6 +1112,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         )
         : nullptr
     ;
+    const Core::GpuPhysicalQueueInfo* const deferredAvboitPreQueue = deferredAvboitPrePacket.valid()
+        ? m_deferredLightingCompiledGraph.queueInfo(
+            m_deferredLightingCompiledGraph.packet(deferredAvboitPrePacket).queue
+        )
+        : nullptr
+    ;
     const Core::GpuExternalCompletionId deferredLightingDependentCompletion = laggedAsyncLightingSchedule
         ? m_deferredLightingHistoryCompletion
         : m_deferredLightingSurfelGiCompletion
@@ -1110,7 +1126,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? m_deferredLightingPrefixCompletion
         : m_deferredAvboitCompletion
     ;
-    const usize deferredPacketCount = hardwareShadowSupported ? 3u : 2u;
+    const usize deferredHardwarePacketCount = hardwareShadowSupported ? 1u : 0u;
+    const usize deferredAvboitPacketCount = foldsAvboitPreIntoDeferredGraph ? 1u : 0u;
+    const usize deferredLightingPacketIndex = deferredHardwarePacketCount + deferredAvboitPacketCount;
+    const usize deferredCompositePacketIndex = deferredLightingPacketIndex + 1u;
+    const usize deferredPacketCount = deferredCompositePacketIndex + 1u;
     if(
         !m_deferredLightingTaskGraphValid
         || (hardwareShadowSupported && (
@@ -1120,9 +1140,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !hardwareCausticsQueue
             || hardwareCausticsQueue->queueClass != Core::CommandQueue::Graphics
         ))
+        || (foldsAvboitPreIntoDeferredGraph && (
+            !m_deferredAvboitPreTask.valid()
+            || !m_deferredLightingPrefixCompletion.valid()
+            || !deferredAvboitPrePacket.valid()
+            || !deferredAvboitPreQueue
+            || deferredAvboitPreQueue->queueClass != Core::CommandQueue::Graphics
+        ))
         || !m_deferredLightingTask.valid()
         || !m_deferredCompositeTask.valid()
-        || !m_deferredAvboitCompletion.valid()
+        || (!foldsAvboitPreIntoDeferredGraph && !m_deferredAvboitCompletion.valid())
         || !deferredLightingPrimaryCompletion.valid()
         || !deferredLightingDependentCompletion.valid()
         || !deferredLightingPacket.valid()
@@ -1131,8 +1158,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !deferredLightingQueue
         || !deferredCompositeQueue
         || (hardwareShadowSupported && m_deferredLightingCompiledGraph.packetIdAt(0u) != hardwareCausticsPacket)
-        || m_deferredLightingCompiledGraph.packetIdAt(hardwareShadowSupported ? 1u : 0u) != deferredLightingPacket
-        || m_deferredLightingCompiledGraph.packetIdAt(hardwareShadowSupported ? 2u : 1u) != deferredCompositePacket
+        || (foldsAvboitPreIntoDeferredGraph
+            && m_deferredLightingCompiledGraph.packetIdAt(deferredHardwarePacketCount) != deferredAvboitPrePacket
+        )
+        || m_deferredLightingCompiledGraph.packetIdAt(deferredLightingPacketIndex) != deferredLightingPacket
+        || m_deferredLightingCompiledGraph.packetIdAt(deferredCompositePacketIndex) != deferredCompositePacket
         || (laggedAsyncLightingSchedule && deferredLightingQueue->queueClass != Core::CommandQueue::Compute)
         || (laggedAsyncLightingSchedule && deferredCompositeQueue->queueClass != Core::CommandQueue::Graphics)
     ){
@@ -1545,71 +1575,72 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     const Core::CommandListResourceStateHandoff* const causticsFinalStateSeed = softwareCausticsFinalStateSeed;
 
-    // AVBOIT's raster entry point imports the prefix packet state; every later stage is recorded in the compiler's
-    // dependency order, so its state seeds stay internal to the declared packet chain.
+    // AVBOIT's raster entry point imports the prefix packet state.  Active lagged frames move that single packet
+    // into the deferred graph; live frames retain AVBOIT's multi-packet graph-owned chain.
     m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
-    Core::GpuNativePacketRecorder avboitRecorder(device);
     const Core::GpuExternalPacketStateSource avboitPreStateSources[] = {
         Core::GpuExternalPacketStateSource{
             .states = graphicsPrefixStateSeed,
         },
     };
-    const Core::GpuNativePacketRecordDesc avboitRecordDescs[] = {
-        Core::GpuNativePacketRecordDesc{
-            .packet = avboitPrePacket,
-            .externalStateSources = avboitPreStateSources,
-            .externalStateSourceCount = LengthOf(avboitPreStateSources),
-        },
-        Core::GpuNativePacketRecordDesc{
-            .packet = avboitDepthWarpPacket,
-        },
-        Core::GpuNativePacketRecordDesc{
-            .packet = avboitExtinctionPacket,
-        },
-        Core::GpuNativePacketRecordDesc{
-            .packet = avboitIntegrationPacket,
-        },
-        Core::GpuNativePacketRecordDesc{
-            .packet = avboitAccumulationPacket,
-        },
-    };
-    const usize avboitRecordDescCount = avboitUsesAsyncCompute ? LengthOf(avboitRecordDescs) : 1u;
-    const bool avboitRecorded =
-        m_avboitTaskGraphValid
-        && m_avboitPreTask.valid()
-        && m_avboitPrefixCompletion.valid()
-        && avboitPrePacket.valid()
-        && (!avboitUsesAsyncCompute || (
-            m_avboitDepthWarpTask.valid()
-            && m_avboitExtinctionTask.valid()
-            && m_avboitIntegrationTask.valid()
-            && m_avboitAccumulationTask.valid()
-        ))
-        && avboitRecorder.recordPacketsInCompileOrder(
-            m_avboitTaskGraph,
-            m_avboitCompiledGraph,
-            avboitRecordDescs,
-            avboitRecordDescCount,
-            m_avboitRecordedGraph
-        )
-    ;
-    if(!avboitRecorded){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned AVBOIT packet chain"));
-        discardRenderPackets();
-        return;
-    }
+    const Core::CommandListResourceStateHandoff* avboitFinalStateSeed = nullptr;
+    if(!foldsAvboitPreIntoDeferredGraph){
+        Core::GpuNativePacketRecorder avboitRecorder(device);
+        const Core::GpuNativePacketRecordDesc avboitRecordDescs[] = {
+            Core::GpuNativePacketRecordDesc{
+                .packet = avboitPrePacket,
+                .externalStateSources = avboitPreStateSources,
+                .externalStateSourceCount = LengthOf(avboitPreStateSources),
+            },
+            Core::GpuNativePacketRecordDesc{
+                .packet = avboitDepthWarpPacket,
+            },
+            Core::GpuNativePacketRecordDesc{
+                .packet = avboitExtinctionPacket,
+            },
+            Core::GpuNativePacketRecordDesc{
+                .packet = avboitIntegrationPacket,
+            },
+            Core::GpuNativePacketRecordDesc{
+                .packet = avboitAccumulationPacket,
+            },
+        };
+        const usize avboitRecordDescCount = avboitUsesAsyncCompute ? LengthOf(avboitRecordDescs) : 1u;
+        const bool avboitRecorded =
+            m_avboitTaskGraphValid
+            && m_avboitPreTask.valid()
+            && m_avboitPrefixCompletion.valid()
+            && avboitPrePacket.valid()
+            && (!avboitUsesAsyncCompute || (
+                m_avboitDepthWarpTask.valid()
+                && m_avboitExtinctionTask.valid()
+                && m_avboitIntegrationTask.valid()
+                && m_avboitAccumulationTask.valid()
+            ))
+            && avboitRecorder.recordPacketsInCompileOrder(
+                m_avboitTaskGraph,
+                m_avboitCompiledGraph,
+                avboitRecordDescs,
+                avboitRecordDescCount,
+                m_avboitRecordedGraph
+            )
+        ;
+        if(!avboitRecorded){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned AVBOIT packet chain"));
+            discardRenderPackets();
+            return;
+        }
 
-    const Core::GpuSubmissionPacketId avboitFinalPacket = avboitUsesAsyncCompute
-        ? avboitAccumulationPacket
-        : avboitPrePacket
-    ;
-    const Core::CommandListResourceStateHandoff* const avboitFinalStateSeed =
-        m_avboitRecordedGraph.packetFinalStateSeed(avboitFinalPacket)
-    ;
-    if(!avboitFinalStateSeed){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT graph did not retain its final state seed"));
-        discardRenderPackets();
-        return;
+        const Core::GpuSubmissionPacketId avboitFinalPacket = avboitUsesAsyncCompute
+            ? avboitAccumulationPacket
+            : avboitPrePacket
+        ;
+        avboitFinalStateSeed = m_avboitRecordedGraph.packetFinalStateSeed(avboitFinalPacket);
+        if(!avboitFinalStateSeed){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT graph did not retain its final state seed"));
+            discardRenderPackets();
+            return;
+        }
     }
 
     // Lighting imports live effects plus AVBOIT only on the default path. Active lagged lighting reads accepted
@@ -1673,57 +1704,48 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     ;
     Core::GpuExternalPacketStateSource deferredCompositeStateSources[2] = {};
     usize deferredCompositeStateSourceCount = 0u;
-    const bool deferredCompositeStateSourcesReady =
-        appendDeclaredStateSource(
-            deferredCompositeStateSources,
-            LengthOf(deferredCompositeStateSources),
-            deferredCompositeStateSourceCount,
-            graphicsPrefixStateSeed
-        )
-        && appendDeclaredStateSource(
-            deferredCompositeStateSources,
-            LengthOf(deferredCompositeStateSources),
-            deferredCompositeStateSourceCount,
-            avboitFinalStateSeed
-        )
-    ;
-    const Core::GpuNativePacketRecordDesc hardwareDeferredRecordDescs[] = {
-        Core::GpuNativePacketRecordDesc{
+    bool deferredCompositeStateSourcesReady = appendDeclaredStateSource(
+        deferredCompositeStateSources,
+        LengthOf(deferredCompositeStateSources),
+        deferredCompositeStateSourceCount,
+        graphicsPrefixStateSeed
+    );
+    if(!foldsAvboitPreIntoDeferredGraph){
+        deferredCompositeStateSourcesReady = deferredCompositeStateSourcesReady
+            && appendDeclaredStateSource(
+                deferredCompositeStateSources,
+                LengthOf(deferredCompositeStateSources),
+                deferredCompositeStateSourceCount,
+                avboitFinalStateSeed
+            )
+        ;
+    }
+    Core::GpuNativePacketRecordDesc deferredRecordDescs[4] = {};
+    usize deferredRecordDescCount = 0u;
+    if(hardwareShadowSupported){
+        deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
             .packet = hardwareCausticsPacket,
             .externalStateSources = hardwareCausticsStateSources,
             .externalStateSourceCount = hardwareCausticsStateSourceCount,
-        },
-        Core::GpuNativePacketRecordDesc{
-            .packet = deferredLightingPacket,
-            .externalStateSources = deferredLightingStateSources,
-            .externalStateSourceCount = deferredLightingStateSourceCount,
-        },
-        Core::GpuNativePacketRecordDesc{
-            .packet = deferredCompositePacket,
-            .externalStateSources = deferredCompositeStateSources,
-            .externalStateSourceCount = deferredCompositeStateSourceCount,
-        },
+        };
+    }
+    if(foldsAvboitPreIntoDeferredGraph){
+        deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
+            .packet = deferredAvboitPrePacket,
+            .externalStateSources = avboitPreStateSources,
+            .externalStateSourceCount = LengthOf(avboitPreStateSources),
+        };
+    }
+    deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
+        .packet = deferredLightingPacket,
+        .externalStateSources = deferredLightingStateSources,
+        .externalStateSourceCount = deferredLightingStateSourceCount,
     };
-    const Core::GpuNativePacketRecordDesc deferredRecordDescs[] = {
-        Core::GpuNativePacketRecordDesc{
-            .packet = deferredLightingPacket,
-            .externalStateSources = deferredLightingStateSources,
-            .externalStateSourceCount = deferredLightingStateSourceCount,
-        },
-        Core::GpuNativePacketRecordDesc{
-            .packet = deferredCompositePacket,
-            .externalStateSources = deferredCompositeStateSources,
-            .externalStateSourceCount = deferredCompositeStateSourceCount,
-        },
+    deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
+        .packet = deferredCompositePacket,
+        .externalStateSources = deferredCompositeStateSources,
+        .externalStateSourceCount = deferredCompositeStateSourceCount,
     };
-    const Core::GpuNativePacketRecordDesc* const deferredRecordDescData = hardwareShadowSupported
-        ? hardwareDeferredRecordDescs
-        : deferredRecordDescs
-    ;
-    const usize deferredRecordDescCount = hardwareShadowSupported
-        ? LengthOf(hardwareDeferredRecordDescs)
-        : LengthOf(deferredRecordDescs)
-    ;
     const Core::GpuNativePacketRecorder deferredRecorder(device);
     const bool deferredPacketsRecorded =
         hardwareCausticsStateSourcesReady
@@ -1735,29 +1757,29 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredHardwareCausticsPrefixCompletion.valid()
             && hardwareCausticsPacket.valid()
         ))
+        && (!foldsAvboitPreIntoDeferredGraph || (
+            m_deferredAvboitPreTask.valid()
+            && m_deferredLightingPrefixCompletion.valid()
+            && deferredAvboitPrePacket.valid()
+        ))
         && m_deferredLightingTask.valid()
         && m_deferredCompositeTask.valid()
-        && m_deferredAvboitCompletion.valid()
+        && (foldsAvboitPreIntoDeferredGraph || m_deferredAvboitCompletion.valid())
         && deferredLightingPrimaryCompletion.valid()
         && deferredLightingDependentCompletion.valid()
         && deferredLightingPacket.valid()
         && deferredCompositePacket.valid()
         && m_deferredLightingCompiledGraph.packetCount() == deferredRecordDescCount
-        && (hardwareShadowSupported
-            ? (
-                m_deferredLightingCompiledGraph.packetIdAt(0u) == hardwareCausticsPacket
-                && m_deferredLightingCompiledGraph.packetIdAt(1u) == deferredLightingPacket
-                && m_deferredLightingCompiledGraph.packetIdAt(2u) == deferredCompositePacket
-            )
-            : (
-                m_deferredLightingCompiledGraph.packetIdAt(0u) == deferredLightingPacket
-                && m_deferredLightingCompiledGraph.packetIdAt(1u) == deferredCompositePacket
-            )
+        && (!hardwareShadowSupported || m_deferredLightingCompiledGraph.packetIdAt(0u) == hardwareCausticsPacket)
+        && (!foldsAvboitPreIntoDeferredGraph
+            || m_deferredLightingCompiledGraph.packetIdAt(deferredHardwarePacketCount) == deferredAvboitPrePacket
         )
+        && m_deferredLightingCompiledGraph.packetIdAt(deferredLightingPacketIndex) == deferredLightingPacket
+        && m_deferredLightingCompiledGraph.packetIdAt(deferredCompositePacketIndex) == deferredCompositePacket
         && deferredRecorder.recordPacketsInCompileOrder(
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph,
-            deferredRecordDescData,
+            deferredRecordDescs,
             deferredRecordDescCount,
             m_deferredLightingRecordedGraph
         )
@@ -1767,6 +1789,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph
         );
+        avboitPreTimingTicket.discard();
         hardwareCausticsTimingTicket.discard();
         deferredLightingTimingTicket.discard();
         deferredCompositeTimingTicket.discard();
@@ -1793,6 +1816,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph
         );
+        avboitPreTimingTicket.discard();
         hardwareCausticsTimingTicket.discard();
         deferredLightingTimingTicket.discard();
         deferredCompositeTimingTicket.discard();
@@ -2016,70 +2040,109 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     };
 
     const auto submitAvboitLightingAndComposite = [&]() -> bool {
-        const Core::GpuTaskGraphExternalCompletionToken avboitPrefixCompletionToken{
-            .completion = m_avboitPrefixCompletion,
-            .token = prefixSubmissionToken,
-        };
-        const Core::GpuTaskGraphPacketTimingTicket avboitTimingTickets[] = {
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = avboitPrePacket,
-                .timingTicket = &avboitPreTimingTicket,
-            },
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = avboitDepthWarpPacket,
-                .timingTicket = &avboitDepthWarpTimingTicket,
-            },
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = avboitExtinctionPacket,
-                .timingTicket = &avboitExtinctionTimingTicket,
-            },
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = avboitIntegrationPacket,
-                .timingTicket = &avboitIntegrationTimingTicket,
-            },
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = avboitAccumulationPacket,
-                .timingTicket = &avboitAccumulationTimingTicket,
-            },
-        };
-        const usize avboitTimingTicketCount = avboitUsesAsyncCompute ? LengthOf(avboitTimingTickets) : 1u;
-        Core::Alloc::ScratchArena avboitScratchArena(RendererArenaScope::s_TaskGraphArena);
-        const Core::GpuTaskGraphSubmitter avboitSubmitter(device);
-        const bool avboitPacketsAccepted =
-            m_avboitTaskGraphValid
-            && m_avboitPreTask.valid()
-            && m_avboitPrefixCompletion.valid()
-            && avboitPrePacket.valid()
-            && avboitSubmitter.submitPacketsInCompileOrder(
-                m_avboitTaskGraph,
-                m_avboitCompiledGraph,
-                m_avboitRecordedGraph,
-                &avboitPrefixCompletionToken,
-                1u,
-                avboitTimingTickets,
-                avboitTimingTicketCount,
-                m_avboitSubmissionTransaction,
-                avboitScratchArena
-            )
-        ;
-        avboitPreSubmissionToken = m_avboitSubmissionTransaction.packetToken(avboitPrePacket);
-        avboitDepthWarpSubmissionToken = m_avboitSubmissionTransaction.packetToken(avboitDepthWarpPacket);
-        avboitExtinctionSubmissionToken = m_avboitSubmissionTransaction.packetToken(avboitExtinctionPacket);
-        avboitIntegrationSubmissionToken = m_avboitSubmissionTransaction.packetToken(avboitIntegrationPacket);
-        avboitAccumulationSubmissionToken = m_avboitSubmissionTransaction.packetToken(avboitAccumulationPacket);
-        avboitFinalSubmissionToken = m_avboitSubmissionTransaction.packetToken(
-            avboitUsesAsyncCompute ? avboitAccumulationPacket : avboitPrePacket
-        );
-        if(!avboitPacketsAccepted || !avboitPreSubmissionToken.valid() || !avboitFinalSubmissionToken.valid()){
-            const bool avboitPreWasRejected = !avboitPreSubmissionToken.valid();
-            discardUnacceptedGraphPackets();
-            discardTimingTickets();
-            if(avboitPreWasRejected)
+        Core::Alloc::ScratchArena deferredScratchArena(RendererArenaScope::s_TaskGraphArena);
+        const Core::GpuTaskGraphSubmitter deferredSubmitter(device);
+        if(foldsAvboitPreIntoDeferredGraph){
+            const Core::GpuTaskGraphExternalCompletionToken avboitPrefixCompletionToken{
+                .completion = m_deferredLightingPrefixCompletion,
+                .token = prefixSubmissionToken,
+            };
+            const bool avboitPreAccepted =
+                m_deferredLightingTaskGraphValid
+                && m_deferredAvboitPreTask.valid()
+                && m_deferredLightingPrefixCompletion.valid()
+                && deferredAvboitPrePacket.valid()
+                && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
+                && deferredSubmitter.submitPacket(
+                    m_deferredLightingTaskGraph,
+                    m_deferredLightingCompiledGraph,
+                    m_deferredLightingRecordedGraph,
+                    deferredAvboitPrePacket,
+                    &avboitPrefixCompletionToken,
+                    1u,
+                    m_deferredLightingSubmissionTransaction,
+                    deferredScratchArena,
+                    &avboitPreTimingTicket
+                )
+            ;
+            avboitPreSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(deferredAvboitPrePacket);
+            avboitFinalSubmissionToken = avboitPreSubmissionToken;
+            if(!avboitPreAccepted || !avboitPreSubmissionToken.valid()){
+                discardUnacceptedGraphPackets();
+                discardTimingTickets();
                 restoreAvboitCpuState();
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned AVBOIT packet chain was rejected"));
-            if(!recoverPendingFrameSubmission())
-                failFrameRenderRecovery();
-            return false;
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned active-lagged AVBOIT packet was rejected"));
+                if(!recoverPendingFrameSubmission())
+                    failFrameRenderRecovery();
+                return false;
+            }
+        }
+        else{
+            const Core::GpuTaskGraphExternalCompletionToken avboitPrefixCompletionToken{
+                .completion = m_avboitPrefixCompletion,
+                .token = prefixSubmissionToken,
+            };
+            const Core::GpuTaskGraphPacketTimingTicket avboitTimingTickets[] = {
+                Core::GpuTaskGraphPacketTimingTicket{
+                    .packet = avboitPrePacket,
+                    .timingTicket = &avboitPreTimingTicket,
+                },
+                Core::GpuTaskGraphPacketTimingTicket{
+                    .packet = avboitDepthWarpPacket,
+                    .timingTicket = &avboitDepthWarpTimingTicket,
+                },
+                Core::GpuTaskGraphPacketTimingTicket{
+                    .packet = avboitExtinctionPacket,
+                    .timingTicket = &avboitExtinctionTimingTicket,
+                },
+                Core::GpuTaskGraphPacketTimingTicket{
+                    .packet = avboitIntegrationPacket,
+                    .timingTicket = &avboitIntegrationTimingTicket,
+                },
+                Core::GpuTaskGraphPacketTimingTicket{
+                    .packet = avboitAccumulationPacket,
+                    .timingTicket = &avboitAccumulationTimingTicket,
+                },
+            };
+            const usize avboitTimingTicketCount = avboitUsesAsyncCompute ? LengthOf(avboitTimingTickets) : 1u;
+            Core::Alloc::ScratchArena avboitScratchArena(RendererArenaScope::s_TaskGraphArena);
+            const Core::GpuTaskGraphSubmitter avboitSubmitter(device);
+            const bool avboitPacketsAccepted =
+                m_avboitTaskGraphValid
+                && m_avboitPreTask.valid()
+                && m_avboitPrefixCompletion.valid()
+                && avboitPrePacket.valid()
+                && avboitSubmitter.submitPacketsInCompileOrder(
+                    m_avboitTaskGraph,
+                    m_avboitCompiledGraph,
+                    m_avboitRecordedGraph,
+                    &avboitPrefixCompletionToken,
+                    1u,
+                    avboitTimingTickets,
+                    avboitTimingTicketCount,
+                    m_avboitSubmissionTransaction,
+                    avboitScratchArena
+                )
+            ;
+            avboitPreSubmissionToken = m_avboitSubmissionTransaction.packetToken(avboitPrePacket);
+            avboitDepthWarpSubmissionToken = m_avboitSubmissionTransaction.packetToken(avboitDepthWarpPacket);
+            avboitExtinctionSubmissionToken = m_avboitSubmissionTransaction.packetToken(avboitExtinctionPacket);
+            avboitIntegrationSubmissionToken = m_avboitSubmissionTransaction.packetToken(avboitIntegrationPacket);
+            avboitAccumulationSubmissionToken = m_avboitSubmissionTransaction.packetToken(avboitAccumulationPacket);
+            avboitFinalSubmissionToken = m_avboitSubmissionTransaction.packetToken(
+                avboitUsesAsyncCompute ? avboitAccumulationPacket : avboitPrePacket
+            );
+            if(!avboitPacketsAccepted || !avboitPreSubmissionToken.valid() || !avboitFinalSubmissionToken.valid()){
+                const bool avboitPreWasRejected = !avboitPreSubmissionToken.valid();
+                discardUnacceptedGraphPackets();
+                discardTimingTickets();
+                if(avboitPreWasRejected)
+                    restoreAvboitCpuState();
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned AVBOIT packet chain was rejected"));
+                if(!recoverPendingFrameSubmission())
+                    failFrameRenderRecovery();
+                return false;
+            }
         }
 
         // Hardware Caustics has already accepted from this shared transaction before AVBOIT. Active lagged Lighting
@@ -2098,8 +2161,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     : surfelGiSubmissionToken,
             },
         };
-        Core::Alloc::ScratchArena deferredScratchArena(RendererArenaScope::s_TaskGraphArena);
-        const Core::GpuTaskGraphSubmitter deferredSubmitter(device);
         const bool deferredLightingAccepted =
             m_deferredLightingTaskGraphValid
             && (!hardwareShadowSupported || (
@@ -2108,7 +2169,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ))
             && m_deferredLightingTask.valid()
             && m_deferredCompositeTask.valid()
-            && m_deferredAvboitCompletion.valid()
+            && (foldsAvboitPreIntoDeferredGraph || m_deferredAvboitCompletion.valid())
             && deferredLightingPrimaryCompletion.valid()
             && deferredLightingDependentCompletion.valid()
             && deferredLightingPacket.valid()
@@ -2161,16 +2222,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 );
             }
         }
-        const Core::GpuTaskGraphExternalCompletionToken deferredCompositeCompletionTokens[] = {
-            Core::GpuTaskGraphExternalCompletionToken{
-                .completion = m_deferredAvboitCompletion,
-                .token = avboitFinalSubmissionToken,
-            },
-        };
-        const usize deferredCompositeCompletionCount = laggedAsyncLightingSchedule
-            ? LengthOf(deferredCompositeCompletionTokens)
-            : 0u
-        ;
         const bool deferredCompositeAccepted =
             deferredLightingAccepted
             && m_deferredCompositeTask.valid()
@@ -2180,8 +2231,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
                 deferredCompositePacket,
-                deferredCompositeCompletionCount > 0u ? deferredCompositeCompletionTokens : nullptr,
-                deferredCompositeCompletionCount,
+                nullptr,
+                0u,
                 m_deferredLightingSubmissionTransaction,
                 deferredScratchArena,
                 &deferredCompositeTimingTicket

@@ -2464,6 +2464,11 @@ void RendererSystem::buildAvboitTaskGraph(
         integrationTimingTicket.discard();
         accumulationTimingTicket.discard();
     }
+    // Active lagged lighting has one Graphics AVBOIT packet.  Its producer/consumer state belongs to the shared
+    // deferred graph so the Composite join is compiler-owned; this standalone graph remains for the live split
+    // and serialized routes only.
+    if(schedule.usesLaggedLightingHistory())
+        return;
     if(
         !deferredTargets.valid()
         || !deferredTargets.bindless.valid()
@@ -2823,7 +2828,11 @@ void RendererSystem::buildAvboitTaskGraph(
 void RendererSystem::buildDeferredLightingTaskGraph(
     const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
     DeferredFrameTargets& deferredTargets,
+    const CsgFrameState& csgFrameState,
+    const bool clearAvboitTargets,
+    const bool hasTransparentRenderers,
     const bool shadowVisibilityPrepared,
+    Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
     Core::GpuTimingSubmissionTicket& hardwareCausticsTimingTicket,
     Core::GpuTimingSubmissionTicket& lightingTimingTicket,
     Core::GpuTimingSubmissionTicket& compositeTimingTicket
@@ -2832,6 +2841,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
 
     m_deferredLightingTaskGraphValid = false;
     m_deferredHardwareCausticsTask = {};
+    m_deferredAvboitPreTask = {};
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredHardwareCausticsPrefixCompletion = {};
@@ -2961,17 +2971,19 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         return;
     }
 
-    Core::GpuExternalCompletionDesc avboitCompletionDesc;
-    avboitCompletionDesc
-        .setIdentity(Name("render.deferred_lighting.avboit_complete"))
-        .setMarkerLabel("AVBOIT Complete")
-    ;
-    m_deferredAvboitCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
+    if(!useLaggedLightingHistory){
+        Core::GpuExternalCompletionDesc avboitCompletionDesc;
         avboitCompletionDesc
-    );
-    if(!m_deferredAvboitCompletion.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import AVBOIT completion for deferred graph"));
-        return;
+            .setIdentity(Name("render.deferred_lighting.avboit_complete"))
+            .setMarkerLabel("AVBOIT Complete")
+        ;
+        m_deferredAvboitCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
+            avboitCompletionDesc
+        );
+        if(!m_deferredAvboitCompletion.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import AVBOIT completion for deferred graph"));
+            return;
+        }
     }
 
     if(useLaggedLightingHistory){
@@ -3183,6 +3195,126 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         }
     }
 
+    Core::GpuGraphResourceId avboitAccumColor = {};
+    Core::GpuGraphResourceId avboitAccumExtinction = {};
+    if(useLaggedLightingHistory){
+        const Core::GpuGraphResourceId avboitLowRaster = importTexture(
+            deferredTargets.avboit.lowRasterTarget,
+            Name("render.avboit.low_raster"),
+            "AVBOIT Low Raster"
+        );
+        avboitAccumColor = importTexture(
+            deferredTargets.avboit.accumColor,
+            Name("render.avboit.accum_color"),
+            "AVBOIT Accumulated Color"
+        );
+        avboitAccumExtinction = importTexture(
+            deferredTargets.avboit.accumExtinction,
+            Name("render.avboit.accum_extinction"),
+            "AVBOIT Accumulated Extinction"
+        );
+        const Core::GpuGraphResourceId avboitTransmittance = importTexture(
+            deferredTargets.avboit.transmittanceTexture,
+            Name("render.avboit.transmittance"),
+            "AVBOIT Transmittance"
+        );
+        const Core::GpuGraphResourceId avboitCoverage = importBuffer(
+            deferredTargets.avboit.coverageBuffer,
+            Name("render.avboit.coverage"),
+            "AVBOIT Coverage"
+        );
+        const Core::GpuGraphResourceId avboitDepthWarp = importBuffer(
+            deferredTargets.avboit.depthWarpBuffer,
+            Name("render.avboit.depth_warp"),
+            "AVBOIT Depth Warp"
+        );
+        const Core::GpuGraphResourceId avboitControl = importBuffer(
+            deferredTargets.avboit.controlBuffer,
+            Name("render.avboit.control"),
+            "AVBOIT Control"
+        );
+        const Core::GpuGraphResourceId avboitExtinction = importBuffer(
+            deferredTargets.avboit.extinctionBuffer,
+            Name("render.avboit.extinction"),
+            "AVBOIT Extinction"
+        );
+        const Core::GpuGraphResourceId avboitExtinctionOverflow = importBuffer(
+            deferredTargets.avboit.extinctionOverflowBuffer,
+            Name("render.avboit.extinction_overflow"),
+            "AVBOIT Extinction Overflow"
+        );
+        const Core::GpuGraphResourceId avboitMaterialDomain = m_deferredLightingTaskGraph.importHazardDomain(
+            HazardDomainDesc(Name("render.avboit.material_domain"), "Transparent Materials and Geometry")
+        );
+        const Core::GpuGraphResourceId avboitCsgDomain = m_deferredLightingTaskGraph.importHazardDomain(
+            HazardDomainDesc(Name("render.avboit.csg_domain"), "Transparent CSG Intervals")
+        );
+        if(
+            !avboitLowRaster.valid()
+            || !avboitAccumColor.valid()
+            || !avboitAccumExtinction.valid()
+            || !avboitTransmittance.valid()
+            || !avboitCoverage.valid()
+            || !avboitDepthWarp.valid()
+            || !avboitControl.valid()
+            || !avboitExtinction.valid()
+            || !avboitExtinctionOverflow.valid()
+            || !avboitMaterialDomain.valid()
+            || !avboitCsgDomain.valid()
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import active-lagged AVBOIT graph resources"));
+            return;
+        }
+
+        const Core::GpuTaskResourceUse avboitPreResourceUses[] = {
+            ReadUse(albedo),
+            ReadUse(normal),
+            ReadUse(worldPosition),
+            ReadUse(depth),
+            ReadWriteUse(avboitLowRaster, Core::ResourceStates::RenderTarget),
+            ReadWriteUse(avboitAccumColor, Core::ResourceStates::RenderTarget),
+            ReadWriteUse(avboitAccumExtinction, Core::ResourceStates::RenderTarget),
+            ReadWriteUse(avboitTransmittance, Core::ResourceStates::UnorderedAccess),
+            ReadWriteUse(avboitCoverage, Core::ResourceStates::UnorderedAccess),
+            ReadWriteUse(avboitDepthWarp, Core::ResourceStates::UnorderedAccess),
+            ReadWriteUse(avboitControl, Core::ResourceStates::UnorderedAccess),
+            ReadWriteUse(avboitExtinction, Core::ResourceStates::UnorderedAccess),
+            ReadWriteUse(avboitExtinctionOverflow, Core::ResourceStates::UnorderedAccess),
+            ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+            ReadUse(avboitMaterialDomain),
+            ReadWriteUse(avboitCsgDomain, Core::ResourceStates::ShaderResource),
+        };
+        Core::GpuTaskSchedulingHint avboitScheduling;
+        avboitScheduling.cost = Core::GpuTaskCostHint::Large;
+        avboitScheduling.forceSubmissionBoundary = true;
+        avboitScheduling.allowPacketMerge = false;
+        Core::GpuTaskDesc avboitPreDesc;
+        avboitPreDesc
+            .setIdentity(Name("render.avboit.pre"))
+            .setMarkerLabel("AVBOIT")
+            .setQueue(GraphicsQueueRequest())
+            .setScheduling(avboitScheduling)
+            .setExternalDependencies(&m_deferredLightingPrefixCompletion, 1u)
+            .setResourceUses(avboitPreResourceUses, LengthOf(avboitPreResourceUses))
+        ;
+        m_deferredAvboitPreTask = m_deferredLightingTaskGraph.addTask<AvboitPreGraphTask>(
+            avboitPreDesc,
+            AvboitPreGraphTask::Payload{
+                .avboitSystem = &m_avboitSystem,
+                .targets = &deferredTargets,
+                .csgFrameState = &csgFrameState,
+                .timingTicket = &avboitPreTimingTicket,
+                .clearTargets = clearAvboitTargets,
+                .hasTransparentRenderers = hasTransparentRenderers,
+                .splitStages = false,
+            }
+        );
+        if(!m_deferredAvboitPreTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare active-lagged AVBOIT graph task"));
+            return;
+        }
+    }
+
     const Core::GpuExternalCompletionId liveLightingExternalDependencies[] = {
         m_deferredAvboitCompletion,
         dependentEffectsCompletion,
@@ -3197,12 +3329,22 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     ;
     const Core::GpuTaskId lightingDependencies[] = { m_deferredHardwareCausticsTask };
     const usize lightingDependencyCount = lightingDependsOnHardwareCaustics ? LengthOf(lightingDependencies) : 0u;
-    // Active lagged lighting receives these shared read-only states directly from the accepted prefix source. This
-    // lets its declarations avoid importing Hardware Caustics' recorded snapshot when it instead reads history.
+    // Active lagged Lighting receives these shared read-only states directly from the accepted prefix source. This
+    // lets it avoid importing the recorded snapshots from Hardware Caustics and AVBOIT Pre while it reads history.
     const bool laggedReadsHaveIndependentStateSources = useLaggedLightingHistory;
     const Core::GpuTaskResourceUse resourceUses[] = {
-        ReadTextureUse(albedo, ECSRenderDetail::s_FramebufferSubresources),
-        ReadTextureUse(normal, ECSRenderDetail::s_FramebufferSubresources),
+        ReadTextureUse(
+            albedo,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource,
+            laggedReadsHaveIndependentStateSources
+        ),
+        ReadTextureUse(
+            normal,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::ShaderResource,
+            laggedReadsHaveIndependentStateSources
+        ),
         ReadTextureUse(
             worldPosition,
             ECSRenderDetail::s_FramebufferSubresources,
@@ -3259,16 +3401,18 @@ void RendererSystem::buildDeferredLightingTaskGraph(
 
     // Composite remains a distinct packet, but its direct dependency on lighting is graph-internal.  It retains
     // the current bindless selector in lagged mode, rather than inheriting lighting's history selector.
-    const Core::GpuGraphResourceId avboitAccumColor = importTexture(
-        deferredTargets.avboit.accumColor,
-        Name("render.deferred_composite.avboit_accum_color"),
-        "AVBOIT Accumulated Color"
-    );
-    const Core::GpuGraphResourceId avboitAccumExtinction = importTexture(
-        deferredTargets.avboit.accumExtinction,
-        Name("render.deferred_composite.avboit_accum_extinction"),
-        "AVBOIT Accumulated Extinction"
-    );
+    if(!useLaggedLightingHistory){
+        avboitAccumColor = importTexture(
+            deferredTargets.avboit.accumColor,
+            Name("render.avboit.accum_color"),
+            "AVBOIT Accumulated Color"
+        );
+        avboitAccumExtinction = importTexture(
+            deferredTargets.avboit.accumExtinction,
+            Name("render.avboit.accum_extinction"),
+            "AVBOIT Accumulated Extinction"
+        );
+    }
     const Core::GpuGraphResourceId compositeColor = importTexture(
         deferredTargets.compositeColor,
         Name("render.deferred_composite.composite_color"),
@@ -3301,20 +3445,18 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     compositeScheduling.avoidQueueCrossing = schedule.usesLaggedLightingHistory();
     compositeScheduling.forceSubmissionBoundary = true;
     compositeScheduling.allowPacketMerge = false;
-    const Core::GpuTaskId compositeDependencies[] = { m_deferredLightingTask };
-    const Core::GpuExternalCompletionId compositeExternalDependencies[] = { m_deferredAvboitCompletion };
-    const usize compositeExternalDependencyCount = useLaggedLightingHistory
-        ? LengthOf(compositeExternalDependencies)
-        : 0u
-    ;
+    const Core::GpuTaskId compositeDependencies[] = {
+        m_deferredLightingTask,
+        m_deferredAvboitPreTask,
+    };
+    const usize compositeDependencyCount = useLaggedLightingHistory ? LengthOf(compositeDependencies) : 1u;
     Core::GpuTaskDesc compositeDesc;
     compositeDesc
         .setIdentity(Name("render.deferred_composite"))
         .setMarkerLabel("Deferred Composite")
         .setQueue(ComputeQueueRequest())
         .setScheduling(compositeScheduling)
-        .setDependencies(compositeDependencies, LengthOf(compositeDependencies))
-        .setExternalDependencies(compositeExternalDependencies, compositeExternalDependencyCount)
+        .setDependencies(compositeDependencies, compositeDependencyCount)
         .setResourceUses(compositeResourceUses, LengthOf(compositeResourceUses))
     ;
     m_deferredCompositeTask = m_deferredSystem.declareDeferredCompositeTask(

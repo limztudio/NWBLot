@@ -2306,40 +2306,86 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             }
             Core::Alloc::ScratchArena hardwareCausticsScratchArena(RendererArenaScope::s_TaskGraphArena);
             const Core::GpuTaskGraphSubmitter hardwareCausticsSubmitter(device);
+            struct HardwareCausticsAcceptanceContext{
+                RendererSystem* renderer = nullptr;
+                DeferredFrameTargets* targets = nullptr;
+                const Core::CommandListResourceStateHandoff* finalState = nullptr;
+                Core::GpuSubmissionPacketId hardwareCausticsPacket;
+                bool usesLaggedHistory = false;
+                bool stateReady = true;
+            };
+            HardwareCausticsAcceptanceContext hardwareCausticsAcceptance{
+                .renderer = this,
+                .targets = &deferredTargets,
+                .finalState = hardwareCausticsFinalStateSeed,
+                .hardwareCausticsPacket = hardwareCausticsPacket,
+                .usesLaggedHistory = laggedAsyncLightingSchedule,
+            };
+            const auto acceptHardwareCausticsPacket = [](
+                void* const rawContext,
+                const Core::GpuSubmissionPacketId& packet,
+                const Core::QueueSubmissionToken& token
+            ) -> bool {
+                static_cast<void>(token);
+                HardwareCausticsAcceptanceContext* const context =
+                    static_cast<HardwareCausticsAcceptanceContext*>(rawContext)
+                ;
+                if(!context)
+                    return false;
+                if(packet != context->hardwareCausticsPacket)
+                    return true;
+                if(!context->usesLaggedHistory)
+                    return true;
+                if(!context->renderer || !context->targets || !context->finalState){
+                    context->stateReady = false;
+                    return false;
+                }
+                context->stateReady = context->renderer->m_causticIrradianceLightingStateHandoff.buildTextureSubset(
+                    *context->finalState,
+                    context->targets->causticIrradiance.get()
+                );
+                return context->stateReady;
+            };
+            const Core::GpuTaskGraphPacketAcceptedCallback hardwareCausticsAcceptedCallback{
+                .context = &hardwareCausticsAcceptance,
+                .invoke = acceptHardwareCausticsPacket,
+            };
+            const Core::GpuTaskGraphPacketTimingTicket hardwareCausticsTimingTickets[] = {
+                Core::GpuTaskGraphPacketTimingTicket{
+                    .packet = hardwareCausticsPacket,
+                    .timingTicket = &hardwareCausticsTimingTicket,
+                },
+            };
             const bool hardwareCausticsAccepted =
                 m_deferredLightingTaskGraphValid
                 && m_deferredHardwareCausticsTask.valid()
                 && (!laggedAsyncLightingSchedule || m_deferredLightingHistoryCompletion.valid())
                 && hardwareCausticsPacket.valid()
                 && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
-                && hardwareCausticsSubmitter.submitPacket(
+                && hardwareCausticsSubmitter.submitPacketRangeInCompileOrder(
                     m_deferredLightingTaskGraph,
                     m_deferredLightingCompiledGraph,
                     m_deferredLightingRecordedGraph,
-                    hardwareCausticsPacket,
+                    deferredHardwareCausticsPacketIndex,
+                    LengthOf(hardwareCausticsTimingTickets),
                     hardwareCausticsCompletionTokens,
                     hardwareCausticsCompletionCount,
+                    hardwareCausticsTimingTickets,
+                    LengthOf(hardwareCausticsTimingTickets),
                     m_deferredLightingSubmissionTransaction,
                     hardwareCausticsScratchArena,
-                    &hardwareCausticsTimingTicket
+                    nullptr,
+                    &hardwareCausticsAcceptedCallback
                 )
             ;
-            hardwareCausticsSubmissionToken = hardwareCausticsAccepted
-                ? m_deferredLightingSubmissionTransaction.packetToken(hardwareCausticsPacket)
-                : Core::QueueSubmissionToken{}
-            ;
+            hardwareCausticsSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(
+                hardwareCausticsPacket
+            );
             const bool hardwareCausticsStateReady =
+                hardwareCausticsAccepted
+                &&
                 hardwareCausticsSubmissionToken.valid()
-                && (
-                    !laggedAsyncLightingSchedule
-                    || (
-                        hardwareCausticsFinalStateSeed
-                        && m_causticIrradianceLightingStateHandoff.buildTextureSubset(
-                            *hardwareCausticsFinalStateSeed,
-                            deferredTargets.causticIrradiance.get()
-                        )
-                    )
-                )
+                && hardwareCausticsAcceptance.stateReady
             ;
             if(!hardwareCausticsStateReady){
                 const bool hardwareCausticsWasAccepted = hardwareCausticsSubmissionToken.valid();

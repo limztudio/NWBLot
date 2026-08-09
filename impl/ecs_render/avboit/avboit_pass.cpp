@@ -455,11 +455,8 @@ void RendererAvboitSystem::renderAvboitPasses(
 void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets){
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_AvboitDepthWarp, graphics().getDevice(), commandList);
 
-    // The depth-warp kernel reads coverage and writes the warp/control buffers through global heap descriptors.
-    commandList.setBufferState(targets.coverageBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(targets.depthWarpBuffer.get(), Core::ResourceStates::UnorderedAccess);
-    commandList.setBufferState(targets.controlBuffer.get(), Core::ResourceStates::UnorderedAccess);
-    commandList.commitBarriers();
+    // The graph records the coverage read and warp/control writes as packet-boundary state; this thunk contains only
+    // the native dispatch itself.
 
     Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
 

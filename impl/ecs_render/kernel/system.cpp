@@ -140,7 +140,6 @@ RendererSystem::RendererSystem(
     , m_laggedLightingHistoryCopyInputStateHandoff(arena)
     , m_laggedLightingHistoryCopyStateHandoff(arena)
     , m_avboitPreStateHandoff(arena)
-    , m_avboitDepthWarpInputStateHandoff(arena)
     , m_avboitDepthWarpStateHandoff(arena)
     , m_avboitExtinctionInputStateHandoff(arena)
     , m_avboitExtinctionStateHandoff(arena)
@@ -256,7 +255,6 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     m_deferredPresentStateHandoff.reset();
     resetLaggedLightingHistoryCopyStateHandoffs();
     m_avboitPreStateHandoff.reset();
-    m_avboitDepthWarpInputStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
     m_avboitExtinctionInputStateHandoff.reset();
     m_avboitExtinctionStateHandoff.reset();
@@ -313,7 +311,6 @@ void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
     m_deferredPresentStateHandoff.reset();
     resetLaggedLightingHistoryCopyStateHandoffs();
     m_avboitPreStateHandoff.reset();
-    m_avboitDepthWarpInputStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
     m_avboitExtinctionInputStateHandoff.reset();
     m_avboitExtinctionStateHandoff.reset();
@@ -356,7 +353,6 @@ void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
     m_deferredPresentStateHandoff.reset();
     resetLaggedLightingHistoryCopyStateHandoffs();
     m_avboitPreStateHandoff.reset();
-    m_avboitDepthWarpInputStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
     m_avboitExtinctionInputStateHandoff.reset();
     m_avboitExtinctionStateHandoff.reset();
@@ -394,7 +390,6 @@ void RendererSystem::resetRejectedShadowVisibilityStateHandoffs()noexcept{
     m_deferredPresentInputStateHandoff.reset();
     m_deferredPresentStateHandoff.reset();
     m_avboitPreStateHandoff.reset();
-    m_avboitDepthWarpInputStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
     m_avboitExtinctionInputStateHandoff.reset();
     m_avboitExtinctionStateHandoff.reset();
@@ -2292,27 +2287,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
 
     if(avboitUsesAsyncCompute){
-        Core::Buffer* const avboitDepthWarpInputBuffers[] = {
-            deferredTargets.avboit.coverageBuffer.get(),
-            deferredTargets.avboit.depthWarpBuffer.get(),
-            deferredTargets.avboit.controlBuffer.get(),
-            deferredTargets.bindless.slotsBuffer.get(),
-        };
-        if(!m_avboitDepthWarpInputStateHandoff.buildResourceSubset(
-            m_avboitPreStateHandoff,
-            nullptr,
-            0u,
-            avboitDepthWarpInputBuffers,
-            LengthOf(avboitDepthWarpInputBuffers)
-        )){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT depth-warp state selection failed"));
-            discardRenderPackets();
-            return;
-        }
         const Core::GpuNativePacketRecordDesc avboitDepthWarpRecordDesc{
             .packet = avboitDepthWarpPacket,
-            .initialStates = &m_avboitDepthWarpInputStateHandoff,
             .finalStates = &m_avboitDepthWarpStateHandoff,
+            .useCompiledStateSeeds = true,
+            .applyCompiledBarriers = true,
         };
         const bool avboitDepthWarpRecorded =
             avboitDepthWarpPacket.valid()

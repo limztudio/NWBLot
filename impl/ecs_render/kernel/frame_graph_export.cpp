@@ -208,19 +208,6 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
         ))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged-lighting history-copy graph telemetry export failed"));
     }
-    if(m_deferredCompositeTaskGraphValid){
-        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-        const Core::GpuTaskGraphTelemetryOptions compositeTelemetryOptions{
-            .queueAssignments = &m_deferredCompositeTaskGraphQueueAssignments,
-        };
-        if(!m_deferredCompositeTaskGraph.appendFrameGraphTelemetry(
-            builder,
-            m_deferredCompositeTaskGraphAnalysis,
-            scratchArena,
-            compositeTelemetryOptions
-        ))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred-composite graph telemetry export failed"));
-    }
     if(m_deferredPresentTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphTelemetryOptions presentTelemetryOptions{
@@ -310,7 +297,7 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             scratchArena,
             deferredLightingTelemetryOptions
         ))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred-lighting graph telemetry export failed"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred-lighting/composite graph telemetry export failed"));
     }
 
     return true;

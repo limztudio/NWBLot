@@ -170,11 +170,6 @@ private:
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         const DeferredFrameTargets& deferredTargets
     );
-    void buildDeferredCompositeTaskGraph(
-        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
-        DeferredFrameTargets& deferredTargets,
-        Core::GpuTimingSubmissionTicket& timingTicket
-    );
     void buildDeferredPresentTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         DeferredFrameTargets& deferredTargets,
@@ -225,7 +220,8 @@ private:
     void buildDeferredLightingTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         DeferredFrameTargets& deferredTargets,
-        Core::GpuTimingSubmissionTicket& timingTicket
+        Core::GpuTimingSubmissionTicket& lightingTimingTicket,
+        Core::GpuTimingSubmissionTicket& compositeTimingTicket
     );
     void reportLaggedLightingTransition(LaggedLightingReport report, u64 targetGeneration);
     [[nodiscard]] Core::Alloc::GlobalArena& arena()noexcept{ return m_arena; }
@@ -302,17 +298,6 @@ private:
     Core::GpuTaskId m_laggedLightingHistoryTask;
     Core::GpuExternalCompletionId m_laggedLightingPresentationCompletion;
     bool m_laggedLightingHistoryTaskGraphValid = false;
-    // Deferred composite is the first renderer pass migrated after the built-in copy pilot. It retains only the
-    // existing state-handoff bridge until compiler-generated barriers supersede it.
-    Core::GpuTaskGraph m_deferredCompositeTaskGraph;
-    Core::GpuTaskGraphAnalysis m_deferredCompositeTaskGraphAnalysis;
-    Core::GpuTaskGraphQueueAssignments m_deferredCompositeTaskGraphQueueAssignments;
-    Core::GpuCompiledGraph m_deferredCompositeCompiledGraph;
-    Core::GpuRecordedGraph m_deferredCompositeRecordedGraph;
-    Core::GpuGraphSubmissionTransaction m_deferredCompositeSubmissionTransaction;
-    Core::GpuTaskId m_deferredCompositeTask;
-    Core::GpuExternalCompletionId m_deferredCompositeLightingCompletion;
-    bool m_deferredCompositeTaskGraphValid = false;
     // Presentation is a Graphics graph task that imports the accepted composite result and, for active lagged
     // lighting, the surfel producer that must remain alive through presentation.
     Core::GpuTaskGraph m_deferredPresentTaskGraph;
@@ -384,8 +369,8 @@ private:
     Core::GpuTaskId m_avboitAccumulationTask;
     Core::GpuExternalCompletionId m_avboitPrefixCompletion;
     bool m_avboitTaskGraphValid = false;
-    // Deferred lighting owns its task, native recording, and two explicit completion imports. The manual state
-    // bridge remains only until the compiler barrier phase replaces it.
+    // Deferred lighting and composite share one packet graph. Lighting imports AVBOIT plus the selected effect
+    // producer; composite is its graph-internal successor, so no renderer-side completion/token bridge remains.
     Core::GpuTaskGraph m_deferredLightingTaskGraph;
     Core::GpuTaskGraphAnalysis m_deferredLightingTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_deferredLightingTaskGraphQueueAssignments;
@@ -393,6 +378,7 @@ private:
     Core::GpuRecordedGraph m_deferredLightingRecordedGraph;
     Core::GpuGraphSubmissionTransaction m_deferredLightingSubmissionTransaction;
     Core::GpuTaskId m_deferredLightingTask;
+    Core::GpuTaskId m_deferredCompositeTask;
     Core::GpuExternalCompletionId m_deferredLightingAvboitCompletion;
     Core::GpuExternalCompletionId m_deferredLightingSurfelGiCompletion;
     Core::GpuExternalCompletionId m_deferredLightingHistoryCompletion;

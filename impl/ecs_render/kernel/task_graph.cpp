@@ -21,8 +21,67 @@ NWB_IMPL_BEGIN
 namespace ECSRenderDetail{
 
 
-// Scene-shading setup is the first native suffix after the remaining mesh-view import. It retains dynamic upload
-// barriers internally while graph declarations establish the final states consumed by later prefix work.
+// Mesh-view setup is the first native graphics-prefix task.  Its dynamic upload barriers remain intrinsic to the
+// upload, while the graph owns packet routing and the declared final ConstantBuffer state.
+struct MeshViewSetupGraphTask{
+    struct Payload{
+        RendererSystem* renderer = nullptr;
+        Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
+        Optional<Core::GpuTimingMeasure>* asyncPrefixTiming = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        bool* ready = nullptr;
+        f32 meshViewAspectRatio = 1.f;
+        bool shadowVisibilityRunsOnCompute = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(
+            !payload.renderer
+            || !payload.frameTimingTransaction
+            || !payload.asyncPrefixTiming
+            || !payload.timingTicket
+            || !payload.ready
+        )
+            return false;
+
+        RendererSystem& renderer = *payload.renderer;
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        const bool recordsGraphicsFrameMarker =
+            !payload.shadowVisibilityRunsOnCompute && RendererGpuTimingScope::s_Frame.valid()
+        ;
+        if(recordsGraphicsFrameMarker)
+            commandList.beginMarker(RendererGpuTimingScope::s_Frame.markerLabel);
+
+        const bool frameTimingStarted = payload.frameTimingTransaction->begin(
+            RendererGpuTimingScope::s_Frame,
+            renderer.m_graphics.getDevice(),
+            commandList
+        );
+        if(payload.shadowVisibilityRunsOnCompute){
+            payload.asyncPrefixTiming->emplace(
+                renderer.m_graphics.gpuTiming(),
+                RendererGpuTimingScope::s_AsyncPrefix,
+                renderer.m_graphics.getDevice(),
+                commandList
+            );
+            payload.asyncPrefixTiming->value().finishMarker();
+        }
+
+        *payload.ready = renderer.m_meshSystem.updateMeshViewBuffer(commandList, payload.meshViewAspectRatio);
+        if(recordsGraphicsFrameMarker)
+            commandList.endMarker();
+        return frameTimingStarted;
+    }
+};
+
+
+// Scene-shading setup follows mesh-view setup. It retains dynamic upload barriers internally while graph
+// declarations establish the final states consumed by later prefix work.
 struct SceneShadingSetupGraphTask{
     struct Payload{
         RendererSystem* renderer = nullptr;
@@ -50,8 +109,8 @@ struct SceneShadingSetupGraphTask{
 };
 
 
-// Deferred clear is the first native suffix after the imported setup bridge. Its entry transitions are fully
-// declaration-driven, so the recording body contains only clear commands and timing.
+// Deferred clear follows fully native setup. Its entry transitions are declaration-driven, so the recording body
+// contains only clear commands and timing.
 struct DeferredClearGraphTask{
     struct Payload{
         RendererSystem* renderer = nullptr;
@@ -89,7 +148,7 @@ struct GbufferGraphTask{
         const CsgFrameState* csgFrameState = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool hasOpaqueCsgFrameWork = false;
-        bool meshViewSetupReady = false;
+        const bool* meshViewSetupReady = nullptr;
         const bool* sceneShadingSetupReady = nullptr;
     };
 
@@ -99,7 +158,14 @@ struct GbufferGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.renderer || !payload.targets || !payload.csgFrameState || !payload.timingTicket)
+        if(
+            !payload.renderer
+            || !payload.targets
+            || !payload.csgFrameState
+            || !payload.timingTicket
+            || !payload.meshViewSetupReady
+            || !payload.sceneShadingSetupReady
+        )
             return false;
 
         RendererSystem& renderer = *payload.renderer;
@@ -120,7 +186,7 @@ struct GbufferGraphTask{
         deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
 
         const bool frameSetupReady =
-            payload.meshViewSetupReady
+            *payload.meshViewSetupReady
             && payload.sceneShadingSetupReady
             && *payload.sceneShadingSetupReady
         ;
@@ -362,8 +428,7 @@ struct LaggedLightingHistoryCopyTask{
 };
 
 
-// The first native body in the temporary graphics-prefix packet.  Its imported predecessor still records the
-// existing setup/G-buffer bridge, while this task owns the final normalization list and its compiler barriers.
+// The terminal graphics-prefix task normalizes the state exported to the following graph packets.
 struct PostGbufferNormalizeGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -719,21 +784,22 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
     DeferredFrameTargets& deferredTargets,
     const CsgFrameState& csgFrameState,
     const bool hasOpaqueCsgFrameWork,
-    const bool meshViewSetupReady,
     const f32 meshViewAspectRatio,
     const bool shadowVisibilityRunsOnCompute,
     const bool surfelGiRunsOnCompute,
+    Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace __hidden_renderer_task_graph;
 
     m_graphicsPrefixTaskGraphValid = false;
-    m_graphicsPrefixBridgeTask = {};
+    m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixTask = {};
+    m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
     m_graphicsPrefixTaskGraph.reset();
     m_graphicsPrefixTaskGraphAnalysis.reset();
@@ -814,27 +880,35 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
         return;
     }
 
-    // This metadata-only task represents the remaining mesh-view setup list. Native scene setup, deferred clear,
-    // G-buffer, and normalization suffixes receive their barrier plans from their own declarations in one Graphics
-    // submission.
-    const Core::GpuTaskResourceUse bridgeResourceUses[] = {
+    const Core::GpuTaskResourceUse meshViewSetupResourceUses[] = {
         WriteUse(meshViewBuffer, Core::ResourceStates::ConstantBuffer),
     };
-    Core::GpuTaskSchedulingHint bridgeScheduling;
-    bridgeScheduling.cost = Core::GpuTaskCostHint::Medium;
-    bridgeScheduling.forceSubmissionBoundary = false;
-    bridgeScheduling.allowPacketMerge = true;
-    Core::GpuTaskDesc bridgeDesc;
-    bridgeDesc
-        .setIdentity(Name("render.graphics_prefix.bridge"))
-        .setMarkerLabel("Graphics Prefix Bridge")
+    Core::GpuTaskSchedulingHint meshViewSetupScheduling;
+    meshViewSetupScheduling.cost = Core::GpuTaskCostHint::Medium;
+    meshViewSetupScheduling.forceSubmissionBoundary = false;
+    meshViewSetupScheduling.allowPacketMerge = true;
+    Core::GpuTaskDesc meshViewSetupDesc;
+    meshViewSetupDesc
+        .setIdentity(Name("render.graphics_prefix.mesh_view_setup"))
+        .setMarkerLabel("Mesh View Setup")
         .setQueue(GraphicsQueueRequest())
-        .setScheduling(bridgeScheduling)
-        .setResourceUses(bridgeResourceUses, LengthOf(bridgeResourceUses))
+        .setScheduling(meshViewSetupScheduling)
+        .setResourceUses(meshViewSetupResourceUses, LengthOf(meshViewSetupResourceUses))
     ;
-    m_graphicsPrefixBridgeTask = m_graphicsPrefixTaskGraph.addTask(bridgeDesc);
-    if(!m_graphicsPrefixBridgeTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graphics-prefix bridge task"));
+    m_graphicsPrefixMeshViewSetupTask = m_graphicsPrefixTaskGraph.addTask<ECSRenderDetail::MeshViewSetupGraphTask>(
+        meshViewSetupDesc,
+        ECSRenderDetail::MeshViewSetupGraphTask::Payload{
+            .renderer = this,
+            .frameTimingTransaction = &frameTimingTransaction,
+            .asyncPrefixTiming = &asyncPrefixTiming,
+            .timingTicket = &timingTicket,
+            .ready = &m_graphicsPrefixMeshViewSetupReady,
+            .meshViewAspectRatio = meshViewAspectRatio,
+            .shadowVisibilityRunsOnCompute = shadowVisibilityRunsOnCompute,
+        }
+    );
+    if(!m_graphicsPrefixMeshViewSetupTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare mesh-view setup task"));
         return;
     }
 
@@ -853,7 +927,7 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
         .setMarkerLabel("Scene Shading Setup")
         .setQueue(GraphicsQueueRequest())
         .setScheduling(sceneShadingSetupScheduling)
-        .setDependencies(&m_graphicsPrefixBridgeTask, 1u)
+        .setDependencies(&m_graphicsPrefixMeshViewSetupTask, 1u)
         .setResourceUses(sceneShadingSetupResourceUses, LengthOf(sceneShadingSetupResourceUses))
     ;
     m_graphicsPrefixSceneShadingSetupTask = m_graphicsPrefixTaskGraph.addTask<ECSRenderDetail::SceneShadingSetupGraphTask>(
@@ -965,7 +1039,7 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
             .csgFrameState = &csgFrameState,
             .timingTicket = &timingTicket,
             .hasOpaqueCsgFrameWork = hasOpaqueCsgFrameWork,
-            .meshViewSetupReady = meshViewSetupReady,
+            .meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady,
             .sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady,
         }
     );

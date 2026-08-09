@@ -29,8 +29,7 @@ struct GpuRecordedPacket{
     static constexpr usize s_MaxCommandLists = 12u;
 
     GpuSubmissionPacketId packet;
-    // Native recording owns its newly-created lists. Imported packets borrow renderer-owned lists that remain alive
-    // through submission, allowing a graph packet to take over established multi-list transport incrementally.
+    // Native recording owns its newly-created lists through submission.
     CommandListHandle ownedCommandLists[s_MaxCommandLists];
     CommandList* commandLists[s_MaxCommandLists] = {};
     u8 commandListCount = 0u;
@@ -107,30 +106,10 @@ struct GpuNativePacketRecordDesc{
     GpuSubmissionPacketId packet;
     const GpuExternalPacketStateSource* externalStateSources = nullptr;
     usize externalStateSourceCount = 0u;
-};
-
-
-// Imported command lists have already been opened, closed, and state-handoffed by their renderer work. The graph
-// becomes the authoritative packet/submission owner without forcing an all-at-once recording-body rewrite.  The
-// imported packet captures its final seed once so following graph packets consume the graph-owned export instead
-// of the renderer's temporary handoff.
-struct GpuImportedPacketRecordDesc{
-    GpuSubmissionPacketId packet;
-    CommandList* const* commandLists = nullptr;
-    usize commandListCount = 0u;
-    const CommandListResourceStateHandoff* stateSeed = nullptr;
-};
-
-
-// One explicit merged packet may retain an imported metadata-only prefix while moving its ordered suffix tasks into
-// native graph recording. The imported lists must already be recorded in execution order and export the exact state
-// from which the native suffix begins. Every task accepts or discards together because they share one queue
-// submission.
-struct GpuImportedPacketNativeSuffixRecordDesc{
-    GpuSubmissionPacketId packet;
-    CommandList* const* importedCommandLists = nullptr;
-    usize importedCommandListCount = 0u;
-    const CommandListResourceStateHandoff* importedStateSeed = nullptr;
+    // A serial predecessor on this packet's physical queue may provide its complete final snapshot as the native
+    // packet's base.  It deliberately remains unfiltered so resources not touched by this packet survive for later
+    // declaration-filtered consumers; independent producer branches must use externalStateSources instead.
+    const CommandListResourceStateHandoff* serialStateSeed = nullptr;
 };
 
 
@@ -146,18 +125,6 @@ public:
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecordDesc& desc,
-        GpuRecordedGraph& outRecordedGraph
-    )const;
-    [[nodiscard]] bool recordImportedPacket(
-        const GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuImportedPacketRecordDesc& desc,
-        GpuRecordedGraph& outRecordedGraph
-    )const;
-    [[nodiscard]] bool recordImportedPacketNativeSuffix(
-        const GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuImportedPacketNativeSuffixRecordDesc& desc,
         GpuRecordedGraph& outRecordedGraph
     )const;
 

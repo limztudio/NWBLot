@@ -57,6 +57,7 @@ namespace ECSRenderDetail{
 #if defined(NWB_DEBUG)
     struct MaterialTypedInstanceRangeVector;
 #endif
+    struct MeshViewSetupGraphTask;
     struct SceneShadingSetupGraphTask;
     struct DeferredClearGraphTask;
     struct GbufferGraphTask;
@@ -73,6 +74,7 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend class RendererDeferredSystem;
     friend class RendererAvboitSystem;
     friend class RendererRayTracingSystem;
+    friend struct ECSRenderDetail::MeshViewSetupGraphTask;
     friend struct ECSRenderDetail::SceneShadingSetupGraphTask;
     friend struct ECSRenderDetail::DeferredClearGraphTask;
     friend struct ECSRenderDetail::GbufferGraphTask;
@@ -148,10 +150,10 @@ private:
         DeferredFrameTargets& deferredTargets,
         const CsgFrameState& csgFrameState,
         bool hasOpaqueCsgFrameWork,
-        bool meshViewSetupReady,
         f32 meshViewAspectRatio,
         bool shadowVisibilityRunsOnCompute,
         bool surfelGiRunsOnCompute,
+        Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
@@ -243,21 +245,21 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;
-    // The prefix retains a shrinking imported recording bridge while its graph packet owns concrete Graphics
-    // transport, submission, completion, and lifecycle. Scene-shading setup, deferred clear, opaque G-buffer, and
-    // post-G-buffer normalization record natively as its suffix.
+    // The graphics prefix is fully native: its graph owns recording, transport, submission, completion, and
+    // lifecycle from mesh-view setup through post-G-buffer normalization.
     Core::GpuTaskGraph m_graphicsPrefixTaskGraph;
     Core::GpuTaskGraphAnalysis m_graphicsPrefixTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_graphicsPrefixTaskGraphQueueAssignments;
     Core::GpuCompiledGraph m_graphicsPrefixCompiledGraph;
     Core::GpuRecordedGraph m_graphicsPrefixRecordedGraph;
     Core::GpuGraphSubmissionTransaction m_graphicsPrefixSubmissionTransaction;
-    Core::GpuTaskId m_graphicsPrefixBridgeTask;
+    Core::GpuTaskId m_graphicsPrefixMeshViewSetupTask;
     Core::GpuTaskId m_graphicsPrefixSceneShadingSetupTask;
     Core::GpuTaskId m_graphicsPrefixDeferredClearTask;
     Core::GpuTaskId m_graphicsPrefixGbufferTask;
     Core::GpuTaskId m_graphicsPrefixTask;
     u16 m_taskGraphDeviceGeneration = 1u;
+    bool m_graphicsPrefixMeshViewSetupReady = false;
     bool m_graphicsPrefixSceneShadingSetupReady = false;
     bool m_graphicsPrefixTaskGraphValid = false;
     // Every renderer task graph owns its packet submission; FrameGraph remains observational telemetry only.
@@ -376,7 +378,6 @@ private:
     RendererRayTracingState m_rayTracingState;
     CsgFrameState m_preparedCsgFrameState;
     Core::CommandListResourceStateHandoff m_shadowPrepareStateHandoff;
-    Core::CommandListResourceStateHandoff m_meshViewSetupStateHandoff;
     // Compute-only shadow scratch/history retains accepted graph packet state across frames. Deferred lighting now
     // consumes the visibility result on the same Compute lane, so the result snapshot remains Compute-local.
     Core::CommandListResourceStateHandoff m_shadowComputePersistentStateHandoff;
@@ -392,7 +393,6 @@ private:
     // frame-lagged Graphics lighting.
     Core::CommandListResourceStateHandoff m_surfelGiComputePersistentStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelIrradianceReturnStateHandoff;
-    Core::CommandListHandle m_meshViewSetupCommandList;
     // A small Graphics recovery packet retires an accepted frame timing scope when a later dependent packet is
     // rejected.  If it joins AsyncCompute, cross-lane resources remain concurrently shared.
     Core::CommandListHandle m_frameRecoveryCommandList;

@@ -120,8 +120,8 @@ public:
 
 
 public:
-    // Metadata-only tasks may bind an already-recorded renderer command-list bundle through
-    // GpuNativePacketRecorder::recordImportedPacket; the graph still owns packet submission and lifecycle.
+    // Metadata-only tasks support graph analysis and scheduling. A task recorded by GpuNativePacketRecorder must
+    // provide a payload thunk through the templated overload below.
     [[nodiscard]] GpuTaskId addTask(const GpuTaskDesc& desc);
 
     template<typename TaskT>

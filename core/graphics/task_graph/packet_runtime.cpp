@@ -274,6 +274,27 @@ bool GpuNativePacketRecorder::recordPacket(
         initialStates
     ))
         return false;
+    if(desc.serialStateSeed && !desc.serialStateSeed->valid())
+        return false;
+
+    // Keep one ordered predecessor as the complete packet base.  The graph-built seed still supplies any declared
+    // internal or external branch result, so the merge follows the same base-plus-branches contract as ordinary
+    // packet seeding without discarding prep state that this packet does not itself use.
+    if(desc.serialStateSeed){
+        if(initialStates){
+            const CommandListResourceStateHandoff* const branches[] = { initialStates };
+            if(!outRecordedGraph.m_stateMergeScratch.buildFanIn(
+                *desc.serialStateSeed,
+                branches,
+                LengthOf(branches)
+            ))
+                return false;
+            initialStates = &outRecordedGraph.m_stateMergeScratch;
+        }
+        else
+            initialStates = desc.serialStateSeed;
+    }
+
     CommandListResourceStateHandoff* const packetStateSeed = outRecordedGraph.packetStateSeed(desc.packet);
     if(!packetStateSeed)
         return false;
@@ -338,156 +359,6 @@ bool GpuNativePacketRecorder::recordPacket(
     recordedPacket.commandLists[0u] = commandList.get();
     recordedPacket.commandListCount = 1u;
     recordedPacket.ownedCommandLists[0u] = Move(commandList);
-    outRecordedGraph.m_packets.push_back(Move(recordedPacket));
-    return true;
-}
-
-
-bool GpuNativePacketRecorder::recordImportedPacket(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuImportedPacketRecordDesc& desc,
-    GpuRecordedGraph& outRecordedGraph
-)const{
-    if(
-        !compiledGraph.validFor(graph)
-        || !compiledGraph.validPacket(desc.packet)
-        || !desc.commandLists
-        || desc.commandListCount == 0u
-        || desc.commandListCount > GpuRecordedPacket::s_MaxCommandLists
-    )
-        return false;
-    if(!outRecordedGraph.validFor(compiledGraph))
-        outRecordedGraph.reset(compiledGraph);
-    if(outRecordedGraph.find(desc.packet))
-        return false;
-
-    CommandListResourceStateHandoff* const packetStateSeed = outRecordedGraph.packetStateSeed(desc.packet);
-    if(!packetStateSeed)
-        return false;
-    packetStateSeed->reset();
-    if(desc.stateSeed && !packetStateSeed->copyFrom(*desc.stateSeed))
-        return false;
-
-    GpuRecordedPacket recordedPacket;
-    recordedPacket.packet = desc.packet;
-    recordedPacket.commandListCount = static_cast<u8>(desc.commandListCount);
-    for(usize commandListIndex = 0u; commandListIndex < desc.commandListCount; ++commandListIndex){
-        CommandList* const commandList = desc.commandLists[commandListIndex];
-        if(!commandList || !commandList->hasCommandBuffer())
-            return false;
-        recordedPacket.commandLists[commandListIndex] = commandList;
-    }
-    outRecordedGraph.m_packets.push_back(Move(recordedPacket));
-    return true;
-}
-
-
-bool GpuNativePacketRecorder::recordImportedPacketNativeSuffix(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuImportedPacketNativeSuffixRecordDesc& desc,
-    GpuRecordedGraph& outRecordedGraph
-)const{
-    if(
-        !compiledGraph.validFor(graph)
-        || !compiledGraph.validPacket(desc.packet)
-        || !desc.importedCommandLists
-        || desc.importedCommandListCount == 0u
-        || desc.importedCommandListCount >= GpuRecordedPacket::s_MaxCommandLists
-        || !desc.importedStateSeed
-        || !desc.importedStateSeed->valid()
-    )
-        return false;
-    if(!outRecordedGraph.validFor(compiledGraph))
-        outRecordedGraph.reset(compiledGraph);
-    if(outRecordedGraph.find(desc.packet))
-        return false;
-
-    const GpuSubmissionPacket& packet = compiledGraph.packet(desc.packet);
-    const GpuTaskId* const tasks = compiledGraph.packetTasks(desc.packet);
-    if(!tasks || packet.taskCount < 2u)
-        return false;
-    const GpuTaskGraphTaskView importedTask = graph.taskAt(tasks[0u].index);
-    if(importedTask.hasPayload)
-        return false;
-
-    const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packet.queue);
-    if(!queue || queue->queueClass >= CommandQueue::kCount)
-        return false;
-    for(u32 taskIndex = 1u; taskIndex < packet.taskCount; ++taskIndex){
-        const GpuTaskId nativeTask = tasks[taskIndex];
-        const GpuTaskGraphTaskView nativeTaskView = graph.taskAt(nativeTask.index);
-        const GpuCompiledTask* const compiledNativeTask = compiledGraph.findTask(nativeTask);
-        if(!nativeTaskView.hasPayload || !compiledNativeTask || compiledNativeTask->packet != desc.packet)
-            return false;
-    }
-
-    CommandListResourceStateHandoff* const packetStateSeed = outRecordedGraph.packetStateSeed(desc.packet);
-    if(!packetStateSeed)
-        return false;
-    packetStateSeed->reset();
-
-    for(usize commandListIndex = 0u; commandListIndex < desc.importedCommandListCount; ++commandListIndex){
-        CommandList* const commandList = desc.importedCommandLists[commandListIndex];
-        if(!commandList || !commandList->hasCommandBuffer())
-            return false;
-    }
-
-    CommandListParameters parameters;
-    parameters.setQueueType(queue->queueClass);
-    CommandListHandle nativeCommandList = m_device.createCommandList(parameters);
-    if(!nativeCommandList)
-        return false;
-
-    nativeCommandList->open(desc.importedStateSeed);
-    bool recorded = nativeCommandList->hasCommandBuffer();
-    for(u32 taskIndex = 1u; recorded && taskIndex < packet.taskCount; ++taskIndex){
-        const GpuTaskId nativeTask = tasks[taskIndex];
-        const GpuTaskGraphTaskView nativeTaskView = graph.taskAt(nativeTask.index);
-        const GpuCompiledTask* const compiledNativeTask = compiledGraph.findTask(nativeTask);
-        NWB_ASSERT(compiledNativeTask);
-        NWB_ASSERT(compiledNativeTask->packet == desc.packet);
-        const GpuTaskRecordContext context{
-            .graph = compiledGraph,
-            .task = nativeTask,
-            .packet = desc.packet,
-            .queue = packet.queue,
-        };
-        const GpuCompiledBarrier* const prologueBarriers = compiledGraph.taskPrologueBarriers(nativeTask);
-        if(compiledNativeTask->prologueBarrierCount > 0u && !prologueBarriers){
-            recorded = false;
-            break;
-        }
-        for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledNativeTask->prologueBarrierCount; ++barrierIndex)
-            recorded = graph.applyCompiledBarrier(prologueBarriers[barrierIndex], *nativeCommandList);
-        if(recorded)
-            nativeCommandList->commitBarriers();
-        nativeCommandList->beginMarker(nativeTaskView.markerLabel);
-        if(recorded)
-            recorded = graph.recordTask(nativeTask, *nativeCommandList, context);
-        nativeCommandList->endMarker();
-        const GpuCompiledBarrier* const epilogueBarriers = compiledGraph.taskEpilogueBarriers(nativeTask);
-        if(compiledNativeTask->epilogueBarrierCount > 0u && !epilogueBarriers){
-            recorded = false;
-            break;
-        }
-        for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledNativeTask->epilogueBarrierCount; ++barrierIndex)
-            recorded = graph.applyCompiledBarrier(epilogueBarriers[barrierIndex], *nativeCommandList);
-        if(recorded)
-            nativeCommandList->commitBarriers();
-    }
-    nativeCommandList->close(packetStateSeed);
-    if(!recorded || !nativeCommandList->hasCommandBuffer() || !packetStateSeed->valid())
-        return false;
-
-    GpuRecordedPacket recordedPacket;
-    recordedPacket.packet = desc.packet;
-    recordedPacket.commandListCount = static_cast<u8>(desc.importedCommandListCount + 1u);
-    for(usize commandListIndex = 0u; commandListIndex < desc.importedCommandListCount; ++commandListIndex)
-        recordedPacket.commandLists[commandListIndex] = desc.importedCommandLists[commandListIndex];
-    recordedPacket.commandLists[desc.importedCommandListCount] = nativeCommandList.get();
-    recordedPacket.ownedCommandLists[desc.importedCommandListCount] = Move(nativeCommandList);
     outRecordedGraph.m_packets.push_back(Move(recordedPacket));
     return true;
 }

@@ -328,10 +328,8 @@ bool ProjectTestbed::onStartup(){
     );
     activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, cameraPosition);
     auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera);
-    if(!activeCamera.camera.valid() || !cameraTransform){
-        NWB_LOGGER_ERROR(NWB_TEXT("ProjectTestbed: failed to create the startup camera"));
-        return false;
-    }
+    NWB_ASSERT(activeCamera.camera.valid());
+    NWB_ASSERT(cameraTransform);
     StoreFloat(QuaternionRotationRollPitchYaw(0.0f, __hidden_runtime::s_CameraStartYaw, 0.0f), &cameraTransform->rotation);
     const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
         *m_world,
@@ -360,25 +358,20 @@ bool ProjectTestbed::onStartup(){
         __hidden_runtime::s_PointLightIntensity,
         __hidden_runtime::s_PointLightRange
     );
-    if(!directionalLight.valid() || !pointLight.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ProjectTestbed: failed to create the startup lights"));
-        return false;
-    }
+    NWB_ASSERT(directionalLight.valid());
+    NWB_ASSERT(pointLight.valid());
 
-    if(!createDefaultScene())
-        return false;
+    createDefaultScene();
     auto* modelSystem = m_world->getSystem<NWB::Impl::ModelSystem>();
-    if(!modelSystem){
-        NWB_LOGGER_ERROR(NWB_TEXT("ProjectTestbed: missing model system during startup"));
-        return false;
-    }
+    NWB_ASSERT(modelSystem);
     modelSystem->syncModelRuntimes();
     registerInputHandler();
-    return m_characterEntity.valid();
+    return true;
 }
 
-bool ProjectTestbed::createDefaultScene(){
+void ProjectTestbed::createDefaultScene(){
     m_characterEntity = __hidden_runtime::CreateSkinnedCharacterEntity(*m_world);
+    NWB_ASSERT(m_characterEntity.valid());
     __hidden_runtime::CreateStaticGroundPlaneEntity(*m_world);
 
     auto uiEntity = m_world->createEntity();
@@ -392,7 +385,6 @@ bool ProjectTestbed::createDefaultScene(){
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
         __hidden_runtime::s_DefaultSceneDescription
     );
-    return m_characterEntity.valid() && uiEntity.id().valid();
 }
 
 void ProjectTestbed::onShutdown(){

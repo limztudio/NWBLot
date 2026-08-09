@@ -110,7 +110,6 @@ RendererSystem::RendererSystem(
     , m_shadowComputeInputStateHandoff(arena)
     , m_shadowComputePersistentStateHandoff(arena)
     , m_shadowVisibilityStateHandoff(arena)
-    , m_shadowVisibilityLightingStateHandoff(arena)
     , m_shadowVisibilityReturnStateHandoff(arena)
     , m_causticsComputeBaseStateHandoff(arena)
     , m_causticsComputeInputStateHandoff(arena)
@@ -122,12 +121,8 @@ RendererSystem::RendererSystem(
     , m_surfelGiComputeInputStateHandoff(arena)
     , m_surfelGiComputePersistentStateHandoff(arena)
     , m_surfelGiStateHandoff(arena)
-    , m_surfelIrradianceLightingStateHandoff(arena)
     , m_surfelIrradianceReturnStateHandoff(arena)
-    , m_deferredLightingBaseStateHandoff(arena)
-    , m_deferredLightingInputStateHandoff(arena)
     , m_deferredLightingStateHandoff(arena)
-    , m_avboitLightingStateHandoff(arena)
     , m_avboitCompositeStateHandoff(arena)
     , m_opaqueColorCompositeStateHandoff(arena)
     , m_deferredCompositeBaseStateHandoff(arena)
@@ -218,7 +213,6 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     m_shadowComputeInputStateHandoff.reset();
     m_shadowComputePersistentStateHandoff.reset();
     m_shadowVisibilityStateHandoff.reset();
-    m_shadowVisibilityLightingStateHandoff.reset();
     m_shadowVisibilityReturnStateHandoff.reset();
     m_causticsComputeBaseStateHandoff.reset();
     m_causticsComputeInputStateHandoff.reset();
@@ -230,12 +224,8 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     m_surfelGiComputeInputStateHandoff.reset();
     m_surfelGiComputePersistentStateHandoff.reset();
     m_surfelGiStateHandoff.reset();
-    m_surfelIrradianceLightingStateHandoff.reset();
     m_surfelIrradianceReturnStateHandoff.reset();
-    m_deferredLightingBaseStateHandoff.reset();
-    m_deferredLightingInputStateHandoff.reset();
     m_deferredLightingStateHandoff.reset();
-    m_avboitLightingStateHandoff.reset();
     m_avboitCompositeStateHandoff.reset();
     m_opaqueColorCompositeStateHandoff.reset();
     m_deferredCompositeBaseStateHandoff.reset();
@@ -271,7 +261,6 @@ void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
     m_shadowComputeBaseStateHandoff.reset();
     m_shadowComputeInputStateHandoff.reset();
     m_shadowVisibilityStateHandoff.reset();
-    m_shadowVisibilityLightingStateHandoff.reset();
     m_causticsComputeBaseStateHandoff.reset();
     m_causticsComputeInputStateHandoff.reset();
     m_causticsStateHandoff.reset();
@@ -279,11 +268,7 @@ void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
     m_surfelGiComputeBaseStateHandoff.reset();
     m_surfelGiComputeInputStateHandoff.reset();
     m_surfelGiStateHandoff.reset();
-    m_surfelIrradianceLightingStateHandoff.reset();
-    m_deferredLightingBaseStateHandoff.reset();
-    m_deferredLightingInputStateHandoff.reset();
     m_deferredLightingStateHandoff.reset();
-    m_avboitLightingStateHandoff.reset();
     m_avboitCompositeStateHandoff.reset();
     m_opaqueColorCompositeStateHandoff.reset();
     m_deferredCompositeBaseStateHandoff.reset();
@@ -307,17 +292,12 @@ void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
     m_shadowComputeBaseStateHandoff.reset();
     m_shadowComputeInputStateHandoff.reset();
     m_shadowVisibilityStateHandoff.reset();
-    m_shadowVisibilityLightingStateHandoff.reset();
     m_causticsStateHandoff.reset();
     m_causticIrradianceLightingStateHandoff.reset();
     m_surfelGiComputeBaseStateHandoff.reset();
     m_surfelGiComputeInputStateHandoff.reset();
     m_surfelGiStateHandoff.reset();
-    m_surfelIrradianceLightingStateHandoff.reset();
-    m_deferredLightingBaseStateHandoff.reset();
-    m_deferredLightingInputStateHandoff.reset();
     m_deferredLightingStateHandoff.reset();
-    m_avboitLightingStateHandoff.reset();
     m_avboitCompositeStateHandoff.reset();
     m_opaqueColorCompositeStateHandoff.reset();
     m_deferredCompositeBaseStateHandoff.reset();
@@ -335,7 +315,6 @@ void RendererSystem::resetRejectedShadowVisibilityStateHandoffs()noexcept{
     m_shadowComputeBaseStateHandoff.reset();
     m_shadowComputeInputStateHandoff.reset();
     m_shadowVisibilityStateHandoff.reset();
-    m_shadowVisibilityLightingStateHandoff.reset();
     m_causticsComputeBaseStateHandoff.reset();
     m_causticsComputeInputStateHandoff.reset();
     m_causticsStateHandoff.reset();
@@ -343,11 +322,7 @@ void RendererSystem::resetRejectedShadowVisibilityStateHandoffs()noexcept{
     m_surfelGiComputeBaseStateHandoff.reset();
     m_surfelGiComputeInputStateHandoff.reset();
     m_surfelGiStateHandoff.reset();
-    m_surfelIrradianceLightingStateHandoff.reset();
-    m_deferredLightingBaseStateHandoff.reset();
-    m_deferredLightingInputStateHandoff.reset();
     m_deferredLightingStateHandoff.reset();
-    m_avboitLightingStateHandoff.reset();
     m_avboitCompositeStateHandoff.reset();
     m_opaqueColorCompositeStateHandoff.reset();
     m_deferredCompositeBaseStateHandoff.reset();
@@ -2352,84 +2327,61 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredState.m_lightBuffer.get(),
         deferredTargets.bindless.slotsBuffer.get(),
     };
-    if(!m_deferredLightingBaseStateHandoff.buildResourceSubset(
-        m_postGbufferNormalizedStateHandoff,
-        deferredLightingBaseTextures,
-        LengthOf(deferredLightingBaseTextures),
-        deferredLightingBaseBuffers,
-        LengthOf(deferredLightingBaseBuffers)
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-lighting base state selection failed"));
-        discardRenderPackets();
-        return;
-    }
-    if(!m_shadowVisibilityLightingStateHandoff.buildTextureSubset(
-        m_shadowVisibilityStateHandoff,
-        deferredTargets.shadowVisibility.get()
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the shadow visibility lighting handoff"));
-        discardRenderPackets();
-        return;
-    }
-    if(!m_causticIrradianceLightingStateHandoff.buildTextureSubset(
-        m_causticsStateHandoff,
-        deferredTargets.causticIrradiance.get()
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the caustic irradiance lighting handoff"));
-        discardRenderPackets();
-        return;
-    }
-    if(!m_surfelIrradianceLightingStateHandoff.buildTextureSubset(
-        m_surfelGiStateHandoff,
-        deferredTargets.surfelIrradiance.get()
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the surfel irradiance lighting handoff"));
-        discardRenderPackets();
-        return;
-    }
+    Core::Texture* const shadowVisibilityLightingTextures[] = {
+        deferredTargets.shadowVisibility.get(),
+    };
+    Core::Texture* const causticIrradianceLightingTextures[] = {
+        deferredTargets.causticIrradiance.get(),
+    };
+    Core::Texture* const surfelIrradianceLightingTextures[] = {
+        deferredTargets.surfelIrradiance.get(),
+    };
     Core::Texture* const avboitLightingTextures[] = {
         deferredTargets.albedo.get(),
         deferredTargets.normal.get(),
         deferredTargets.worldPosition.get(),
         deferredTargets.depth.get(),
     };
-    if(!m_avboitLightingStateHandoff.buildResourceSubset(
-        *avboitFinalStateSeed,
-        avboitLightingTextures,
-        LengthOf(avboitLightingTextures),
-        nullptr,
-        0u
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the AVBOIT lighting inputs"));
-        discardRenderPackets();
-        return;
-    }
-
-    const Core::CommandListResourceStateHandoff* deferredLightingBranchStates[4] = {};
-    usize deferredLightingBranchCount = 0u;
+    Core::GpuExternalPacketStateSource deferredLightingStateSources[5] = {};
+    usize deferredLightingStateSourceCount = 0u;
+    deferredLightingStateSources[deferredLightingStateSourceCount++] = Core::GpuExternalPacketStateSource{
+        .states = &m_postGbufferNormalizedStateHandoff,
+        .textures = deferredLightingBaseTextures,
+        .textureCount = LengthOf(deferredLightingBaseTextures),
+        .buffers = deferredLightingBaseBuffers,
+        .bufferCount = LengthOf(deferredLightingBaseBuffers),
+    };
     if(!laggedAsyncLightingSchedule){
-        deferredLightingBranchStates[deferredLightingBranchCount++] = &m_shadowVisibilityLightingStateHandoff;
-        deferredLightingBranchStates[deferredLightingBranchCount++] = &m_causticIrradianceLightingStateHandoff;
-        deferredLightingBranchStates[deferredLightingBranchCount++] = &m_surfelIrradianceLightingStateHandoff;
+        deferredLightingStateSources[deferredLightingStateSourceCount++] = Core::GpuExternalPacketStateSource{
+            .states = &m_shadowVisibilityStateHandoff,
+            .textures = shadowVisibilityLightingTextures,
+            .textureCount = LengthOf(shadowVisibilityLightingTextures),
+        };
+        deferredLightingStateSources[deferredLightingStateSourceCount++] = Core::GpuExternalPacketStateSource{
+            .states = &m_causticsStateHandoff,
+            .textures = causticIrradianceLightingTextures,
+            .textureCount = LengthOf(causticIrradianceLightingTextures),
+        };
+        deferredLightingStateSources[deferredLightingStateSourceCount++] = Core::GpuExternalPacketStateSource{
+            .states = &m_surfelGiStateHandoff,
+            .textures = surfelIrradianceLightingTextures,
+            .textureCount = LengthOf(surfelIrradianceLightingTextures),
+        };
     }
-    deferredLightingBranchStates[deferredLightingBranchCount++] = &m_avboitLightingStateHandoff;
-    if(!m_deferredLightingInputStateHandoff.buildFanIn(
-        m_deferredLightingBaseStateHandoff,
-        deferredLightingBranchStates,
-        deferredLightingBranchCount
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-lighting state fan-in failed"));
-        discardRenderPackets();
-        return;
-    }
+    deferredLightingStateSources[deferredLightingStateSourceCount++] = Core::GpuExternalPacketStateSource{
+        .states = avboitFinalStateSeed,
+        .textures = avboitLightingTextures,
+        .textureCount = LengthOf(avboitLightingTextures),
+    };
 
-    // The graph owns native recording and packet-boundary barriers.  The handoff only seeds actual cross-graph state
-    // until compiled packet-state seeds eliminate renderer-owned fan-in.
+    // The graph owns native recording and packet-boundary barriers. The recorder seeds exact external resource state
+    // directly from completed producers, without renderer-owned subset or fan-in handoffs.
     Core::GpuNativePacketRecorder deferredLightingRecorder(device);
     const Core::GpuNativePacketRecordDesc deferredLightingRecordDesc{
         .packet = deferredLightingPacket,
-        .initialStates = &m_deferredLightingInputStateHandoff,
         .finalStates = &m_deferredLightingStateHandoff,
+        .externalStateSources = deferredLightingStateSources,
+        .externalStateSourceCount = deferredLightingStateSourceCount,
         .applyCompiledBarriers = true,
     };
     const bool deferredLightingRecorded =
@@ -2484,7 +2436,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredTargets.bindless.slotsBuffer.get(),
     };
     if(!m_deferredCompositeBaseStateHandoff.buildResourceSubset(
-        m_deferredLightingBaseStateHandoff,
+        m_postGbufferNormalizedStateHandoff,
         nullptr,
         0u,
         deferredCompositeBaseBuffers,

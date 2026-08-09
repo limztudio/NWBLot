@@ -370,7 +370,6 @@ private:
     // visibility result on the same Compute lane, so the result snapshot remains Compute-local until the next frame.
     Core::CommandListResourceStateHandoff m_shadowComputePersistentStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityStateHandoff;
-    Core::CommandListResourceStateHandoff m_shadowVisibilityLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityReturnStateHandoff;
     // Software caustics retain their temporal scratch on the dedicated Compute lane. Hardware dispatch-rays caustics
     // use the Graphics hardware-caustics packet; normal deferred lighting consumes either resolved irradiance on Compute, while
@@ -388,15 +387,10 @@ private:
     Core::CommandListResourceStateHandoff m_surfelGiComputeInputStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelGiComputePersistentStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelGiStateHandoff;
-    Core::CommandListResourceStateHandoff m_surfelIrradianceLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelIrradianceReturnStateHandoff;
-    // Normal lighting runs on AsyncCompute after the Graphics AVBOIT chain. The opt-in lagged path instead runs it on
-    // Graphics with accepted history, so its narrow input handoff contains only current G-buffer data, AVBOIT state,
-    // and the reusable opaque-color storage output.
-    Core::CommandListResourceStateHandoff m_deferredLightingBaseStateHandoff;
-    Core::CommandListResourceStateHandoff m_deferredLightingInputStateHandoff;
+    // Normal lighting runs on AsyncCompute after the Graphics AVBOIT chain. Its external producer states are seeded
+    // directly by the packet recorder; only the output handoff remains for the not-yet-merged composite graph.
     Core::CommandListResourceStateHandoff m_deferredLightingStateHandoff;
-    Core::CommandListResourceStateHandoff m_avboitLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_avboitCompositeStateHandoff;
     Core::CommandListResourceStateHandoff m_opaqueColorCompositeStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredCompositeBaseStateHandoff;

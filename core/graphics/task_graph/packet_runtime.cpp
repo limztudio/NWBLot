@@ -78,10 +78,17 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId& packetID,
     const CommandListResourceStateHandoff* const externalInitialStates,
+    const GpuExternalPacketStateSource* const externalStateSources,
+    const usize externalStateSourceCount,
+    const bool includeCompiledStateSeeds,
     const CommandListResourceStateHandoff*& outInitialStates
 ){
     outInitialStates = nullptr;
-    if(!validFor(compiledGraph) || !compiledGraph.validPacket(packetID))
+    if(
+        !validFor(compiledGraph)
+        || !compiledGraph.validPacket(packetID)
+        || (externalStateSourceCount != 0u && !externalStateSources)
+    )
         return false;
 
     m_initialStateSeed.reset();
@@ -89,6 +96,50 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     m_stateMergeScratch.reset();
     if(externalInitialStates && !m_initialStateSeed.copyFrom(*externalInitialStates))
         return false;
+
+    const auto appendStateSubset = [&](const auto& buildSubset){
+        m_stateSubsetScratch.reset();
+        if(!buildSubset() || m_stateSubsetScratch.empty())
+            return false;
+
+        if(!m_initialStateSeed.valid())
+            return m_initialStateSeed.copyFrom(m_stateSubsetScratch);
+
+        const CommandListResourceStateHandoff* const branches[] = { &m_stateSubsetScratch };
+        if(!m_stateMergeScratch.buildFanIn(m_initialStateSeed, branches, LengthOf(branches)))
+            return false;
+        return m_initialStateSeed.copyFrom(m_stateMergeScratch);
+    };
+
+    for(usize sourceIndex = 0u; sourceIndex < externalStateSourceCount; ++sourceIndex){
+        const GpuExternalPacketStateSource& source = externalStateSources[sourceIndex];
+        if(
+            !source.states
+            || !source.states->valid()
+            || (source.textureCount != 0u && !source.textures)
+            || (source.bufferCount != 0u && !source.buffers)
+            || (source.textureCount == 0u && source.bufferCount == 0u)
+        )
+            return false;
+
+        if(!appendStateSubset(
+            [&]{
+                return m_stateSubsetScratch.buildResourceSubset(
+                    *source.states,
+                    source.textures,
+                    source.textureCount,
+                    source.buffers,
+                    source.bufferCount
+                );
+            }
+        ))
+            return false;
+    }
+
+    if(!includeCompiledStateSeeds){
+        outInitialStates = m_initialStateSeed.valid() ? &m_initialStateSeed : nullptr;
+        return true;
+    }
 
     const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
     const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
@@ -106,39 +157,25 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
             if(!sourceStates || !sourceStates->valid())
                 return false;
 
-            m_stateSubsetScratch.reset();
-            if(Texture* const texture = graph.textureForResource(seed.resource)){
-                if(!m_stateSubsetScratch.buildTextureRangeSubset(
-                    *sourceStates,
-                    texture,
-                    seed.range.textureSubresources
-                ))
-                    return false;
-            }
-            else if(Buffer* const buffer = graph.bufferForResource(seed.resource)){
-                Buffer* const buffers[] = { buffer };
-                if(!m_stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))
-                    return false;
-            }
-            else
-                return false;
-
             // An empty subset means the producer thunk never tracked a resource it declared as a state source.  Do
             // not silently fall back to the descriptor's creation state: that would reintroduce the stale-state bug
             // this graph-owned seed is meant to eliminate.
-            if(m_stateSubsetScratch.empty())
-                return false;
-
-            if(!m_initialStateSeed.valid()){
-                if(!m_initialStateSeed.copyFrom(m_stateSubsetScratch))
+            if(!appendStateSubset(
+                [&]{
+                    if(Texture* const texture = graph.textureForResource(seed.resource)){
+                        return m_stateSubsetScratch.buildTextureRangeSubset(
+                            *sourceStates,
+                            texture,
+                            seed.range.textureSubresources
+                        );
+                    }
+                    if(Buffer* const buffer = graph.bufferForResource(seed.resource)){
+                        Buffer* const buffers[] = { buffer };
+                        return m_stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u);
+                    }
                     return false;
-                continue;
-            }
-
-            const CommandListResourceStateHandoff* const branches[] = { &m_stateSubsetScratch };
-            if(!m_stateMergeScratch.buildFanIn(m_initialStateSeed, branches, LengthOf(branches)))
-                return false;
-            if(!m_initialStateSeed.copyFrom(m_stateMergeScratch))
+                }
+            ))
                 return false;
         }
     }
@@ -163,8 +200,17 @@ bool GpuNativePacketRecorder::recordPacket(
 
     const CommandListResourceStateHandoff* initialStates = desc.initialStates;
     if(
-        desc.useCompiledStateSeeds
-        && !outRecordedGraph.buildPacketInitialStateSeed(graph, compiledGraph, desc.packet, desc.initialStates, initialStates)
+        (desc.useCompiledStateSeeds || desc.externalStateSourceCount != 0u)
+        && !outRecordedGraph.buildPacketInitialStateSeed(
+            graph,
+            compiledGraph,
+            desc.packet,
+            desc.initialStates,
+            desc.externalStateSources,
+            desc.externalStateSourceCount,
+            desc.useCompiledStateSeeds,
+            initialStates
+        )
     )
         return false;
     CommandListResourceStateHandoff* const packetStateSeed = outRecordedGraph.packetStateSeed(desc.packet);

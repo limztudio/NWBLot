@@ -22,6 +22,7 @@ NWB_CORE_BEGIN
 
 class GpuTimingSubmissionTicket;
 class GpuTaskGraph;
+struct GpuExternalPacketStateSource;
 
 
 struct GpuRecordedPacket{
@@ -68,6 +69,9 @@ private:
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketId& packet,
         const CommandListResourceStateHandoff* externalInitialStates,
+        const GpuExternalPacketStateSource* externalStateSources,
+        usize externalStateSourceCount,
+        bool includeCompiledStateSeeds,
         const CommandListResourceStateHandoff*& outInitialStates
     );
     [[nodiscard]] CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet)noexcept;
@@ -87,13 +91,28 @@ private:
 };
 
 
-// Transitional packet state handoffs seed imported/existing work at open and export final state at close.  Graph
+// Selects the precise resources a packet needs from a completed external producer's native final state. This is the
+// transitional cross-graph/cross-frame counterpart to compiler-produced packet state seeds.
+struct GpuExternalPacketStateSource{
+    const CommandListResourceStateHandoff* states = nullptr;
+    Texture* const* textures = nullptr;
+    usize textureCount = 0u;
+    Buffer* const* buffers = nullptr;
+    usize bufferCount = 0u;
+};
+
+
+// Transitional packet state handoffs seed imported/existing work at open and export final state at close. Graph
 // barriers already lower through this recorder; the remaining bridge disappears once compiler-produced packet
 // state seeds cover cross-graph and cross-frame imports.
 struct GpuNativePacketRecordDesc{
     GpuSubmissionPacketId packet;
     const CommandListResourceStateHandoff* initialStates = nullptr;
     CommandListResourceStateHandoff* finalStates = nullptr;
+    // Resource-filtered final states from completed external producers. They merge with initialStates before native
+    // recording and remain distinct from graph-internal compiler state seeds.
+    const GpuExternalPacketStateSource* externalStateSources = nullptr;
+    usize externalStateSourceCount = 0u;
     // Uses compiler-selected producer snapshots for graph-internal resource state.  External/cross-frame inputs
     // remain in initialStates until their producers join the same graph.
     bool useCompiledStateSeeds = false;

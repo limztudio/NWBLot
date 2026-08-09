@@ -720,11 +720,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketChain){
     );
     ASSERT_TRUE(resource.valid());
 
+    // This mirrors the graph-owned software effects sequence: Shadow Visibility -> Software Caustics -> Surfel GI.
+    // A single Graphics family remains a valid fallback for each compute-designated packet.
     const GpuTaskResourceUse writerUses[] = {
         GpuTaskResourceUse{
             .resource = resource,
             .range = {},
-            .requiredState = ResourceStates::CopyDest,
+            .requiredState = ResourceStates::UnorderedAccess,
             .access = GpuTaskResourceAccess::Write,
         },
     };
@@ -733,13 +735,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketChain){
     writerScheduling.allowPacketMerge = false;
     GpuTaskDesc writerDesc;
     writerDesc
-        .setIdentity(Name("tests/descriptor_buffer/compile_order_writer"))
-        .setMarkerLabel("Compile Order Writer")
+        .setIdentity(Name("tests/descriptor_buffer/software_effects_shadow_visibility"))
+        .setMarkerLabel("Shadow Visibility")
         .setQueue(GpuQueueRequest{
-            GpuQueueCapability::Graphics,
-            GpuQueuePreference::Graphics,
-            false,
-            false,
+            GpuQueueCapability::Compute,
+            GpuQueuePreference::Compute,
+            true,
+            true,
         })
         .setScheduling(writerScheduling)
         .setResourceUses(writerUses, LengthOf(writerUses))
@@ -749,7 +751,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketChain){
         writerDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::CopyDest,
+            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &writerRecorded,
         }
     );
@@ -759,8 +761,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketChain){
         GpuTaskResourceUse{
             .resource = resource,
             .range = {},
-            .requiredState = ResourceStates::ConstantBuffer,
-            .access = GpuTaskResourceAccess::Read,
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::ReadWrite,
         },
     };
     GpuTaskSchedulingHint readerScheduling;
@@ -768,13 +770,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketChain){
     readerScheduling.allowPacketMerge = false;
     GpuTaskDesc readerDesc;
     readerDesc
-        .setIdentity(Name("tests/descriptor_buffer/compile_order_reader"))
-        .setMarkerLabel("Compile Order Reader")
+        .setIdentity(Name("tests/descriptor_buffer/software_effects_caustics"))
+        .setMarkerLabel("Software Caustics")
         .setQueue(GpuQueueRequest{
-            GpuQueueCapability::Graphics,
-            GpuQueuePreference::Graphics,
-            false,
-            false,
+            GpuQueueCapability::Compute,
+            GpuQueuePreference::Compute,
+            true,
+            true,
         })
         .setScheduling(readerScheduling)
         .setDependencies(&writer, 1u)
@@ -785,11 +787,47 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketChain){
         readerDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::ConstantBuffer,
+            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &readerRecorded,
         }
     );
     ASSERT_TRUE(reader.valid());
+
+    const GpuTaskResourceUse surfelGiUses[] = {
+        GpuTaskResourceUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskSchedulingHint surfelGiScheduling;
+    surfelGiScheduling.forceSubmissionBoundary = true;
+    surfelGiScheduling.allowPacketMerge = false;
+    GpuTaskDesc surfelGiDesc;
+    surfelGiDesc
+        .setIdentity(Name("tests/descriptor_buffer/software_effects_surfel_gi"))
+        .setMarkerLabel("Surfel GI")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Compute,
+            GpuQueuePreference::Compute,
+            true,
+            true,
+        })
+        .setScheduling(surfelGiScheduling)
+        .setDependencies(&reader, 1u)
+        .setResourceUses(surfelGiUses, LengthOf(surfelGiUses))
+    ;
+    bool surfelGiRecorded = false;
+    const GpuTaskId surfelGi = graph.addTask<NativePacketPrefixTask>(
+        surfelGiDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = buffer.get(),
+            .expectedState = ResourceStates::ShaderResource,
+            .recorded = &surfelGiRecorded,
+        }
+    );
+    ASSERT_TRUE(surfelGi.valid());
 
     const GpuPhysicalQueueInfo queue{
         .id = GpuPhysicalQueueId{ 0u, 1u },
@@ -810,16 +848,23 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketChain){
     GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
     GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
     GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
-    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/compile_order_scratch"));
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/software_effects_scratch"));
     const GpuTaskGraphCompiler compiler;
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
     const GpuSubmissionPacketId writerPacket = compiledGraph.packetForTask(writer);
     const GpuSubmissionPacketId readerPacket = compiledGraph.packetForTask(reader);
+    const GpuSubmissionPacketId surfelGiPacket = compiledGraph.packetForTask(surfelGi);
     ASSERT_TRUE(writerPacket.valid());
     ASSERT_TRUE(readerPacket.valid());
+    ASSERT_TRUE(surfelGiPacket.valid());
     EXPECT_EQ(compiledGraph.packetIdAt(0u), writerPacket);
     EXPECT_EQ(compiledGraph.packetIdAt(1u), readerPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(2u), surfelGiPacket);
+    ASSERT_EQ(compiledGraph.packet(readerPacket).dependencyCount, 1u);
+    ASSERT_EQ(compiledGraph.packet(surfelGiPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(readerPacket)[0].producer, writerPacket);
+    EXPECT_EQ(compiledGraph.packetDependencies(surfelGiPacket)[0].producer, readerPacket);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -827,6 +872,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketChain){
     const GpuNativePacketRecordDesc recordDescs[] = {
         GpuNativePacketRecordDesc{ .packet = writerPacket },
         GpuNativePacketRecordDesc{ .packet = readerPacket },
+        GpuNativePacketRecordDesc{ .packet = surfelGiPacket },
     };
     const GpuNativePacketRecorder recorder(device);
     ASSERT_TRUE(recorder.recordPacketsInCompileOrder(
@@ -838,6 +884,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketChain){
     ));
     EXPECT_TRUE(writerRecorded);
     EXPECT_TRUE(readerRecorded);
+    EXPECT_TRUE(surfelGiRecorded);
 
     const GpuTaskGraphSubmitter submitter(device);
     ASSERT_TRUE(submitter.submitPacketsInCompileOrder(
@@ -853,6 +900,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketChain){
     ));
     EXPECT_TRUE(transaction.packetToken(writerPacket).valid());
     EXPECT_TRUE(transaction.packetToken(readerPacket).valid());
+    EXPECT_TRUE(transaction.packetToken(surfelGiPacket).valid());
     EXPECT_TRUE(device.waitForIdle());
 }
 

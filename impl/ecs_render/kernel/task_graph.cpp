@@ -21,12 +21,13 @@ NWB_IMPL_BEGIN
 namespace ECSRenderDetail{
 
 
-// Records the non-publishing endpoint used when a later frame packet rejects after the prefix accepted. The graph
-// lifecycle keeps the timing transaction alive only through an accepted recovery submission.
+// Records the non-publishing endpoint used when a later frame packet rejects after the prefix accepted. The shared
+// graph declares this tail eagerly but arms it only for a late recovery record/submission.
 struct FrameRecoveryGraphTask{
     struct Payload{
         Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
-        bool retiresFrameTiming = false;
+        bool* armed = nullptr;
+        bool* retiresFrameTiming = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -36,25 +37,39 @@ struct FrameRecoveryGraphTask{
     ){
         static_cast<void>(context);
         return payload.frameTimingTransaction
-            && (!payload.retiresFrameTiming || payload.frameTimingTransaction->recordEnd(commandList))
+            && payload.armed
+            && payload.retiresFrameTiming
+            && *payload.armed
+            && (!*payload.retiresFrameTiming || payload.frameTimingTransaction->recordEnd(commandList))
         ;
     }
 
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         static_cast<void>(token);
         if(
-            payload.retiresFrameTiming
+            payload.armed
+            && payload.retiresFrameTiming
+            && *payload.armed
+            && *payload.retiresFrameTiming
             && payload.frameTimingTransaction
             && !payload.frameTimingTransaction->confirmEndSubmission(false)
         ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire frame recovery timing query"));
             payload.frameTimingTransaction->discard();
         }
+        if(payload.armed)
+            *payload.armed = false;
+        if(payload.retiresFrameTiming)
+            *payload.retiresFrameTiming = false;
     }
 
     static void discarded(Payload& payload){
-        if(payload.frameTimingTransaction)
+        if(payload.armed && *payload.armed && payload.frameTimingTransaction)
             payload.frameTimingTransaction->discard();
+        if(payload.armed)
+            *payload.armed = false;
+        if(payload.retiresFrameTiming)
+            *payload.retiresFrameTiming = false;
     }
 };
 
@@ -882,115 +897,6 @@ struct DeferredPresentGraphTask{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-void RendererSystem::buildFrameRecoveryTaskGraph(
-    Core::GpuTimingFrameTransaction& frameTimingTransaction,
-    const bool retiresFrameTiming,
-    const bool waitsForAsyncProducer
-){
-    using namespace __hidden_renderer_task_graph;
-
-    m_frameRecoveryTaskGraphValid = false;
-    m_frameRecoveryTask = {};
-    m_frameRecoveryAsyncCompletion = {};
-    m_frameRecoveryTaskGraph.reset();
-    m_frameRecoveryTaskGraphAnalysis.reset();
-    m_frameRecoveryTaskGraphQueueAssignments.reset();
-    m_frameRecoveryCompiledGraph.reset();
-    m_frameRecoveryRecordedGraph.reset(m_frameRecoveryCompiledGraph);
-    m_frameRecoverySubmissionTransaction.reset(m_frameRecoveryCompiledGraph);
-
-    const Core::GpuGraphResourceId recoveryDomain = m_frameRecoveryTaskGraph.importHazardDomain(
-        HazardDomainDesc(Name("render.frame_recovery.timing"), "Frame Recovery Timing")
-    );
-    if(!recoveryDomain.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import frame-recovery graph resources"));
-        return;
-    }
-
-    if(waitsForAsyncProducer){
-        Core::GpuExternalCompletionDesc asyncCompletionDesc;
-        asyncCompletionDesc
-            .setIdentity(Name("render.frame_recovery.async_complete"))
-            .setMarkerLabel("Latest Async Producer Complete")
-        ;
-        m_frameRecoveryAsyncCompletion = m_frameRecoveryTaskGraph.importExternalCompletion(asyncCompletionDesc);
-        if(!m_frameRecoveryAsyncCompletion.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import frame-recovery async completion"));
-            return;
-        }
-    }
-
-    const Core::GpuTaskResourceUse resourceUses[] = {
-        ReadWriteUse(recoveryDomain, Core::ResourceStates::Common),
-    };
-    Core::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = Core::GpuTaskCostHint::Tiny;
-    scheduling.forceSubmissionBoundary = true;
-    scheduling.allowPacketMerge = false;
-    Core::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("render.frame_recovery"))
-        .setMarkerLabel("Frame Recovery")
-        .setQueue(GraphicsQueueRequest())
-        .setScheduling(scheduling)
-        .setExternalDependencies(
-            waitsForAsyncProducer ? &m_frameRecoveryAsyncCompletion : nullptr,
-            waitsForAsyncProducer ? 1u : 0u
-        )
-        .setResourceUses(resourceUses, LengthOf(resourceUses))
-    ;
-    m_frameRecoveryTask = m_frameRecoveryTaskGraph.addTask<ECSRenderDetail::FrameRecoveryGraphTask>(
-        desc,
-        ECSRenderDetail::FrameRecoveryGraphTask::Payload{
-            .frameTimingTransaction = &frameTimingTransaction,
-            .retiresFrameTiming = retiresFrameTiming,
-        }
-    );
-    if(!m_frameRecoveryTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare frame-recovery task"));
-        return;
-    }
-
-    const auto& device = graphics().getDevice();
-    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
-    const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
-        static_cast<u8>(Core::GpuQueueCapability::Graphics)
-        | static_cast<u8>(Core::GpuQueueCapability::Compute)
-        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
-    );
-    const Core::GpuPhysicalQueueInfo queues[] = {
-        Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
-            .queueClass = Core::CommandQueue::Graphics,
-            .capabilities = graphicsQueueCapabilities,
-            .familyIndex = graphicsFamilyIndex,
-            .queueIndex = 0u,
-            .dedicated = false,
-        },
-    };
-    const Core::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-    const Core::GpuTaskGraphCompiler compiler;
-    if(!compiler.compile(
-        m_frameRecoveryTaskGraph,
-        m_frameRecoveryTaskGraphAnalysis,
-        topology,
-        m_frameRecoveryTaskGraphQueueAssignments,
-        m_frameRecoveryCompiledGraph,
-        scratchArena
-    )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile frame-recovery task graph"));
-        return;
-    }
-    m_frameRecoveryRecordedGraph.reset(m_frameRecoveryCompiledGraph);
-    m_frameRecoverySubmissionTransaction.reset(m_frameRecoveryCompiledGraph);
-    m_frameRecoveryTaskGraphValid = true;
-}
 
 
 void RendererSystem::buildShadowPrepareTaskGraph(
@@ -2016,9 +1922,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredCompositeTask = {};
     m_deferredPresentTask = {};
     m_deferredLaggedLightingHistoryTask = {};
+    m_deferredFrameRecoveryTask = {};
     m_deferredLightingHistoryCompletion = {};
+    m_deferredFrameRecoveryCompletion = {};
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
+    m_deferredFrameRecoveryArmed = false;
+    m_deferredFrameRecoveryRetiresTiming = false;
     m_deferredLightingTaskGraph.reset();
     m_deferredLightingTaskGraphAnalysis.reset();
     m_deferredLightingTaskGraphQueueAssignments.reset();
@@ -3012,6 +2922,54 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred lagged-lighting history-copy task"));
             return;
         }
+    }
+
+    // Recovery is a late independent Graphics tail. It deliberately has no packet dependency on normal work: a
+    // rejected suffix must not prevent it from retiring the accepted frame prefix. At submission it always binds
+    // this completion to the latest accepted non-Graphics producer, or to the accepted Prefix Graphics token.
+    const Core::GpuGraphResourceId recoveryDomain = m_deferredLightingTaskGraph.importHazardDomain(
+        HazardDomainDesc(Name("render.frame_recovery.timing"), "Frame Recovery Timing")
+    );
+    Core::GpuExternalCompletionDesc recoveryCompletionDesc;
+    recoveryCompletionDesc
+        .setIdentity(Name("render.frame_recovery.predecessor_complete"))
+        .setMarkerLabel("Latest Frame Producer Complete")
+    ;
+    m_deferredFrameRecoveryCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
+        recoveryCompletionDesc
+    );
+    if(!recoveryDomain.valid() || !m_deferredFrameRecoveryCompletion.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred frame-recovery graph resources"));
+        return;
+    }
+
+    const Core::GpuTaskResourceUse recoveryResourceUses[] = {
+        ReadWriteUse(recoveryDomain, Core::ResourceStates::Common),
+    };
+    Core::GpuTaskSchedulingHint recoveryScheduling;
+    recoveryScheduling.cost = Core::GpuTaskCostHint::Tiny;
+    recoveryScheduling.forceSubmissionBoundary = true;
+    recoveryScheduling.allowPacketMerge = false;
+    Core::GpuTaskDesc recoveryDesc;
+    recoveryDesc
+        .setIdentity(Name("render.frame_recovery"))
+        .setMarkerLabel("Frame Recovery")
+        .setQueue(GraphicsQueueRequest())
+        .setScheduling(recoveryScheduling)
+        .setExternalDependencies(&m_deferredFrameRecoveryCompletion, 1u)
+        .setResourceUses(recoveryResourceUses, LengthOf(recoveryResourceUses))
+    ;
+    m_deferredFrameRecoveryTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::FrameRecoveryGraphTask>(
+        recoveryDesc,
+        ECSRenderDetail::FrameRecoveryGraphTask::Payload{
+            .frameTimingTransaction = &frameTimingTransaction,
+            .armed = &m_deferredFrameRecoveryArmed,
+            .retiresFrameTiming = &m_deferredFrameRecoveryRetiresTiming,
+        }
+    );
+    if(!m_deferredFrameRecoveryTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred frame-recovery graph task"));
+        return;
     }
 
     const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(

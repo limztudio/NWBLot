@@ -1156,6 +1156,12 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
             .setMarkerLabel("External Completion")
     );
     ASSERT_TRUE(completion.valid());
+    const Graphics::GpuExternalCompletionId recoveryCompletion = graph.importExternalCompletion(
+        Graphics::GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/task_graph/packet_recovery_predecessor"))
+            .setMarkerLabel("Recovery Predecessor")
+    );
+    ASSERT_TRUE(recoveryCompletion.valid());
 
     u32 acceptedCount = 0u;
     u32 discardedCount = 0u;
@@ -1190,6 +1196,43 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     );
     ASSERT_TRUE(second.valid());
 
+    const Graphics::GpuGraphResourceId recoveryDomain = AddHazardDomain(
+        graph,
+        Name("tests/task_graph/packet_recovery_domain"),
+        "Frame Recovery Timing"
+    );
+    ASSERT_TRUE(recoveryDomain.valid());
+    const Graphics::GpuTaskResourceUse recoveryUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = recoveryDomain,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Common,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    Graphics::GpuTaskSchedulingHint recoveryScheduling;
+    recoveryScheduling.forceSubmissionBoundary = true;
+    recoveryScheduling.allowPacketMerge = false;
+    Graphics::GpuTaskDesc recoveryDesc;
+    recoveryDesc
+        .setIdentity(Name("tests/task_graph/packet_recovery"))
+        .setMarkerLabel("Frame Recovery")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(recoveryScheduling)
+        .setExternalDependencies(&recoveryCompletion, 1u)
+        .setResourceUses(recoveryUses, LengthOf(recoveryUses))
+    ;
+    const Graphics::GpuTaskId recovery = graph.addTask<PacketLifecycleTask>(
+        recoveryDesc,
+        PacketLifecycleTask::Payload{ &acceptedCount, &discardedCount, &acceptedToken }
+    );
+    ASSERT_TRUE(recovery.valid());
+
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
     const Graphics::GpuTaskGraphQueueTopology topology{
         .queues = queues,
@@ -1200,20 +1243,27 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
     ASSERT_TRUE(compiledGraph.validFor(graph));
-    ASSERT_EQ(compiledGraph.taskCount(), 2u);
-    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    ASSERT_EQ(compiledGraph.taskCount(), 3u);
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
 
     const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
     const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(second);
+    const Graphics::GpuSubmissionPacketId recoveryPacket = compiledGraph.packetForTask(recovery);
     ASSERT_TRUE(firstPacket.valid());
     ASSERT_TRUE(secondPacket.valid());
+    ASSERT_TRUE(recoveryPacket.valid());
     EXPECT_NE(firstPacket, secondPacket);
+    EXPECT_NE(recoveryPacket, secondPacket);
     const auto& secondPacketPlan = compiledGraph.packet(secondPacket);
     ASSERT_EQ(secondPacketPlan.taskCount, 1u);
     ASSERT_EQ(secondPacketPlan.dependencyCount, 1u);
     ASSERT_EQ(secondPacketPlan.externalDependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(secondPacket)[0].producer, firstPacket);
     EXPECT_EQ(compiledGraph.packetExternalDependencies(secondPacket)[0], completion);
+    const auto& recoveryPacketPlan = compiledGraph.packet(recoveryPacket);
+    EXPECT_EQ(recoveryPacketPlan.dependencyCount, 0u);
+    ASSERT_EQ(recoveryPacketPlan.externalDependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetExternalDependencies(recoveryPacket)[0], recoveryCompletion);
 
     Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
     transaction.reset(compiledGraph);
@@ -1227,15 +1277,37 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     ASSERT_NE(transaction.latestAcceptedToken(compiledGraph.packet(firstPacket).queue), nullptr);
     EXPECT_EQ(transaction.latestAcceptedToken(compiledGraph.packet(firstPacket).queue)->value, firstToken.value);
 
-    // A later packet that never reaches submission must discard only itself; the accepted producer remains visible
-    // to recovery and must never receive a rollback callback.
-    transaction.discardUnaccepted(graph, compiledGraph);
+    // A later packet may reject while the independent recovery tail remains Declared. The accepted producer stays
+    // visible, then recovery can still accept before the normal blanket cleanup rejects any remaining packet.
+    transaction.rejectPacket(graph, compiledGraph, secondPacket);
     EXPECT_EQ(acceptedCount, 1u);
     EXPECT_EQ(discardedCount, 1u);
     ASSERT_NE(transaction.packetRuntime(secondPacket), nullptr);
     EXPECT_EQ(
         transaction.packetRuntime(secondPacket)->state,
         Graphics::GpuPacketRuntimeState::Rejected
+    );
+    ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
+    EXPECT_EQ(
+        transaction.packetRuntime(recoveryPacket)->state,
+        Graphics::GpuPacketRuntimeState::Declared
+    );
+
+    ASSERT_TRUE(transaction.markPacketRecorded(recoveryPacket));
+    const Graphics::QueueSubmissionToken recoveryToken{ Graphics::CommandQueue::Graphics, 42u };
+    transaction.acceptPacket(graph, compiledGraph, recoveryPacket, recoveryToken);
+    EXPECT_EQ(acceptedCount, 2u);
+    EXPECT_EQ(discardedCount, 1u);
+    EXPECT_EQ(acceptedToken.queue, recoveryToken.queue);
+    EXPECT_EQ(acceptedToken.value, recoveryToken.value);
+
+    transaction.discardUnaccepted(graph, compiledGraph);
+    EXPECT_EQ(acceptedCount, 2u);
+    EXPECT_EQ(discardedCount, 1u);
+    ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
+    EXPECT_EQ(
+        transaction.packetRuntime(recoveryPacket)->state,
+        Graphics::GpuPacketRuntimeState::Accepted
     );
 }
 

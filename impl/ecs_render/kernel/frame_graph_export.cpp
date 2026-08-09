@@ -156,19 +156,6 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
     builder.addEdge(deferredComposite, deferredPresent, Edge::DependsOn);
     builder.addEdge(deferredPresent, backBuffer, Edge::Writes);
 
-    if(m_frameRecoveryTaskGraphValid){
-        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-        const Core::GpuTaskGraphTelemetryOptions recoveryTelemetryOptions{
-            .queueAssignments = &m_frameRecoveryTaskGraphQueueAssignments,
-        };
-        if(!m_frameRecoveryTaskGraph.appendFrameGraphTelemetry(
-            builder,
-            m_frameRecoveryTaskGraphAnalysis,
-            scratchArena,
-            recoveryTelemetryOptions
-        ))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frame-recovery graph telemetry export failed"));
-    }
     if(m_shadowPrepareTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphTelemetryOptions shadowPrepareTelemetryOptions{

@@ -145,11 +145,6 @@ private:
     void resetRejectedShadowVisibilityStateHandoffs()noexcept;
     void invalidateLaggedLightingHistorySubmission()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
-    void buildFrameRecoveryTaskGraph(
-        Core::GpuTimingFrameTransaction& frameTimingTransaction,
-        bool retiresFrameTiming,
-        bool waitsForAsyncProducer
-    );
     void buildShadowPrepareTaskGraph(
         DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket
@@ -271,17 +266,6 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;
-    // Recovery is a graph-owned Graphics packet that retires an accepted frame timing scope after a later packet
-    // rejects, optionally waiting for the latest accepted AsyncCompute producer.
-    Core::GpuTaskGraph m_frameRecoveryTaskGraph;
-    Core::GpuTaskGraphAnalysis m_frameRecoveryTaskGraphAnalysis;
-    Core::GpuTaskGraphQueueAssignments m_frameRecoveryTaskGraphQueueAssignments;
-    Core::GpuCompiledGraph m_frameRecoveryCompiledGraph;
-    Core::GpuRecordedGraph m_frameRecoveryRecordedGraph;
-    Core::GpuGraphSubmissionTransaction m_frameRecoverySubmissionTransaction;
-    Core::GpuTaskId m_frameRecoveryTask;
-    Core::GpuExternalCompletionId m_frameRecoveryAsyncCompletion;
-    bool m_frameRecoveryTaskGraphValid = false;
     // Shadow preparation is a graph-owned Graphics packet. Its native final snapshot is the ordered serial base
     // for the following graphics-prefix packet.
     Core::GpuTaskGraph m_shadowPrepareTaskGraph;
@@ -294,7 +278,7 @@ private:
     bool m_shadowPrepareTaskGraphValid = false;
     u16 m_taskGraphDeviceGeneration = 1u;
     // The native Graphics prefix, Shadow Visibility, Software Caustics, Surfel GI, AVBOIT, Hardware Caustics,
-    // Deferred Lighting, Composite, Present, and the optional lagged-history copy share one packet graph. The
+    // Deferred Lighting, Composite, Present, optional lagged-history copy, and recovery share one packet graph. The
     // prefix's five command lists remain a temporary recording bridge inside its first Graphics packet.
     Core::GpuTaskGraph m_deferredLightingTaskGraph;
     Core::GpuTaskGraphAnalysis m_deferredLightingTaskGraphAnalysis;
@@ -320,9 +304,15 @@ private:
     Core::GpuTaskId m_deferredCompositeTask;
     Core::GpuTaskId m_deferredPresentTask;
     Core::GpuTaskId m_deferredLaggedLightingHistoryTask;
+    // Recovery stays unrecorded until a later packet rejects. It uses a generic accepted-producer completion so the
+    // Graphics tail can join the latest AsyncCompute/Transfer work, or the Prefix Graphics submission when none did.
+    Core::GpuTaskId m_deferredFrameRecoveryTask;
     Core::GpuExternalCompletionId m_deferredLightingHistoryCompletion;
+    Core::GpuExternalCompletionId m_deferredFrameRecoveryCompletion;
     bool m_graphicsPrefixMeshViewSetupReady = false;
     bool m_graphicsPrefixSceneShadingSetupReady = false;
+    bool m_deferredFrameRecoveryArmed = false;
+    bool m_deferredFrameRecoveryRetiresTiming = false;
     bool m_deferredLightingTaskGraphValid = false;
 
 private:

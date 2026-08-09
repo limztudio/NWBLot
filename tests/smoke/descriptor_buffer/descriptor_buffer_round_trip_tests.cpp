@@ -57,6 +57,8 @@ namespace Tests{
 
 using namespace Core;
 
+inline constexpr GpuTimingScopeDefinition s_FrameTransactionScope("tests/timing_frame_transaction");
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -281,6 +283,99 @@ struct NativePacketPrefixTask{
     static void accepted(Payload& payload, const QueueSubmissionToken& token){
         if(payload.acceptedToken)
             *payload.acceptedToken = token;
+    }
+};
+
+
+// Minimal graph-native timing endpoints used to exercise a late recovery packet in the same submission transaction.
+struct NativeFrameTimingPacketTask{
+    enum class Endpoint : u8{
+        Begin,
+        End,
+    };
+
+    struct Payload{
+        Device* device = nullptr;
+        GpuTimingFrameTransaction* transaction = nullptr;
+        GpuTimingSubmissionTicket* timingTicket = nullptr;
+        Endpoint endpoint = Endpoint::Begin;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.device || !payload.transaction || !payload.timingTicket)
+            return false;
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        const bool ready = payload.endpoint == Endpoint::Begin
+            ? payload.transaction->begin(s_FrameTransactionScope, *payload.device, commandList)
+            : payload.transaction->recordEnd(commandList)
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
+struct NativeFrameRecoveryPacketTask{
+    struct Payload{
+        GpuTimingFrameTransaction* transaction = nullptr;
+        bool* armed = nullptr;
+        bool* retiresTiming = nullptr;
+        bool* recorded = nullptr;
+        bool* accepted = nullptr;
+        bool* discarded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        const bool ready = payload.transaction
+            && payload.armed
+            && payload.retiresTiming
+            && *payload.armed
+            && (!*payload.retiresTiming || payload.transaction->recordEnd(commandList))
+        ;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        static_cast<void>(token);
+        if(
+            payload.transaction
+            && payload.armed
+            && payload.retiresTiming
+            && *payload.armed
+            && *payload.retiresTiming
+        )
+            static_cast<void>(payload.transaction->confirmEndSubmission(false));
+        if(payload.armed)
+            *payload.armed = false;
+        if(payload.retiresTiming)
+            *payload.retiresTiming = false;
+        if(payload.accepted)
+            *payload.accepted = true;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.transaction && payload.armed && *payload.armed)
+            payload.transaction->discard();
+        if(payload.armed)
+            *payload.armed = false;
+        if(payload.retiresTiming)
+            *payload.retiresTiming = false;
+        if(payload.discarded)
+            *payload.discarded = true;
     }
 };
 
@@ -1477,7 +1572,6 @@ inline constexpr GpuTimingScopeDefinition s_FrameTimingLateActivationScope("test
 inline constexpr GpuTimingScopeDefinition s_UnpreparedTimingScope("tests/timing_unprepared_scope");
 inline constexpr GpuTimingScopeDefinition s_SubmissionTicketScope("tests/timing_submission_ticket");
 inline constexpr GpuTimingScopeDefinition s_ConcurrentSubmissionTicketScope("tests/timing_submission_ticket_concurrent");
-inline constexpr GpuTimingScopeDefinition s_FrameTransactionScope("tests/timing_frame_transaction");
 
 
 // Records a timing scope inside dynamic rendering, where vkCmdResetQueryPool is illegal. The scope can therefore
@@ -2091,6 +2185,278 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
     ASSERT_TRUE(device.waitForIdle());
     timing.collect(device, 92u);
     EXPECT_TRUE(timingSink.stats(s_FrameTransactionScope.identity).valid());
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
+
+// A recovery packet is declared with the normal frame graph but recorded only after a later packet rejects. It must
+// remain independent of that rejected packet, consume the accepted Prefix completion, and retire the timing scope
+// before the shared transaction rejects any remaining normal work.
+TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInSharedTransaction){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = graphics.gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTransactionScope.identity, device, 1u));
+    timing.beginFrame(120u);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId frameTimingDomain = graph.importHazardDomain(
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/recovery_frame_timing"))
+            .setMarkerLabel("Frame Timing")
+            .setType(GpuGraphResourceType::HazardDomain)
+    );
+    const GpuGraphResourceId recoveryDomain = graph.importHazardDomain(
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/recovery_domain"))
+            .setMarkerLabel("Frame Recovery")
+            .setType(GpuGraphResourceType::HazardDomain)
+    );
+    const GpuExternalCompletionId recoveryPredecessor = graph.importExternalCompletion(
+        GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/recovery_predecessor"))
+            .setMarkerLabel("Recovery Predecessor Complete")
+    );
+    ASSERT_TRUE(frameTimingDomain.valid());
+    ASSERT_TRUE(recoveryDomain.valid());
+    ASSERT_TRUE(recoveryPredecessor.valid());
+
+    const GpuTaskResourceUse frameTimingUses[] = {
+        GpuTaskResourceUse{
+            .resource = frameTimingDomain,
+            .range = {},
+            .requiredState = ResourceStates::Common,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    const GpuTaskResourceUse recoveryUses[] = {
+        GpuTaskResourceUse{
+            .resource = recoveryDomain,
+            .range = {},
+            .requiredState = ResourceStates::Common,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+
+    GpuTimingFrameTransaction frameTransaction(timing);
+    GpuTimingSubmissionTicket prefixTimingTicket(timing);
+    GpuTimingSubmissionTicket finalTimingTicket(timing);
+    bool prefixRecorded = false;
+    bool finalRecorded = false;
+    bool recoveryArmed = false;
+    bool recoveryRetiresTiming = false;
+    bool recoveryRecorded = false;
+    bool recoveryAccepted = false;
+    bool recoveryDiscarded = false;
+
+    GpuTaskDesc prefixDesc;
+    prefixDesc
+        .setIdentity(Name("tests/descriptor_buffer/recovery_prefix"))
+        .setMarkerLabel("Prefix")
+        .setQueue(graphicsQueue)
+        .setScheduling(scheduling)
+        .setResourceUses(frameTimingUses, LengthOf(frameTimingUses))
+    ;
+    const GpuTaskId prefixTask = graph.addTask<NativeFrameTimingPacketTask>(
+        prefixDesc,
+        NativeFrameTimingPacketTask::Payload{
+            .device = &device,
+            .transaction = &frameTransaction,
+            .timingTicket = &prefixTimingTicket,
+            .endpoint = NativeFrameTimingPacketTask::Endpoint::Begin,
+            .recorded = &prefixRecorded,
+        }
+    );
+    ASSERT_TRUE(prefixTask.valid());
+
+    const GpuTaskId finalDependencies[] = { prefixTask };
+    GpuTaskDesc finalDesc;
+    finalDesc
+        .setIdentity(Name("tests/descriptor_buffer/recovery_rejected_final"))
+        .setMarkerLabel("Rejected Final")
+        .setQueue(graphicsQueue)
+        .setScheduling(scheduling)
+        .setDependencies(finalDependencies, LengthOf(finalDependencies))
+        .setResourceUses(frameTimingUses, LengthOf(frameTimingUses))
+    ;
+    const GpuTaskId finalTask = graph.addTask<NativeFrameTimingPacketTask>(
+        finalDesc,
+        NativeFrameTimingPacketTask::Payload{
+            .device = &device,
+            .transaction = &frameTransaction,
+            .timingTicket = &finalTimingTicket,
+            .endpoint = NativeFrameTimingPacketTask::Endpoint::End,
+            .recorded = &finalRecorded,
+        }
+    );
+    ASSERT_TRUE(finalTask.valid());
+
+    GpuTaskDesc recoveryDesc;
+    recoveryDesc
+        .setIdentity(Name("tests/descriptor_buffer/recovery_tail"))
+        .setMarkerLabel("Frame Recovery")
+        .setQueue(graphicsQueue)
+        .setScheduling(scheduling)
+        .setExternalDependencies(&recoveryPredecessor, 1u)
+        .setResourceUses(recoveryUses, LengthOf(recoveryUses))
+    ;
+    const GpuTaskId recoveryTask = graph.addTask<NativeFrameRecoveryPacketTask>(
+        recoveryDesc,
+        NativeFrameRecoveryPacketTask::Payload{
+            .transaction = &frameTransaction,
+            .armed = &recoveryArmed,
+            .retiresTiming = &recoveryRetiresTiming,
+            .recorded = &recoveryRecorded,
+            .accepted = &recoveryAccepted,
+            .discarded = &recoveryDiscarded,
+        }
+    );
+    ASSERT_TRUE(recoveryTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/late_recovery_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+
+    const GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefixTask);
+    const GpuSubmissionPacketId finalPacket = compiledGraph.packetForTask(finalTask);
+    const GpuSubmissionPacketId recoveryPacket = compiledGraph.packetForTask(recoveryTask);
+    ASSERT_TRUE(prefixPacket.valid());
+    ASSERT_TRUE(finalPacket.valid());
+    ASSERT_TRUE(recoveryPacket.valid());
+    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    EXPECT_EQ(compiledGraph.packetIdAt(0u), prefixPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(1u), finalPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(2u), recoveryPacket);
+    EXPECT_EQ(compiledGraph.packet(recoveryPacket).dependencyCount, 0u);
+    ASSERT_EQ(compiledGraph.packet(recoveryPacket).externalDependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetExternalDependencies(recoveryPacket)[0], recoveryPredecessor);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = prefixPacket },
+        recordedGraph
+    ));
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = finalPacket },
+        recordedGraph
+    ));
+    EXPECT_TRUE(prefixRecorded);
+    EXPECT_TRUE(finalRecorded);
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        prefixPacket,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena,
+        &prefixTimingTicket
+    ));
+    const QueueSubmissionToken prefixToken = transaction.packetToken(prefixPacket);
+    ASSERT_TRUE(prefixToken.valid());
+    frameTransaction.confirmBeginSubmission();
+
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    EXPECT_FALSE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        finalPacket,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena,
+        &finalTimingTicket
+    ));
+    ASSERT_NE(transaction.packetRuntime(finalPacket), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(finalPacket)->state, GpuPacketRuntimeState::Rejected);
+    EXPECT_FALSE(recoveryRecorded);
+    EXPECT_FALSE(recoveryAccepted);
+    EXPECT_FALSE(recoveryDiscarded);
+    ASSERT_TRUE(frameTransaction.needsRetirement());
+
+    frameTransaction.prepareForRecovery();
+    recoveryArmed = true;
+    recoveryRetiresTiming = true;
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = recoveryPacket },
+        recordedGraph
+    ));
+    ASSERT_TRUE(recoveryRecorded);
+    const GpuTaskGraphExternalCompletionToken recoveryCompletionToken{
+        .completion = recoveryPredecessor,
+        .token = prefixToken,
+    };
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        recoveryPacket,
+        &recoveryCompletionToken,
+        1u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(recoveryAccepted);
+    EXPECT_FALSE(recoveryDiscarded);
+    EXPECT_FALSE(recoveryArmed);
+    EXPECT_FALSE(recoveryRetiresTiming);
+    EXPECT_FALSE(frameTransaction.needsRetirement());
+
+    transaction.discardUnaccepted(graph, compiledGraph);
+    ASSERT_NE(transaction.packetRuntime(prefixPacket), nullptr);
+    ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
+    EXPECT_EQ(transaction.packetRuntime(prefixPacket)->state, GpuPacketRuntimeState::Accepted);
+    EXPECT_EQ(transaction.packetRuntime(recoveryPacket)->state, GpuPacketRuntimeState::Accepted);
+    EXPECT_FALSE(recoveryDiscarded);
+    ASSERT_TRUE(device.waitForIdle());
+    timing.collect(device, 121u);
+    EXPECT_FALSE(timingSink.stats(s_FrameTransactionScope.identity).valid());
 
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();

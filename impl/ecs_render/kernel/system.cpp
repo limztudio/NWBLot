@@ -36,12 +36,6 @@ RendererSystem::RendererSystem(
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_csgShapeRegistry(arena)
-    , m_frameRecoveryTaskGraph(arena)
-    , m_frameRecoveryTaskGraphAnalysis(arena)
-    , m_frameRecoveryTaskGraphQueueAssignments(arena)
-    , m_frameRecoveryCompiledGraph(arena)
-    , m_frameRecoveryRecordedGraph(arena)
-    , m_frameRecoverySubmissionTransaction(arena)
     , m_shadowPrepareTaskGraph(arena)
     , m_shadowPrepareTaskGraphAnalysis(arena)
     , m_shadowPrepareTaskGraphQueueAssignments(arena)
@@ -211,15 +205,6 @@ void RendererSystem::invalidateResources(){
     m_preparedCsgFrameStateValid = false;
     m_preparedHasTransparentRenderers = false;
     m_preparedShadowVisibilityReady = false;
-    m_frameRecoveryTaskGraphValid = false;
-    m_frameRecoveryTask = {};
-    m_frameRecoveryAsyncCompletion = {};
-    m_frameRecoveryTaskGraph.reset();
-    m_frameRecoveryTaskGraphAnalysis.reset();
-    m_frameRecoveryTaskGraphQueueAssignments.reset();
-    m_frameRecoveryCompiledGraph.reset();
-    m_frameRecoveryRecordedGraph.reset(m_frameRecoveryCompiledGraph);
-    m_frameRecoverySubmissionTransaction.reset(m_frameRecoveryCompiledGraph);
     m_shadowPrepareTaskGraphValid = false;
     m_shadowPrepareTask = {};
     m_shadowPrepareTaskGraph.reset();
@@ -249,7 +234,11 @@ void RendererSystem::invalidateResources(){
     m_deferredCompositeTask = {};
     m_deferredPresentTask = {};
     m_deferredLaggedLightingHistoryTask = {};
+    m_deferredFrameRecoveryTask = {};
     m_deferredLightingHistoryCompletion = {};
+    m_deferredFrameRecoveryCompletion = {};
+    m_deferredFrameRecoveryArmed = false;
+    m_deferredFrameRecoveryRetiresTiming = false;
     m_deferredLightingTaskGraph.reset();
     m_deferredLightingTaskGraphAnalysis.reset();
     m_deferredLightingTaskGraphQueueAssignments.reset();
@@ -537,15 +526,6 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
 }
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
-    m_frameRecoveryTaskGraphValid = false;
-    m_frameRecoveryTask = {};
-    m_frameRecoveryAsyncCompletion = {};
-    m_frameRecoveryTaskGraph.reset();
-    m_frameRecoveryTaskGraphAnalysis.reset();
-    m_frameRecoveryTaskGraphQueueAssignments.reset();
-    m_frameRecoveryCompiledGraph.reset();
-    m_frameRecoveryRecordedGraph.reset(m_frameRecoveryCompiledGraph);
-    m_frameRecoverySubmissionTransaction.reset(m_frameRecoveryCompiledGraph);
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearTask = {};
@@ -567,7 +547,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredCompositeTask = {};
     m_deferredPresentTask = {};
     m_deferredLaggedLightingHistoryTask = {};
+    m_deferredFrameRecoveryTask = {};
     m_deferredLightingHistoryCompletion = {};
+    m_deferredFrameRecoveryCompletion = {};
+    m_deferredFrameRecoveryArmed = false;
+    m_deferredFrameRecoveryRetiresTiming = false;
     m_deferredLightingTaskGraph.reset();
     m_deferredLightingTaskGraphAnalysis.reset();
     m_deferredLightingTaskGraphQueueAssignments.reset();
@@ -952,6 +936,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     );
     const Core::GpuSubmissionPacketId deferredLaggedLightingHistoryPacket =
         m_deferredLightingCompiledGraph.packetForTask(m_deferredLaggedLightingHistoryTask);
+    const Core::GpuSubmissionPacketId deferredFrameRecoveryPacket =
+        m_deferredLightingCompiledGraph.packetForTask(m_deferredFrameRecoveryTask);
     const Core::GpuPhysicalQueueInfo* const deferredLightingQueue = deferredLightingPacket.valid()
         ? m_deferredLightingCompiledGraph.queueInfo(m_deferredLightingCompiledGraph.packet(deferredLightingPacket).queue)
         : nullptr
@@ -968,6 +954,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredLaggedLightingHistoryPacket.valid()
             ? m_deferredLightingCompiledGraph.queueInfo(
                 m_deferredLightingCompiledGraph.packet(deferredLaggedLightingHistoryPacket).queue
+            )
+            : nullptr
+    ;
+    const Core::GpuPhysicalQueueInfo* const deferredFrameRecoveryQueue =
+        deferredFrameRecoveryPacket.valid()
+            ? m_deferredLightingCompiledGraph.queueInfo(
+                m_deferredLightingCompiledGraph.packet(deferredFrameRecoveryPacket).queue
             )
             : nullptr
     ;
@@ -1000,7 +993,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const usize deferredPresentPacketIndex = deferredCompositePacketIndex + 1u;
     const usize deferredInitialPacketCount = deferredPresentPacketIndex + 1u;
     const usize deferredLaggedLightingHistoryPacketIndex = deferredInitialPacketCount;
-    const usize deferredPacketCount = deferredInitialPacketCount + (captureLaggedLightingHistory ? 1u : 0u);
+    const usize deferredFrameRecoveryPacketIndex = deferredLaggedLightingHistoryPacketIndex
+        + (captureLaggedLightingHistory ? 1u : 0u)
+    ;
+    const usize deferredPacketCount = deferredFrameRecoveryPacketIndex + 1u;
     if(
         !m_deferredLightingTaskGraphValid
         || !m_graphicsPrefixMeshViewSetupTask.valid()
@@ -1056,6 +1052,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredLightingTask.valid()
         || !m_deferredCompositeTask.valid()
         || !m_deferredPresentTask.valid()
+        || !m_deferredFrameRecoveryTask.valid()
+        || !m_deferredFrameRecoveryCompletion.valid()
         || (captureLaggedLightingHistory && (
             !m_deferredLaggedLightingHistoryTask.valid()
             || !deferredLaggedLightingHistoryPacket.valid()
@@ -1065,10 +1063,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !deferredLightingPacket.valid()
         || !deferredCompositePacket.valid()
         || !deferredPresentPacket.valid()
+        || !deferredFrameRecoveryPacket.valid()
         || m_deferredLightingCompiledGraph.packetCount() != deferredPacketCount
         || !deferredLightingQueue
         || !deferredCompositeQueue
         || !deferredPresentQueue
+        || !deferredFrameRecoveryQueue
         || m_deferredLightingCompiledGraph.packetIdAt(graphicsPrefixPacketIndex) != graphicsPrefixPacket
         || m_deferredLightingCompiledGraph.packetIdAt(deferredShadowVisibilityPacketIndex) != shadowVisibilityPacket
         || (!hardwareShadowSupported && (
@@ -1092,9 +1092,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingCompiledGraph.packetIdAt(deferredLaggedLightingHistoryPacketIndex)
                 != deferredLaggedLightingHistoryPacket
         ))
+        || m_deferredLightingCompiledGraph.packetIdAt(deferredFrameRecoveryPacketIndex)
+            != deferredFrameRecoveryPacket
         || (laggedAsyncLightingSchedule && deferredLightingQueue->queueClass != Core::CommandQueue::Compute)
         || (laggedAsyncLightingSchedule && deferredCompositeQueue->queueClass != Core::CommandQueue::Graphics)
         || deferredPresentQueue->queueClass != Core::CommandQueue::Graphics
+        || deferredFrameRecoveryQueue->queueClass != Core::CommandQueue::Graphics
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned prefix/effects/deferred packet chain was unavailable"));
         deferredPresentTimingTicket.discard();
@@ -1395,9 +1398,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
         .packet = deferredPresentPacket,
     };
-    // The optional history tail records after Present accepts because only then are its current-frame producer
-    // snapshots eligible to become external state sources. Record the remaining compile-order packet range so the
-    // late tail can join the same recorded graph and submission transaction without a renderer completion bridge.
+    // The optional history tail and independent recovery tail record only after their runtime prerequisites exist.
+    // Record the normal compile-order prefix now; both late packets join this recorded graph and transaction without
+    // renderer-side completion bridges.
     bool deferredPacketsRecorded =
         hardwareCausticsStateSourcesReady
         && shadowVisibilityStateSourcesReady
@@ -1439,6 +1442,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredLightingTask.valid()
         && m_deferredCompositeTask.valid()
         && m_deferredPresentTask.valid()
+        && m_deferredFrameRecoveryTask.valid()
+        && m_deferredFrameRecoveryCompletion.valid()
         && (!captureLaggedLightingHistory || (
             m_deferredLaggedLightingHistoryTask.valid()
             && deferredLaggedLightingHistoryPacket.valid()
@@ -1447,6 +1452,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && deferredLightingPacket.valid()
         && deferredCompositePacket.valid()
         && deferredPresentPacket.valid()
+        && deferredFrameRecoveryPacket.valid()
+        && deferredFrameRecoveryQueue
         && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
         && deferredRecordDescCount == deferredInitialPacketCount - 1u
         && m_deferredLightingCompiledGraph.packetIdAt(graphicsPrefixPacketIndex) == graphicsPrefixPacket
@@ -1472,6 +1479,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingCompiledGraph.packetIdAt(deferredLaggedLightingHistoryPacketIndex)
                 == deferredLaggedLightingHistoryPacket
         ))
+        && m_deferredLightingCompiledGraph.packetIdAt(deferredFrameRecoveryPacketIndex)
+            == deferredFrameRecoveryPacket
     ;
     for(usize recordDescIndex = 0u, packetIndex = graphicsPrefixPacketIndex + 1u;
         deferredPacketsRecorded && recordDescIndex < deferredRecordDescCount;
@@ -1551,97 +1560,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-
-    const auto submitFrameRecoveryPacket = [&](const Core::QueueSubmissionToken* asyncWaitToken) -> bool {
-        // Retire the accepted frame scope after a rejected packet and, when applicable, join accepted async work
-        // without queue-family ownership repair.
-        if(device.isDeviceLost()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery packet skipped because the graphics device is lost"));
-            frameTimingTransaction.discard();
-            return false;
-        }
-        NWB_ASSERT(!asyncWaitToken || asyncWaitToken->valid());
-
-        const bool retireTiming = frameTimingTransaction.needsRetirement();
-        if(retireTiming)
-            frameTimingTransaction.prepareForRecovery();
-        buildFrameRecoveryTaskGraph(frameTimingTransaction, retireTiming, asyncWaitToken != nullptr);
-        const Core::GpuSubmissionPacketId recoveryPacket = m_frameRecoveryCompiledGraph.packetForTask(
-            m_frameRecoveryTask
-        );
-        const Core::GpuPhysicalQueueInfo* const recoveryQueue = recoveryPacket.valid()
-            ? m_frameRecoveryCompiledGraph.queueInfo(m_frameRecoveryCompiledGraph.packet(recoveryPacket).queue)
-            : nullptr
-        ;
-        const auto discardFrameRecovery = [&](){
-            if(m_frameRecoveryTaskGraphValid){
-                m_frameRecoverySubmissionTransaction.discardUnaccepted(
-                    m_frameRecoveryTaskGraph,
-                    m_frameRecoveryCompiledGraph
-                );
-            }
-            else{
-                frameTimingTransaction.discard();
-            }
-        };
-        if(
-            !m_frameRecoveryTaskGraphValid
-            || !m_frameRecoveryTask.valid()
-            || !recoveryPacket.valid()
-            || !recoveryQueue
-            || recoveryQueue->queueClass != Core::CommandQueue::Graphics
-            || (asyncWaitToken && !m_frameRecoveryAsyncCompletion.valid())
-        ){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery graph was unavailable"));
-            discardFrameRecovery();
-            return false;
-        }
-
-        const Core::GpuNativePacketRecorder recorder(device);
-        const bool recoveryRecorded = recorder.recordPacket(
-            m_frameRecoveryTaskGraph,
-            m_frameRecoveryCompiledGraph,
-            Core::GpuNativePacketRecordDesc{
-                .packet = recoveryPacket,
-            },
-            m_frameRecoveryRecordedGraph
-        );
-        if(!recoveryRecorded){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to record frame recovery packet"));
-            discardFrameRecovery();
-            return false;
-        }
-
-        Core::GpuTaskGraphExternalCompletionToken recoveryCompletionToken;
-        const Core::GpuTaskGraphExternalCompletionToken* recoveryCompletionTokens = nullptr;
-        usize recoveryCompletionCount = 0u;
-        if(asyncWaitToken){
-            recoveryCompletionToken = Core::GpuTaskGraphExternalCompletionToken{
-                .completion = m_frameRecoveryAsyncCompletion,
-                .token = *asyncWaitToken,
-            };
-            recoveryCompletionTokens = &recoveryCompletionToken;
-            recoveryCompletionCount = 1u;
-        }
-        Core::Alloc::ScratchArena recoveryScratchArena(RendererArenaScope::s_TaskGraphArena);
-        const Core::GpuTaskGraphSubmitter submitter(device);
-        const bool recoveryAccepted = submitter.submitPacket(
-            m_frameRecoveryTaskGraph,
-            m_frameRecoveryCompiledGraph,
-            m_frameRecoveryRecordedGraph,
-            recoveryPacket,
-            recoveryCompletionTokens,
-            recoveryCompletionCount,
-            m_frameRecoverySubmissionTransaction,
-            recoveryScratchArena
-        );
-        if(!recoveryAccepted){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery submission was rejected"));
-            discardFrameRecovery();
-            return false;
-        }
-        return true;
-    };
     Core::QueueSubmissionToken prefixSubmissionToken;
     Core::QueueSubmissionToken shadowVisibilitySubmissionToken;
     Core::QueueSubmissionToken hardwareCausticsSubmissionToken;
@@ -1655,6 +1573,94 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::QueueSubmissionToken avboitFinalSubmissionToken;
     Core::QueueSubmissionToken deferredLightingSubmissionToken;
     Core::QueueSubmissionToken deferredCompositeSubmissionToken;
+    const auto submitFrameRecoveryPacket = [&](const Core::QueueSubmissionToken* const asyncWaitToken) -> bool {
+        // Retire the accepted frame scope after a rejected packet and join the latest accepted non-Graphics producer.
+        // The Prefix Graphics token is the durable fallback completion; same-queue waits collapse to queue ordering.
+        if(device.isDeviceLost()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery packet skipped because the graphics device is lost"));
+            m_deferredFrameRecoveryArmed = false;
+            m_deferredFrameRecoveryRetiresTiming = false;
+            frameTimingTransaction.discard();
+            return false;
+        }
+        NWB_ASSERT(!asyncWaitToken || asyncWaitToken->valid());
+        const Core::QueueSubmissionToken& recoveryPredecessorToken = asyncWaitToken
+            ? *asyncWaitToken
+            : prefixSubmissionToken
+        ;
+        const bool retireTiming = frameTimingTransaction.needsRetirement();
+        if(retireTiming)
+            frameTimingTransaction.prepareForRecovery();
+        m_deferredFrameRecoveryArmed = true;
+        m_deferredFrameRecoveryRetiresTiming = retireTiming;
+        const auto discardFrameRecovery = [&](){
+            if(
+                m_deferredLightingTaskGraphValid
+                && deferredFrameRecoveryPacket.valid()
+            ){
+                m_deferredLightingSubmissionTransaction.rejectPacket(
+                    m_deferredLightingTaskGraph,
+                    m_deferredLightingCompiledGraph,
+                    deferredFrameRecoveryPacket
+                );
+            }
+            else{
+                m_deferredFrameRecoveryArmed = false;
+                m_deferredFrameRecoveryRetiresTiming = false;
+                frameTimingTransaction.discard();
+            }
+        };
+        if(
+            !m_deferredLightingTaskGraphValid
+            || !m_deferredFrameRecoveryTask.valid()
+            || !m_deferredFrameRecoveryCompletion.valid()
+            || !deferredFrameRecoveryPacket.valid()
+            || !deferredFrameRecoveryQueue
+            || deferredFrameRecoveryQueue->queueClass != Core::CommandQueue::Graphics
+            || !recoveryPredecessorToken.valid()
+        ){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred frame recovery packet was unavailable"));
+            discardFrameRecovery();
+            return false;
+        }
+
+        const bool recoveryRecorded = deferredRecorder.recordPacket(
+            m_deferredLightingTaskGraph,
+            m_deferredLightingCompiledGraph,
+            Core::GpuNativePacketRecordDesc{
+                .packet = deferredFrameRecoveryPacket,
+            },
+            m_deferredLightingRecordedGraph
+        );
+        if(!recoveryRecorded){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to late-record deferred frame recovery packet"));
+            discardFrameRecovery();
+            return false;
+        }
+
+        const Core::GpuTaskGraphExternalCompletionToken recoveryCompletionToken{
+            .completion = m_deferredFrameRecoveryCompletion,
+            .token = recoveryPredecessorToken,
+        };
+        Core::Alloc::ScratchArena recoveryScratchArena(RendererArenaScope::s_TaskGraphArena);
+        const Core::GpuTaskGraphSubmitter submitter(device);
+        const bool recoveryAccepted = submitter.submitPacket(
+            m_deferredLightingTaskGraph,
+            m_deferredLightingCompiledGraph,
+            m_deferredLightingRecordedGraph,
+            deferredFrameRecoveryPacket,
+            &recoveryCompletionToken,
+            1u,
+            m_deferredLightingSubmissionTransaction,
+            recoveryScratchArena
+        );
+        if(!recoveryAccepted){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred frame recovery submission was rejected"));
+            discardFrameRecovery();
+            return false;
+        }
+        return true;
+    };
     const auto restoreUnacceptedShadowEffectsCpuState = [&](){
         // Compile-order submission can retain either successor. Keep every accepted CPU mirror intact while
         // restoring only work that never reached a queue.
@@ -1708,6 +1714,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ? submitFrameRecoveryPacket(asyncWaitToken)
             : true
         ;
+    };
+    const auto recoverPendingFrameThenDiscardUnaccepted = [&]() -> bool {
+        const bool recovered = recoverPendingFrameSubmission();
+        // Recovery must record and submit while this packet remains Declared. Once it has accepted (or its own
+        // rejection discarded the timing transaction), reject every remaining normal packet in the shared graph.
+        discardUnacceptedGraphPackets();
+        return recovered;
     };
     const auto failFrameRenderRecovery = [&](){
         if(m_frameRenderRecoveryFailed)
@@ -1823,12 +1836,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ;
         if(!avboitPacketsAccepted || !avboitFinalSubmissionToken.valid()){
             const bool avboitPreWasRejected = !avboitPreSubmissionToken.valid();
-            discardUnacceptedGraphPackets();
+            const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
             if(avboitPreWasRejected)
                 restoreAvboitCpuState();
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred AVBOIT packet chain was rejected"));
-            if(!recoverPendingFrameSubmission())
+            if(!recovered)
                 failFrameRenderRecovery();
             return false;
         }
@@ -1894,9 +1907,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 )
             );
             if(!lightingReturnStatesReady){
-                discardUnacceptedGraphPackets();
+                const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
                 discardTimingTickets();
-                if(!recoverPendingFrameSubmission())
+                if(!recovered)
                     failFrameRenderRecovery();
                 // Lost post-lighting state leaves no safe producer layout.
                 failFrameRenderRecovery();
@@ -1932,10 +1945,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !deferredLightingSubmissionToken.valid()
             || !deferredCompositeSubmissionToken.valid()
         ){
-            discardUnacceptedGraphPackets();
+            const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred lighting/composite packet chain was rejected"));
-            if(!recoverPendingFrameSubmission())
+            if(!recovered)
                 failFrameRenderRecovery();
             return false;
         }
@@ -1970,10 +1983,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             : Core::QueueSubmissionToken{}
         ;
         if(!finalPresentationSubmissionToken.valid()){
-            discardUnacceptedGraphPackets();
+            const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred present submission was rejected"));
-            if(!recoverPendingFrameSubmission())
+            if(!recovered)
                 failFrameRenderRecovery();
             return false;
         }
@@ -2024,11 +2037,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ;
         surfelGiSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(surfelGiPacket);
         if(!surfelGiAccepted || !surfelGiSubmissionToken.valid()){
-            discardUnacceptedGraphPackets();
+            const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
             restoreUnacceptedShadowEffectsCpuState();
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred surfel-GI packet was rejected"));
-            if(!recoverPendingFrameSubmission())
+            if(!recovered)
                 failFrameRenderRecovery();
             return false;
         }
@@ -2036,9 +2049,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             *surfelGiFinalStateSeed,
             deferredTargets.surfelIrradiance.get()
         )){
-            discardUnacceptedGraphPackets();
+            const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
-            if(!recoverPendingFrameSubmission())
+            if(!recovered)
                 failFrameRenderRecovery();
             // An accepted graph producer without a retained state cannot safely feed a later frame.
             failFrameRenderRecovery();
@@ -2065,9 +2078,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 surfelGiComputeScratchBuffers,
                 LengthOf(surfelGiComputeScratchBuffers)
             )){
-                discardUnacceptedGraphPackets();
+                const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
                 discardTimingTickets();
-                if(!recoverPendingFrameSubmission())
+                if(!recovered)
                     failFrameRenderRecovery();
                 failFrameRenderRecovery();
                 return false;
@@ -2133,14 +2146,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             shadowVisibilityPacket
         );
         if(!shadowVisibilityAccepted || !shadowVisibilitySubmissionToken.valid()){
-            discardUnacceptedGraphPackets();
+            const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
             restoreShadowCpuState();
             restoreUnacceptedShadowEffectsCpuState();
             m_raytracingSystem.discardSoftShadowTemporalHistory();
             resetRejectedShadowVisibilityStateHandoffs();
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred shadow-visibility packet was rejected"));
-            if(!recoverPendingFrameSubmission())
+            if(!recovered)
                 failFrameRenderRecovery();
             return;
         }
@@ -2177,11 +2190,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 )
             ;
             if(!producerReturnStatesReady){
-                discardUnacceptedGraphPackets();
+                const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
                 discardTimingTickets();
                 restoreUnacceptedShadowEffectsCpuState();
                 m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-                if(!recoverPendingFrameSubmission())
+                if(!recovered)
                     failFrameRenderRecovery();
                 // Missing accepted producer state leaves no safe next layout.
                 failFrameRenderRecovery();
@@ -2217,11 +2230,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 shadowComputeScratchBuffers,
                 LengthOf(shadowComputeScratchBuffers)
             )){
-                discardUnacceptedGraphPackets();
+                const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
                 discardTimingTickets();
                 restoreUnacceptedShadowEffectsCpuState();
                 m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-                recoverPendingFrameSubmission();
+                static_cast<void>(recovered);
                 // Missing compute scratch leaves no safe layout restoration.
                 failFrameRenderRecovery();
                 return;
@@ -2230,11 +2243,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
         m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
         if(!hardwareShadowSupported && (!softwareCausticsAccepted || !softwareCausticsSubmissionToken.valid())){
-            discardUnacceptedGraphPackets();
+            const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
             restoreUnacceptedShadowEffectsCpuState();
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred software-caustics packet was rejected"));
-            if(!recoverPendingFrameSubmission())
+            if(!recovered)
                 failFrameRenderRecovery();
             return;
         }
@@ -2289,14 +2302,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ;
             if(!hardwareCausticsStateReady){
                 const bool hardwareCausticsWasAccepted = hardwareCausticsSubmissionToken.valid();
-                discardUnacceptedGraphPackets();
+                const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
                 discardTimingTickets();
                 if(!hardwareCausticsWasAccepted)
                     restoreCausticsCpuState();
                 restoreAvboitCpuState();
                 resetAbandonedFrameStateHandoffs();
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred hardware caustics was unavailable"));
-                if(!recoverPendingFrameSubmission())
+                if(!recovered)
                     failFrameRenderRecovery();
                 if(hardwareCausticsWasAccepted)
                     failFrameRenderRecovery();
@@ -2308,10 +2321,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 *causticsFinalStateSeed,
                 deferredTargets.causticIrradiance.get()
             )){
-                discardUnacceptedGraphPackets();
+                const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
                 discardTimingTickets();
                 restoreAvboitCpuState();
-                if(!recoverPendingFrameSubmission())
+                if(!recovered)
                     failFrameRenderRecovery();
                 failFrameRenderRecovery();
                 return;
@@ -2325,10 +2338,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 )
             ;
             if(!softwareCausticsStateReady){
-                discardUnacceptedGraphPackets();
+                const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
                 discardTimingTickets();
                 restoreAvboitCpuState();
-                if(!recoverPendingFrameSubmission())
+                if(!recovered)
                     failFrameRenderRecovery();
                 // An accepted Compute producer without retained output state cannot safely span frames.
                 failFrameRenderRecovery();
@@ -2348,10 +2361,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 nullptr,
                 0u
             )){
-                discardUnacceptedGraphPackets();
+                const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
                 discardTimingTickets();
                 restoreAvboitCpuState();
-                if(!recoverPendingFrameSubmission())
+                if(!recovered)
                     failFrameRenderRecovery();
                 failFrameRenderRecovery();
                 return;

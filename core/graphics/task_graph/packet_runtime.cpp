@@ -6,6 +6,7 @@
 
 #include "task_graph.h"
 
+#include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
 
 

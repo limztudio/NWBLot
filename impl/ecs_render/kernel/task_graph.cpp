@@ -2630,6 +2630,7 @@ void RendererSystem::buildDeferredCompositeTaskGraph(
         .setResourceUses(resourceUses, LengthOf(resourceUses))
     ;
     m_deferredCompositeTask = m_deferredSystem.declareDeferredCompositeTask(
+        m_deferredCompositeTaskGraph,
         desc,
         deferredTargets,
         timingTicket

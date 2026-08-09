@@ -6,6 +6,7 @@
 
 #include "compiler.h"
 
+#include <core/graphics/backend_selection.h>
 #include <core/telemetry/frame_graph_contributor.h>
 
 #include <global/atomic.h>

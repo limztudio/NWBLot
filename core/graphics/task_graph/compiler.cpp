@@ -881,6 +881,8 @@ bool GpuTaskGraphCompiler::compile(
     GpuCompiledGraph& outCompiledGraph,
     Alloc::ScratchArena& scratchArena
 )const{
+    using namespace __hidden_gpu_task_graph_compiler;
+
     outCompiledGraph.reset();
     if(!analyze(graph, outAnalysis, scratchArena) || !assignQueues(graph, outAnalysis, topology, outAssignments))
         return false;

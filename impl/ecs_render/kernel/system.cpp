@@ -2082,27 +2082,48 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         frameTimingTransaction.confirmBeginSubmission();
         Core::Alloc::ScratchArena shadowEffectsScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter shadowEffectsSubmitter(device);
-        const bool shadowVisibilityAccepted =
+        const Core::GpuTaskGraphPacketTimingTicket shadowEffectsTimingTickets[] = {
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = shadowVisibilityPacket,
+                .timingTicket = &shadowVisibilityTimingTicket,
+            },
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = softwareCausticsPacket,
+                .timingTicket = &softwareCausticsTimingTicket,
+            },
+        };
+        const usize shadowEffectsPacketCount = hardwareShadowSupported ? 1u : LengthOf(shadowEffectsTimingTickets);
+        const bool shadowEffectsSubmitted =
             m_deferredLightingTaskGraphValid
             && m_deferredShadowVisibilityTask.valid()
             && shadowVisibilityPacket.valid()
             && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
-            && shadowEffectsSubmitter.submitPacket(
+            && (hardwareShadowSupported || (
+                m_deferredSoftwareCausticsTask.valid()
+                && softwareCausticsPacket.valid()
+            ))
+            && shadowEffectsSubmitter.submitPacketRangeInCompileOrder(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
-                shadowVisibilityPacket,
+                deferredShadowVisibilityPacketIndex,
+                shadowEffectsPacketCount,
                 nullptr,
                 0u,
+                shadowEffectsTimingTickets,
+                shadowEffectsPacketCount,
                 m_deferredLightingSubmissionTransaction,
-                shadowEffectsScratchArena,
-                &shadowVisibilityTimingTicket
+                shadowEffectsScratchArena
             )
         ;
         shadowVisibilitySubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(
             shadowVisibilityPacket
         );
-        if(!shadowVisibilityAccepted || !shadowVisibilitySubmissionToken.valid()){
+        softwareCausticsSubmissionToken = !hardwareShadowSupported
+            ? m_deferredLightingSubmissionTransaction.packetToken(softwareCausticsPacket)
+            : Core::QueueSubmissionToken{}
+        ;
+        if(!shadowVisibilitySubmissionToken.valid()){
             const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
             restoreShadowCpuState();
@@ -2115,27 +2136,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return;
         }
 
-        bool softwareCausticsAccepted = hardwareShadowSupported;
-        if(!hardwareShadowSupported){
-            softwareCausticsAccepted =
-                m_deferredSoftwareCausticsTask.valid()
-                && softwareCausticsPacket.valid()
-                && shadowEffectsSubmitter.submitPacket(
-                    m_deferredLightingTaskGraph,
-                    m_deferredLightingCompiledGraph,
-                    m_deferredLightingRecordedGraph,
-                    softwareCausticsPacket,
-                    nullptr,
-                    0u,
-                    m_deferredLightingSubmissionTransaction,
-                    shadowEffectsScratchArena,
-                    &softwareCausticsTimingTicket
-                )
-            ;
-            softwareCausticsSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(
-                softwareCausticsPacket
-            );
-        }
+        const bool softwareCausticsAccepted = hardwareShadowSupported || (
+            shadowEffectsSubmitted && softwareCausticsSubmissionToken.valid()
+        );
 
         if(shadowVisibilityRunsOnCompute){
             // Retain only private compute scratch; shared inputs come from next frame's prefix.

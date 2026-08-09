@@ -470,17 +470,8 @@ void RendererAvboitSystem::dispatchAvboitIntegration(Core::CommandList& commandL
     const u32 pixelCount = targets.lowWidth * targets.lowHeight;
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_AvboitIntegration, graphics().getDevice(), commandList);
 
-    // Integration reads all packed extinction inputs and writes the Texture3D through global heap descriptors. Keep
-    // its UAV transition explicit so the complete heap-mediated write/read sequence remains visible to the command list.
-    commandList.setBufferState(targets.extinctionBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(targets.controlBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(targets.extinctionOverflowBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(
-        targets.transmittanceTexture.get(),
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::ResourceStates::UnorderedAccess
-    );
-    commandList.commitBarriers();
+    // The graph records packed-extinction reads and the Texture3D UAV write as packet-boundary state; this thunk
+    // contains only the native dispatch itself.
 
     Core::GpuDescriptorHeap& heap = graphics().getDevice().getDescriptorHeap();
 

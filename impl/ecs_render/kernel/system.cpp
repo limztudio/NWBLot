@@ -142,7 +142,6 @@ RendererSystem::RendererSystem(
     , m_avboitPreStateHandoff(arena)
     , m_avboitDepthWarpStateHandoff(arena)
     , m_avboitExtinctionStateHandoff(arena)
-    , m_avboitIntegrationInputStateHandoff(arena)
     , m_avboitIntegrationStateHandoff(arena)
     , m_avboitAccumulationInputStateHandoff(arena)
     , m_avboitStateHandoff(arena)
@@ -256,7 +255,6 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
     m_avboitExtinctionStateHandoff.reset();
-    m_avboitIntegrationInputStateHandoff.reset();
     m_avboitIntegrationStateHandoff.reset();
     m_avboitAccumulationInputStateHandoff.reset();
     m_avboitStateHandoff.reset();
@@ -311,7 +309,6 @@ void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
     m_avboitExtinctionStateHandoff.reset();
-    m_avboitIntegrationInputStateHandoff.reset();
     m_avboitIntegrationStateHandoff.reset();
     m_avboitAccumulationInputStateHandoff.reset();
     m_avboitStateHandoff.reset();
@@ -352,7 +349,6 @@ void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
     m_avboitExtinctionStateHandoff.reset();
-    m_avboitIntegrationInputStateHandoff.reset();
     m_avboitIntegrationStateHandoff.reset();
     m_avboitAccumulationInputStateHandoff.reset();
     m_avboitStateHandoff.reset();
@@ -388,7 +384,6 @@ void RendererSystem::resetRejectedShadowVisibilityStateHandoffs()noexcept{
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
     m_avboitExtinctionStateHandoff.reset();
-    m_avboitIntegrationInputStateHandoff.reset();
     m_avboitIntegrationStateHandoff.reset();
     m_avboitAccumulationInputStateHandoff.reset();
     m_avboitStateHandoff.reset();
@@ -2326,30 +2321,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return;
         }
 
-        Core::Texture* const avboitIntegrationInputTextures[] = {
-            deferredTargets.avboit.transmittanceTexture.get(),
-        };
-        Core::Buffer* const avboitIntegrationInputBuffers[] = {
-            deferredTargets.avboit.extinctionBuffer.get(),
-            deferredTargets.avboit.controlBuffer.get(),
-            deferredTargets.avboit.extinctionOverflowBuffer.get(),
-            deferredTargets.bindless.slotsBuffer.get(),
-        };
-        if(!m_avboitIntegrationInputStateHandoff.buildResourceSubset(
-            m_avboitExtinctionStateHandoff,
-            avboitIntegrationInputTextures,
-            LengthOf(avboitIntegrationInputTextures),
-            avboitIntegrationInputBuffers,
-            LengthOf(avboitIntegrationInputBuffers)
-        )){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT integration state selection failed"));
-            discardRenderPackets();
-            return;
-        }
         const Core::GpuNativePacketRecordDesc avboitIntegrationRecordDesc{
             .packet = avboitIntegrationPacket,
-            .initialStates = &m_avboitIntegrationInputStateHandoff,
             .finalStates = &m_avboitIntegrationStateHandoff,
+            .useCompiledStateSeeds = true,
+            .applyCompiledBarriers = true,
         };
         const bool avboitIntegrationRecorded =
             avboitIntegrationPacket.valid()

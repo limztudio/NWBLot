@@ -22,6 +22,7 @@ GpuCompiledGraph::GpuCompiledGraph(GraphicsArena& arena)
     , m_packetTasks(arena)
     , m_packetDependencies(arena)
     , m_packetExternalDependencies(arena)
+    , m_prologueStateSeeds(arena)
     , m_prologueBarriers(arena)
     , m_epilogueBarriers(arena)
     , m_queueTopology(arena)
@@ -34,6 +35,7 @@ void GpuCompiledGraph::reset(){
     m_packetTasks.clear();
     m_packetDependencies.clear();
     m_packetExternalDependencies.clear();
+    m_prologueStateSeeds.clear();
     m_prologueBarriers.clear();
     m_epilogueBarriers.clear();
     m_queueTopology.clear();
@@ -101,6 +103,18 @@ const GpuExternalCompletionId* GpuCompiledGraph::packetExternalDependencies(
         ? m_packetExternalDependencies.data() + packetPlan.externalDependencyOffset
         : nullptr
     ;
+}
+
+const GpuPacketStateSeed* GpuCompiledGraph::taskPrologueStateSeeds(const GpuTaskId& task)const noexcept{
+    const GpuCompiledTask* const compiledTask = findTask(task);
+    if(
+        !compiledTask
+        || compiledTask->prologueStateSeedCount == 0u
+        || compiledTask->prologueStateSeedOffset > m_prologueStateSeeds.size()
+        || compiledTask->prologueStateSeedCount > m_prologueStateSeeds.size() - compiledTask->prologueStateSeedOffset
+    )
+        return nullptr;
+    return m_prologueStateSeeds.data() + compiledTask->prologueStateSeedOffset;
 }
 
 const GpuCompiledBarrier* GpuCompiledGraph::taskPrologueBarriers(const GpuTaskId& task)const noexcept{

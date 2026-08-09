@@ -21,6 +21,13 @@ NWB_CORE_BEGIN
 
 void GpuRecordedGraph::reset(const GpuCompiledGraph& compiledGraph){
     m_packets.clear();
+    m_packetStateSeeds.clear();
+    m_packetStateSeeds.reserve(compiledGraph.packetCount());
+    for(usize packetIndex = 0u; packetIndex < compiledGraph.packetCount(); ++packetIndex)
+        m_packetStateSeeds.emplace_back(m_arena);
+    m_initialStateSeed.reset();
+    m_stateSubsetScratch.reset();
+    m_stateMergeScratch.reset();
     m_generation = compiledGraph.generation();
     m_deviceGeneration = compiledGraph.deviceGeneration();
     m_valid = compiledGraph.valid();
@@ -31,6 +38,7 @@ bool GpuRecordedGraph::validFor(const GpuCompiledGraph& compiledGraph)const noex
         && compiledGraph.valid()
         && m_generation == compiledGraph.generation()
         && m_deviceGeneration == compiledGraph.deviceGeneration()
+        && m_packetStateSeeds.size() == compiledGraph.packetCount()
     ;
 }
 
@@ -42,6 +50,94 @@ const GpuRecordedPacket* GpuRecordedGraph::find(const GpuSubmissionPacketId& pac
             return &recordedPacket;
     }
     return nullptr;
+}
+
+CommandListResourceStateHandoff* GpuRecordedGraph::packetStateSeed(const GpuSubmissionPacketId& packet)noexcept{
+    if(!packet.valid() || packet.generation != m_generation || packet.index >= m_packetStateSeeds.size())
+        return nullptr;
+    return &m_packetStateSeeds[packet.index];
+}
+
+const CommandListResourceStateHandoff* GpuRecordedGraph::packetStateSeed(
+    const GpuSubmissionPacketId& packet
+)const noexcept{
+    if(!packet.valid() || packet.generation != m_generation || packet.index >= m_packetStateSeeds.size())
+        return nullptr;
+    return &m_packetStateSeeds[packet.index];
+}
+
+bool GpuRecordedGraph::buildPacketInitialStateSeed(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId& packetID,
+    const CommandListResourceStateHandoff* const externalInitialStates,
+    const CommandListResourceStateHandoff*& outInitialStates
+){
+    outInitialStates = nullptr;
+    if(!validFor(compiledGraph) || !compiledGraph.validPacket(packetID))
+        return false;
+
+    m_initialStateSeed.reset();
+    m_stateSubsetScratch.reset();
+    m_stateMergeScratch.reset();
+    if(externalInitialStates && !m_initialStateSeed.copyFrom(*externalInitialStates))
+        return false;
+
+    const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
+    const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
+    if(!tasks || packet.taskCount == 0u)
+        return false;
+    for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
+        const GpuCompiledTask* const compiledTask = compiledGraph.findTask(tasks[taskIndex]);
+        const GpuPacketStateSeed* const stateSeeds = compiledGraph.taskPrologueStateSeeds(tasks[taskIndex]);
+        if(!compiledTask || (compiledTask->prologueStateSeedCount != 0u && !stateSeeds))
+            return false;
+
+        for(u32 seedIndex = 0u; seedIndex < compiledTask->prologueStateSeedCount; ++seedIndex){
+            const GpuPacketStateSeed& seed = stateSeeds[seedIndex];
+            const CommandListResourceStateHandoff* const sourceStates = packetStateSeed(seed.sourcePacket);
+            if(!sourceStates || !sourceStates->valid())
+                return false;
+
+            m_stateSubsetScratch.reset();
+            if(Texture* const texture = graph.textureForResource(seed.resource)){
+                if(!m_stateSubsetScratch.buildTextureRangeSubset(
+                    *sourceStates,
+                    texture,
+                    seed.range.textureSubresources
+                ))
+                    return false;
+            }
+            else if(Buffer* const buffer = graph.bufferForResource(seed.resource)){
+                Buffer* const buffers[] = { buffer };
+                if(!m_stateSubsetScratch.buildResourceSubset(*sourceStates, nullptr, 0u, buffers, 1u))
+                    return false;
+            }
+            else
+                return false;
+
+            // An empty subset means the producer thunk never tracked a resource it declared as a state source.  Do
+            // not silently fall back to the descriptor's creation state: that would reintroduce the stale-state bug
+            // this graph-owned seed is meant to eliminate.
+            if(m_stateSubsetScratch.empty())
+                return false;
+
+            if(!m_initialStateSeed.valid()){
+                if(!m_initialStateSeed.copyFrom(m_stateSubsetScratch))
+                    return false;
+                continue;
+            }
+
+            const CommandListResourceStateHandoff* const branches[] = { &m_stateSubsetScratch };
+            if(!m_stateMergeScratch.buildFanIn(m_initialStateSeed, branches, LengthOf(branches)))
+                return false;
+            if(!m_initialStateSeed.copyFrom(m_stateMergeScratch))
+                return false;
+        }
+    }
+
+    outInitialStates = m_initialStateSeed.valid() ? &m_initialStateSeed : nullptr;
+    return true;
 }
 
 
@@ -58,6 +154,17 @@ bool GpuNativePacketRecorder::recordPacket(
     if(outRecordedGraph.find(desc.packet))
         return false;
 
+    const CommandListResourceStateHandoff* initialStates = desc.initialStates;
+    if(
+        desc.useCompiledStateSeeds
+        && !outRecordedGraph.buildPacketInitialStateSeed(graph, compiledGraph, desc.packet, desc.initialStates, initialStates)
+    )
+        return false;
+    CommandListResourceStateHandoff* const packetStateSeed = outRecordedGraph.packetStateSeed(desc.packet);
+    if(!packetStateSeed)
+        return false;
+    packetStateSeed->reset();
+
     const GpuSubmissionPacket& packet = compiledGraph.packet(desc.packet);
     const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packet.queue);
     if(!queue || queue->queueClass >= CommandQueue::kCount)
@@ -69,7 +176,7 @@ bool GpuNativePacketRecorder::recordPacket(
     if(!commandList)
         return false;
 
-    commandList->open(desc.initialStates);
+    commandList->open(initialStates);
     bool recorded = commandList->hasCommandBuffer();
     const GpuTaskId* const tasks = compiledGraph.packetTasks(desc.packet);
     if(!tasks || packet.taskCount == 0u)
@@ -113,8 +220,10 @@ bool GpuNativePacketRecorder::recordPacket(
                 commandList->commitBarriers();
         }
     }
-    commandList->close(desc.finalStates);
+    commandList->close(packetStateSeed);
     if(!recorded || !commandList->hasCommandBuffer())
+        return false;
+    if(desc.finalStates && !desc.finalStates->copyFrom(*packetStateSeed))
         return false;
 
     GpuRecordedPacket recordedPacket;

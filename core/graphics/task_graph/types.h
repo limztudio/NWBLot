@@ -264,6 +264,15 @@ struct GpuCompiledBarrier{
     GpuPhysicalQueueId destinationQueue;
 };
 
+// A packet-state seed names the prior packet that owns the authoritative native state snapshot for one declared
+// resource range.  The recorder filters that snapshot to the declared range before opening the consumer command
+// list; no renderer-side fan-in is required for graph-internal edges.
+struct GpuPacketStateSeed{
+    GpuGraphResourceId resource;
+    GpuTaskResourceRange range;
+    GpuSubmissionPacketId sourcePacket;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

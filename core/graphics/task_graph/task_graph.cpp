@@ -265,6 +265,20 @@ GpuTaskGraphExternalCompletionView GpuTaskGraph::externalCompletionAt(const usiz
     };
 }
 
+Texture* GpuTaskGraph::textureForResource(const GpuGraphResourceId& resource)const noexcept{
+    if(!validResource(resource))
+        return nullptr;
+    const GpuGraphResourceNode& node = m_resources[resource.index];
+    return node.type == GpuGraphResourceType::Texture ? node.texture.get() : nullptr;
+}
+
+Buffer* GpuTaskGraph::bufferForResource(const GpuGraphResourceId& resource)const noexcept{
+    if(!validResource(resource))
+        return nullptr;
+    const GpuGraphResourceNode& node = m_resources[resource.index];
+    return node.type == GpuGraphResourceType::Buffer ? node.buffer.get() : nullptr;
+}
+
 bool GpuTaskGraph::recordTask(
     const GpuTaskId& taskID,
     CommandList& commandList,

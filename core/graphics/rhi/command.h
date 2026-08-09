@@ -123,6 +123,15 @@ public:
         usize bufferCount
     );
     [[nodiscard]] bool buildTextureSubset(const CommandListResourceStateHandoff& source, Texture* texture);
+    [[nodiscard]] bool buildTextureRangeSubset(
+        const CommandListResourceStateHandoff& source,
+        Texture* texture,
+        TextureSubresourceSet subresources
+    );
+    // Copies a valid state snapshot without exposing backend tracker storage.  Packet recording uses this to retain
+    // graph-owned producer seeds while legacy consumers still request their own final handoff.
+    [[nodiscard]] bool copyFrom(const CommandListResourceStateHandoff& source);
+    [[nodiscard]] bool empty()const noexcept;
 
 
 private:

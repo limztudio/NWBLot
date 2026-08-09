@@ -21,6 +21,7 @@ NWB_CORE_BEGIN
 
 
 class GpuTimingSubmissionTicket;
+class GpuTaskGraph;
 
 
 struct GpuRecordedPacket{
@@ -40,7 +41,12 @@ class GpuRecordedGraph final : NoCopy{
 
 public:
     explicit GpuRecordedGraph(GraphicsArena& arena)
-        : m_packets(arena)
+        : m_arena(arena)
+        , m_packets(arena)
+        , m_packetStateSeeds(arena)
+        , m_initialStateSeed(arena)
+        , m_stateSubsetScratch(arena)
+        , m_stateMergeScratch(arena)
     {}
 
 
@@ -52,7 +58,24 @@ public:
 
 
 private:
+    [[nodiscard]] bool buildPacketInitialStateSeed(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuSubmissionPacketId& packet,
+        const CommandListResourceStateHandoff* externalInitialStates,
+        const CommandListResourceStateHandoff*& outInitialStates
+    );
+    [[nodiscard]] CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet)noexcept;
+    [[nodiscard]] const CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet)const noexcept;
+
+
+private:
+    GraphicsArena& m_arena;
     GraphicsVector<GpuRecordedPacket> m_packets;
+    GraphicsVector<CommandListResourceStateHandoff> m_packetStateSeeds;
+    CommandListResourceStateHandoff m_initialStateSeed;
+    CommandListResourceStateHandoff m_stateSubsetScratch;
+    CommandListResourceStateHandoff m_stateMergeScratch;
     u64 m_generation = 0u;
     u16 m_deviceGeneration = 0u;
     bool m_valid = false;
@@ -66,6 +89,9 @@ struct GpuNativePacketRecordDesc{
     GpuSubmissionPacketId packet;
     const CommandListResourceStateHandoff* initialStates = nullptr;
     CommandListResourceStateHandoff* finalStates = nullptr;
+    // Uses compiler-selected producer snapshots for graph-internal resource state.  External/cross-frame inputs
+    // remain in initialStates until their producers join the same graph.
+    bool useCompiledStateSeeds = false;
     // Transitional opt-in while renderer tasks shed their local boundary transitions.  New graph-owned tasks set
     // this true; imported or not-yet-migrated record thunks retain their established state bridge.
     bool applyCompiledBarriers = false;

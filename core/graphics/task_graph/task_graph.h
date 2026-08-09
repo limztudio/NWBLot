@@ -187,6 +187,8 @@ public:
     [[nodiscard]] GpuTaskGraphTaskView taskAt(usize index)const;
     [[nodiscard]] GpuTaskGraphResourceView resourceAt(usize index)const;
     [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const;
+    [[nodiscard]] Texture* textureForResource(const GpuGraphResourceId& resource)const noexcept;
+    [[nodiscard]] Buffer* bufferForResource(const GpuGraphResourceId& resource)const noexcept;
     [[nodiscard]] bool recordTask(
         const GpuTaskId& task,
         CommandList& commandList,

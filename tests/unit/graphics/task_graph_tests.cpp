@@ -1321,6 +1321,9 @@ TEST(GpuTaskGraph, PlansPacketBoundaryTransitionsAndUavDependencies){
     ASSERT_NE(compiledWriter, nullptr);
     ASSERT_NE(compiledUavReader, nullptr);
     ASSERT_NE(compiledShaderReader, nullptr);
+    ASSERT_EQ(compiledWriter->prologueStateSeedCount, 0u);
+    ASSERT_EQ(compiledUavReader->prologueStateSeedCount, 1u);
+    ASSERT_EQ(compiledShaderReader->prologueStateSeedCount, 1u);
     ASSERT_EQ(compiledWriter->prologueBarrierCount, 1u);
     ASSERT_EQ(compiledUavReader->prologueBarrierCount, 1u);
     ASSERT_EQ(compiledShaderReader->prologueBarrierCount, 1u);
@@ -1328,9 +1331,17 @@ TEST(GpuTaskGraph, PlansPacketBoundaryTransitionsAndUavDependencies){
     const Graphics::GpuCompiledBarrier* const writerBarrier = compiledGraph.taskPrologueBarriers(writer);
     const Graphics::GpuCompiledBarrier* const uavBarrier = compiledGraph.taskPrologueBarriers(uavReader);
     const Graphics::GpuCompiledBarrier* const shaderBarrier = compiledGraph.taskPrologueBarriers(shaderReader);
+    const Graphics::GpuPacketStateSeed* const uavSeed = compiledGraph.taskPrologueStateSeeds(uavReader);
+    const Graphics::GpuPacketStateSeed* const shaderSeed = compiledGraph.taskPrologueStateSeeds(shaderReader);
     ASSERT_NE(writerBarrier, nullptr);
     ASSERT_NE(uavBarrier, nullptr);
     ASSERT_NE(shaderBarrier, nullptr);
+    ASSERT_NE(uavSeed, nullptr);
+    ASSERT_NE(shaderSeed, nullptr);
+    EXPECT_EQ(uavSeed[0].resource, texture);
+    EXPECT_EQ(uavSeed[0].sourcePacket, compiledWriter->packet);
+    EXPECT_EQ(shaderSeed[0].resource, texture);
+    EXPECT_EQ(shaderSeed[0].sourcePacket, compiledUavReader->packet);
     EXPECT_EQ(writerBarrier[0].type, Graphics::GpuCompiledBarrierType::TextureTransition);
     EXPECT_EQ(writerBarrier[0].before, Graphics::ResourceStates::Common);
     EXPECT_EQ(writerBarrier[0].after, Graphics::ResourceStates::UnorderedAccess);

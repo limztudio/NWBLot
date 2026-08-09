@@ -354,6 +354,75 @@ bool CommandListResourceStateHandoff::buildTextureSubset(
     return buildResourceSubset(source, textures, 1u, nullptr, 0u);
 }
 
+bool CommandListResourceStateHandoff::buildTextureRangeSubset(
+    const CommandListResourceStateHandoff& source,
+    Texture* const texture,
+    const TextureSubresourceSet subresources
+){
+    if(this == &source || !source.valid() || !texture){
+        reset();
+        return false;
+    }
+
+    const TextureSubresourceSet resolvedSubresources = subresources.resolve(
+        texture->getDescription(),
+        TextureSubresourceMipResolve::Range
+    );
+    const MipLevel mipEnd = resolvedSubresources.baseMipLevel + resolvedSubresources.numMipLevels;
+    const ArraySlice arrayEnd = resolvedSubresources.baseArraySlice + resolvedSubresources.numArraySlices;
+    const auto contains = [&](const MipLevel mipLevel, const ArraySlice arraySlice){
+        return mipLevel >= resolvedSubresources.baseMipLevel
+            && mipLevel < mipEnd
+            && arraySlice >= resolvedSubresources.baseArraySlice
+            && arraySlice < arrayEnd
+        ;
+    };
+
+    reset();
+    for(const TextureState& state : source.m_textureStates){
+        if(state.texture == texture && contains(state.mipLevel, state.arraySlice))
+            m_textureStates.push_back(state);
+    }
+    for(const PermanentTextureState& state : source.m_permanentTextureStates){
+        if(state.texture == texture)
+            m_permanentTextureStates.push_back(state);
+    }
+    m_valid = true;
+    return true;
+}
+
+bool CommandListResourceStateHandoff::copyFrom(const CommandListResourceStateHandoff& source){
+    if(this == &source)
+        return source.valid();
+
+    reset();
+    if(!source.valid())
+        return false;
+
+    m_textureStates.reserve(source.m_textureStates.size());
+    for(const TextureState& state : source.m_textureStates)
+        m_textureStates.push_back(state);
+    m_bufferStates.reserve(source.m_bufferStates.size());
+    for(const BufferState& state : source.m_bufferStates)
+        m_bufferStates.push_back(state);
+    m_permanentTextureStates.reserve(source.m_permanentTextureStates.size());
+    for(const PermanentTextureState& state : source.m_permanentTextureStates)
+        m_permanentTextureStates.push_back(state);
+    m_permanentBufferStates.reserve(source.m_permanentBufferStates.size());
+    for(const BufferState& state : source.m_permanentBufferStates)
+        m_permanentBufferStates.push_back(state);
+    m_valid = true;
+    return true;
+}
+
+bool CommandListResourceStateHandoff::empty()const noexcept{
+    return m_textureStates.empty()
+        && m_bufferStates.empty()
+        && m_permanentTextureStates.empty()
+        && m_permanentBufferStates.empty()
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

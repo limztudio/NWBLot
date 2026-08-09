@@ -36,6 +36,12 @@ RendererSystem::RendererSystem(
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_csgShapeRegistry(arena)
+    , m_frameRecoveryTaskGraph(arena)
+    , m_frameRecoveryTaskGraphAnalysis(arena)
+    , m_frameRecoveryTaskGraphQueueAssignments(arena)
+    , m_frameRecoveryCompiledGraph(arena)
+    , m_frameRecoveryRecordedGraph(arena)
+    , m_frameRecoverySubmissionTransaction(arena)
     , m_shadowPrepareTaskGraph(arena)
     , m_shadowPrepareTaskGraphAnalysis(arena)
     , m_shadowPrepareTaskGraphQueueAssignments(arena)
@@ -218,9 +224,6 @@ bool RendererSystem::validateResources(const u32 width, const u32 height, const 
     if(width == 0 || height == 0)
         return true;
 
-    if(!ensureFrameCommandLists())
-        return false;
-
     if(!prepareGpuTimingScopes())
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU timing scope preparation failed; timing samples may be skipped"));
 
@@ -262,6 +265,15 @@ void RendererSystem::invalidateResources(){
     m_preparedCsgFrameStateValid = false;
     m_preparedHasTransparentRenderers = false;
     m_preparedShadowVisibilityReady = false;
+    m_frameRecoveryTaskGraphValid = false;
+    m_frameRecoveryTask = {};
+    m_frameRecoveryAsyncCompletion = {};
+    m_frameRecoveryTaskGraph.reset();
+    m_frameRecoveryTaskGraphAnalysis.reset();
+    m_frameRecoveryTaskGraphQueueAssignments.reset();
+    m_frameRecoveryCompiledGraph.reset();
+    m_frameRecoveryRecordedGraph.reset(m_frameRecoveryCompiledGraph);
+    m_frameRecoverySubmissionTransaction.reset(m_frameRecoveryCompiledGraph);
     m_shadowPrepareTaskGraphValid = false;
     m_shadowPrepareTask = {};
     m_shadowPrepareTaskGraph.reset();
@@ -378,7 +390,6 @@ void RendererSystem::invalidateResources(){
         : static_cast<u16>(m_taskGraphDeviceGeneration + 1u)
     ;
     resetInvalidatedResourceStateHandoffs();
-    m_frameRecoveryCommandList.reset();
     resetLaggedLightingHistoryTracking();
     m_frameRenderRecoveryFailed = false;
     // Retire heap-retained TLAS resources before releasing their backing state.
@@ -407,20 +418,6 @@ void RendererSystem::invalidateResources(){
 void RendererSystem::update(Core::ECS::World& world, f32 delta){
     static_cast<void>(world);
     static_cast<void>(delta);
-}
-
-bool RendererSystem::ensureFrameCommandLists(){
-    auto& device = m_graphics.getDevice();
-
-    if(!m_frameRecoveryCommandList){
-        m_frameRecoveryCommandList = device.createCommandList();
-        if(!m_frameRecoveryCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create frame recovery command list"));
-            return false;
-        }
-    }
-
-    return true;
 }
 
 bool RendererSystem::prepareGpuTimingScopes(){
@@ -669,6 +666,15 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
 }
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
+    m_frameRecoveryTaskGraphValid = false;
+    m_frameRecoveryTask = {};
+    m_frameRecoveryAsyncCompletion = {};
+    m_frameRecoveryTaskGraph.reset();
+    m_frameRecoveryTaskGraphAnalysis.reset();
+    m_frameRecoveryTaskGraphQueueAssignments.reset();
+    m_frameRecoveryCompiledGraph.reset();
+    m_frameRecoveryRecordedGraph.reset(m_frameRecoveryCompiledGraph);
+    m_frameRecoverySubmissionTransaction.reset(m_frameRecoveryCompiledGraph);
     m_graphicsPrefixTaskGraphValid = false;
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -858,8 +864,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         .hardwareCaustics = hardwareShadowSupported,
     };
     buildLaggedLightingHistoryTaskGraph(taskGraphInput, deferredTargets);
-    Core::CommandList* frameRecoveryCommandList = m_frameRecoveryCommandList.get();
-    NWB_ASSERT(frameRecoveryCommandList);
 
     resetFrameRecordingStateHandoffs();
     m_raytracingSystem.discardSoftShadowTemporalHistory();
@@ -2030,42 +2034,80 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const bool retireTiming = frameTimingTransaction.needsRetirement();
         if(retireTiming)
             frameTimingTransaction.prepareForRecovery();
-        frameRecoveryCommandList->open();
-        if(!frameRecoveryCommandList->hasCommandBuffer()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to record frame recovery packet"));
-            frameTimingTransaction.discard();
-            return false;
-        }
-        if(retireTiming && !frameTimingTransaction.recordEnd(*frameRecoveryCommandList)){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to write frame recovery timing endpoint"));
-            frameTimingTransaction.discard();
-            return false;
-        }
-        frameRecoveryCommandList->close();
-        if(!frameRecoveryCommandList->hasCommandBuffer()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to close frame recovery packet"));
-            frameTimingTransaction.discard();
+        buildFrameRecoveryTaskGraph(frameTimingTransaction, retireTiming, asyncWaitToken != nullptr);
+        const Core::GpuSubmissionPacketId recoveryPacket = m_frameRecoveryCompiledGraph.packetForTask(
+            m_frameRecoveryTask
+        );
+        const Core::GpuPhysicalQueueInfo* const recoveryQueue = recoveryPacket.valid()
+            ? m_frameRecoveryCompiledGraph.queueInfo(m_frameRecoveryCompiledGraph.packet(recoveryPacket).queue)
+            : nullptr
+        ;
+        const auto discardFrameRecovery = [&](){
+            if(m_frameRecoveryTaskGraphValid){
+                m_frameRecoverySubmissionTransaction.discardUnaccepted(
+                    m_frameRecoveryTaskGraph,
+                    m_frameRecoveryCompiledGraph
+                );
+            }
+            else{
+                frameTimingTransaction.discard();
+            }
+        };
+        if(
+            !m_frameRecoveryTaskGraphValid
+            || !m_frameRecoveryTask.valid()
+            || !recoveryPacket.valid()
+            || !recoveryQueue
+            || recoveryQueue->queueClass != Core::CommandQueue::Graphics
+            || (asyncWaitToken && !m_frameRecoveryAsyncCompletion.valid())
+        ){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery graph was unavailable"));
+            discardFrameRecovery();
             return false;
         }
 
-        Core::QueueSubmissionDesc recoverySubmitDesc;
-        if(asyncWaitToken)
-            recoverySubmitDesc.setWaitTokens(asyncWaitToken, 1u);
-        Core::CommandList* recoveryCommandLists[] = { frameRecoveryCommandList };
-        const Core::QueueSubmissionToken recoveryToken = device.executeCommandLists(
-            recoveryCommandLists,
-            1u,
-            Core::RenderLane::Graphics,
-            recoverySubmitDesc
+        const Core::GpuNativePacketRecorder recorder(device);
+        const bool recoveryRecorded = recorder.recordPacket(
+            m_frameRecoveryTaskGraph,
+            m_frameRecoveryCompiledGraph,
+            Core::GpuNativePacketRecordDesc{
+                .packet = recoveryPacket,
+            },
+            m_frameRecoveryRecordedGraph
         );
-        if(!recoveryToken.valid()){
-            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery submission was rejected"));
-            frameTimingTransaction.discard();
+        if(!recoveryRecorded){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: failed to record frame recovery packet"));
+            discardFrameRecovery();
             return false;
         }
-        if(retireTiming && !frameTimingTransaction.confirmEndSubmission(false)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retire frame recovery timing query"));
-            frameTimingTransaction.discard();
+
+        Core::GpuTaskGraphExternalCompletionToken recoveryCompletionToken;
+        const Core::GpuTaskGraphExternalCompletionToken* recoveryCompletionTokens = nullptr;
+        usize recoveryCompletionCount = 0u;
+        if(asyncWaitToken){
+            recoveryCompletionToken = Core::GpuTaskGraphExternalCompletionToken{
+                .completion = m_frameRecoveryAsyncCompletion,
+                .token = *asyncWaitToken,
+            };
+            recoveryCompletionTokens = &recoveryCompletionToken;
+            recoveryCompletionCount = 1u;
+        }
+        Core::Alloc::ScratchArena recoveryScratchArena(RendererArenaScope::s_TaskGraphArena);
+        const Core::GpuTaskGraphSubmitter submitter(device);
+        const bool recoveryAccepted = submitter.submitPacket(
+            m_frameRecoveryTaskGraph,
+            m_frameRecoveryCompiledGraph,
+            m_frameRecoveryRecordedGraph,
+            recoveryPacket,
+            recoveryCompletionTokens,
+            recoveryCompletionCount,
+            m_frameRecoverySubmissionTransaction,
+            recoveryScratchArena
+        );
+        if(!recoveryAccepted){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery submission was rejected"));
+            discardFrameRecovery();
+            return false;
         }
         return true;
     };

@@ -135,7 +135,6 @@ public:
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept{ return m_frameLaggedAsyncLightingEnabled; }
 
 private:
-    [[nodiscard]] bool ensureFrameCommandLists();
     [[nodiscard]] bool prepareGpuTimingScopes();
     // These reset groups deliberately remain lifecycle-specific. Some handoffs retain accepted AsyncCompute scratch
     // or producer return state across frames, while unsubmitted work must be discarded before the next recording pass.
@@ -146,6 +145,11 @@ private:
     void resetRejectedShadowVisibilityStateHandoffs()noexcept;
     void invalidateLaggedLightingHistorySubmission()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
+    void buildFrameRecoveryTaskGraph(
+        Core::GpuTimingFrameTransaction& frameTimingTransaction,
+        bool retiresFrameTiming,
+        bool waitsForAsyncProducer
+    );
     void buildShadowPrepareTaskGraph(
         DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket
@@ -250,6 +254,17 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;
+    // Recovery is a graph-owned Graphics packet that retires an accepted frame timing scope after a later packet
+    // rejects, optionally waiting for the latest accepted AsyncCompute producer.
+    Core::GpuTaskGraph m_frameRecoveryTaskGraph;
+    Core::GpuTaskGraphAnalysis m_frameRecoveryTaskGraphAnalysis;
+    Core::GpuTaskGraphQueueAssignments m_frameRecoveryTaskGraphQueueAssignments;
+    Core::GpuCompiledGraph m_frameRecoveryCompiledGraph;
+    Core::GpuRecordedGraph m_frameRecoveryRecordedGraph;
+    Core::GpuGraphSubmissionTransaction m_frameRecoverySubmissionTransaction;
+    Core::GpuTaskId m_frameRecoveryTask;
+    Core::GpuExternalCompletionId m_frameRecoveryAsyncCompletion;
+    bool m_frameRecoveryTaskGraphValid = false;
     // Shadow preparation is a graph-owned Graphics packet. Its native final snapshot is the ordered serial base
     // for the following graphics-prefix packet.
     Core::GpuTaskGraph m_shadowPrepareTaskGraph;
@@ -407,9 +422,6 @@ private:
     // frame-lagged Graphics lighting.
     Core::CommandListResourceStateHandoff m_surfelGiComputePersistentStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelIrradianceReturnStateHandoff;
-    // A small Graphics recovery packet retires an accepted frame timing scope when a later dependent packet is
-    // rejected.  If it joins AsyncCompute, cross-lane resources remain concurrently shared.
-    Core::CommandListHandle m_frameRecoveryCommandList;
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;
     bool m_preparedShadowVisibilityReady = false;

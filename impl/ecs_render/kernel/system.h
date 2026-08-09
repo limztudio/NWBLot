@@ -392,10 +392,6 @@ private:
     // directly by the packet recorder; both lighting and composite retain only their outbound handoffs.
     Core::CommandListResourceStateHandoff m_deferredLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredCompositeStateHandoff;
-    Core::CommandListResourceStateHandoff m_compositeColorPresentStateHandoff;
-    Core::CommandListResourceStateHandoff m_deferredPresentBaseStateHandoff;
-    Core::CommandListResourceStateHandoff m_deferredPresentInputStateHandoff;
-    Core::CommandListResourceStateHandoff m_deferredPresentStateHandoff;
     // The source images leave the accepted producer/current-lighting path in this state while the graph-owned copy
     // records into separately tracked history. The history textures themselves restore to Common on close.
     Core::CommandListResourceStateHandoff m_laggedLightingHistoryCopyInputStateHandoff;

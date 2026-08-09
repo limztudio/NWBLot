@@ -24,7 +24,6 @@ namespace __hidden_renderer_task_graph{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Packet = ECSRenderDetail::FrameExecutionPacket;
 namespace Work = ECSRenderDetail::FrameExecutionWork;
 
 struct WorkMetadata{
@@ -328,12 +327,67 @@ struct AvboitAccumulationGraphTask{
 };
 
 
+struct DeferredPresentGraphTask{
+    struct Payload{
+        RendererDeferredSystem* deferredSystem = nullptr;
+        Core::Graphics* graphics = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::Framebuffer* presentationFramebuffer = nullptr;
+        Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
+        Optional<Core::GpuTimingMeasure>* asyncFinalTiming = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        bool shadowVisibilityRunsOnCompute = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(
+            !payload.deferredSystem
+            || !payload.graphics
+            || !payload.targets
+            || !payload.presentationFramebuffer
+            || !payload.frameTimingTransaction
+            || !payload.timingTicket
+            || (payload.shadowVisibilityRunsOnCompute && !payload.asyncFinalTiming)
+        )
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        if(payload.shadowVisibilityRunsOnCompute){
+            payload.asyncFinalTiming->emplace(
+                payload.graphics->gpuTiming(),
+                RendererGpuTimingScope::s_AsyncFinal,
+                payload.graphics->getDevice(),
+                commandList
+            );
+            payload.asyncFinalTiming->value().finishMarker();
+        }
+
+        const bool presentRecorded = payload.deferredSystem->renderDeferredPresent(
+            commandList,
+            *payload.targets,
+            payload.presentationFramebuffer
+        );
+        const bool frameTimingEnded = presentRecorded
+            && payload.frameTimingTransaction->recordEnd(commandList)
+        ;
+        if(payload.shadowVisibilityRunsOnCompute && presentRecorded && payload.asyncFinalTiming->has_value()){
+            payload.asyncFinalTiming->value().finishTiming(commandList);
+            payload.asyncFinalTiming->reset();
+        }
+        return presentRecorded && frameTimingEnded;
+    }
+};
+
+
 [[nodiscard]] static WorkMetadata WorkMetadataFor(const Work::Enum work){
     switch(work){
     case Work::GraphicsPrefix:
         return WorkMetadata{ Name("render.task_graph.graphics_prefix"), "Graphics Prefix", GraphicsQueueRequest() };
-    case Work::GraphicsPresent:
-        return WorkMetadata{ Name("render.task_graph.present"), "Present", GraphicsQueueRequest() };
     default:
         NWB_ASSERT(false);
         return {};
@@ -416,35 +470,6 @@ struct AvboitAccumulationGraphTask{
     };
 }
 
-[[nodiscard]] static bool PacketPathExists(
-    const ECSRenderDetail::FrameExecutionPlan& frameExecutionPlan,
-    const Packet::Enum producer,
-    const Packet::Enum consumer
-){
-    if(producer == consumer)
-        return true;
-
-    bool visited[Packet::kCount] = {};
-    const auto visit = [&](auto&& self, const Packet::Enum current) -> bool{
-        if(current == producer)
-            return true;
-
-        const usize currentIndex = static_cast<usize>(current);
-        if(visited[currentIndex])
-            return false;
-        visited[currentIndex] = true;
-
-        const ECSRenderDetail::FrameExecutionPacketPlan& packetPlan = frameExecutionPlan.packet(current);
-        for(u8 waitIndex = 0u; waitIndex < packetPlan.waitPacketCount; ++waitIndex){
-            if(self(self, packetPlan.waitPackets[waitIndex]))
-                return true;
-        }
-        return false;
-    };
-    return visit(visit, consumer);
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -467,7 +492,6 @@ void RendererSystem::buildGpuTaskGraph(
 
     m_gpuTaskGraphValid = false;
     m_gpuTaskGraphWorkTasks.clear();
-    m_gpuTaskGraphLegacyMismatches.clear();
     m_gpuTaskGraphLegacyQueueMismatches.clear();
     m_gpuTaskGraph.reset();
     m_gpuTaskGraphAnalysis.reset();
@@ -507,26 +531,16 @@ void RendererSystem::buildGpuTaskGraph(
         "World Position"
     );
     const Core::GpuGraphResourceId depth = importTexture(deferredTargets.depth, Name("render.task_graph.depth"), "Depth");
-    const Core::GpuGraphResourceId compositeColor = importTexture(
-        deferredTargets.compositeColor,
-        Name("render.task_graph.composite_color"),
-        "Composite Color"
-    );
     const Core::GpuGraphResourceId meshViewBuffer = m_gpuTaskGraph.importBuffer(
         m_drawState.m_meshViewBuffer,
         BufferResourceDesc(Name("render.task_graph.mesh_view"), "Mesh View")
-    );
-    const Core::GpuGraphResourceId backbuffer = m_gpuTaskGraph.importHazardDomain(
-        HazardDomainDesc(Name("render.task_graph.backbuffer"), "Back Buffer")
     );
     if(
         !albedo.valid()
         || !normal.valid()
         || !worldPosition.valid()
         || !depth.valid()
-        || !compositeColor.valid()
         || !meshViewBuffer.valid()
-        || !backbuffer.valid()
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph could not import required renderer resources"));
         return;
@@ -570,13 +584,8 @@ void RendererSystem::buildGpuTaskGraph(
         WriteUse(worldPosition, Core::ResourceStates::RenderTarget),
         WriteUse(depth, Core::ResourceStates::DepthWrite),
     };
-    const Core::GpuTaskResourceUse presentUses[] = {
-        ReadUse(compositeColor),
-        WriteUse(backbuffer, Core::ResourceStates::Present),
-    };
     const bool graphBuilt =
         addWorkTask(Work::GraphicsPrefix, graphicsPrefixUses, LengthOf(graphicsPrefixUses))
-        && addWorkTask(Work::GraphicsPresent, presentUses, LengthOf(presentUses))
     ;
     if(!graphBuilt){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph could not declare semantic work dependencies"));
@@ -669,49 +678,6 @@ void RendererSystem::buildGpuTaskGraph(
     if(!m_gpuTaskGraphLegacyQueueMismatches.empty()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph queue assignment differs from FrameExecutionPlan ({})")
             , m_gpuTaskGraphLegacyQueueMismatches.size()
-        );
-    }
-
-    const auto workForTask = [&](const Core::GpuTaskId task, Work::Enum& outWork){
-        for(usize workIndex = 0u; workIndex < Work::kCount; ++workIndex){
-            if(workTasks[workIndex] != task)
-                continue;
-            outWork = static_cast<Work::Enum>(workIndex);
-            return true;
-        }
-        return false;
-    };
-    const auto packetForTask = [&](const Core::GpuTaskId task, Packet::Enum& outPacket){
-        Work::Enum work = Work::kCount;
-        if(!workForTask(task, work) || !frameExecutionPlan.hasWork(work))
-            return false;
-        outPacket = frameExecutionPlan.packetForWork(work);
-        return true;
-    };
-    const auto recordLegacyScheduleMismatch = [&](const Core::GpuTaskDependencyEdge& graphEdge){
-        for(const Core::GpuTaskDependencyEdge& mismatch : m_gpuTaskGraphLegacyMismatches){
-            if(mismatch.producer == graphEdge.producer && mismatch.consumer == graphEdge.consumer)
-                return;
-        }
-        m_gpuTaskGraphLegacyMismatches.push_back(graphEdge);
-    };
-    for(const Core::GpuTaskDependencyEdge& graphEdge : m_gpuTaskGraphAnalysis.edges()){
-        Packet::Enum producerPacket = Packet::kCount;
-        Packet::Enum consumerPacket = Packet::kCount;
-        if(
-            !packetForTask(graphEdge.producer, producerPacket)
-            || !packetForTask(graphEdge.consumer, consumerPacket)
-        ){
-            continue;
-        }
-        if(PacketPathExists(frameExecutionPlan, producerPacket, consumerPacket))
-            continue;
-
-        recordLegacyScheduleMismatch(graphEdge);
-    }
-    if(!m_gpuTaskGraphLegacyMismatches.empty()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph found {} semantic dependencies absent from FrameExecutionPlan")
-            , m_gpuTaskGraphLegacyMismatches.size()
         );
     }
 
@@ -2852,6 +2818,183 @@ void RendererSystem::buildDeferredCompositeTaskGraph(
     m_deferredCompositeRecordedGraph.reset(m_deferredCompositeCompiledGraph);
     m_deferredCompositeSubmissionTransaction.reset(m_deferredCompositeCompiledGraph);
     m_deferredCompositeTaskGraphValid = true;
+}
+
+
+void RendererSystem::buildDeferredPresentTaskGraph(
+    const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+    DeferredFrameTargets& deferredTargets,
+    Core::Framebuffer* const presentationFramebuffer,
+    const bool waitsForSurfelGi,
+    const bool shadowVisibilityRunsOnCompute,
+    Core::GpuTimingFrameTransaction& frameTimingTransaction,
+    Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
+    Core::GpuTimingSubmissionTicket& timingTicket
+){
+    using namespace __hidden_renderer_task_graph;
+
+    m_deferredPresentTaskGraphValid = false;
+    m_deferredPresentTask = {};
+    m_deferredPresentCompositeCompletion = {};
+    m_deferredPresentSurfelGiCompletion = {};
+    m_deferredPresentTaskGraph.reset();
+    m_deferredPresentTaskGraphAnalysis.reset();
+    m_deferredPresentTaskGraphQueueAssignments.reset();
+    m_deferredPresentCompiledGraph.reset();
+    m_deferredPresentRecordedGraph.reset(m_deferredPresentCompiledGraph);
+    m_deferredPresentSubmissionTransaction.reset(m_deferredPresentCompiledGraph);
+
+    const ECSRenderDetail::GpuTaskGraphFrameSchedule schedule(input);
+    if(
+        !deferredTargets.valid()
+        || !deferredTargets.bindless.valid()
+        || !presentationFramebuffer
+        || waitsForSurfelGi != schedule.usesLaggedLightingHistory()
+    )
+        return;
+
+    const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
+        return m_deferredPresentTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
+    };
+    const Core::GpuGraphResourceId compositeColor = importTexture(
+        deferredTargets.compositeColor,
+        Name("render.deferred_present.composite_color"),
+        "Composite Color"
+    );
+    const Core::GpuGraphResourceId bindlessSlots = m_deferredPresentTaskGraph.importBuffer(
+        deferredTargets.bindless.slotsBuffer,
+        BufferResourceDesc(Name("render.deferred_present.bindless_slots"), "Deferred Bindless Slots")
+    );
+    const Core::GpuGraphResourceId backbuffer = m_deferredPresentTaskGraph.importHazardDomain(
+        HazardDomainDesc(Name("render.deferred_present.backbuffer"), "Presentation Back Buffer")
+    );
+    if(!compositeColor.valid() || !bindlessSlots.valid() || !backbuffer.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-present graph resources"));
+        return;
+    }
+
+    Core::GpuExternalCompletionDesc compositeCompletionDesc;
+    compositeCompletionDesc
+        .setIdentity(Name("render.deferred_present.deferred_composite_complete"))
+        .setMarkerLabel("Deferred Composite Complete")
+    ;
+    m_deferredPresentCompositeCompletion = m_deferredPresentTaskGraph.importExternalCompletion(
+        compositeCompletionDesc
+    );
+    if(!m_deferredPresentCompositeCompletion.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-composite completion for present"));
+        return;
+    }
+
+    Core::GpuExternalCompletionId externalDependencies[2] = { m_deferredPresentCompositeCompletion };
+    usize externalDependencyCount = 1u;
+    if(waitsForSurfelGi){
+        Core::GpuExternalCompletionDesc surfelGiCompletionDesc;
+        surfelGiCompletionDesc
+            .setIdentity(Name("render.deferred_present.surfel_gi_complete"))
+            .setMarkerLabel("Surfel GI Complete")
+        ;
+        m_deferredPresentSurfelGiCompletion = m_deferredPresentTaskGraph.importExternalCompletion(
+            surfelGiCompletionDesc
+        );
+        if(!m_deferredPresentSurfelGiCompletion.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import surfel-GI completion for present"));
+            return;
+        }
+        externalDependencies[externalDependencyCount++] = m_deferredPresentSurfelGiCompletion;
+    }
+
+    const Core::GpuTaskResourceUse resourceUses[] = {
+        ReadUse(compositeColor),
+        ReadUse(bindlessSlots, Core::ResourceStates::ConstantBuffer),
+        WriteUse(backbuffer, Core::ResourceStates::Present),
+    };
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Medium;
+    scheduling.avoidQueueCrossing = waitsForSurfelGi;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Core::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("render.deferred_present"))
+        .setMarkerLabel("Deferred Present")
+        .setQueue(GraphicsQueueRequest())
+        .setScheduling(scheduling)
+        .setExternalDependencies(externalDependencies, externalDependencyCount)
+        .setResourceUses(resourceUses, LengthOf(resourceUses))
+    ;
+    m_deferredPresentTask = m_deferredPresentTaskGraph.addTask<DeferredPresentGraphTask>(
+        desc,
+        DeferredPresentGraphTask::Payload{
+            .deferredSystem = &m_deferredSystem,
+            .graphics = &m_graphics,
+            .targets = &deferredTargets,
+            .presentationFramebuffer = presentationFramebuffer,
+            .frameTimingTransaction = &frameTimingTransaction,
+            .asyncFinalTiming = &asyncFinalTiming,
+            .timingTicket = &timingTicket,
+            .shadowVisibilityRunsOnCompute = shadowVisibilityRunsOnCompute,
+        }
+    );
+    if(!m_deferredPresentTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-present graph task"));
+        return;
+    }
+
+    const auto& device = graphics().getDevice();
+    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
+    const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
+    const bool dedicatedAsyncCompute = input.dedicatedAsyncCompute
+        && computeFamilyIndex != Limit<u32>::s_Max
+        && computeFamilyIndex != graphicsFamilyIndex
+    ;
+    const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
+        static_cast<u8>(Core::GpuQueueCapability::Graphics)
+        | static_cast<u8>(Core::GpuQueueCapability::Compute)
+        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
+    );
+    const Core::GpuQueueCapability::Mask computeQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
+        static_cast<u8>(Core::GpuQueueCapability::Compute)
+        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
+    );
+    const Core::GpuPhysicalQueueInfo queues[] = {
+        Core::GpuPhysicalQueueInfo{
+            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
+            .queueClass = Core::CommandQueue::Graphics,
+            .capabilities = graphicsQueueCapabilities,
+            .familyIndex = graphicsFamilyIndex,
+            .queueIndex = 0u,
+            .dedicated = false,
+        },
+        Core::GpuPhysicalQueueInfo{
+            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphDeviceGeneration },
+            .queueClass = Core::CommandQueue::Compute,
+            .capabilities = computeQueueCapabilities,
+            .familyIndex = computeFamilyIndex,
+            .queueIndex = 0u,
+            .dedicated = true,
+        },
+    };
+    const Core::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = dedicatedAsyncCompute ? LengthOf(queues) : 1u,
+    };
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+    const Core::GpuTaskGraphCompiler compiler;
+    if(!compiler.compile(
+        m_deferredPresentTaskGraph,
+        m_deferredPresentTaskGraphAnalysis,
+        topology,
+        m_deferredPresentTaskGraphQueueAssignments,
+        m_deferredPresentCompiledGraph,
+        scratchArena
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile deferred-present task graph"));
+        return;
+    }
+    m_deferredPresentRecordedGraph.reset(m_deferredPresentCompiledGraph);
+    m_deferredPresentSubmissionTransaction.reset(m_deferredPresentCompiledGraph);
+    m_deferredPresentTaskGraphValid = true;
 }
 
 

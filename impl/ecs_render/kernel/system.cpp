@@ -128,7 +128,6 @@ RendererSystem::RendererSystem(
     , m_gpuTaskGraphAnalysis(arena)
     , m_gpuTaskGraphQueueAssignments(arena)
     , m_gpuTaskGraphWorkTasks(arena)
-    , m_gpuTaskGraphLegacyMismatches(arena)
     , m_gpuTaskGraphLegacyQueueMismatches(arena)
     , m_laggedLightingHistoryTaskGraph(arena)
     , m_laggedLightingHistoryTaskGraphAnalysis(arena)
@@ -142,6 +141,12 @@ RendererSystem::RendererSystem(
     , m_deferredCompositeCompiledGraph(arena)
     , m_deferredCompositeRecordedGraph(arena)
     , m_deferredCompositeSubmissionTransaction(arena)
+    , m_deferredPresentTaskGraph(arena)
+    , m_deferredPresentTaskGraphAnalysis(arena)
+    , m_deferredPresentTaskGraphQueueAssignments(arena)
+    , m_deferredPresentCompiledGraph(arena)
+    , m_deferredPresentRecordedGraph(arena)
+    , m_deferredPresentSubmissionTransaction(arena)
     , m_shadowVisibilityTaskGraph(arena)
     , m_shadowVisibilityTaskGraphAnalysis(arena)
     , m_shadowVisibilityTaskGraphQueueAssignments(arena)
@@ -539,7 +544,6 @@ void RendererSystem::invalidateResources(){
     m_preparedShadowVisibilityReady = false;
     m_gpuTaskGraphValid = false;
     m_gpuTaskGraphWorkTasks.clear();
-    m_gpuTaskGraphLegacyMismatches.clear();
     m_gpuTaskGraphLegacyQueueMismatches.clear();
     m_gpuTaskGraph.reset();
     m_gpuTaskGraphAnalysis.reset();
@@ -562,6 +566,16 @@ void RendererSystem::invalidateResources(){
     m_deferredCompositeCompiledGraph.reset();
     m_deferredCompositeRecordedGraph.reset(m_deferredCompositeCompiledGraph);
     m_deferredCompositeSubmissionTransaction.reset(m_deferredCompositeCompiledGraph);
+    m_deferredPresentTaskGraphValid = false;
+    m_deferredPresentTask = {};
+    m_deferredPresentCompositeCompletion = {};
+    m_deferredPresentSurfelGiCompletion = {};
+    m_deferredPresentTaskGraph.reset();
+    m_deferredPresentTaskGraphAnalysis.reset();
+    m_deferredPresentTaskGraphQueueAssignments.reset();
+    m_deferredPresentCompiledGraph.reset();
+    m_deferredPresentRecordedGraph.reset(m_deferredPresentCompiledGraph);
+    m_deferredPresentSubmissionTransaction.reset(m_deferredPresentCompiledGraph);
     m_shadowVisibilityTaskGraphValid = false;
     m_shadowVisibilityTask = {};
     m_shadowVisibilityPrefixCompletion = {};
@@ -634,7 +648,6 @@ void RendererSystem::invalidateResources(){
     m_gbufferCommandList.reset();
     m_postGbufferNormalizeCommandList.reset();
     m_frameRecoveryCommandList.reset();
-    m_deferredPresentCommandList.reset();
     m_shadowPrepareCommandList.reset();
     resetLaggedLightingHistoryTracking();
     m_frameRenderRecoveryFailed = false;
@@ -713,14 +726,6 @@ bool RendererSystem::ensureFrameCommandLists(){
         m_frameRecoveryCommandList = device.createCommandList();
         if(!m_frameRecoveryCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create frame recovery command list"));
-            return false;
-        }
-    }
-
-    if(!m_deferredPresentCommandList){
-        m_deferredPresentCommandList = device.createCommandList();
-        if(!m_deferredPresentCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred-present command list"));
             return false;
         }
     }
@@ -886,7 +891,6 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     NWB_ASSERT(m_deferredClearCommandList);
     NWB_ASSERT(m_gbufferCommandList);
     NWB_ASSERT(m_postGbufferNormalizeCommandList);
-    NWB_ASSERT(m_deferredPresentCommandList);
     NWB_ASSERT(m_shadowPrepareCommandList);
 
     auto& device = m_graphics.getDevice();
@@ -967,7 +971,6 @@ bool RendererSystem::recordShadowPrepareCommandList(DeferredFrameTargets& deferr
 void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_gpuTaskGraphValid = false;
     m_gpuTaskGraphWorkTasks.clear();
-    m_gpuTaskGraphLegacyMismatches.clear();
     m_gpuTaskGraphLegacyQueueMismatches.clear();
     m_gpuTaskGraph.reset();
     m_gpuTaskGraphAnalysis.reset();
@@ -990,6 +993,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredCompositeCompiledGraph.reset();
     m_deferredCompositeRecordedGraph.reset(m_deferredCompositeCompiledGraph);
     m_deferredCompositeSubmissionTransaction.reset(m_deferredCompositeCompiledGraph);
+    m_deferredPresentTaskGraphValid = false;
+    m_deferredPresentTask = {};
+    m_deferredPresentCompositeCompletion = {};
+    m_deferredPresentSurfelGiCompletion = {};
+    m_deferredPresentTaskGraph.reset();
+    m_deferredPresentTaskGraphAnalysis.reset();
+    m_deferredPresentTaskGraphQueueAssignments.reset();
+    m_deferredPresentCompiledGraph.reset();
+    m_deferredPresentRecordedGraph.reset(m_deferredPresentCompiledGraph);
+    m_deferredPresentSubmissionTransaction.reset(m_deferredPresentCompiledGraph);
     m_shadowVisibilityTaskGraphValid = false;
     m_shadowVisibilityTask = {};
     m_shadowVisibilityPrefixCompletion = {};
@@ -1102,13 +1115,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
         && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
     ;
-    const ECSRenderDetail::FrameExecutionPlanInput frameExecutionPlanInput{
-        dedicatedAsyncCompute,
-        m_frameLaggedAsyncLightingEnabled,
-        laggedLightingHistoryResourcesReady,
-        m_laggedLightingHistorySubmissionToken.valid(),
-    };
-    const ECSRenderDetail::FrameExecutionPlan frameExecutionPlan(frameExecutionPlanInput);
+    const ECSRenderDetail::FrameExecutionPlan frameExecutionPlan;
     const bool laggedAsyncLightingSchedule =
         laggedAsyncLightingRequested
         && laggedLightingHistoryResourcesReady
@@ -1139,14 +1146,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* gbufferCommandList = m_gbufferCommandList.get();
     Core::CommandList* postGbufferNormalizeCommandList = m_postGbufferNormalizeCommandList.get();
     Core::CommandList* frameRecoveryCommandList = m_frameRecoveryCommandList.get();
-    Core::CommandList* deferredPresentCommandList = m_deferredPresentCommandList.get();
     NWB_ASSERT(meshViewSetupCommandList);
     NWB_ASSERT(sceneShadingSetupCommandList);
     NWB_ASSERT(deferredClearCommandList);
     NWB_ASSERT(gbufferCommandList);
     NWB_ASSERT(postGbufferNormalizeCommandList);
     NWB_ASSERT(frameRecoveryCommandList);
-    NWB_ASSERT(deferredPresentCommandList);
 
     resetFrameRecordingStateHandoffs();
     m_raytracingSystem.discardSoftShadowTemporalHistory();
@@ -1257,7 +1262,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         restorePostGbufferEffectsCpuState();
     };
 
-    // Every timed packet owns a ticket; the frame scope itself spans the accepted prefix and present submissions.
+    // The remaining prefix envelope owns its ticket; the frame scope spans accepted prefix and graph-owned present
+    // submissions.
     ECSRenderDetail::FrameExecutionPlanTimingTickets frameExecutionTimingTickets(
         frameExecutionPlan,
         m_graphics.gpuTiming()
@@ -1533,6 +1539,48 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingFrameTransaction frameTimingTransaction(m_graphics.gpuTiming());
     Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
     Optional<Core::GpuTimingMeasure> asyncFinalTiming;
+    Core::GpuTimingSubmissionTicket deferredPresentTimingTicket(m_graphics.gpuTiming());
+    buildDeferredPresentTaskGraph(
+        taskGraphInput,
+        deferredTargets,
+        framebuffer,
+        laggedAsyncLightingSchedule,
+        shadowVisibilityRunsOnCompute,
+        frameTimingTransaction,
+        asyncFinalTiming,
+        deferredPresentTimingTicket
+    );
+    const Core::GpuSubmissionPacketId deferredPresentPacket = m_deferredPresentCompiledGraph.packetForTask(
+        m_deferredPresentTask
+    );
+    const Core::GpuPhysicalQueueInfo* const deferredPresentQueue = deferredPresentPacket.valid()
+        ? m_deferredPresentCompiledGraph.queueInfo(m_deferredPresentCompiledGraph.packet(deferredPresentPacket).queue)
+        : nullptr
+    ;
+    if(
+        !m_deferredPresentTaskGraphValid
+        || !m_deferredPresentTask.valid()
+        || !m_deferredPresentCompositeCompletion.valid()
+        || (laggedAsyncLightingSchedule && !m_deferredPresentSurfelGiCompletion.valid())
+        || !deferredPresentQueue
+        || deferredPresentQueue->queueClass != Core::CommandQueue::Graphics
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred present was unavailable"));
+        deferredPresentTimingTicket.discard();
+        deferredCompositeTimingTicket.discard();
+        deferredLightingTimingTicket.discard();
+        avboitPreTimingTicket.discard();
+        avboitDepthWarpTimingTicket.discard();
+        avboitExtinctionTimingTicket.discard();
+        avboitIntegrationTimingTicket.discard();
+        avboitAccumulationTimingTicket.discard();
+        surfelGiTimingTicket.discard();
+        softwareCausticsTimingTicket.discard();
+        hardwareCausticsTimingTicket.discard();
+        shadowVisibilityTimingTicket.discard();
+        frameExecutionTimingTickets.discardAll();
+        return;
+    }
     const auto discardTimingTickets = [
         &frameExecutionTimingTickets,
         &shadowVisibilityTimingTicket,
@@ -1545,7 +1593,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &avboitIntegrationTimingTicket,
         &avboitAccumulationTimingTicket,
         &deferredLightingTimingTicket,
-        &deferredCompositeTimingTicket
+        &deferredCompositeTimingTicket,
+        &deferredPresentTimingTicket
     ](){
         frameExecutionTimingTickets.discardAll();
         shadowVisibilityTimingTicket.discard();
@@ -1559,8 +1608,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         avboitAccumulationTimingTicket.discard();
         deferredLightingTimingTicket.discard();
         deferredCompositeTimingTicket.discard();
+        deferredPresentTimingTicket.discard();
     };
     const auto discardUnacceptedGraphPackets = [&](){
+        m_deferredPresentSubmissionTransaction.discardUnaccepted(
+            m_deferredPresentTaskGraph,
+            m_deferredPresentCompiledGraph
+        );
         m_deferredCompositeSubmissionTransaction.discardUnaccepted(
             m_deferredCompositeTaskGraph,
             m_deferredCompositeCompiledGraph
@@ -2700,67 +2754,33 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    bool deferredPresentCommandListReady = false;
-    const Core::Graphics::JobHandle deferredPresentRecordingJob = m_graphics.scheduleGraphicsJob([
-        this,
-        framebuffer,
-        &deferredTargets,
-        deferredPresentCommandList,
-        &frameTimingTransaction,
-        &asyncFinalTiming,
-        &deferredPresentCommandListReady,
-        shadowVisibilityRunsOnCompute,
-        &frameExecutionTimingTickets
-    ](){
-        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
-            frameExecutionTimingTickets,
-            ECSRenderDetail::FrameExecutionWork::GraphicsPresent
+    Core::GpuNativePacketRecorder deferredPresentRecorder(device);
+    const Core::GpuNativePacketRecordDesc deferredPresentRecordDesc{
+        .packet = deferredPresentPacket,
+        .initialStates = &m_deferredPresentInputStateHandoff,
+        .finalStates = &m_deferredPresentStateHandoff,
+    };
+    const bool deferredPresentRecorded =
+        m_deferredPresentTaskGraphValid
+        && m_deferredPresentTask.valid()
+        && m_deferredPresentCompositeCompletion.valid()
+        && (!laggedAsyncLightingSchedule || m_deferredPresentSurfelGiCompletion.valid())
+        && deferredPresentPacket.valid()
+        && deferredPresentRecorder.recordPacket(
+            m_deferredPresentTaskGraph,
+            m_deferredPresentCompiledGraph,
+            deferredPresentRecordDesc,
+            m_deferredPresentRecordedGraph
+        )
+        && m_deferredPresentStateHandoff.valid()
+    ;
+    if(!deferredPresentRecorded){
+        m_deferredPresentSubmissionTransaction.discardUnaccepted(
+            m_deferredPresentTaskGraph,
+            m_deferredPresentCompiledGraph
         );
-        deferredPresentCommandList->open(&m_deferredPresentInputStateHandoff);
-        if(!deferredPresentCommandList->hasCommandBuffer())
-            return;
-
-        if(shadowVisibilityRunsOnCompute){
-            asyncFinalTiming.emplace(
-                m_graphics.gpuTiming(),
-                RendererGpuTimingScope::s_AsyncFinal,
-                m_graphics.getDevice(),
-                *deferredPresentCommandList
-            );
-            asyncFinalTiming->finishMarker();
-        }
-
-        const bool deferredPresentRecorded = m_deferredSystem.renderDeferredPresent(
-            *deferredPresentCommandList,
-            deferredTargets,
-            framebuffer
-        );
-
-        // Publish the frame timing endpoint only after presentation accepts.
-        bool frameTimingEnded = true;
-        if(deferredPresentRecorded)
-            frameTimingEnded = frameTimingTransaction.recordEnd(*deferredPresentCommandList);
-        if(shadowVisibilityRunsOnCompute && deferredPresentRecorded){
-            if(asyncFinalTiming){
-                asyncFinalTiming->finishTiming(*deferredPresentCommandList);
-                asyncFinalTiming.reset();
-            }
-        }
-        deferredPresentCommandList->close(&m_deferredPresentStateHandoff);
-        deferredPresentCommandListReady =
-            deferredPresentRecorded
-            && frameTimingEnded
-            && m_deferredPresentStateHandoff.valid()
-            && deferredPresentCommandList->hasCommandBuffer()
-        ;
-    });
-    if(!deferredPresentRecordingJob.valid()){
-        discardRenderPackets();
-        return;
-    }
-
-    m_graphics.waitJob(deferredPresentRecordingJob);
-    if(!deferredPresentCommandListReady){
+        deferredPresentTimingTicket.discard();
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned deferred present"));
         discardRenderPackets();
         return;
     }
@@ -2773,7 +2793,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, deferredClearCommandList },
         { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, gbufferCommandList },
         { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, postGbufferNormalizeCommandList },
-        { ECSRenderDetail::FrameExecutionWork::GraphicsPresent, deferredPresentCommandList },
     };
     if(!frameExecutionCommandLists.appendPlannedWorkCommandLists(
         recordedFrameWorkCommandLists,
@@ -2784,67 +2803,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // The plan resolves dependency edges; RendererSystem owns acceptance and recovery state.
-    ECSRenderDetail::FrameExecutionExternalWaitTokens frameExecutionExternalWaitTokens;
-    ECSRenderDetail::FrameExecutionPlanSubmissionState frameExecutionSubmissionState(
-        frameExecutionPlan,
-        frameExecutionExternalWaitTokens
-    );
-    const auto submitPlannedFramePacket = [&](
-        const ECSRenderDetail::FrameExecutionPacket::Enum packet,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        Core::CommandList* const* commandLists,
-        const usize commandListCount
-    ) -> Core::QueueSubmissionToken {
-        Core::QueueSubmissionToken waitTokens[ECSRenderDetail::FrameExecutionPlan::s_MaxSubmissionWaits] = {};
-        Core::QueueSubmissionDesc submitDesc;
-        if(!frameExecutionSubmissionState.prepareSubmission(
-            packet,
-            submitDesc,
-            waitTokens,
-            LengthOf(waitTokens)
-        )){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame execution plan dependency was not accepted"));
-            timingTicket.discard();
-            return {};
-        }
-        const Core::QueueSubmissionToken submissionToken = timingTicket.submit(
-            device,
-            commandLists,
-            commandListCount,
-            frameExecutionPlan.packet(packet).lane,
-            submitDesc
-        );
-        if(submissionToken.valid())
-            frameExecutionSubmissionState.acceptSubmission(packet, submissionToken);
-        return submissionToken;
-    };
-    const auto executePlannedFramePacket = [&](
-        const ECSRenderDetail::FrameExecutionPacket::Enum packet,
-        Core::CommandList* const* commandLists,
-        const usize commandListCount
-    ) -> Core::QueueSubmissionToken {
-        Core::QueueSubmissionToken waitTokens[ECSRenderDetail::FrameExecutionPlan::s_MaxSubmissionWaits] = {};
-        Core::QueueSubmissionDesc submitDesc;
-        if(!frameExecutionSubmissionState.prepareSubmission(
-            packet,
-            submitDesc,
-            waitTokens,
-            LengthOf(waitTokens)
-        )){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame execution plan dependency was not accepted"));
-            return {};
-        }
-        const Core::QueueSubmissionToken submissionToken = device.executeCommandLists(
-            commandLists,
-            commandListCount,
-            frameExecutionPlan.packet(packet).lane,
-            submitDesc
-        );
-        if(submissionToken.valid())
-            frameExecutionSubmissionState.acceptSubmission(packet, submissionToken);
-        return submissionToken;
-    };
+    // The remaining legacy envelope contains only the timed Graphics prefix. Every later producer and consumer is
+    // a graph packet with an explicit completion token.
     const auto submitRecordedFramePacket = [&](const ECSRenderDetail::FrameExecutionPacket::Enum packet)
         -> Core::QueueSubmissionToken {
         const ECSRenderDetail::FrameExecutionPacketCommandListRange packetCommandLists =
@@ -2852,51 +2812,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ;
         Core::GpuTimingSubmissionTicket* const timingTicket = frameExecutionTimingTickets.ticketForPacket(packet);
         if(!timingTicket || packetCommandLists.commandListCount == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame execution packet has no timing ticket or recorded command list"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame prefix has no timing ticket or recorded command list"));
             if(timingTicket)
                 timingTicket->discard();
             return {};
         }
-        return submitPlannedFramePacket(
-            packet,
-            *timingTicket,
+        return timingTicket->submit(
+            device,
             packetCommandLists.commandLists,
-            packetCommandLists.commandListCount
+            packetCommandLists.commandListCount,
+            frameExecutionPlan.packet(packet).lane,
+            Core::QueueSubmissionDesc{}
         );
-    };
-    const auto executeRecordedFramePacket = [&](const ECSRenderDetail::FrameExecutionPacket::Enum packet)
-        -> Core::QueueSubmissionToken {
-        const ECSRenderDetail::FrameExecutionPacketCommandListRange packetCommandLists =
-            frameExecutionCommandLists.commandLists(packet)
-        ;
-        if(packetCommandLists.commandListCount == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame execution packet has no recorded command list"));
-            return {};
-        }
-        // Reject missing command buffers for timed and execution-only packets.
-        for(usize commandListIndex = 0u;
-            commandListIndex < packetCommandLists.commandListCount;
-            ++commandListIndex
-        ){
-            Core::CommandList* const commandList = packetCommandLists.commandLists[commandListIndex];
-            if(!commandList || !commandList->hasCommandBuffer()){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: execution-only frame packet has no recorded command list"));
-                return {};
-            }
-        }
-        return executePlannedFramePacket(
-            packet,
-            packetCommandLists.commandLists,
-            packetCommandLists.commandListCount
-        );
-    };
-    // Plan flags distinguish timed and execution-only packets.
-    const auto dispatchRecordedFramePacket = [&](const ECSRenderDetail::FrameExecutionPacket::Enum packet)
-        -> Core::QueueSubmissionToken {
-        return frameExecutionPlan.packet(packet).recordsTiming
-            ? submitRecordedFramePacket(packet)
-            : executeRecordedFramePacket(packet)
-        ;
     };
     const auto dispatchRecordedFrameBatch = [&](const ECSRenderDetail::FrameExecutionSubmissionBatch::Enum batch)
         -> Core::QueueSubmissionToken {
@@ -2908,7 +2835,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         Core::QueueSubmissionToken lastSubmissionToken;
         for(u8 packetIndex = 0u; packetIndex < batchPlan.packetCount; ++packetIndex){
             const ECSRenderDetail::FrameExecutionPacket::Enum packet = batchPlan.packets[packetIndex];
-            lastSubmissionToken = dispatchRecordedFramePacket(packet);
+            lastSubmissionToken = submitRecordedFramePacket(packet);
             if(!lastSubmissionToken.valid())
                 return {};
         }
@@ -2981,7 +2908,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::QueueSubmissionToken deferredLightingSubmissionToken;
     Core::QueueSubmissionToken deferredCompositeSubmissionToken;
     const auto recoverPendingFrameSubmission = [&]() -> bool {
-        const Core::QueueSubmissionToken* asyncWaitToken = frameExecutionSubmissionState.asyncRecoveryWaitToken();
+        const Core::QueueSubmissionToken* asyncWaitToken = nullptr;
         if(
             shadowVisibilitySubmissionToken.valid()
             && shadowVisibilitySubmissionToken.queue == Core::CommandQueue::Compute
@@ -3260,14 +3187,75 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 failFrameRenderRecovery();
             return false;
         }
-        frameExecutionSubmissionState.setExternalWaitToken(
-            ECSRenderDetail::FrameExecutionExternalWait::DeferredComposite,
-            deferredCompositeSubmissionToken
-        );
         return true;
     };
 
     Core::QueueSubmissionToken finalPresentationSubmissionToken;
+    const auto submitDeferredPresent = [&]() -> bool {
+        Core::GpuTaskGraphExternalCompletionToken presentCompletionTokens[2] = {
+            Core::GpuTaskGraphExternalCompletionToken{
+                .completion = m_deferredPresentCompositeCompletion,
+                .token = deferredCompositeSubmissionToken,
+            },
+        };
+        usize presentCompletionCount = 1u;
+        if(laggedAsyncLightingSchedule){
+            presentCompletionTokens[presentCompletionCount++] = {
+                .completion = m_deferredPresentSurfelGiCompletion,
+                .token = surfelGiSubmissionToken,
+            };
+        }
+        Core::Alloc::ScratchArena presentScratchArena(RendererArenaScope::s_TaskGraphArena);
+        const Core::GpuTaskGraphSubmitter deferredPresentSubmitter(device);
+        const bool deferredPresentAccepted =
+            m_deferredPresentTaskGraphValid
+            && m_deferredPresentTask.valid()
+            && m_deferredPresentCompositeCompletion.valid()
+            && (!laggedAsyncLightingSchedule || m_deferredPresentSurfelGiCompletion.valid())
+            && deferredPresentSubmitter.submitPacket(
+                m_deferredPresentTaskGraph,
+                m_deferredPresentCompiledGraph,
+                m_deferredPresentRecordedGraph,
+                deferredPresentPacket,
+                presentCompletionTokens,
+                presentCompletionCount,
+                m_deferredPresentSubmissionTransaction,
+                presentScratchArena,
+                &deferredPresentTimingTicket
+            )
+        ;
+        finalPresentationSubmissionToken = deferredPresentAccepted
+            ? m_deferredPresentSubmissionTransaction.packetToken(deferredPresentPacket)
+            : Core::QueueSubmissionToken{}
+        ;
+        if(!finalPresentationSubmissionToken.valid()){
+            discardUnacceptedGraphPackets();
+            discardTimingTickets();
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred present submission was rejected"));
+            if(!recoverPendingFrameSubmission())
+                failFrameRenderRecovery();
+            return false;
+        }
+        if(!frameTimingTransaction.confirmEndSubmission(true)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm frame critical-path timing"));
+            frameTimingTransaction.discard();
+        }
+        if(!dedicatedAsyncCompute && m_frameLaggedAsyncLightingEnabled){
+            reportLaggedLightingTransition(
+                LaggedLightingReport::NoDedicatedAsyncCompute,
+                deferredTargets.laggedLightingHistory.generation
+            );
+        }
+        else if(m_laggedLightingCurrentFrameAcceptancePending){
+            reportLaggedLightingTransition(
+                LaggedLightingReport::CurrentFrameAccepted,
+                deferredTargets.laggedLightingHistory.generation
+            );
+            m_laggedLightingCurrentFrameAcceptancePending = false;
+        }
+        return true;
+    };
+
     // The plan owns packet order; these cases own acceptance-dependent state.
     for(usize submissionBatchIndex = 0u;
         submissionBatchIndex < frameExecutionPlan.submissionBatchCount();
@@ -3559,11 +3547,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     failFrameRenderRecovery();
                 return;
             }
-            frameExecutionSubmissionState.setExternalWaitToken(
-                ECSRenderDetail::FrameExecutionExternalWait::SurfelGi,
-                surfelGiSubmissionToken
-            );
-
             if(!m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
                 m_surfelGiStateHandoff,
                 deferredTargets.surfelIrradiance.get()
@@ -3607,39 +3590,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 }
             }
 
-            if(!submitAvboitLightingAndComposite())
+            if(!submitAvboitLightingAndComposite() || !submitDeferredPresent())
                 return;
-            break;
-        }
-        case ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPresent:{
-            // History overlaps current lighting but preserves the frame-lifetime producer dependency.
-            const Core::QueueSubmissionToken finalSubmissionToken = dispatchRecordedFrameBatch(
-                ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPresent
-            );
-            if(!finalSubmissionToken.valid()){
-                if(!recoverPendingFrameSubmission())
-                    failFrameRenderRecovery();
-                return;
-            }
-            finalPresentationSubmissionToken = finalSubmissionToken;
-            if(!frameTimingTransaction.confirmEndSubmission(true)){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm frame critical-path timing"));
-                frameTimingTransaction.discard();
-            }
-            if(!dedicatedAsyncCompute && m_frameLaggedAsyncLightingEnabled){
-                reportLaggedLightingTransition(
-                    LaggedLightingReport::NoDedicatedAsyncCompute,
-                    deferredTargets.laggedLightingHistory.generation
-                );
-            }
-            else if(m_laggedLightingCurrentFrameAcceptancePending){
-                reportLaggedLightingTransition(
-                    LaggedLightingReport::CurrentFrameAccepted,
-                    deferredTargets.laggedLightingHistory.generation
-                );
-                m_laggedLightingCurrentFrameAcceptancePending = false;
-            }
-
             break;
         }
         default:

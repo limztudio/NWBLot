@@ -159,8 +159,6 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
     if(m_gpuTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphTelemetryOptions taskGraphTelemetryOptions{
-            .legacyScheduleMismatches = m_gpuTaskGraphLegacyMismatches.data(),
-            .legacyScheduleMismatchCount = m_gpuTaskGraphLegacyMismatches.size(),
             .queueAssignments = &m_gpuTaskGraphQueueAssignments,
             .legacyQueueMismatches = m_gpuTaskGraphLegacyQueueMismatches.data(),
             .legacyQueueMismatchCount = m_gpuTaskGraphLegacyQueueMismatches.size(),
@@ -198,6 +196,19 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             compositeTelemetryOptions
         ))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred-composite graph telemetry export failed"));
+    }
+    if(m_deferredPresentTaskGraphValid){
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+        const Core::GpuTaskGraphTelemetryOptions presentTelemetryOptions{
+            .queueAssignments = &m_deferredPresentTaskGraphQueueAssignments,
+        };
+        if(!m_deferredPresentTaskGraph.appendFrameGraphTelemetry(
+            builder,
+            m_deferredPresentTaskGraphAnalysis,
+            scratchArena,
+            presentTelemetryOptions
+        ))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred-present graph telemetry export failed"));
     }
     if(m_shadowVisibilityTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);

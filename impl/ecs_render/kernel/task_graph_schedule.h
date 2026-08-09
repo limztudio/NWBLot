@@ -60,7 +60,6 @@ public:
             m_workEnabled[static_cast<usize>(work)] = true;
         };
         enable(FrameExecutionWork::GraphicsPrefix);
-        enable(FrameExecutionWork::GraphicsPresent);
     }
 
 

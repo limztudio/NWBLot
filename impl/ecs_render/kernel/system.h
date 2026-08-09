@@ -12,6 +12,7 @@
 #include <impl/ecs_render/kernel/task_graph_schedule.h>
 
 #include <core/ecs/system.h>
+#include <core/graphics/gpu_timing.h>
 #include <core/graphics/render_pass.h>
 #include <core/graphics/task_graph/packet_runtime.h>
 #include <core/telemetry/frame_graph_contributor.h>
@@ -152,6 +153,16 @@ private:
         DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
+    void buildDeferredPresentTaskGraph(
+        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+        DeferredFrameTargets& deferredTargets,
+        Core::Framebuffer* presentationFramebuffer,
+        bool waitsForSurfelGi,
+        bool shadowVisibilityRunsOnCompute,
+        Core::GpuTimingFrameTransaction& frameTimingTransaction,
+        Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
+        Core::GpuTimingSubmissionTicket& timingTicket
+    );
     void buildShadowVisibilityTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         DeferredFrameTargets& deferredTargets,
@@ -227,7 +238,6 @@ private:
     Core::GpuTaskGraphAnalysis m_gpuTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_gpuTaskGraphQueueAssignments;
     Core::GraphicsVector<Core::GpuTaskId> m_gpuTaskGraphWorkTasks;
-    Core::GraphicsVector<Core::GpuTaskDependencyEdge> m_gpuTaskGraphLegacyMismatches;
     Core::GraphicsVector<Core::GpuTaskId> m_gpuTaskGraphLegacyQueueMismatches;
     u16 m_gpuTaskGraphDeviceGeneration = 1u;
     bool m_gpuTaskGraphValid = false;
@@ -253,6 +263,18 @@ private:
     Core::GpuTaskId m_deferredCompositeTask;
     Core::GpuExternalCompletionId m_deferredCompositeLightingCompletion;
     bool m_deferredCompositeTaskGraphValid = false;
+    // Presentation is a Graphics graph task that imports the accepted composite result and, for active lagged
+    // lighting, the surfel producer that must remain alive through presentation.
+    Core::GpuTaskGraph m_deferredPresentTaskGraph;
+    Core::GpuTaskGraphAnalysis m_deferredPresentTaskGraphAnalysis;
+    Core::GpuTaskGraphQueueAssignments m_deferredPresentTaskGraphQueueAssignments;
+    Core::GpuCompiledGraph m_deferredPresentCompiledGraph;
+    Core::GpuRecordedGraph m_deferredPresentRecordedGraph;
+    Core::GpuGraphSubmissionTransaction m_deferredPresentSubmissionTransaction;
+    Core::GpuTaskId m_deferredPresentTask;
+    Core::GpuExternalCompletionId m_deferredPresentCompositeCompletion;
+    Core::GpuExternalCompletionId m_deferredPresentSurfelGiCompletion;
+    bool m_deferredPresentTaskGraphValid = false;
     // Shadow visibility owns its graph task, physical queue, and submission completion.  The manual state handoff
     // remains only until automatic graph barriers replace this migration bridge.
     Core::GpuTaskGraph m_shadowVisibilityTaskGraph;
@@ -408,10 +430,6 @@ private:
     // A small Graphics recovery packet retires an accepted frame timing scope when a later dependent packet is
     // rejected.  If it joins AsyncCompute, cross-lane resources remain concurrently shared.
     Core::CommandListHandle m_frameRecoveryCommandList;
-    // Surface images are not required to support storage writes, so a short Graphics raster present pass follows the
-    // composite result. The normal dedicated schedule obtains that result from Compute; the optional lagged schedule
-    // keeps lighting/composite on Graphics.
-    Core::CommandListHandle m_deferredPresentCommandList;
     Core::CommandListHandle m_shadowPrepareCommandList;
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;

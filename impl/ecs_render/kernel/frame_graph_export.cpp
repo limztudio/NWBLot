@@ -163,12 +163,18 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
 
     if(m_gpuTaskGraphShadowValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphShadowArena);
+        const Core::GpuTaskGraphTelemetryOptions taskGraphTelemetryOptions{
+            .legacyScheduleMismatches = m_gpuTaskGraphShadowLegacyMismatches.data(),
+            .legacyScheduleMismatchCount = m_gpuTaskGraphShadowLegacyMismatches.size(),
+            .queueAssignments = &m_gpuTaskGraphQueueAssignments,
+            .legacyQueueMismatches = m_gpuTaskGraphShadowLegacyQueueMismatches.data(),
+            .legacyQueueMismatchCount = m_gpuTaskGraphShadowLegacyQueueMismatches.size(),
+        };
         if(!m_gpuTaskGraph.appendFrameGraphTelemetry(
             builder,
             m_gpuTaskGraphAnalysis,
             scratchArena,
-            m_gpuTaskGraphShadowLegacyMismatches.data(),
-            m_gpuTaskGraphShadowLegacyMismatches.size()
+            taskGraphTelemetryOptions
         ))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph shadow telemetry export failed"));
     }

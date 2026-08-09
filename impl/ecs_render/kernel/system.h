@@ -176,12 +176,16 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;
-    // The generic task graph is observational through Phase 1. It owns imported handles until the telemetry capture
-    // following render(), while FrameExecutionPlan remains the only live scheduling and submission authority.
+    // The generic task graph is observational through Phase 2. It owns imported handles and physical queue
+    // assignment metadata until telemetry capture following render(), while FrameExecutionPlan remains the only live
+    // scheduling and submission authority.
     Core::GpuTaskGraph m_gpuTaskGraph;
     Core::GpuTaskGraphAnalysis m_gpuTaskGraphAnalysis;
+    Core::GpuTaskGraphQueueAssignments m_gpuTaskGraphQueueAssignments;
     Core::GraphicsVector<Core::GpuTaskDependencyEdge> m_gpuTaskGraphShadowLegacyMismatches;
+    Core::GraphicsVector<Core::GpuTaskId> m_gpuTaskGraphShadowLegacyQueueMismatches;
     GpuTaskGraphShadowFrameInput m_gpuTaskGraphShadowInput;
+    u16 m_gpuTaskGraphShadowDeviceGeneration = 1u;
     bool m_gpuTaskGraphShadowValid = false;
     bool m_gpuTaskGraphShadowPending = false;
 

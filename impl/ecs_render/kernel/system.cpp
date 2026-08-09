@@ -126,7 +126,9 @@ RendererSystem::RendererSystem(
     , m_csgShapeRegistry(arena)
     , m_gpuTaskGraph(arena)
     , m_gpuTaskGraphAnalysis(arena)
+    , m_gpuTaskGraphQueueAssignments(arena)
     , m_gpuTaskGraphShadowLegacyMismatches(arena)
+    , m_gpuTaskGraphShadowLegacyQueueMismatches(arena)
     , m_meshState(arena)
     , m_materialState(arena)
     , m_rayTracingState(arena)
@@ -490,8 +492,14 @@ void RendererSystem::invalidateResources(){
     m_gpuTaskGraphShadowPending = false;
     m_gpuTaskGraphShadowInput = GpuTaskGraphShadowFrameInput{};
     m_gpuTaskGraphShadowLegacyMismatches.clear();
+    m_gpuTaskGraphShadowLegacyQueueMismatches.clear();
     m_gpuTaskGraph.reset();
     m_gpuTaskGraphAnalysis.reset();
+    m_gpuTaskGraphQueueAssignments.reset();
+    m_gpuTaskGraphShadowDeviceGeneration = m_gpuTaskGraphShadowDeviceGeneration == Limit<u16>::s_Max
+        ? 1u
+        : static_cast<u16>(m_gpuTaskGraphShadowDeviceGeneration + 1u)
+    ;
     resetInvalidatedResourceStateHandoffs();
     m_meshViewSetupCommandList.reset();
     m_sceneShadingSetupCommandList.reset();
@@ -1016,8 +1024,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_gpuTaskGraphShadowPending = false;
     m_gpuTaskGraphShadowInput = GpuTaskGraphShadowFrameInput{};
     m_gpuTaskGraphShadowLegacyMismatches.clear();
+    m_gpuTaskGraphShadowLegacyQueueMismatches.clear();
     m_gpuTaskGraph.reset();
     m_gpuTaskGraphAnalysis.reset();
+    m_gpuTaskGraphQueueAssignments.reset();
 
     if(!framebuffer)
         return;

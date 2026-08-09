@@ -20,13 +20,113 @@ namespace __hidden_gpu_task_graph_compiler{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool IsValidQueueRequest(const GpuQueueRequest& request)noexcept{
-    constexpr u8 s_ValidCapabilityMask =
-        static_cast<u8>(GpuQueueCapability::Transfer)
-        | static_cast<u8>(GpuQueueCapability::Compute)
-        | static_cast<u8>(GpuQueueCapability::Graphics)
+inline constexpr u8 s_ValidQueueCapabilityMask =
+    static_cast<u8>(GpuQueueCapability::Transfer)
+    | static_cast<u8>(GpuQueueCapability::Compute)
+    | static_cast<u8>(GpuQueueCapability::Graphics)
+;
+
+[[nodiscard]] static bool HasCapabilities(
+    const GpuQueueCapability::Mask available,
+    const GpuQueueCapability::Mask required
+)noexcept{
+    const u8 availableMask = static_cast<u8>(available);
+    const u8 requiredMask = static_cast<u8>(required);
+    return (availableMask & requiredMask) == requiredMask;
+}
+
+[[nodiscard]] static bool IsKnownQueueClass(const CommandQueue::Enum queueClass)noexcept{
+    return queueClass < CommandQueue::kCount;
+}
+
+[[nodiscard]] static bool IsBetterQueue(
+    const GpuPhysicalQueueInfo& candidate,
+    const GpuPhysicalQueueInfo* const current
+)noexcept{
+    if(!current)
+        return true;
+    if(candidate.id.index != current->id.index)
+        return candidate.id.index < current->id.index;
+    return candidate.queueClass < current->queueClass;
+}
+
+[[nodiscard]] static bool IsValidQueueTopology(
+    const GpuTaskGraphQueueTopology& topology,
+    u16& outDeviceGeneration
+)noexcept{
+    outDeviceGeneration = 0u;
+    if(!topology.queues || topology.queueCount == 0u)
+        return false;
+
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
+        const u8 capabilityMask = static_cast<u8>(queue.capabilities);
+        if(
+            !queue.id.valid()
+            || !IsKnownQueueClass(queue.queueClass)
+            || capabilityMask == 0u
+            || (capabilityMask & ~s_ValidQueueCapabilityMask) != 0u
+        )
+            return false;
+
+        switch(queue.queueClass){
+        case CommandQueue::Graphics:
+            if(!HasCapabilities(queue.capabilities, GpuQueueCapability::Graphics))
+                return false;
+            break;
+        case CommandQueue::Compute:
+            if(!HasCapabilities(queue.capabilities, GpuQueueCapability::Compute))
+                return false;
+            break;
+        default:
+            return false;
+        }
+
+        if(queueIndex == 0u)
+            outDeviceGeneration = queue.id.deviceGeneration;
+        else if(queue.id.deviceGeneration != outDeviceGeneration)
+            return false;
+
+        for(usize previousIndex = 0u; previousIndex < queueIndex; ++previousIndex){
+            if(topology.queues[previousIndex].id == queue.id)
+                return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] static const GpuPhysicalQueueInfo* FindBestCompatibleQueue(
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuQueueCapability::Mask requiredCapabilities,
+    const CommandQueue::Enum requiredClass = CommandQueue::kCount
+)noexcept{
+    const GpuPhysicalQueueInfo* result = nullptr;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
+        if(
+            (requiredClass != CommandQueue::kCount && queue.queueClass != requiredClass)
+            || !HasCapabilities(queue.capabilities, requiredCapabilities)
+            || !IsBetterQueue(queue, result)
+        )
+            continue;
+        result = &queue;
+    }
+    return result;
+}
+
+[[nodiscard]] static bool RequiresGraphics(const GpuQueueCapability::Mask requiredCapabilities)noexcept{
+    return HasCapabilities(requiredCapabilities, GpuQueueCapability::Graphics);
+}
+
+[[nodiscard]] static bool ShouldUseDedicatedCompute(const GpuTaskSchedulingHint& hint)noexcept{
+    return hint.cost != GpuTaskCostHint::Tiny
+        && hint.overlapPreferred
+        && !hint.avoidQueueCrossing
     ;
-    return (static_cast<u8>(request.requiredCapabilities) & ~s_ValidCapabilityMask) == 0u
+}
+
+[[nodiscard]] static bool IsValidQueueRequest(const GpuQueueRequest& request)noexcept{
+    return (static_cast<u8>(request.requiredCapabilities) & ~s_ValidQueueCapabilityMask) == 0u
         && request.preferredQueue < GpuQueuePreference::kCount;
 }
 
@@ -281,6 +381,34 @@ bool GpuTaskGraphAnalysis::hasInferredEdge(const GpuTaskId& producer, const GpuT
             return true;
     }
     return false;
+}
+
+
+void GpuTaskGraphQueueAssignments::reset(){
+    m_assignments.clear();
+    m_diagnostic = GpuTaskQueueAssignmentDiagnostic{};
+    m_generation = 0u;
+    m_taskCount = 0u;
+    m_deviceGeneration = 0u;
+    m_valid = false;
+}
+
+bool GpuTaskGraphQueueAssignments::validFor(const GpuTaskGraph& graph)const noexcept{
+    return m_valid
+        && m_generation == graph.generation()
+        && m_taskCount == graph.taskCount()
+    ;
+}
+
+const GpuTaskQueueAssignment* GpuTaskGraphQueueAssignments::find(const GpuTaskId& task)const noexcept{
+    if(!m_valid || task.generation != m_generation)
+        return nullptr;
+
+    for(const GpuTaskQueueAssignment& assignment : m_assignments){
+        if(assignment.task == task)
+            return &assignment;
+    }
+    return nullptr;
 }
 
 
@@ -559,6 +687,142 @@ bool GpuTaskGraphCompiler::analyze(
 
     outAnalysis.m_diagnostic.status = GpuTaskGraphAnalysisStatus::Success;
     outAnalysis.m_valid = true;
+    return true;
+}
+
+
+bool GpuTaskGraphCompiler::assignQueues(
+    const GpuTaskGraph& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    const GpuTaskGraphQueueTopology& topology,
+    GpuTaskGraphQueueAssignments& outAssignments
+)const{
+    using namespace __hidden_gpu_task_graph_compiler;
+
+    outAssignments.reset();
+    const auto fail = [&](const GpuTaskGraphQueueAssignmentStatus::Enum status, const GpuTaskId task = {}, const GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None){
+        outAssignments.m_diagnostic.status = status;
+        outAssignments.m_diagnostic.task = task;
+        outAssignments.m_diagnostic.requiredCapabilities = requiredCapabilities;
+        return false;
+    };
+    if(!analysis.validFor(graph))
+        return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis);
+
+    u16 deviceGeneration = 0u;
+    if(!IsValidQueueTopology(topology, deviceGeneration))
+        return fail(GpuTaskGraphQueueAssignmentStatus::InvalidQueueTopology);
+
+    outAssignments.m_generation = graph.generation();
+    outAssignments.m_taskCount = graph.taskCount();
+    outAssignments.m_deviceGeneration = deviceGeneration;
+    outAssignments.m_assignments.reserve(graph.taskCount());
+
+    for(const GpuTaskId taskID : analysis.topologicalOrder()){
+        const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
+        const GpuPhysicalQueueInfo* const graphicsQueue = FindBestCompatibleQueue(
+            topology,
+            task.queue.requiredCapabilities,
+            CommandQueue::Graphics
+        );
+        const GpuPhysicalQueueInfo* const computeQueue = FindBestCompatibleQueue(
+            topology,
+            task.queue.requiredCapabilities,
+            CommandQueue::Compute
+        );
+        const GpuPhysicalQueueInfo* const fallbackQueue = FindBestCompatibleQueue(
+            topology,
+            task.queue.requiredCapabilities
+        );
+
+        const GpuPhysicalQueueInfo* selectedQueue = nullptr;
+        GpuTaskQueueAssignmentReason::Enum reason = GpuTaskQueueAssignmentReason::Unknown;
+        if(RequiresGraphics(task.queue.requiredCapabilities)){
+            // A task that declares Graphics must stay on the physical Graphics transport even if a malformed future
+            // topology happens to advertise Graphics capability on another queue class.
+            selectedQueue = graphicsQueue;
+            reason = GpuTaskQueueAssignmentReason::RequiredGraphics;
+        }
+        else{
+            switch(task.queue.preferredQueue){
+            case GpuQueuePreference::Graphics:
+                selectedQueue = graphicsQueue;
+                reason = GpuTaskQueueAssignmentReason::PreferredQueue;
+                if(!selectedQueue && task.queue.allowFallback){
+                    selectedQueue = fallbackQueue;
+                    reason = GpuTaskQueueAssignmentReason::Fallback;
+                }
+                break;
+            case GpuQueuePreference::Compute:
+                if(
+                    computeQueue
+                    && (
+                        !task.queue.compilerMayOverridePreference
+                        || (computeQueue->dedicated && ShouldUseDedicatedCompute(task.scheduling))
+                    )
+                ){
+                    selectedQueue = computeQueue;
+                    reason = computeQueue->dedicated
+                        ? GpuTaskQueueAssignmentReason::DedicatedCompute
+                        : GpuTaskQueueAssignmentReason::PreferredQueue
+                    ;
+                }
+                else if(task.queue.allowFallback && graphicsQueue){
+                    selectedQueue = graphicsQueue;
+                    reason = GpuTaskQueueAssignmentReason::Fallback;
+                }
+                else if(computeQueue){
+                    selectedQueue = computeQueue;
+                    reason = GpuTaskQueueAssignmentReason::PreferredQueue;
+                }
+                else if(task.queue.allowFallback){
+                    selectedQueue = fallbackQueue;
+                    reason = GpuTaskQueueAssignmentReason::Fallback;
+                }
+                break;
+            case GpuQueuePreference::Transfer:
+                // Transfer has no distinct CommandQueue class yet. Until that migration happens, a Transfer request
+                // can fall back only to an actually supplied Compute or Graphics queue that advertises Transfer.
+                if(!task.queue.allowFallback)
+                    break;
+                if(computeQueue && computeQueue->dedicated && ShouldUseDedicatedCompute(task.scheduling))
+                    selectedQueue = computeQueue;
+                else if(graphicsQueue)
+                    selectedQueue = graphicsQueue;
+                else
+                    selectedQueue = fallbackQueue;
+                reason = GpuTaskQueueAssignmentReason::Fallback;
+                break;
+            case GpuQueuePreference::Any:
+                // Keep the initial Any policy conservative and stable. Packet/frontier scoring arrives after this
+                // observational assignment has proven parity against the current renderer schedule.
+                selectedQueue = graphicsQueue ? graphicsQueue : fallbackQueue;
+                reason = GpuTaskQueueAssignmentReason::ConservativeAny;
+                break;
+            default:
+                NWB_ASSERT(false);
+                break;
+            }
+        }
+        if(!selectedQueue){
+            return fail(
+                GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue,
+                task.id,
+                task.queue.requiredCapabilities
+            );
+        }
+
+        outAssignments.m_assignments.push_back(GpuTaskQueueAssignment{
+            .task = task.id,
+            .queue = selectedQueue->id,
+            .queueClass = selectedQueue->queueClass,
+            .reason = reason,
+            .dedicated = selectedQueue->dedicated,
+        });
+    }
+
+    outAssignments.m_diagnostic.status = GpuTaskGraphQueueAssignmentStatus::Success;
+    outAssignments.m_valid = true;
     return true;
 }
 

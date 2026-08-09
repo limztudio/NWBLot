@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <core/graphics/rhi/command.h>
 #include <core/graphics/rhi/raytracing.h>
 
 
@@ -37,6 +38,42 @@ namespace GpuQueuePreference{
 
         kCount,
     };
+};
+
+// Queue preferences describe desired capability classes; this ID identifies one concrete queue in a particular
+// device lifetime. Phase 2 currently maps it to the existing Graphics/Compute transport pair, but it intentionally
+// leaves room for multiple queues of the same class and a later Transfer queue.
+struct GpuPhysicalQueueId{
+    u16 index = Limit<u16>::s_Max;
+    u16 deviceGeneration = 0u;
+
+    [[nodiscard]] constexpr bool valid()const{
+        return index != Limit<u16>::s_Max && deviceGeneration != 0u;
+    }
+};
+inline constexpr bool operator==(const GpuPhysicalQueueId& lhs, const GpuPhysicalQueueId& rhs)noexcept{
+    return lhs.index == rhs.index && lhs.deviceGeneration == rhs.deviceGeneration;
+}
+inline constexpr bool operator!=(const GpuPhysicalQueueId& lhs, const GpuPhysicalQueueId& rhs)noexcept{
+    return !(lhs == rhs);
+}
+
+// `queueClass` is the current physical submission transport. It is deliberately distinct from
+// GpuQueuePreference: the former names a real queue, while the latter is a task declaration policy.
+struct GpuPhysicalQueueInfo{
+    GpuPhysicalQueueId id;
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
+    GpuQueueCapability::Mask capabilities = GpuQueueCapability::None;
+    u32 familyIndex = Limit<u32>::s_Max;
+    u32 queueIndex = 0u;
+    bool dedicated = false;
+};
+
+// This view is immutable for one compile. The renderer owns device discovery and supplies only queues that may
+// receive work; graph code never infers or fabricates a fallback physical queue.
+struct GpuTaskGraphQueueTopology{
+    const GpuPhysicalQueueInfo* queues = nullptr;
+    usize queueCount = 0u;
 };
 
 namespace GpuTaskCostHint{
@@ -91,6 +128,20 @@ namespace GpuTaskGraphTelemetryEdgeFlag{
         ExplicitDependency = 1u << 0u,
         InferredDependency = 1u << 1u,
         MissingLegacyScheduleDependency = 1u << 2u,
+    };
+};
+
+// Queue-assignment information reuses the existing frame-graph node flags during the observational migration.
+// Keeping it in the node payload avoids changing the telemetry wire schema while still making compiler decisions
+// and parity failures visible.
+namespace GpuTaskGraphTelemetryNodeFlag{
+    enum Mask : u8{
+        None = 0u,
+        AssignedGraphicsQueue = 1u << 0u,
+        AssignedComputeQueue = 1u << 1u,
+        AssignedDedicatedQueue = 1u << 2u,
+        QueueAssignmentFallback = 1u << 3u,
+        LegacyQueueAssignmentMismatch = 1u << 4u,
     };
 };
 

@@ -31,6 +31,14 @@ struct WorkMetadata{
     Name identity = NAME_NONE;
     AStringView markerLabel;
     Core::GpuQueueRequest queue;
+    Core::GpuTaskSchedulingHint scheduling;
+
+    WorkMetadata() = default;
+    WorkMetadata(const Name& value, const AStringView label, const Core::GpuQueueRequest& request)
+        : identity(value)
+        , markerLabel(label)
+        , queue(request)
+    {}
 };
 
 
@@ -54,7 +62,8 @@ struct WorkMetadata{
 
 [[nodiscard]] static WorkMetadata WorkMetadataFor(
     const Work::Enum work,
-    const bool hardwareCaustics
+    const bool hardwareCaustics,
+    const bool usesLaggedLightingHistory
 ){
     switch(work){
     case Work::GraphicsPrefix:
@@ -81,10 +90,18 @@ struct WorkMetadata{
         return WorkMetadata{ Name("render.task_graph.avboit_integration"), "AVBOIT Integration", ComputeQueueRequest() };
     case Work::AvboitAccumulation:
         return WorkMetadata{ Name("render.task_graph.avboit_accumulation"), "AVBOIT Accumulation", GraphicsQueueRequest() };
-    case Work::DeferredLighting:
-        return WorkMetadata{ Name("render.task_graph.deferred_lighting"), "Deferred Lighting", ComputeQueueRequest() };
-    case Work::DeferredComposite:
-        return WorkMetadata{ Name("render.task_graph.deferred_composite"), "Deferred Composite", ComputeQueueRequest() };
+    case Work::DeferredLighting:{
+        WorkMetadata metadata{ Name("render.task_graph.deferred_lighting"), "Deferred Lighting", ComputeQueueRequest() };
+        // The active lagged path keeps its final lighting chain on Graphics to avoid a no-overlap return crossing
+        // before presentation. This is a semantic scheduling hint, not a live FrameExecutionPlan override.
+        metadata.scheduling.avoidQueueCrossing = usesLaggedLightingHistory;
+        return metadata;
+    }
+    case Work::DeferredComposite:{
+        WorkMetadata metadata{ Name("render.task_graph.deferred_composite"), "Deferred Composite", ComputeQueueRequest() };
+        metadata.scheduling.avoidQueueCrossing = usesLaggedLightingHistory;
+        return metadata;
+    }
     case Work::GraphicsPresent:
         return WorkMetadata{ Name("render.task_graph.present"), "Present", GraphicsQueueRequest() };
     case Work::LaggedLightingStash:
@@ -195,11 +212,23 @@ void RendererSystem::buildGpuTaskGraphShadow(
 
     m_gpuTaskGraphShadowValid = false;
     m_gpuTaskGraphShadowLegacyMismatches.clear();
+    m_gpuTaskGraphShadowLegacyQueueMismatches.clear();
     m_gpuTaskGraph.reset();
     m_gpuTaskGraphAnalysis.reset();
+    m_gpuTaskGraphQueueAssignments.reset();
+
+    const auto& device = graphics().getDevice();
+    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
+    const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
+    // The existing renderer reports dedicated AsyncCompute only for a distinct compute transport. Recheck the
+    // physical family identity here so a future backend cannot accidentally make the shadow compiler invent overlap.
+    const bool dedicatedAsyncCompute = input.dedicatedAsyncCompute
+        && computeFamilyIndex != Limit<u32>::s_Max
+        && computeFamilyIndex != graphicsFamilyIndex
+    ;
 
     const ECSRenderDetail::FrameExecutionPlanInput frameExecutionPlanInput{
-        input.dedicatedAsyncCompute,
+        dedicatedAsyncCompute,
         input.frameLaggedAsyncLightingEnabled,
         input.laggedLightingHistoryReady,
         input.laggedLightingHistoryAccepted,
@@ -347,6 +376,11 @@ void RendererSystem::buildGpuTaskGraphShadow(
         }
     }
 
+    const bool usesLaggedLightingHistory = frameExecutionPlan.workWaitsForExternalToken(
+        Work::DeferredLighting,
+        ExternalWait::LaggedLightingHistory
+    );
+
     Core::GpuTaskId workTasks[Work::kCount] = {};
     const auto addWorkTask = [&](const Work::Enum work, const Core::GpuTaskResourceUse* const resourceUses, const usize resourceUseCount){
         if(!frameExecutionPlan.hasWork(work))
@@ -379,12 +413,13 @@ void RendererSystem::buildGpuTaskGraphShadow(
             externalDependencies[waitIndex] = laggedHistoryCompletion;
         }
 
-        const WorkMetadata metadata = WorkMetadataFor(work, input.hardwareCaustics);
+        const WorkMetadata metadata = WorkMetadataFor(work, input.hardwareCaustics, usesLaggedLightingHistory);
         Core::GpuTaskDesc desc;
         desc
             .setIdentity(metadata.identity)
             .setMarkerLabel(metadata.markerLabel)
             .setQueue(metadata.queue)
+            .setScheduling(metadata.scheduling)
             .setDependencies(dependencies, dependencyCount)
             .setExternalDependencies(externalDependencies, packetPlan.externalWaitCount)
             .setResourceUses(resourceUses, resourceUseCount)
@@ -440,10 +475,6 @@ void RendererSystem::buildGpuTaskGraphShadow(
         ReadUse(avboitTransmittance),
         WriteUse(opaqueColor, Core::ResourceStates::RenderTarget),
     };
-    const bool usesLaggedLightingHistory = frameExecutionPlan.workWaitsForExternalToken(
-        Work::DeferredLighting,
-        ExternalWait::LaggedLightingHistory
-    );
     const Core::GpuGraphResourceId lightingShadowVisibility = usesLaggedLightingHistory
         ? historyShadowVisibility
         : shadowVisibility
@@ -511,6 +542,63 @@ void RendererSystem::buildGpuTaskGraphShadow(
             , static_cast<u32>(m_gpuTaskGraphAnalysis.diagnostic().status)
         );
         return;
+    }
+
+    const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
+        static_cast<u8>(Core::GpuQueueCapability::Graphics)
+        | static_cast<u8>(Core::GpuQueueCapability::Compute)
+        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
+    );
+    const Core::GpuQueueCapability::Mask computeQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
+        static_cast<u8>(Core::GpuQueueCapability::Compute)
+        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
+    );
+    const Core::GpuPhysicalQueueInfo queueTopologyInfos[] = {
+        Core::GpuPhysicalQueueInfo{
+            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphShadowDeviceGeneration },
+            .queueClass = Core::CommandQueue::Graphics,
+            .capabilities = graphicsQueueCapabilities,
+            .familyIndex = graphicsFamilyIndex,
+            .queueIndex = 0u,
+            .dedicated = false,
+        },
+        Core::GpuPhysicalQueueInfo{
+            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphShadowDeviceGeneration },
+            .queueClass = Core::CommandQueue::Compute,
+            .capabilities = computeQueueCapabilities,
+            .familyIndex = computeFamilyIndex,
+            .queueIndex = 0u,
+            .dedicated = true,
+        },
+    };
+    const Core::GpuTaskGraphQueueTopology queueTopology{
+        .queues = queueTopologyInfos,
+        .queueCount = dedicatedAsyncCompute ? LengthOf(queueTopologyInfos) : 1u,
+    };
+    if(!compiler.assignQueues(m_gpuTaskGraph, m_gpuTaskGraphAnalysis, queueTopology, m_gpuTaskGraphQueueAssignments)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph shadow queue assignment failed (status {})")
+            , static_cast<u32>(m_gpuTaskGraphQueueAssignments.diagnostic().status)
+        );
+        return;
+    }
+    for(usize workIndex = 0u; workIndex < Work::kCount; ++workIndex){
+        const Work::Enum work = static_cast<Work::Enum>(workIndex);
+        if(!frameExecutionPlan.hasWork(work))
+            continue;
+
+        const Core::GpuTaskQueueAssignment* const assignment = m_gpuTaskGraphQueueAssignments.find(workTasks[workIndex]);
+        if(!assignment){
+            NWB_ASSERT(false);
+            return;
+        }
+        const Core::CommandQueue::Enum legacyQueue = device.resolveRenderLane(frameExecutionPlan.laneForWork(work));
+        if(assignment->queueClass != legacyQueue)
+            m_gpuTaskGraphShadowLegacyQueueMismatches.push_back(workTasks[workIndex]);
+    }
+    if(!m_gpuTaskGraphShadowLegacyQueueMismatches.empty()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph shadow found {} queue assignments differing from FrameExecutionPlan")
+            , m_gpuTaskGraphShadowLegacyQueueMismatches.size()
+        );
     }
 
     const auto packetForTask = [&](const Core::GpuTaskId task, Packet::Enum& outPacket){

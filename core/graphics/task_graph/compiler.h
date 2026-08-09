@@ -39,6 +39,43 @@ struct GpuTaskGraphAnalysisDiagnostic{
     GpuGraphResourceId resource;
 };
 
+namespace GpuTaskQueueAssignmentReason{
+    enum Enum : u8{
+        Unknown,
+        RequiredGraphics,
+        PreferredQueue,
+        DedicatedCompute,
+        Fallback,
+        ConservativeAny,
+
+        kCount,
+    };
+};
+
+namespace GpuTaskGraphQueueAssignmentStatus{
+    enum Enum : u8{
+        NotAssigned,
+        Success,
+        InvalidGraphAnalysis,
+        InvalidQueueTopology,
+        NoCompatibleQueue,
+    };
+};
+
+struct GpuTaskQueueAssignmentDiagnostic{
+    GpuTaskGraphQueueAssignmentStatus::Enum status = GpuTaskGraphQueueAssignmentStatus::NotAssigned;
+    GpuTaskId task;
+    GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None;
+};
+
+struct GpuTaskQueueAssignment{
+    GpuTaskId task;
+    GpuPhysicalQueueId queue;
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
+    GpuTaskQueueAssignmentReason::Enum reason = GpuTaskQueueAssignmentReason::Unknown;
+    bool dedicated = false;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -95,18 +132,57 @@ private:
     bool m_valid = false;
 };
 
+// Queue assignment is a separate immutable compile result so Phase 2 can compare physical routing without making
+// it authoritative for native recording or submission yet.
+class GpuTaskGraphQueueAssignments final : NoCopy{
+    friend class GpuTaskGraphCompiler;
+
+public:
+    explicit GpuTaskGraphQueueAssignments(GraphicsArena& arena)
+        : m_assignments(arena)
+    {}
+
+
+public:
+    void reset();
+
+    [[nodiscard]] bool valid()const noexcept{ return m_valid; }
+    [[nodiscard]] bool validFor(const GpuTaskGraph& graph)const noexcept;
+    [[nodiscard]] const GpuTaskQueueAssignmentDiagnostic& diagnostic()const noexcept{ return m_diagnostic; }
+    [[nodiscard]] const GraphicsVector<GpuTaskQueueAssignment>& assignments()const noexcept{ return m_assignments; }
+    [[nodiscard]] const GpuTaskQueueAssignment* find(const GpuTaskId& task)const noexcept;
+
+
+private:
+    GraphicsVector<GpuTaskQueueAssignment> m_assignments;
+    GpuTaskQueueAssignmentDiagnostic m_diagnostic;
+    u64 m_generation = 0u;
+    usize m_taskCount = 0u;
+    u16 m_deviceGeneration = 0u;
+    bool m_valid = false;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 class GpuTaskGraphCompiler final : NoCopy{
 public:
-    // Phase 1 intentionally ends with a validated DAG and observability data. Queue assignment, packets, barriers,
-    // native recording, and submission are separate later compiler stages.
+    // Graph validation and hazards remain independent from physical queue policy, so later packet, barrier,
+    // recording, and submission stages can consume one validated, immutable analysis result.
     [[nodiscard]] bool analyze(
         const GpuTaskGraph& graph,
         GpuTaskGraphAnalysis& outAnalysis,
         Alloc::ScratchArena& scratchArena
+    )const;
+
+    // Phase 2 only produces an observational physical-queue decision. It never creates a command list or changes
+    // FrameExecutionPlan's live route; the caller supplies the concrete topology discovered from its current device.
+    [[nodiscard]] bool assignQueues(
+        const GpuTaskGraph& graph,
+        const GpuTaskGraphAnalysis& analysis,
+        const GpuTaskGraphQueueTopology& topology,
+        GpuTaskGraphQueueAssignments& outAssignments
     )const;
 };
 

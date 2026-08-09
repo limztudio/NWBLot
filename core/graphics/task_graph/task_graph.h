@@ -21,6 +21,7 @@ NWB_CORE_BEGIN
 
 
 class GpuTaskGraphAnalysis;
+class GpuTaskGraphQueueAssignments;
 
 namespace Telemetry{
     class FrameGraphBuilder;
@@ -56,6 +57,14 @@ struct GpuTaskGraphExternalCompletionView{
     GpuExternalCompletionId id;
     Name identity = NAME_NONE;
     AStringView markerLabel;
+};
+
+struct GpuTaskGraphTelemetryOptions{
+    const GpuTaskDependencyEdge* legacyScheduleMismatches = nullptr;
+    usize legacyScheduleMismatchCount = 0u;
+    const GpuTaskGraphQueueAssignments* queueAssignments = nullptr;
+    const GpuTaskId* legacyQueueMismatches = nullptr;
+    usize legacyQueueMismatchCount = 0u;
 };
 
 
@@ -154,8 +163,7 @@ public:
         Telemetry::FrameGraphBuilder& builder,
         const GpuTaskGraphAnalysis& analysis,
         Alloc::ScratchArena& scratchArena,
-        const GpuTaskDependencyEdge* legacyScheduleMismatches = nullptr,
-        usize legacyScheduleMismatchCount = 0u
+        const GpuTaskGraphTelemetryOptions& options = {}
     )const;
 
 

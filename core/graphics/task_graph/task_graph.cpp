@@ -252,15 +252,26 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
     Telemetry::FrameGraphBuilder& builder,
     const GpuTaskGraphAnalysis& analysis,
     Alloc::ScratchArena& scratchArena,
-    const GpuTaskDependencyEdge* const legacyScheduleMismatches,
-    const usize legacyScheduleMismatchCount
+    const GpuTaskGraphTelemetryOptions& options
 )const{
     if(
         !analysis.validFor(*this)
         || m_tasks.empty()
-        || (legacyScheduleMismatchCount > 0u && !legacyScheduleMismatches)
+        || (options.legacyScheduleMismatchCount > 0u && !options.legacyScheduleMismatches)
+        || (options.legacyQueueMismatchCount > 0u && !options.legacyQueueMismatches)
+        || (options.queueAssignments && !options.queueAssignments->validFor(*this))
     )
         return false;
+    for(usize mismatchIndex = 0u; mismatchIndex < options.legacyQueueMismatchCount; ++mismatchIndex){
+        if(!validTask(options.legacyQueueMismatches[mismatchIndex]))
+            return false;
+    }
+    if(options.queueAssignments){
+        for(usize taskIndex = 0u; taskIndex < m_tasks.size(); ++taskIndex){
+            if(!options.queueAssignments->find(taskAt(taskIndex).id))
+                return false;
+        }
+    }
 
     Vector<Telemetry::FrameGraphNodeHandle, Alloc::ScratchArena> resourceNodes(scratchArena);
     Vector<Telemetry::FrameGraphNodeHandle, Alloc::ScratchArena> completionNodes(scratchArena);
@@ -279,7 +290,32 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
     }
     for(usize taskIndex = 0u; taskIndex < m_tasks.size(); ++taskIndex){
         const GpuTaskGraphTaskView task = taskAt(taskIndex);
-        taskNodes.push_back(builder.addPass(task.identity, task.markerLabel));
+        u8 flags = GpuTaskGraphTelemetryNodeFlag::None;
+        if(options.queueAssignments){
+            const GpuTaskQueueAssignment* const assignment = options.queueAssignments->find(task.id);
+            NWB_ASSERT(assignment);
+            switch(assignment->queueClass){
+            case CommandQueue::Graphics:
+                flags |= GpuTaskGraphTelemetryNodeFlag::AssignedGraphicsQueue;
+                break;
+            case CommandQueue::Compute:
+                flags |= GpuTaskGraphTelemetryNodeFlag::AssignedComputeQueue;
+                break;
+            default:
+                return false;
+            }
+            if(assignment->dedicated)
+                flags |= GpuTaskGraphTelemetryNodeFlag::AssignedDedicatedQueue;
+            if(assignment->reason == GpuTaskQueueAssignmentReason::Fallback)
+                flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentFallback;
+        }
+        for(usize mismatchIndex = 0u; mismatchIndex < options.legacyQueueMismatchCount; ++mismatchIndex){
+            if(options.legacyQueueMismatches[mismatchIndex] == task.id){
+                flags |= GpuTaskGraphTelemetryNodeFlag::LegacyQueueAssignmentMismatch;
+                break;
+            }
+        }
+        taskNodes.push_back(builder.addPass(task.identity, task.markerLabel, flags));
     }
 
     for(usize taskIndex = 0u; taskIndex < m_tasks.size(); ++taskIndex){
@@ -302,8 +338,8 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
             flags |= GpuTaskGraphTelemetryEdgeFlag::ExplicitDependency;
         if(analysis.hasInferredEdge(edge.producer, edge.consumer))
             flags |= GpuTaskGraphTelemetryEdgeFlag::InferredDependency;
-        for(usize mismatchIndex = 0u; mismatchIndex < legacyScheduleMismatchCount; ++mismatchIndex){
-            const GpuTaskDependencyEdge& mismatch = legacyScheduleMismatches[mismatchIndex];
+        for(usize mismatchIndex = 0u; mismatchIndex < options.legacyScheduleMismatchCount; ++mismatchIndex){
+            const GpuTaskDependencyEdge& mismatch = options.legacyScheduleMismatches[mismatchIndex];
             if(mismatch.producer == edge.producer && mismatch.consumer == edge.consumer){
                 flags |= GpuTaskGraphTelemetryEdgeFlag::MissingLegacyScheduleDependency;
                 break;

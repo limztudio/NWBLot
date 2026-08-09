@@ -44,6 +44,9 @@ struct GpuTaskSchedulingHint{
     bool avoidQueueCrossing = false;
     bool forceSubmissionBoundary = false;
     bool allowPacketMerge = true;
+    // Merging remains opt-in while imported recording bridges are retired incrementally.  When set, this task may
+    // share the immediately preceding compatible packet instead of creating a new queue submission.
+    bool mergeWithPrevious = false;
 };
 
 // A resource may be metadata-only during the shadow-graph phase, or may retain an imported engine handle through

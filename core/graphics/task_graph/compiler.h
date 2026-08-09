@@ -186,9 +186,9 @@ public:
         GpuTaskGraphQueueAssignments& outAssignments
     )const;
 
-    // Phase 3's packet compiler deliberately starts with one task per packet.  It reuses the independently exposed
-    // analysis and queue-assignment results so telemetry and live packet creation consume exactly the same immutable
-    // decisions.  Packet merging and graph-owned barrier seeds are later compiler phases.
+    // The packet compiler reuses the independently exposed analysis and queue-assignment results so telemetry and
+    // live packet creation consume exactly the same immutable decisions.  Tasks retain one packet by default;
+    // explicitly requested compatible successors may merge into the preceding packet.
     [[nodiscard]] bool compile(
         const GpuTaskGraph& graph,
         GpuTaskGraphAnalysis& outAnalysis,

@@ -50,7 +50,11 @@ bool GpuCompiledGraph::validFor(const GpuTaskGraph& graph)const noexcept{
         && m_generation == graph.generation()
         && m_graphTaskCount == graph.taskCount()
         && m_tasks.size() == m_graphTaskCount
-        && m_packets.size() == m_graphTaskCount
+        && m_packetTasks.size() == m_graphTaskCount
+        && (
+            (m_graphTaskCount == 0u && m_packets.empty())
+            || (m_graphTaskCount > 0u && !m_packets.empty() && m_packets.size() <= m_graphTaskCount)
+        )
     ;
 }
 

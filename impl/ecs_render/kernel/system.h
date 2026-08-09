@@ -139,7 +139,10 @@ private:
     void resetLaggedLightingHistoryTracking()noexcept;
     void buildGraphicsPrefixTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
-        const DeferredFrameTargets& deferredTargets
+        DeferredFrameTargets& deferredTargets,
+        bool shadowVisibilityRunsOnCompute,
+        Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
+        Core::GpuTimingSubmissionTicket& timingTicket
     );
     void buildLaggedLightingHistoryTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
@@ -229,14 +232,16 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;
-    // The prefix retains its established parallel command-list recording while its graph packet owns concrete
-    // Graphics transport, submission, completion, and lifecycle.
+    // The prefix retains a shrinking imported recording bridge while its graph packet owns concrete Graphics
+    // transport, submission, completion, and lifecycle.  The post-G-buffer normalization task records natively
+    // as the packet suffix.
     Core::GpuTaskGraph m_graphicsPrefixTaskGraph;
     Core::GpuTaskGraphAnalysis m_graphicsPrefixTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_graphicsPrefixTaskGraphQueueAssignments;
     Core::GpuCompiledGraph m_graphicsPrefixCompiledGraph;
     Core::GpuRecordedGraph m_graphicsPrefixRecordedGraph;
     Core::GpuGraphSubmissionTransaction m_graphicsPrefixSubmissionTransaction;
+    Core::GpuTaskId m_graphicsPrefixBridgeTask;
     Core::GpuTaskId m_graphicsPrefixTask;
     u16 m_taskGraphDeviceGeneration = 1u;
     bool m_graphicsPrefixTaskGraphValid = false;
@@ -360,7 +365,6 @@ private:
     Core::CommandListResourceStateHandoff m_sceneShadingSetupStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredClearStateHandoff;
     Core::CommandListResourceStateHandoff m_gbufferStateHandoff;
-    Core::CommandListResourceStateHandoff m_postGbufferNormalizedStateHandoff;
     // Compute-only shadow scratch/history retains accepted graph packet state across frames. Deferred lighting now
     // consumes the visibility result on the same Compute lane, so the result snapshot remains Compute-local.
     Core::CommandListResourceStateHandoff m_shadowComputePersistentStateHandoff;
@@ -380,7 +384,6 @@ private:
     Core::CommandListHandle m_sceneShadingSetupCommandList;
     Core::CommandListHandle m_deferredClearCommandList;
     Core::CommandListHandle m_gbufferCommandList;
-    Core::CommandListHandle m_postGbufferNormalizeCommandList;
     // A small Graphics recovery packet retires an accepted frame timing scope when a later dependent packet is
     // rejected.  If it joins AsyncCompute, cross-lane resources remain concurrently shared.
     Core::CommandListHandle m_frameRecoveryCommandList;

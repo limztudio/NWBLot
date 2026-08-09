@@ -104,7 +104,6 @@ RendererSystem::RendererSystem(
     , m_sceneShadingSetupStateHandoff(arena)
     , m_deferredClearStateHandoff(arena)
     , m_gbufferStateHandoff(arena)
-    , m_postGbufferNormalizedStateHandoff(arena)
     , m_shadowComputePersistentStateHandoff(arena)
     , m_shadowVisibilityReturnStateHandoff(arena)
     , m_causticsComputePersistentStateHandoff(arena)
@@ -198,7 +197,6 @@ void RendererSystem::resetInvalidatedResourceStateHandoffs()noexcept{
     m_sceneShadingSetupStateHandoff.reset();
     m_deferredClearStateHandoff.reset();
     m_gbufferStateHandoff.reset();
-    m_postGbufferNormalizedStateHandoff.reset();
     resetTargetGenerationStateHandoffs();
 }
 
@@ -208,7 +206,6 @@ void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
     m_sceneShadingSetupStateHandoff.reset();
     m_deferredClearStateHandoff.reset();
     m_gbufferStateHandoff.reset();
-    m_postGbufferNormalizedStateHandoff.reset();
     m_causticIrradianceLightingStateHandoff.reset();
 }
 
@@ -218,7 +215,6 @@ void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
     m_sceneShadingSetupStateHandoff.reset();
     m_deferredClearStateHandoff.reset();
     m_gbufferStateHandoff.reset();
-    m_postGbufferNormalizedStateHandoff.reset();
     m_causticIrradianceLightingStateHandoff.reset();
 }
 
@@ -279,6 +275,7 @@ void RendererSystem::invalidateResources(){
     m_preparedHasTransparentRenderers = false;
     m_preparedShadowVisibilityReady = false;
     m_graphicsPrefixTaskGraphValid = false;
+    m_graphicsPrefixBridgeTask = {};
     m_graphicsPrefixTask = {};
     m_graphicsPrefixTaskGraph.reset();
     m_graphicsPrefixTaskGraphAnalysis.reset();
@@ -384,7 +381,6 @@ void RendererSystem::invalidateResources(){
     m_sceneShadingSetupCommandList.reset();
     m_deferredClearCommandList.reset();
     m_gbufferCommandList.reset();
-    m_postGbufferNormalizeCommandList.reset();
     m_frameRecoveryCommandList.reset();
     m_shadowPrepareCommandList.reset();
     resetLaggedLightingHistoryTracking();
@@ -448,14 +444,6 @@ bool RendererSystem::ensureFrameCommandLists(){
         m_gbufferCommandList = device.createCommandList();
         if(!m_gbufferCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create G-buffer command list"));
-            return false;
-        }
-    }
-
-    if(!m_postGbufferNormalizeCommandList){
-        m_postGbufferNormalizeCommandList = device.createCommandList();
-        if(!m_postGbufferNormalizeCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create post-G-buffer normalization command list"));
             return false;
         }
     }
@@ -628,7 +616,6 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     NWB_ASSERT(m_sceneShadingSetupCommandList);
     NWB_ASSERT(m_deferredClearCommandList);
     NWB_ASSERT(m_gbufferCommandList);
-    NWB_ASSERT(m_postGbufferNormalizeCommandList);
     NWB_ASSERT(m_shadowPrepareCommandList);
 
     auto& device = m_graphics.getDevice();
@@ -708,6 +695,7 @@ bool RendererSystem::recordShadowPrepareCommandList(DeferredFrameTargets& deferr
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_graphicsPrefixTaskGraphValid = false;
+    m_graphicsPrefixBridgeTask = {};
     m_graphicsPrefixTask = {};
     m_graphicsPrefixTaskGraph.reset();
     m_graphicsPrefixTaskGraphAnalysis.reset();
@@ -867,8 +855,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const bool shadowVisibilityExpectedCompute = dedicatedAsyncCompute;
     const bool softwareCausticsExpectedCompute = dedicatedAsyncCompute && !hardwareShadowSupported;
     const bool shadowVisibilityPrepared = m_preparedShadowVisibilityReady;
-    // Compile every graph before native recording. The prefix imports its established command-list bundle, while
-    // all later work records directly through its own graph task.
+    // Compile every graph before native recording. The prefix retains four imported bridge lists followed by one
+    // native graph task; all later work records directly through its own graph task.
     const ECSRenderDetail::GpuTaskGraphFrameScheduleInput taskGraphInput{
         .dedicatedAsyncCompute = dedicatedAsyncCompute,
         .frameLaggedAsyncLightingEnabled = m_frameLaggedAsyncLightingEnabled,
@@ -878,36 +866,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         .hardwareCaustics = hardwareShadowSupported,
     };
     buildLaggedLightingHistoryTaskGraph(taskGraphInput, deferredTargets);
-    buildGraphicsPrefixTaskGraph(taskGraphInput, deferredTargets);
-    const Core::GpuSubmissionPacketId graphicsPrefixPacket = m_graphicsPrefixCompiledGraph.packetForTask(
-        m_graphicsPrefixTask
-    );
-    const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue = graphicsPrefixPacket.valid()
-        ? m_graphicsPrefixCompiledGraph.queueInfo(
-            m_graphicsPrefixCompiledGraph.packet(graphicsPrefixPacket).queue
-        )
-        : nullptr
-    ;
-    if(
-        !m_graphicsPrefixTaskGraphValid
-        || !m_graphicsPrefixTask.valid()
-        || !graphicsPrefixQueue
-        || graphicsPrefixQueue->queueClass != Core::CommandQueue::Graphics
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned graphics prefix was unavailable"));
-        return;
-    }
     Core::CommandList* meshViewSetupCommandList = m_meshViewSetupCommandList.get();
     Core::CommandList* sceneShadingSetupCommandList = m_sceneShadingSetupCommandList.get();
     Core::CommandList* deferredClearCommandList = m_deferredClearCommandList.get();
     Core::CommandList* gbufferCommandList = m_gbufferCommandList.get();
-    Core::CommandList* postGbufferNormalizeCommandList = m_postGbufferNormalizeCommandList.get();
     Core::CommandList* frameRecoveryCommandList = m_frameRecoveryCommandList.get();
     NWB_ASSERT(meshViewSetupCommandList);
     NWB_ASSERT(sceneShadingSetupCommandList);
     NWB_ASSERT(deferredClearCommandList);
     NWB_ASSERT(gbufferCommandList);
-    NWB_ASSERT(postGbufferNormalizeCommandList);
     NWB_ASSERT(frameRecoveryCommandList);
 
     resetFrameRecordingStateHandoffs();
@@ -1019,8 +986,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         restorePostGbufferEffectsCpuState();
     };
 
-    // The graph-owned prefix packet retains the established timing scope across its imported command-list bundle.
+    // The graph-owned prefix packet retains the established timing scope across its four imported lists and native
+    // post-G-buffer suffix.
     Core::GpuTimingSubmissionTicket graphicsPrefixTimingTicket(m_graphics.gpuTiming());
+    Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
     Core::GpuTimingSubmissionTicket shadowVisibilityTimingTicket(m_graphics.gpuTiming());
     buildShadowVisibilityTaskGraph(
         taskGraphInput,
@@ -1052,6 +1021,34 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const bool shadowVisibilityRunsOnCompute = shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute;
     if(shadowVisibilityRunsOnCompute != shadowVisibilityExpectedCompute){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow-visibility graph queue disagrees with renderer topology"));
+        shadowVisibilityTimingTicket.discard();
+        graphicsPrefixTimingTicket.discard();
+        return;
+    }
+    buildGraphicsPrefixTaskGraph(
+        taskGraphInput,
+        deferredTargets,
+        shadowVisibilityRunsOnCompute,
+        asyncPrefixTiming,
+        graphicsPrefixTimingTicket
+    );
+    const Core::GpuSubmissionPacketId graphicsPrefixPacket = m_graphicsPrefixCompiledGraph.packetForTask(
+        m_graphicsPrefixTask
+    );
+    const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue = graphicsPrefixPacket.valid()
+        ? m_graphicsPrefixCompiledGraph.queueInfo(
+            m_graphicsPrefixCompiledGraph.packet(graphicsPrefixPacket).queue
+        )
+        : nullptr
+    ;
+    if(
+        !m_graphicsPrefixTaskGraphValid
+        || !m_graphicsPrefixBridgeTask.valid()
+        || !m_graphicsPrefixTask.valid()
+        || !graphicsPrefixQueue
+        || graphicsPrefixQueue->queueClass != Core::CommandQueue::Graphics
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned graphics prefix was unavailable"));
         shadowVisibilityTimingTicket.discard();
         graphicsPrefixTimingTicket.discard();
         return;
@@ -1290,7 +1287,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // Publish the frame endpoint only after the final Graphics packet accepts.  This also covers the serialized
     // Graphics-only route when no dedicated compute family exists.
     Core::GpuTimingFrameTransaction frameTimingTransaction(m_graphics.gpuTiming());
-    Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
     Optional<Core::GpuTimingMeasure> asyncFinalTiming;
     Core::GpuTimingSubmissionTicket deferredPresentTimingTicket(m_graphics.gpuTiming());
     buildDeferredPresentTaskGraph(
@@ -1711,65 +1707,28 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // Normalize shared inputs before sibling workers import the same snapshot.
-    bool postGbufferNormalizeCommandListReady = false;
-    const Core::Graphics::JobHandle postGbufferNormalizeRecordingJob = m_graphics.scheduleGraphicsJob([
-        this,
-        &deferredTargets,
-        postGbufferNormalizeCommandList,
-        &postGbufferNormalizeCommandListReady,
-        &asyncPrefixTiming,
-        shadowVisibilityRunsOnCompute,
-        &graphicsPrefixTimingTicket
-    ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(graphicsPrefixTimingTicket);
-        postGbufferNormalizeCommandList->open(&m_gbufferStateHandoff);
-        if(!postGbufferNormalizeCommandList->hasCommandBuffer())
-            return;
-
-        m_raytracingSystem.normalizePostGbufferPacketResources(*postGbufferNormalizeCommandList, deferredTargets);
-        if(shadowVisibilityRunsOnCompute && asyncPrefixTiming){
-            asyncPrefixTiming->finishTiming(*postGbufferNormalizeCommandList);
-            asyncPrefixTiming.reset();
-        }
-        postGbufferNormalizeCommandList->close(&m_postGbufferNormalizedStateHandoff);
-        postGbufferNormalizeCommandListReady =
-            m_postGbufferNormalizedStateHandoff.valid()
-            && postGbufferNormalizeCommandList->hasCommandBuffer()
-        ;
-    });
-    if(!postGbufferNormalizeRecordingJob.valid()){
-        discardRenderPackets();
-        return;
-    }
-
-    m_graphics.waitJob(postGbufferNormalizeRecordingJob);
-    if(!postGbufferNormalizeCommandListReady){
-        discardRenderPackets();
-        return;
-    }
-
-    // Imported prefix lists retain their existing recording implementation, but the graph captures their final
-    // state once. Every graph-owned consumer below imports that packet export rather than a renderer-side handoff.
+    // The retained bridge records only setup, clear, and G-buffer lists.  The graph appends its native normalization
+    // suffix to the same packet, captures the final state once, and preserves one ordered Graphics submission.
     Core::CommandList* const graphicsPrefixCommandLists[] = {
         meshViewSetupCommandList,
         sceneShadingSetupCommandList,
         deferredClearCommandList,
         gbufferCommandList,
-        postGbufferNormalizeCommandList,
     };
     Core::GpuNativePacketRecorder graphicsPrefixRecorder(device);
-    const Core::GpuImportedPacketRecordDesc graphicsPrefixRecordDesc{
+    const Core::GpuImportedPacketNativeSuffixRecordDesc graphicsPrefixRecordDesc{
         .packet = graphicsPrefixPacket,
-        .commandLists = graphicsPrefixCommandLists,
-        .commandListCount = LengthOf(graphicsPrefixCommandLists),
-        .stateSeed = &m_postGbufferNormalizedStateHandoff,
+        .nativeTask = m_graphicsPrefixTask,
+        .importedCommandLists = graphicsPrefixCommandLists,
+        .importedCommandListCount = LengthOf(graphicsPrefixCommandLists),
+        .importedStateSeed = &m_gbufferStateHandoff,
     };
     const bool graphicsPrefixRecorded =
         m_graphicsPrefixTaskGraphValid
+        && m_graphicsPrefixBridgeTask.valid()
         && m_graphicsPrefixTask.valid()
         && graphicsPrefixPacket.valid()
-        && graphicsPrefixRecorder.recordImportedPacket(
+        && graphicsPrefixRecorder.recordImportedPacketNativeSuffix(
             m_graphicsPrefixTaskGraph,
             m_graphicsPrefixCompiledGraph,
             graphicsPrefixRecordDesc,

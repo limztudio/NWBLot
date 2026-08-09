@@ -337,7 +337,7 @@ bool GpuNativePacketRecorder::recordPacket(
     recordedPacket.packet = desc.packet;
     recordedPacket.commandLists[0u] = commandList.get();
     recordedPacket.commandListCount = 1u;
-    recordedPacket.ownedCommandList = Move(commandList);
+    recordedPacket.ownedCommandLists[0u] = Move(commandList);
     outRecordedGraph.m_packets.push_back(Move(recordedPacket));
     return true;
 }
@@ -378,6 +378,101 @@ bool GpuNativePacketRecorder::recordImportedPacket(
             return false;
         recordedPacket.commandLists[commandListIndex] = commandList;
     }
+    outRecordedGraph.m_packets.push_back(Move(recordedPacket));
+    return true;
+}
+
+
+bool GpuNativePacketRecorder::recordImportedPacketNativeSuffix(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuImportedPacketNativeSuffixRecordDesc& desc,
+    GpuRecordedGraph& outRecordedGraph
+)const{
+    if(
+        !compiledGraph.validFor(graph)
+        || !compiledGraph.validPacket(desc.packet)
+        || !desc.nativeTask.valid()
+        || !desc.importedCommandLists
+        || desc.importedCommandListCount == 0u
+        || desc.importedCommandListCount >= GpuRecordedPacket::s_MaxCommandLists
+        || !desc.importedStateSeed
+        || !desc.importedStateSeed->valid()
+    )
+        return false;
+    if(!outRecordedGraph.validFor(compiledGraph))
+        outRecordedGraph.reset(compiledGraph);
+    if(outRecordedGraph.find(desc.packet))
+        return false;
+
+    const GpuSubmissionPacket& packet = compiledGraph.packet(desc.packet);
+    const GpuTaskId* const tasks = compiledGraph.packetTasks(desc.packet);
+    if(!tasks || packet.taskCount != 2u || tasks[1u] != desc.nativeTask)
+        return false;
+    const GpuTaskGraphTaskView importedTask = graph.taskAt(tasks[0u].index);
+    const GpuTaskGraphTaskView nativeTask = graph.taskAt(desc.nativeTask.index);
+    if(importedTask.hasPayload || !nativeTask.hasPayload)
+        return false;
+
+    const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packet.queue);
+    const GpuCompiledTask* const compiledNativeTask = compiledGraph.findTask(desc.nativeTask);
+    if(!queue || queue->queueClass >= CommandQueue::kCount || !compiledNativeTask || compiledNativeTask->packet != desc.packet)
+        return false;
+
+    CommandListResourceStateHandoff* const packetStateSeed = outRecordedGraph.packetStateSeed(desc.packet);
+    if(!packetStateSeed)
+        return false;
+    packetStateSeed->reset();
+
+    for(usize commandListIndex = 0u; commandListIndex < desc.importedCommandListCount; ++commandListIndex){
+        CommandList* const commandList = desc.importedCommandLists[commandListIndex];
+        if(!commandList || !commandList->hasCommandBuffer())
+            return false;
+    }
+
+    CommandListParameters parameters;
+    parameters.setQueueType(queue->queueClass);
+    CommandListHandle nativeCommandList = m_device.createCommandList(parameters);
+    if(!nativeCommandList)
+        return false;
+
+    nativeCommandList->open(desc.importedStateSeed);
+    bool recorded = nativeCommandList->hasCommandBuffer();
+    const GpuTaskRecordContext context{
+        .graph = compiledGraph,
+        .task = desc.nativeTask,
+        .packet = desc.packet,
+        .queue = packet.queue,
+    };
+    const GpuCompiledBarrier* const prologueBarriers = compiledGraph.taskPrologueBarriers(desc.nativeTask);
+    if(compiledNativeTask->prologueBarrierCount > 0u && !prologueBarriers)
+        recorded = false;
+    for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledNativeTask->prologueBarrierCount; ++barrierIndex)
+        recorded = graph.applyCompiledBarrier(prologueBarriers[barrierIndex], *nativeCommandList);
+    if(recorded)
+        nativeCommandList->commitBarriers();
+    nativeCommandList->beginMarker(nativeTask.markerLabel);
+    if(recorded)
+        recorded = graph.recordTask(desc.nativeTask, *nativeCommandList, context);
+    nativeCommandList->endMarker();
+    const GpuCompiledBarrier* const epilogueBarriers = compiledGraph.taskEpilogueBarriers(desc.nativeTask);
+    if(compiledNativeTask->epilogueBarrierCount > 0u && !epilogueBarriers)
+        recorded = false;
+    for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledNativeTask->epilogueBarrierCount; ++barrierIndex)
+        recorded = graph.applyCompiledBarrier(epilogueBarriers[barrierIndex], *nativeCommandList);
+    if(recorded)
+        nativeCommandList->commitBarriers();
+    nativeCommandList->close(packetStateSeed);
+    if(!recorded || !nativeCommandList->hasCommandBuffer() || !packetStateSeed->valid())
+        return false;
+
+    GpuRecordedPacket recordedPacket;
+    recordedPacket.packet = desc.packet;
+    recordedPacket.commandListCount = static_cast<u8>(desc.importedCommandListCount + 1u);
+    for(usize commandListIndex = 0u; commandListIndex < desc.importedCommandListCount; ++commandListIndex)
+        recordedPacket.commandLists[commandListIndex] = desc.importedCommandLists[commandListIndex];
+    recordedPacket.commandLists[desc.importedCommandListCount] = nativeCommandList.get();
+    recordedPacket.ownedCommandLists[desc.importedCommandListCount] = Move(nativeCommandList);
     outRecordedGraph.m_packets.push_back(Move(recordedPacket));
     return true;
 }

@@ -29,9 +29,9 @@ struct GpuRecordedPacket{
     static constexpr usize s_MaxCommandLists = 12u;
 
     GpuSubmissionPacketId packet;
-    // Native recording owns its one newly-created list. Imported packets borrow renderer-owned lists that remain
-    // alive through submission, allowing a graph packet to take over established multi-list transport incrementally.
-    CommandListHandle ownedCommandList;
+    // Native recording owns its newly-created lists. Imported packets borrow renderer-owned lists that remain alive
+    // through submission, allowing a graph packet to take over established multi-list transport incrementally.
+    CommandListHandle ownedCommandLists[s_MaxCommandLists];
     CommandList* commandLists[s_MaxCommandLists] = {};
     u8 commandListCount = 0u;
 };
@@ -122,6 +122,18 @@ struct GpuImportedPacketRecordDesc{
 };
 
 
+// One explicit merged packet may retain an imported metadata-only prefix while moving its final task into native
+// graph recording.  The imported lists must already be recorded in execution order and export the exact state from
+// which the native suffix begins.  Both tasks accept or discard together because they share one queue submission.
+struct GpuImportedPacketNativeSuffixRecordDesc{
+    GpuSubmissionPacketId packet;
+    GpuTaskId nativeTask;
+    CommandList* const* importedCommandLists = nullptr;
+    usize importedCommandListCount = 0u;
+    const CommandListResourceStateHandoff* importedStateSeed = nullptr;
+};
+
+
 class GpuNativePacketRecorder final : NoCopy{
 public:
     explicit GpuNativePacketRecorder(Device& device)
@@ -140,6 +152,12 @@ public:
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuImportedPacketRecordDesc& desc,
+        GpuRecordedGraph& outRecordedGraph
+    )const;
+    [[nodiscard]] bool recordImportedPacketNativeSuffix(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuImportedPacketNativeSuffixRecordDesc& desc,
         GpuRecordedGraph& outRecordedGraph
     )const;
 

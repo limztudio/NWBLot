@@ -21,9 +21,8 @@ class GpuTaskGraph;
 class GpuTaskGraphCompiler;
 
 
-// Tasks describe semantic work.  Packets are compiler-generated native-recording and submission units.  The first
-// production milestone intentionally creates one packet per task; packet merging arrives after this path owns
-// lifecycle and dependency handling.
+// Tasks describe semantic work. Packets are compiler-generated native-recording and submission units; a packet
+// contains one or more explicitly compatible tasks.
 struct GpuSubmissionPacket{
     GpuPhysicalQueueId queue;
     u32 taskOffset = 0u;

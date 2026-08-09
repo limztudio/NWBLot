@@ -121,6 +121,37 @@ struct LaggedLightingHistoryCopyTask{
 };
 
 
+// The first native body in the temporary graphics-prefix packet.  Its imported predecessor still records the
+// existing setup/G-buffer bridge, while this task owns the final normalization list and its compiler barriers.
+struct PostGbufferNormalizeGraphTask{
+    struct Payload{
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Optional<Core::GpuTimingMeasure>* asyncPrefixTiming = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        bool shadowVisibilityRunsOnCompute = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.raytracingSystem || !payload.targets || !payload.timingTicket)
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        payload.raytracingSystem->normalizePostGbufferPacketResources(commandList, *payload.targets);
+        if(payload.shadowVisibilityRunsOnCompute && payload.asyncPrefixTiming && *payload.asyncPrefixTiming){
+            (*payload.asyncPrefixTiming)->finishTiming(commandList);
+            payload.asyncPrefixTiming->reset();
+        }
+        return true;
+    }
+};
+
+
 // AVBOIT remains explicitly staged because its raster/compute alternation is a real dependency chain.  The graph
 // owns those packets now; manual state handoffs only seed native recording until automatic graph barriers arrive.
 static void RestoreAvboitGbufferInputs(Core::CommandList& commandList, DeferredFrameTargets& targets){
@@ -444,11 +475,15 @@ struct DeferredPresentGraphTask{
 
 void RendererSystem::buildGraphicsPrefixTaskGraph(
     const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
-    const DeferredFrameTargets& deferredTargets
+    DeferredFrameTargets& deferredTargets,
+    const bool shadowVisibilityRunsOnCompute,
+    Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
+    Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace __hidden_renderer_task_graph;
 
     m_graphicsPrefixTaskGraphValid = false;
+    m_graphicsPrefixBridgeTask = {};
     m_graphicsPrefixTask = {};
     m_graphicsPrefixTaskGraph.reset();
     m_graphicsPrefixTaskGraphAnalysis.reset();
@@ -498,28 +533,65 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
         return;
     }
 
-    const Core::GpuTaskResourceUse resourceUses[] = {
-        WriteUse(meshViewBuffer, Core::ResourceStates::UnorderedAccess),
+    // This imported task declares the final states of its four retained command lists.  The native suffix then
+    // receives its barrier plan from those declarations while both remain one ordered Graphics submission.
+    const Core::GpuTaskResourceUse bridgeResourceUses[] = {
+        WriteUse(meshViewBuffer, Core::ResourceStates::ConstantBuffer),
         WriteUse(albedo, Core::ResourceStates::RenderTarget),
         WriteUse(normal, Core::ResourceStates::RenderTarget),
         WriteUse(worldPosition, Core::ResourceStates::RenderTarget),
         WriteUse(depth, Core::ResourceStates::DepthWrite),
     };
-    Core::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = Core::GpuTaskCostHint::Medium;
-    scheduling.forceSubmissionBoundary = true;
-    scheduling.allowPacketMerge = false;
-    Core::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("render.graphics_prefix"))
-        .setMarkerLabel("Graphics Prefix")
+    Core::GpuTaskSchedulingHint bridgeScheduling;
+    bridgeScheduling.cost = Core::GpuTaskCostHint::Medium;
+    bridgeScheduling.forceSubmissionBoundary = false;
+    bridgeScheduling.allowPacketMerge = true;
+    Core::GpuTaskDesc bridgeDesc;
+    bridgeDesc
+        .setIdentity(Name("render.graphics_prefix.bridge"))
+        .setMarkerLabel("Graphics Prefix Bridge")
         .setQueue(GraphicsQueueRequest())
-        .setScheduling(scheduling)
-        .setResourceUses(resourceUses, LengthOf(resourceUses))
+        .setScheduling(bridgeScheduling)
+        .setResourceUses(bridgeResourceUses, LengthOf(bridgeResourceUses))
     ;
-    m_graphicsPrefixTask = m_graphicsPrefixTaskGraph.addTask(desc);
+    m_graphicsPrefixBridgeTask = m_graphicsPrefixTaskGraph.addTask(bridgeDesc);
+    if(!m_graphicsPrefixBridgeTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graphics-prefix bridge task"));
+        return;
+    }
+
+    const Core::GpuTaskResourceUse normalizeResourceUses[] = {
+        ReadUse(meshViewBuffer, Core::ResourceStates::ConstantBuffer),
+        ReadUse(normal, Core::ResourceStates::ShaderResource),
+        ReadUse(worldPosition, Core::ResourceStates::ShaderResource),
+        ReadUse(depth, Core::ResourceStates::ShaderResource),
+    };
+    Core::GpuTaskSchedulingHint normalizeScheduling;
+    normalizeScheduling.cost = Core::GpuTaskCostHint::Tiny;
+    normalizeScheduling.forceSubmissionBoundary = false;
+    normalizeScheduling.allowPacketMerge = true;
+    normalizeScheduling.mergeWithPrevious = true;
+    Core::GpuTaskDesc normalizeDesc;
+    normalizeDesc
+        .setIdentity(Name("render.graphics_prefix.normalize"))
+        .setMarkerLabel("Post-G-Buffer Normalize")
+        .setQueue(GraphicsQueueRequest())
+        .setScheduling(normalizeScheduling)
+        .setDependencies(&m_graphicsPrefixBridgeTask, 1u)
+        .setResourceUses(normalizeResourceUses, LengthOf(normalizeResourceUses))
+    ;
+    m_graphicsPrefixTask = m_graphicsPrefixTaskGraph.addTask<PostGbufferNormalizeGraphTask>(
+        normalizeDesc,
+        PostGbufferNormalizeGraphTask::Payload{
+            .raytracingSystem = &m_raytracingSystem,
+            .targets = &deferredTargets,
+            .asyncPrefixTiming = &asyncPrefixTiming,
+            .timingTicket = &timingTicket,
+            .shadowVisibilityRunsOnCompute = shadowVisibilityRunsOnCompute,
+        }
+    );
     if(!m_graphicsPrefixTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graphics-prefix graph task"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare post-G-buffer normalization task"));
         return;
     }
 

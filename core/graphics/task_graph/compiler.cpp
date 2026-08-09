@@ -902,8 +902,9 @@ bool GpuTaskGraphCompiler::compile(
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex)
         outCompiledGraph.m_queueTopology.push_back(topology.queues[queueIndex]);
 
-    // The initial lowering intentionally exposes one exact acceptance and synchronization point per semantic task.
-    // Later packet merging must preserve these dependency/frontier semantics rather than rebuilding renderer packets.
+    // Tasks retain one exact acceptance and synchronization point by default.  An explicitly opted-in successor may
+    // share its immediately preceding compatible packet, preserving task order while retaining one submission for a
+    // temporary imported/native recording bridge.
     for(const GpuTaskId taskID : outAnalysis.topologicalOrder()){
         const GpuTaskQueueAssignment* const assignment = outAssignments.find(taskID);
         if(!assignment || !assignment->queue.valid()){
@@ -911,17 +912,50 @@ bool GpuTaskGraphCompiler::compile(
             return false;
         }
 
-        const GpuSubmissionPacketId packetID{
-            static_cast<u32>(outCompiledGraph.m_packets.size()),
-            outCompiledGraph.m_generation,
-        };
-        const u32 taskOffset = static_cast<u32>(outCompiledGraph.m_packetTasks.size());
+        const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
+        GpuSubmissionPacketId packetID;
+        const bool mergeRequested =
+            task.scheduling.mergeWithPrevious
+            && task.scheduling.allowPacketMerge
+            && !task.scheduling.forceSubmissionBoundary
+            && !outCompiledGraph.m_packets.empty()
+        ;
+        if(mergeRequested){
+            GpuSubmissionPacket& precedingPacket = outCompiledGraph.m_packets.back();
+            bool precedingPacketAllowsMerge = precedingPacket.queue == assignment->queue;
+            for(u32 precedingTaskIndex = 0u;
+                precedingPacketAllowsMerge && precedingTaskIndex < precedingPacket.taskCount;
+                ++precedingTaskIndex
+            ){
+                const GpuTaskId precedingTask = outCompiledGraph.m_packetTasks[
+                    precedingPacket.taskOffset + precedingTaskIndex
+                ];
+                const GpuTaskGraphTaskView preceding = graph.taskAt(precedingTask.index);
+                precedingPacketAllowsMerge = preceding.scheduling.allowPacketMerge
+                    && !preceding.scheduling.forceSubmissionBoundary
+                ;
+            }
+            if(precedingPacketAllowsMerge){
+                packetID = GpuSubmissionPacketId{
+                    static_cast<u32>(outCompiledGraph.m_packets.size() - 1u),
+                    outCompiledGraph.m_generation,
+                };
+                ++precedingPacket.taskCount;
+            }
+        }
+
+        if(!packetID.valid()){
+            packetID = GpuSubmissionPacketId{
+                static_cast<u32>(outCompiledGraph.m_packets.size()),
+                outCompiledGraph.m_generation,
+            };
+            outCompiledGraph.m_packets.push_back(GpuSubmissionPacket{
+                .queue = assignment->queue,
+                .taskOffset = static_cast<u32>(outCompiledGraph.m_packetTasks.size()),
+                .taskCount = 1u,
+            });
+        }
         outCompiledGraph.m_packetTasks.push_back(taskID);
-        outCompiledGraph.m_packets.push_back(GpuSubmissionPacket{
-            .queue = assignment->queue,
-            .taskOffset = taskOffset,
-            .taskCount = 1u,
-        });
         outCompiledGraph.m_tasks.push_back(GpuCompiledTask{
             .task = taskID,
             .queue = assignment->queue,
@@ -1042,14 +1076,14 @@ bool GpuTaskGraphCompiler::compile(
 
     for(usize consumerPacketIndex = 0u; consumerPacketIndex < outCompiledGraph.m_packets.size(); ++consumerPacketIndex){
         GpuSubmissionPacket& consumerPacket = outCompiledGraph.m_packets[consumerPacketIndex];
-        const GpuTaskId consumerTask = outCompiledGraph.m_packetTasks[consumerPacket.taskOffset];
-        const GpuCompiledTask* const compiledConsumerTask = outCompiledGraph.findTask(consumerTask);
-        if(!compiledConsumerTask){
-            outCompiledGraph.reset();
-            return false;
-        }
+        const GpuSubmissionPacketId consumerPacketID{
+            static_cast<u32>(consumerPacketIndex),
+            outCompiledGraph.m_generation,
+        };
         consumerPacket.dependencyOffset = static_cast<u32>(outCompiledGraph.m_packetDependencies.size());
         const auto appendPacketDependency = [&](const GpuSubmissionPacketId producerPacket){
+            if(producerPacket == consumerPacketID)
+                return true;
             if(
                 !producerPacket.valid()
                 || producerPacket.index >= consumerPacketIndex
@@ -1067,56 +1101,62 @@ bool GpuTaskGraphCompiler::compile(
 
             outCompiledGraph.m_packetDependencies.push_back(GpuPacketDependency{
                 .producer = producerPacket,
-                .consumer = GpuSubmissionPacketId{
-                    static_cast<u32>(consumerPacketIndex),
-                    outCompiledGraph.m_generation,
-                },
+                .consumer = consumerPacketID,
             });
             ++consumerPacket.dependencyCount;
             return true;
         };
-        for(const GpuTaskDependencyEdge& edge : outAnalysis.edges()){
-            if(edge.consumer != consumerTask)
-                continue;
-
-            const GpuSubmissionPacketId producerPacket = outCompiledGraph.packetForTask(edge.producer);
-            if(!appendPacketDependency(producerPacket)){
-                outCompiledGraph.reset();
-                return false;
-            }
-        }
-
-        const GpuPacketStateSeed* const stateSeeds = outCompiledGraph.taskPrologueStateSeeds(consumerTask);
-        if(compiledConsumerTask->prologueStateSeedCount != 0u && !stateSeeds){
-            outCompiledGraph.reset();
-            return false;
-        }
-        for(u32 stateSeedIndex = 0u; stateSeedIndex < compiledConsumerTask->prologueStateSeedCount; ++stateSeedIndex){
-            if(!appendPacketDependency(stateSeeds[stateSeedIndex].sourcePacket)){
-                outCompiledGraph.reset();
-                return false;
-            }
-        }
-
         consumerPacket.externalDependencyOffset = static_cast<u32>(outCompiledGraph.m_packetExternalDependencies.size());
-        for(const GpuTaskExternalDependencyEdge& edge : outAnalysis.externalDependencies()){
-            if(edge.consumer != consumerTask)
-                continue;
+        for(u32 taskIndex = 0u; taskIndex < consumerPacket.taskCount; ++taskIndex){
+            const GpuTaskId consumerTask = outCompiledGraph.m_packetTasks[consumerPacket.taskOffset + taskIndex];
+            const GpuCompiledTask* const compiledConsumerTask = outCompiledGraph.findTask(consumerTask);
+            if(!compiledConsumerTask){
+                outCompiledGraph.reset();
+                return false;
+            }
 
-            bool alreadyAdded = false;
-            for(u32 dependencyIndex = 0u; dependencyIndex < consumerPacket.externalDependencyCount; ++dependencyIndex){
-                if(outCompiledGraph.m_packetExternalDependencies[
-                    consumerPacket.externalDependencyOffset + dependencyIndex
-                ] == edge.completion){
-                    alreadyAdded = true;
-                    break;
+            for(const GpuTaskDependencyEdge& edge : outAnalysis.edges()){
+                if(edge.consumer != consumerTask)
+                    continue;
+
+                const GpuSubmissionPacketId producerPacket = outCompiledGraph.packetForTask(edge.producer);
+                if(!appendPacketDependency(producerPacket)){
+                    outCompiledGraph.reset();
+                    return false;
                 }
             }
-            if(alreadyAdded)
-                continue;
 
-            outCompiledGraph.m_packetExternalDependencies.push_back(edge.completion);
-            ++consumerPacket.externalDependencyCount;
+            const GpuPacketStateSeed* const stateSeeds = outCompiledGraph.taskPrologueStateSeeds(consumerTask);
+            if(compiledConsumerTask->prologueStateSeedCount != 0u && !stateSeeds){
+                outCompiledGraph.reset();
+                return false;
+            }
+            for(u32 stateSeedIndex = 0u; stateSeedIndex < compiledConsumerTask->prologueStateSeedCount; ++stateSeedIndex){
+                if(!appendPacketDependency(stateSeeds[stateSeedIndex].sourcePacket)){
+                    outCompiledGraph.reset();
+                    return false;
+                }
+            }
+
+            for(const GpuTaskExternalDependencyEdge& edge : outAnalysis.externalDependencies()){
+                if(edge.consumer != consumerTask)
+                    continue;
+
+                bool alreadyAdded = false;
+                for(u32 dependencyIndex = 0u; dependencyIndex < consumerPacket.externalDependencyCount; ++dependencyIndex){
+                    if(outCompiledGraph.m_packetExternalDependencies[
+                        consumerPacket.externalDependencyOffset + dependencyIndex
+                    ] == edge.completion){
+                        alreadyAdded = true;
+                        break;
+                    }
+                }
+                if(alreadyAdded)
+                    continue;
+
+                outCompiledGraph.m_packetExternalDependencies.push_back(edge.completion);
+                ++consumerPacket.externalDependencyCount;
+            }
         }
     }
 

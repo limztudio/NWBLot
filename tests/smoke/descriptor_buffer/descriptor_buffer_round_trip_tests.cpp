@@ -26,6 +26,8 @@
 #include <core/alloc/job.h>
 #include <core/graphics/module.h>
 #include <core/graphics/api.h>
+#include <core/graphics/task_graph/compiler.h>
+#include <core/graphics/task_graph/packet_runtime.h>
 #include <core/perf/timing.h>
 #include <impl/assets/graphics/avboit/constants.h>
 #include <impl/assets/graphics/bindless/runtime_abi.h>
@@ -243,6 +245,192 @@ TEST_F(DescriptorBufferRoundTripTest, FrameSubmissionSuspensionFreezesTheFrameCl
 
     graphics.requestDeviceRecreation();
     EXPECT_FALSE(graphics.runFrame());
+}
+
+
+struct ImportedPacketNativeSuffixTask{
+    struct Payload{
+        Buffer* buffer = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.buffer)
+            return false;
+        const bool ready = commandList.getBufferState(payload.buffer) == ResourceStates::ShaderResource;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
+TEST_F(DescriptorBufferRoundTripTest, MergedImportedPacketRecordsNativeSuffixAndExportsFinalState){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId resource = graph.importBuffer(
+        buffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/merged_packet_buffer"))
+            .setMarkerLabel("Merged Packet Buffer")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    ASSERT_TRUE(resource.valid());
+
+    const GpuTaskResourceUse bridgeUses[] = {
+        GpuTaskResourceUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = ResourceStates::CopyDest,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    GpuTaskSchedulingHint bridgeScheduling;
+    bridgeScheduling.allowPacketMerge = true;
+    GpuTaskDesc bridgeDesc;
+    bridgeDesc
+        .setIdentity(Name("tests/descriptor_buffer/merged_packet_bridge"))
+        .setMarkerLabel("Merged Packet Bridge")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(bridgeScheduling)
+        .setResourceUses(bridgeUses, LengthOf(bridgeUses))
+    ;
+    const GpuTaskId bridgeTask = graph.addTask(bridgeDesc);
+    ASSERT_TRUE(bridgeTask.valid());
+
+    const GpuTaskResourceUse suffixUses[] = {
+        GpuTaskResourceUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskSchedulingHint suffixScheduling;
+    suffixScheduling.allowPacketMerge = true;
+    suffixScheduling.mergeWithPrevious = true;
+    GpuTaskDesc suffixDesc;
+    suffixDesc
+        .setIdentity(Name("tests/descriptor_buffer/merged_packet_suffix"))
+        .setMarkerLabel("Merged Packet Suffix")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(suffixScheduling)
+        .setDependencies(&bridgeTask, 1u)
+        .setResourceUses(suffixUses, LengthOf(suffixUses))
+    ;
+    bool nativeSuffixRecorded = false;
+    const GpuTaskId suffixTask = graph.addTask<ImportedPacketNativeSuffixTask>(
+        suffixDesc,
+        ImportedPacketNativeSuffixTask::Payload{
+            .buffer = buffer.get(),
+            .recorded = &nativeSuffixRecorded,
+        }
+    );
+    ASSERT_TRUE(suffixTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = 0u,
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/merged_packet_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(suffixTask);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(packet, compiledGraph.packetForTask(bridgeTask));
+    const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
+    ASSERT_EQ(packetPlan.taskCount, 2u);
+    ASSERT_NE(compiledGraph.packetTasks(packet), nullptr);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[0u], bridgeTask);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[1u], suffixTask);
+    EXPECT_FALSE(graph.taskAt(bridgeTask.index).hasPayload);
+    EXPECT_TRUE(graph.taskAt(suffixTask.index).hasPayload);
+    ASSERT_NE(compiledGraph.findTask(suffixTask), nullptr);
+
+    auto importedCommandList = device.createCommandList();
+    ASSERT_NE(importedCommandList.get(), nullptr);
+    CommandListResourceStateHandoff importedState(DescriptorBufferRoundTripTest::arena());
+    importedCommandList->open();
+    importedCommandList->setBufferState(buffer.get(), ResourceStates::CopyDest);
+    importedCommandList->close(&importedState);
+    ASSERT_TRUE(importedState.valid());
+    ASSERT_TRUE(importedCommandList->hasCommandBuffer());
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    CommandList* const importedCommandLists[] = { importedCommandList.get() };
+    const GpuImportedPacketNativeSuffixRecordDesc recordDesc{
+        .packet = packet,
+        .nativeTask = suffixTask,
+        .importedCommandLists = importedCommandLists,
+        .importedCommandListCount = LengthOf(importedCommandLists),
+        .importedStateSeed = &importedState,
+    };
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordImportedPacketNativeSuffix(graph, compiledGraph, recordDesc, recordedGraph));
+    ASSERT_TRUE(nativeSuffixRecorded);
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    ASSERT_NE(finalState, nullptr);
+
+    auto stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getBufferState(buffer.get()), ResourceStates::ShaderResource);
+    stateProbe->close();
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        packet,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(packet).valid());
+    EXPECT_TRUE(device.waitForIdle());
 }
 
 

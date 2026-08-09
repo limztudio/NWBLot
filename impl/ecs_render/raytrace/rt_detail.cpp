@@ -356,13 +356,8 @@ void RendererRayTracingSystem::transitionSwShadowTraversalResources(Core::Comman
 }
 
 void RendererRayTracingSystem::normalizePostGbufferPacketResources(Core::CommandList& commandList, DeferredFrameTargets& targets){
-    // The post-G-buffer packets record from the same handoff. Move every input they can share to its common read
-    // state here, before any worker records a transition from the G-buffer/prepare producer's state. This
-    // keeps the ordered Graphics submission free of duplicate stale-layout barriers while still leaving each packet's
-    // writable output resources exclusively owned by that packet.
-    commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+    // The native graph task now declares the G-buffer read transitions and Mesh View's retained constant-buffer
+    // state.  Keep only the shared dynamic resources that have not yet moved out of this recording bridge.
     commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
     commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
     commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
@@ -381,7 +376,6 @@ void RendererRayTracingSystem::normalizePostGbufferPacketResources(Core::Command
         commandList.setBufferState(rayTracingState().m_shadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
     }
     commandList.setAccelStructState(rayTracingState().m_tlas.get(), Core::ResourceStates::AccelStructRead);
-    commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
     commandList.setBufferState(rayTracingState().m_causticEmissionTargetBuffer.get(), Core::ResourceStates::ShaderResource);
 }
 

@@ -1240,6 +1240,59 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
 }
 
 
+TEST(GpuTaskGraph, MergesExplicitCompatibleSuccessorIntoOnePacket){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuTaskSchedulingHint prefixScheduling;
+    prefixScheduling.allowPacketMerge = true;
+    Graphics::GpuTaskDesc prefixDesc;
+    prefixDesc
+        .setIdentity(Name("tests/task_graph/merged_prefix"))
+        .setMarkerLabel("Merged Prefix")
+        .setScheduling(prefixScheduling)
+    ;
+    const Graphics::GpuTaskId prefix = graph.addTask(prefixDesc);
+    ASSERT_TRUE(prefix.valid());
+
+    Graphics::GpuTaskSchedulingHint suffixScheduling;
+    suffixScheduling.allowPacketMerge = true;
+    suffixScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskDesc suffixDesc;
+    suffixDesc
+        .setIdentity(Name("tests/task_graph/merged_suffix"))
+        .setMarkerLabel("Merged Suffix")
+        .setScheduling(suffixScheduling)
+        .setDependencies(&prefix, 1u)
+    ;
+    const Graphics::GpuTaskId suffix = graph.addTask(suffixDesc);
+    ASSERT_TRUE(suffix.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(compiledGraph.validFor(graph));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+
+    const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
+    const Graphics::GpuSubmissionPacketId suffixPacket = compiledGraph.packetForTask(suffix);
+    ASSERT_TRUE(prefixPacket.valid());
+    EXPECT_EQ(prefixPacket, suffixPacket);
+    const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(prefixPacket);
+    ASSERT_EQ(packet.taskCount, 2u);
+    ASSERT_NE(compiledGraph.packetTasks(prefixPacket), nullptr);
+    EXPECT_EQ(compiledGraph.packetTasks(prefixPacket)[0u], prefix);
+    EXPECT_EQ(compiledGraph.packetTasks(prefixPacket)[1u], suffix);
+    EXPECT_EQ(packet.dependencyCount, 0u);
+}
+
+
 TEST(GpuTaskGraph, PlansPacketBoundaryTransitionsAndUavDependencies){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

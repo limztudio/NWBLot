@@ -18,6 +18,182 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ECSRenderDetail{
+
+
+// The opaque G-buffer keeps its existing recording body, but now runs as the first native suffix task after the
+// imported setup/clear bridge. Its resource barriers and final state are therefore part of the graph packet.
+struct GbufferGraphTask{
+    struct Payload{
+        RendererSystem* renderer = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        const CsgFrameState* csgFrameState = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        bool hasOpaqueCsgFrameWork = false;
+        bool frameSetupReady = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.renderer || !payload.targets || !payload.csgFrameState || !payload.timingTicket)
+            return false;
+
+        RendererSystem& renderer = *payload.renderer;
+        DeferredFrameTargets& deferredTargets = *payload.targets;
+        const CsgFrameState& csgFrameState = *payload.csgFrameState;
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+
+        MaterialPassDrawItemPartitions opaqueDrawItems{ scratchArena };
+        InstanceGpuDataVector instanceData{ scratchArena };
+        CsgFrameGpuData csgFrameData{ scratchArena };
+#if defined(NWB_DEBUG)
+        ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{ scratchArena };
+#endif
+        MaterialTypedByteDataVector materialTypedBytes{ scratchArena };
+
+        Core::ViewportState deferredViewportState;
+        deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
+
+        if(payload.frameSetupReady){
+            renderer.m_materialSystem.gatherMaterialPassDrawItems(
+                deferredTargets.framebuffer.get(),
+                MaterialPipelinePass::Opaque,
+                false,
+                csgFrameState,
+                opaqueDrawItems,
+                instanceData,
+                csgFrameData,
+#if defined(NWB_DEBUG)
+                materialTypedRanges,
+#endif
+                materialTypedBytes,
+                RendererResourceLookupMode::PreparedOnly
+            );
+        }
+
+        const Core::Rect opaqueCsgClearRect = csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height);
+        if(payload.hasOpaqueCsgFrameWork)
+            renderer.m_deferredSystem.clearCsgIntervalTargets(commandList, deferredTargets, opaqueCsgClearRect);
+
+        const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
+        const bool deferredResourcesReady =
+            hasDeferredDrawItems
+            && renderer.m_materialSystem.materialPassDrawBuffersReady(instanceData, materialTypedBytes)
+        ;
+        const bool regularDrawResourcesReady =
+            deferredResourcesReady
+            && renderer.m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.regular)
+        ;
+        const bool csgResourcesReady =
+            deferredResourcesReady
+            && (opaqueDrawItems.csg.empty() || renderer.m_csgSystem.csgFrameBuffersReady(csgFrameData))
+        ;
+        const bool csgDrawResourcesReady =
+            csgResourcesReady
+            && (opaqueDrawItems.csg.empty() || renderer.m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csg))
+        ;
+        const bool csgReceiverSurfaceDrawResourcesReady =
+            csgResourcesReady
+            && (opaqueDrawItems.csgReceiverSurface.empty() || renderer.m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
+        ;
+        const bool deferredUploadReady =
+            deferredResourcesReady
+            && renderer.m_materialSystem.uploadMaterialPassDrawBuffers(
+                commandList,
+                instanceData,
+#if defined(NWB_DEBUG)
+                materialTypedRanges,
+#endif
+                materialTypedBytes
+            )
+        ;
+        if(deferredUploadReady){
+            const bool csgUploadReady =
+                csgResourcesReady
+                && (opaqueDrawItems.csg.empty() || renderer.m_csgSystem.uploadCsgFrameBuffers(commandList, csgFrameData))
+            ;
+            const bool csgSampleStateReady =
+                csgUploadReady
+                && (!csgFrameData.hasWork() || renderer.m_csgSystem.uploadCsgIntervalSampleState(commandList, deferredTargets, csgFrameData))
+            ;
+            if(csgSampleStateReady && csgFrameData.hasWork())
+                renderer.m_csgSystem.dispatchCsgIntervalPeels(commandList, deferredTargets, csgFrameData);
+            const MaterialPassDrawContext opaqueDrawContext{
+                commandList,
+                deferredTargets.framebuffer.get(),
+                MaterialPipelinePass::Opaque,
+                nullptr,
+                deferredViewportState
+            };
+            if(regularDrawResourcesReady && !opaqueDrawItems.regular.empty()){
+                Core::GpuTimingMeasure timing(
+                    renderer.m_graphics.gpuTiming(),
+                    RendererGpuTimingScope::s_OpaqueRegular,
+                    renderer.m_graphics.getDevice(),
+                    commandList
+                );
+                renderer.m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.regular);
+            }
+
+            Core::ViewportState csgIntervalViewportState;
+            csgIntervalViewportState
+                .addViewport(deferredTargets.framebuffer->getFramebufferInfo().getViewport())
+                .addScissorRect(csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height))
+            ;
+            const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
+                commandList,
+                deferredTargets.framebuffer.get(),
+                MaterialPipelinePass::CsgReceiverSurface,
+                nullptr,
+                csgIntervalViewportState
+            };
+            if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
+                Core::GpuTimingMeasure timing(
+                    renderer.m_graphics.gpuTiming(),
+                    RendererGpuTimingScope::s_OpaqueCsgReceiverSurface,
+                    renderer.m_graphics.getDevice(),
+                    commandList
+                );
+                renderer.m_materialSystem.renderMaterialPassDrawItems(
+                    csgReceiverSurfaceDrawContext,
+                    opaqueDrawItems.csgReceiverSurface
+                );
+            }
+            if(csgSampleStateReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)
+                renderer.m_csgSystem.dispatchCsgReceiverSpanBuild(commandList, deferredTargets, csgFrameData);
+            if(csgSampleStateReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)
+                renderer.m_csgSystem.dispatchCsgIntervalCombine(commandList, deferredTargets, csgFrameData);
+            if(csgSampleStateReady && csgDrawResourcesReady){
+                if(!opaqueDrawItems.csg.empty()){
+                    Core::GpuTimingMeasure timing(
+                        renderer.m_graphics.gpuTiming(),
+                        RendererGpuTimingScope::s_OpaqueCsg,
+                        renderer.m_graphics.getDevice(),
+                        commandList
+                    );
+                    renderer.m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
+                }
+                if(csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)
+                    renderer.m_csgSystem.renderCsgIntervalCaps(commandList, deferredTargets, csgFrameData);
+            }
+        }
+        commandList.endRenderPass();
+        return true;
+    }
+};
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_renderer_task_graph{
 
 
@@ -476,6 +652,9 @@ struct DeferredPresentGraphTask{
 void RendererSystem::buildGraphicsPrefixTaskGraph(
     const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
     DeferredFrameTargets& deferredTargets,
+    const CsgFrameState& csgFrameState,
+    const bool hasOpaqueCsgFrameWork,
+    const bool frameSetupReady,
     const bool shadowVisibilityRunsOnCompute,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
     Core::GpuTimingSubmissionTicket& timingTicket
@@ -484,6 +663,7 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
 
     m_graphicsPrefixTaskGraphValid = false;
     m_graphicsPrefixBridgeTask = {};
+    m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixTask = {};
     m_graphicsPrefixTaskGraph.reset();
     m_graphicsPrefixTaskGraphAnalysis.reset();
@@ -533,14 +713,14 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
         return;
     }
 
-    // This imported task declares the final states of its four retained command lists.  The native suffix then
-    // receives its barrier plan from those declarations while both remain one ordered Graphics submission.
+    // This imported task declares the final states of its three retained setup/clear lists. The native G-buffer and
+    // normalization suffixes receive their barrier plans from these declarations in one Graphics submission.
     const Core::GpuTaskResourceUse bridgeResourceUses[] = {
         WriteUse(meshViewBuffer, Core::ResourceStates::ConstantBuffer),
-        WriteUse(albedo, Core::ResourceStates::RenderTarget),
-        WriteUse(normal, Core::ResourceStates::RenderTarget),
-        WriteUse(worldPosition, Core::ResourceStates::RenderTarget),
-        WriteUse(depth, Core::ResourceStates::DepthWrite),
+        WriteUse(albedo, Core::ResourceStates::CopyDest),
+        WriteUse(normal, Core::ResourceStates::CopyDest),
+        WriteUse(worldPosition, Core::ResourceStates::CopyDest),
+        WriteUse(depth, Core::ResourceStates::CopyDest),
     };
     Core::GpuTaskSchedulingHint bridgeScheduling;
     bridgeScheduling.cost = Core::GpuTaskCostHint::Medium;
@@ -557,6 +737,43 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
     m_graphicsPrefixBridgeTask = m_graphicsPrefixTaskGraph.addTask(bridgeDesc);
     if(!m_graphicsPrefixBridgeTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graphics-prefix bridge task"));
+        return;
+    }
+
+    const Core::GpuTaskResourceUse gbufferResourceUses[] = {
+        ReadUse(meshViewBuffer, Core::ResourceStates::ConstantBuffer),
+        WriteUse(albedo, Core::ResourceStates::RenderTarget),
+        WriteUse(normal, Core::ResourceStates::RenderTarget),
+        WriteUse(worldPosition, Core::ResourceStates::RenderTarget),
+        WriteUse(depth, Core::ResourceStates::DepthWrite),
+    };
+    Core::GpuTaskSchedulingHint gbufferScheduling;
+    gbufferScheduling.cost = Core::GpuTaskCostHint::Medium;
+    gbufferScheduling.forceSubmissionBoundary = false;
+    gbufferScheduling.allowPacketMerge = true;
+    gbufferScheduling.mergeWithPrevious = true;
+    Core::GpuTaskDesc gbufferDesc;
+    gbufferDesc
+        .setIdentity(Name("render.graphics_prefix.gbuffer"))
+        .setMarkerLabel("Opaque G-Buffer")
+        .setQueue(GraphicsQueueRequest())
+        .setScheduling(gbufferScheduling)
+        .setDependencies(&m_graphicsPrefixBridgeTask, 1u)
+        .setResourceUses(gbufferResourceUses, LengthOf(gbufferResourceUses))
+    ;
+    m_graphicsPrefixGbufferTask = m_graphicsPrefixTaskGraph.addTask<ECSRenderDetail::GbufferGraphTask>(
+        gbufferDesc,
+        ECSRenderDetail::GbufferGraphTask::Payload{
+            .renderer = this,
+            .targets = &deferredTargets,
+            .csgFrameState = &csgFrameState,
+            .timingTicket = &timingTicket,
+            .hasOpaqueCsgFrameWork = hasOpaqueCsgFrameWork,
+            .frameSetupReady = frameSetupReady,
+        }
+    );
+    if(!m_graphicsPrefixGbufferTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque G-buffer task"));
         return;
     }
 
@@ -577,7 +794,7 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
         .setMarkerLabel("Post-G-Buffer Normalize")
         .setQueue(GraphicsQueueRequest())
         .setScheduling(normalizeScheduling)
-        .setDependencies(&m_graphicsPrefixBridgeTask, 1u)
+        .setDependencies(&m_graphicsPrefixGbufferTask, 1u)
         .setResourceUses(normalizeResourceUses, LengthOf(normalizeResourceUses))
     ;
     m_graphicsPrefixTask = m_graphicsPrefixTaskGraph.addTask<PostGbufferNormalizeGraphTask>(

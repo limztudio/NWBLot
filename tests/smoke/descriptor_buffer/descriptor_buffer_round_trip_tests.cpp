@@ -252,6 +252,8 @@ struct ImportedPacketNativeSuffixTask{
     struct Payload{
         Buffer* buffer = nullptr;
         ResourceStates::Mask expectedState = ResourceStates::Unknown;
+        Texture* texture = nullptr;
+        ResourceStates::Mask expectedTextureState = ResourceStates::Unknown;
         bool* recorded = nullptr;
     };
 
@@ -263,7 +265,9 @@ struct ImportedPacketNativeSuffixTask{
         static_cast<void>(context);
         if(!payload.buffer)
             return false;
-        const bool ready = commandList.getBufferState(payload.buffer) == payload.expectedState;
+        bool ready = commandList.getBufferState(payload.buffer) == payload.expectedState;
+        if(payload.texture)
+            ready = ready && commandList.getTextureSubresourceState(payload.texture, 0u, 0u) == payload.expectedTextureState;
         if(payload.recorded)
             *payload.recorded = ready;
         return ready;
@@ -280,6 +284,15 @@ TEST_F(DescriptorBufferRoundTripTest, MergedImportedPacketRecordsNativeSuffixSeq
             .setInitialState(ResourceStates::Common)
     );
     ASSERT_NE(buffer.get(), nullptr);
+    auto texture = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInRenderTarget(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(texture.get(), nullptr);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId resource = graph.importBuffer(
@@ -290,10 +303,24 @@ TEST_F(DescriptorBufferRoundTripTest, MergedImportedPacketRecordsNativeSuffixSeq
             .setType(GpuGraphResourceType::Buffer)
     );
     ASSERT_TRUE(resource.valid());
+    const GpuGraphResourceId textureResource = graph.importTexture(
+        texture,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/merged_packet_texture"))
+            .setMarkerLabel("Merged Packet Texture")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(textureResource.valid());
 
     const GpuTaskResourceUse bridgeUses[] = {
         GpuTaskResourceUse{
             .resource = resource,
+            .range = {},
+            .requiredState = ResourceStates::CopyDest,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = textureResource,
             .range = {},
             .requiredState = ResourceStates::CopyDest,
             .access = GpuTaskResourceAccess::Write,
@@ -324,6 +351,12 @@ TEST_F(DescriptorBufferRoundTripTest, MergedImportedPacketRecordsNativeSuffixSeq
             .requiredState = ResourceStates::ShaderResource,
             .access = GpuTaskResourceAccess::Read,
         },
+        GpuTaskResourceUse{
+            .resource = textureResource,
+            .range = {},
+            .requiredState = ResourceStates::RenderTarget,
+            .access = GpuTaskResourceAccess::Write,
+        },
     };
     GpuTaskSchedulingHint suffixScheduling;
     suffixScheduling.allowPacketMerge = true;
@@ -348,6 +381,8 @@ TEST_F(DescriptorBufferRoundTripTest, MergedImportedPacketRecordsNativeSuffixSeq
         ImportedPacketNativeSuffixTask::Payload{
             .buffer = buffer.get(),
             .expectedState = ResourceStates::ShaderResource,
+            .texture = texture.get(),
+            .expectedTextureState = ResourceStates::RenderTarget,
             .recorded = &nativeSuffixRecorded,
         }
     );
@@ -359,6 +394,12 @@ TEST_F(DescriptorBufferRoundTripTest, MergedImportedPacketRecordsNativeSuffixSeq
             .range = {},
             .requiredState = ResourceStates::UnorderedAccess,
             .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = textureResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
         },
     };
     GpuTaskSchedulingHint finalSuffixScheduling;
@@ -384,6 +425,8 @@ TEST_F(DescriptorBufferRoundTripTest, MergedImportedPacketRecordsNativeSuffixSeq
         ImportedPacketNativeSuffixTask::Payload{
             .buffer = buffer.get(),
             .expectedState = ResourceStates::UnorderedAccess,
+            .texture = texture.get(),
+            .expectedTextureState = ResourceStates::ShaderResource,
             .recorded = &finalNativeSuffixRecorded,
         }
     );
@@ -433,6 +476,7 @@ TEST_F(DescriptorBufferRoundTripTest, MergedImportedPacketRecordsNativeSuffixSeq
     CommandListResourceStateHandoff importedState(DescriptorBufferRoundTripTest::arena());
     importedCommandList->open();
     importedCommandList->setBufferState(buffer.get(), ResourceStates::CopyDest);
+    importedCommandList->setTextureState(texture.get(), s_AllSubresources, ResourceStates::CopyDest);
     importedCommandList->close(&importedState);
     ASSERT_TRUE(importedState.valid());
     ASSERT_TRUE(importedCommandList->hasCommandBuffer());
@@ -458,6 +502,7 @@ TEST_F(DescriptorBufferRoundTripTest, MergedImportedPacketRecordsNativeSuffixSeq
     ASSERT_NE(stateProbe.get(), nullptr);
     stateProbe->open(finalState);
     EXPECT_EQ(stateProbe->getBufferState(buffer.get()), ResourceStates::UnorderedAccess);
+    EXPECT_EQ(stateProbe->getTextureSubresourceState(texture.get(), 0u, 0u), ResourceStates::ShaderResource);
     stateProbe->close();
 
     const GpuTaskGraphSubmitter submitter(device);

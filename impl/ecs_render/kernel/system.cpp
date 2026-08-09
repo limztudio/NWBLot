@@ -103,7 +103,6 @@ RendererSystem::RendererSystem(
     , m_meshViewSetupStateHandoff(arena)
     , m_sceneShadingSetupStateHandoff(arena)
     , m_deferredClearStateHandoff(arena)
-    , m_gbufferStateHandoff(arena)
     , m_shadowComputePersistentStateHandoff(arena)
     , m_shadowVisibilityReturnStateHandoff(arena)
     , m_causticsComputePersistentStateHandoff(arena)
@@ -196,7 +195,6 @@ void RendererSystem::resetInvalidatedResourceStateHandoffs()noexcept{
     m_meshViewSetupStateHandoff.reset();
     m_sceneShadingSetupStateHandoff.reset();
     m_deferredClearStateHandoff.reset();
-    m_gbufferStateHandoff.reset();
     resetTargetGenerationStateHandoffs();
 }
 
@@ -205,7 +203,6 @@ void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
     m_meshViewSetupStateHandoff.reset();
     m_sceneShadingSetupStateHandoff.reset();
     m_deferredClearStateHandoff.reset();
-    m_gbufferStateHandoff.reset();
     m_causticIrradianceLightingStateHandoff.reset();
 }
 
@@ -214,7 +211,6 @@ void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
     m_meshViewSetupStateHandoff.reset();
     m_sceneShadingSetupStateHandoff.reset();
     m_deferredClearStateHandoff.reset();
-    m_gbufferStateHandoff.reset();
     m_causticIrradianceLightingStateHandoff.reset();
 }
 
@@ -276,6 +272,7 @@ void RendererSystem::invalidateResources(){
     m_preparedShadowVisibilityReady = false;
     m_graphicsPrefixTaskGraphValid = false;
     m_graphicsPrefixBridgeTask = {};
+    m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixTask = {};
     m_graphicsPrefixTaskGraph.reset();
     m_graphicsPrefixTaskGraphAnalysis.reset();
@@ -380,7 +377,6 @@ void RendererSystem::invalidateResources(){
     m_meshViewSetupCommandList.reset();
     m_sceneShadingSetupCommandList.reset();
     m_deferredClearCommandList.reset();
-    m_gbufferCommandList.reset();
     m_frameRecoveryCommandList.reset();
     m_shadowPrepareCommandList.reset();
     resetLaggedLightingHistoryTracking();
@@ -436,14 +432,6 @@ bool RendererSystem::ensureFrameCommandLists(){
         m_deferredClearCommandList = device.createCommandList();
         if(!m_deferredClearCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred-clear command list"));
-            return false;
-        }
-    }
-
-    if(!m_gbufferCommandList){
-        m_gbufferCommandList = device.createCommandList();
-        if(!m_gbufferCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create G-buffer command list"));
             return false;
         }
     }
@@ -615,7 +603,6 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     NWB_ASSERT(m_meshViewSetupCommandList);
     NWB_ASSERT(m_sceneShadingSetupCommandList);
     NWB_ASSERT(m_deferredClearCommandList);
-    NWB_ASSERT(m_gbufferCommandList);
     NWB_ASSERT(m_shadowPrepareCommandList);
 
     auto& device = m_graphics.getDevice();
@@ -696,6 +683,7 @@ bool RendererSystem::recordShadowPrepareCommandList(DeferredFrameTargets& deferr
 void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_graphicsPrefixTaskGraphValid = false;
     m_graphicsPrefixBridgeTask = {};
+    m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixTask = {};
     m_graphicsPrefixTaskGraph.reset();
     m_graphicsPrefixTaskGraphAnalysis.reset();
@@ -855,8 +843,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const bool shadowVisibilityExpectedCompute = dedicatedAsyncCompute;
     const bool softwareCausticsExpectedCompute = dedicatedAsyncCompute && !hardwareShadowSupported;
     const bool shadowVisibilityPrepared = m_preparedShadowVisibilityReady;
-    // Compile every graph before native recording. The prefix retains four imported bridge lists followed by one
-    // native graph task; all later work records directly through its own graph task.
+    // Compile every independent graph before native recording. The graphics prefix waits until its three imported
+    // setup/clear lists are ready, then adds its native G-buffer and normalization suffixes.
     const ECSRenderDetail::GpuTaskGraphFrameScheduleInput taskGraphInput{
         .dedicatedAsyncCompute = dedicatedAsyncCompute,
         .frameLaggedAsyncLightingEnabled = m_frameLaggedAsyncLightingEnabled,
@@ -869,12 +857,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* meshViewSetupCommandList = m_meshViewSetupCommandList.get();
     Core::CommandList* sceneShadingSetupCommandList = m_sceneShadingSetupCommandList.get();
     Core::CommandList* deferredClearCommandList = m_deferredClearCommandList.get();
-    Core::CommandList* gbufferCommandList = m_gbufferCommandList.get();
     Core::CommandList* frameRecoveryCommandList = m_frameRecoveryCommandList.get();
     NWB_ASSERT(meshViewSetupCommandList);
     NWB_ASSERT(sceneShadingSetupCommandList);
     NWB_ASSERT(deferredClearCommandList);
-    NWB_ASSERT(gbufferCommandList);
     NWB_ASSERT(frameRecoveryCommandList);
 
     resetFrameRecordingStateHandoffs();
@@ -1021,34 +1007,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const bool shadowVisibilityRunsOnCompute = shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute;
     if(shadowVisibilityRunsOnCompute != shadowVisibilityExpectedCompute){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow-visibility graph queue disagrees with renderer topology"));
-        shadowVisibilityTimingTicket.discard();
-        graphicsPrefixTimingTicket.discard();
-        return;
-    }
-    buildGraphicsPrefixTaskGraph(
-        taskGraphInput,
-        deferredTargets,
-        shadowVisibilityRunsOnCompute,
-        asyncPrefixTiming,
-        graphicsPrefixTimingTicket
-    );
-    const Core::GpuSubmissionPacketId graphicsPrefixPacket = m_graphicsPrefixCompiledGraph.packetForTask(
-        m_graphicsPrefixTask
-    );
-    const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue = graphicsPrefixPacket.valid()
-        ? m_graphicsPrefixCompiledGraph.queueInfo(
-            m_graphicsPrefixCompiledGraph.packet(graphicsPrefixPacket).queue
-        )
-        : nullptr
-    ;
-    if(
-        !m_graphicsPrefixTaskGraphValid
-        || !m_graphicsPrefixBridgeTask.valid()
-        || !m_graphicsPrefixTask.valid()
-        || !graphicsPrefixQueue
-        || graphicsPrefixQueue->queueClass != Core::CommandQueue::Graphics
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned graphics prefix was unavailable"));
         shadowVisibilityTimingTicket.discard();
         graphicsPrefixTimingTicket.discard();
         return;
@@ -1553,178 +1511,56 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
 
     const bool frameSetupReady = meshViewSetupReady && sceneShadingSetupReady;
-    bool gbufferCommandListReady = false;
-    const Core::Graphics::JobHandle gbufferRecordingJob = m_graphics.scheduleGraphicsJob([
-        this,
-        &deferredTargets,
+    buildGraphicsPrefixTaskGraph(
+        taskGraphInput,
+        deferredTargets,
         csgFrameState,
         hasOpaqueCsgFrameWork,
         frameSetupReady,
-        &device,
-        gbufferCommandList,
-        &gbufferCommandListReady,
-        &graphicsPrefixTimingTicket
-    ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(graphicsPrefixTimingTicket);
-        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-        Core::CommandList* commandList = gbufferCommandList;
-        commandList->open(&m_deferredClearStateHandoff);
-        if(!commandList->hasCommandBuffer())
-            return;
-
-        MaterialPassDrawItemPartitions opaqueDrawItems{scratchArena};
-        InstanceGpuDataVector instanceData{scratchArena};
-        CsgFrameGpuData csgFrameData{scratchArena};
-#if defined(NWB_DEBUG)
-        ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{scratchArena};
-#endif
-        MaterialTypedByteDataVector materialTypedBytes{scratchArena};
-
-        Core::ViewportState deferredViewportState;
-        deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
-
-        if(frameSetupReady){
-            m_materialSystem.gatherMaterialPassDrawItems(
-                deferredTargets.framebuffer.get(),
-                MaterialPipelinePass::Opaque,
-                false,
-                csgFrameState,
-                opaqueDrawItems,
-                instanceData,
-                csgFrameData,
-#if defined(NWB_DEBUG)
-                materialTypedRanges,
-#endif
-                materialTypedBytes,
-                RendererResourceLookupMode::PreparedOnly
-            );
-        }
-
-        const Core::Rect opaqueCsgClearRect = csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height);
-        if(hasOpaqueCsgFrameWork)
-            m_deferredSystem.clearCsgIntervalTargets(*commandList, deferredTargets, opaqueCsgClearRect);
-
-        const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
-        const bool deferredResourcesReady =
-            hasDeferredDrawItems
-            && m_materialSystem.materialPassDrawBuffersReady(instanceData, materialTypedBytes)
-        ;
-        const bool regularDrawResourcesReady =
-            deferredResourcesReady
-            && m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.regular)
-        ;
-        const bool csgResourcesReady =
-            deferredResourcesReady
-            && (opaqueDrawItems.csg.empty() || m_csgSystem.csgFrameBuffersReady(csgFrameData))
-        ;
-        const bool csgDrawResourcesReady =
-            csgResourcesReady
-            && (opaqueDrawItems.csg.empty() || m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csg))
-        ;
-        const bool csgReceiverSurfaceDrawResourcesReady =
-            csgResourcesReady
-            && (opaqueDrawItems.csgReceiverSurface.empty() || m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
-        ;
-        const bool deferredUploadReady =
-            deferredResourcesReady
-            && m_materialSystem.uploadMaterialPassDrawBuffers(
-                *commandList,
-                instanceData,
-#if defined(NWB_DEBUG)
-                materialTypedRanges,
-#endif
-                materialTypedBytes
-            )
-        ;
-        if(deferredUploadReady){
-            const bool csgUploadReady = csgResourcesReady && (opaqueDrawItems.csg.empty() || m_csgSystem.uploadCsgFrameBuffers(*commandList, csgFrameData));
-            const bool csgSampleStateReady =
-                csgUploadReady
-                && (!csgFrameData.hasWork() || m_csgSystem.uploadCsgIntervalSampleState(*commandList, deferredTargets, csgFrameData))
-            ;
-            if(csgSampleStateReady && csgFrameData.hasWork())
-                m_csgSystem.dispatchCsgIntervalPeels(*commandList, deferredTargets, csgFrameData);
-            const MaterialPassDrawContext opaqueDrawContext{
-                *commandList,
-                deferredTargets.framebuffer.get(),
-                MaterialPipelinePass::Opaque,
-                nullptr,
-                deferredViewportState
-            };
-            if(regularDrawResourcesReady && !opaqueDrawItems.regular.empty()){
-                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueRegular, device, *commandList);
-
-                m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.regular);
-            }
-
-            Core::ViewportState csgIntervalViewportState;
-            csgIntervalViewportState
-                .addViewport(deferredTargets.framebuffer->getFramebufferInfo().getViewport())
-                .addScissorRect(csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height))
-            ;
-            const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
-                *commandList,
-                deferredTargets.framebuffer.get(),
-                MaterialPipelinePass::CsgReceiverSurface,
-                nullptr,
-                csgIntervalViewportState
-            };
-            if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
-                Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsgReceiverSurface, device, *commandList);
-
-                m_materialSystem.renderMaterialPassDrawItems(csgReceiverSurfaceDrawContext, opaqueDrawItems.csgReceiverSurface);
-            }
-            if(csgSampleStateReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)
-                m_csgSystem.dispatchCsgReceiverSpanBuild(*commandList, deferredTargets, csgFrameData);
-            if(csgSampleStateReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)
-                m_csgSystem.dispatchCsgIntervalCombine(*commandList, deferredTargets, csgFrameData);
-            if(csgSampleStateReady && csgDrawResourcesReady){
-                if(!opaqueDrawItems.csg.empty()){
-                    Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_OpaqueCsg, device, *commandList);
-
-                    m_materialSystem.renderMaterialPassDrawItems(opaqueDrawContext, opaqueDrawItems.csg);
-                }
-                if(csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady)
-                    m_csgSystem.renderCsgIntervalCaps(*commandList, deferredTargets, csgFrameData);
-            }
-        }
-        commandList->endRenderPass();
-
-        // Sibling workers import the opaque producer's exported state.
-        commandList->close(&m_gbufferStateHandoff);
-        if(!m_gbufferStateHandoff.valid())
-            return;
-        gbufferCommandListReady = commandList->hasCommandBuffer();
-    });
-    if(!gbufferRecordingJob.valid()){
+        shadowVisibilityRunsOnCompute,
+        asyncPrefixTiming,
+        graphicsPrefixTimingTicket
+    );
+    const Core::GpuSubmissionPacketId graphicsPrefixPacket = m_graphicsPrefixCompiledGraph.packetForTask(
+        m_graphicsPrefixTask
+    );
+    const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue = graphicsPrefixPacket.valid()
+        ? m_graphicsPrefixCompiledGraph.queueInfo(
+            m_graphicsPrefixCompiledGraph.packet(graphicsPrefixPacket).queue
+        )
+        : nullptr
+    ;
+    if(
+        !m_graphicsPrefixTaskGraphValid
+        || !m_graphicsPrefixBridgeTask.valid()
+        || !m_graphicsPrefixGbufferTask.valid()
+        || !m_graphicsPrefixTask.valid()
+        || !graphicsPrefixQueue
+        || graphicsPrefixQueue->queueClass != Core::CommandQueue::Graphics
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned graphics prefix was unavailable"));
         discardRenderPackets();
         return;
     }
 
-    m_graphics.waitJob(gbufferRecordingJob);
-    if(!gbufferCommandListReady){
-        discardRenderPackets();
-        return;
-    }
-
-    // The retained bridge records only setup, clear, and G-buffer lists.  The graph appends its native normalization
-    // suffix to the same packet, captures the final state once, and preserves one ordered Graphics submission.
+    // The retained bridge records only setup and clear lists. The graph appends native opaque G-buffer and
+    // normalization work to the same packet, captures the final state once, and preserves one ordered submission.
     Core::CommandList* const graphicsPrefixCommandLists[] = {
         meshViewSetupCommandList,
         sceneShadingSetupCommandList,
         deferredClearCommandList,
-        gbufferCommandList,
     };
     Core::GpuNativePacketRecorder graphicsPrefixRecorder(device);
     const Core::GpuImportedPacketNativeSuffixRecordDesc graphicsPrefixRecordDesc{
         .packet = graphicsPrefixPacket,
         .importedCommandLists = graphicsPrefixCommandLists,
         .importedCommandListCount = LengthOf(graphicsPrefixCommandLists),
-        .importedStateSeed = &m_gbufferStateHandoff,
+        .importedStateSeed = &m_deferredClearStateHandoff,
     };
     const bool graphicsPrefixRecorded =
         m_graphicsPrefixTaskGraphValid
         && m_graphicsPrefixBridgeTask.valid()
+        && m_graphicsPrefixGbufferTask.valid()
         && m_graphicsPrefixTask.valid()
         && graphicsPrefixPacket.valid()
         && graphicsPrefixRecorder.recordImportedPacketNativeSuffix(
@@ -2742,6 +2578,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const Core::GpuTaskGraphSubmitter graphicsPrefixSubmitter(device);
         const bool graphicsPrefixAccepted =
             m_graphicsPrefixTaskGraphValid
+            && m_graphicsPrefixBridgeTask.valid()
+            && m_graphicsPrefixGbufferTask.valid()
             && m_graphicsPrefixTask.valid()
             && graphicsPrefixSubmitter.submitPacket(
                 m_graphicsPrefixTaskGraph,

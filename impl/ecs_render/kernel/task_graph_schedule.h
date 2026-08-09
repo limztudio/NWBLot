@@ -67,7 +67,6 @@ public:
         enable(FrameExecutionWork::RayEffects);
         enable(FrameExecutionWork::Caustics);
         enable(FrameExecutionWork::AvboitRaster);
-        enable(FrameExecutionWork::DeferredLighting);
         enable(FrameExecutionWork::GraphicsPresent);
         if(m_usesDedicatedAsyncCompute)
             enable(FrameExecutionWork::AsyncEffectsTiming);
@@ -94,9 +93,7 @@ public:
     )const noexcept{
         if(!m_usesLaggedLightingHistory || !hasWork(work))
             return false;
-        return work == FrameExecutionWork::DeferredLighting
-            || (work == FrameExecutionWork::Caustics && m_hardwareCaustics)
-        ;
+        return work == FrameExecutionWork::Caustics && m_hardwareCaustics;
     }
     // These are semantic ordering constraints, not packet-copying. Resource hazards provide the remaining edges.
     [[nodiscard]] bool workDependsOn(
@@ -120,17 +117,6 @@ public:
             return producer == FrameExecutionWork::AvboitExtinction;
         case FrameExecutionWork::AvboitAccumulation:
             return producer == FrameExecutionWork::AvboitIntegration;
-        case FrameExecutionWork::DeferredLighting:
-            if(m_usesAsyncAvboit && producer == FrameExecutionWork::AvboitAccumulation)
-                return true;
-            if(!m_usesAsyncAvboit && producer == FrameExecutionWork::AvboitRaster)
-                return true;
-            return !m_usesLaggedLightingHistory
-                && (
-                    producer == FrameExecutionWork::RayEffects
-                    || producer == FrameExecutionWork::Caustics
-                )
-            ;
         case FrameExecutionWork::GraphicsPresent:
             return m_usesLaggedLightingHistory && producer == FrameExecutionWork::RayEffects;
         default:

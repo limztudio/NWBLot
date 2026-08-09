@@ -170,8 +170,7 @@ struct LaggedLightingHistoryCopyTask{
 
 [[nodiscard]] static WorkMetadata WorkMetadataFor(
     const Work::Enum work,
-    const bool hardwareCaustics,
-    const bool usesLaggedLightingHistory
+    const bool hardwareCaustics
 ){
     switch(work){
     case Work::GraphicsPrefix:
@@ -196,13 +195,6 @@ struct LaggedLightingHistoryCopyTask{
         return WorkMetadata{ Name("render.task_graph.avboit_integration"), "AVBOIT Integration", ComputeQueueRequest() };
     case Work::AvboitAccumulation:
         return WorkMetadata{ Name("render.task_graph.avboit_accumulation"), "AVBOIT Accumulation", GraphicsQueueRequest() };
-    case Work::DeferredLighting:{
-        WorkMetadata metadata{ Name("render.task_graph.deferred_lighting"), "Deferred Lighting", ComputeQueueRequest() };
-        // The active lagged path keeps its final lighting chain on Graphics to avoid a no-overlap return crossing
-        // before presentation. This is a semantic scheduling hint, not a live FrameExecutionPlan override.
-        metadata.scheduling.avoidQueueCrossing = usesLaggedLightingHistory;
-        return metadata;
-    }
     case Work::GraphicsPresent:
         return WorkMetadata{ Name("render.task_graph.present"), "Present", GraphicsQueueRequest() };
     default:
@@ -440,36 +432,8 @@ void RendererSystem::buildGpuTaskGraph(
         return;
     }
 
-    Core::GpuGraphResourceId historyShadowVisibility;
-    Core::GpuGraphResourceId historyCausticIrradiance;
-    Core::GpuGraphResourceId historySurfelIrradiance;
-    const bool capturesLaggedLightingHistory = graphSchedule.capturesLaggedLightingHistory();
-    if(capturesLaggedLightingHistory){
-        const DeferredLaggedLightingHistoryResources& history = deferredTargets.laggedLightingHistory;
-        historyShadowVisibility = importTexture(
-            history.shadowVisibility,
-            Name("render.task_graph.history_shadow_visibility"),
-            "History Shadow Visibility"
-        );
-        historyCausticIrradiance = importTexture(
-            history.causticIrradiance,
-            Name("render.task_graph.history_caustic_irradiance"),
-            "History Caustic Irradiance"
-        );
-        historySurfelIrradiance = importTexture(
-            history.surfelIrradiance,
-            Name("render.task_graph.history_surfel_irradiance"),
-            "History Surfel Irradiance"
-        );
-        if(!historyShadowVisibility.valid() || !historyCausticIrradiance.valid() || !historySurfelIrradiance.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph could not import lagged-lighting history"));
-            return;
-        }
-    }
-
-    const bool consumesLaggedLightingHistory = graphSchedule.usesLaggedLightingHistory();
     Core::GpuExternalCompletionId laggedHistoryCompletion;
-    if(consumesLaggedLightingHistory){
+    if(graphSchedule.workWaitsForLaggedLightingHistory(Work::Caustics)){
         Core::GpuExternalCompletionDesc completion;
         completion
             .setIdentity(Name("render.task_graph.lagged_lighting_history_ready"))
@@ -481,8 +445,6 @@ void RendererSystem::buildGpuTaskGraph(
             return;
         }
     }
-
-    const bool usesLaggedLightingHistory = graphSchedule.usesLaggedLightingHistory();
 
     Core::GraphicsVector<Core::GpuTaskId>& workTasks = m_gpuTaskGraphWorkTasks;
     const auto addWorkTask = [&](const Work::Enum work, const Core::GpuTaskResourceUse* const resourceUses, const usize resourceUseCount){
@@ -509,7 +471,7 @@ void RendererSystem::buildGpuTaskGraph(
             externalDependencies[externalDependencyCount++] = laggedHistoryCompletion;
         }
 
-        const WorkMetadata metadata = WorkMetadataFor(work, input.hardwareCaustics, usesLaggedLightingHistory);
+        const WorkMetadata metadata = WorkMetadataFor(work, input.hardwareCaustics);
         Core::GpuTaskDesc desc;
         desc
             .setIdentity(metadata.identity)
@@ -565,28 +527,6 @@ void RendererSystem::buildGpuTaskGraph(
         ReadUse(avboitTransmittance),
         WriteUse(opaqueColor, Core::ResourceStates::RenderTarget),
     };
-    const Core::GpuGraphResourceId lightingShadowVisibility = usesLaggedLightingHistory
-        ? historyShadowVisibility
-        : shadowVisibility
-    ;
-    const Core::GpuGraphResourceId lightingCausticIrradiance = usesLaggedLightingHistory
-        ? historyCausticIrradiance
-        : causticIrradiance
-    ;
-    const Core::GpuGraphResourceId lightingSurfelIrradiance = usesLaggedLightingHistory
-        ? historySurfelIrradiance
-        : surfelIrradiance
-    ;
-    const Core::GpuTaskResourceUse deferredLightingUses[] = {
-        ReadUse(albedo),
-        ReadUse(normal),
-        ReadUse(worldPosition),
-        ReadUse(depth, Core::ResourceStates::DepthRead),
-        ReadUse(lightingShadowVisibility),
-        ReadUse(lightingCausticIrradiance),
-        ReadUse(lightingSurfelIrradiance),
-        WriteUse(opaqueColor, Core::ResourceStates::UnorderedAccess),
-    };
     const Core::GpuTaskResourceUse presentUses[] = {
         ReadUse(compositeColor),
         WriteUse(backbuffer, Core::ResourceStates::Present),
@@ -601,7 +541,6 @@ void RendererSystem::buildGpuTaskGraph(
         && addWorkTask(Work::AvboitExtinction, avboitExtinctionUses, LengthOf(avboitExtinctionUses))
         && addWorkTask(Work::AvboitIntegration, avboitIntegrationUses, LengthOf(avboitIntegrationUses))
         && addWorkTask(Work::AvboitAccumulation, avboitAccumulationUses, LengthOf(avboitAccumulationUses))
-        && addWorkTask(Work::DeferredLighting, deferredLightingUses, LengthOf(deferredLightingUses))
         && addWorkTask(Work::GraphicsPresent, presentUses, LengthOf(presentUses))
     ;
     if(!graphBuilt){
@@ -1218,6 +1157,252 @@ void RendererSystem::buildSurfelGiTaskGraph(
     m_surfelGiRecordedGraph.reset(m_surfelGiCompiledGraph);
     m_surfelGiSubmissionTransaction.reset(m_surfelGiCompiledGraph);
     m_surfelGiTaskGraphValid = true;
+}
+
+
+void RendererSystem::buildDeferredLightingTaskGraph(
+    const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+    DeferredFrameTargets& deferredTargets,
+    Core::GpuTimingSubmissionTicket& timingTicket
+){
+    using namespace __hidden_renderer_task_graph;
+
+    m_deferredLightingTaskGraphValid = false;
+    m_deferredLightingTask = {};
+    m_deferredLightingGraphicsEffectsCompletion = {};
+    m_deferredLightingSurfelGiCompletion = {};
+    m_deferredLightingHistoryCompletion = {};
+    m_deferredLightingTaskGraph.reset();
+    m_deferredLightingTaskGraphAnalysis.reset();
+    m_deferredLightingTaskGraphQueueAssignments.reset();
+    m_deferredLightingCompiledGraph.reset();
+    m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
+    m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
+
+    const ECSRenderDetail::GpuTaskGraphFrameSchedule schedule(input);
+    const bool useLaggedLightingHistory = schedule.usesLaggedLightingHistory();
+    const DeferredLaggedLightingHistoryResources* const history = useLaggedLightingHistory
+        ? &deferredTargets.laggedLightingHistory
+        : nullptr
+    ;
+    if(
+        !deferredTargets.valid()
+        || !deferredTargets.bindless.valid()
+        || !m_deferredState.m_sceneShadingBuffer
+        || !m_deferredState.m_lightBuffer
+        || (useLaggedLightingHistory && (!history || !history->valid()))
+    )
+        return;
+
+    const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
+        return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
+    };
+    const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
+        return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
+    };
+    const Core::GpuGraphResourceId albedo = importTexture(
+        deferredTargets.albedo,
+        Name("render.deferred_lighting.albedo"),
+        "G-Buffer Albedo"
+    );
+    const Core::GpuGraphResourceId normal = importTexture(
+        deferredTargets.normal,
+        Name("render.deferred_lighting.normal"),
+        "G-Buffer Normal"
+    );
+    const Core::GpuGraphResourceId worldPosition = importTexture(
+        deferredTargets.worldPosition,
+        Name("render.deferred_lighting.world_position"),
+        "G-Buffer World Position"
+    );
+    const Core::GpuGraphResourceId depth = importTexture(
+        deferredTargets.depth,
+        Name("render.deferred_lighting.depth"),
+        "G-Buffer Depth"
+    );
+    const Core::GpuGraphResourceId shadowVisibility = importTexture(
+        history ? history->shadowVisibility : deferredTargets.shadowVisibility,
+        Name("render.deferred_lighting.shadow_visibility"),
+        history ? "Lagged Shadow Visibility" : "Shadow Visibility"
+    );
+    const Core::GpuGraphResourceId causticIrradiance = importTexture(
+        history ? history->causticIrradiance : deferredTargets.causticIrradiance,
+        Name("render.deferred_lighting.caustic_irradiance"),
+        history ? "Lagged Caustic Irradiance" : "Caustic Irradiance"
+    );
+    const Core::GpuGraphResourceId surfelIrradiance = importTexture(
+        history ? history->surfelIrradiance : deferredTargets.surfelIrradiance,
+        Name("render.deferred_lighting.surfel_irradiance"),
+        history ? "Lagged Surfel Irradiance" : "Surfel Irradiance"
+    );
+    const Core::GpuGraphResourceId opaqueColor = importTexture(
+        deferredTargets.opaqueColor,
+        Name("render.deferred_lighting.opaque_color"),
+        "Opaque Color"
+    );
+    const Core::GpuGraphResourceId sceneShading = importBuffer(
+        m_deferredState.m_sceneShadingBuffer,
+        Name("render.deferred_lighting.scene_shading"),
+        "Scene Shading"
+    );
+    const Core::GpuGraphResourceId lights = importBuffer(
+        m_deferredState.m_lightBuffer,
+        Name("render.deferred_lighting.lights"),
+        "Lights"
+    );
+    const Core::GpuGraphResourceId bindlessSlots = importBuffer(
+        history ? history->slotsBuffer : deferredTargets.bindless.slotsBuffer,
+        Name("render.deferred_lighting.bindless_slots"),
+        history ? "Lagged Deferred Bindless Slots" : "Deferred Bindless Slots"
+    );
+    if(
+        !albedo.valid()
+        || !normal.valid()
+        || !worldPosition.valid()
+        || !depth.valid()
+        || !shadowVisibility.valid()
+        || !causticIrradiance.valid()
+        || !surfelIrradiance.valid()
+        || !opaqueColor.valid()
+        || !sceneShading.valid()
+        || !lights.valid()
+        || !bindlessSlots.valid()
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-lighting graph resources"));
+        return;
+    }
+
+    Core::GpuExternalCompletionDesc graphicsEffectsCompletionDesc;
+    graphicsEffectsCompletionDesc
+        .setIdentity(Name("render.deferred_lighting.graphics_effects_complete"))
+        .setMarkerLabel("Graphics Effects Complete")
+    ;
+    m_deferredLightingGraphicsEffectsCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
+        graphicsEffectsCompletionDesc
+    );
+    if(!m_deferredLightingGraphicsEffectsCompletion.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graphics-effects completion for deferred lighting"));
+        return;
+    }
+
+    Core::GpuExternalCompletionDesc dependentEffectsCompletionDesc;
+    dependentEffectsCompletionDesc
+        .setIdentity(
+            useLaggedLightingHistory
+                ? Name("render.deferred_lighting.lagged_history_complete")
+                : Name("render.deferred_lighting.surfel_gi_complete")
+        )
+        .setMarkerLabel(useLaggedLightingHistory ? "Lagged Lighting History Complete" : "Surfel GI Complete")
+    ;
+    Core::GpuExternalCompletionId dependentEffectsCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
+        dependentEffectsCompletionDesc
+    );
+    if(!dependentEffectsCompletion.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-lighting dependent completion"));
+        return;
+    }
+    if(useLaggedLightingHistory)
+        m_deferredLightingHistoryCompletion = dependentEffectsCompletion;
+    else
+        m_deferredLightingSurfelGiCompletion = dependentEffectsCompletion;
+
+    const Core::GpuExternalCompletionId externalDependencies[] = {
+        m_deferredLightingGraphicsEffectsCompletion,
+        dependentEffectsCompletion,
+    };
+    const Core::GpuTaskResourceUse resourceUses[] = {
+        ReadUse(albedo),
+        ReadUse(normal),
+        ReadUse(worldPosition),
+        ReadUse(depth),
+        ReadUse(shadowVisibility),
+        ReadUse(causticIrradiance),
+        ReadUse(surfelIrradiance),
+        ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer),
+        ReadUse(lights),
+        ReadUse(bindlessSlots, Core::ResourceStates::ConstantBuffer),
+        WriteUse(opaqueColor, Core::ResourceStates::UnorderedAccess),
+    };
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Large;
+    scheduling.avoidQueueCrossing = useLaggedLightingHistory;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Core::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("render.deferred_lighting"))
+        .setMarkerLabel("Deferred Lighting")
+        .setQueue(ComputeQueueRequest())
+        .setScheduling(scheduling)
+        .setExternalDependencies(externalDependencies, LengthOf(externalDependencies))
+        .setResourceUses(resourceUses, LengthOf(resourceUses))
+    ;
+    m_deferredLightingTask = m_deferredSystem.declareDeferredLightingTask(
+        m_deferredLightingTaskGraph,
+        desc,
+        deferredTargets,
+        useLaggedLightingHistory,
+        timingTicket
+    );
+    if(!m_deferredLightingTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-lighting graph task"));
+        return;
+    }
+
+    const auto& device = graphics().getDevice();
+    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
+    const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
+    const bool dedicatedAsyncCompute = input.dedicatedAsyncCompute
+        && computeFamilyIndex != Limit<u32>::s_Max
+        && computeFamilyIndex != graphicsFamilyIndex
+    ;
+    const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
+        static_cast<u8>(Core::GpuQueueCapability::Graphics)
+        | static_cast<u8>(Core::GpuQueueCapability::Compute)
+        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
+    );
+    const Core::GpuQueueCapability::Mask computeQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
+        static_cast<u8>(Core::GpuQueueCapability::Compute)
+        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
+    );
+    const Core::GpuPhysicalQueueInfo queues[] = {
+        Core::GpuPhysicalQueueInfo{
+            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
+            .queueClass = Core::CommandQueue::Graphics,
+            .capabilities = graphicsQueueCapabilities,
+            .familyIndex = graphicsFamilyIndex,
+            .queueIndex = 0u,
+            .dedicated = false,
+        },
+        Core::GpuPhysicalQueueInfo{
+            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphDeviceGeneration },
+            .queueClass = Core::CommandQueue::Compute,
+            .capabilities = computeQueueCapabilities,
+            .familyIndex = computeFamilyIndex,
+            .queueIndex = 0u,
+            .dedicated = true,
+        },
+    };
+    const Core::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = dedicatedAsyncCompute ? LengthOf(queues) : 1u,
+    };
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+    const Core::GpuTaskGraphCompiler compiler;
+    if(!compiler.compile(
+        m_deferredLightingTaskGraph,
+        m_deferredLightingTaskGraphAnalysis,
+        topology,
+        m_deferredLightingTaskGraphQueueAssignments,
+        m_deferredLightingCompiledGraph,
+        scratchArena
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile deferred-lighting task graph"));
+        return;
+    }
+    m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
+    m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
+    m_deferredLightingTaskGraphValid = true;
 }
 
 

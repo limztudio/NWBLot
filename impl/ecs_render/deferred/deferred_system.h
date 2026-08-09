@@ -36,6 +36,13 @@ public:
     [[nodiscard]] bool updateSceneShadingBuffer(Core::CommandList& commandList, f32 fallbackAspectRatio);
     [[nodiscard]] bool createDeferredLightingResources();
     [[nodiscard]] bool createDeferredLightingPipeline();
+    [[nodiscard]] Core::GpuTaskId declareDeferredLightingTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        bool useLaggedLightingHistory,
+        Core::GpuTimingSubmissionTicket& timingTicket
+    );
     [[nodiscard]] bool renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets, bool useLaggedLightingHistory = false);
     [[nodiscard]] bool createDeferredFrameTargets(u32 width, u32 height);
     [[nodiscard]] bool createDeferredCompositeResources();

@@ -157,6 +157,11 @@ private:
         DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
+    void buildDeferredLightingTaskGraph(
+        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+        DeferredFrameTargets& deferredTargets,
+        Core::GpuTimingSubmissionTicket& timingTicket
+    );
     void reportLaggedLightingTransition(LaggedLightingReport report, u64 targetGeneration);
     [[nodiscard]] Core::Alloc::GlobalArena& arena()noexcept{ return m_arena; }
     [[nodiscard]] Core::ECS::World& world()noexcept{ return m_world; }
@@ -231,6 +236,19 @@ private:
     Core::GpuTaskId m_surfelGiTask;
     Core::GpuExternalCompletionId m_surfelGiEffectsCompletion;
     bool m_surfelGiTaskGraphValid = false;
+    // Deferred lighting owns its task, native recording, and two explicit completion imports. The manual state
+    // bridge remains only until the compiler barrier phase replaces it.
+    Core::GpuTaskGraph m_deferredLightingTaskGraph;
+    Core::GpuTaskGraphAnalysis m_deferredLightingTaskGraphAnalysis;
+    Core::GpuTaskGraphQueueAssignments m_deferredLightingTaskGraphQueueAssignments;
+    Core::GpuCompiledGraph m_deferredLightingCompiledGraph;
+    Core::GpuRecordedGraph m_deferredLightingRecordedGraph;
+    Core::GpuGraphSubmissionTransaction m_deferredLightingSubmissionTransaction;
+    Core::GpuTaskId m_deferredLightingTask;
+    Core::GpuExternalCompletionId m_deferredLightingGraphicsEffectsCompletion;
+    Core::GpuExternalCompletionId m_deferredLightingSurfelGiCompletion;
+    Core::GpuExternalCompletionId m_deferredLightingHistoryCompletion;
+    bool m_deferredLightingTaskGraphValid = false;
 
 private:
     RendererMeshState m_meshState;
@@ -323,8 +341,6 @@ private:
     // dedicated AsyncCompute path. Hardware dispatch-rays caustics stay on the Graphics overlap packet.
     Core::CommandListHandle m_asyncCausticsCommandList;
     Core::CommandListHandle m_causticsCommandList;
-    Core::CommandListHandle m_asyncDeferredLightingCommandList;
-    Core::CommandListHandle m_deferredLightingCommandList;
     // The hybrid AVBOIT packet uses Graphics lists for raster phases and AsyncCompute lists for its two pure dispatches.
     Core::CommandListHandle m_avboitCommandList;
     Core::CommandListHandle m_asyncAvboitDepthWarpCommandList;

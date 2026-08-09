@@ -30,6 +30,33 @@ struct PushConstants{
 static_assert(sizeof(PushConstants) == sizeof(u32) * 2u);
 
 
+struct DeferredLightingGraphTask{
+    struct Payload{
+        RendererDeferredSystem* deferredSystem = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        bool useLaggedLightingHistory = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.deferredSystem || !payload.targets || !payload.timingTicket)
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        return payload.deferredSystem->renderDeferredLighting(
+            commandList,
+            *payload.targets,
+            payload.useLaggedLightingHistory
+        );
+    }
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -139,6 +166,24 @@ bool RendererDeferredSystem::createDeferredLightingPipeline(){
     }
 
     return true;
+}
+
+Core::GpuTaskId RendererDeferredSystem::declareDeferredLightingTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    const bool useLaggedLightingHistory,
+    Core::GpuTimingSubmissionTicket& timingTicket
+){
+    return graph.addTask<__hidden_deferred_lighting::DeferredLightingGraphTask>(
+        desc,
+        __hidden_deferred_lighting::DeferredLightingGraphTask::Payload{
+            .deferredSystem = this,
+            .targets = &targets,
+            .timingTicket = &timingTicket,
+            .useLaggedLightingHistory = useLaggedLightingHistory,
+        }
+    );
 }
 
 bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){

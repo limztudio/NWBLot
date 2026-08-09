@@ -36,7 +36,6 @@ namespace FrameExecutionPacket{
         GraphicsAvboitExtinction,
         AsyncAvboitIntegration,
         GraphicsAvboitAccumulation,
-        DeferredLighting,
         GraphicsPresent,
 
         kCount,
@@ -50,7 +49,6 @@ namespace FrameExecutionSubmissionBatch{
         GraphicsPrefix,
         AsyncRayEffects,
         GraphicsEffects,
-        DeferredLighting,
         GraphicsPresent,
 
         kCount,
@@ -70,7 +68,6 @@ namespace FrameExecutionWork{
         AvboitExtinction,
         AvboitIntegration,
         AvboitAccumulation,
-        DeferredLighting,
         GraphicsPresent,
 
         kCount,
@@ -190,7 +187,6 @@ public:
         if(usesAsyncCaustics)
             assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::AsyncRayEffects);
 
-        FrameExecutionPacket::Enum graphicsEffectsCompletionPacket = FrameExecutionPacket::GraphicsEffects;
         if(usesAsyncAvboit){
             enablePacket(FrameExecutionPacket::GraphicsAvboitPre, Core::RenderLane::Graphics);
             addPacketWait(FrameExecutionPacket::GraphicsAvboitPre, FrameExecutionPacket::GraphicsPrefix);
@@ -221,7 +217,6 @@ public:
             enablePacket(FrameExecutionPacket::GraphicsAvboitAccumulation, Core::RenderLane::Graphics);
             addPacketWait(FrameExecutionPacket::GraphicsAvboitAccumulation, FrameExecutionPacket::AsyncAvboitIntegration);
             assignWork(FrameExecutionWork::AvboitAccumulation, FrameExecutionPacket::GraphicsAvboitAccumulation);
-            graphicsEffectsCompletionPacket = FrameExecutionPacket::GraphicsAvboitAccumulation;
         }
         else{
             enablePacket(FrameExecutionPacket::GraphicsEffects, Core::RenderLane::Graphics);
@@ -239,23 +234,6 @@ public:
             // is serialized on Graphics.
             if(usesDedicatedAsyncCompute)
                 assignWork(FrameExecutionWork::AsyncEffectsTiming, FrameExecutionPacket::GraphicsEffects);
-        }
-
-        const Core::RenderLane::Enum deferredLane = usesLaggedAsyncLighting
-            ? Core::RenderLane::Graphics
-            : computeWorkLane
-        ;
-        enablePacket(FrameExecutionPacket::DeferredLighting, deferredLane);
-        addPacketWait(FrameExecutionPacket::DeferredLighting, graphicsEffectsCompletionPacket);
-        assignWork(FrameExecutionWork::DeferredLighting, FrameExecutionPacket::DeferredLighting);
-        if(usesLaggedAsyncLighting)
-            addExternalWait(
-                FrameExecutionPacket::DeferredLighting,
-                FrameExecutionExternalWait::LaggedLightingHistory
-            );
-        else{
-            addPacketWait(FrameExecutionPacket::DeferredLighting, FrameExecutionPacket::AsyncRayEffects);
-            addExternalWait(FrameExecutionPacket::DeferredLighting, FrameExecutionExternalWait::SurfelGi);
         }
 
         enablePacket(FrameExecutionPacket::GraphicsPresent, Core::RenderLane::Graphics);
@@ -478,10 +456,6 @@ private:
                 FrameExecutionPacket::GraphicsEffects
             );
         }
-        appendSubmissionPacket(
-            FrameExecutionSubmissionBatch::DeferredLighting,
-            FrameExecutionPacket::DeferredLighting
-        );
         appendSubmissionPacket(
             FrameExecutionSubmissionBatch::GraphicsPresent,
             FrameExecutionPacket::GraphicsPresent

@@ -149,6 +149,12 @@ RendererSystem::RendererSystem(
     , m_surfelGiCompiledGraph(arena)
     , m_surfelGiRecordedGraph(arena)
     , m_surfelGiSubmissionTransaction(arena)
+    , m_deferredLightingTaskGraph(arena)
+    , m_deferredLightingTaskGraphAnalysis(arena)
+    , m_deferredLightingTaskGraphQueueAssignments(arena)
+    , m_deferredLightingCompiledGraph(arena)
+    , m_deferredLightingRecordedGraph(arena)
+    , m_deferredLightingSubmissionTransaction(arena)
     , m_meshState(arena)
     , m_materialState(arena)
     , m_rayTracingState(arena)
@@ -544,6 +550,17 @@ void RendererSystem::invalidateResources(){
     m_surfelGiCompiledGraph.reset();
     m_surfelGiRecordedGraph.reset(m_surfelGiCompiledGraph);
     m_surfelGiSubmissionTransaction.reset(m_surfelGiCompiledGraph);
+    m_deferredLightingTaskGraphValid = false;
+    m_deferredLightingTask = {};
+    m_deferredLightingGraphicsEffectsCompletion = {};
+    m_deferredLightingSurfelGiCompletion = {};
+    m_deferredLightingHistoryCompletion = {};
+    m_deferredLightingTaskGraph.reset();
+    m_deferredLightingTaskGraphAnalysis.reset();
+    m_deferredLightingTaskGraphQueueAssignments.reset();
+    m_deferredLightingCompiledGraph.reset();
+    m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
+    m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
     m_gpuTaskGraphDeviceGeneration = m_gpuTaskGraphDeviceGeneration == Limit<u16>::s_Max
         ? 1u
         : static_cast<u16>(m_gpuTaskGraphDeviceGeneration + 1u)
@@ -560,8 +577,6 @@ void RendererSystem::invalidateResources(){
     m_asyncEffectsTimingEndCommandList.reset();
     m_asyncCausticsCommandList.reset();
     m_causticsCommandList.reset();
-    m_asyncDeferredLightingCommandList.reset();
-    m_deferredLightingCommandList.reset();
     m_avboitCommandList.reset();
     m_asyncAvboitDepthWarpCommandList.reset();
     m_avboitExtinctionCommandList.reset();
@@ -684,15 +699,6 @@ bool RendererSystem::ensureFrameCommandLists(){
                 return false;
             }
         }
-        if(!m_asyncDeferredLightingCommandList){
-            Core::CommandListParameters asyncDeferredLightingCommandListParameters;
-            asyncDeferredLightingCommandListParameters.setRenderLane(Core::RenderLane::AsyncCompute);
-            m_asyncDeferredLightingCommandList = device.createCommandList(asyncDeferredLightingCommandListParameters);
-            if(!m_asyncDeferredLightingCommandList){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async deferred-lighting command list"));
-                return false;
-            }
-        }
         if(!m_asyncAvboitDepthWarpCommandList){
             Core::CommandListParameters asyncAvboitDepthWarpCommandListParameters;
             asyncAvboitDepthWarpCommandListParameters.setRenderLane(Core::RenderLane::AsyncCompute);
@@ -731,14 +737,6 @@ bool RendererSystem::ensureFrameCommandLists(){
         m_causticsCommandList = device.createCommandList();
         if(!m_causticsCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustics command list"));
-            return false;
-        }
-    }
-
-    if(!m_deferredLightingCommandList){
-        m_deferredLightingCommandList = device.createCommandList();
-        if(!m_deferredLightingCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred-lighting command list"));
             return false;
         }
     }
@@ -934,8 +932,6 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     NWB_ASSERT(m_postGbufferNormalizeCommandList);
     NWB_ASSERT(m_shadowVisibilityCommandList);
     NWB_ASSERT(m_causticsCommandList);
-    NWB_ASSERT(!m_graphics.getDevice().isRenderLaneDedicated(Core::RenderLane::AsyncCompute) || m_asyncDeferredLightingCommandList);
-    NWB_ASSERT(m_deferredLightingCommandList);
     NWB_ASSERT(m_avboitCommandList);
     NWB_ASSERT(m_deferredPresentCommandList);
     NWB_ASSERT(m_shadowPrepareCommandList);
@@ -1052,6 +1048,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_surfelGiCompiledGraph.reset();
     m_surfelGiRecordedGraph.reset(m_surfelGiCompiledGraph);
     m_surfelGiSubmissionTransaction.reset(m_surfelGiCompiledGraph);
+    m_deferredLightingTaskGraphValid = false;
+    m_deferredLightingTask = {};
+    m_deferredLightingGraphicsEffectsCompletion = {};
+    m_deferredLightingSurfelGiCompletion = {};
+    m_deferredLightingHistoryCompletion = {};
+    m_deferredLightingTaskGraph.reset();
+    m_deferredLightingTaskGraphAnalysis.reset();
+    m_deferredLightingTaskGraphQueueAssignments.reset();
+    m_deferredLightingCompiledGraph.reset();
+    m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
+    m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
 
     if(!framebuffer)
         return;
@@ -1119,10 +1126,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const bool recordsAsyncEffectsTiming = frameExecutionPlan.hasWork(
         ECSRenderDetail::FrameExecutionWork::AsyncEffectsTiming
     );
-    const bool laggedAsyncLightingSchedule = frameExecutionPlan.workWaitsForExternalToken(
-        ECSRenderDetail::FrameExecutionWork::DeferredLighting,
-        ECSRenderDetail::FrameExecutionExternalWait::LaggedLightingHistory
-    );
+    const bool laggedAsyncLightingSchedule =
+        laggedAsyncLightingRequested
+        && laggedLightingHistoryResourcesReady
+        && m_laggedLightingHistorySubmissionToken.valid()
+    ;
     // History capture is now a graph-owned copy task.  It remains available whenever the opt-in path has a distinct
     // compute transport, independent of the remaining legacy packet plan.
     const bool captureLaggedLightingHistory = laggedAsyncLightingRequested;
@@ -1178,13 +1186,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_asyncCausticsCommandList.get(),
         }
     );
-    Core::CommandList* const deferredLightingCommandList = commandListForWork(
-        ECSRenderDetail::FrameExecutionWork::DeferredLighting,
-        ECSRenderDetail::FrameExecutionLaneCommandListPair{
-            m_deferredLightingCommandList.get(),
-            m_asyncDeferredLightingCommandList.get(),
-        }
-    );
     Core::CommandList* avboitCommandList = m_avboitCommandList.get();
     Core::CommandList* asyncAvboitDepthWarpCommandList = m_asyncAvboitDepthWarpCommandList.get();
     Core::CommandList* avboitExtinctionCommandList = m_avboitExtinctionCommandList.get();
@@ -1202,8 +1203,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(!recordsAsyncEffectsTiming || asyncEffectsTimingEndCommandList);
     NWB_ASSERT(m_causticsCommandList);
     NWB_ASSERT(causticsCommandList);
-    NWB_ASSERT(m_deferredLightingCommandList);
-    NWB_ASSERT(deferredLightingCommandList);
     NWB_ASSERT(avboitCommandList);
     NWB_ASSERT(!asyncAvboitSchedule || asyncAvboitDepthWarpCommandList);
     NWB_ASSERT(!asyncAvboitSchedule || avboitExtinctionCommandList);
@@ -1345,6 +1344,33 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
     const bool surfelGiRunsOnCompute = surfelGiQueue->queueClass == Core::CommandQueue::Compute;
+    Core::GpuTimingSubmissionTicket deferredLightingTimingTicket(m_graphics.gpuTiming());
+    buildDeferredLightingTaskGraph(taskGraphInput, deferredTargets, deferredLightingTimingTicket);
+    const Core::GpuSubmissionPacketId deferredLightingPacket = m_deferredLightingCompiledGraph.packetForTask(
+        m_deferredLightingTask
+    );
+    const Core::GpuPhysicalQueueInfo* const deferredLightingQueue = deferredLightingPacket.valid()
+        ? m_deferredLightingCompiledGraph.queueInfo(m_deferredLightingCompiledGraph.packet(deferredLightingPacket).queue)
+        : nullptr
+    ;
+    const Core::GpuExternalCompletionId deferredLightingDependentCompletion = laggedAsyncLightingSchedule
+        ? m_deferredLightingHistoryCompletion
+        : m_deferredLightingSurfelGiCompletion
+    ;
+    if(
+        !m_deferredLightingTaskGraphValid
+        || !m_deferredLightingGraphicsEffectsCompletion.valid()
+        || !deferredLightingDependentCompletion.valid()
+        || !deferredLightingQueue
+        || (laggedAsyncLightingSchedule && deferredLightingQueue->queueClass != Core::CommandQueue::Graphics)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred lighting was unavailable"));
+        deferredLightingTimingTicket.discard();
+        surfelGiTimingTicket.discard();
+        frameExecutionTimingTickets.discardAll();
+        return;
+    }
+    const bool deferredLightingRunsOnCompute = deferredLightingQueue->queueClass == Core::CommandQueue::Compute;
     Core::GpuTimingSubmissionTicket deferredCompositeTimingTicket(m_graphics.gpuTiming());
     buildDeferredCompositeTaskGraph(taskGraphInput, deferredTargets, deferredCompositeTimingTicket);
     // Publish the frame endpoint only after the final Graphics packet accepts.  This also covers the serialized
@@ -1353,10 +1379,30 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
     Optional<Core::GpuTimingMeasure> asyncEffectsTiming;
     Optional<Core::GpuTimingMeasure> asyncFinalTiming;
-    const auto discardTimingTickets = [&frameExecutionTimingTickets, &surfelGiTimingTicket, &deferredCompositeTimingTicket](){
+    const auto discardTimingTickets = [
+        &frameExecutionTimingTickets,
+        &surfelGiTimingTicket,
+        &deferredLightingTimingTicket,
+        &deferredCompositeTimingTicket
+    ](){
         frameExecutionTimingTickets.discardAll();
         surfelGiTimingTicket.discard();
+        deferredLightingTimingTicket.discard();
         deferredCompositeTimingTicket.discard();
+    };
+    const auto discardUnacceptedGraphPackets = [&](){
+        m_deferredCompositeSubmissionTransaction.discardUnaccepted(
+            m_deferredCompositeTaskGraph,
+            m_deferredCompositeCompiledGraph
+        );
+        m_deferredLightingSubmissionTransaction.discardUnaccepted(
+            m_deferredLightingTaskGraph,
+            m_deferredLightingCompiledGraph
+        );
+        m_surfelGiSubmissionTransaction.discardUnaccepted(
+            m_surfelGiTaskGraph,
+            m_surfelGiCompiledGraph
+        );
     };
     const auto discardRenderPackets = [&](){
         if(asyncPrefixTiming){
@@ -1373,14 +1419,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         frameTimingTransaction.discard();
         discardTimingTickets();
-        m_deferredCompositeSubmissionTransaction.discardUnaccepted(
-            m_deferredCompositeTaskGraph,
-            m_deferredCompositeCompiledGraph
-        );
-        m_surfelGiSubmissionTransaction.discardUnaccepted(
-            m_surfelGiTaskGraph,
-            m_surfelGiCompiledGraph
-        );
+        discardUnacceptedGraphPackets();
         restorePostGbufferPacketCpuState();
         m_raytracingSystem.discardSoftShadowTemporalHistory();
         resetAbandonedFrameStateHandoffs();
@@ -2509,43 +2548,35 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // Lagged lighting reads immutable history on Graphics; default lighting consumes live effects.
-    bool deferredLightingCommandListReady = false;
-    const Core::Graphics::JobHandle deferredLightingRecordingJob = m_graphics.scheduleGraphicsJob([
-        this,
-        &deferredTargets,
-        deferredLightingCommandList,
-        &deferredLightingCommandListReady,
-        laggedAsyncLightingSchedule,
-        &frameExecutionTimingTickets
-    ](){
-        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
-            frameExecutionTimingTickets,
-            ECSRenderDetail::FrameExecutionWork::DeferredLighting
+    // The graph now owns the lighting command list and native recording. State fan-in remains manual only until
+    // compiler-produced barriers replace this temporary bridge.
+    Core::GpuNativePacketRecorder deferredLightingRecorder(device);
+    const Core::GpuNativePacketRecordDesc deferredLightingRecordDesc{
+        .packet = deferredLightingPacket,
+        .initialStates = &m_deferredLightingInputStateHandoff,
+        .finalStates = &m_deferredLightingStateHandoff,
+    };
+    const bool deferredLightingRecorded =
+        m_deferredLightingTaskGraphValid
+        && m_deferredLightingTask.valid()
+        && m_deferredLightingGraphicsEffectsCompletion.valid()
+        && deferredLightingDependentCompletion.valid()
+        && deferredLightingPacket.valid()
+        && deferredLightingRecorder.recordPacket(
+            m_deferredLightingTaskGraph,
+            m_deferredLightingCompiledGraph,
+            deferredLightingRecordDesc,
+            m_deferredLightingRecordedGraph
+        )
+        && m_deferredLightingStateHandoff.valid()
+    ;
+    if(!deferredLightingRecorded){
+        m_deferredLightingSubmissionTransaction.discardUnaccepted(
+            m_deferredLightingTaskGraph,
+            m_deferredLightingCompiledGraph
         );
-        deferredLightingCommandList->open(&m_deferredLightingInputStateHandoff);
-        if(!deferredLightingCommandList->hasCommandBuffer())
-            return;
-
-        const bool deferredLightingRecorded = m_deferredSystem.renderDeferredLighting(
-            *deferredLightingCommandList,
-            deferredTargets,
-            laggedAsyncLightingSchedule
-        );
-        deferredLightingCommandList->close(&m_deferredLightingStateHandoff);
-        deferredLightingCommandListReady =
-            deferredLightingRecorded
-            && m_deferredLightingStateHandoff.valid()
-            && deferredLightingCommandList->hasCommandBuffer()
-        ;
-    });
-    if(!deferredLightingRecordingJob.valid()){
-        discardRenderPackets();
-        return;
-    }
-
-    m_graphics.waitJob(deferredLightingRecordingJob);
-    if(!deferredLightingCommandListReady){
+        deferredLightingTimingTicket.discard();
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned deferred lighting"));
         discardRenderPackets();
         return;
     }
@@ -2751,7 +2782,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         { ECSRenderDetail::FrameExecutionWork::AvboitExtinction, avboitExtinctionCommandList },
         { ECSRenderDetail::FrameExecutionWork::AvboitIntegration, asyncAvboitIntegrationCommandList },
         { ECSRenderDetail::FrameExecutionWork::AvboitAccumulation, avboitAccumulateCommandList },
-        { ECSRenderDetail::FrameExecutionWork::DeferredLighting, deferredLightingCommandList },
         { ECSRenderDetail::FrameExecutionWork::GraphicsPresent, deferredPresentCommandList },
     };
     if(!frameExecutionCommandLists.appendPlannedWorkCommandLists(
@@ -2950,6 +2980,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return true;
     };
     Core::QueueSubmissionToken surfelGiSubmissionToken;
+    Core::QueueSubmissionToken deferredLightingSubmissionToken;
     Core::QueueSubmissionToken deferredCompositeSubmissionToken;
     const auto recoverPendingFrameSubmission = [&]() -> bool {
         const Core::QueueSubmissionToken* asyncWaitToken = frameExecutionSubmissionState.asyncRecoveryWaitToken();
@@ -2958,6 +2989,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && surfelGiSubmissionToken.queue == Core::CommandQueue::Compute
         )
             asyncWaitToken = &surfelGiSubmissionToken;
+        if(
+            deferredLightingSubmissionToken.valid()
+            && deferredLightingSubmissionToken.queue == Core::CommandQueue::Compute
+        )
+            asyncWaitToken = &deferredLightingSubmissionToken;
         if(
             deferredCompositeSubmissionToken.valid()
             && deferredCompositeSubmissionToken.queue == Core::CommandQueue::Compute
@@ -3007,10 +3043,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 ECSRenderDetail::FrameExecutionSubmissionBatch::AsyncRayEffects
             );
             if(!shadowSubmissionToken.valid()){
-                m_surfelGiSubmissionTransaction.discardUnaccepted(
-                    m_surfelGiTaskGraph,
-                    m_surfelGiCompiledGraph
-                );
+                discardUnacceptedGraphPackets();
                 discardTimingTickets();
                 restoreShadowCpuState();
                 restoreEffectsCpuState();
@@ -3036,10 +3069,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     ))
                 ;
                 if(!producerReturnStatesReady){
-                    m_surfelGiSubmissionTransaction.discardUnaccepted(
-                        m_surfelGiTaskGraph,
-                        m_surfelGiCompiledGraph
-                    );
+                    discardUnacceptedGraphPackets();
                     discardTimingTickets();
                     restoreUnacceptedGraphicsEffectsCpuState();
                     restoreSurfelGiCpuState();
@@ -3080,10 +3110,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     shadowComputeScratchBuffers,
                     LengthOf(shadowComputeScratchBuffers)
                 )){
-                    m_surfelGiSubmissionTransaction.discardUnaccepted(
-                        m_surfelGiTaskGraph,
-                        m_surfelGiCompiledGraph
-                    );
+                    discardUnacceptedGraphPackets();
                     discardTimingTickets();
                     restoreUnacceptedGraphicsEffectsCpuState();
                     restoreSurfelGiCpuState();
@@ -3108,10 +3135,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                         nullptr,
                         0u
                     )){
-                        m_surfelGiSubmissionTransaction.discardUnaccepted(
-                            m_surfelGiTaskGraph,
-                            m_surfelGiCompiledGraph
-                        );
+                        discardUnacceptedGraphPackets();
                         discardTimingTickets();
                         restoreGraphicsEffectsCpuState();
                         restoreSurfelGiCpuState();
@@ -3150,10 +3174,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 : Core::QueueSubmissionToken{}
             ;
             if(!surfelGiSubmissionToken.valid()){
-                m_surfelGiSubmissionTransaction.discardUnaccepted(
-                    m_surfelGiTaskGraph,
-                    m_surfelGiCompiledGraph
-                );
+                discardUnacceptedGraphPackets();
                 discardTimingTickets();
                 restoreSurfelGiCpuState();
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned surfel GI submission was rejected"));
@@ -3170,6 +3191,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_surfelGiStateHandoff,
                 deferredTargets.surfelIrradiance.get()
             )){
+                discardUnacceptedGraphPackets();
                 discardTimingTickets();
                 if(!recoverPendingFrameSubmission())
                     failFrameRenderRecovery();
@@ -3199,6 +3221,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     surfelGiComputeScratchBuffers,
                     LengthOf(surfelGiComputeScratchBuffers)
                 )){
+                    discardUnacceptedGraphPackets();
                     discardTimingTickets();
                     if(!recoverPendingFrameSubmission())
                         failFrameRenderRecovery();
@@ -3214,6 +3237,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsEffects
             );
             if(!graphicsEffectsSubmissionToken.valid()){
+                discardUnacceptedGraphPackets();
                 discardTimingTickets();
                 // Accepted-token tracking starts when this batch begins.
                 if(!frameExecutionSubmissionState.batchHasAcceptedPacket(
@@ -3233,22 +3257,55 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 return;
             }
 
-            break;
-        }
-        case ECSRenderDetail::FrameExecutionSubmissionBatch::DeferredLighting:{
-            // Accepted history lets Graphics light current G-buffer data beside the async producer.
-            const Core::QueueSubmissionToken lightingSubmissionToken = dispatchRecordedFrameBatch(
-                ECSRenderDetail::FrameExecutionSubmissionBatch::DeferredLighting
-            );
-            if(!lightingSubmissionToken.valid()){
+            // Deferred lighting is graph-owned but retains the accepted Graphics effects batch as an explicit
+            // completion import until those producers migrate too. The live path additionally waits for surfel GI;
+            // the opt-in lagged path instead consumes the accepted history snapshot.
+            const Core::GpuTaskGraphExternalCompletionToken lightingCompletionTokens[] = {
+                Core::GpuTaskGraphExternalCompletionToken{
+                    .completion = m_deferredLightingGraphicsEffectsCompletion,
+                    .token = graphicsEffectsSubmissionToken,
+                },
+                Core::GpuTaskGraphExternalCompletionToken{
+                    .completion = deferredLightingDependentCompletion,
+                    .token = laggedAsyncLightingSchedule
+                        ? m_laggedLightingHistorySubmissionToken
+                        : surfelGiSubmissionToken,
+                },
+            };
+            Core::Alloc::ScratchArena lightingScratchArena(RendererArenaScope::s_TaskGraphArena);
+            const Core::GpuTaskGraphSubmitter deferredLightingSubmitter(device);
+            const bool deferredLightingAccepted =
+                m_deferredLightingTaskGraphValid
+                && m_deferredLightingTask.valid()
+                && m_deferredLightingGraphicsEffectsCompletion.valid()
+                && deferredLightingDependentCompletion.valid()
+                && deferredLightingSubmitter.submitPacket(
+                    m_deferredLightingTaskGraph,
+                    m_deferredLightingCompiledGraph,
+                    m_deferredLightingRecordedGraph,
+                    deferredLightingPacket,
+                    lightingCompletionTokens,
+                    LengthOf(lightingCompletionTokens),
+                    m_deferredLightingSubmissionTransaction,
+                    lightingScratchArena,
+                    &deferredLightingTimingTicket
+                )
+            ;
+            deferredLightingSubmissionToken = deferredLightingAccepted
+                ? m_deferredLightingSubmissionTransaction.packetToken(deferredLightingPacket)
+                : Core::QueueSubmissionToken{}
+            ;
+            if(!deferredLightingSubmissionToken.valid()){
+                discardUnacceptedGraphPackets();
                 discardTimingTickets();
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred lighting submission was rejected"));
                 if(!recoverPendingFrameSubmission())
                     failFrameRenderRecovery();
                 return;
             }
             if(laggedAsyncLightingSchedule)
                 deferredTargets.laggedLightingHistory.slotsUploaded = true;
-            const bool lightingReturnStatesReady = !dedicatedAsyncCompute || laggedAsyncLightingSchedule || (
+            const bool lightingReturnStatesReady = !deferredLightingRunsOnCompute || laggedAsyncLightingSchedule || (
                 m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
                     m_deferredLightingStateHandoff,
                     deferredTargets.shadowVisibility.get()
@@ -3264,6 +3321,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 )
             );
             if(!lightingReturnStatesReady){
+                discardUnacceptedGraphPackets();
                 discardTimingTickets();
                 if(!recoverPendingFrameSubmission())
                     failFrameRenderRecovery();
@@ -3281,7 +3339,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
             const Core::GpuTaskGraphExternalCompletionToken lightingCompletionToken{
                 .completion = m_deferredCompositeLightingCompletion,
-                .token = lightingSubmissionToken,
+                .token = deferredLightingSubmissionToken,
             };
             const Core::GpuTaskGraphSubmitter deferredCompositeSubmitter(device);
             const bool deferredCompositeAccepted =
@@ -3307,10 +3365,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 : Core::QueueSubmissionToken{}
             ;
             if(!deferredCompositeSubmissionToken.valid()){
-                m_deferredCompositeSubmissionTransaction.discardUnaccepted(
-                    m_deferredCompositeTaskGraph,
-                    m_deferredCompositeCompiledGraph
-                );
+                discardUnacceptedGraphPackets();
                 discardTimingTickets();
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred composite submission was rejected"));
                 if(!recoverPendingFrameSubmission())

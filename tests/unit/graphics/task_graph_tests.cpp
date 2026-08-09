@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <core/graphics/task_graph/compiler.h>
+#include <core/graphics/task_graph/packet_runtime.h>
 #include <core/telemetry/frame_graph_contributor.h>
 
 
@@ -107,6 +108,18 @@ inline constexpr Name s_TaskGraphScratchArena("tests/graphics/task_graph_scratch
     return compiler.assignQueues(graph, analysis, topology, assignments);
 }
 
+[[nodiscard]] bool Compile(
+    const Graphics::GpuTaskGraph& graph,
+    Graphics::GpuTaskGraphAnalysis& analysis,
+    const Graphics::GpuTaskGraphQueueTopology& topology,
+    Graphics::GpuTaskGraphQueueAssignments& assignments,
+    Graphics::GpuCompiledGraph& compiledGraph
+){
+    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
+    const Graphics::GpuTaskGraphCompiler compiler;
+    return compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena);
+}
+
 [[nodiscard]] constexpr Graphics::GpuQueueCapability::Mask QueueCapabilities(
     const Graphics::GpuQueueCapability::Mask first,
     const Graphics::GpuQueueCapability::Mask second = Graphics::GpuQueueCapability::None,
@@ -200,6 +213,25 @@ struct PayloadDestroyTask{
                 ++*destructionCount;
         }
     };
+};
+
+struct PacketLifecycleTask{
+    struct Payload{
+        u32* acceptedCount = nullptr;
+        u32* discardedCount = nullptr;
+        Graphics::QueueSubmissionToken* acceptedToken = nullptr;
+    };
+
+    static void accepted(Payload& payload, const Graphics::QueueSubmissionToken& token){
+        if(payload.acceptedCount)
+            ++*payload.acceptedCount;
+        if(payload.acceptedToken)
+            *payload.acceptedToken = token;
+    }
+    static void discarded(Payload& payload){
+        if(payload.discardedCount)
+            ++*payload.discardedCount;
+    }
 };
 
 
@@ -1098,6 +1130,146 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
     EXPECT_EQ(analysis.topologicalOrder()[1], third);
     EXPECT_EQ(analysis.topologicalOrder()[2], first);
 }
+
+TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
+        Graphics::GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/task_graph/packet_external"))
+            .setMarkerLabel("External Completion")
+    );
+    ASSERT_TRUE(completion.valid());
+
+    u32 acceptedCount = 0u;
+    u32 discardedCount = 0u;
+    Graphics::QueueSubmissionToken acceptedToken;
+    Graphics::GpuTaskDesc firstDesc;
+    firstDesc
+        .setIdentity(Name("tests/task_graph/packet_first"))
+        .setMarkerLabel("Packet First")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Compute,
+            Graphics::GpuQueuePreference::Compute,
+            true,
+            true,
+        })
+    ;
+    const Graphics::GpuTaskId first = graph.addTask<PacketLifecycleTask>(
+        firstDesc,
+        PacketLifecycleTask::Payload{ &acceptedCount, &discardedCount, &acceptedToken }
+    );
+    ASSERT_TRUE(first.valid());
+
+    Graphics::GpuTaskDesc secondDesc;
+    secondDesc
+        .setIdentity(Name("tests/task_graph/packet_second"))
+        .setMarkerLabel("Packet Second")
+        .setDependencies(&first, 1u)
+        .setExternalDependencies(&completion, 1u)
+    ;
+    const Graphics::GpuTaskId second = graph.addTask<PacketLifecycleTask>(
+        secondDesc,
+        PacketLifecycleTask::Payload{ &acceptedCount, &discardedCount, &acceptedToken }
+    );
+    ASSERT_TRUE(second.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_TRUE(compiledGraph.validFor(graph));
+    ASSERT_EQ(compiledGraph.taskCount(), 2u);
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(second);
+    ASSERT_TRUE(firstPacket.valid());
+    ASSERT_TRUE(secondPacket.valid());
+    EXPECT_NE(firstPacket, secondPacket);
+    const auto& secondPacketPlan = compiledGraph.packet(secondPacket);
+    ASSERT_EQ(secondPacketPlan.taskCount, 1u);
+    ASSERT_EQ(secondPacketPlan.dependencyCount, 1u);
+    ASSERT_EQ(secondPacketPlan.externalDependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(secondPacket)[0].producer, firstPacket);
+    EXPECT_EQ(compiledGraph.packetExternalDependencies(secondPacket)[0], completion);
+
+    Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
+    transaction.reset(compiledGraph);
+    ASSERT_TRUE(transaction.markPacketRecorded(firstPacket));
+    const Graphics::QueueSubmissionToken firstToken{ Graphics::CommandQueue::Compute, 41u };
+    transaction.acceptPacket(graph, compiledGraph, firstPacket, firstToken);
+    EXPECT_EQ(acceptedCount, 1u);
+    EXPECT_EQ(discardedCount, 0u);
+    EXPECT_EQ(acceptedToken.queue, firstToken.queue);
+    EXPECT_EQ(acceptedToken.value, firstToken.value);
+    ASSERT_NE(transaction.latestAcceptedToken(compiledGraph.packet(firstPacket).queue), nullptr);
+    EXPECT_EQ(transaction.latestAcceptedToken(compiledGraph.packet(firstPacket).queue)->value, firstToken.value);
+
+    // A later packet that never reaches submission must discard only itself; the accepted producer remains visible
+    // to recovery and must never receive a rollback callback.
+    transaction.discardUnaccepted(graph, compiledGraph);
+    EXPECT_EQ(acceptedCount, 1u);
+    EXPECT_EQ(discardedCount, 1u);
+    ASSERT_NE(transaction.packetRuntime(secondPacket), nullptr);
+    EXPECT_EQ(
+        transaction.packetRuntime(secondPacket)->state,
+        Graphics::GpuPacketRuntimeState::Rejected
+    );
+}
+
+
+TEST(GpuTaskGraph, CompilesTransferPreferenceToGraphicsFallbackWithoutARendererPath){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    u32 acceptedCount = 0u;
+    u32 discardedCount = 0u;
+    Graphics::QueueSubmissionToken acceptedToken;
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/transfer_fallback"))
+        .setMarkerLabel("Transfer Fallback")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+    const Graphics::GpuTaskId copyTask = graph.addTask<PacketLifecycleTask>(
+        desc,
+        PacketLifecycleTask::Payload{ &acceptedCount, &discardedCount, &acceptedToken }
+    );
+    ASSERT_TRUE(copyTask.valid());
+
+    const Graphics::GpuPhysicalQueueInfo graphicsOnly[] = { GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = graphicsOnly,
+        .queueCount = LengthOf(graphicsOnly),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(copyTask);
+    ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::Fallback);
+
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(copyTask);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packet(packet).queue, assignment->queue);
+    const Graphics::GpuPhysicalQueueInfo* const packetQueue = compiledGraph.queueInfo(compiledGraph.packet(packet).queue);
+    ASSERT_NE(packetQueue, nullptr);
+    EXPECT_EQ(packetQueue->queueClass, Graphics::CommandQueue::Graphics);
+}
+
 
 TEST(GpuTaskGraph, RejectsExplicitCyclesAndExportsExternalMetadata){
     TestArena testArena;

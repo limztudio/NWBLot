@@ -13,7 +13,7 @@
 
 #include <core/ecs/system.h>
 #include <core/graphics/render_pass.h>
-#include <core/graphics/task_graph/compiler.h>
+#include <core/graphics/task_graph/packet_runtime.h>
 #include <core/telemetry/frame_graph_contributor.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets_material/asset.h>
@@ -120,7 +120,7 @@ public:
         m_laggedLightingReport = LaggedLightingReport::Unreported;
         m_laggedLightingReportGeneration = 0u;
         resetLaggedLightingHistoryTracking();
-        resetLaggedLightingStashStateHandoffs();
+        resetLaggedLightingHistoryCopyStateHandoffs();
     }
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept{ return m_frameLaggedAsyncLightingEnabled; }
 
@@ -135,13 +135,17 @@ private:
     void resetFrameRecordingStateHandoffs()noexcept;
     void resetAbandonedFrameStateHandoffs()noexcept;
     void resetRejectedAsyncRayEffectsStateHandoffs()noexcept;
-    void resetLaggedLightingStashStateHandoffs()noexcept;
+    void resetLaggedLightingHistoryCopyStateHandoffs()noexcept;
     void invalidateLaggedLightingHistorySubmission()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
     void buildGpuTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         const DeferredFrameTargets& deferredTargets,
         const ECSRenderDetail::FrameExecutionPlan& legacyPlan
+    );
+    void buildLaggedLightingHistoryTaskGraph(
+        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+        const DeferredFrameTargets& deferredTargets
     );
     void reportLaggedLightingTransition(LaggedLightingReport report, u64 targetGeneration);
     [[nodiscard]] Core::Alloc::GlobalArena& arena()noexcept{ return m_arena; }
@@ -184,6 +188,17 @@ private:
     u16 m_gpuTaskGraphDeviceGeneration = 1u;
     bool m_gpuTaskGraphValid = false;
     bool m_gpuTaskGraphLiveRoutingValid = false;
+    // The first live graph pilot is intentionally isolated from the telemetry sidecar: its sole packet is submitted
+    // by the graph, while the remaining renderer work still uses the legacy plan until it is migrated.
+    Core::GpuTaskGraph m_laggedLightingHistoryTaskGraph;
+    Core::GpuTaskGraphAnalysis m_laggedLightingHistoryTaskGraphAnalysis;
+    Core::GpuTaskGraphQueueAssignments m_laggedLightingHistoryTaskGraphQueueAssignments;
+    Core::GpuCompiledGraph m_laggedLightingHistoryCompiledGraph;
+    Core::GpuRecordedGraph m_laggedLightingHistoryRecordedGraph;
+    Core::GpuGraphSubmissionTransaction m_laggedLightingHistorySubmissionTransaction;
+    Core::GpuTaskId m_laggedLightingHistoryTask;
+    Core::GpuExternalCompletionId m_laggedLightingPresentationCompletion;
+    bool m_laggedLightingHistoryTaskGraphValid = false;
 
 private:
     RendererMeshState m_meshState;
@@ -243,10 +258,10 @@ private:
     Core::CommandListResourceStateHandoff m_deferredPresentBaseStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredPresentInputStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredPresentStateHandoff;
-    // The source images leave the accepted producer/current-lighting path in this state while an AsyncCompute packet
-    // copies them into the separately tracked history. The history textures themselves restore to Common on close.
-    Core::CommandListResourceStateHandoff m_laggedLightingStashInputStateHandoff;
-    Core::CommandListResourceStateHandoff m_laggedLightingStashStateHandoff;
+    // The source images leave the accepted producer/current-lighting path in this state while the graph-owned copy
+    // records into separately tracked history. The history textures themselves restore to Common on close.
+    Core::CommandListResourceStateHandoff m_laggedLightingHistoryCopyInputStateHandoff;
+    Core::CommandListResourceStateHandoff m_laggedLightingHistoryCopyStateHandoff;
     // AVBOIT's raster occupancy/extinction/accumulation stages stay on Graphics, while the depth-warp and integration
     // dispatches run on AsyncCompute. All inter-stage work resources use concurrent sharing; these handoffs carry
     // state only and are submitted in strict Graphics -> Compute -> Graphics order.
@@ -283,7 +298,6 @@ private:
     Core::CommandListHandle m_asyncDeferredLightingCommandList;
     Core::CommandListHandle m_deferredLightingCommandList;
     Core::CommandListHandle m_asyncDeferredCompositeCommandList;
-    Core::CommandListHandle m_asyncLaggedLightingStashCommandList;
     // The hybrid AVBOIT packet uses Graphics lists for raster phases and AsyncCompute lists for its two pure dispatches.
     Core::CommandListHandle m_avboitCommandList;
     Core::CommandListHandle m_asyncAvboitDepthWarpCommandList;

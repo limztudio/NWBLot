@@ -131,6 +131,12 @@ RendererSystem::RendererSystem(
     , m_gpuTaskGraphWorkQueues(arena)
     , m_gpuTaskGraphLegacyMismatches(arena)
     , m_gpuTaskGraphLegacyQueueMismatches(arena)
+    , m_laggedLightingHistoryTaskGraph(arena)
+    , m_laggedLightingHistoryTaskGraphAnalysis(arena)
+    , m_laggedLightingHistoryTaskGraphQueueAssignments(arena)
+    , m_laggedLightingHistoryCompiledGraph(arena)
+    , m_laggedLightingHistoryRecordedGraph(arena)
+    , m_laggedLightingHistorySubmissionTransaction(arena)
     , m_meshState(arena)
     , m_materialState(arena)
     , m_rayTracingState(arena)
@@ -172,8 +178,8 @@ RendererSystem::RendererSystem(
     , m_deferredPresentBaseStateHandoff(arena)
     , m_deferredPresentInputStateHandoff(arena)
     , m_deferredPresentStateHandoff(arena)
-    , m_laggedLightingStashInputStateHandoff(arena)
-    , m_laggedLightingStashStateHandoff(arena)
+    , m_laggedLightingHistoryCopyInputStateHandoff(arena)
+    , m_laggedLightingHistoryCopyStateHandoff(arena)
     , m_avboitPreStateHandoff(arena)
     , m_avboitDepthWarpInputStateHandoff(arena)
     , m_avboitDepthWarpStateHandoff(arena)
@@ -242,9 +248,9 @@ void RendererSystem::reportLaggedLightingTransition(const LaggedLightingReport r
     }
 }
 
-void RendererSystem::resetLaggedLightingStashStateHandoffs()noexcept{
-    m_laggedLightingStashInputStateHandoff.reset();
-    m_laggedLightingStashStateHandoff.reset();
+void RendererSystem::resetLaggedLightingHistoryCopyStateHandoffs()noexcept{
+    m_laggedLightingHistoryCopyInputStateHandoff.reset();
+    m_laggedLightingHistoryCopyStateHandoff.reset();
 }
 
 void RendererSystem::invalidateLaggedLightingHistorySubmission()noexcept{
@@ -289,7 +295,7 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     m_deferredPresentBaseStateHandoff.reset();
     m_deferredPresentInputStateHandoff.reset();
     m_deferredPresentStateHandoff.reset();
-    resetLaggedLightingStashStateHandoffs();
+    resetLaggedLightingHistoryCopyStateHandoffs();
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpInputStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
@@ -346,7 +352,7 @@ void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
     m_deferredPresentBaseStateHandoff.reset();
     m_deferredPresentInputStateHandoff.reset();
     m_deferredPresentStateHandoff.reset();
-    resetLaggedLightingStashStateHandoffs();
+    resetLaggedLightingHistoryCopyStateHandoffs();
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpInputStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
@@ -389,7 +395,7 @@ void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
     m_deferredPresentBaseStateHandoff.reset();
     m_deferredPresentInputStateHandoff.reset();
     m_deferredPresentStateHandoff.reset();
-    resetLaggedLightingStashStateHandoffs();
+    resetLaggedLightingHistoryCopyStateHandoffs();
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpInputStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
@@ -499,6 +505,15 @@ void RendererSystem::invalidateResources(){
     m_gpuTaskGraph.reset();
     m_gpuTaskGraphAnalysis.reset();
     m_gpuTaskGraphQueueAssignments.reset();
+    m_laggedLightingHistoryTaskGraphValid = false;
+    m_laggedLightingHistoryTask = {};
+    m_laggedLightingPresentationCompletion = {};
+    m_laggedLightingHistoryTaskGraph.reset();
+    m_laggedLightingHistoryTaskGraphAnalysis.reset();
+    m_laggedLightingHistoryTaskGraphQueueAssignments.reset();
+    m_laggedLightingHistoryCompiledGraph.reset();
+    m_laggedLightingHistoryRecordedGraph.reset(m_laggedLightingHistoryCompiledGraph);
+    m_laggedLightingHistorySubmissionTransaction.reset(m_laggedLightingHistoryCompiledGraph);
     m_gpuTaskGraphDeviceGeneration = m_gpuTaskGraphDeviceGeneration == Limit<u16>::s_Max
         ? 1u
         : static_cast<u16>(m_gpuTaskGraphDeviceGeneration + 1u)
@@ -520,7 +535,6 @@ void RendererSystem::invalidateResources(){
     m_asyncDeferredLightingCommandList.reset();
     m_deferredLightingCommandList.reset();
     m_asyncDeferredCompositeCommandList.reset();
-    m_asyncLaggedLightingStashCommandList.reset();
     m_avboitCommandList.reset();
     m_asyncAvboitDepthWarpCommandList.reset();
     m_avboitExtinctionCommandList.reset();
@@ -668,15 +682,6 @@ bool RendererSystem::ensureFrameCommandLists(){
             m_asyncDeferredCompositeCommandList = device.createCommandList(asyncDeferredCompositeCommandListParameters);
             if(!m_asyncDeferredCompositeCommandList){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async deferred-composite command list"));
-                return false;
-            }
-        }
-        if(!m_asyncLaggedLightingStashCommandList){
-            Core::CommandListParameters asyncLaggedLightingStashCommandListParameters;
-            asyncLaggedLightingStashCommandListParameters.setRenderLane(Core::RenderLane::AsyncCompute);
-            m_asyncLaggedLightingStashCommandList = device.createCommandList(asyncLaggedLightingStashCommandListParameters);
-            if(!m_asyncLaggedLightingStashCommandList){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create async lagged-lighting stash command list"));
                 return false;
             }
         }
@@ -1032,6 +1037,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_gpuTaskGraph.reset();
     m_gpuTaskGraphAnalysis.reset();
     m_gpuTaskGraphQueueAssignments.reset();
+    m_laggedLightingHistoryTaskGraphValid = false;
+    m_laggedLightingHistoryTask = {};
+    m_laggedLightingPresentationCompletion = {};
+    m_laggedLightingHistoryTaskGraph.reset();
+    m_laggedLightingHistoryTaskGraphAnalysis.reset();
+    m_laggedLightingHistoryTaskGraphQueueAssignments.reset();
+    m_laggedLightingHistoryCompiledGraph.reset();
+    m_laggedLightingHistoryRecordedGraph.reset(m_laggedLightingHistoryCompiledGraph);
+    m_laggedLightingHistorySubmissionTransaction.reset(m_laggedLightingHistoryCompiledGraph);
 
     if(!framebuffer)
         return;
@@ -1072,7 +1086,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(m_laggedLightingHistoryGeneration != historyGeneration){
             // Target generations prevent history from using recycled slots after resize.
             invalidateLaggedLightingHistorySubmission();
-            resetLaggedLightingStashStateHandoffs();
+            resetLaggedLightingHistoryCopyStateHandoffs();
             m_laggedLightingHistoryGeneration = historyGeneration;
         }
     }
@@ -1103,10 +1117,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ECSRenderDetail::FrameExecutionWork::DeferredLighting,
         ECSRenderDetail::FrameExecutionExternalWait::LaggedLightingHistory
     );
-    // Accepted history enables Graphics lighting to overlap the async producer.
-    const bool captureLaggedLightingHistory = frameExecutionPlan.hasWork(
-        ECSRenderDetail::FrameExecutionWork::LaggedLightingStash
-    );
+    // History capture is now a graph-owned copy task.  It remains available whenever the opt-in path has a distinct
+    // compute transport, independent of the remaining legacy packet plan.
+    const bool captureLaggedLightingHistory = laggedAsyncLightingRequested;
     // Hardware caustics remain on Graphics while software caustics use Compute.
     const bool asyncCausticsSchedule = frameExecutionPlan.workRunsOnLane(
         ECSRenderDetail::FrameExecutionWork::Caustics,
@@ -1183,7 +1196,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_asyncDeferredCompositeCommandList.get(),
         }
     );
-    Core::CommandList* asyncLaggedLightingStashCommandList = m_asyncLaggedLightingStashCommandList.get();
     Core::CommandList* avboitCommandList = m_avboitCommandList.get();
     Core::CommandList* asyncAvboitDepthWarpCommandList = m_asyncAvboitDepthWarpCommandList.get();
     Core::CommandList* avboitExtinctionCommandList = m_avboitExtinctionCommandList.get();
@@ -1207,7 +1219,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     NWB_ASSERT(deferredLightingCommandList);
     NWB_ASSERT(m_deferredCompositeCommandList);
     NWB_ASSERT(deferredCompositeCommandList);
-    NWB_ASSERT(!captureLaggedLightingHistory || asyncLaggedLightingStashCommandList);
     NWB_ASSERT(avboitCommandList);
     NWB_ASSERT(!asyncAvboitSchedule || asyncAvboitDepthWarpCommandList);
     NWB_ASSERT(!asyncAvboitSchedule || avboitExtinctionCommandList);
@@ -2972,6 +2983,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_graphics.requestDeviceRecreation();
     };
 
+    Core::QueueSubmissionToken finalPresentationSubmissionToken;
     // The plan owns packet order; these cases own acceptance-dependent state.
     for(usize submissionBatchIndex = 0u;
         submissionBatchIndex < frameExecutionPlan.submissionBatchCount();
@@ -3235,6 +3247,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     failFrameRenderRecovery();
                 return;
             }
+            finalPresentationSubmissionToken = finalSubmissionToken;
             if(!frameTimingTransaction.confirmEndSubmission(true)){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm frame critical-path timing"));
                 frameTimingTransaction.discard();
@@ -3262,141 +3275,118 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
 
     if(captureLaggedLightingHistory){
-        // Capture waits for the final read-complete edge before copying live producer outputs.
-        const Core::CommandListResourceStateHandoff* const causticStashSource = laggedAsyncLightingSchedule
+        // The graph task waits on the accepted final presentation token.  Manual state handoff remains only until
+        // compiler-produced packet state seeds replace the renderer's existing transition bridge.
+        const Core::CommandListResourceStateHandoff* const causticHistoryCopySource = laggedAsyncLightingSchedule
             ? &m_causticIrradianceLightingStateHandoff
             : &m_causticIrradianceReturnStateHandoff
         ;
-        const Core::CommandListResourceStateHandoff* const stashBranches[] = {
-            causticStashSource,
+        const Core::CommandListResourceStateHandoff* const historyCopyBranches[] = {
+            causticHistoryCopySource,
             &m_surfelIrradianceReturnStateHandoff,
         };
-        const bool stashInputReady = m_laggedLightingStashInputStateHandoff.buildFanIn(
+        const bool historyCopyInputReady = m_laggedLightingHistoryCopyInputStateHandoff.buildFanIn(
             m_shadowVisibilityReturnStateHandoff,
-            stashBranches,
-            LengthOf(stashBranches)
+            historyCopyBranches,
+            LengthOf(historyCopyBranches)
         );
-        if(!stashInputReady){
+        if(!historyCopyInputReady){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged lighting-history capture skipped because its source state was unavailable"));
             invalidateLaggedLightingHistorySubmission();
         }
+        else if(
+            !m_laggedLightingHistoryTaskGraphValid
+            || !finalPresentationSubmissionToken.valid()
+            || !m_laggedLightingHistoryTask.valid()
+            || !m_laggedLightingPresentationCompletion.valid()
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged lighting-history graph was unavailable; reverting to current-frame lighting"));
+            invalidateLaggedLightingHistorySubmission();
+            resetLaggedLightingHistoryCopyStateHandoffs();
+        }
         else{
-            asyncLaggedLightingStashCommandList->open(&m_laggedLightingStashInputStateHandoff);
-            bool stashRecorded = asyncLaggedLightingStashCommandList->hasCommandBuffer();
-            if(stashRecorded){
-                DeferredLaggedLightingHistoryResources& history = deferredTargets.laggedLightingHistory;
-                stashRecorded = history.valid();
-                if(stashRecorded){
-                    asyncLaggedLightingStashCommandList->setTextureState(
-                        deferredTargets.shadowVisibility.get(),
-                        ECSRenderDetail::s_ShadowVisibilitySubresources,
-                        Core::ResourceStates::CopySource
-                    );
-                    asyncLaggedLightingStashCommandList->setTextureState(
-                        history.shadowVisibility.get(),
-                        ECSRenderDetail::s_ShadowVisibilitySubresources,
-                        Core::ResourceStates::CopyDest
-                    );
-                    asyncLaggedLightingStashCommandList->setTextureState(
-                        deferredTargets.causticIrradiance.get(),
-                        ECSRenderDetail::s_FramebufferSubresources,
-                        Core::ResourceStates::CopySource
-                    );
-                    asyncLaggedLightingStashCommandList->setTextureState(
-                        history.causticIrradiance.get(),
-                        ECSRenderDetail::s_FramebufferSubresources,
-                        Core::ResourceStates::CopyDest
-                    );
-                    asyncLaggedLightingStashCommandList->setTextureState(
-                        deferredTargets.surfelIrradiance.get(),
-                        ECSRenderDetail::s_FramebufferSubresources,
-                        Core::ResourceStates::CopySource
-                    );
-                    asyncLaggedLightingStashCommandList->setTextureState(
-                        history.surfelIrradiance.get(),
-                        ECSRenderDetail::s_FramebufferSubresources,
-                        Core::ResourceStates::CopyDest
-                    );
-                    asyncLaggedLightingStashCommandList->commitBarriers();
-
-                    for(u32 shadowSlot = 0u; shadowSlot < NWB_SCENE_SHADOW_SLOT_COUNT; ++shadowSlot){
-                        Core::TextureSlice shadowSlice;
-                        shadowSlice.setArraySlice(shadowSlot);
-                        asyncLaggedLightingStashCommandList->copyTexture(
-                            history.shadowVisibility.get(),
-                            shadowSlice,
-                            deferredTargets.shadowVisibility.get(),
-                            shadowSlice
-                        );
-                    }
-                    const Core::TextureSlice irradianceSlice;
-                    asyncLaggedLightingStashCommandList->copyTexture(
-                        history.causticIrradiance.get(),
-                        irradianceSlice,
-                        deferredTargets.causticIrradiance.get(),
-                        irradianceSlice
-                    );
-                    asyncLaggedLightingStashCommandList->copyTexture(
-                        history.surfelIrradiance.get(),
-                        irradianceSlice,
-                        deferredTargets.surfelIrradiance.get(),
-                        irradianceSlice
-                    );
-                }
-            }
-            asyncLaggedLightingStashCommandList->close(&m_laggedLightingStashStateHandoff);
-            stashRecorded =
-                stashRecorded
-                && m_laggedLightingStashStateHandoff.valid()
-                && asyncLaggedLightingStashCommandList->hasCommandBuffer()
+            const Core::GpuSubmissionPacketId historyPacket = m_laggedLightingHistoryCompiledGraph.packetForTask(
+                m_laggedLightingHistoryTask
+            );
+            Core::GpuNativePacketRecorder recorder(device);
+            const Core::GpuNativePacketRecordDesc recordDesc{
+                .packet = historyPacket,
+                .initialStates = &m_laggedLightingHistoryCopyInputStateHandoff,
+                .finalStates = &m_laggedLightingHistoryCopyStateHandoff,
+            };
+            const bool historyCopyRecorded = historyPacket.valid()
+                && recorder.recordPacket(
+                    m_laggedLightingHistoryTaskGraph,
+                    m_laggedLightingHistoryCompiledGraph,
+                    recordDesc,
+                    m_laggedLightingHistoryRecordedGraph
+                )
+                && m_laggedLightingHistoryCopyStateHandoff.valid()
             ;
-
-            if(!stashRecorded){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record lagged lighting-history capture; reverting to current-frame lighting"));
+            if(!historyCopyRecorded){
+                m_laggedLightingHistorySubmissionTransaction.discardUnaccepted(
+                    m_laggedLightingHistoryTaskGraph,
+                    m_laggedLightingHistoryCompiledGraph
+                );
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record graph-owned lagged lighting-history capture; reverting to current-frame lighting"));
                 invalidateLaggedLightingHistorySubmission();
-                resetLaggedLightingStashStateHandoffs();
-            }
-            else if(!frameExecutionCommandLists.appendForWork(
-                ECSRenderDetail::FrameExecutionWork::LaggedLightingStash,
-                asyncLaggedLightingStashCommandList
-            )){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to append lagged lighting-history capture to its frame packet; reverting to current-frame lighting"));
-                invalidateLaggedLightingHistorySubmission();
-                resetLaggedLightingStashStateHandoffs();
+                resetLaggedLightingHistoryCopyStateHandoffs();
             }
             else{
-                const Core::QueueSubmissionToken stashSubmissionToken = dispatchRecordedFramePacket(
-                    ECSRenderDetail::FrameExecutionPacket::AsyncLaggedLightingStash
+                Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+                const Core::GpuTaskGraphExternalCompletionToken completionToken{
+                    .completion = m_laggedLightingPresentationCompletion,
+                    .token = finalPresentationSubmissionToken,
+                };
+                const Core::GpuTaskGraphSubmitter submitter(device);
+                const bool historyCopyAccepted = submitter.submitPacket(
+                    m_laggedLightingHistoryTaskGraph,
+                    m_laggedLightingHistoryCompiledGraph,
+                    m_laggedLightingHistoryRecordedGraph,
+                    historyPacket,
+                    &completionToken,
+                    1u,
+                    m_laggedLightingHistorySubmissionTransaction,
+                    scratchArena
                 );
-                if(!stashSubmissionToken.valid()){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged lighting-history capture submission was rejected; reverting to current-frame lighting"));
+                const Core::QueueSubmissionToken historyCopySubmissionToken = historyCopyAccepted
+                    ? m_laggedLightingHistorySubmissionTransaction.packetToken(historyPacket)
+                    : Core::QueueSubmissionToken{}
+                ;
+                if(!historyCopySubmissionToken.valid()){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned lagged lighting-history capture submission was rejected; reverting to current-frame lighting"));
                     invalidateLaggedLightingHistorySubmission();
-                    resetLaggedLightingStashStateHandoffs();
+                    resetLaggedLightingHistoryCopyStateHandoffs();
                 }
                 else{
-                    const bool stashReturnStatesReady =
+                    const bool historyCopyReturnStatesReady =
                         m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
-                            m_laggedLightingStashStateHandoff,
+                            m_laggedLightingHistoryCopyStateHandoff,
                             deferredTargets.shadowVisibility.get()
                         )
                         && m_causticIrradianceReturnStateHandoff.buildTextureSubset(
-                            m_laggedLightingStashStateHandoff,
+                            m_laggedLightingHistoryCopyStateHandoff,
                             deferredTargets.causticIrradiance.get()
                         )
                         && m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
-                            m_laggedLightingStashStateHandoff,
+                            m_laggedLightingHistoryCopyStateHandoff,
                             deferredTargets.surfelIrradiance.get()
                         )
                     ;
-                    if(!stashReturnStatesReady){
-                        if(!recoverPendingFrameSubmission())
+                    if(!historyCopyReturnStatesReady){
+                        if(!submitFrameRecoveryPacket(&historyCopySubmissionToken))
                             failFrameRenderRecovery();
                         // Lost retained copy state leaves no safe producer layout.
                         failFrameRenderRecovery();
                         return;
                     }
 
-                    m_laggedLightingHistorySubmissionToken = stashSubmissionToken;
+                    // The task's accepted hook publishes this exact token.  Keep the assertion close to the handoff
+                    // so a future lifecycle change cannot accidentally reintroduce a renderer-side publication path.
+                    NWB_ASSERT(
+                        m_laggedLightingHistorySubmissionToken.queue == historyCopySubmissionToken.queue
+                        && m_laggedLightingHistorySubmissionToken.value == historyCopySubmissionToken.value
+                    );
                     if(!laggedAsyncLightingSchedule){
                         reportLaggedLightingTransition(
                             LaggedLightingReport::BootstrapAccepted,

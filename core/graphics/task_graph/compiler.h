@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "compiled_graph.h"
 #include "task_graph.h"
 
 #include <core/alloc/scratch.h>
@@ -183,6 +184,18 @@ public:
         const GpuTaskGraphAnalysis& analysis,
         const GpuTaskGraphQueueTopology& topology,
         GpuTaskGraphQueueAssignments& outAssignments
+    )const;
+
+    // Phase 3's packet compiler deliberately starts with one task per packet.  It reuses the independently exposed
+    // analysis and queue-assignment results so telemetry and live packet creation consume exactly the same immutable
+    // decisions.  Packet merging and graph-owned barrier seeds are later compiler phases.
+    [[nodiscard]] bool compile(
+        const GpuTaskGraph& graph,
+        GpuTaskGraphAnalysis& outAnalysis,
+        const GpuTaskGraphQueueTopology& topology,
+        GpuTaskGraphQueueAssignments& outAssignments,
+        GpuCompiledGraph& outCompiledGraph,
+        Alloc::ScratchArena& scratchArena
     )const;
 };
 

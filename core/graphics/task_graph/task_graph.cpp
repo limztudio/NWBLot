@@ -76,7 +76,7 @@ GpuTaskGraph::~GpuTaskGraph(){
 
 
 GpuTaskId GpuTaskGraph::addTask(const GpuTaskDesc& desc){
-    return appendTask(desc, nullptr, nullptr);
+    return appendTask(desc, nullptr, nullptr, nullptr, nullptr, nullptr);
 }
 
 GpuGraphResourceId GpuTaskGraph::importResource(const GpuGraphResourceDesc& desc){
@@ -248,6 +248,36 @@ GpuTaskGraphExternalCompletionView GpuTaskGraph::externalCompletionAt(const usiz
     };
 }
 
+bool GpuTaskGraph::recordTask(
+    const GpuTaskId& taskID,
+    CommandList& commandList,
+    const GpuTaskRecordContext& context
+)const{
+    if(!validTask(taskID))
+        return false;
+
+    const GpuTaskNode& task = m_tasks[taskID.index];
+    return task.payload && task.recordPayload && task.recordPayload(task.payload, commandList, context);
+}
+
+void GpuTaskGraph::acceptTask(const GpuTaskId& taskID, const QueueSubmissionToken& token)noexcept{
+    if(!validTask(taskID) || !token.valid())
+        return;
+
+    GpuTaskNode& task = m_tasks[taskID.index];
+    if(task.payload && task.acceptPayload)
+        task.acceptPayload(task.payload, token);
+}
+
+void GpuTaskGraph::discardTask(const GpuTaskId& taskID)noexcept{
+    if(!validTask(taskID))
+        return;
+
+    GpuTaskNode& task = m_tasks[taskID.index];
+    if(task.payload && task.discardPayload)
+        task.discardPayload(task.payload);
+}
+
 bool GpuTaskGraph::appendFrameGraphTelemetry(
     Telemetry::FrameGraphBuilder& builder,
     const GpuTaskGraphAnalysis& analysis,
@@ -363,6 +393,9 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
 GpuTaskId GpuTaskGraph::appendTask(
     const GpuTaskDesc& desc,
     void* const payload,
+    const GpuTaskRecordThunk recordPayload,
+    const GpuTaskAcceptedThunk acceptPayload,
+    const GpuTaskDiscardedThunk discardPayload,
     const GpuTaskPayloadDestroyThunk destroyPayload
 ){
     if(
@@ -396,6 +429,9 @@ GpuTaskId GpuTaskGraph::appendTask(
     task.resourceUseOffset = static_cast<u32>(m_resourceUses.size());
     task.resourceUseCount = static_cast<u32>(desc.resourceUseCount);
     task.payload = payload;
+    task.recordPayload = recordPayload;
+    task.acceptPayload = acceptPayload;
+    task.discardPayload = discardPayload;
     task.destroyPayload = destroyPayload;
 
     for(usize dependencyIndex = 0u; dependencyIndex < desc.dependencyCount; ++dependencyIndex)

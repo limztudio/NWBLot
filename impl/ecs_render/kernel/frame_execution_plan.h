@@ -39,7 +39,6 @@ namespace FrameExecutionPacket{
         DeferredLighting,
         DeferredComposite,
         GraphicsPresent,
-        AsyncLaggedLightingStash,
 
         kCount,
     };
@@ -77,7 +76,6 @@ namespace FrameExecutionWork{
         DeferredLighting,
         DeferredComposite,
         GraphicsPresent,
-        LaggedLightingStash,
 
         kCount,
     };
@@ -199,7 +197,7 @@ public:
             addPacketWait(FrameExecutionPacket::GraphicsAvboitPre, FrameExecutionPacket::GraphicsPrefix);
             if(!usesAsyncCaustics){
                 assignWork(FrameExecutionWork::Caustics, FrameExecutionPacket::GraphicsAvboitPre);
-                // History stash must finish before Graphics hardware caustics rewrite live irradiance.
+                // The accepted history-copy token must finish before Graphics hardware caustics rewrite live irradiance.
                 if(usesLaggedAsyncLighting)
                     addExternalWait(
                         FrameExecutionPacket::GraphicsAvboitPre,
@@ -269,15 +267,6 @@ public:
         if(usesLaggedAsyncLighting)
             addPacketWait(FrameExecutionPacket::GraphicsPresent, FrameExecutionPacket::AsyncRayEffects);
 
-        if(capturesLaggedLightingHistory){
-            enablePacket(
-                FrameExecutionPacket::AsyncLaggedLightingStash,
-                Core::RenderLane::AsyncCompute,
-                false
-            );
-            addPacketWait(FrameExecutionPacket::AsyncLaggedLightingStash, FrameExecutionPacket::GraphicsPresent);
-            assignWork(FrameExecutionWork::LaggedLightingStash, FrameExecutionPacket::AsyncLaggedLightingStash);
-        }
         configureSubmissionBatches();
     }
 
@@ -502,8 +491,6 @@ private:
             FrameExecutionSubmissionBatch::GraphicsPresent,
             FrameExecutionPacket::GraphicsPresent
         );
-
-        // History copy records only after presentation accepts.
     }
 private:
     FrameExecutionPacketPlan m_packets[FrameExecutionPacket::kCount] = {};

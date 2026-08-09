@@ -75,8 +75,6 @@ class GpuTaskGraph final : NoCopy{
     friend class GpuTaskGraphCompiler;
 
 private:
-    using GpuTaskPayloadDestroyThunk = void(*)(GraphicsArena& arena, void* payload)noexcept;
-
     struct GpuTaskNode{
         Name identity = NAME_NONE;
         GpuQueueRequest queue;
@@ -90,6 +88,9 @@ private:
         u32 resourceUseOffset = 0u;
         u32 resourceUseCount = 0u;
         void* payload = nullptr;
+        GpuTaskRecordThunk recordPayload = nullptr;
+        GpuTaskAcceptedThunk acceptPayload = nullptr;
+        GpuTaskDiscardedThunk discardPayload = nullptr;
         GpuTaskPayloadDestroyThunk destroyPayload = nullptr;
     };
 
@@ -129,7 +130,32 @@ public:
         if(!storedPayload)
             return {};
 
-        const GpuTaskId task = appendTask(desc, storedPayload, &DestroyPayload<Payload>);
+        GpuTaskRecordThunk recordPayload = nullptr;
+        if constexpr(requires(const Payload& value, CommandList& commandList, const GpuTaskRecordContext& context){
+            { TaskT::record(value, commandList, context) } -> SameAs<bool>;
+        })
+            recordPayload = &RecordPayload<TaskT>;
+
+        GpuTaskAcceptedThunk acceptPayload = nullptr;
+        if constexpr(requires(Payload& value, const QueueSubmissionToken& token){
+            TaskT::accepted(value, token);
+        })
+            acceptPayload = &AcceptPayload<TaskT>;
+
+        GpuTaskDiscardedThunk discardPayload = nullptr;
+        if constexpr(requires(Payload& value){
+            TaskT::discarded(value);
+        })
+            discardPayload = &DiscardPayload<TaskT>;
+
+        const GpuTaskId task = appendTask(
+            desc,
+            storedPayload,
+            recordPayload,
+            acceptPayload,
+            discardPayload,
+            &DestroyPayload<Payload>
+        );
         if(!task.valid())
             DestroyArenaObject(m_arena, storedPayload);
         return task;
@@ -159,6 +185,13 @@ public:
     [[nodiscard]] GpuTaskGraphTaskView taskAt(usize index)const;
     [[nodiscard]] GpuTaskGraphResourceView resourceAt(usize index)const;
     [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const;
+    [[nodiscard]] bool recordTask(
+        const GpuTaskId& task,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    )const;
+    void acceptTask(const GpuTaskId& task, const QueueSubmissionToken& token)noexcept;
+    void discardTask(const GpuTaskId& task)noexcept;
     [[nodiscard]] bool appendFrameGraphTelemetry(
         Telemetry::FrameGraphBuilder& builder,
         const GpuTaskGraphAnalysis& analysis,
@@ -168,6 +201,25 @@ public:
 
 
 private:
+    template<typename TaskT>
+    static bool RecordPayload(
+        const void* const payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        using Payload = typename TaskT::Payload;
+        return TaskT::record(*static_cast<const Payload*>(payload), commandList, context);
+    }
+    template<typename TaskT>
+    static void AcceptPayload(void* const payload, const QueueSubmissionToken& token){
+        using Payload = typename TaskT::Payload;
+        TaskT::accepted(*static_cast<Payload*>(payload), token);
+    }
+    template<typename TaskT>
+    static void DiscardPayload(void* const payload){
+        using Payload = typename TaskT::Payload;
+        TaskT::discarded(*static_cast<Payload*>(payload));
+    }
     template<typename PayloadT>
     static void DestroyPayload(GraphicsArena& arena, void* payload)noexcept{
         DestroyArenaObject(arena, static_cast<PayloadT*>(payload));
@@ -176,6 +228,9 @@ private:
     [[nodiscard]] GpuTaskId appendTask(
         const GpuTaskDesc& desc,
         void* payload,
+        GpuTaskRecordThunk recordPayload,
+        GpuTaskAcceptedThunk acceptPayload,
+        GpuTaskDiscardedThunk discardPayload,
         GpuTaskPayloadDestroyThunk destroyPayload
     );
     [[nodiscard]] GpuGraphResourceId appendResource(const GpuGraphResourceDesc& desc);

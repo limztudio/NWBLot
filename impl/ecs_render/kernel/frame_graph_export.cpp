@@ -173,6 +173,19 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
         ))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph telemetry export failed"));
     }
+    if(m_laggedLightingHistoryTaskGraphValid){
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+        const Core::GpuTaskGraphTelemetryOptions historyCopyTelemetryOptions{
+            .queueAssignments = &m_laggedLightingHistoryTaskGraphQueueAssignments,
+        };
+        if(!m_laggedLightingHistoryTaskGraph.appendFrameGraphTelemetry(
+            builder,
+            m_laggedLightingHistoryTaskGraphAnalysis,
+            scratchArena,
+            historyCopyTelemetryOptions
+        ))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged-lighting history-copy graph telemetry export failed"));
+    }
 
     return true;
 }

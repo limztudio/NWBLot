@@ -79,8 +79,6 @@ public:
             enable(FrameExecutionWork::AvboitIntegration);
             enable(FrameExecutionWork::AvboitAccumulation);
         }
-        if(m_capturesLaggedLightingHistory)
-            enable(FrameExecutionWork::LaggedLightingStash);
     }
 
 
@@ -143,8 +141,6 @@ public:
             return producer == FrameExecutionWork::DeferredComposite
                 || (m_usesLaggedLightingHistory && producer == FrameExecutionWork::RayEffects)
             ;
-        case FrameExecutionWork::LaggedLightingStash:
-            return producer == FrameExecutionWork::GraphicsPresent;
         default:
             return false;
         }

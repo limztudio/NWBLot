@@ -186,6 +186,21 @@ inline constexpr bool operator!=(const GpuExternalCompletionId& lhs, const GpuEx
     return !(lhs == rhs);
 }
 
+// A packet is the compiler-generated unit of native recording and queue submission.  Like graph handles, packet
+// IDs are tied to one graph generation so a recorded or accepted packet can never be reused after reset().
+struct GpuSubmissionPacketId{
+    u32 index = Limit<u32>::s_Max;
+    u64 generation = 0u;
+
+    [[nodiscard]] constexpr bool valid()const{ return index != Limit<u32>::s_Max && generation != 0u; }
+};
+inline constexpr bool operator==(const GpuSubmissionPacketId& lhs, const GpuSubmissionPacketId& rhs)noexcept{
+    return lhs.index == rhs.index && lhs.generation == rhs.generation;
+}
+inline constexpr bool operator!=(const GpuSubmissionPacketId& lhs, const GpuSubmissionPacketId& rhs)noexcept{
+    return !(lhs == rhs);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

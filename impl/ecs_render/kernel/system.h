@@ -177,6 +177,18 @@ private:
         DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
+    void buildAvboitTaskGraph(
+        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+        DeferredFrameTargets& deferredTargets,
+        const CsgFrameState& csgFrameState,
+        bool clearTargets,
+        bool hasTransparentRenderers,
+        Core::GpuTimingSubmissionTicket& preTimingTicket,
+        Core::GpuTimingSubmissionTicket& depthWarpTimingTicket,
+        Core::GpuTimingSubmissionTicket& extinctionTimingTicket,
+        Core::GpuTimingSubmissionTicket& integrationTimingTicket,
+        Core::GpuTimingSubmissionTicket& accumulationTimingTicket
+    );
     void buildDeferredLightingTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         DeferredFrameTargets& deferredTargets,
@@ -285,6 +297,21 @@ private:
     Core::GpuTaskId m_surfelGiTask;
     Core::GpuExternalCompletionId m_surfelGiEffectsCompletion;
     bool m_surfelGiTaskGraphValid = false;
+    // AVBOIT owns its complete raster/compute chain as one graph. The split topology is selected only when a
+    // distinct Compute family exists; otherwise the complete chain records as one Graphics packet.
+    Core::GpuTaskGraph m_avboitTaskGraph;
+    Core::GpuTaskGraphAnalysis m_avboitTaskGraphAnalysis;
+    Core::GpuTaskGraphQueueAssignments m_avboitTaskGraphQueueAssignments;
+    Core::GpuCompiledGraph m_avboitCompiledGraph;
+    Core::GpuRecordedGraph m_avboitRecordedGraph;
+    Core::GpuGraphSubmissionTransaction m_avboitSubmissionTransaction;
+    Core::GpuTaskId m_avboitPreTask;
+    Core::GpuTaskId m_avboitDepthWarpTask;
+    Core::GpuTaskId m_avboitExtinctionTask;
+    Core::GpuTaskId m_avboitIntegrationTask;
+    Core::GpuTaskId m_avboitAccumulationTask;
+    Core::GpuExternalCompletionId m_avboitPrefixCompletion;
+    bool m_avboitTaskGraphValid = false;
     // Deferred lighting owns its task, native recording, and two explicit completion imports. The manual state
     // bridge remains only until the compiler barrier phase replaces it.
     Core::GpuTaskGraph m_deferredLightingTaskGraph;
@@ -294,7 +321,7 @@ private:
     Core::GpuRecordedGraph m_deferredLightingRecordedGraph;
     Core::GpuGraphSubmissionTransaction m_deferredLightingSubmissionTransaction;
     Core::GpuTaskId m_deferredLightingTask;
-    Core::GpuExternalCompletionId m_deferredLightingGraphicsEffectsCompletion;
+    Core::GpuExternalCompletionId m_deferredLightingAvboitCompletion;
     Core::GpuExternalCompletionId m_deferredLightingSurfelGiCompletion;
     Core::GpuExternalCompletionId m_deferredLightingHistoryCompletion;
     bool m_deferredLightingTaskGraphValid = false;
@@ -362,8 +389,8 @@ private:
     Core::CommandListResourceStateHandoff m_laggedLightingHistoryCopyInputStateHandoff;
     Core::CommandListResourceStateHandoff m_laggedLightingHistoryCopyStateHandoff;
     // AVBOIT's raster occupancy/extinction/accumulation stages stay on Graphics, while the depth-warp and integration
-    // dispatches run on AsyncCompute. All inter-stage work resources use concurrent sharing; these handoffs carry
-    // state only and are submitted in strict Graphics -> Compute -> Graphics order.
+    // dispatches may use the graph-selected Compute packet. All inter-stage work resources use concurrent sharing;
+    // these handoffs carry state only until graph-generated barriers supersede this bridge.
     Core::CommandListResourceStateHandoff m_avboitPreStateHandoff;
     Core::CommandListResourceStateHandoff m_avboitDepthWarpInputStateHandoff;
     Core::CommandListResourceStateHandoff m_avboitDepthWarpStateHandoff;
@@ -381,12 +408,6 @@ private:
     // A small Graphics recovery packet retires an accepted frame timing scope when a later dependent packet is
     // rejected.  If it joins AsyncCompute, cross-lane resources remain concurrently shared.
     Core::CommandListHandle m_frameRecoveryCommandList;
-    // The hybrid AVBOIT packet uses Graphics lists for raster phases and AsyncCompute lists for its two pure dispatches.
-    Core::CommandListHandle m_avboitCommandList;
-    Core::CommandListHandle m_asyncAvboitDepthWarpCommandList;
-    Core::CommandListHandle m_avboitExtinctionCommandList;
-    Core::CommandListHandle m_asyncAvboitIntegrationCommandList;
-    Core::CommandListHandle m_avboitAccumulateCommandList;
     // Surface images are not required to support storage writes, so a short Graphics raster present pass follows the
     // composite result. The normal dedicated schedule obtains that result from Compute; the optional lagged schedule
     // keeps lighting/composite on Graphics.

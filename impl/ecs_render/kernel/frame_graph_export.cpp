@@ -251,6 +251,19 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
         ))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel-GI graph telemetry export failed"));
     }
+    if(m_avboitTaskGraphValid){
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+        const Core::GpuTaskGraphTelemetryOptions avboitTelemetryOptions{
+            .queueAssignments = &m_avboitTaskGraphQueueAssignments,
+        };
+        if(!m_avboitTaskGraph.appendFrameGraphTelemetry(
+            builder,
+            m_avboitTaskGraphAnalysis,
+            scratchArena,
+            avboitTelemetryOptions
+        ))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: AVBOIT graph telemetry export failed"));
+    }
     if(m_deferredLightingTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphTelemetryOptions deferredLightingTelemetryOptions{

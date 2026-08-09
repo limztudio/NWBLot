@@ -7,6 +7,8 @@
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/renderer_private.h>
 
+#include <core/graphics/gpu_timing.h>
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -167,20 +169,169 @@ struct LaggedLightingHistoryCopyTask{
 };
 
 
+// AVBOIT remains explicitly staged because its raster/compute alternation is a real dependency chain.  The graph
+// owns those packets now; manual state handoffs only seed native recording until automatic graph barriers arrive.
+static void RestoreAvboitGbufferInputs(Core::CommandList& commandList, DeferredFrameTargets& targets){
+    commandList.setTextureState(
+        targets.albedo.get(),
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::ShaderResource
+    );
+    commandList.setTextureState(
+        targets.normal.get(),
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::ShaderResource
+    );
+    commandList.setTextureState(
+        targets.worldPosition.get(),
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::ShaderResource
+    );
+    commandList.setTextureState(
+        targets.depth.get(),
+        ECSRenderDetail::s_FramebufferSubresources,
+        Core::ResourceStates::ShaderResource
+    );
+}
+
+
+struct AvboitPreGraphTask{
+    struct Payload{
+        RendererAvboitSystem* avboitSystem = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        const CsgFrameState* csgFrameState = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        bool clearTargets = false;
+        bool hasTransparentRenderers = false;
+        bool splitStages = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.avboitSystem || !payload.targets || !payload.csgFrameState || !payload.timingTicket)
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        if(payload.clearTargets)
+            payload.avboitSystem->clearAvboitTargets(commandList, payload.targets->avboit);
+        if(payload.hasTransparentRenderers){
+            if(payload.splitStages)
+                payload.avboitSystem->renderAvboitPreDepthWarpPasses(
+                    commandList,
+                    *payload.targets,
+                    *payload.csgFrameState
+                );
+            else
+                payload.avboitSystem->renderAvboitPasses(commandList, *payload.targets, *payload.csgFrameState);
+        }
+        RestoreAvboitGbufferInputs(commandList, *payload.targets);
+        return true;
+    }
+};
+
+
+struct AvboitDepthWarpGraphTask{
+    struct Payload{
+        RendererAvboitSystem* avboitSystem = nullptr;
+        AvboitFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.avboitSystem || !payload.targets || !payload.timingTicket)
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        payload.avboitSystem->dispatchAvboitDepthWarp(commandList, *payload.targets);
+        return true;
+    }
+};
+
+
+struct AvboitExtinctionGraphTask{
+    struct Payload{
+        RendererAvboitSystem* avboitSystem = nullptr;
+        AvboitFrameTargets* targets = nullptr;
+        const CsgFrameState* csgFrameState = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.avboitSystem || !payload.targets || !payload.csgFrameState || !payload.timingTicket)
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        payload.avboitSystem->renderAvboitExtinctionPass(commandList, *payload.targets, *payload.csgFrameState);
+        return true;
+    }
+};
+
+
+struct AvboitIntegrationGraphTask{
+    struct Payload{
+        RendererAvboitSystem* avboitSystem = nullptr;
+        AvboitFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.avboitSystem || !payload.targets || !payload.timingTicket)
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        payload.avboitSystem->dispatchAvboitIntegration(commandList, *payload.targets);
+        return true;
+    }
+};
+
+
+struct AvboitAccumulationGraphTask{
+    struct Payload{
+        RendererAvboitSystem* avboitSystem = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        const CsgFrameState* csgFrameState = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.avboitSystem || !payload.targets || !payload.csgFrameState || !payload.timingTicket)
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        payload.avboitSystem->renderAvboitAccumulatePass(commandList, *payload.targets, *payload.csgFrameState);
+        return true;
+    }
+};
+
+
 [[nodiscard]] static WorkMetadata WorkMetadataFor(const Work::Enum work){
     switch(work){
     case Work::GraphicsPrefix:
         return WorkMetadata{ Name("render.task_graph.graphics_prefix"), "Graphics Prefix", GraphicsQueueRequest() };
-    case Work::AvboitRaster:
-        return WorkMetadata{ Name("render.task_graph.avboit_raster"), "AVBOIT Raster", GraphicsQueueRequest() };
-    case Work::AvboitDepthWarp:
-        return WorkMetadata{ Name("render.task_graph.avboit_depth_warp"), "AVBOIT Depth Warp", ComputeQueueRequest() };
-    case Work::AvboitExtinction:
-        return WorkMetadata{ Name("render.task_graph.avboit_extinction"), "AVBOIT Extinction", GraphicsQueueRequest() };
-    case Work::AvboitIntegration:
-        return WorkMetadata{ Name("render.task_graph.avboit_integration"), "AVBOIT Integration", ComputeQueueRequest() };
-    case Work::AvboitAccumulation:
-        return WorkMetadata{ Name("render.task_graph.avboit_accumulation"), "AVBOIT Accumulation", GraphicsQueueRequest() };
     case Work::GraphicsPresent:
         return WorkMetadata{ Name("render.task_graph.present"), "Present", GraphicsQueueRequest() };
     default:
@@ -356,11 +507,6 @@ void RendererSystem::buildGpuTaskGraph(
         "World Position"
     );
     const Core::GpuGraphResourceId depth = importTexture(deferredTargets.depth, Name("render.task_graph.depth"), "Depth");
-    const Core::GpuGraphResourceId opaqueColor = importTexture(
-        deferredTargets.opaqueColor,
-        Name("render.task_graph.opaque_color"),
-        "Opaque Color"
-    );
     const Core::GpuGraphResourceId compositeColor = importTexture(
         deferredTargets.compositeColor,
         Name("render.task_graph.composite_color"),
@@ -378,39 +524,11 @@ void RendererSystem::buildGpuTaskGraph(
         || !normal.valid()
         || !worldPosition.valid()
         || !depth.valid()
-        || !opaqueColor.valid()
         || !compositeColor.valid()
         || !meshViewBuffer.valid()
         || !backbuffer.valid()
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph could not import required renderer resources"));
-        return;
-    }
-
-    // AVBOIT raster work clears these targets even when no transparent draw needs the split compute stages, so the
-    // semantic graph must import them on every valid deferred-target generation.
-    const Core::GpuGraphResourceId avboitLowRaster = importTexture(
-        deferredTargets.avboit.lowRasterTarget,
-        Name("render.task_graph.avboit_low_raster"),
-        "AVBOIT Low Raster"
-    );
-    const Core::GpuGraphResourceId avboitAccumColor = importTexture(
-        deferredTargets.avboit.accumColor,
-        Name("render.task_graph.avboit_accum_color"),
-        "AVBOIT Accumulation Color"
-    );
-    const Core::GpuGraphResourceId avboitExtinction = importTexture(
-        deferredTargets.avboit.accumExtinction,
-        Name("render.task_graph.avboit_extinction"),
-        "AVBOIT Extinction"
-    );
-    const Core::GpuGraphResourceId avboitTransmittance = importTexture(
-        deferredTargets.avboit.transmittanceTexture,
-        Name("render.task_graph.avboit_transmittance"),
-        "AVBOIT Transmittance"
-    );
-    if(!avboitLowRaster.valid() || !avboitAccumColor.valid() || !avboitExtinction.valid() || !avboitTransmittance.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph could not import AVBOIT resources"));
         return;
     }
 
@@ -452,38 +570,12 @@ void RendererSystem::buildGpuTaskGraph(
         WriteUse(worldPosition, Core::ResourceStates::RenderTarget),
         WriteUse(depth, Core::ResourceStates::DepthWrite),
     };
-    const Core::GpuTaskResourceUse avboitRasterUses[] = {
-        ReadUse(depth, Core::ResourceStates::DepthRead),
-        WriteUse(avboitLowRaster, Core::ResourceStates::RenderTarget),
-        WriteUse(avboitAccumColor, Core::ResourceStates::RenderTarget),
-    };
-    const Core::GpuTaskResourceUse avboitDepthWarpUses[] = {
-        ReadUse(avboitLowRaster),
-        WriteUse(avboitAccumColor, Core::ResourceStates::UnorderedAccess),
-    };
-    const Core::GpuTaskResourceUse avboitExtinctionUses[] = {
-        ReadUse(avboitAccumColor),
-        WriteUse(avboitExtinction, Core::ResourceStates::RenderTarget),
-    };
-    const Core::GpuTaskResourceUse avboitIntegrationUses[] = {
-        ReadUse(avboitExtinction),
-        WriteUse(avboitTransmittance, Core::ResourceStates::UnorderedAccess),
-    };
-    const Core::GpuTaskResourceUse avboitAccumulationUses[] = {
-        ReadUse(avboitTransmittance),
-        WriteUse(opaqueColor, Core::ResourceStates::RenderTarget),
-    };
     const Core::GpuTaskResourceUse presentUses[] = {
         ReadUse(compositeColor),
         WriteUse(backbuffer, Core::ResourceStates::Present),
     };
     const bool graphBuilt =
         addWorkTask(Work::GraphicsPrefix, graphicsPrefixUses, LengthOf(graphicsPrefixUses))
-        && addWorkTask(Work::AvboitRaster, avboitRasterUses, LengthOf(avboitRasterUses))
-        && addWorkTask(Work::AvboitDepthWarp, avboitDepthWarpUses, LengthOf(avboitDepthWarpUses))
-        && addWorkTask(Work::AvboitExtinction, avboitExtinctionUses, LengthOf(avboitExtinctionUses))
-        && addWorkTask(Work::AvboitIntegration, avboitIntegrationUses, LengthOf(avboitIntegrationUses))
-        && addWorkTask(Work::AvboitAccumulation, avboitAccumulationUses, LengthOf(avboitAccumulationUses))
         && addWorkTask(Work::GraphicsPresent, presentUses, LengthOf(presentUses))
     ;
     if(!graphBuilt){
@@ -1958,6 +2050,405 @@ void RendererSystem::buildSurfelGiTaskGraph(
 }
 
 
+void RendererSystem::buildAvboitTaskGraph(
+    const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+    DeferredFrameTargets& deferredTargets,
+    const CsgFrameState& csgFrameState,
+    const bool clearTargets,
+    const bool hasTransparentRenderers,
+    Core::GpuTimingSubmissionTicket& preTimingTicket,
+    Core::GpuTimingSubmissionTicket& depthWarpTimingTicket,
+    Core::GpuTimingSubmissionTicket& extinctionTimingTicket,
+    Core::GpuTimingSubmissionTicket& integrationTimingTicket,
+    Core::GpuTimingSubmissionTicket& accumulationTimingTicket
+){
+    using namespace __hidden_renderer_task_graph;
+
+    m_avboitTaskGraphValid = false;
+    m_avboitPreTask = {};
+    m_avboitDepthWarpTask = {};
+    m_avboitExtinctionTask = {};
+    m_avboitIntegrationTask = {};
+    m_avboitAccumulationTask = {};
+    m_avboitPrefixCompletion = {};
+    m_avboitTaskGraph.reset();
+    m_avboitTaskGraphAnalysis.reset();
+    m_avboitTaskGraphQueueAssignments.reset();
+    m_avboitCompiledGraph.reset();
+    m_avboitRecordedGraph.reset(m_avboitCompiledGraph);
+    m_avboitSubmissionTransaction.reset(m_avboitCompiledGraph);
+
+    const auto& device = graphics().getDevice();
+    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
+    const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
+    const bool dedicatedAsyncCompute = input.dedicatedAsyncCompute
+        && computeFamilyIndex != Limit<u32>::s_Max
+        && computeFamilyIndex != graphicsFamilyIndex
+    ;
+    const ECSRenderDetail::GpuTaskGraphFrameSchedule schedule(input);
+    const bool splitStages = schedule.usesAsyncAvboit() && dedicatedAsyncCompute;
+    if(!splitStages){
+        depthWarpTimingTicket.discard();
+        extinctionTimingTicket.discard();
+        integrationTimingTicket.discard();
+        accumulationTimingTicket.discard();
+    }
+    if(
+        !deferredTargets.valid()
+        || !deferredTargets.bindless.valid()
+        || hasTransparentRenderers != input.hasTransparentRenderers
+    )
+        return;
+
+    const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
+        return m_avboitTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
+    };
+    const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
+        return m_avboitTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
+    };
+    const Core::GpuGraphResourceId albedo = importTexture(
+        deferredTargets.albedo,
+        Name("render.avboit.albedo"),
+        "G-Buffer Albedo"
+    );
+    const Core::GpuGraphResourceId normal = importTexture(
+        deferredTargets.normal,
+        Name("render.avboit.normal"),
+        "G-Buffer Normal"
+    );
+    const Core::GpuGraphResourceId worldPosition = importTexture(
+        deferredTargets.worldPosition,
+        Name("render.avboit.world_position"),
+        "G-Buffer World Position"
+    );
+    const Core::GpuGraphResourceId depth = importTexture(
+        deferredTargets.depth,
+        Name("render.avboit.depth"),
+        "G-Buffer Depth"
+    );
+    const Core::GpuGraphResourceId lowRaster = importTexture(
+        deferredTargets.avboit.lowRasterTarget,
+        Name("render.avboit.low_raster"),
+        "AVBOIT Low Raster"
+    );
+    const Core::GpuGraphResourceId accumColor = importTexture(
+        deferredTargets.avboit.accumColor,
+        Name("render.avboit.accum_color"),
+        "AVBOIT Accumulated Color"
+    );
+    const Core::GpuGraphResourceId accumExtinction = importTexture(
+        deferredTargets.avboit.accumExtinction,
+        Name("render.avboit.accum_extinction"),
+        "AVBOIT Accumulated Extinction"
+    );
+    const Core::GpuGraphResourceId transmittance = importTexture(
+        deferredTargets.avboit.transmittanceTexture,
+        Name("render.avboit.transmittance"),
+        "AVBOIT Transmittance"
+    );
+    const Core::GpuGraphResourceId coverage = importBuffer(
+        deferredTargets.avboit.coverageBuffer,
+        Name("render.avboit.coverage"),
+        "AVBOIT Coverage"
+    );
+    const Core::GpuGraphResourceId depthWarp = importBuffer(
+        deferredTargets.avboit.depthWarpBuffer,
+        Name("render.avboit.depth_warp"),
+        "AVBOIT Depth Warp"
+    );
+    const Core::GpuGraphResourceId control = importBuffer(
+        deferredTargets.avboit.controlBuffer,
+        Name("render.avboit.control"),
+        "AVBOIT Control"
+    );
+    const Core::GpuGraphResourceId extinction = importBuffer(
+        deferredTargets.avboit.extinctionBuffer,
+        Name("render.avboit.extinction"),
+        "AVBOIT Extinction"
+    );
+    const Core::GpuGraphResourceId extinctionOverflow = importBuffer(
+        deferredTargets.avboit.extinctionOverflowBuffer,
+        Name("render.avboit.extinction_overflow"),
+        "AVBOIT Extinction Overflow"
+    );
+    const Core::GpuGraphResourceId bindlessSlots = importBuffer(
+        deferredTargets.bindless.slotsBuffer,
+        Name("render.avboit.bindless_slots"),
+        "Deferred Bindless Slots"
+    );
+    const Core::GpuGraphResourceId materialDomain = m_avboitTaskGraph.importHazardDomain(
+        HazardDomainDesc(Name("render.avboit.material_domain"), "Transparent Materials and Geometry")
+    );
+    const Core::GpuGraphResourceId csgDomain = m_avboitTaskGraph.importHazardDomain(
+        HazardDomainDesc(Name("render.avboit.csg_domain"), "Transparent CSG Intervals")
+    );
+    if(
+        !albedo.valid()
+        || !normal.valid()
+        || !worldPosition.valid()
+        || !depth.valid()
+        || !lowRaster.valid()
+        || !accumColor.valid()
+        || !accumExtinction.valid()
+        || !transmittance.valid()
+        || !coverage.valid()
+        || !depthWarp.valid()
+        || !control.valid()
+        || !extinction.valid()
+        || !extinctionOverflow.valid()
+        || !bindlessSlots.valid()
+        || !materialDomain.valid()
+        || !csgDomain.valid()
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import AVBOIT graph resources"));
+        return;
+    }
+
+    Core::GpuExternalCompletionDesc prefixCompletionDesc;
+    prefixCompletionDesc
+        .setIdentity(Name("render.avboit.graphics_prefix_complete"))
+        .setMarkerLabel("Graphics Prefix Complete")
+    ;
+    m_avboitPrefixCompletion = m_avboitTaskGraph.importExternalCompletion(prefixCompletionDesc);
+    if(!m_avboitPrefixCompletion.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graphics-prefix completion for AVBOIT"));
+        return;
+    }
+
+    const Core::GpuTaskResourceUse preResourceUses[] = {
+        ReadUse(albedo),
+        ReadUse(normal),
+        ReadUse(worldPosition),
+        ReadUse(depth),
+        ReadWriteUse(lowRaster, Core::ResourceStates::RenderTarget),
+        ReadWriteUse(accumColor, Core::ResourceStates::RenderTarget),
+        ReadWriteUse(accumExtinction, Core::ResourceStates::RenderTarget),
+        ReadWriteUse(transmittance, Core::ResourceStates::UnorderedAccess),
+        ReadWriteUse(coverage, Core::ResourceStates::UnorderedAccess),
+        ReadWriteUse(depthWarp, Core::ResourceStates::UnorderedAccess),
+        ReadWriteUse(control, Core::ResourceStates::UnorderedAccess),
+        ReadWriteUse(extinction, Core::ResourceStates::UnorderedAccess),
+        ReadWriteUse(extinctionOverflow, Core::ResourceStates::UnorderedAccess),
+        ReadUse(bindlessSlots, Core::ResourceStates::ConstantBuffer),
+        ReadUse(materialDomain),
+        // Transparent CSG interval construction mutates its backing domain before occupancy consumes it.
+        ReadWriteUse(csgDomain, Core::ResourceStates::ShaderResource),
+    };
+    Core::GpuTaskSchedulingHint graphicsScheduling;
+    graphicsScheduling.cost = Core::GpuTaskCostHint::Large;
+    graphicsScheduling.forceSubmissionBoundary = true;
+    graphicsScheduling.allowPacketMerge = false;
+    Core::GpuTaskDesc preDesc;
+    preDesc
+        .setIdentity(Name("render.avboit.pre"))
+        .setMarkerLabel(splitStages ? "AVBOIT Pre" : "AVBOIT")
+        .setQueue(GraphicsQueueRequest())
+        .setScheduling(graphicsScheduling)
+        .setExternalDependencies(&m_avboitPrefixCompletion, 1u)
+        .setResourceUses(preResourceUses, LengthOf(preResourceUses))
+    ;
+    m_avboitPreTask = m_avboitTaskGraph.addTask<AvboitPreGraphTask>(
+        preDesc,
+        AvboitPreGraphTask::Payload{
+            .avboitSystem = &m_avboitSystem,
+            .targets = &deferredTargets,
+            .csgFrameState = &csgFrameState,
+            .timingTicket = &preTimingTicket,
+            .clearTargets = clearTargets,
+            .hasTransparentRenderers = hasTransparentRenderers,
+            .splitStages = splitStages,
+        }
+    );
+    if(!m_avboitPreTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT pre graph task"));
+        return;
+    }
+
+    if(splitStages){
+        const Core::GpuTaskResourceUse depthWarpResourceUses[] = {
+            ReadUse(coverage),
+            ReadWriteUse(depthWarp, Core::ResourceStates::UnorderedAccess),
+            ReadWriteUse(control, Core::ResourceStates::UnorderedAccess),
+            ReadUse(bindlessSlots, Core::ResourceStates::ConstantBuffer),
+        };
+        Core::GpuTaskSchedulingHint computeScheduling;
+        computeScheduling.cost = Core::GpuTaskCostHint::Medium;
+        computeScheduling.forceSubmissionBoundary = true;
+        computeScheduling.allowPacketMerge = false;
+        const Core::GpuTaskId preDependency[] = { m_avboitPreTask };
+        Core::GpuTaskDesc depthWarpDesc;
+        depthWarpDesc
+            .setIdentity(Name("render.avboit.depth_warp"))
+            .setMarkerLabel("AVBOIT Depth Warp")
+            .setQueue(ComputeQueueRequest())
+            .setScheduling(computeScheduling)
+            .setDependencies(preDependency, LengthOf(preDependency))
+            .setResourceUses(depthWarpResourceUses, LengthOf(depthWarpResourceUses))
+        ;
+        m_avboitDepthWarpTask = m_avboitTaskGraph.addTask<AvboitDepthWarpGraphTask>(
+            depthWarpDesc,
+            AvboitDepthWarpGraphTask::Payload{
+                .avboitSystem = &m_avboitSystem,
+                .targets = &deferredTargets.avboit,
+                .timingTicket = &depthWarpTimingTicket,
+            }
+        );
+        if(!m_avboitDepthWarpTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT depth-warp graph task"));
+            return;
+        }
+
+        const Core::GpuTaskResourceUse extinctionResourceUses[] = {
+            // The low-resolution framebuffer is rebound for the no-color-write extinction raster stage.
+            ReadUse(lowRaster, Core::ResourceStates::RenderTarget),
+            ReadUse(depthWarp),
+            ReadUse(control),
+            ReadWriteUse(extinction, Core::ResourceStates::UnorderedAccess),
+            ReadWriteUse(extinctionOverflow, Core::ResourceStates::UnorderedAccess),
+            ReadUse(bindlessSlots, Core::ResourceStates::ConstantBuffer),
+            ReadUse(materialDomain),
+            ReadUse(csgDomain),
+        };
+        const Core::GpuTaskId depthWarpDependency[] = { m_avboitDepthWarpTask };
+        Core::GpuTaskDesc extinctionDesc;
+        extinctionDesc
+            .setIdentity(Name("render.avboit.extinction"))
+            .setMarkerLabel("AVBOIT Extinction")
+            .setQueue(GraphicsQueueRequest())
+            .setScheduling(graphicsScheduling)
+            .setDependencies(depthWarpDependency, LengthOf(depthWarpDependency))
+            .setResourceUses(extinctionResourceUses, LengthOf(extinctionResourceUses))
+        ;
+        m_avboitExtinctionTask = m_avboitTaskGraph.addTask<AvboitExtinctionGraphTask>(
+            extinctionDesc,
+            AvboitExtinctionGraphTask::Payload{
+                .avboitSystem = &m_avboitSystem,
+                .targets = &deferredTargets.avboit,
+                .csgFrameState = &csgFrameState,
+                .timingTicket = &extinctionTimingTicket,
+            }
+        );
+        if(!m_avboitExtinctionTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT extinction graph task"));
+            return;
+        }
+
+        const Core::GpuTaskResourceUse integrationResourceUses[] = {
+            ReadUse(extinction),
+            ReadUse(control),
+            ReadUse(extinctionOverflow),
+            ReadWriteUse(transmittance, Core::ResourceStates::UnorderedAccess),
+            ReadUse(bindlessSlots, Core::ResourceStates::ConstantBuffer),
+        };
+        const Core::GpuTaskId extinctionDependency[] = { m_avboitExtinctionTask };
+        Core::GpuTaskDesc integrationDesc;
+        integrationDesc
+            .setIdentity(Name("render.avboit.integration"))
+            .setMarkerLabel("AVBOIT Integration")
+            .setQueue(ComputeQueueRequest())
+            .setScheduling(computeScheduling)
+            .setDependencies(extinctionDependency, LengthOf(extinctionDependency))
+            .setResourceUses(integrationResourceUses, LengthOf(integrationResourceUses))
+        ;
+        m_avboitIntegrationTask = m_avboitTaskGraph.addTask<AvboitIntegrationGraphTask>(
+            integrationDesc,
+            AvboitIntegrationGraphTask::Payload{
+                .avboitSystem = &m_avboitSystem,
+                .targets = &deferredTargets.avboit,
+                .timingTicket = &integrationTimingTicket,
+            }
+        );
+        if(!m_avboitIntegrationTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT integration graph task"));
+            return;
+        }
+
+        const Core::GpuTaskResourceUse accumulationResourceUses[] = {
+            ReadUse(depth),
+            ReadUse(transmittance),
+            ReadUse(depthWarp),
+            ReadUse(control),
+            ReadWriteUse(accumColor, Core::ResourceStates::RenderTarget),
+            ReadWriteUse(accumExtinction, Core::ResourceStates::RenderTarget),
+            ReadUse(bindlessSlots, Core::ResourceStates::ConstantBuffer),
+            ReadUse(materialDomain),
+            ReadUse(csgDomain),
+        };
+        const Core::GpuTaskId integrationDependency[] = { m_avboitIntegrationTask };
+        Core::GpuTaskDesc accumulationDesc;
+        accumulationDesc
+            .setIdentity(Name("render.avboit.accumulation"))
+            .setMarkerLabel("AVBOIT Accumulation")
+            .setQueue(GraphicsQueueRequest())
+            .setScheduling(graphicsScheduling)
+            .setDependencies(integrationDependency, LengthOf(integrationDependency))
+            .setResourceUses(accumulationResourceUses, LengthOf(accumulationResourceUses))
+        ;
+        m_avboitAccumulationTask = m_avboitTaskGraph.addTask<AvboitAccumulationGraphTask>(
+            accumulationDesc,
+            AvboitAccumulationGraphTask::Payload{
+                .avboitSystem = &m_avboitSystem,
+                .targets = &deferredTargets,
+                .csgFrameState = &csgFrameState,
+                .timingTicket = &accumulationTimingTicket,
+            }
+        );
+        if(!m_avboitAccumulationTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation graph task"));
+            return;
+        }
+    }
+
+    const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
+        static_cast<u8>(Core::GpuQueueCapability::Graphics)
+        | static_cast<u8>(Core::GpuQueueCapability::Compute)
+        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
+    );
+    const Core::GpuQueueCapability::Mask computeQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
+        static_cast<u8>(Core::GpuQueueCapability::Compute)
+        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
+    );
+    const Core::GpuPhysicalQueueInfo queues[] = {
+        Core::GpuPhysicalQueueInfo{
+            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
+            .queueClass = Core::CommandQueue::Graphics,
+            .capabilities = graphicsQueueCapabilities,
+            .familyIndex = graphicsFamilyIndex,
+            .queueIndex = 0u,
+            .dedicated = false,
+        },
+        Core::GpuPhysicalQueueInfo{
+            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphDeviceGeneration },
+            .queueClass = Core::CommandQueue::Compute,
+            .capabilities = computeQueueCapabilities,
+            .familyIndex = computeFamilyIndex,
+            .queueIndex = 0u,
+            .dedicated = true,
+        },
+    };
+    const Core::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = dedicatedAsyncCompute ? LengthOf(queues) : 1u,
+    };
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+    const Core::GpuTaskGraphCompiler compiler;
+    if(!compiler.compile(
+        m_avboitTaskGraph,
+        m_avboitTaskGraphAnalysis,
+        topology,
+        m_avboitTaskGraphQueueAssignments,
+        m_avboitCompiledGraph,
+        scratchArena
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile AVBOIT task graph"));
+        return;
+    }
+    m_avboitRecordedGraph.reset(m_avboitCompiledGraph);
+    m_avboitSubmissionTransaction.reset(m_avboitCompiledGraph);
+    m_avboitTaskGraphValid = true;
+}
+
+
 void RendererSystem::buildDeferredLightingTaskGraph(
     const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
     DeferredFrameTargets& deferredTargets,
@@ -1967,7 +2458,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
 
     m_deferredLightingTaskGraphValid = false;
     m_deferredLightingTask = {};
-    m_deferredLightingGraphicsEffectsCompletion = {};
+    m_deferredLightingAvboitCompletion = {};
     m_deferredLightingSurfelGiCompletion = {};
     m_deferredLightingHistoryCompletion = {};
     m_deferredLightingTaskGraph.reset();
@@ -2070,16 +2561,16 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         return;
     }
 
-    Core::GpuExternalCompletionDesc graphicsEffectsCompletionDesc;
-    graphicsEffectsCompletionDesc
-        .setIdentity(Name("render.deferred_lighting.graphics_effects_complete"))
-        .setMarkerLabel("Graphics Effects Complete")
+    Core::GpuExternalCompletionDesc avboitCompletionDesc;
+    avboitCompletionDesc
+        .setIdentity(Name("render.deferred_lighting.avboit_complete"))
+        .setMarkerLabel("AVBOIT Complete")
     ;
-    m_deferredLightingGraphicsEffectsCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
-        graphicsEffectsCompletionDesc
+    m_deferredLightingAvboitCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
+        avboitCompletionDesc
     );
-    if(!m_deferredLightingGraphicsEffectsCompletion.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graphics-effects completion for deferred lighting"));
+    if(!m_deferredLightingAvboitCompletion.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import AVBOIT completion for deferred lighting"));
         return;
     }
 
@@ -2105,7 +2596,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         m_deferredLightingSurfelGiCompletion = dependentEffectsCompletion;
 
     const Core::GpuExternalCompletionId externalDependencies[] = {
-        m_deferredLightingGraphicsEffectsCompletion,
+        m_deferredLightingAvboitCompletion,
         dependentEffectsCompletion,
     };
     const Core::GpuTaskResourceUse resourceUses[] = {

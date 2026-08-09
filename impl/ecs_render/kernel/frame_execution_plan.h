@@ -29,12 +29,6 @@ namespace ECSRenderDetail{
 namespace FrameExecutionPacket{
     enum Enum : u8{
         GraphicsPrefix,
-        GraphicsEffects,
-        GraphicsAvboitPre,
-        AsyncAvboitDepthWarp,
-        GraphicsAvboitExtinction,
-        AsyncAvboitIntegration,
-        GraphicsAvboitAccumulation,
         GraphicsPresent,
 
         kCount,
@@ -46,7 +40,6 @@ namespace FrameExecutionPacket{
 namespace FrameExecutionSubmissionBatch{
     enum Enum : u8{
         GraphicsPrefix,
-        GraphicsEffects,
         GraphicsPresent,
 
         kCount,
@@ -58,11 +51,6 @@ namespace FrameExecutionSubmissionBatch{
 namespace FrameExecutionWork{
     enum Enum : u8{
         GraphicsPrefix,
-        AvboitRaster,
-        AvboitDepthWarp,
-        AvboitExtinction,
-        AvboitIntegration,
-        AvboitAccumulation,
         GraphicsPresent,
 
         kCount,
@@ -88,7 +76,6 @@ struct FrameExecutionPlanInput{
     bool frameLaggedAsyncLightingEnabled = false;
     bool laggedLightingHistoryReady = false;
     bool laggedLightingHistoryAccepted = false;
-    bool hasTransparentRenderers = false;
 };
 
 
@@ -147,41 +134,8 @@ public:
             && input.laggedLightingHistoryReady
             && input.laggedLightingHistoryAccepted
         ;
-        const bool usesAsyncAvboit =
-            input.dedicatedAsyncCompute
-            && input.hasTransparentRenderers
-            && !usesLaggedAsyncLighting
-        ;
-
         enablePacket(FrameExecutionPacket::GraphicsPrefix, Core::RenderLane::Graphics);
         assignWork(FrameExecutionWork::GraphicsPrefix, FrameExecutionPacket::GraphicsPrefix);
-
-        if(usesAsyncAvboit){
-            enablePacket(FrameExecutionPacket::GraphicsAvboitPre, Core::RenderLane::Graphics);
-            addPacketWait(FrameExecutionPacket::GraphicsAvboitPre, FrameExecutionPacket::GraphicsPrefix);
-            assignWork(FrameExecutionWork::AvboitRaster, FrameExecutionPacket::GraphicsAvboitPre);
-
-            enablePacket(FrameExecutionPacket::AsyncAvboitDepthWarp, Core::RenderLane::AsyncCompute);
-            addPacketWait(FrameExecutionPacket::AsyncAvboitDepthWarp, FrameExecutionPacket::GraphicsAvboitPre);
-            assignWork(FrameExecutionWork::AvboitDepthWarp, FrameExecutionPacket::AsyncAvboitDepthWarp);
-
-            enablePacket(FrameExecutionPacket::GraphicsAvboitExtinction, Core::RenderLane::Graphics);
-            addPacketWait(FrameExecutionPacket::GraphicsAvboitExtinction, FrameExecutionPacket::AsyncAvboitDepthWarp);
-            assignWork(FrameExecutionWork::AvboitExtinction, FrameExecutionPacket::GraphicsAvboitExtinction);
-
-            enablePacket(FrameExecutionPacket::AsyncAvboitIntegration, Core::RenderLane::AsyncCompute);
-            addPacketWait(FrameExecutionPacket::AsyncAvboitIntegration, FrameExecutionPacket::GraphicsAvboitExtinction);
-            assignWork(FrameExecutionWork::AvboitIntegration, FrameExecutionPacket::AsyncAvboitIntegration);
-
-            enablePacket(FrameExecutionPacket::GraphicsAvboitAccumulation, Core::RenderLane::Graphics);
-            addPacketWait(FrameExecutionPacket::GraphicsAvboitAccumulation, FrameExecutionPacket::AsyncAvboitIntegration);
-            assignWork(FrameExecutionWork::AvboitAccumulation, FrameExecutionPacket::GraphicsAvboitAccumulation);
-        }
-        else{
-            enablePacket(FrameExecutionPacket::GraphicsEffects, Core::RenderLane::Graphics);
-            addPacketWait(FrameExecutionPacket::GraphicsEffects, FrameExecutionPacket::GraphicsPrefix);
-            assignWork(FrameExecutionWork::AvboitRaster, FrameExecutionPacket::GraphicsEffects);
-        }
 
         enablePacket(FrameExecutionPacket::GraphicsPresent, Core::RenderLane::Graphics);
         addExternalWait(FrameExecutionPacket::GraphicsPresent, FrameExecutionExternalWait::DeferredComposite);
@@ -351,34 +305,6 @@ private:
             FrameExecutionSubmissionBatch::GraphicsPrefix,
             FrameExecutionPacket::GraphicsPrefix
         );
-        if(hasWork(FrameExecutionWork::AvboitDepthWarp)){
-            appendSubmissionPacket(
-                FrameExecutionSubmissionBatch::GraphicsEffects,
-                FrameExecutionPacket::GraphicsAvboitPre
-            );
-            appendSubmissionPacket(
-                FrameExecutionSubmissionBatch::GraphicsEffects,
-                FrameExecutionPacket::AsyncAvboitDepthWarp
-            );
-            appendSubmissionPacket(
-                FrameExecutionSubmissionBatch::GraphicsEffects,
-                FrameExecutionPacket::GraphicsAvboitExtinction
-            );
-            appendSubmissionPacket(
-                FrameExecutionSubmissionBatch::GraphicsEffects,
-                FrameExecutionPacket::AsyncAvboitIntegration
-            );
-            appendSubmissionPacket(
-                FrameExecutionSubmissionBatch::GraphicsEffects,
-                FrameExecutionPacket::GraphicsAvboitAccumulation
-            );
-        }
-        else{
-            appendSubmissionPacket(
-                FrameExecutionSubmissionBatch::GraphicsEffects,
-                FrameExecutionPacket::GraphicsEffects
-            );
-        }
         appendSubmissionPacket(
             FrameExecutionSubmissionBatch::GraphicsPresent,
             FrameExecutionPacket::GraphicsPresent

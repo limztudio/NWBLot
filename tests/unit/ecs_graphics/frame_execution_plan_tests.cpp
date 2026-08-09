@@ -80,39 +80,9 @@ void ExpectSubmissionBatchesResolvePacketDependencies(const FrameExecutionPlan& 
 }
 
 
-[[nodiscard]] bool PacketPathExists(
-    const FrameExecutionPlan& plan,
-    const FrameExecutionPacket::Enum producer,
-    const FrameExecutionPacket::Enum consumer
-){
-    if(producer == consumer)
-        return true;
-
-    bool visited[FrameExecutionPacket::kCount] = {};
-    const auto visit = [&](auto&& self, const FrameExecutionPacket::Enum current) -> bool{
-        if(current == producer)
-            return true;
-
-        const usize currentIndex = static_cast<usize>(current);
-        if(visited[currentIndex])
-            return false;
-        visited[currentIndex] = true;
-
-        const auto& packet = plan.packet(current);
-        for(u8 waitIndex = 0u; waitIndex < packet.waitPacketCount; ++waitIndex){
-            if(self(self, packet.waitPackets[waitIndex]))
-                return true;
-        }
-        return false;
-    };
-    return visit(visit, consumer);
-}
-
-
-TEST(EcsGraphics, FrameExecutionPlanRoutesRemainingWorkThroughGraphicsWithoutDedicatedCompute){
+TEST(EcsGraphics, FrameExecutionPlanRoutesOnlyRemainingWorkThroughGraphics){
     const FrameExecutionPlan plan(FrameExecutionPlanInput{
         false,
-        true,
         true,
         true,
         true,
@@ -120,14 +90,13 @@ TEST(EcsGraphics, FrameExecutionPlanRoutesRemainingWorkThroughGraphicsWithoutDed
 
     for(usize workIndex = 0u; workIndex < FrameExecutionWork::kCount; ++workIndex){
         const FrameExecutionWork::Enum work = static_cast<FrameExecutionWork::Enum>(workIndex);
-        if(!plan.hasWork(work))
-            continue;
+        ASSERT_TRUE(plan.hasWork(work));
         EXPECT_EQ(plan.laneForWork(work), RenderLane::Graphics);
         EXPECT_EQ(plan.expectedQueueForWork(work), CommandQueue::Graphics);
+        EXPECT_TRUE(plan.workMatchesExpectedQueue(work, CommandQueue::Graphics));
+        EXPECT_FALSE(plan.workMatchesExpectedQueue(work, CommandQueue::Compute));
     }
-    EXPECT_FALSE(plan.hasWork(FrameExecutionWork::AvboitDepthWarp));
     EXPECT_TRUE(plan.packet(FrameExecutionPacket::GraphicsPrefix).enabled);
-    EXPECT_TRUE(plan.packet(FrameExecutionPacket::GraphicsEffects).enabled);
     EXPECT_TRUE(plan.packet(FrameExecutionPacket::GraphicsPresent).enabled);
     EXPECT_TRUE(plan.packetWaitsForExternalToken(
         FrameExecutionPacket::GraphicsPresent,
@@ -137,34 +106,13 @@ TEST(EcsGraphics, FrameExecutionPlanRoutesRemainingWorkThroughGraphicsWithoutDed
 }
 
 
-TEST(EcsGraphics, FrameExecutionPlanKeepsOnlyRemainingWorkInTheParityOracle){
-    const FrameExecutionPlan graphicsPlan(FrameExecutionPlanInput{
-        false, false, false, false, false,
-    });
-    for(usize workIndex = 0u; workIndex < FrameExecutionWork::kCount; ++workIndex){
-        const FrameExecutionWork::Enum work = static_cast<FrameExecutionWork::Enum>(workIndex);
-        if(!graphicsPlan.hasWork(work))
-            continue;
-        EXPECT_TRUE(graphicsPlan.workMatchesExpectedQueue(work, CommandQueue::Graphics));
-        EXPECT_FALSE(graphicsPlan.workMatchesExpectedQueue(work, CommandQueue::Compute));
-    }
-
-    const FrameExecutionPlan dedicatedPlan(FrameExecutionPlanInput{
-        true, false, false, false, true,
-    });
-    EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::AvboitDepthWarp), CommandQueue::Compute);
-    EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::GraphicsPresent), CommandQueue::Graphics);
-}
-
-
-TEST(EcsGraphics, GpuTaskGraphFrameScheduleMatchesTheRemainingLegacyPlan){
+TEST(EcsGraphics, GpuTaskGraphScheduleRetainsOnlyPlanParityAndSelectsAvboitRoute){
     const GpuTaskGraphFrameScheduleInput inputs[] = {
         GpuTaskGraphFrameScheduleInput{ false, true, true, true, true, true },
         GpuTaskGraphFrameScheduleInput{ true, false, false, false, false, false },
         GpuTaskGraphFrameScheduleInput{ true, false, false, false, true, false },
         GpuTaskGraphFrameScheduleInput{ true, true, true, false, true, true },
         GpuTaskGraphFrameScheduleInput{ true, true, true, true, true, true },
-        GpuTaskGraphFrameScheduleInput{ true, true, true, true, false, false },
     };
     for(const GpuTaskGraphFrameScheduleInput& input : inputs){
         const GpuTaskGraphFrameSchedule schedule(input);
@@ -173,147 +121,97 @@ TEST(EcsGraphics, GpuTaskGraphFrameScheduleMatchesTheRemainingLegacyPlan){
             input.frameLaggedAsyncLightingEnabled,
             input.laggedLightingHistoryReady,
             input.laggedLightingHistoryAccepted,
-            input.hasTransparentRenderers,
         });
         for(usize workIndex = 0u; workIndex < FrameExecutionWork::kCount; ++workIndex){
             const FrameExecutionWork::Enum work = static_cast<FrameExecutionWork::Enum>(workIndex);
-            ASSERT_EQ(schedule.hasWork(work), plan.hasWork(work));
-            if(!schedule.hasWork(work))
-                continue;
-
+            EXPECT_EQ(schedule.hasWork(work), plan.hasWork(work));
             for(usize producerIndex = 0u; producerIndex < FrameExecutionWork::kCount; ++producerIndex){
-                const FrameExecutionWork::Enum producer = static_cast<FrameExecutionWork::Enum>(producerIndex);
-                if(!schedule.workDependsOn(work, producer))
-                    continue;
-                ASSERT_TRUE(plan.hasWork(producer));
-                EXPECT_TRUE(PacketPathExists(
-                    plan,
-                    plan.packetForWork(producer),
-                    plan.packetForWork(work)
+                EXPECT_FALSE(schedule.workDependsOn(
+                    work,
+                    static_cast<FrameExecutionWork::Enum>(producerIndex)
                 ));
             }
         }
     }
 
-    const GpuTaskGraphFrameSchedule activeHardwareLagged(GpuTaskGraphFrameScheduleInput{
+    const GpuTaskGraphFrameSchedule splitAvboit(GpuTaskGraphFrameScheduleInput{
+        true, false, false, false, true, true,
+    });
+    EXPECT_TRUE(splitAvboit.usesAsyncAvboit());
+
+    const GpuTaskGraphFrameSchedule laggedLighting(GpuTaskGraphFrameScheduleInput{
         true, true, true, true, true, true,
     });
-    EXPECT_TRUE(activeHardwareLagged.usesLaggedLightingHistory());
-    EXPECT_TRUE(activeHardwareLagged.capturesLaggedLightingHistory());
+    EXPECT_TRUE(laggedLighting.usesLaggedLightingHistory());
+    EXPECT_TRUE(laggedLighting.capturesLaggedLightingHistory());
+    EXPECT_FALSE(laggedLighting.usesAsyncAvboit());
 
-    const GpuTaskGraphFrameSchedule activeSoftwareLagged(GpuTaskGraphFrameScheduleInput{
-        true, true, true, true, true, false,
+    const GpuTaskGraphFrameSchedule sharedQueue(GpuTaskGraphFrameScheduleInput{
+        false, false, false, false, true, false,
     });
-    EXPECT_TRUE(activeSoftwareLagged.usesLaggedLightingHistory());
-    EXPECT_TRUE(activeSoftwareLagged.capturesLaggedLightingHistory());
-    for(usize workIndex = 0u; workIndex < FrameExecutionWork::kCount; ++workIndex){
-        const FrameExecutionWork::Enum work = static_cast<FrameExecutionWork::Enum>(workIndex);
-        EXPECT_EQ(activeHardwareLagged.hasWork(work), activeSoftwareLagged.hasWork(work));
-    }
+    EXPECT_FALSE(sharedQueue.usesAsyncAvboit());
 }
 
 
-TEST(EcsGraphics, FrameExecutionPlanOwnsOnlyTheRemainingOrderedSubmissionBatches){
-    const FrameExecutionPlan opaquePlan(FrameExecutionPlanInput{
-        true, false, false, false, false,
+TEST(EcsGraphics, FrameExecutionPlanOwnsOnlyPrefixAndPresentBatches){
+    const FrameExecutionPlan plan(FrameExecutionPlanInput{
+        true, false, false, false,
     });
     const FrameExecutionSubmissionBatch::Enum expectedBatches[] = {
         FrameExecutionSubmissionBatch::GraphicsPrefix,
-        FrameExecutionSubmissionBatch::GraphicsEffects,
         FrameExecutionSubmissionBatch::GraphicsPresent,
     };
-    ASSERT_EQ(opaquePlan.submissionBatchCount(), LengthOf(expectedBatches));
+    ASSERT_EQ(plan.submissionBatchCount(), LengthOf(expectedBatches));
     for(usize batchIndex = 0u; batchIndex < LengthOf(expectedBatches); ++batchIndex)
-        EXPECT_EQ(opaquePlan.submissionBatchID(batchIndex), expectedBatches[batchIndex]);
+        EXPECT_EQ(plan.submissionBatchID(batchIndex), expectedBatches[batchIndex]);
 
     const FrameExecutionPacket::Enum prefixPackets[] = { FrameExecutionPacket::GraphicsPrefix };
-    const FrameExecutionPacket::Enum effectsPackets[] = { FrameExecutionPacket::GraphicsEffects };
     const FrameExecutionPacket::Enum presentPackets[] = { FrameExecutionPacket::GraphicsPresent };
     ExpectSubmissionBatch(
-        opaquePlan,
+        plan,
         FrameExecutionSubmissionBatch::GraphicsPrefix,
         prefixPackets,
         LengthOf(prefixPackets)
     );
     ExpectSubmissionBatch(
-        opaquePlan,
-        FrameExecutionSubmissionBatch::GraphicsEffects,
-        effectsPackets,
-        LengthOf(effectsPackets)
-    );
-    ExpectSubmissionBatch(
-        opaquePlan,
+        plan,
         FrameExecutionSubmissionBatch::GraphicsPresent,
         presentPackets,
         LengthOf(presentPackets)
     );
-    ExpectSubmissionBatchesResolvePacketDependencies(opaquePlan);
-
-    const FrameExecutionPlan splitPlan(FrameExecutionPlanInput{
-        true, false, false, false, true,
-    });
-    const FrameExecutionPacket::Enum splitEffectsPackets[] = {
-        FrameExecutionPacket::GraphicsAvboitPre,
-        FrameExecutionPacket::AsyncAvboitDepthWarp,
-        FrameExecutionPacket::GraphicsAvboitExtinction,
-        FrameExecutionPacket::AsyncAvboitIntegration,
-        FrameExecutionPacket::GraphicsAvboitAccumulation,
-    };
-    ExpectSubmissionBatch(
-        splitPlan,
-        FrameExecutionSubmissionBatch::GraphicsEffects,
-        splitEffectsPackets,
-        LengthOf(splitEffectsPackets)
-    );
-    ExpectSubmissionBatchesResolvePacketDependencies(splitPlan);
+    ExpectSubmissionBatchesResolvePacketDependencies(plan);
 }
 
 
-TEST(EcsGraphics, FrameExecutionPlanLeavesGraphOwnedLightingOutOfPacketDependencies){
+TEST(EcsGraphics, FrameExecutionPlanImportsGraphCompletionsForPresentation){
     const FrameExecutionPlan bootstrapPlan(FrameExecutionPlanInput{
-        true, true, true, false, true,
+        true, true, true, false,
     });
-    EXPECT_TRUE(bootstrapPlan.packet(FrameExecutionPacket::GraphicsPresent).enabled);
-    EXPECT_EQ(bootstrapPlan.packet(FrameExecutionPacket::GraphicsPresent).waitPacketCount, 0u);
-    EXPECT_EQ(bootstrapPlan.packet(FrameExecutionPacket::GraphicsPresent).externalWaitCount, 1u);
-    EXPECT_EQ(
-        bootstrapPlan.packet(FrameExecutionPacket::GraphicsPresent).externalWaits[0],
-        FrameExecutionExternalWait::DeferredComposite
-    );
+    const auto& bootstrapPresent = bootstrapPlan.packet(FrameExecutionPacket::GraphicsPresent);
+    EXPECT_EQ(bootstrapPresent.waitPacketCount, 0u);
+    ASSERT_EQ(bootstrapPresent.externalWaitCount, 1u);
+    EXPECT_EQ(bootstrapPresent.externalWaits[0], FrameExecutionExternalWait::DeferredComposite);
 
     const FrameExecutionPlan activeLaggedPlan(FrameExecutionPlanInput{
-        true, true, true, true, false,
+        true, true, true, true,
     });
-    const auto& present = activeLaggedPlan.packet(FrameExecutionPacket::GraphicsPresent);
-    ASSERT_EQ(present.waitPacketCount, 0u);
-    ASSERT_EQ(present.externalWaitCount, 2u);
-    EXPECT_EQ(present.externalWaits[0], FrameExecutionExternalWait::DeferredComposite);
-    EXPECT_EQ(present.externalWaits[1], FrameExecutionExternalWait::SurfelGi);
-
-    const auto& effects = activeLaggedPlan.packet(FrameExecutionPacket::GraphicsEffects);
-    EXPECT_EQ(effects.externalWaitCount, 0u);
+    const auto& activePresent = activeLaggedPlan.packet(FrameExecutionPacket::GraphicsPresent);
+    EXPECT_EQ(activePresent.waitPacketCount, 0u);
+    ASSERT_EQ(activePresent.externalWaitCount, 2u);
+    EXPECT_EQ(activePresent.externalWaits[0], FrameExecutionExternalWait::DeferredComposite);
+    EXPECT_EQ(activePresent.externalWaits[1], FrameExecutionExternalWait::SurfelGi);
 }
 
 
 TEST(EcsGraphics, FrameExecutionPacketCommandListsRouteOnlyRemainingPlanWork){
     const FrameExecutionPlan plan(FrameExecutionPlanInput{
-        true, false, false, false, true,
+        true, false, false, false,
     });
     FrameExecutionPacketCommandLists commandLists(plan);
     NWB::Core::CommandList* const prefix = TestCommandList(1u);
-    NWB::Core::CommandList* const avboitPre = TestCommandList(2u);
-    NWB::Core::CommandList* const depthWarp = TestCommandList(3u);
-    NWB::Core::CommandList* const extinction = TestCommandList(4u);
-    NWB::Core::CommandList* const integration = TestCommandList(5u);
-    NWB::Core::CommandList* const accumulation = TestCommandList(6u);
-    NWB::Core::CommandList* const present = TestCommandList(7u);
+    NWB::Core::CommandList* const present = TestCommandList(2u);
     const FrameExecutionWorkCommandListBinding bindings[] = {
         { FrameExecutionWork::GraphicsPrefix, prefix },
-        { FrameExecutionWork::AvboitRaster, avboitPre },
-        { FrameExecutionWork::AvboitDepthWarp, depthWarp },
-        { FrameExecutionWork::AvboitExtinction, extinction },
-        { FrameExecutionWork::AvboitIntegration, integration },
-        { FrameExecutionWork::AvboitAccumulation, accumulation },
         { FrameExecutionWork::GraphicsPresent, present },
     };
     ASSERT_TRUE(commandLists.appendPlannedWorkCommandLists(bindings, LengthOf(bindings)));
@@ -321,31 +219,15 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsRouteOnlyRemainingPlanWork){
     const auto prefixLists = commandLists.commandLists(FrameExecutionPacket::GraphicsPrefix);
     ASSERT_EQ(prefixLists.commandListCount, 1u);
     EXPECT_EQ(prefixLists.commandLists[0], prefix);
-    const auto accumulationLists = commandLists.commandLists(FrameExecutionPacket::GraphicsAvboitAccumulation);
-    ASSERT_EQ(accumulationLists.commandListCount, 1u);
-    EXPECT_EQ(accumulationLists.commandLists[0], accumulation);
     const auto presentLists = commandLists.commandLists(FrameExecutionPacket::GraphicsPresent);
     ASSERT_EQ(presentLists.commandListCount, 1u);
     EXPECT_EQ(presentLists.commandLists[0], present);
-
-    const FrameExecutionPlan opaquePlan(FrameExecutionPlanInput{
-        true, false, false, false, false,
-    });
-    FrameExecutionPacketCommandLists opaqueLists(opaquePlan);
-    const FrameExecutionWorkCommandListBinding absentSplitWork[] = {
-        { FrameExecutionWork::AvboitDepthWarp, TestCommandList(9u) },
-    };
-    EXPECT_TRUE(opaqueLists.appendPlannedWorkCommandLists(absentSplitWork, LengthOf(absentSplitWork)));
-    EXPECT_EQ(
-        opaqueLists.commandLists(FrameExecutionPacket::GraphicsEffects).commandListCount,
-        0u
-    );
 }
 
 
 TEST(EcsGraphics, FrameExecutionPlanSubmissionStateWaitsForGraphCompositeBeforePresent){
     const FrameExecutionPlan plan(FrameExecutionPlanInput{
-        false, false, false, false, false,
+        false, false, false, false,
     });
     FrameExecutionPlanSubmissionState submissions(plan);
     NWB::Core::QueueSubmissionToken waitTokens[FrameExecutionPlan::s_MaxSubmissionWaits] = {};
@@ -360,16 +242,6 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateWaitsForGraphCompositeBeforeP
     submissions.acceptSubmission(
         FrameExecutionPacket::GraphicsPrefix,
         NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 11u }
-    );
-    ASSERT_TRUE(submissions.prepareSubmission(
-        FrameExecutionPacket::GraphicsEffects,
-        submitDesc,
-        waitTokens,
-        LengthOf(waitTokens)
-    ));
-    submissions.acceptSubmission(
-        FrameExecutionPacket::GraphicsEffects,
-        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 33u }
     );
 
     EXPECT_FALSE(submissions.prepareSubmission(
@@ -394,28 +266,11 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateWaitsForGraphCompositeBeforeP
 
 TEST(EcsGraphics, FrameExecutionPlanSubmissionStateRetainsGraphCompletions){
     const FrameExecutionPlan plan(FrameExecutionPlanInput{
-        true, true, true, true, false,
+        true, true, true, true,
     });
     FrameExecutionPlanSubmissionState submissions(plan);
     NWB::Core::QueueSubmissionToken waitTokens[FrameExecutionPlan::s_MaxSubmissionWaits] = {};
     NWB::Core::QueueSubmissionDesc submitDesc;
-
-    submissions.acceptSubmission(
-        FrameExecutionPacket::GraphicsPrefix,
-        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 11u }
-    );
-    ASSERT_TRUE(submissions.prepareSubmission(
-        FrameExecutionPacket::GraphicsEffects,
-        submitDesc,
-        waitTokens,
-        LengthOf(waitTokens)
-    ));
-    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
-    EXPECT_EQ(waitTokens[0].value, 11u);
-    submissions.acceptSubmission(
-        FrameExecutionPacket::GraphicsEffects,
-        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 33u }
-    );
 
     const NWB::Core::QueueSubmissionToken compositeToken{ CommandQueue::Graphics, 44u };
     const NWB::Core::QueueSubmissionToken surfelGiToken{ CommandQueue::Compute, 55u };
@@ -431,42 +286,6 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateRetainsGraphCompletions){
     ExpectSubmissionToken(waitTokens[0], compositeToken);
     ExpectSubmissionToken(waitTokens[1], surfelGiToken);
     EXPECT_EQ(submissions.asyncRecoveryWaitToken(), nullptr);
-}
-
-
-TEST(EcsGraphics, FrameExecutionPlanSubmissionStateTracksNewestRemainingComputePacket){
-    const FrameExecutionPlan plan(FrameExecutionPlanInput{
-        true, false, false, false, true,
-    });
-    FrameExecutionPlanSubmissionState submissions(plan);
-
-    submissions.acceptSubmission(
-        FrameExecutionPacket::GraphicsPrefix,
-        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 11u }
-    );
-    EXPECT_EQ(submissions.asyncRecoveryWaitToken(), nullptr);
-
-    submissions.acceptSubmission(
-        FrameExecutionPacket::GraphicsAvboitPre,
-        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 22u }
-    );
-    submissions.acceptSubmission(
-        FrameExecutionPacket::AsyncAvboitDepthWarp,
-        NWB::Core::QueueSubmissionToken{ CommandQueue::Compute, 33u }
-    );
-    ASSERT_NE(submissions.asyncRecoveryWaitToken(), nullptr);
-    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, 33u);
-
-    submissions.acceptSubmission(
-        FrameExecutionPacket::GraphicsAvboitExtinction,
-        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 44u }
-    );
-    submissions.acceptSubmission(
-        FrameExecutionPacket::AsyncAvboitIntegration,
-        NWB::Core::QueueSubmissionToken{ CommandQueue::Compute, 55u }
-    );
-    ASSERT_NE(submissions.asyncRecoveryWaitToken(), nullptr);
-    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, 55u);
 }
 
 

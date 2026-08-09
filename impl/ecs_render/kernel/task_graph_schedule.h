@@ -23,8 +23,8 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// This is deliberately separate from FrameExecutionPlan. It declares the remaining packet-owned semantic work for
-// parity telemetry; each migrated renderer task declares and submits its own graph independently.
+// This is deliberately separate from FrameExecutionPlan. It selects graph-owned renderer routes while declaring the
+// remaining packet-owned work for parity telemetry.
 struct GpuTaskGraphFrameScheduleInput{
     bool dedicatedAsyncCompute = false;
     bool frameLaggedAsyncLightingEnabled = false;
@@ -60,14 +60,7 @@ public:
             m_workEnabled[static_cast<usize>(work)] = true;
         };
         enable(FrameExecutionWork::GraphicsPrefix);
-        enable(FrameExecutionWork::AvboitRaster);
         enable(FrameExecutionWork::GraphicsPresent);
-        if(m_usesAsyncAvboit){
-            enable(FrameExecutionWork::AvboitDepthWarp);
-            enable(FrameExecutionWork::AvboitExtinction);
-            enable(FrameExecutionWork::AvboitIntegration);
-            enable(FrameExecutionWork::AvboitAccumulation);
-        }
     }
 
 
@@ -79,7 +72,7 @@ public:
     [[nodiscard]] bool usesLaggedLightingHistory()const noexcept{ return m_usesLaggedLightingHistory; }
     [[nodiscard]] bool capturesLaggedLightingHistory()const noexcept{ return m_capturesLaggedLightingHistory; }
     [[nodiscard]] bool usesAsyncAvboit()const noexcept{ return m_usesAsyncAvboit; }
-    // These are semantic ordering constraints, not packet-copying. Resource hazards provide the remaining edges.
+    // Remaining legacy work has no internal packet edge: graph-owned producers publish its external completions.
     [[nodiscard]] bool workDependsOn(
         const FrameExecutionWork::Enum consumer,
         const FrameExecutionWork::Enum producer
@@ -87,22 +80,9 @@ public:
         if(!hasWork(consumer) || !hasWork(producer))
             return false;
 
-        switch(consumer){
-        case FrameExecutionWork::AvboitRaster:
-            return producer == FrameExecutionWork::GraphicsPrefix;
-        case FrameExecutionWork::AvboitDepthWarp:
-            return producer == FrameExecutionWork::AvboitRaster;
-        case FrameExecutionWork::AvboitExtinction:
-            return producer == FrameExecutionWork::AvboitDepthWarp;
-        case FrameExecutionWork::AvboitIntegration:
-            return producer == FrameExecutionWork::AvboitExtinction;
-        case FrameExecutionWork::AvboitAccumulation:
-            return producer == FrameExecutionWork::AvboitIntegration;
-        case FrameExecutionWork::GraphicsPresent:
-            return false;
-        default:
-            return false;
-        }
+        static_cast<void>(consumer);
+        static_cast<void>(producer);
+        return false;
     }
 
 

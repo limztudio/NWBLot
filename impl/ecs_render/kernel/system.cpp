@@ -1951,6 +1951,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const auto submitDeferredPresent = [&]() -> bool {
         Core::Alloc::ScratchArena presentScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter deferredPresentSubmitter(device);
+        const Core::GpuTaskGraphPacketTimingTicket deferredPresentTimingTickets[] = {
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = deferredPresentPacket,
+                .timingTicket = &deferredPresentTimingTicket,
+            },
+        };
         const bool deferredPresentAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredPresentTask.valid()
@@ -1958,16 +1964,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && surfelGiSubmissionToken.valid()
             && deferredCompositeSubmissionToken.valid()
             && deferredPresentPacket.valid()
-            && deferredPresentSubmitter.submitPacket(
+            && deferredPresentSubmitter.submitPacketRangeInCompileOrder(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
-                deferredPresentPacket,
+                deferredPresentPacketIndex,
+                LengthOf(deferredPresentTimingTickets),
                 nullptr,
                 0u,
+                deferredPresentTimingTickets,
+                LengthOf(deferredPresentTimingTickets),
                 m_deferredLightingSubmissionTransaction,
-                presentScratchArena,
-                &deferredPresentTimingTicket
+                presentScratchArena
             )
         ;
         finalPresentationSubmissionToken = deferredPresentAccepted
@@ -2132,6 +2140,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     {
         Core::Alloc::ScratchArena graphicsPrefixScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter graphicsPrefixSubmitter(device);
+        const Core::GpuTaskGraphPacketTimingTicket graphicsPrefixTimingTickets[] = {
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = graphicsPrefixPacket,
+                .timingTicket = &graphicsPrefixTimingTicket,
+            },
+        };
         const bool graphicsPrefixAccepted =
             m_deferredLightingTaskGraphValid
             && m_graphicsPrefixMeshViewSetupTask.valid()
@@ -2140,16 +2154,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_graphicsPrefixGbufferTask.valid()
             && m_graphicsPrefixTask.valid()
             && graphicsPrefixPacket.valid()
-            && graphicsPrefixSubmitter.submitPacket(
+            && graphicsPrefixSubmitter.submitPacketRangeInCompileOrder(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
-                graphicsPrefixPacket,
+                graphicsPrefixPacketIndex,
+                LengthOf(graphicsPrefixTimingTickets),
                 nullptr,
                 0u,
+                graphicsPrefixTimingTickets,
+                LengthOf(graphicsPrefixTimingTickets),
                 m_deferredLightingSubmissionTransaction,
-                graphicsPrefixScratchArena,
-                &graphicsPrefixTimingTicket
+                graphicsPrefixScratchArena
             )
         ;
         prefixSubmissionToken = graphicsPrefixAccepted
@@ -2553,11 +2569,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             else{
                 Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
                 const Core::GpuTaskGraphSubmitter submitter(device);
-                const bool historyCopyAccepted = submitter.submitPacket(
+                const bool historyCopyAccepted = submitter.submitPacketRangeInCompileOrder(
                     m_deferredLightingTaskGraph,
                     m_deferredLightingCompiledGraph,
                     m_deferredLightingRecordedGraph,
-                    deferredLaggedLightingHistoryPacket,
+                    deferredLaggedLightingHistoryPacketIndex,
+                    1u,
+                    nullptr,
+                    0u,
                     nullptr,
                     0u,
                     m_deferredLightingSubmissionTransaction,

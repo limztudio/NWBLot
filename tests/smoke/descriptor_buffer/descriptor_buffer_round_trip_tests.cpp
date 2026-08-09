@@ -279,6 +279,32 @@ struct NativePacketPrefixTask{
 };
 
 
+struct NativeShadowPrepareTask{
+    struct Payload{
+        Buffer* bindlessSlots = nullptr;
+        bool* recorded = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.bindlessSlots)
+            return false;
+        commandList.setBufferState(payload.bindlessSlots, ResourceStates::CopyDest);
+        commandList.commitBarriers();
+        commandList.setBufferState(payload.bindlessSlots, ResourceStates::ConstantBuffer);
+        commandList.commitBarriers();
+        const bool ready = commandList.getBufferState(payload.bindlessSlots) == ResourceStates::ConstantBuffer;
+        if(payload.recorded)
+            *payload.recorded = ready;
+        return ready;
+    }
+};
+
+
 TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndCarriesSerialFinalState){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto buffer = device.createBuffer(
@@ -3072,9 +3098,10 @@ TEST_F(DescriptorBufferRoundTripTest, NormalizedStatePreludeFansInIndependentBra
 }
 
 
-// Models RendererSystem's ordered graphics prefix: setup, deferred clear, opaque production, and normalization
-// establish the state consumed by later independently recorded producers, compute lighting, composite, and present.
-TEST_F(DescriptorBufferRoundTripTest, RendererGraphicsPrefixStateChainThroughComputePresent){
+// Models RendererSystem's graph-owned preparation and ordered graphics prefix: setup, deferred clear, opaque
+// production, and normalization establish the state consumed by later independently recorded producers, compute
+// lighting, composite, and present.
+TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroughComputePresent){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto makeGbufferTarget = [&device](){
@@ -3158,7 +3185,6 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphicsPrefixStateChainThroughCom
     ASSERT_NE(avboitAccumColor.get(), nullptr);
     ASSERT_NE(avboitAccumExtinction.get(), nullptr);
 
-    CommandListResourceStateHandoff shadowPrepareState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff meshViewSetupState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff sceneShadingSetupState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff deferredClearState(DescriptorBufferRoundTripTest::arena());
@@ -3184,7 +3210,6 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphicsPrefixStateChainThroughCom
     CommandListResourceStateHandoff deferredPresentBaseState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff deferredPresentInputState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff deferredPresentState(DescriptorBufferRoundTripTest::arena());
-    auto shadowPrepare = device.createCommandList();
     auto meshViewSetup = device.createCommandList();
     auto sceneShadingSetup = device.createCommandList();
     auto deferredClear = device.createCommandList();
@@ -3197,7 +3222,6 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphicsPrefixStateChainThroughCom
     auto avboit = device.createCommandList();
     auto composite = device.createCommandList();
     auto present = device.createCommandList();
-    ASSERT_NE(shadowPrepare.get(), nullptr);
     ASSERT_NE(meshViewSetup.get(), nullptr);
     ASSERT_NE(sceneShadingSetup.get(), nullptr);
     ASSERT_NE(deferredClear.get(), nullptr);
@@ -3211,18 +3235,109 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphicsPrefixStateChainThroughCom
     ASSERT_NE(composite.get(), nullptr);
     ASSERT_NE(present.get(), nullptr);
 
-    shadowPrepare->open();
-    shadowPrepare->setBufferState(slotsBuffer.get(), ResourceStates::CopyDest);
-    shadowPrepare->setBufferState(slotsBuffer.get(), ResourceStates::ConstantBuffer);
-    shadowPrepare->close(&shadowPrepareState);
-    ASSERT_TRUE(shadowPrepareState.valid());
+    GpuTaskGraph shadowPrepareGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId shadowPrepareSlots = shadowPrepareGraph.importBuffer(
+        slotsBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/shadow_prepare_slots"))
+            .setMarkerLabel("Shadow Prepare Slots")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    ASSERT_TRUE(shadowPrepareSlots.valid());
+    const GpuTaskResourceUse shadowPrepareUses[] = {
+        GpuTaskResourceUse{
+            .resource = shadowPrepareSlots,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    GpuTaskSchedulingHint shadowPrepareScheduling;
+    shadowPrepareScheduling.cost = GpuTaskCostHint::Large;
+    shadowPrepareScheduling.forceSubmissionBoundary = true;
+    shadowPrepareScheduling.allowPacketMerge = false;
+    GpuTaskDesc shadowPrepareDesc;
+    shadowPrepareDesc
+        .setIdentity(Name("tests/descriptor_buffer/shadow_prepare"))
+        .setMarkerLabel("Shadow Preparation")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(shadowPrepareScheduling)
+        .setResourceUses(shadowPrepareUses, LengthOf(shadowPrepareUses))
+    ;
+    bool nativeShadowPrepareRecorded = false;
+    const GpuTaskId shadowPrepareTask = shadowPrepareGraph.addTask<NativeShadowPrepareTask>(
+        shadowPrepareDesc,
+        NativeShadowPrepareTask::Payload{
+            .bindlessSlots = slotsBuffer.get(),
+            .recorded = &nativeShadowPrepareRecorded,
+        }
+    );
+    ASSERT_TRUE(shadowPrepareTask.valid());
+    const GpuPhysicalQueueInfo shadowPrepareQueue{
+        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = 0u,
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology shadowPrepareTopology{
+        .queues = &shadowPrepareQueue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis shadowPrepareAnalysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments shadowPrepareAssignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph shadowPrepareCompiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena shadowPrepareScratch(Name("tests/descriptor_buffer/shadow_prepare_scratch"));
+    const GpuTaskGraphCompiler shadowPrepareCompiler;
+    ASSERT_TRUE(shadowPrepareCompiler.compile(
+        shadowPrepareGraph,
+        shadowPrepareAnalysis,
+        shadowPrepareTopology,
+        shadowPrepareAssignments,
+        shadowPrepareCompiledGraph,
+        shadowPrepareScratch
+    ));
+    const GpuSubmissionPacketId shadowPreparePacket = shadowPrepareCompiledGraph.packetForTask(shadowPrepareTask);
+    ASSERT_TRUE(shadowPreparePacket.valid());
+    GpuRecordedGraph shadowPrepareRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction shadowPrepareTransaction(DescriptorBufferRoundTripTest::arena());
+    shadowPrepareTransaction.reset(shadowPrepareCompiledGraph);
+    const GpuNativePacketRecorder shadowPrepareRecorder(device);
+    ASSERT_TRUE(shadowPrepareRecorder.recordPacket(
+        shadowPrepareGraph,
+        shadowPrepareCompiledGraph,
+        GpuNativePacketRecordDesc{ .packet = shadowPreparePacket },
+        shadowPrepareRecordedGraph
+    ));
+    ASSERT_TRUE(nativeShadowPrepareRecorded);
+    const CommandListResourceStateHandoff* const shadowPrepareStateSeed =
+        shadowPrepareRecordedGraph.packetFinalStateSeed(shadowPreparePacket)
+    ;
+    ASSERT_NE(shadowPrepareStateSeed, nullptr);
+    const GpuTaskGraphSubmitter shadowPrepareSubmitter(device);
+    ASSERT_TRUE(shadowPrepareSubmitter.submitPacket(
+        shadowPrepareGraph,
+        shadowPrepareCompiledGraph,
+        shadowPrepareRecordedGraph,
+        shadowPreparePacket,
+        nullptr,
+        0u,
+        shadowPrepareTransaction,
+        shadowPrepareScratch
+    ));
+    ASSERT_TRUE(shadowPrepareTransaction.packetToken(shadowPreparePacket).valid());
 
-    CommandList* shadowPrepareCommandLists[] = { shadowPrepare.get() };
-    bool shadowPrepareSubmitted = false;
-    EXPECT_GT(device.executeCommandLists(shadowPrepareCommandLists, LengthOf(shadowPrepareCommandLists), CommandQueue::Graphics, &shadowPrepareSubmitted), 0u);
-    ASSERT_TRUE(shadowPrepareSubmitted);
-
-    meshViewSetup->open(&shadowPrepareState);
+    meshViewSetup->open(shadowPrepareStateSeed);
     meshViewSetup->setBufferState(meshViewBuffer.get(), ResourceStates::CopyDest);
     meshViewSetup->setBufferState(meshViewBuffer.get(), ResourceStates::ConstantBuffer);
     meshViewSetup->close(&meshViewSetupState);

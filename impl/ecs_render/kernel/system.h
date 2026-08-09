@@ -57,6 +57,7 @@ namespace ECSRenderDetail{
 #if defined(NWB_DEBUG)
     struct MaterialTypedInstanceRangeVector;
 #endif
+    struct ShadowPrepareGraphTask;
     struct MeshViewSetupGraphTask;
     struct SceneShadingSetupGraphTask;
     struct DeferredClearGraphTask;
@@ -74,6 +75,7 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend class RendererDeferredSystem;
     friend class RendererAvboitSystem;
     friend class RendererRayTracingSystem;
+    friend struct ECSRenderDetail::ShadowPrepareGraphTask;
     friend struct ECSRenderDetail::MeshViewSetupGraphTask;
     friend struct ECSRenderDetail::SceneShadingSetupGraphTask;
     friend struct ECSRenderDetail::DeferredClearGraphTask;
@@ -135,7 +137,6 @@ public:
 private:
     [[nodiscard]] bool ensureFrameCommandLists();
     [[nodiscard]] bool prepareGpuTimingScopes();
-    [[nodiscard]] bool recordShadowPrepareCommandList(DeferredFrameTargets& deferredTargets);
     // These reset groups deliberately remain lifecycle-specific. Some handoffs retain accepted AsyncCompute scratch
     // or producer return state across frames, while unsubmitted work must be discarded before the next recording pass.
     void resetTargetGenerationStateHandoffs()noexcept;
@@ -145,6 +146,10 @@ private:
     void resetRejectedShadowVisibilityStateHandoffs()noexcept;
     void invalidateLaggedLightingHistorySubmission()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
+    void buildShadowPrepareTaskGraph(
+        DeferredFrameTargets& deferredTargets,
+        Core::GpuTimingSubmissionTicket& timingTicket
+    );
     void buildGraphicsPrefixTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         DeferredFrameTargets& deferredTargets,
@@ -245,6 +250,16 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;
+    // Shadow preparation is a graph-owned Graphics packet. Its native final snapshot is the ordered serial base
+    // for the following graphics-prefix packet.
+    Core::GpuTaskGraph m_shadowPrepareTaskGraph;
+    Core::GpuTaskGraphAnalysis m_shadowPrepareTaskGraphAnalysis;
+    Core::GpuTaskGraphQueueAssignments m_shadowPrepareTaskGraphQueueAssignments;
+    Core::GpuCompiledGraph m_shadowPrepareCompiledGraph;
+    Core::GpuRecordedGraph m_shadowPrepareRecordedGraph;
+    Core::GpuGraphSubmissionTransaction m_shadowPrepareSubmissionTransaction;
+    Core::GpuTaskId m_shadowPrepareTask;
+    bool m_shadowPrepareTaskGraphValid = false;
     // The graphics prefix is fully native: its graph owns recording, transport, submission, completion, and
     // lifecycle from mesh-view setup through post-G-buffer normalization.
     Core::GpuTaskGraph m_graphicsPrefixTaskGraph;
@@ -377,7 +392,6 @@ private:
     RendererAvboitState m_avboitState;
     RendererRayTracingState m_rayTracingState;
     CsgFrameState m_preparedCsgFrameState;
-    Core::CommandListResourceStateHandoff m_shadowPrepareStateHandoff;
     // Compute-only shadow scratch/history retains accepted graph packet state across frames. Deferred lighting now
     // consumes the visibility result on the same Compute lane, so the result snapshot remains Compute-local.
     Core::CommandListResourceStateHandoff m_shadowComputePersistentStateHandoff;
@@ -396,7 +410,6 @@ private:
     // A small Graphics recovery packet retires an accepted frame timing scope when a later dependent packet is
     // rejected.  If it joins AsyncCompute, cross-lane resources remain concurrently shared.
     Core::CommandListHandle m_frameRecoveryCommandList;
-    Core::CommandListHandle m_shadowPrepareCommandList;
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;
     bool m_preparedShadowVisibilityReady = false;

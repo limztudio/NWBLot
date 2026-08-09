@@ -36,6 +36,12 @@ RendererSystem::RendererSystem(
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_csgShapeRegistry(arena)
+    , m_shadowPrepareTaskGraph(arena)
+    , m_shadowPrepareTaskGraphAnalysis(arena)
+    , m_shadowPrepareTaskGraphQueueAssignments(arena)
+    , m_shadowPrepareCompiledGraph(arena)
+    , m_shadowPrepareRecordedGraph(arena)
+    , m_shadowPrepareSubmissionTransaction(arena)
     , m_graphicsPrefixTaskGraph(arena)
     , m_graphicsPrefixTaskGraphAnalysis(arena)
     , m_graphicsPrefixTaskGraphQueueAssignments(arena)
@@ -99,7 +105,6 @@ RendererSystem::RendererSystem(
     , m_meshState(arena)
     , m_materialState(arena)
     , m_rayTracingState(arena)
-    , m_shadowPrepareStateHandoff(arena)
     , m_shadowComputePersistentStateHandoff(arena)
     , m_shadowVisibilityReturnStateHandoff(arena)
     , m_causticsComputePersistentStateHandoff(arena)
@@ -187,8 +192,7 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
 }
 
 void RendererSystem::resetInvalidatedResourceStateHandoffs()noexcept{
-    // Full invalidation also drops the serial preparation base.
-    m_shadowPrepareStateHandoff.reset();
+    // The shadow-preparation packet owns its serial export; only retained cross-frame state is reset here.
     resetTargetGenerationStateHandoffs();
 }
 
@@ -258,6 +262,14 @@ void RendererSystem::invalidateResources(){
     m_preparedCsgFrameStateValid = false;
     m_preparedHasTransparentRenderers = false;
     m_preparedShadowVisibilityReady = false;
+    m_shadowPrepareTaskGraphValid = false;
+    m_shadowPrepareTask = {};
+    m_shadowPrepareTaskGraph.reset();
+    m_shadowPrepareTaskGraphAnalysis.reset();
+    m_shadowPrepareTaskGraphQueueAssignments.reset();
+    m_shadowPrepareCompiledGraph.reset();
+    m_shadowPrepareRecordedGraph.reset(m_shadowPrepareCompiledGraph);
+    m_shadowPrepareSubmissionTransaction.reset(m_shadowPrepareCompiledGraph);
     m_graphicsPrefixTaskGraphValid = false;
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -367,7 +379,6 @@ void RendererSystem::invalidateResources(){
     ;
     resetInvalidatedResourceStateHandoffs();
     m_frameRecoveryCommandList.reset();
-    m_shadowPrepareCommandList.reset();
     resetLaggedLightingHistoryTracking();
     m_frameRenderRecoveryFailed = false;
     // Retire heap-retained TLAS resources before releasing their backing state.
@@ -405,14 +416,6 @@ bool RendererSystem::ensureFrameCommandLists(){
         m_frameRecoveryCommandList = device.createCommandList();
         if(!m_frameRecoveryCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create frame recovery command list"));
-            return false;
-        }
-    }
-
-    if(!m_shadowPrepareCommandList){
-        m_shadowPrepareCommandList = device.createCommandList();
-        if(!m_shadowPrepareCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow preparation command list"));
             return false;
         }
     }
@@ -565,36 +568,66 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     )
         return false;
 
-    NWB_ASSERT(m_shadowPrepareCommandList);
-
     auto& device = m_graphics.getDevice();
 
-    // Preparation uploads target slots and initializes surfels on the Graphics lane when no dedicated Compute lane
-    // is available.
+    // Preparation uploads target slots and initializes surfels in an ordered Graphics graph packet before render.
     const bool deferredBindlessSlotsWereUploaded = deferredTargets.bindless.slotsUploaded;
     m_raytracingSystem.discardSurfelResourceInitialization();
     Core::GpuTimingSubmissionTicket shadowPrepareTimingTicket(m_graphics.gpuTiming());
+    buildShadowPrepareTaskGraph(deferredTargets, shadowPrepareTimingTicket);
+    const Core::GpuSubmissionPacketId shadowPreparePacket = m_shadowPrepareCompiledGraph.packetForTask(
+        m_shadowPrepareTask
+    );
+    const Core::GpuPhysicalQueueInfo* const shadowPrepareQueue = shadowPreparePacket.valid()
+        ? m_shadowPrepareCompiledGraph.queueInfo(m_shadowPrepareCompiledGraph.packet(shadowPreparePacket).queue)
+        : nullptr
+    ;
     const auto discardShadowPrepare = [&](){
-        // Failed preparation forces a safe cache rebuild; a previous key may name retired storage.
-        m_rayTracingState.m_tlasStaticSceneHashValid = false;
-        m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
-        m_rayTracingState.m_hwShadowMaterialContextHashValid = false;
-        m_rayTracingState.m_swShadowMaterialContextHashValid = false;
-        shadowPrepareTimingTicket.discard();
-        m_shadowPrepareStateHandoff.reset();
-        m_preparedShadowVisibilityReady = false;
-        deferredTargets.bindless.slotsUploaded = deferredBindlessSlotsWereUploaded;
-        m_raytracingSystem.discardSurfelResourceInitialization();
+        if(m_shadowPrepareTaskGraphValid){
+            m_shadowPrepareSubmissionTransaction.discardUnaccepted(
+                m_shadowPrepareTaskGraph,
+                m_shadowPrepareCompiledGraph
+            );
+        }
+        else{
+            // A declaration or compilation failure occurs before the task payload can run its graph discard hook.
+            m_rayTracingState.m_tlasStaticSceneHashValid = false;
+            m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
+            m_rayTracingState.m_hwShadowMaterialContextHashValid = false;
+            m_rayTracingState.m_swShadowMaterialContextHashValid = false;
+            shadowPrepareTimingTicket.discard();
+            m_preparedShadowVisibilityReady = false;
+            deferredTargets.bindless.slotsUploaded = deferredBindlessSlotsWereUploaded;
+            m_raytracingSystem.discardSurfelResourceInitialization();
+        }
+        m_shadowPrepareRecordedGraph.reset(m_shadowPrepareCompiledGraph);
     };
+    if(
+        !m_shadowPrepareTaskGraphValid
+        || !m_shadowPrepareTask.valid()
+        || !shadowPreparePacket.valid()
+        || !shadowPrepareQueue
+        || shadowPrepareQueue->queueClass != Core::CommandQueue::Graphics
+    ){
+        discardShadowPrepare();
+        return false;
+    }
+
     bool shadowPrepareRecorded = false;
     const Core::Graphics::JobHandle shadowPrepareJob = m_graphics.scheduleGraphicsJob([
         this,
-        &deferredTargets,
         &shadowPrepareRecorded,
-        &shadowPrepareTimingTicket
+        shadowPreparePacket
     ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(shadowPrepareTimingTicket);
-        shadowPrepareRecorded = recordShadowPrepareCommandList(deferredTargets);
+        const Core::GpuNativePacketRecorder recorder(m_graphics.getDevice());
+        shadowPrepareRecorded = recorder.recordPacket(
+            m_shadowPrepareTaskGraph,
+            m_shadowPrepareCompiledGraph,
+            Core::GpuNativePacketRecordDesc{
+                .packet = shadowPreparePacket,
+            },
+            m_shadowPrepareRecordedGraph
+        );
     });
     if(!shadowPrepareJob.valid()){
         discardShadowPrepare();
@@ -607,39 +640,32 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
         return false;
     }
 
-    Core::CommandList* shadowPrepareCommandLists[] = { m_shadowPrepareCommandList.get() };
-    if(!shadowPrepareTimingTicket.submit(device, shadowPrepareCommandLists, 1u)){
+    const Core::CommandListResourceStateHandoff* const shadowPrepareStateSeed =
+        m_shadowPrepareRecordedGraph.packetFinalStateSeed(shadowPreparePacket)
+    ;
+    if(!shadowPrepareStateSeed){
         discardShadowPrepare();
         return false;
     }
-    m_raytracingSystem.finalizeSurfelResourceInitialization();
+
+    Core::Alloc::ScratchArena submissionScratch(RendererArenaScope::s_TaskGraphArena);
+    const Core::GpuTaskGraphSubmitter submitter(device);
+    if(!submitter.submitPacket(
+        m_shadowPrepareTaskGraph,
+        m_shadowPrepareCompiledGraph,
+        m_shadowPrepareRecordedGraph,
+        shadowPreparePacket,
+        nullptr,
+        0u,
+        m_shadowPrepareSubmissionTransaction,
+        submissionScratch,
+        &shadowPrepareTimingTicket
+    )){
+        discardShadowPrepare();
+        return false;
+    }
 
     return true;
-}
-
-bool RendererSystem::recordShadowPrepareCommandList(DeferredFrameTargets& deferredTargets){
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
-
-    m_shadowPrepareCommandList->open();
-    const bool deferredBindlessResourcesUploaded = m_deferredSystem.uploadDeferredBindlessFrameResources(
-        *m_shadowPrepareCommandList,
-        deferredTargets
-    );
-    const bool shadowResourcesPrepared = deferredBindlessResourcesUploaded
-        && m_raytracingSystem.prepareShadowVisibilityResources(
-            *m_shadowPrepareCommandList,
-            deferredTargets,
-            scratchArena,
-            m_preparedShadowVisibilityReady
-        )
-    ;
-    // Upload final slot indirection after all capacity growth settles.
-    const bool traceMaterialContextUploaded = shadowResourcesPrepared
-        && m_raytracingSystem.uploadRayTraceMaterialContextSlots(*m_shadowPrepareCommandList)
-    ;
-    // Preserve preparation output state for the first render list.
-    m_shadowPrepareCommandList->close(&m_shadowPrepareStateHandoff);
-    return traceMaterialContextUploaded && m_shadowPrepareStateHandoff.valid();
 }
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
@@ -753,10 +779,22 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(!m_deferredState.m_targets.valid())
         return;
     DeferredFrameTargets& deferredTargets = m_deferredState.m_targets;
+    const Core::GpuSubmissionPacketId shadowPreparePacket = m_shadowPrepareCompiledGraph.packetForTask(
+        m_shadowPrepareTask
+    );
+    const Core::CommandListResourceStateHandoff* const shadowPrepareStateSeed =
+        shadowPreparePacket.valid()
+            ? m_shadowPrepareRecordedGraph.packetFinalStateSeed(shadowPreparePacket)
+            : nullptr
+    ;
 
     NWB_ASSERT(m_preparedCsgFrameStateValid);
-    NWB_ASSERT(m_shadowPrepareStateHandoff.valid());
+    NWB_ASSERT(m_shadowPrepareTaskGraphValid && shadowPrepareStateSeed);
     NWB_ASSERT(deferredTargets.bindless.slotsUploaded);
+    if(!m_shadowPrepareTaskGraphValid || !shadowPrepareStateSeed){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned shadow preparation was unavailable"));
+        return;
+    }
 
     const CsgFrameState csgFrameState = m_preparedCsgFrameState;
     const bool hasOpaqueCsgFrameWork = csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
@@ -1374,7 +1412,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuNativePacketRecorder graphicsPrefixRecorder(device);
     const Core::GpuNativePacketRecordDesc graphicsPrefixRecordDesc{
         .packet = graphicsPrefixPacket,
-        .serialStateSeed = &m_shadowPrepareStateHandoff,
+        .serialStateSeed = shadowPrepareStateSeed,
     };
     const bool graphicsPrefixRecorded =
         m_graphicsPrefixTaskGraphValid

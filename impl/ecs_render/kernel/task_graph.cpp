@@ -21,6 +21,74 @@ NWB_IMPL_BEGIN
 namespace ECSRenderDetail{
 
 
+// Shadow preparation owns the one Graphics packet that uploads bindless indirection and builds the current trace
+// scene. Its exact final snapshot becomes the serial state base for the following graphics-prefix packet.
+struct ShadowPrepareGraphTask{
+    struct Payload{
+        RendererSystem* renderer = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        bool deferredBindlessSlotsWereUploaded = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.renderer || !payload.targets || !payload.timingTicket)
+            return false;
+
+        RendererSystem& renderer = *payload.renderer;
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
+
+        renderer.m_preparedShadowVisibilityReady = false;
+        const bool deferredBindlessResourcesUploaded = renderer.m_deferredSystem.uploadDeferredBindlessFrameResources(
+            commandList,
+            *payload.targets
+        );
+        const bool shadowResourcesPrepared = deferredBindlessResourcesUploaded
+            && renderer.m_raytracingSystem.prepareShadowVisibilityResources(
+                commandList,
+                *payload.targets,
+                scratchArena,
+                renderer.m_preparedShadowVisibilityReady
+            )
+        ;
+        // Upload final slot indirection after all capacity growth settles.
+        return shadowResourcesPrepared
+            && renderer.m_raytracingSystem.uploadRayTraceMaterialContextSlots(commandList)
+        ;
+    }
+
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        static_cast<void>(token);
+        if(payload.renderer)
+            payload.renderer->m_raytracingSystem.finalizeSurfelResourceInitialization();
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.timingTicket)
+            payload.timingTicket->discard();
+        if(!payload.renderer)
+            return;
+
+        RendererSystem& renderer = *payload.renderer;
+        // Failed preparation forces a safe cache rebuild; a previous key may name retired storage.
+        renderer.m_rayTracingState.m_tlasStaticSceneHashValid = false;
+        renderer.m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
+        renderer.m_rayTracingState.m_hwShadowMaterialContextHashValid = false;
+        renderer.m_rayTracingState.m_swShadowMaterialContextHashValid = false;
+        renderer.m_preparedShadowVisibilityReady = false;
+        if(payload.targets)
+            payload.targets->bindless.slotsUploaded = payload.deferredBindlessSlotsWereUploaded;
+        renderer.m_raytracingSystem.discardSurfelResourceInitialization();
+    }
+};
+
+
 // Mesh-view setup is the first native graphics-prefix task.  Its dynamic upload barriers remain intrinsic to the
 // upload, while the graph owns packet routing and the declared final ConstantBuffer state.
 struct MeshViewSetupGraphTask{
@@ -777,6 +845,122 @@ struct DeferredPresentGraphTask{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void RendererSystem::buildShadowPrepareTaskGraph(
+    DeferredFrameTargets& deferredTargets,
+    Core::GpuTimingSubmissionTicket& timingTicket
+){
+    using namespace __hidden_renderer_task_graph;
+
+    m_shadowPrepareTaskGraphValid = false;
+    m_shadowPrepareTask = {};
+    m_shadowPrepareTaskGraph.reset();
+    m_shadowPrepareTaskGraphAnalysis.reset();
+    m_shadowPrepareTaskGraphQueueAssignments.reset();
+    m_shadowPrepareCompiledGraph.reset();
+    m_shadowPrepareRecordedGraph.reset(m_shadowPrepareCompiledGraph);
+    m_shadowPrepareSubmissionTransaction.reset(m_shadowPrepareCompiledGraph);
+
+    if(!deferredTargets.valid() || !deferredTargets.bindless.valid())
+        return;
+
+    Core::GpuGraphResourceDesc bindlessSlotsDesc = BufferResourceDesc(
+        Name("render.shadow_prepare.bindless_slots"),
+        "Deferred Bindless Slots"
+    );
+    // The accepted upload leaves this selector in ConstantBuffer. A rejected graph task restores slotsUploaded,
+    // so this dynamic initial state is the actual serial Graphics state rather than the allocation-time default.
+    bindlessSlotsDesc.setInitialState(
+        deferredTargets.bindless.slotsUploaded
+            ? Core::ResourceStates::ConstantBuffer
+            : deferredTargets.bindless.slotsBuffer->getDescription().initialState
+    );
+    const Core::GpuGraphResourceId bindlessSlots = m_shadowPrepareTaskGraph.importBuffer(
+        deferredTargets.bindless.slotsBuffer,
+        bindlessSlotsDesc
+    );
+    const Core::GpuGraphResourceId preparationDomain = m_shadowPrepareTaskGraph.importHazardDomain(
+        HazardDomainDesc(
+            Name("render.shadow_prepare.dynamic_resources"),
+            "Dynamic Trace Preparation Resources"
+        )
+    );
+    if(!bindlessSlots.valid() || !preparationDomain.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shadow-preparation graph resources"));
+        return;
+    }
+
+    const Core::GpuTaskResourceUse resourceUses[] = {
+        // This final state is consumed by every following bindless reader. Additional trace buffers are allocated or
+        // replaced while the task records, so their exact final states are exported from the native packet snapshot.
+        ReadWriteUse(bindlessSlots, Core::ResourceStates::ConstantBuffer),
+        ReadWriteUse(preparationDomain, Core::ResourceStates::Common),
+    };
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Large;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Core::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("render.shadow_prepare"))
+        .setMarkerLabel("Shadow Preparation")
+        .setQueue(GraphicsQueueRequest())
+        .setScheduling(scheduling)
+        .setResourceUses(resourceUses, LengthOf(resourceUses))
+    ;
+    m_shadowPrepareTask = m_shadowPrepareTaskGraph.addTask<ECSRenderDetail::ShadowPrepareGraphTask>(
+        desc,
+        ECSRenderDetail::ShadowPrepareGraphTask::Payload{
+            .renderer = this,
+            .targets = &deferredTargets,
+            .timingTicket = &timingTicket,
+            .deferredBindlessSlotsWereUploaded = deferredTargets.bindless.slotsUploaded,
+        }
+    );
+    if(!m_shadowPrepareTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shadow-preparation task"));
+        return;
+    }
+
+    const auto& device = graphics().getDevice();
+    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
+    const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
+        static_cast<u8>(Core::GpuQueueCapability::Graphics)
+        | static_cast<u8>(Core::GpuQueueCapability::Compute)
+        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
+    );
+    const Core::GpuPhysicalQueueInfo queues[] = {
+        Core::GpuPhysicalQueueInfo{
+            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
+            .queueClass = Core::CommandQueue::Graphics,
+            .capabilities = graphicsQueueCapabilities,
+            .familyIndex = graphicsFamilyIndex,
+            .queueIndex = 0u,
+            .dedicated = false,
+        },
+    };
+    const Core::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+    const Core::GpuTaskGraphCompiler compiler;
+    if(!compiler.compile(
+        m_shadowPrepareTaskGraph,
+        m_shadowPrepareTaskGraphAnalysis,
+        topology,
+        m_shadowPrepareTaskGraphQueueAssignments,
+        m_shadowPrepareCompiledGraph,
+        scratchArena
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile shadow-preparation task graph"));
+        return;
+    }
+    m_shadowPrepareRecordedGraph.reset(m_shadowPrepareCompiledGraph);
+    m_shadowPrepareSubmissionTransaction.reset(m_shadowPrepareCompiledGraph);
+    m_shadowPrepareTaskGraphValid = true;
+}
 
 
 void RendererSystem::buildGraphicsPrefixTaskGraph(

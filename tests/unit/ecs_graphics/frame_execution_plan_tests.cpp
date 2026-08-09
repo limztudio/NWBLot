@@ -24,7 +24,6 @@ using GpuTaskGraphFrameScheduleInput = NWB::Impl::ECSRenderDetail::GpuTaskGraphF
 using FrameExecutionPacketCommandLists = NWB::Impl::ECSRenderDetail::FrameExecutionPacketCommandLists;
 using FrameExecutionWorkCommandListBinding = NWB::Impl::ECSRenderDetail::FrameExecutionWorkCommandListBinding;
 using FrameExecutionPlanSubmissionState = NWB::Impl::ECSRenderDetail::FrameExecutionPlanSubmissionState;
-using FrameExecutionExternalWaitTokens = NWB::Impl::ECSRenderDetail::FrameExecutionExternalWaitTokens;
 namespace FrameExecutionPacket = NWB::Impl::ECSRenderDetail::FrameExecutionPacket;
 namespace FrameExecutionSubmissionBatch = NWB::Impl::ECSRenderDetail::FrameExecutionSubmissionBatch;
 namespace FrameExecutionWork = NWB::Impl::ECSRenderDetail::FrameExecutionWork;
@@ -117,7 +116,6 @@ TEST(EcsGraphics, FrameExecutionPlanRoutesRemainingWorkThroughGraphicsWithoutDed
         true,
         true,
         true,
-        false,
     });
 
     for(usize workIndex = 0u; workIndex < FrameExecutionWork::kCount; ++workIndex){
@@ -141,7 +139,7 @@ TEST(EcsGraphics, FrameExecutionPlanRoutesRemainingWorkThroughGraphicsWithoutDed
 
 TEST(EcsGraphics, FrameExecutionPlanKeepsOnlyRemainingWorkInTheParityOracle){
     const FrameExecutionPlan graphicsPlan(FrameExecutionPlanInput{
-        false, false, false, false, false, false,
+        false, false, false, false, false,
     });
     for(usize workIndex = 0u; workIndex < FrameExecutionWork::kCount; ++workIndex){
         const FrameExecutionWork::Enum work = static_cast<FrameExecutionWork::Enum>(workIndex);
@@ -152,16 +150,10 @@ TEST(EcsGraphics, FrameExecutionPlanKeepsOnlyRemainingWorkInTheParityOracle){
     }
 
     const FrameExecutionPlan dedicatedPlan(FrameExecutionPlanInput{
-        true, false, false, false, true, false,
+        true, false, false, false, true,
     });
-    EXPECT_FALSE(dedicatedPlan.hasWork(FrameExecutionWork::HardwareCaustics));
     EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::AvboitDepthWarp), CommandQueue::Compute);
     EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::GraphicsPresent), CommandQueue::Graphics);
-
-    const FrameExecutionPlan hardwarePlan(FrameExecutionPlanInput{
-        true, false, false, false, true, true,
-    });
-    EXPECT_EQ(hardwarePlan.expectedQueueForWork(FrameExecutionWork::HardwareCaustics), CommandQueue::Graphics);
 }
 
 
@@ -182,7 +174,6 @@ TEST(EcsGraphics, GpuTaskGraphFrameScheduleMatchesTheRemainingLegacyPlan){
             input.laggedLightingHistoryReady,
             input.laggedLightingHistoryAccepted,
             input.hasTransparentRenderers,
-            input.hardwareCaustics,
         });
         for(usize workIndex = 0u; workIndex < FrameExecutionWork::kCount; ++workIndex){
             const FrameExecutionWork::Enum work = static_cast<FrameExecutionWork::Enum>(workIndex);
@@ -201,12 +192,6 @@ TEST(EcsGraphics, GpuTaskGraphFrameScheduleMatchesTheRemainingLegacyPlan){
                     plan.packetForWork(work)
                 ));
             }
-            if(schedule.workWaitsForLaggedLightingHistory(work)){
-                EXPECT_TRUE(plan.workWaitsForExternalToken(
-                    work,
-                    FrameExecutionExternalWait::LaggedLightingHistory
-                ));
-            }
         }
     }
 
@@ -215,19 +200,22 @@ TEST(EcsGraphics, GpuTaskGraphFrameScheduleMatchesTheRemainingLegacyPlan){
     });
     EXPECT_TRUE(activeHardwareLagged.usesLaggedLightingHistory());
     EXPECT_TRUE(activeHardwareLagged.capturesLaggedLightingHistory());
-    EXPECT_TRUE(activeHardwareLagged.workWaitsForLaggedLightingHistory(FrameExecutionWork::HardwareCaustics));
 
     const GpuTaskGraphFrameSchedule activeSoftwareLagged(GpuTaskGraphFrameScheduleInput{
-        true, true, true, true, false, false,
+        true, true, true, true, true, false,
     });
-    EXPECT_FALSE(activeSoftwareLagged.hasWork(FrameExecutionWork::HardwareCaustics));
-    EXPECT_FALSE(activeSoftwareLagged.workWaitsForLaggedLightingHistory(FrameExecutionWork::HardwareCaustics));
+    EXPECT_TRUE(activeSoftwareLagged.usesLaggedLightingHistory());
+    EXPECT_TRUE(activeSoftwareLagged.capturesLaggedLightingHistory());
+    for(usize workIndex = 0u; workIndex < FrameExecutionWork::kCount; ++workIndex){
+        const FrameExecutionWork::Enum work = static_cast<FrameExecutionWork::Enum>(workIndex);
+        EXPECT_EQ(activeHardwareLagged.hasWork(work), activeSoftwareLagged.hasWork(work));
+    }
 }
 
 
 TEST(EcsGraphics, FrameExecutionPlanOwnsOnlyTheRemainingOrderedSubmissionBatches){
     const FrameExecutionPlan opaquePlan(FrameExecutionPlanInput{
-        true, false, false, false, false, false,
+        true, false, false, false, false,
     });
     const FrameExecutionSubmissionBatch::Enum expectedBatches[] = {
         FrameExecutionSubmissionBatch::GraphicsPrefix,
@@ -262,7 +250,7 @@ TEST(EcsGraphics, FrameExecutionPlanOwnsOnlyTheRemainingOrderedSubmissionBatches
     ExpectSubmissionBatchesResolvePacketDependencies(opaquePlan);
 
     const FrameExecutionPlan splitPlan(FrameExecutionPlanInput{
-        true, false, false, false, true, false,
+        true, false, false, false, true,
     });
     const FrameExecutionPacket::Enum splitEffectsPackets[] = {
         FrameExecutionPacket::GraphicsAvboitPre,
@@ -283,7 +271,7 @@ TEST(EcsGraphics, FrameExecutionPlanOwnsOnlyTheRemainingOrderedSubmissionBatches
 
 TEST(EcsGraphics, FrameExecutionPlanLeavesGraphOwnedLightingOutOfPacketDependencies){
     const FrameExecutionPlan bootstrapPlan(FrameExecutionPlanInput{
-        true, true, true, false, true, false,
+        true, true, true, false, true,
     });
     EXPECT_TRUE(bootstrapPlan.packet(FrameExecutionPacket::GraphicsPresent).enabled);
     EXPECT_EQ(bootstrapPlan.packet(FrameExecutionPacket::GraphicsPresent).waitPacketCount, 0u);
@@ -294,7 +282,7 @@ TEST(EcsGraphics, FrameExecutionPlanLeavesGraphOwnedLightingOutOfPacketDependenc
     );
 
     const FrameExecutionPlan activeLaggedPlan(FrameExecutionPlanInput{
-        true, true, true, true, false, true,
+        true, true, true, true, false,
     });
     const auto& present = activeLaggedPlan.packet(FrameExecutionPacket::GraphicsPresent);
     ASSERT_EQ(present.waitPacketCount, 0u);
@@ -303,14 +291,13 @@ TEST(EcsGraphics, FrameExecutionPlanLeavesGraphOwnedLightingOutOfPacketDependenc
     EXPECT_EQ(present.externalWaits[1], FrameExecutionExternalWait::SurfelGi);
 
     const auto& effects = activeLaggedPlan.packet(FrameExecutionPacket::GraphicsEffects);
-    ASSERT_EQ(effects.externalWaitCount, 1u);
-    EXPECT_EQ(effects.externalWaits[0], FrameExecutionExternalWait::LaggedLightingHistory);
+    EXPECT_EQ(effects.externalWaitCount, 0u);
 }
 
 
 TEST(EcsGraphics, FrameExecutionPacketCommandListsRouteOnlyRemainingPlanWork){
     const FrameExecutionPlan plan(FrameExecutionPlanInput{
-        true, false, false, false, true, false,
+        true, false, false, false, true,
     });
     FrameExecutionPacketCommandLists commandLists(plan);
     NWB::Core::CommandList* const prefix = TestCommandList(1u);
@@ -342,7 +329,7 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsRouteOnlyRemainingPlanWork){
     EXPECT_EQ(presentLists.commandLists[0], present);
 
     const FrameExecutionPlan opaquePlan(FrameExecutionPlanInput{
-        true, false, false, false, false, false,
+        true, false, false, false, false,
     });
     FrameExecutionPacketCommandLists opaqueLists(opaquePlan);
     const FrameExecutionWorkCommandListBinding absentSplitWork[] = {
@@ -358,7 +345,7 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsRouteOnlyRemainingPlanWork){
 
 TEST(EcsGraphics, FrameExecutionPlanSubmissionStateWaitsForGraphCompositeBeforePresent){
     const FrameExecutionPlan plan(FrameExecutionPlanInput{
-        false, false, false, false, false, false,
+        false, false, false, false, false,
     });
     FrameExecutionPlanSubmissionState submissions(plan);
     NWB::Core::QueueSubmissionToken waitTokens[FrameExecutionPlan::s_MaxSubmissionWaits] = {};
@@ -405,14 +392,11 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateWaitsForGraphCompositeBeforeP
 }
 
 
-TEST(EcsGraphics, FrameExecutionPlanSubmissionStateRetainsLaggedHistoryAndGraphCompletions){
+TEST(EcsGraphics, FrameExecutionPlanSubmissionStateRetainsGraphCompletions){
     const FrameExecutionPlan plan(FrameExecutionPlanInput{
-        true, true, true, true, false, true,
+        true, true, true, true, false,
     });
-    FrameExecutionExternalWaitTokens externalWaitTokens;
-    const NWB::Core::QueueSubmissionToken historyToken{ CommandQueue::Compute, 71u };
-    externalWaitTokens.tokens[static_cast<usize>(FrameExecutionExternalWait::LaggedLightingHistory)] = historyToken;
-    FrameExecutionPlanSubmissionState submissions(plan, externalWaitTokens);
+    FrameExecutionPlanSubmissionState submissions(plan);
     NWB::Core::QueueSubmissionToken waitTokens[FrameExecutionPlan::s_MaxSubmissionWaits] = {};
     NWB::Core::QueueSubmissionDesc submitDesc;
 
@@ -426,9 +410,8 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateRetainsLaggedHistoryAndGraphC
         waitTokens,
         LengthOf(waitTokens)
     ));
-    ASSERT_EQ(submitDesc.waitTokenCount, 2u);
+    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
     EXPECT_EQ(waitTokens[0].value, 11u);
-    ExpectSubmissionToken(waitTokens[1], historyToken);
     submissions.acceptSubmission(
         FrameExecutionPacket::GraphicsEffects,
         NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 33u }
@@ -453,7 +436,7 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateRetainsLaggedHistoryAndGraphC
 
 TEST(EcsGraphics, FrameExecutionPlanSubmissionStateTracksNewestRemainingComputePacket){
     const FrameExecutionPlan plan(FrameExecutionPlanInput{
-        true, false, false, false, true, false,
+        true, false, false, false, true,
     });
     FrameExecutionPlanSubmissionState submissions(plan);
 

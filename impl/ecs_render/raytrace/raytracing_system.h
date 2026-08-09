@@ -83,6 +83,13 @@ public:
     [[nodiscard]] bool renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool hasCausticWork()const noexcept;
     [[nodiscard]] bool prepareHwCausticResources(DeferredFrameTargets& targets);
+    [[nodiscard]] Core::GpuTaskId declareHardwareCausticsTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        bool shadowVisibilityPrepared,
+        Core::GpuTimingSubmissionTicket& timingTicket
+    );
     [[nodiscard]] bool renderHwCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool hasHwCausticWork()const noexcept;
     [[nodiscard]] bool hasSurfelWork()const noexcept;

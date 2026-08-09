@@ -28,8 +28,8 @@ static constexpr AStringView s_HwRaygenExportName = "CausticHwRayGen";
 static constexpr AStringView s_HwMissExportName = "CausticHwMiss";
 static constexpr AStringView s_HwHitGroupExportName = "CausticHwHitGroup";
 
-// Software caustics are graph-owned independently of the remaining hardware-ray-tracing packet. The renderer
-// still supplies the temporary manual state handoff until graph barriers replace that migration bridge.
+// Caustic producers own graph packets independently. The renderer still supplies the temporary manual state handoff
+// until graph barriers replace that migration bridge.
 struct SoftwareCausticsGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -57,6 +57,39 @@ struct SoftwareCausticsGraphTask{
             );
             if(!causticsDispatched && payload.raytracingSystem->hasCausticWork())
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software caustic render pass failed"));
+        }
+        return true;
+    }
+};
+
+
+struct HardwareCausticsGraphTask{
+    struct Payload{
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        bool shadowVisibilityPrepared = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.raytracingSystem || !payload.targets || !payload.timingTicket)
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        // Retain black caustics whenever no hardware producer dispatches.
+        payload.raytracingSystem->clearCausticTargets(commandList, *payload.targets);
+        if(payload.shadowVisibilityPrepared){
+            const bool causticsDispatched = payload.raytracingSystem->renderHwCaustics(
+                commandList,
+                *payload.targets
+            );
+            if(!causticsDispatched && payload.raytracingSystem->hasHwCausticWork())
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic render pass failed"));
         }
         return true;
     }
@@ -600,6 +633,24 @@ Core::GpuTaskId RendererRayTracingSystem::declareSoftwareCausticsTask(
     return graph.addTask<__hidden_caustics::SoftwareCausticsGraphTask>(
         desc,
         __hidden_caustics::SoftwareCausticsGraphTask::Payload{
+            .raytracingSystem = this,
+            .targets = &targets,
+            .timingTicket = &timingTicket,
+            .shadowVisibilityPrepared = shadowVisibilityPrepared,
+        }
+    );
+}
+
+Core::GpuTaskId RendererRayTracingSystem::declareHardwareCausticsTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    const bool shadowVisibilityPrepared,
+    Core::GpuTimingSubmissionTicket& timingTicket
+){
+    return graph.addTask<__hidden_caustics::HardwareCausticsGraphTask>(
+        desc,
+        __hidden_caustics::HardwareCausticsGraphTask::Payload{
             .raytracingSystem = this,
             .targets = &targets,
             .timingTicket = &timingTicket,

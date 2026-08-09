@@ -212,6 +212,19 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
         ))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: shadow-visibility graph telemetry export failed"));
     }
+    if(m_hardwareCausticsTaskGraphValid){
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+        const Core::GpuTaskGraphTelemetryOptions hardwareCausticsTelemetryOptions{
+            .queueAssignments = &m_hardwareCausticsTaskGraphQueueAssignments,
+        };
+        if(!m_hardwareCausticsTaskGraph.appendFrameGraphTelemetry(
+            builder,
+            m_hardwareCausticsTaskGraphAnalysis,
+            scratchArena,
+            hardwareCausticsTelemetryOptions
+        ))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware-caustics graph telemetry export failed"));
+    }
     if(m_softwareCausticsTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphTelemetryOptions softwareCausticsTelemetryOptions{

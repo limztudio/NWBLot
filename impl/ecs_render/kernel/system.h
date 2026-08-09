@@ -159,6 +159,13 @@ private:
         bool hardwareShadowSupported,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
+    void buildHardwareCausticsTaskGraph(
+        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+        DeferredFrameTargets& deferredTargets,
+        bool shadowVisibilityPrepared,
+        bool waitsForLaggedLightingHistory,
+        Core::GpuTimingSubmissionTicket& timingTicket
+    );
     void buildSoftwareCausticsTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         DeferredFrameTargets& deferredTargets,
@@ -245,8 +252,19 @@ private:
     Core::GpuTaskId m_shadowVisibilityTask;
     Core::GpuExternalCompletionId m_shadowVisibilityPrefixCompletion;
     bool m_shadowVisibilityTaskGraphValid = false;
-    // Software caustics own their graph task and native packet. The manual state handoff remains only until the
-    // automatic-barrier phase; the hardware dispatch-rays variant retains its separate legacy migration step.
+    // Hardware dispatch-rays caustics stay on Graphics but own their graph packet and completion imports. The manual
+    // state handoff remains only until the automatic-barrier phase.
+    Core::GpuTaskGraph m_hardwareCausticsTaskGraph;
+    Core::GpuTaskGraphAnalysis m_hardwareCausticsTaskGraphAnalysis;
+    Core::GpuTaskGraphQueueAssignments m_hardwareCausticsTaskGraphQueueAssignments;
+    Core::GpuCompiledGraph m_hardwareCausticsCompiledGraph;
+    Core::GpuRecordedGraph m_hardwareCausticsRecordedGraph;
+    Core::GpuGraphSubmissionTransaction m_hardwareCausticsSubmissionTransaction;
+    Core::GpuTaskId m_hardwareCausticsTask;
+    Core::GpuExternalCompletionId m_hardwareCausticsPrefixCompletion;
+    Core::GpuExternalCompletionId m_hardwareCausticsLaggedHistoryCompletion;
+    bool m_hardwareCausticsTaskGraphValid = false;
+    // Software caustics use the parallel graph-owned variant when hardware ray tracing is unavailable.
     Core::GpuTaskGraph m_softwareCausticsTaskGraph;
     Core::GpuTaskGraphAnalysis m_softwareCausticsTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_softwareCausticsTaskGraphQueueAssignments;
@@ -363,8 +381,6 @@ private:
     // A small Graphics recovery packet retires an accepted frame timing scope when a later dependent packet is
     // rejected.  If it joins AsyncCompute, cross-lane resources remain concurrently shared.
     Core::CommandListHandle m_frameRecoveryCommandList;
-    // Hardware dispatch-rays caustics retain this Graphics list until their later graph-migration step.
-    Core::CommandListHandle m_hardwareCausticsCommandList;
     // The hybrid AVBOIT packet uses Graphics lists for raster phases and AsyncCompute lists for its two pure dispatches.
     Core::CommandListHandle m_avboitCommandList;
     Core::CommandListHandle m_asyncAvboitDepthWarpCommandList;

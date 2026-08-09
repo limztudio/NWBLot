@@ -58,8 +58,6 @@ namespace FrameExecutionSubmissionBatch{
 namespace FrameExecutionWork{
     enum Enum : u8{
         GraphicsPrefix,
-        // Only hardware dispatch-rays caustics still use the legacy packet plan. Software caustics are graph-owned.
-        HardwareCaustics,
         AvboitRaster,
         AvboitDepthWarp,
         AvboitExtinction,
@@ -75,7 +73,6 @@ namespace FrameExecutionWork{
 // External-token edges live with packet dependencies.
 namespace FrameExecutionExternalWait{
     enum Enum : u8{
-        LaggedLightingHistory,
         // Graph-owned deferred composite publishes this accepted token before legacy presentation submits.
         DeferredComposite,
         // Graph-owned surfel GI publishes this accepted token before its remaining legacy consumers submit.
@@ -92,8 +89,6 @@ struct FrameExecutionPlanInput{
     bool laggedLightingHistoryReady = false;
     bool laggedLightingHistoryAccepted = false;
     bool hasTransparentRenderers = false;
-    // Hardware caustics remain on Graphics until their graph-migration step.
-    bool hardwareCaustics = false;
 };
 
 
@@ -164,15 +159,6 @@ public:
         if(usesAsyncAvboit){
             enablePacket(FrameExecutionPacket::GraphicsAvboitPre, Core::RenderLane::Graphics);
             addPacketWait(FrameExecutionPacket::GraphicsAvboitPre, FrameExecutionPacket::GraphicsPrefix);
-            if(input.hardwareCaustics){
-                assignWork(FrameExecutionWork::HardwareCaustics, FrameExecutionPacket::GraphicsAvboitPre);
-                // The accepted history-copy token must finish before Graphics hardware caustics rewrite live irradiance.
-                if(usesLaggedAsyncLighting)
-                    addExternalWait(
-                        FrameExecutionPacket::GraphicsAvboitPre,
-                        FrameExecutionExternalWait::LaggedLightingHistory
-                    );
-            }
             assignWork(FrameExecutionWork::AvboitRaster, FrameExecutionPacket::GraphicsAvboitPre);
 
             enablePacket(FrameExecutionPacket::AsyncAvboitDepthWarp, Core::RenderLane::AsyncCompute);
@@ -194,14 +180,6 @@ public:
         else{
             enablePacket(FrameExecutionPacket::GraphicsEffects, Core::RenderLane::Graphics);
             addPacketWait(FrameExecutionPacket::GraphicsEffects, FrameExecutionPacket::GraphicsPrefix);
-            if(input.hardwareCaustics){
-                assignWork(FrameExecutionWork::HardwareCaustics, FrameExecutionPacket::GraphicsEffects);
-                if(usesLaggedAsyncLighting)
-                    addExternalWait(
-                        FrameExecutionPacket::GraphicsEffects,
-                        FrameExecutionExternalWait::LaggedLightingHistory
-                    );
-            }
             assignWork(FrameExecutionWork::AvboitRaster, FrameExecutionPacket::GraphicsEffects);
         }
 

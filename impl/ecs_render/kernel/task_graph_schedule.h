@@ -31,6 +31,7 @@ struct GpuTaskGraphFrameScheduleInput{
     bool laggedLightingHistoryReady = false;
     bool laggedLightingHistoryAccepted = false;
     bool hasTransparentRenderers = false;
+    // Selects the hardware or software caustics graph producer; it is not legacy packet-plan work.
     bool hardwareCaustics = false;
 };
 
@@ -54,14 +55,11 @@ public:
             && input.hasTransparentRenderers
             && !m_usesLaggedLightingHistory
         )
-        , m_hardwareCaustics(input.hardwareCaustics)
     {
         const auto enable = [&](const FrameExecutionWork::Enum work){
             m_workEnabled[static_cast<usize>(work)] = true;
         };
         enable(FrameExecutionWork::GraphicsPrefix);
-        if(m_hardwareCaustics)
-            enable(FrameExecutionWork::HardwareCaustics);
         enable(FrameExecutionWork::AvboitRaster);
         enable(FrameExecutionWork::GraphicsPresent);
         if(m_usesAsyncAvboit){
@@ -81,13 +79,6 @@ public:
     [[nodiscard]] bool usesLaggedLightingHistory()const noexcept{ return m_usesLaggedLightingHistory; }
     [[nodiscard]] bool capturesLaggedLightingHistory()const noexcept{ return m_capturesLaggedLightingHistory; }
     [[nodiscard]] bool usesAsyncAvboit()const noexcept{ return m_usesAsyncAvboit; }
-    [[nodiscard]] bool workWaitsForLaggedLightingHistory(
-        const FrameExecutionWork::Enum work
-    )const noexcept{
-        if(!m_usesLaggedLightingHistory || !hasWork(work))
-            return false;
-        return work == FrameExecutionWork::HardwareCaustics && m_hardwareCaustics;
-    }
     // These are semantic ordering constraints, not packet-copying. Resource hazards provide the remaining edges.
     [[nodiscard]] bool workDependsOn(
         const FrameExecutionWork::Enum consumer,
@@ -97,7 +88,6 @@ public:
             return false;
 
         switch(consumer){
-        case FrameExecutionWork::HardwareCaustics:
         case FrameExecutionWork::AvboitRaster:
             return producer == FrameExecutionWork::GraphicsPrefix;
         case FrameExecutionWork::AvboitDepthWarp:
@@ -122,7 +112,6 @@ private:
     bool m_usesLaggedLightingHistory = false;
     bool m_capturesLaggedLightingHistory = false;
     bool m_usesAsyncAvboit = false;
-    bool m_hardwareCaustics = false;
 };
 
 

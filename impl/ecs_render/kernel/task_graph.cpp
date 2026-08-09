@@ -21,8 +21,38 @@ NWB_IMPL_BEGIN
 namespace ECSRenderDetail{
 
 
-// The opaque G-buffer keeps its existing recording body, but now runs as the first native suffix task after the
-// imported setup/clear bridge. Its resource barriers and final state are therefore part of the graph packet.
+// Deferred clear is the first native suffix after the imported setup bridge. Its entry transitions are fully
+// declaration-driven, so the recording body contains only clear commands and timing.
+struct DeferredClearGraphTask{
+    struct Payload{
+        RendererSystem* renderer = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        bool clearSurfelIrradiance = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.renderer || !payload.targets || !payload.timingTicket)
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        payload.renderer->m_deferredSystem.clearDeferredTargets(
+            commandList,
+            *payload.targets,
+            payload.clearSurfelIrradiance
+        );
+        return true;
+    }
+};
+
+
+// The opaque G-buffer keeps its existing recording body, but now runs after the native deferred clear. Its resource
+// barriers and final state are therefore part of the graph packet.
 struct GbufferGraphTask{
     struct Payload{
         RendererSystem* renderer = nullptr;
@@ -656,6 +686,7 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
     const bool hasOpaqueCsgFrameWork,
     const bool frameSetupReady,
     const bool shadowVisibilityRunsOnCompute,
+    const bool surfelGiRunsOnCompute,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
@@ -663,6 +694,7 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
 
     m_graphicsPrefixTaskGraphValid = false;
     m_graphicsPrefixBridgeTask = {};
+    m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixTask = {};
     m_graphicsPrefixTaskGraph.reset();
@@ -698,6 +730,20 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
         Name("render.graphics_prefix.depth"),
         "Depth"
     );
+    const Core::GpuGraphResourceId opaqueColor = importTexture(
+        deferredTargets.opaqueColor,
+        Name("render.graphics_prefix.opaque_color"),
+        "Opaque Color"
+    );
+    const bool clearSurfelIrradiance = !surfelGiRunsOnCompute && deferredTargets.surfelIrradiance != nullptr;
+    Core::GpuGraphResourceId surfelIrradiance;
+    if(clearSurfelIrradiance){
+        surfelIrradiance = importTexture(
+            deferredTargets.surfelIrradiance,
+            Name("render.graphics_prefix.surfel_irradiance"),
+            "Surfel Irradiance"
+        );
+    }
     const Core::GpuGraphResourceId meshViewBuffer = m_graphicsPrefixTaskGraph.importBuffer(
         m_drawState.m_meshViewBuffer,
         BufferResourceDesc(Name("render.graphics_prefix.mesh_view"), "Mesh View")
@@ -707,20 +753,18 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
         || !normal.valid()
         || !worldPosition.valid()
         || !depth.valid()
+        || !opaqueColor.valid()
+        || (clearSurfelIrradiance && !surfelIrradiance.valid())
         || !meshViewBuffer.valid()
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graphics-prefix graph resources"));
         return;
     }
 
-    // This imported task declares the final states of its three retained setup/clear lists. The native G-buffer and
-    // normalization suffixes receive their barrier plans from these declarations in one Graphics submission.
+    // This metadata-only task represents the two retained setup lists. Native deferred clear, G-buffer, and
+    // normalization suffixes receive their barrier plans from their own declarations in one Graphics submission.
     const Core::GpuTaskResourceUse bridgeResourceUses[] = {
         WriteUse(meshViewBuffer, Core::ResourceStates::ConstantBuffer),
-        WriteUse(albedo, Core::ResourceStates::CopyDest),
-        WriteUse(normal, Core::ResourceStates::CopyDest),
-        WriteUse(worldPosition, Core::ResourceStates::CopyDest),
-        WriteUse(depth, Core::ResourceStates::CopyDest),
     };
     Core::GpuTaskSchedulingHint bridgeScheduling;
     bridgeScheduling.cost = Core::GpuTaskCostHint::Medium;
@@ -737,6 +781,72 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
     m_graphicsPrefixBridgeTask = m_graphicsPrefixTaskGraph.addTask(bridgeDesc);
     if(!m_graphicsPrefixBridgeTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graphics-prefix bridge task"));
+        return;
+    }
+
+    {
+        Core::Alloc::ScratchArena clearResourceScratch(RendererArenaScope::s_TaskGraphArena);
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> clearResourceUses{ clearResourceScratch };
+        clearResourceUses.reserve(6u);
+        clearResourceUses.push_back(WriteTextureUse(
+            albedo,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::CopyDest
+        ));
+        clearResourceUses.push_back(WriteTextureUse(
+            normal,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::CopyDest
+        ));
+        clearResourceUses.push_back(WriteTextureUse(
+            worldPosition,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::CopyDest
+        ));
+        clearResourceUses.push_back(WriteTextureUse(
+            opaqueColor,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::CopyDest
+        ));
+        clearResourceUses.push_back(WriteTextureUse(
+            depth,
+            ECSRenderDetail::s_FramebufferSubresources,
+            Core::ResourceStates::CopyDest
+        ));
+        if(clearSurfelIrradiance){
+            clearResourceUses.push_back(WriteTextureUse(
+                surfelIrradiance,
+                ECSRenderDetail::s_FramebufferSubresources,
+                Core::ResourceStates::CopyDest
+            ));
+        }
+
+        Core::GpuTaskSchedulingHint clearScheduling;
+        clearScheduling.cost = Core::GpuTaskCostHint::Tiny;
+        clearScheduling.forceSubmissionBoundary = false;
+        clearScheduling.allowPacketMerge = true;
+        clearScheduling.mergeWithPrevious = true;
+        Core::GpuTaskDesc clearDesc;
+        clearDesc
+            .setIdentity(Name("render.graphics_prefix.deferred_clear"))
+            .setMarkerLabel("Deferred Clear")
+            .setQueue(GraphicsQueueRequest())
+            .setScheduling(clearScheduling)
+            .setDependencies(&m_graphicsPrefixBridgeTask, 1u)
+            .setResourceUses(clearResourceUses.data(), clearResourceUses.size())
+        ;
+        m_graphicsPrefixDeferredClearTask = m_graphicsPrefixTaskGraph.addTask<ECSRenderDetail::DeferredClearGraphTask>(
+            clearDesc,
+            ECSRenderDetail::DeferredClearGraphTask::Payload{
+                .renderer = this,
+                .targets = &deferredTargets,
+                .timingTicket = &timingTicket,
+                .clearSurfelIrradiance = clearSurfelIrradiance,
+            }
+        );
+    }
+    if(!m_graphicsPrefixDeferredClearTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-clear task"));
         return;
     }
 
@@ -758,7 +868,7 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
         .setMarkerLabel("Opaque G-Buffer")
         .setQueue(GraphicsQueueRequest())
         .setScheduling(gbufferScheduling)
-        .setDependencies(&m_graphicsPrefixBridgeTask, 1u)
+        .setDependencies(&m_graphicsPrefixDeferredClearTask, 1u)
         .setResourceUses(gbufferResourceUses, LengthOf(gbufferResourceUses))
     ;
     m_graphicsPrefixGbufferTask = m_graphicsPrefixTaskGraph.addTask<ECSRenderDetail::GbufferGraphTask>(

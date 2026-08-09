@@ -50,7 +50,7 @@ public:
     [[nodiscard]] bool createDeferredPresentPipeline(Core::Framebuffer* presentationFramebuffer);
     void resetAvboitFrameTargets(AvboitFrameTargets& targets);
     void resetDeferredFrameTargets();
-    void clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, bool clearCsgTargets, const Core::Rect& csgClearRect, bool clearSurfelIrradiance);
+    void clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, bool clearSurfelIrradiance);
     void clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::Rect& csgClearRect);
     [[nodiscard]] Core::GpuTaskId declareDeferredCompositeTask(
         Core::GpuTaskGraph& graph,

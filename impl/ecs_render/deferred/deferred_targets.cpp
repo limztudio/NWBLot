@@ -992,8 +992,6 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
 void RendererDeferredSystem::clearDeferredTargets(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const bool clearCsgTargets,
-    const Core::Rect& csgClearRect,
     const bool clearSurfelIrradiance
 ){
     NWB_ASSERT(targets.albedo);
@@ -1001,43 +999,17 @@ void RendererDeferredSystem::clearDeferredTargets(
     NWB_ASSERT(targets.worldPosition);
     NWB_ASSERT(targets.opaqueColor);
     NWB_ASSERT(targets.depth);
-    if(clearCsgTargets)
-        __hidden_deferred_targets::AssertCsgIntervalTargetsAvailable(targets);
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredClear, graphics().getDevice(), commandList);
 
-    const __hidden_deferred_targets::CsgIntervalSubresources csgSubresources =
-        __hidden_deferred_targets::MakeCsgIntervalSubresources(targets)
-    ;
-
-    commandList.setTextureState(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-
-    if(clearCsgTargets)
-        __hidden_deferred_targets::SetCsgIntervalTargetCopyDestStates(commandList, targets, csgSubresources);
-
-    commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-    commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-
-    // On a Graphics-routed plan this is reset here. A dedicated AsyncCompute surfel packet owns the same clear so its
-    // exclusive result never has to make a Graphics -> Compute ownership trip before the producer can write it.
-    if(clearSurfelIrradiance && targets.surfelIrradiance)
-        commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::CopyDest);
-
-    commandList.commitBarriers();
+    // The graph-owned deferred-clear task lowers these CopyDest transitions before invoking this body. CSG interval
+    // targets retain their separate dynamic clear path after receiver work is gathered by the opaque task.
 
     commandList.clearTextureFloat(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
     commandList.clearTextureFloat(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_GBufferNormalClearColor);
     commandList.clearTextureFloat(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_GBufferWorldPositionClearColor);
     if(clearSurfelIrradiance && targets.surfelIrradiance)
         commandList.clearTextureFloat(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_SurfelIrradianceClearColor);
-
-    if(clearCsgTargets){
-        Core::GpuTimingMeasure csgClearTiming(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgIntervalClear, graphics().getDevice(), commandList);
-
-        __hidden_deferred_targets::ClearCsgIntervalTargets(commandList, targets, csgSubresources, csgClearRect);
-    }
 
     commandList.clearTextureFloat(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
 

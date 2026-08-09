@@ -257,6 +257,7 @@ struct NativePacketPrefixTask{
         Texture* additionalTexture = nullptr;
         ResourceStates::Mask expectedAdditionalTextureState = ResourceStates::Unknown;
         bool* recorded = nullptr;
+        QueueSubmissionToken* acceptedToken = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -275,6 +276,11 @@ struct NativePacketPrefixTask{
         if(payload.recorded)
             *payload.recorded = ready;
         return ready;
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(payload.acceptedToken)
+            *payload.acceptedToken = token;
     }
 };
 
@@ -1259,6 +1265,253 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
     EXPECT_EQ(transaction.packetToken(hardwarePacket).value, hardwareToken.value);
     EXPECT_EQ(transaction.packetToken(avboitPrePacket).value, avboitPreToken.value);
     EXPECT_EQ(transaction.packetToken(lightingPacket).value, lightingToken.value);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInSharedTransaction){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto sourceBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    auto historyBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    auto presentationBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(sourceBuffer.get(), nullptr);
+    ASSERT_NE(historyBuffer.get(), nullptr);
+    ASSERT_NE(presentationBuffer.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId source = graph.importBuffer(
+        sourceBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/late_history_source"))
+            .setMarkerLabel("Late History Source")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId history = graph.importBuffer(
+        historyBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/late_history_destination"))
+            .setMarkerLabel("Late History Destination")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId presentation = graph.importBuffer(
+        presentationBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/late_history_presentation"))
+            .setMarkerLabel("Late History Presentation")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    ASSERT_TRUE(source.valid());
+    ASSERT_TRUE(history.valid());
+    ASSERT_TRUE(presentation.valid());
+
+    GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+
+    const GpuTaskResourceUse presentUses[] = {
+        GpuTaskResourceUse{
+            .resource = presentation,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskDesc presentDesc;
+    presentDesc
+        .setIdentity(Name("tests/descriptor_buffer/late_history_present"))
+        .setMarkerLabel("Deferred Present")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(scheduling)
+        .setResourceUses(presentUses, LengthOf(presentUses))
+    ;
+    bool presentRecorded = false;
+    QueueSubmissionToken presentAcceptedToken;
+    const GpuTaskId presentTask = graph.addTask<NativePacketPrefixTask>(
+        presentDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = presentationBuffer.get(),
+            .expectedState = ResourceStates::ShaderResource,
+            .recorded = &presentRecorded,
+            .acceptedToken = &presentAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(presentTask.valid());
+
+    const GpuTaskResourceUse historyUses[] = {
+        GpuTaskResourceUse{
+            .resource = source,
+            .range = {},
+            .requiredState = ResourceStates::CopySource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = history,
+            .range = {},
+            .requiredState = ResourceStates::CopyDest,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    const GpuTaskId historyDependencies[] = { presentTask };
+    GpuTaskDesc historyDesc;
+    historyDesc
+        .setIdentity(Name("tests/descriptor_buffer/late_history_copy"))
+        .setMarkerLabel("Lagged Lighting History Copy")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Transfer,
+            GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+        .setScheduling(scheduling)
+        .setDependencies(historyDependencies, LengthOf(historyDependencies))
+        .setResourceUses(historyUses, LengthOf(historyUses))
+    ;
+    bool historyRecorded = false;
+    QueueSubmissionToken historyAcceptedToken;
+    const GpuTaskId historyTask = graph.addTask<NativePacketPrefixTask>(
+        historyDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = sourceBuffer.get(),
+            .expectedState = ResourceStates::CopySource,
+            .recorded = &historyRecorded,
+            .acceptedToken = &historyAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(historyTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/late_history_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+
+    const GpuSubmissionPacketId presentPacket = compiledGraph.packetForTask(presentTask);
+    const GpuSubmissionPacketId historyPacket = compiledGraph.packetForTask(historyTask);
+    ASSERT_TRUE(presentPacket.valid());
+    ASSERT_TRUE(historyPacket.valid());
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    EXPECT_EQ(compiledGraph.packetIdAt(0u), presentPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(1u), historyPacket);
+    ASSERT_GE(compiledGraph.packet(historyPacket).dependencyCount, 1u);
+    const GpuPacketDependency* const historyPacketDependencies = compiledGraph.packetDependencies(historyPacket);
+    ASSERT_NE(historyPacketDependencies, nullptr);
+    bool historyWaitsForPresent = false;
+    for(usize index = 0u; index < compiledGraph.packet(historyPacket).dependencyCount; ++index)
+        historyWaitsForPresent = historyWaitsForPresent || historyPacketDependencies[index].producer == presentPacket;
+    EXPECT_TRUE(historyWaitsForPresent);
+    EXPECT_EQ(compiledGraph.packet(historyPacket).externalDependencyCount, 0u);
+
+    // Current-frame producer state arrives independently from the terminal Present dependency. This is the same
+    // late fan-in shape used by the renderer's shadow/caustic/surfel return snapshots.
+    CommandListResourceStateHandoff sourceState(DescriptorBufferRoundTripTest::arena());
+    auto sourceProducer = device.createCommandList();
+    ASSERT_NE(sourceProducer.get(), nullptr);
+    sourceProducer->open();
+    sourceProducer->setBufferState(sourceBuffer.get(), ResourceStates::CopySource);
+    sourceProducer->close(&sourceState);
+    ASSERT_TRUE(sourceState.valid());
+    CommandList* const sourceProducerCommandLists[] = { sourceProducer.get() };
+    bool sourceProducerSubmitted = false;
+    EXPECT_GT(device.executeCommandLists(
+        sourceProducerCommandLists,
+        LengthOf(sourceProducerCommandLists),
+        CommandQueue::Graphics,
+        &sourceProducerSubmitted
+    ), 0u);
+    ASSERT_TRUE(sourceProducerSubmitted);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = presentPacket },
+        recordedGraph
+    ));
+    EXPECT_TRUE(presentRecorded);
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        presentPacket,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken presentSubmissionToken = transaction.packetToken(presentPacket);
+    ASSERT_TRUE(presentSubmissionToken.valid());
+    EXPECT_EQ(presentAcceptedToken.value, presentSubmissionToken.value);
+    EXPECT_FALSE(transaction.packetToken(historyPacket).valid());
+
+    const GpuExternalPacketStateSource historyStateSources[] = {
+        GpuExternalPacketStateSource{ .states = &sourceState },
+    };
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{
+            .packet = historyPacket,
+            .externalStateSources = historyStateSources,
+            .externalStateSourceCount = LengthOf(historyStateSources),
+        },
+        recordedGraph
+    ));
+    EXPECT_TRUE(historyRecorded);
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        historyPacket,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken historySubmissionToken = transaction.packetToken(historyPacket);
+    ASSERT_TRUE(historySubmissionToken.valid());
+    EXPECT_EQ(historyAcceptedToken.value, historySubmissionToken.value);
     EXPECT_TRUE(device.waitForIdle());
 }
 

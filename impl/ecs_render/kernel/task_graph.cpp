@@ -527,10 +527,6 @@ struct LaggedLightingHistoryCopyTask{
             *payload.acceptedHistoryToken = token;
     }
 
-    static void discarded(Payload& payload){
-        if(payload.acceptedHistoryToken)
-            *payload.acceptedHistoryToken = {};
-    }
 };
 
 
@@ -1474,185 +1470,6 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
 }
 
 
-void RendererSystem::buildLaggedLightingHistoryTaskGraph(
-    const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
-    const DeferredFrameTargets& deferredTargets
-){
-    using namespace __hidden_renderer_task_graph;
-
-    m_laggedLightingHistoryTaskGraphValid = false;
-    m_laggedLightingHistoryTask = {};
-    m_laggedLightingPresentationCompletion = {};
-    m_laggedLightingHistoryTaskGraph.reset();
-    m_laggedLightingHistoryTaskGraphAnalysis.reset();
-    m_laggedLightingHistoryTaskGraphQueueAssignments.reset();
-    m_laggedLightingHistoryCompiledGraph.reset();
-    m_laggedLightingHistoryRecordedGraph.reset(m_laggedLightingHistoryCompiledGraph);
-    m_laggedLightingHistorySubmissionTransaction.reset(m_laggedLightingHistoryCompiledGraph);
-
-    const ECSRenderDetail::GpuTaskGraphFrameSchedule schedule(input);
-    if(!schedule.capturesLaggedLightingHistory())
-        return;
-
-    const auto& device = graphics().getDevice();
-    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
-    const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
-    const bool dedicatedAsyncCompute = input.dedicatedAsyncCompute
-        && computeFamilyIndex != Limit<u32>::s_Max
-        && computeFamilyIndex != graphicsFamilyIndex
-    ;
-    if(!dedicatedAsyncCompute)
-        return;
-
-    const DeferredLaggedLightingHistoryResources& history = deferredTargets.laggedLightingHistory;
-    if(!history.valid())
-        return;
-    const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
-        return m_laggedLightingHistoryTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
-    };
-    const Core::GpuGraphResourceId shadowVisibility = importTexture(
-        deferredTargets.shadowVisibility,
-        Name("render.lagged_history_copy.shadow_visibility"),
-        "Shadow Visibility"
-    );
-    const Core::GpuGraphResourceId causticIrradiance = importTexture(
-        deferredTargets.causticIrradiance,
-        Name("render.lagged_history_copy.caustic_irradiance"),
-        "Caustic Irradiance"
-    );
-    const Core::GpuGraphResourceId surfelIrradiance = importTexture(
-        deferredTargets.surfelIrradiance,
-        Name("render.lagged_history_copy.surfel_irradiance"),
-        "Surfel Irradiance"
-    );
-    const Core::GpuGraphResourceId historyShadowVisibility = importTexture(
-        history.shadowVisibility,
-        Name("render.lagged_history_copy.history_shadow_visibility"),
-        "History Shadow Visibility"
-    );
-    const Core::GpuGraphResourceId historyCausticIrradiance = importTexture(
-        history.causticIrradiance,
-        Name("render.lagged_history_copy.history_caustic_irradiance"),
-        "History Caustic Irradiance"
-    );
-    const Core::GpuGraphResourceId historySurfelIrradiance = importTexture(
-        history.surfelIrradiance,
-        Name("render.lagged_history_copy.history_surfel_irradiance"),
-        "History Surfel Irradiance"
-    );
-    if(
-        !shadowVisibility.valid()
-        || !causticIrradiance.valid()
-        || !surfelIrradiance.valid()
-        || !historyShadowVisibility.valid()
-        || !historyCausticIrradiance.valid()
-        || !historySurfelIrradiance.valid()
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import lagged-lighting history-copy resources"));
-        return;
-    }
-
-    Core::GpuExternalCompletionDesc presentationCompletionDesc;
-    presentationCompletionDesc
-        .setIdentity(Name("render.lagged_history_copy.presentation_complete"))
-        .setMarkerLabel("Final Presentation Complete")
-    ;
-    m_laggedLightingPresentationCompletion = m_laggedLightingHistoryTaskGraph.importExternalCompletion(
-        presentationCompletionDesc
-    );
-    if(!m_laggedLightingPresentationCompletion.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import final presentation completion for history copy"));
-        return;
-    }
-
-    const Core::GpuTaskResourceUse resourceUses[] = {
-        ReadUse(shadowVisibility, Core::ResourceStates::CopySource),
-        ReadUse(causticIrradiance, Core::ResourceStates::CopySource),
-        ReadUse(surfelIrradiance, Core::ResourceStates::CopySource),
-        WriteUse(historyShadowVisibility, Core::ResourceStates::CopyDest),
-        WriteUse(historyCausticIrradiance, Core::ResourceStates::CopyDest),
-        WriteUse(historySurfelIrradiance, Core::ResourceStates::CopyDest),
-    };
-    Core::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = Core::GpuTaskCostHint::Medium;
-    scheduling.forceSubmissionBoundary = true;
-    scheduling.allowPacketMerge = false;
-    Core::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("render.lagged_history_copy"))
-        .setMarkerLabel("Lagged Lighting History Copy")
-        .setQueue(TransferQueueRequest())
-        .setScheduling(scheduling)
-        .setExternalDependencies(&m_laggedLightingPresentationCompletion, 1u)
-        .setResourceUses(resourceUses, LengthOf(resourceUses))
-    ;
-    m_laggedLightingHistoryTask = m_laggedLightingHistoryTaskGraph.addTask<LaggedLightingHistoryCopyTask>(
-        desc,
-        LaggedLightingHistoryCopyTask::Payload{
-            .sourceShadowVisibility = deferredTargets.shadowVisibility,
-            .sourceCausticIrradiance = deferredTargets.causticIrradiance,
-            .sourceSurfelIrradiance = deferredTargets.surfelIrradiance,
-            .destinationShadowVisibility = history.shadowVisibility,
-            .destinationCausticIrradiance = history.causticIrradiance,
-            .destinationSurfelIrradiance = history.surfelIrradiance,
-            .acceptedHistoryToken = &m_laggedLightingHistorySubmissionToken,
-        }
-    );
-    if(!m_laggedLightingHistoryTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare lagged-lighting history-copy task"));
-        return;
-    }
-
-    const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
-        static_cast<u8>(Core::GpuQueueCapability::Graphics)
-        | static_cast<u8>(Core::GpuQueueCapability::Compute)
-        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
-    );
-    const Core::GpuQueueCapability::Mask computeQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
-        static_cast<u8>(Core::GpuQueueCapability::Compute)
-        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
-    );
-    const Core::GpuPhysicalQueueInfo queues[] = {
-        Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
-            .queueClass = Core::CommandQueue::Graphics,
-            .capabilities = graphicsQueueCapabilities,
-            .familyIndex = graphicsFamilyIndex,
-            .queueIndex = 0u,
-            .dedicated = false,
-        },
-        Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 1u, m_taskGraphDeviceGeneration },
-            .queueClass = Core::CommandQueue::Compute,
-            .capabilities = computeQueueCapabilities,
-            .familyIndex = computeFamilyIndex,
-            .queueIndex = 0u,
-            .dedicated = true,
-        },
-    };
-    const Core::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-    const Core::GpuTaskGraphCompiler compiler;
-    if(!compiler.compile(
-        m_laggedLightingHistoryTaskGraph,
-        m_laggedLightingHistoryTaskGraphAnalysis,
-        topology,
-        m_laggedLightingHistoryTaskGraphQueueAssignments,
-        m_laggedLightingHistoryCompiledGraph,
-        scratchArena
-    )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile lagged-lighting history-copy graph"));
-        return;
-    }
-    m_laggedLightingHistoryRecordedGraph.reset(m_laggedLightingHistoryCompiledGraph);
-    m_laggedLightingHistorySubmissionTransaction.reset(m_laggedLightingHistoryCompiledGraph);
-    m_laggedLightingHistoryTaskGraphValid = true;
-}
-
-
 void RendererSystem::buildShadowVisibilityTaskGraph(
     const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
     DeferredFrameTargets& deferredTargets,
@@ -2440,7 +2257,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::GpuTimingSubmissionTicket& hardwareCausticsTimingTicket,
     Core::GpuTimingSubmissionTicket& lightingTimingTicket,
     Core::GpuTimingSubmissionTicket& compositeTimingTicket,
-    Core::GpuTimingSubmissionTicket& presentTimingTicket
+    Core::GpuTimingSubmissionTicket& presentTimingTicket,
+    const bool includeLaggedLightingHistoryCapture
 ){
     using namespace __hidden_renderer_task_graph;
 
@@ -2454,6 +2272,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredPresentTask = {};
+    m_deferredLaggedLightingHistoryTask = {};
     m_deferredHardwareCausticsPrefixCompletion = {};
     m_deferredLightingPrefixCompletion = {};
     m_deferredLightingSurfelGiCompletion = {};
@@ -2484,7 +2303,15 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     }
     const bool declaresHardwareCaustics = input.hardwareCaustics;
     const bool lightingDependsOnHardwareCaustics = declaresHardwareCaustics && !useLaggedLightingHistory;
+    const bool capturesLaggedLightingHistory = includeLaggedLightingHistoryCapture
+        && schedule.capturesLaggedLightingHistory()
+        && dedicatedAsyncCompute
+    ;
     const DeferredLaggedLightingHistoryResources* const history = useLaggedLightingHistory
+        ? &deferredTargets.laggedLightingHistory
+        : nullptr
+    ;
+    const DeferredLaggedLightingHistoryResources* const captureHistory = capturesLaggedLightingHistory
         ? &deferredTargets.laggedLightingHistory
         : nullptr
     ;
@@ -2496,6 +2323,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         || !presentationFramebuffer
         || hasTransparentRenderers != input.hasTransparentRenderers
         || (useLaggedLightingHistory && (!history || !history->valid()))
+        || (capturesLaggedLightingHistory && (!captureHistory || !captureHistory->valid()))
     )
         return;
 
@@ -2578,6 +2406,68 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 "Caustic Irradiance"
             )
     ;
+    // The optional history copy is declared in this graph after Present, but records only after its accepted
+    // producer snapshots exist. Active lighting samples the history resources above, so reuse those exact graph
+    // identities for copy destinations and import only the current producer images that are otherwise absent.
+    Core::GpuGraphResourceId historyCopyShadowVisibility;
+    Core::GpuGraphResourceId historyCopyCausticIrradiance;
+    Core::GpuGraphResourceId historyCopySurfelIrradiance;
+    Core::GpuGraphResourceId historyCopyDestinationShadowVisibility;
+    Core::GpuGraphResourceId historyCopyDestinationCausticIrradiance;
+    Core::GpuGraphResourceId historyCopyDestinationSurfelIrradiance;
+    if(capturesLaggedLightingHistory){
+        historyCopyShadowVisibility = history
+            ? importTexture(
+                deferredTargets.shadowVisibility,
+                Name("render.lagged_history_copy.shadow_visibility"),
+                "Shadow Visibility"
+            )
+            : shadowVisibility
+        ;
+        historyCopyCausticIrradiance = !history
+            ? causticIrradiance
+            : (declaresHardwareCaustics
+                ? hardwareCausticIrradiance
+                : importTexture(
+                    deferredTargets.causticIrradiance,
+                    Name("render.lagged_history_copy.caustic_irradiance"),
+                    "Caustic Irradiance"
+                )
+            )
+        ;
+        historyCopySurfelIrradiance = history
+            ? importTexture(
+                deferredTargets.surfelIrradiance,
+                Name("render.lagged_history_copy.surfel_irradiance"),
+                "Surfel Irradiance"
+            )
+            : surfelIrradiance
+        ;
+        historyCopyDestinationShadowVisibility = history
+            ? shadowVisibility
+            : importTexture(
+                captureHistory->shadowVisibility,
+                Name("render.lagged_history_copy.history_shadow_visibility"),
+                "History Shadow Visibility"
+            )
+        ;
+        historyCopyDestinationCausticIrradiance = history
+            ? causticIrradiance
+            : importTexture(
+                captureHistory->causticIrradiance,
+                Name("render.lagged_history_copy.history_caustic_irradiance"),
+                "History Caustic Irradiance"
+            )
+        ;
+        historyCopyDestinationSurfelIrradiance = history
+            ? surfelIrradiance
+            : importTexture(
+                captureHistory->surfelIrradiance,
+                Name("render.lagged_history_copy.history_surfel_irradiance"),
+                "History Surfel Irradiance"
+            )
+        ;
+    }
     // AVBOIT shares the deferred graph's G-buffer and current bindless imports. Its private targets remain
     // distinct resources, while the compiler owns every producer/consumer state seed through Lighting and
     // Composite on both the live and active-lagged routes.
@@ -2646,6 +2536,14 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         || !bindlessSlots.valid()
         || !currentBindlessSlots.valid()
         || (declaresHardwareCaustics && !hardwareCausticIrradiance.valid())
+        || (capturesLaggedLightingHistory && (
+            !historyCopyShadowVisibility.valid()
+            || !historyCopyCausticIrradiance.valid()
+            || !historyCopySurfelIrradiance.valid()
+            || !historyCopyDestinationShadowVisibility.valid()
+            || !historyCopyDestinationCausticIrradiance.valid()
+            || !historyCopyDestinationSurfelIrradiance.valid()
+        ))
         || !avboitLowRaster.valid()
         || !avboitAccumColor.valid()
         || !avboitAccumExtinction.valid()
@@ -3271,6 +3169,47 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     if(!m_deferredPresentTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-present graph task"));
         return;
+    }
+
+    if(capturesLaggedLightingHistory){
+        const Core::GpuTaskResourceUse historyCopyResourceUses[] = {
+            ReadUse(historyCopyShadowVisibility, Core::ResourceStates::CopySource),
+            ReadUse(historyCopyCausticIrradiance, Core::ResourceStates::CopySource),
+            ReadUse(historyCopySurfelIrradiance, Core::ResourceStates::CopySource),
+            WriteUse(historyCopyDestinationShadowVisibility, Core::ResourceStates::CopyDest),
+            WriteUse(historyCopyDestinationCausticIrradiance, Core::ResourceStates::CopyDest),
+            WriteUse(historyCopyDestinationSurfelIrradiance, Core::ResourceStates::CopyDest),
+        };
+        Core::GpuTaskSchedulingHint historyCopyScheduling;
+        historyCopyScheduling.cost = Core::GpuTaskCostHint::Medium;
+        historyCopyScheduling.forceSubmissionBoundary = true;
+        historyCopyScheduling.allowPacketMerge = false;
+        const Core::GpuTaskId historyCopyDependencies[] = { m_deferredPresentTask };
+        Core::GpuTaskDesc historyCopyDesc;
+        historyCopyDesc
+            .setIdentity(Name("render.lagged_history_copy"))
+            .setMarkerLabel("Lagged Lighting History Copy")
+            .setQueue(TransferQueueRequest())
+            .setScheduling(historyCopyScheduling)
+            .setDependencies(historyCopyDependencies, LengthOf(historyCopyDependencies))
+            .setResourceUses(historyCopyResourceUses, LengthOf(historyCopyResourceUses))
+        ;
+        m_deferredLaggedLightingHistoryTask = m_deferredLightingTaskGraph.addTask<LaggedLightingHistoryCopyTask>(
+            historyCopyDesc,
+            LaggedLightingHistoryCopyTask::Payload{
+                .sourceShadowVisibility = deferredTargets.shadowVisibility,
+                .sourceCausticIrradiance = deferredTargets.causticIrradiance,
+                .sourceSurfelIrradiance = deferredTargets.surfelIrradiance,
+                .destinationShadowVisibility = captureHistory->shadowVisibility,
+                .destinationCausticIrradiance = captureHistory->causticIrradiance,
+                .destinationSurfelIrradiance = captureHistory->surfelIrradiance,
+                .acceptedHistoryToken = &m_laggedLightingHistorySubmissionToken,
+            }
+        );
+        if(!m_deferredLaggedLightingHistoryTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred lagged-lighting history-copy task"));
+            return;
+        }
     }
 
     const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(

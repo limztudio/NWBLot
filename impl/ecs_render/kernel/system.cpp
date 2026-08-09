@@ -54,12 +54,6 @@ RendererSystem::RendererSystem(
     , m_graphicsPrefixCompiledGraph(arena)
     , m_graphicsPrefixRecordedGraph(arena)
     , m_graphicsPrefixSubmissionTransaction(arena)
-    , m_laggedLightingHistoryTaskGraph(arena)
-    , m_laggedLightingHistoryTaskGraphAnalysis(arena)
-    , m_laggedLightingHistoryTaskGraphQueueAssignments(arena)
-    , m_laggedLightingHistoryCompiledGraph(arena)
-    , m_laggedLightingHistoryRecordedGraph(arena)
-    , m_laggedLightingHistorySubmissionTransaction(arena)
     , m_shadowVisibilityTaskGraph(arena)
     , m_shadowVisibilityTaskGraphAnalysis(arena)
     , m_shadowVisibilityTaskGraphQueueAssignments(arena)
@@ -260,15 +254,6 @@ void RendererSystem::invalidateResources(){
     m_graphicsPrefixCompiledGraph.reset();
     m_graphicsPrefixRecordedGraph.reset(m_graphicsPrefixCompiledGraph);
     m_graphicsPrefixSubmissionTransaction.reset(m_graphicsPrefixCompiledGraph);
-    m_laggedLightingHistoryTaskGraphValid = false;
-    m_laggedLightingHistoryTask = {};
-    m_laggedLightingPresentationCompletion = {};
-    m_laggedLightingHistoryTaskGraph.reset();
-    m_laggedLightingHistoryTaskGraphAnalysis.reset();
-    m_laggedLightingHistoryTaskGraphQueueAssignments.reset();
-    m_laggedLightingHistoryCompiledGraph.reset();
-    m_laggedLightingHistoryRecordedGraph.reset(m_laggedLightingHistoryCompiledGraph);
-    m_laggedLightingHistorySubmissionTransaction.reset(m_laggedLightingHistoryCompiledGraph);
     m_shadowVisibilityTaskGraphValid = false;
     m_shadowVisibilityTask = {};
     m_softwareCausticsTask = {};
@@ -290,6 +275,7 @@ void RendererSystem::invalidateResources(){
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredPresentTask = {};
+    m_deferredLaggedLightingHistoryTask = {};
     m_deferredHardwareCausticsPrefixCompletion = {};
     m_deferredLightingPrefixCompletion = {};
     m_deferredLightingSurfelGiCompletion = {};
@@ -605,15 +591,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_graphicsPrefixCompiledGraph.reset();
     m_graphicsPrefixRecordedGraph.reset(m_graphicsPrefixCompiledGraph);
     m_graphicsPrefixSubmissionTransaction.reset(m_graphicsPrefixCompiledGraph);
-    m_laggedLightingHistoryTaskGraphValid = false;
-    m_laggedLightingHistoryTask = {};
-    m_laggedLightingPresentationCompletion = {};
-    m_laggedLightingHistoryTaskGraph.reset();
-    m_laggedLightingHistoryTaskGraphAnalysis.reset();
-    m_laggedLightingHistoryTaskGraphQueueAssignments.reset();
-    m_laggedLightingHistoryCompiledGraph.reset();
-    m_laggedLightingHistoryRecordedGraph.reset(m_laggedLightingHistoryCompiledGraph);
-    m_laggedLightingHistorySubmissionTransaction.reset(m_laggedLightingHistoryCompiledGraph);
     m_shadowVisibilityTaskGraphValid = false;
     m_shadowVisibilityTask = {};
     m_softwareCausticsTask = {};
@@ -635,6 +612,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredPresentTask = {};
+    m_deferredLaggedLightingHistoryTask = {};
     m_deferredHardwareCausticsPrefixCompletion = {};
     m_deferredLightingPrefixCompletion = {};
     m_deferredLightingSurfelGiCompletion = {};
@@ -714,8 +692,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_laggedLightingHistorySubmissionToken.valid()
     ;
     // History capture is graph-owned and remains available whenever the opt-in path has a distinct compute
-    // transport.
-    const bool captureLaggedLightingHistory = laggedAsyncLightingRequested;
+    // transport. Its tail is optional: a failed tail build must leave the current frame's deferred path intact.
+    const bool requestsLaggedLightingHistoryCapture = laggedAsyncLightingRequested;
     // Software caustics are graph-owned. A distinct Compute family is the only route that may resolve to Compute;
     // otherwise the compiler routes the same task through Graphics without a renderer fallback topology.
     const bool shadowVisibilityExpectedCompute = dedicatedAsyncCompute;
@@ -731,8 +709,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         .hasTransparentRenderers = hasTransparentRenderers,
         .hardwareCaustics = hardwareShadowSupported,
     };
-    buildLaggedLightingHistoryTaskGraph(taskGraphInput, deferredTargets);
-
     resetFrameRecordingStateHandoffs();
     m_raytracingSystem.discardSoftShadowTemporalHistory();
 
@@ -967,8 +943,35 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         hardwareCausticsTimingTicket,
         deferredLightingTimingTicket,
         deferredCompositeTimingTicket,
-        deferredPresentTimingTicket
+        deferredPresentTimingTicket,
+        requestsLaggedLightingHistoryCapture
     );
+    if(requestsLaggedLightingHistoryCapture && !m_deferredLightingTaskGraphValid){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred graph build with optional lagged lighting-history capture failed; retrying without the tail"));
+        buildDeferredLightingTaskGraph(
+            taskGraphInput,
+            deferredTargets,
+            csgFrameState,
+            clearAvboitTargets,
+            hasTransparentRenderers,
+            shadowVisibilityPrepared,
+            framebuffer,
+            shadowVisibilityRunsOnCompute,
+            frameTimingTransaction,
+            asyncFinalTiming,
+            avboitPreTimingTicket,
+            avboitDepthWarpTimingTicket,
+            avboitExtinctionTimingTicket,
+            avboitIntegrationTimingTicket,
+            avboitAccumulationTimingTicket,
+            hardwareCausticsTimingTicket,
+            deferredLightingTimingTicket,
+            deferredCompositeTimingTicket,
+            deferredPresentTimingTicket,
+            false
+        );
+    }
+    const bool captureLaggedLightingHistory = m_deferredLaggedLightingHistoryTask.valid();
     const Core::GpuSubmissionPacketId avboitPrePacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitPreTask
     );
@@ -1025,6 +1028,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId deferredPresentPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredPresentTask
     );
+    const Core::GpuSubmissionPacketId deferredLaggedLightingHistoryPacket =
+        m_deferredLightingCompiledGraph.packetForTask(m_deferredLaggedLightingHistoryTask);
     const Core::GpuPhysicalQueueInfo* const deferredLightingQueue = deferredLightingPacket.valid()
         ? m_deferredLightingCompiledGraph.queueInfo(m_deferredLightingCompiledGraph.packet(deferredLightingPacket).queue)
         : nullptr
@@ -1036,6 +1041,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuPhysicalQueueInfo* const deferredPresentQueue = deferredPresentPacket.valid()
         ? m_deferredLightingCompiledGraph.queueInfo(m_deferredLightingCompiledGraph.packet(deferredPresentPacket).queue)
         : nullptr
+    ;
+    const Core::GpuPhysicalQueueInfo* const deferredLaggedLightingHistoryQueue =
+        deferredLaggedLightingHistoryPacket.valid()
+            ? m_deferredLightingCompiledGraph.queueInfo(
+                m_deferredLightingCompiledGraph.packet(deferredLaggedLightingHistoryPacket).queue
+            )
+            : nullptr
     ;
     const Core::GpuPhysicalQueueInfo* const hardwareCausticsQueue = hardwareCausticsPacket.valid()
         ? m_deferredLightingCompiledGraph.queueInfo(
@@ -1057,7 +1069,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const usize deferredLightingPacketIndex = deferredHardwarePacketCount + deferredAvboitPacketCount;
     const usize deferredCompositePacketIndex = deferredLightingPacketIndex + 1u;
     const usize deferredPresentPacketIndex = deferredCompositePacketIndex + 1u;
-    const usize deferredPacketCount = deferredPresentPacketIndex + 1u;
+    const usize deferredInitialPacketCount = deferredPresentPacketIndex + 1u;
+    const usize deferredLaggedLightingHistoryPacketIndex = deferredInitialPacketCount;
+    const usize deferredPacketCount = deferredInitialPacketCount + (captureLaggedLightingHistory ? 1u : 0u);
     if(
         !m_deferredLightingTaskGraphValid
         || (hardwareShadowSupported && (
@@ -1093,6 +1107,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredLightingTask.valid()
         || !m_deferredCompositeTask.valid()
         || !m_deferredPresentTask.valid()
+        || (captureLaggedLightingHistory && (
+            !m_deferredLaggedLightingHistoryTask.valid()
+            || !deferredLaggedLightingHistoryPacket.valid()
+            || !deferredLaggedLightingHistoryQueue
+        ))
         || (laggedAsyncLightingSchedule && !m_deferredPresentSurfelGiCompletion.valid())
         || !deferredLightingDependentCompletion.valid()
         || !deferredLightingPacket.valid()
@@ -1113,6 +1132,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || m_deferredLightingCompiledGraph.packetIdAt(deferredLightingPacketIndex) != deferredLightingPacket
         || m_deferredLightingCompiledGraph.packetIdAt(deferredCompositePacketIndex) != deferredCompositePacket
         || m_deferredLightingCompiledGraph.packetIdAt(deferredPresentPacketIndex) != deferredPresentPacket
+        || (captureLaggedLightingHistory && (
+            m_deferredLightingCompiledGraph.packetIdAt(deferredLaggedLightingHistoryPacketIndex)
+                != deferredLaggedLightingHistoryPacket
+        ))
         || (laggedAsyncLightingSchedule && deferredLightingQueue->queueClass != Core::CommandQueue::Compute)
         || (laggedAsyncLightingSchedule && deferredCompositeQueue->queueClass != Core::CommandQueue::Graphics)
         || deferredPresentQueue->queueClass != Core::CommandQueue::Graphics
@@ -1584,7 +1607,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         .packet = deferredPresentPacket,
     };
     const Core::GpuNativePacketRecorder deferredRecorder(device);
-    const bool deferredPacketsRecorded =
+    // The optional history tail records after Present accepts because only then are its current-frame producer
+    // snapshots eligible to become external state sources. Record this compile-order prefix packet-by-packet so the
+    // late tail can join the same recorded graph and submission transaction without a renderer completion bridge.
+    bool deferredPacketsRecorded =
         hardwareCausticsStateSourcesReady
         && deferredLightingStateSourcesReady
         && deferredCompositeStateSourcesReady
@@ -1610,12 +1636,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredLightingTask.valid()
         && m_deferredCompositeTask.valid()
         && m_deferredPresentTask.valid()
+        && (!captureLaggedLightingHistory || (
+            m_deferredLaggedLightingHistoryTask.valid()
+            && deferredLaggedLightingHistoryPacket.valid()
+        ))
         && (!laggedAsyncLightingSchedule || m_deferredPresentSurfelGiCompletion.valid())
         && deferredLightingDependentCompletion.valid()
         && deferredLightingPacket.valid()
         && deferredCompositePacket.valid()
         && deferredPresentPacket.valid()
-        && m_deferredLightingCompiledGraph.packetCount() == deferredRecordDescCount
+        && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
+        && deferredRecordDescCount == deferredInitialPacketCount
         && (!hardwareShadowSupported || m_deferredLightingCompiledGraph.packetIdAt(0u) == hardwareCausticsPacket)
         && m_deferredLightingCompiledGraph.packetIdAt(deferredAvboitPrePacketIndex) == avboitPrePacket
         && (!avboitUsesAsyncCompute || (
@@ -1627,14 +1658,28 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredLightingCompiledGraph.packetIdAt(deferredLightingPacketIndex) == deferredLightingPacket
         && m_deferredLightingCompiledGraph.packetIdAt(deferredCompositePacketIndex) == deferredCompositePacket
         && m_deferredLightingCompiledGraph.packetIdAt(deferredPresentPacketIndex) == deferredPresentPacket
-        && deferredRecorder.recordPacketsInCompileOrder(
-            m_deferredLightingTaskGraph,
-            m_deferredLightingCompiledGraph,
-            deferredRecordDescs,
-            deferredRecordDescCount,
-            m_deferredLightingRecordedGraph
-        )
+        && (!captureLaggedLightingHistory || (
+            m_deferredLightingCompiledGraph.packetIdAt(deferredLaggedLightingHistoryPacketIndex)
+                == deferredLaggedLightingHistoryPacket
+        ))
     ;
+    for(
+        usize packetIndex = 0u;
+        deferredPacketsRecorded && packetIndex < deferredRecordDescCount;
+        ++packetIndex
+    ){
+        const Core::GpuNativePacketRecordDesc& recordDesc = deferredRecordDescs[packetIndex];
+        if(
+            recordDesc.packet != m_deferredLightingCompiledGraph.packetIdAt(packetIndex)
+            || !deferredRecorder.recordPacket(
+                m_deferredLightingTaskGraph,
+                m_deferredLightingCompiledGraph,
+                recordDesc,
+                m_deferredLightingRecordedGraph
+            )
+        )
+            deferredPacketsRecorded = false;
+    }
     if(!deferredPacketsRecorded){
         m_deferredLightingSubmissionTransaction.discardUnaccepted(
             m_deferredLightingTaskGraph,
@@ -2503,9 +2548,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return;
     }
 
-    if(captureLaggedLightingHistory){
-        // The graph task waits on the accepted final presentation token. Its declared source uses select the
-        // retained producer snapshots directly; the recorder owns all current-frame state fan-in and barriers.
+    if(requestsLaggedLightingHistoryCapture && !captureLaggedLightingHistory){
+        // The optional tail could not be built, but Present already completed through the durable deferred graph.
+        // Match the former standalone-copy fallback by forcing the next frame through bootstrap.
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting"));
+        invalidateLaggedLightingHistorySubmission();
+    }
+    else if(captureLaggedLightingHistory){
+        // The deferred graph's terminal history-copy task depends on Present internally. Its declared source uses
+        // select retained producer snapshots only after those producers accepted, so this is intentionally a late
+        // record into the shared recorded graph rather than part of the initial packet prefix.
         const Core::CommandListResourceStateHandoff* const causticHistoryCopySource = laggedAsyncLightingSchedule
             ? &m_causticIrradianceLightingStateHandoff
             : &m_causticIrradianceReturnStateHandoff
@@ -2533,67 +2585,73 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             )
         ;
         if(!historyCopyStateSourcesReady){
+            m_deferredLightingSubmissionTransaction.discardUnaccepted(
+                m_deferredLightingTaskGraph,
+                m_deferredLightingCompiledGraph
+            );
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged lighting-history capture skipped because its source state was unavailable"));
             invalidateLaggedLightingHistorySubmission();
         }
         else if(
-            !m_laggedLightingHistoryTaskGraphValid
-            || !finalPresentationSubmissionToken.valid()
-            || !m_laggedLightingHistoryTask.valid()
-            || !m_laggedLightingPresentationCompletion.valid()
+            !finalPresentationSubmissionToken.valid()
+            || !m_deferredLightingTaskGraphValid
+            || !m_deferredLaggedLightingHistoryTask.valid()
+            || !deferredLaggedLightingHistoryPacket.valid()
+            || !deferredLaggedLightingHistoryQueue
+            || m_deferredLightingCompiledGraph.packetCount() != deferredPacketCount
+            || m_deferredLightingCompiledGraph.packetIdAt(deferredLaggedLightingHistoryPacketIndex)
+                != deferredLaggedLightingHistoryPacket
         ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged lighting-history graph was unavailable; reverting to current-frame lighting"));
+            if(m_deferredLightingTaskGraphValid){
+                m_deferredLightingSubmissionTransaction.discardUnaccepted(
+                    m_deferredLightingTaskGraph,
+                    m_deferredLightingCompiledGraph
+                );
+            }
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting"));
             invalidateLaggedLightingHistorySubmission();
         }
         else{
-            const Core::GpuSubmissionPacketId historyPacket = m_laggedLightingHistoryCompiledGraph.packetForTask(
-                m_laggedLightingHistoryTask
-            );
             Core::GpuNativePacketRecorder recorder(device);
             const Core::GpuNativePacketRecordDesc recordDesc{
-                .packet = historyPacket,
+                .packet = deferredLaggedLightingHistoryPacket,
                 .externalStateSources = historyCopyStateSources,
                 .externalStateSourceCount = historyCopyStateSourceCount,
             };
-            const bool historyCopyRecorded = historyPacket.valid()
-                && recorder.recordPacket(
-                    m_laggedLightingHistoryTaskGraph,
-                    m_laggedLightingHistoryCompiledGraph,
+            const bool historyCopyRecorded = recorder.recordPacket(
+                    m_deferredLightingTaskGraph,
+                    m_deferredLightingCompiledGraph,
                     recordDesc,
-                    m_laggedLightingHistoryRecordedGraph
+                    m_deferredLightingRecordedGraph
                 )
             ;
             const Core::CommandListResourceStateHandoff* const historyCopyFinalStateSeed = historyCopyRecorded
-                ? m_laggedLightingHistoryRecordedGraph.packetFinalStateSeed(historyPacket)
+                ? m_deferredLightingRecordedGraph.packetFinalStateSeed(deferredLaggedLightingHistoryPacket)
                 : nullptr
             ;
             if(!historyCopyRecorded || !historyCopyFinalStateSeed){
-                m_laggedLightingHistorySubmissionTransaction.discardUnaccepted(
-                    m_laggedLightingHistoryTaskGraph,
-                    m_laggedLightingHistoryCompiledGraph
+                m_deferredLightingSubmissionTransaction.discardUnaccepted(
+                    m_deferredLightingTaskGraph,
+                    m_deferredLightingCompiledGraph
                 );
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record graph-owned lagged lighting-history capture; reverting to current-frame lighting"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to late-record graph-owned lagged lighting-history capture; reverting to current-frame lighting"));
                 invalidateLaggedLightingHistorySubmission();
             }
             else{
                 Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-                const Core::GpuTaskGraphExternalCompletionToken completionToken{
-                    .completion = m_laggedLightingPresentationCompletion,
-                    .token = finalPresentationSubmissionToken,
-                };
                 const Core::GpuTaskGraphSubmitter submitter(device);
                 const bool historyCopyAccepted = submitter.submitPacket(
-                    m_laggedLightingHistoryTaskGraph,
-                    m_laggedLightingHistoryCompiledGraph,
-                    m_laggedLightingHistoryRecordedGraph,
-                    historyPacket,
-                    &completionToken,
-                    1u,
-                    m_laggedLightingHistorySubmissionTransaction,
+                    m_deferredLightingTaskGraph,
+                    m_deferredLightingCompiledGraph,
+                    m_deferredLightingRecordedGraph,
+                    deferredLaggedLightingHistoryPacket,
+                    nullptr,
+                    0u,
+                    m_deferredLightingSubmissionTransaction,
                     scratchArena
                 );
                 const Core::QueueSubmissionToken historyCopySubmissionToken = historyCopyAccepted
-                    ? m_laggedLightingHistorySubmissionTransaction.packetToken(historyPacket)
+                    ? m_deferredLightingSubmissionTransaction.packetToken(deferredLaggedLightingHistoryPacket)
                     : Core::QueueSubmissionToken{}
                 ;
                 if(!historyCopySubmissionToken.valid()){

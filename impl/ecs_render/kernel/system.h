@@ -166,10 +166,6 @@ private:
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
-    void buildLaggedLightingHistoryTaskGraph(
-        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
-        const DeferredFrameTargets& deferredTargets
-    );
     void buildShadowVisibilityTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         DeferredFrameTargets& deferredTargets,
@@ -210,7 +206,8 @@ private:
         Core::GpuTimingSubmissionTicket& hardwareCausticsTimingTicket,
         Core::GpuTimingSubmissionTicket& lightingTimingTicket,
         Core::GpuTimingSubmissionTicket& compositeTimingTicket,
-        Core::GpuTimingSubmissionTicket& presentTimingTicket
+        Core::GpuTimingSubmissionTicket& presentTimingTicket,
+        bool includeLaggedLightingHistoryCapture
     );
     void reportLaggedLightingTransition(LaggedLightingReport report, u64 targetGeneration);
     [[nodiscard]] Core::Alloc::GlobalArena& arena()noexcept{ return m_arena; }
@@ -277,16 +274,6 @@ private:
     bool m_graphicsPrefixMeshViewSetupReady = false;
     bool m_graphicsPrefixSceneShadingSetupReady = false;
     bool m_graphicsPrefixTaskGraphValid = false;
-    // Every renderer task graph owns its packet submission; FrameGraph remains observational telemetry only.
-    Core::GpuTaskGraph m_laggedLightingHistoryTaskGraph;
-    Core::GpuTaskGraphAnalysis m_laggedLightingHistoryTaskGraphAnalysis;
-    Core::GpuTaskGraphQueueAssignments m_laggedLightingHistoryTaskGraphQueueAssignments;
-    Core::GpuCompiledGraph m_laggedLightingHistoryCompiledGraph;
-    Core::GpuRecordedGraph m_laggedLightingHistoryRecordedGraph;
-    Core::GpuGraphSubmissionTransaction m_laggedLightingHistorySubmissionTransaction;
-    Core::GpuTaskId m_laggedLightingHistoryTask;
-    Core::GpuExternalCompletionId m_laggedLightingPresentationCompletion;
-    bool m_laggedLightingHistoryTaskGraphValid = false;
     // Shadow visibility owns the ordered effects graph. Software Caustics is present only on the software route;
     // Surfel GI follows the selected shadow-effects producer on both routes. Their ordering, state seeds, and
     // submission tokens are graph-internal rather than renderer completion ladders.
@@ -301,9 +288,9 @@ private:
     Core::GpuTaskId m_surfelGiTask;
     Core::GpuExternalCompletionId m_shadowVisibilityPrefixCompletion;
     bool m_shadowVisibilityTaskGraphValid = false;
-    // AVBOIT, Hardware Caustics, Deferred Lighting, Composite, and Present share one packet graph. The AVBOIT
-    // split topology is selected only when a distinct Compute family exists; otherwise it records as one Graphics
-    // packet in the same transaction as its consumers.
+    // AVBOIT, Hardware Caustics, Deferred Lighting, Composite, Present, and the optional lagged-history copy share
+    // one packet graph. The AVBOIT split topology is selected only when a distinct Compute family exists; otherwise
+    // it records as one Graphics packet in the same transaction as its consumers.
     // Hardware and AVBOIT remain staged Graphics producers; live Lighting consumes Hardware through an internal
     // edge, while lagged Lighting reads history and can run independently on the dedicated Compute lane.
     Core::GpuTaskGraph m_deferredLightingTaskGraph;
@@ -321,6 +308,7 @@ private:
     Core::GpuTaskId m_deferredLightingTask;
     Core::GpuTaskId m_deferredCompositeTask;
     Core::GpuTaskId m_deferredPresentTask;
+    Core::GpuTaskId m_deferredLaggedLightingHistoryTask;
     Core::GpuExternalCompletionId m_deferredHardwareCausticsPrefixCompletion;
     Core::GpuExternalCompletionId m_deferredLightingPrefixCompletion;
     Core::GpuExternalCompletionId m_deferredLightingSurfelGiCompletion;

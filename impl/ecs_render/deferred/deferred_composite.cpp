@@ -212,13 +212,8 @@ bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandL
     if(!uploadDeferredBindlessFrameResources(commandList, targets))
         return false;
 
-    // Heap-selected inputs are not automatically visible to state tracking. Composite runs directly after lighting on
-    // the same Compute lane and writes a linear intermediate; the Graphics-only present pass consumes only that output.
-    commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(targets.avboit.accumColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(targets.avboit.accumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(targets.compositeColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.commitBarriers();
+    // Packet-boundary states for these bindless resources are emitted from the compiled task graph.  This thunk
+    // retains only the commands intrinsic to composite recording.
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredComposite, graphics().getDevice(), commandList);
 
@@ -248,10 +243,8 @@ bool RendererDeferredSystem::renderDeferredPresent(Core::CommandList& commandLis
     if(!uploadDeferredBindlessFrameResources(commandList, targets))
         return false;
 
-    // The presentation shader samples the Compute-composited linear image and writes the surface framebuffer, which
-    // keeps format conversion and presentation ownership on Graphics without requiring a storage-capable swapchain.
-    commandList.setTextureState(targets.compositeColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.commitBarriers();
+    // The graph transitions the sampled composite image before this task.  The framebuffer stays a hazard domain:
+    // its acquire, render-pass, and presentation ownership remain intrinsic to the Graphics command-list path.
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredPresent, graphics().getDevice(), commandList);
 

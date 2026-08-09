@@ -2614,6 +2614,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         .packet = deferredCompositePacket,
         .initialStates = &m_deferredCompositeInputStateHandoff,
         .finalStates = &m_deferredCompositeStateHandoff,
+        .applyCompiledBarriers = true,
     };
     const bool deferredCompositeRecorded =
         m_deferredCompositeTaskGraphValid
@@ -2679,6 +2680,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         .packet = deferredPresentPacket,
         .initialStates = &m_deferredPresentInputStateHandoff,
         .finalStates = &m_deferredPresentStateHandoff,
+        .applyCompiledBarriers = true,
     };
     const bool deferredPresentRecorded =
         m_deferredPresentTaskGraphValid

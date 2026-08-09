@@ -1656,13 +1656,15 @@ void RendererSystem::buildShadowVisibilityTaskGraph(
     const bool shadowVisibilityPrepared,
     const bool hardwareShadowSupported,
     Core::GpuTimingSubmissionTicket& shadowVisibilityTimingTicket,
-    Core::GpuTimingSubmissionTicket& softwareCausticsTimingTicket
+    Core::GpuTimingSubmissionTicket& softwareCausticsTimingTicket,
+    Core::GpuTimingSubmissionTicket& surfelGiTimingTicket
 ){
     using namespace __hidden_renderer_task_graph;
 
     m_shadowVisibilityTaskGraphValid = false;
     m_shadowVisibilityTask = {};
     m_softwareCausticsTask = {};
+    m_surfelGiTask = {};
     m_shadowVisibilityPrefixCompletion = {};
     m_shadowVisibilityTaskGraph.reset();
     m_shadowVisibilityTaskGraphAnalysis.reset();
@@ -1984,6 +1986,12 @@ void RendererSystem::buildShadowVisibilityTaskGraph(
         m_shadowVisibilityTask,
         softwareCausticsTimingTicket
     ))
+        return;
+    const Core::GpuTaskId effectsTask = hardwareShadowSupported
+        ? m_shadowVisibilityTask
+        : m_softwareCausticsTask
+    ;
+    if(!declareSurfelGiTask(deferredTargets, effectsTask, surfelGiTimingTicket))
         return;
 
     const auto& device = graphics().getDevice();
@@ -2492,40 +2500,31 @@ bool RendererSystem::declareSoftwareCausticsTask(
 }
 
 
-void RendererSystem::buildSurfelGiTaskGraph(
-    const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+bool RendererSystem::declareSurfelGiTask(
     DeferredFrameTargets& deferredTargets,
+    const Core::GpuTaskId& effectsTask,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace __hidden_renderer_task_graph;
 
-    m_surfelGiTaskGraphValid = false;
     m_surfelGiTask = {};
-    m_surfelGiEffectsCompletion = {};
-    m_surfelGiTaskGraph.reset();
-    m_surfelGiTaskGraphAnalysis.reset();
-    m_surfelGiTaskGraphQueueAssignments.reset();
-    m_surfelGiCompiledGraph.reset();
-    m_surfelGiRecordedGraph.reset(m_surfelGiCompiledGraph);
-    m_surfelGiSubmissionTransaction.reset(m_surfelGiCompiledGraph);
-
-    if(!deferredTargets.valid() || !deferredTargets.bindless.valid())
-        return;
+    if(!effectsTask.valid() || !deferredTargets.valid() || !deferredTargets.bindless.valid())
+        return false;
 
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
-        return m_surfelGiTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
+        return m_shadowVisibilityTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
     };
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
-        return m_surfelGiTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
+        return m_shadowVisibilityTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
     const Core::GpuGraphResourceId worldPosition = importTexture(
         deferredTargets.worldPosition,
-        Name("render.surfel_gi.world_position"),
+        Name("render.shadow_visibility.world_position"),
         "G-Buffer World Position"
     );
     const Core::GpuGraphResourceId normal = importTexture(
         deferredTargets.normal,
-        Name("render.surfel_gi.normal"),
+        Name("render.shadow_visibility.normal"),
         "G-Buffer Normal"
     );
     const Core::GpuGraphResourceId surfelIrradianceHalf = importTexture(
@@ -2540,10 +2539,10 @@ void RendererSystem::buildSurfelGiTaskGraph(
     );
     const Core::GpuGraphResourceId bindlessSlots = importBuffer(
         deferredTargets.bindless.slotsBuffer,
-        Name("render.surfel_gi.bindless_slots"),
+        Name("render.shadow_visibility.bindless_slots"),
         "Deferred Bindless Slots"
     );
-    const Core::GpuGraphResourceId sceneGeometryDomain = m_surfelGiTaskGraph.importHazardDomain(
+    const Core::GpuGraphResourceId sceneGeometryDomain = m_shadowVisibilityTaskGraph.importHazardDomain(
         HazardDomainDesc(Name("render.surfel_gi.scene_geometry"), "Scene Acceleration and Geometry")
     );
     if(
@@ -2555,23 +2554,7 @@ void RendererSystem::buildSurfelGiTaskGraph(
         || !sceneGeometryDomain.valid()
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import surfel-GI graph resources"));
-        return;
-    }
-
-    const bool waitsForSoftwareCaustics = !input.hardwareCaustics;
-    Core::GpuExternalCompletionDesc effectsCompletionDesc;
-    effectsCompletionDesc
-        .setIdentity(
-            waitsForSoftwareCaustics
-                ? Name("render.surfel_gi.software_caustics_complete")
-                : Name("render.surfel_gi.shadow_visibility_complete")
-        )
-        .setMarkerLabel(waitsForSoftwareCaustics ? "Software Caustics Complete" : "Shadow Visibility Complete")
-    ;
-    m_surfelGiEffectsCompletion = m_surfelGiTaskGraph.importExternalCompletion(effectsCompletionDesc);
-    if(!m_surfelGiEffectsCompletion.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import effects completion for surfel GI"));
-        return;
+        return false;
     }
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
@@ -2605,13 +2588,13 @@ void RendererSystem::buildSurfelGiTaskGraph(
     const bool optionalResourcesImported =
         appendOptionalReadBuffer(
             m_deferredState.m_sceneShadingBuffer,
-            Name("render.surfel_gi.scene_shading"),
+            Name("render.shadow_visibility.scene_shading"),
             "Scene Shading",
             Core::ResourceStates::ConstantBuffer
         )
         && appendOptionalReadBuffer(
             m_deferredState.m_lightBuffer,
-            Name("render.surfel_gi.lights"),
+            Name("render.shadow_visibility.lights"),
             "Lights",
             Core::ResourceStates::ShaderResource
         )
@@ -2623,7 +2606,7 @@ void RendererSystem::buildSurfelGiTaskGraph(
         )
         && appendOptionalReadBuffer(
             m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer,
-            Name("render.surfel_gi.material_context_slots"),
+            Name("render.shadow_visibility.material_context_slots"),
             "Ray Trace Material Context Slots",
             Core::ResourceStates::ConstantBuffer
         )
@@ -2678,86 +2661,34 @@ void RendererSystem::buildSurfelGiTaskGraph(
     ;
     if(!optionalResourcesImported){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a surfel-GI dynamic resource domain"));
-        return;
+        return false;
     }
 
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
+    const Core::GpuTaskId dependencies[] = { effectsTask };
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.surfel_gi"))
         .setMarkerLabel("Surfel GI")
         .setQueue(ComputeQueueRequest())
         .setScheduling(scheduling)
-        .setExternalDependencies(&m_surfelGiEffectsCompletion, 1u)
+        .setDependencies(dependencies, LengthOf(dependencies))
         .setResourceUses(resourceUses.data(), resourceUses.size())
     ;
     m_surfelGiTask = m_raytracingSystem.declareSurfelGiTask(
-        m_surfelGiTaskGraph,
+        m_shadowVisibilityTaskGraph,
         desc,
         deferredTargets,
         timingTicket
     );
     if(!m_surfelGiTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare surfel-GI graph task"));
-        return;
+        return false;
     }
-
-    const auto& device = graphics().getDevice();
-    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
-    const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
-    const bool dedicatedAsyncCompute = input.dedicatedAsyncCompute
-        && computeFamilyIndex != Limit<u32>::s_Max
-        && computeFamilyIndex != graphicsFamilyIndex
-    ;
-    const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
-        static_cast<u8>(Core::GpuQueueCapability::Graphics)
-        | static_cast<u8>(Core::GpuQueueCapability::Compute)
-        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
-    );
-    const Core::GpuQueueCapability::Mask computeQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
-        static_cast<u8>(Core::GpuQueueCapability::Compute)
-        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
-    );
-    const Core::GpuPhysicalQueueInfo queues[] = {
-        Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
-            .queueClass = Core::CommandQueue::Graphics,
-            .capabilities = graphicsQueueCapabilities,
-            .familyIndex = graphicsFamilyIndex,
-            .queueIndex = 0u,
-            .dedicated = false,
-        },
-        Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 1u, m_taskGraphDeviceGeneration },
-            .queueClass = Core::CommandQueue::Compute,
-            .capabilities = computeQueueCapabilities,
-            .familyIndex = computeFamilyIndex,
-            .queueIndex = 0u,
-            .dedicated = true,
-        },
-    };
-    const Core::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = dedicatedAsyncCompute ? LengthOf(queues) : 1u,
-    };
-    const Core::GpuTaskGraphCompiler compiler;
-    if(!compiler.compile(
-        m_surfelGiTaskGraph,
-        m_surfelGiTaskGraphAnalysis,
-        topology,
-        m_surfelGiTaskGraphQueueAssignments,
-        m_surfelGiCompiledGraph,
-        scratchArena
-    )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile surfel-GI task graph"));
-        return;
-    }
-    m_surfelGiRecordedGraph.reset(m_surfelGiCompiledGraph);
-    m_surfelGiSubmissionTransaction.reset(m_surfelGiCompiledGraph);
-    m_surfelGiTaskGraphValid = true;
+    return true;
 }
 
 

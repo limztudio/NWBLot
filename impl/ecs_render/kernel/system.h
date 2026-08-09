@@ -186,7 +186,8 @@ private:
         bool shadowVisibilityPrepared,
         bool hardwareShadowSupported,
         Core::GpuTimingSubmissionTicket& shadowVisibilityTimingTicket,
-        Core::GpuTimingSubmissionTicket& softwareCausticsTimingTicket
+        Core::GpuTimingSubmissionTicket& softwareCausticsTimingTicket,
+        Core::GpuTimingSubmissionTicket& surfelGiTimingTicket
     );
     [[nodiscard]] bool declareSoftwareCausticsTask(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
@@ -195,16 +196,16 @@ private:
         const Core::GpuTaskId& shadowVisibilityTask,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
+    [[nodiscard]] bool declareSurfelGiTask(
+        DeferredFrameTargets& deferredTargets,
+        const Core::GpuTaskId& effectsTask,
+        Core::GpuTimingSubmissionTicket& timingTicket
+    );
     void buildHardwareCausticsTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         DeferredFrameTargets& deferredTargets,
         bool shadowVisibilityPrepared,
         bool waitsForLaggedLightingHistory,
-        Core::GpuTimingSubmissionTicket& timingTicket
-    );
-    void buildSurfelGiTaskGraph(
-        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
-        DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     void buildAvboitTaskGraph(
@@ -312,9 +313,9 @@ private:
     Core::GpuExternalCompletionId m_deferredPresentCompositeCompletion;
     Core::GpuExternalCompletionId m_deferredPresentSurfelGiCompletion;
     bool m_deferredPresentTaskGraphValid = false;
-    // Shadow visibility and the software-caustics successor share one graph. The latter is present only on the
-    // software route, so its ordering, state seed, and submission token are graph-internal rather than a renderer
-    // completion ladder.
+    // Shadow visibility owns the ordered effects graph. Software Caustics is present only on the software route;
+    // Surfel GI follows the selected shadow-effects producer on both routes. Their ordering, state seeds, and
+    // submission tokens are graph-internal rather than renderer completion ladders.
     Core::GpuTaskGraph m_shadowVisibilityTaskGraph;
     Core::GpuTaskGraphAnalysis m_shadowVisibilityTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_shadowVisibilityTaskGraphQueueAssignments;
@@ -323,6 +324,7 @@ private:
     Core::GpuGraphSubmissionTransaction m_shadowVisibilitySubmissionTransaction;
     Core::GpuTaskId m_shadowVisibilityTask;
     Core::GpuTaskId m_softwareCausticsTask;
+    Core::GpuTaskId m_surfelGiTask;
     Core::GpuExternalCompletionId m_shadowVisibilityPrefixCompletion;
     bool m_shadowVisibilityTaskGraphValid = false;
     // Hardware dispatch-rays caustics stay on Graphics but own their graph packet and completion imports. The manual
@@ -337,17 +339,6 @@ private:
     Core::GpuExternalCompletionId m_hardwareCausticsPrefixCompletion;
     Core::GpuExternalCompletionId m_hardwareCausticsLaggedHistoryCompletion;
     bool m_hardwareCausticsTaskGraphValid = false;
-    // Surfel GI is a coarse graph-owned compute task. Its manual state handoffs remain until the barrier phase,
-    // while its producer and consumer completion edges are already graph submissions.
-    Core::GpuTaskGraph m_surfelGiTaskGraph;
-    Core::GpuTaskGraphAnalysis m_surfelGiTaskGraphAnalysis;
-    Core::GpuTaskGraphQueueAssignments m_surfelGiTaskGraphQueueAssignments;
-    Core::GpuCompiledGraph m_surfelGiCompiledGraph;
-    Core::GpuRecordedGraph m_surfelGiRecordedGraph;
-    Core::GpuGraphSubmissionTransaction m_surfelGiSubmissionTransaction;
-    Core::GpuTaskId m_surfelGiTask;
-    Core::GpuExternalCompletionId m_surfelGiEffectsCompletion;
-    bool m_surfelGiTaskGraphValid = false;
     // AVBOIT owns its complete raster/compute chain as one graph. The split topology is selected only when a
     // distinct Compute family exists; otherwise the complete chain records as one Graphics packet.
     Core::GpuTaskGraph m_avboitTaskGraph;

@@ -232,7 +232,7 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             scratchArena,
             shadowVisibilityTelemetryOptions
         ))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: shadow-visibility/software-caustics graph telemetry export failed"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: shadow-effects graph telemetry export failed"));
     }
     if(m_hardwareCausticsTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
@@ -246,19 +246,6 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             hardwareCausticsTelemetryOptions
         ))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware-caustics graph telemetry export failed"));
-    }
-    if(m_surfelGiTaskGraphValid){
-        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-        const Core::GpuTaskGraphTelemetryOptions surfelGiTelemetryOptions{
-            .queueAssignments = &m_surfelGiTaskGraphQueueAssignments,
-        };
-        if(!m_surfelGiTaskGraph.appendFrameGraphTelemetry(
-            builder,
-            m_surfelGiTaskGraphAnalysis,
-            scratchArena,
-            surfelGiTelemetryOptions
-        ))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel-GI graph telemetry export failed"));
     }
     if(m_avboitTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);

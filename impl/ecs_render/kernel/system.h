@@ -56,7 +56,6 @@ namespace ECSRenderDetail{
 #if defined(NWB_DEBUG)
     struct MaterialTypedInstanceRangeVector;
 #endif
-    class FrameExecutionPlan;
 };
 
 
@@ -139,10 +138,9 @@ private:
     void resetLaggedLightingHistoryCopyStateHandoffs()noexcept;
     void invalidateLaggedLightingHistorySubmission()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
-    void buildGpuTaskGraph(
+    void buildGraphicsPrefixTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
-        const DeferredFrameTargets& deferredTargets,
-        const ECSRenderDetail::FrameExecutionPlan& legacyPlan
+        const DeferredFrameTargets& deferredTargets
     );
     void buildLaggedLightingHistoryTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
@@ -232,17 +230,18 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;
-    // The semantic sidecar remains the parity oracle for still-legacy packet work. Migrated tasks own independent
-    // graphs and submissions; FrameGraph remains observational telemetry only.
-    Core::GpuTaskGraph m_gpuTaskGraph;
-    Core::GpuTaskGraphAnalysis m_gpuTaskGraphAnalysis;
-    Core::GpuTaskGraphQueueAssignments m_gpuTaskGraphQueueAssignments;
-    Core::GraphicsVector<Core::GpuTaskId> m_gpuTaskGraphWorkTasks;
-    Core::GraphicsVector<Core::GpuTaskId> m_gpuTaskGraphLegacyQueueMismatches;
-    u16 m_gpuTaskGraphDeviceGeneration = 1u;
-    bool m_gpuTaskGraphValid = false;
-    // Live graph tasks are intentionally isolated from the telemetry sidecar. Each owns its packet submission while
-    // the remaining renderer work continues through the legacy plan until it is individually migrated.
+    // The prefix retains its established parallel command-list recording while its graph packet owns concrete
+    // Graphics transport, submission, completion, and lifecycle.
+    Core::GpuTaskGraph m_graphicsPrefixTaskGraph;
+    Core::GpuTaskGraphAnalysis m_graphicsPrefixTaskGraphAnalysis;
+    Core::GpuTaskGraphQueueAssignments m_graphicsPrefixTaskGraphQueueAssignments;
+    Core::GpuCompiledGraph m_graphicsPrefixCompiledGraph;
+    Core::GpuRecordedGraph m_graphicsPrefixRecordedGraph;
+    Core::GpuGraphSubmissionTransaction m_graphicsPrefixSubmissionTransaction;
+    Core::GpuTaskId m_graphicsPrefixTask;
+    u16 m_taskGraphDeviceGeneration = 1u;
+    bool m_graphicsPrefixTaskGraphValid = false;
+    // Every renderer task graph owns its packet submission; FrameGraph remains observational telemetry only.
     Core::GpuTaskGraph m_laggedLightingHistoryTaskGraph;
     Core::GpuTaskGraphAnalysis m_laggedLightingHistoryTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_laggedLightingHistoryTaskGraphQueueAssignments;

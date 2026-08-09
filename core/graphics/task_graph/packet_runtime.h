@@ -24,8 +24,14 @@ class GpuTimingSubmissionTicket;
 
 
 struct GpuRecordedPacket{
+    static constexpr usize s_MaxCommandLists = 12u;
+
     GpuSubmissionPacketId packet;
-    CommandListHandle commandList;
+    // Native recording owns its one newly-created list. Imported packets borrow renderer-owned lists that remain
+    // alive through submission, allowing a graph packet to take over established multi-list transport incrementally.
+    CommandListHandle ownedCommandList;
+    CommandList* commandLists[s_MaxCommandLists] = {};
+    u8 commandListCount = 0u;
 };
 
 
@@ -62,6 +68,15 @@ struct GpuNativePacketRecordDesc{
 };
 
 
+// Imported command lists have already been opened, closed, and state-handoffed by their renderer work. The graph
+// becomes the authoritative packet/submission owner without forcing an all-at-once recording-body rewrite.
+struct GpuImportedPacketRecordDesc{
+    GpuSubmissionPacketId packet;
+    CommandList* const* commandLists = nullptr;
+    usize commandListCount = 0u;
+};
+
+
 class GpuNativePacketRecorder final : NoCopy{
 public:
     explicit GpuNativePacketRecorder(Device& device)
@@ -74,6 +89,12 @@ public:
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecordDesc& desc,
+        GpuRecordedGraph& outRecordedGraph
+    )const;
+    [[nodiscard]] bool recordImportedPacket(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuImportedPacketRecordDesc& desc,
         GpuRecordedGraph& outRecordedGraph
     )const;
 

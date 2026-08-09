@@ -90,10 +90,45 @@ bool GpuNativePacketRecorder::recordPacket(
     if(!recorded || !commandList->hasCommandBuffer())
         return false;
 
-    outRecordedGraph.m_packets.push_back(GpuRecordedPacket{
-        .packet = desc.packet,
-        .commandList = Move(commandList),
-    });
+    GpuRecordedPacket recordedPacket;
+    recordedPacket.packet = desc.packet;
+    recordedPacket.commandLists[0u] = commandList.get();
+    recordedPacket.commandListCount = 1u;
+    recordedPacket.ownedCommandList = Move(commandList);
+    outRecordedGraph.m_packets.push_back(Move(recordedPacket));
+    return true;
+}
+
+
+bool GpuNativePacketRecorder::recordImportedPacket(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuImportedPacketRecordDesc& desc,
+    GpuRecordedGraph& outRecordedGraph
+)const{
+    if(
+        !compiledGraph.validFor(graph)
+        || !compiledGraph.validPacket(desc.packet)
+        || !desc.commandLists
+        || desc.commandListCount == 0u
+        || desc.commandListCount > GpuRecordedPacket::s_MaxCommandLists
+    )
+        return false;
+    if(!outRecordedGraph.validFor(compiledGraph))
+        outRecordedGraph.reset(compiledGraph);
+    if(outRecordedGraph.find(desc.packet))
+        return false;
+
+    GpuRecordedPacket recordedPacket;
+    recordedPacket.packet = desc.packet;
+    recordedPacket.commandListCount = static_cast<u8>(desc.commandListCount);
+    for(usize commandListIndex = 0u; commandListIndex < desc.commandListCount; ++commandListIndex){
+        CommandList* const commandList = desc.commandLists[commandListIndex];
+        if(!commandList || !commandList->hasCommandBuffer())
+            return false;
+        recordedPacket.commandLists[commandListIndex] = commandList;
+    }
+    outRecordedGraph.m_packets.push_back(Move(recordedPacket));
     return true;
 }
 
@@ -238,9 +273,21 @@ bool GpuTaskGraphSubmitter::submitPacket(
     const GpuRecordedPacket* const recordedPacket = recordedGraph.find(packetID);
     const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
     const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packet.queue);
-    if(!recordedPacket || !recordedPacket->commandList || !recordedPacket->commandList->hasCommandBuffer() || !queue){
+    if(
+        !recordedPacket
+        || recordedPacket->commandListCount == 0u
+        || recordedPacket->commandListCount > GpuRecordedPacket::s_MaxCommandLists
+        || !queue
+    ){
         transaction.rejectPacket(graph, compiledGraph, packetID);
         return false;
+    }
+    for(u8 commandListIndex = 0u; commandListIndex < recordedPacket->commandListCount; ++commandListIndex){
+        CommandList* const commandList = recordedPacket->commandLists[commandListIndex];
+        if(!commandList || !commandList->hasCommandBuffer()){
+            transaction.rejectPacket(graph, compiledGraph, packetID);
+            return false;
+        }
     }
 
     Vector<QueueSubmissionToken, Alloc::ScratchArena> waitTokens(scratchArena);
@@ -276,18 +323,17 @@ bool GpuTaskGraphSubmitter::submitPacket(
     QueueSubmissionDesc submitDesc;
     if(!waitTokens.empty())
         submitDesc.setWaitTokens(waitTokens.data(), waitTokens.size());
-    CommandList* const commandLists[] = { recordedPacket->commandList.get() };
     const QueueSubmissionToken token = timingTicket
         ? timingTicket->submit(
             m_device,
-            commandLists,
-            LengthOf(commandLists),
+            recordedPacket->commandLists,
+            recordedPacket->commandListCount,
             queue->queueClass,
             submitDesc
         )
         : m_device.executeCommandLists(
-            commandLists,
-            LengthOf(commandLists),
+            recordedPacket->commandLists,
+            recordedPacket->commandListCount,
             queue->queueClass,
             submitDesc
         )

@@ -119,7 +119,8 @@ public:
 
 
 public:
-    // Metadata-only tasks make the old renderer observable without pretending that it records through this graph.
+    // Metadata-only tasks may bind an already-recorded renderer command-list bundle through
+    // GpuNativePacketRecorder::recordImportedPacket; the graph still owns packet submission and lifecycle.
     [[nodiscard]] GpuTaskId addTask(const GpuTaskDesc& desc);
 
     template<typename TaskT>

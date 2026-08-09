@@ -156,20 +156,18 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
     builder.addEdge(deferredComposite, deferredPresent, Edge::DependsOn);
     builder.addEdge(deferredPresent, backBuffer, Edge::Writes);
 
-    if(m_gpuTaskGraphValid){
+    if(m_graphicsPrefixTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-        const Core::GpuTaskGraphTelemetryOptions taskGraphTelemetryOptions{
-            .queueAssignments = &m_gpuTaskGraphQueueAssignments,
-            .legacyQueueMismatches = m_gpuTaskGraphLegacyQueueMismatches.data(),
-            .legacyQueueMismatchCount = m_gpuTaskGraphLegacyQueueMismatches.size(),
+        const Core::GpuTaskGraphTelemetryOptions prefixTelemetryOptions{
+            .queueAssignments = &m_graphicsPrefixTaskGraphQueueAssignments,
         };
-        if(!m_gpuTaskGraph.appendFrameGraphTelemetry(
+        if(!m_graphicsPrefixTaskGraph.appendFrameGraphTelemetry(
             builder,
-            m_gpuTaskGraphAnalysis,
+            m_graphicsPrefixTaskGraphAnalysis,
             scratchArena,
-            taskGraphTelemetryOptions
+            prefixTelemetryOptions
         ))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph telemetry export failed"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graphics-prefix graph telemetry export failed"));
     }
     if(m_laggedLightingHistoryTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);

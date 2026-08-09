@@ -21,94 +21,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace ECSRenderDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Timed packets own tickets keyed by their declarative work identity.
-class FrameExecutionPlanTimingTickets final{
-public:
-    // Keep timing scope ownership keyed by the plan work ID.
-    class WorkRecordingScope final : NoCopy{
-    public:
-        WorkRecordingScope(
-            FrameExecutionPlanTimingTickets& timingTickets,
-            const FrameExecutionWork::Enum work
-        )
-            : m_recordingScope(timingTickets.requiredTicketForWork(work))
-        {}
-
-
-    private:
-        Core::GpuTimingSubmissionTicket::RecordingScope m_recordingScope;
-    };
-
-
-public:
-    explicit FrameExecutionPlanTimingTickets(
-        const FrameExecutionPlan& plan,
-        Core::GpuTimingRecorder& recorder
-    )
-        : m_plan(plan)
-    {
-        for(usize packetIndex = 0u; packetIndex < FrameExecutionPacket::kCount; ++packetIndex){
-            const FrameExecutionPacket::Enum packet = static_cast<FrameExecutionPacket::Enum>(packetIndex);
-            const FrameExecutionPacketPlan& packetPlan = m_plan.packet(packet);
-            if(packetPlan.enabled && packetPlan.recordsTiming)
-                m_tickets[packetIndex].emplace(recorder);
-        }
-    }
-
-
-public:
-    [[nodiscard]] Core::GpuTimingSubmissionTicket* ticketForPacket(
-        const FrameExecutionPacket::Enum packet
-    )noexcept{
-        const FrameExecutionPacketPlan& packetPlan = m_plan.packet(packet);
-        if(!packetPlan.enabled || !packetPlan.recordsTiming)
-            return nullptr;
-
-        Optional<Core::GpuTimingSubmissionTicket>& timingTicket = m_tickets[static_cast<usize>(packet)];
-        NWB_ASSERT(timingTicket.has_value());
-        return timingTicket ? &timingTicket.value() : nullptr;
-    }
-    [[nodiscard]] Core::GpuTimingSubmissionTicket* ticketForWork(
-        const FrameExecutionWork::Enum work
-    )noexcept{
-        return m_plan.hasWork(work) ? ticketForPacket(m_plan.packetForWork(work)) : nullptr;
-    }
-    void discardAll()noexcept{
-        for(Optional<Core::GpuTimingSubmissionTicket>& timingTicket : m_tickets){
-            if(timingTicket)
-                timingTicket->discard();
-        }
-    }
-
-
-private:
-    [[nodiscard]] Core::GpuTimingSubmissionTicket& requiredTicketForWork(
-        const FrameExecutionWork::Enum work
-    )noexcept{
-        Core::GpuTimingSubmissionTicket* const timingTicket = ticketForWork(work);
-        NWB_ASSERT(timingTicket);
-        return *timingTicket;
-    }
-    const FrameExecutionPlan& m_plan;
-    Optional<Core::GpuTimingSubmissionTicket> m_tickets[FrameExecutionPacket::kCount] = {};
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 RendererSystem::RendererSystem(
     Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
@@ -124,11 +36,12 @@ RendererSystem::RendererSystem(
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_csgShapeRegistry(arena)
-    , m_gpuTaskGraph(arena)
-    , m_gpuTaskGraphAnalysis(arena)
-    , m_gpuTaskGraphQueueAssignments(arena)
-    , m_gpuTaskGraphWorkTasks(arena)
-    , m_gpuTaskGraphLegacyQueueMismatches(arena)
+    , m_graphicsPrefixTaskGraph(arena)
+    , m_graphicsPrefixTaskGraphAnalysis(arena)
+    , m_graphicsPrefixTaskGraphQueueAssignments(arena)
+    , m_graphicsPrefixCompiledGraph(arena)
+    , m_graphicsPrefixRecordedGraph(arena)
+    , m_graphicsPrefixSubmissionTransaction(arena)
     , m_laggedLightingHistoryTaskGraph(arena)
     , m_laggedLightingHistoryTaskGraphAnalysis(arena)
     , m_laggedLightingHistoryTaskGraphQueueAssignments(arena)
@@ -542,12 +455,14 @@ void RendererSystem::invalidateResources(){
     m_preparedCsgFrameStateValid = false;
     m_preparedHasTransparentRenderers = false;
     m_preparedShadowVisibilityReady = false;
-    m_gpuTaskGraphValid = false;
-    m_gpuTaskGraphWorkTasks.clear();
-    m_gpuTaskGraphLegacyQueueMismatches.clear();
-    m_gpuTaskGraph.reset();
-    m_gpuTaskGraphAnalysis.reset();
-    m_gpuTaskGraphQueueAssignments.reset();
+    m_graphicsPrefixTaskGraphValid = false;
+    m_graphicsPrefixTask = {};
+    m_graphicsPrefixTaskGraph.reset();
+    m_graphicsPrefixTaskGraphAnalysis.reset();
+    m_graphicsPrefixTaskGraphQueueAssignments.reset();
+    m_graphicsPrefixCompiledGraph.reset();
+    m_graphicsPrefixRecordedGraph.reset(m_graphicsPrefixCompiledGraph);
+    m_graphicsPrefixSubmissionTransaction.reset(m_graphicsPrefixCompiledGraph);
     m_laggedLightingHistoryTaskGraphValid = false;
     m_laggedLightingHistoryTask = {};
     m_laggedLightingPresentationCompletion = {};
@@ -637,9 +552,9 @@ void RendererSystem::invalidateResources(){
     m_deferredLightingCompiledGraph.reset();
     m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
     m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
-    m_gpuTaskGraphDeviceGeneration = m_gpuTaskGraphDeviceGeneration == Limit<u16>::s_Max
+    m_taskGraphDeviceGeneration = m_taskGraphDeviceGeneration == Limit<u16>::s_Max
         ? 1u
-        : static_cast<u16>(m_gpuTaskGraphDeviceGeneration + 1u)
+        : static_cast<u16>(m_taskGraphDeviceGeneration + 1u)
     ;
     resetInvalidatedResourceStateHandoffs();
     m_meshViewSetupCommandList.reset();
@@ -969,12 +884,14 @@ bool RendererSystem::recordShadowPrepareCommandList(DeferredFrameTargets& deferr
 }
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
-    m_gpuTaskGraphValid = false;
-    m_gpuTaskGraphWorkTasks.clear();
-    m_gpuTaskGraphLegacyQueueMismatches.clear();
-    m_gpuTaskGraph.reset();
-    m_gpuTaskGraphAnalysis.reset();
-    m_gpuTaskGraphQueueAssignments.reset();
+    m_graphicsPrefixTaskGraphValid = false;
+    m_graphicsPrefixTask = {};
+    m_graphicsPrefixTaskGraph.reset();
+    m_graphicsPrefixTaskGraphAnalysis.reset();
+    m_graphicsPrefixTaskGraphQueueAssignments.reset();
+    m_graphicsPrefixCompiledGraph.reset();
+    m_graphicsPrefixRecordedGraph.reset(m_graphicsPrefixCompiledGraph);
+    m_graphicsPrefixSubmissionTransaction.reset(m_graphicsPrefixCompiledGraph);
     m_laggedLightingHistoryTaskGraphValid = false;
     m_laggedLightingHistoryTask = {};
     m_laggedLightingPresentationCompletion = {};
@@ -1115,22 +1032,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
         && m_graphics.queryFeatureSupport(Core::Feature::RayQuery)
     ;
-    const ECSRenderDetail::FrameExecutionPlan frameExecutionPlan;
     const bool laggedAsyncLightingSchedule =
         laggedAsyncLightingRequested
         && laggedLightingHistoryResourcesReady
         && m_laggedLightingHistorySubmissionToken.valid()
     ;
-    // History capture is now a graph-owned copy task.  It remains available whenever the opt-in path has a distinct
-    // compute transport, independent of the remaining legacy packet plan.
+    // History capture is graph-owned and remains available whenever the opt-in path has a distinct compute
+    // transport.
     const bool captureLaggedLightingHistory = laggedAsyncLightingRequested;
     // Software caustics are graph-owned. A distinct Compute family is the only route that may resolve to Compute;
     // otherwise the compiler routes the same task through Graphics without a renderer fallback topology.
     const bool shadowVisibilityExpectedCompute = dedicatedAsyncCompute;
     const bool softwareCausticsExpectedCompute = dedicatedAsyncCompute && !hardwareShadowSupported;
     const bool shadowVisibilityPrepared = m_preparedShadowVisibilityReady;
-    // Compile the semantic sidecar before native recording. Remaining packet work stays under FrameExecutionPlan
-    // while each migrated task owns its own compiled graph and submission.
+    // Compile every graph before native recording. The prefix imports its established command-list bundle, while
+    // all later work records directly through its own graph task.
     const ECSRenderDetail::GpuTaskGraphFrameScheduleInput taskGraphInput{
         .dedicatedAsyncCompute = dedicatedAsyncCompute,
         .frameLaggedAsyncLightingEnabled = m_frameLaggedAsyncLightingEnabled,
@@ -1139,7 +1055,26 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         .hasTransparentRenderers = hasTransparentRenderers,
         .hardwareCaustics = hardwareShadowSupported,
     };
-    buildGpuTaskGraph(taskGraphInput, deferredTargets, frameExecutionPlan);
+    buildLaggedLightingHistoryTaskGraph(taskGraphInput, deferredTargets);
+    buildGraphicsPrefixTaskGraph(taskGraphInput, deferredTargets);
+    const Core::GpuSubmissionPacketId graphicsPrefixPacket = m_graphicsPrefixCompiledGraph.packetForTask(
+        m_graphicsPrefixTask
+    );
+    const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue = graphicsPrefixPacket.valid()
+        ? m_graphicsPrefixCompiledGraph.queueInfo(
+            m_graphicsPrefixCompiledGraph.packet(graphicsPrefixPacket).queue
+        )
+        : nullptr
+    ;
+    if(
+        !m_graphicsPrefixTaskGraphValid
+        || !m_graphicsPrefixTask.valid()
+        || !graphicsPrefixQueue
+        || graphicsPrefixQueue->queueClass != Core::CommandQueue::Graphics
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned graphics prefix was unavailable"));
+        return;
+    }
     Core::CommandList* meshViewSetupCommandList = m_meshViewSetupCommandList.get();
     Core::CommandList* sceneShadingSetupCommandList = m_sceneShadingSetupCommandList.get();
     Core::CommandList* deferredClearCommandList = m_deferredClearCommandList.get();
@@ -1262,12 +1197,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         restorePostGbufferEffectsCpuState();
     };
 
-    // The remaining prefix envelope owns its ticket; the frame scope spans accepted prefix and graph-owned present
-    // submissions.
-    ECSRenderDetail::FrameExecutionPlanTimingTickets frameExecutionTimingTickets(
-        frameExecutionPlan,
-        m_graphics.gpuTiming()
-    );
+    // The graph-owned prefix packet retains the established timing scope across its imported command-list bundle.
+    Core::GpuTimingSubmissionTicket graphicsPrefixTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket shadowVisibilityTimingTicket(m_graphics.gpuTiming());
     buildShadowVisibilityTaskGraph(
         taskGraphInput,
@@ -1293,14 +1224,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned shadow visibility was unavailable"));
         shadowVisibilityTimingTicket.discard();
-        frameExecutionTimingTickets.discardAll();
+        graphicsPrefixTimingTicket.discard();
         return;
     }
     const bool shadowVisibilityRunsOnCompute = shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute;
     if(shadowVisibilityRunsOnCompute != shadowVisibilityExpectedCompute){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow-visibility graph queue disagrees with renderer topology"));
         shadowVisibilityTimingTicket.discard();
-        frameExecutionTimingTickets.discardAll();
+        graphicsPrefixTimingTicket.discard();
         return;
     }
     Core::GpuTimingSubmissionTicket hardwareCausticsTimingTicket(m_graphics.gpuTiming());
@@ -1335,7 +1266,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned hardware caustics were unavailable"));
         hardwareCausticsTimingTicket.discard();
         shadowVisibilityTimingTicket.discard();
-        frameExecutionTimingTickets.discardAll();
+        graphicsPrefixTimingTicket.discard();
         return;
     }
     if(
@@ -1345,7 +1276,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: hardware-caustics graph queue disagrees with renderer topology"));
         hardwareCausticsTimingTicket.discard();
         shadowVisibilityTimingTicket.discard();
-        frameExecutionTimingTickets.discardAll();
+        graphicsPrefixTimingTicket.discard();
         return;
     }
     Core::GpuTimingSubmissionTicket softwareCausticsTimingTicket(m_graphics.gpuTiming());
@@ -1377,7 +1308,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         softwareCausticsTimingTicket.discard();
         hardwareCausticsTimingTicket.discard();
         shadowVisibilityTimingTicket.discard();
-        frameExecutionTimingTickets.discardAll();
+        graphicsPrefixTimingTicket.discard();
         return;
     }
     const bool softwareCausticsRunsOnCompute =
@@ -1389,7 +1320,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         softwareCausticsTimingTicket.discard();
         hardwareCausticsTimingTicket.discard();
         shadowVisibilityTimingTicket.discard();
-        frameExecutionTimingTickets.discardAll();
+        graphicsPrefixTimingTicket.discard();
         return;
     }
     Core::GpuTimingSubmissionTicket surfelGiTimingTicket(m_graphics.gpuTiming());
@@ -1405,7 +1336,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         softwareCausticsTimingTicket.discard();
         hardwareCausticsTimingTicket.discard();
         shadowVisibilityTimingTicket.discard();
-        frameExecutionTimingTickets.discardAll();
+        graphicsPrefixTimingTicket.discard();
         return;
     }
     const bool surfelGiRunsOnCompute = surfelGiQueue->queueClass == Core::CommandQueue::Compute;
@@ -1494,7 +1425,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         softwareCausticsTimingTicket.discard();
         hardwareCausticsTimingTicket.discard();
         shadowVisibilityTimingTicket.discard();
-        frameExecutionTimingTickets.discardAll();
+        graphicsPrefixTimingTicket.discard();
         return;
     }
     Core::GpuTimingSubmissionTicket deferredLightingTimingTicket(m_graphics.gpuTiming());
@@ -1528,7 +1459,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         softwareCausticsTimingTicket.discard();
         hardwareCausticsTimingTicket.discard();
         shadowVisibilityTimingTicket.discard();
-        frameExecutionTimingTickets.discardAll();
+        graphicsPrefixTimingTicket.discard();
         return;
     }
     const bool deferredLightingRunsOnCompute = deferredLightingQueue->queueClass == Core::CommandQueue::Compute;
@@ -1578,11 +1509,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         softwareCausticsTimingTicket.discard();
         hardwareCausticsTimingTicket.discard();
         shadowVisibilityTimingTicket.discard();
-        frameExecutionTimingTickets.discardAll();
+        graphicsPrefixTimingTicket.discard();
         return;
     }
     const auto discardTimingTickets = [
-        &frameExecutionTimingTickets,
+        &graphicsPrefixTimingTicket,
         &shadowVisibilityTimingTicket,
         &hardwareCausticsTimingTicket,
         &softwareCausticsTimingTicket,
@@ -1596,7 +1527,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &deferredCompositeTimingTicket,
         &deferredPresentTimingTicket
     ](){
-        frameExecutionTimingTickets.discardAll();
+        graphicsPrefixTimingTicket.discard();
         shadowVisibilityTimingTicket.discard();
         hardwareCausticsTimingTicket.discard();
         softwareCausticsTimingTicket.discard();
@@ -1611,6 +1542,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredPresentTimingTicket.discard();
     };
     const auto discardUnacceptedGraphPackets = [&](){
+        m_graphicsPrefixSubmissionTransaction.discardUnaccepted(
+            m_graphicsPrefixTaskGraph,
+            m_graphicsPrefixCompiledGraph
+        );
         m_deferredPresentSubmissionTransaction.discardUnaccepted(
             m_deferredPresentTaskGraph,
             m_deferredPresentCompiledGraph
@@ -1676,14 +1611,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &asyncPrefixTiming,
         &meshViewSetupReady,
         &meshViewSetupCommandListReady,
-        &frameExecutionTimingTickets,
+        &graphicsPrefixTimingTicket,
         meshViewAspectRatio,
         shadowVisibilityRunsOnCompute
     ](){
-        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
-            frameExecutionTimingTickets,
-            ECSRenderDetail::FrameExecutionWork::GraphicsPrefix
-        );
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(graphicsPrefixTimingTicket);
         meshViewSetupCommandList->open(&m_shadowPrepareStateHandoff);
         if(!meshViewSetupCommandList->hasCommandBuffer())
             return;
@@ -1725,12 +1657,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         sceneShadingSetupCommandList,
         &sceneShadingSetupReady,
         &sceneShadingSetupCommandListReady,
-        &frameExecutionTimingTickets
+        &graphicsPrefixTimingTicket
     ](){
-        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
-            frameExecutionTimingTickets,
-            ECSRenderDetail::FrameExecutionWork::GraphicsPrefix
-        );
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(graphicsPrefixTimingTicket);
         sceneShadingSetupCommandList->open(&m_shadowPrepareStateHandoff);
         if(!sceneShadingSetupCommandList->hasCommandBuffer())
             return;
@@ -1749,12 +1678,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredClearCommandList,
         &deferredClearCommandListReady,
         surfelGiRunsOnCompute,
-        &frameExecutionTimingTickets
+        &graphicsPrefixTimingTicket
     ](){
-        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
-            frameExecutionTimingTickets,
-            ECSRenderDetail::FrameExecutionWork::GraphicsPrefix
-        );
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(graphicsPrefixTimingTicket);
         deferredClearCommandList->open(&m_shadowPrepareStateHandoff);
         if(!deferredClearCommandList->hasCommandBuffer())
             return;
@@ -1826,12 +1752,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &device,
         gbufferCommandList,
         &gbufferCommandListReady,
-        &frameExecutionTimingTickets
+        &graphicsPrefixTimingTicket
     ](){
-        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
-            frameExecutionTimingTickets,
-            ECSRenderDetail::FrameExecutionWork::GraphicsPrefix
-        );
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(graphicsPrefixTimingTicket);
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
         Core::CommandList* commandList = gbufferCommandList;
         commandList->open(&m_frameSetupStateFanInHandoff);
@@ -1982,12 +1905,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &postGbufferNormalizeCommandListReady,
         &asyncPrefixTiming,
         shadowVisibilityRunsOnCompute,
-        &frameExecutionTimingTickets
+        &graphicsPrefixTimingTicket
     ](){
-        ECSRenderDetail::FrameExecutionPlanTimingTickets::WorkRecordingScope timingRecording(
-            frameExecutionTimingTickets,
-            ECSRenderDetail::FrameExecutionWork::GraphicsPrefix
-        );
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(graphicsPrefixTimingTicket);
         postGbufferNormalizeCommandList->open(&m_gbufferStateHandoff);
         if(!postGbufferNormalizeCommandList->hasCommandBuffer())
             return;
@@ -2785,62 +2705,41 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // Preserve declarative packet order after parallel recording.
-    ECSRenderDetail::FrameExecutionPacketCommandLists frameExecutionCommandLists(frameExecutionPlan);
-    const ECSRenderDetail::FrameExecutionWorkCommandListBinding recordedFrameWorkCommandLists[] = {
-        { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, meshViewSetupCommandList },
-        { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, sceneShadingSetupCommandList },
-        { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, deferredClearCommandList },
-        { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, gbufferCommandList },
-        { ECSRenderDetail::FrameExecutionWork::GraphicsPrefix, postGbufferNormalizeCommandList },
+    // The graph packet imports the established parallel command-list bundle and becomes its sole submission owner.
+    Core::CommandList* const graphicsPrefixCommandLists[] = {
+        meshViewSetupCommandList,
+        sceneShadingSetupCommandList,
+        deferredClearCommandList,
+        gbufferCommandList,
+        postGbufferNormalizeCommandList,
     };
-    if(!frameExecutionCommandLists.appendPlannedWorkCommandLists(
-        recordedFrameWorkCommandLists,
-        LengthOf(recordedFrameWorkCommandLists)
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to collect recorded work for the frame execution plan"));
+    Core::GpuNativePacketRecorder graphicsPrefixRecorder(device);
+    const Core::GpuImportedPacketRecordDesc graphicsPrefixRecordDesc{
+        .packet = graphicsPrefixPacket,
+        .commandLists = graphicsPrefixCommandLists,
+        .commandListCount = LengthOf(graphicsPrefixCommandLists),
+    };
+    const bool graphicsPrefixRecorded =
+        m_graphicsPrefixTaskGraphValid
+        && m_graphicsPrefixTask.valid()
+        && graphicsPrefixPacket.valid()
+        && graphicsPrefixRecorder.recordImportedPacket(
+            m_graphicsPrefixTaskGraph,
+            m_graphicsPrefixCompiledGraph,
+            graphicsPrefixRecordDesc,
+            m_graphicsPrefixRecordedGraph
+        )
+    ;
+    if(!graphicsPrefixRecorded){
+        m_graphicsPrefixSubmissionTransaction.discardUnaccepted(
+            m_graphicsPrefixTaskGraph,
+            m_graphicsPrefixCompiledGraph
+        );
+        graphicsPrefixTimingTicket.discard();
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to import graph-owned graphics prefix"));
         discardRenderPackets();
         return;
     }
-
-    // The remaining legacy envelope contains only the timed Graphics prefix. Every later producer and consumer is
-    // a graph packet with an explicit completion token.
-    const auto submitRecordedFramePacket = [&](const ECSRenderDetail::FrameExecutionPacket::Enum packet)
-        -> Core::QueueSubmissionToken {
-        const ECSRenderDetail::FrameExecutionPacketCommandListRange packetCommandLists =
-            frameExecutionCommandLists.commandLists(packet)
-        ;
-        Core::GpuTimingSubmissionTicket* const timingTicket = frameExecutionTimingTickets.ticketForPacket(packet);
-        if(!timingTicket || packetCommandLists.commandListCount == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame prefix has no timing ticket or recorded command list"));
-            if(timingTicket)
-                timingTicket->discard();
-            return {};
-        }
-        return timingTicket->submit(
-            device,
-            packetCommandLists.commandLists,
-            packetCommandLists.commandListCount,
-            frameExecutionPlan.packet(packet).lane,
-            Core::QueueSubmissionDesc{}
-        );
-    };
-    const auto dispatchRecordedFrameBatch = [&](const ECSRenderDetail::FrameExecutionSubmissionBatch::Enum batch)
-        -> Core::QueueSubmissionToken {
-        const ECSRenderDetail::FrameExecutionSubmissionBatchPlan& batchPlan =
-            frameExecutionPlan.submissionBatch(batch)
-        ;
-        NWB_ASSERT(batchPlan.packetCount > 0u);
-
-        Core::QueueSubmissionToken lastSubmissionToken;
-        for(u8 packetIndex = 0u; packetIndex < batchPlan.packetCount; ++packetIndex){
-            const ECSRenderDetail::FrameExecutionPacket::Enum packet = batchPlan.packets[packetIndex];
-            lastSubmissionToken = submitRecordedFramePacket(packet);
-            if(!lastSubmissionToken.valid())
-                return {};
-        }
-        return lastSubmissionToken;
-    };
 
     const auto submitFrameRecoveryPacket = [&](const Core::QueueSubmissionToken* asyncWaitToken) -> bool {
         // Retire the accepted frame scope after a rejected packet and, when applicable, join accepted async work
@@ -3256,25 +3155,36 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return true;
     };
 
-    // The plan owns packet order; these cases own acceptance-dependent state.
-    for(usize submissionBatchIndex = 0u;
-        submissionBatchIndex < frameExecutionPlan.submissionBatchCount();
-        ++submissionBatchIndex
-    ){
-        const ECSRenderDetail::FrameExecutionSubmissionBatch::Enum submissionBatch =
-            frameExecutionPlan.submissionBatchID(submissionBatchIndex)
+    // The graph owns the prefix packet and publishes the completion consumed by every subsequent producer.
+    {
+        Core::Alloc::ScratchArena graphicsPrefixScratchArena(RendererArenaScope::s_TaskGraphArena);
+        const Core::GpuTaskGraphSubmitter graphicsPrefixSubmitter(device);
+        const bool graphicsPrefixAccepted =
+            m_graphicsPrefixTaskGraphValid
+            && m_graphicsPrefixTask.valid()
+            && graphicsPrefixSubmitter.submitPacket(
+                m_graphicsPrefixTaskGraph,
+                m_graphicsPrefixCompiledGraph,
+                m_graphicsPrefixRecordedGraph,
+                graphicsPrefixPacket,
+                nullptr,
+                0u,
+                m_graphicsPrefixSubmissionTransaction,
+                graphicsPrefixScratchArena,
+                &graphicsPrefixTimingTicket
+            )
         ;
-        switch(submissionBatch){
-        case ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPrefix:{
-            // The graph-owned shadow packet consumes the accepted prefix token on either physical transport.
-            prefixSubmissionToken = dispatchRecordedFrameBatch(
-                ECSRenderDetail::FrameExecutionSubmissionBatch::GraphicsPrefix
-            );
-            if(!prefixSubmissionToken.valid()){
-                discardRenderPackets();
-                return;
-            }
-            frameTimingTransaction.confirmBeginSubmission();
+        prefixSubmissionToken = graphicsPrefixAccepted
+            ? m_graphicsPrefixSubmissionTransaction.packetToken(graphicsPrefixPacket)
+            : Core::QueueSubmissionToken{}
+        ;
+        if(!prefixSubmissionToken.valid()){
+            discardRenderPackets();
+            return;
+        }
+        frameTimingTransaction.confirmBeginSubmission();
+        // The graph-owned shadow packet consumes the accepted prefix token on either physical transport.
+        {
             Core::Alloc::ScratchArena shadowVisibilityScratchArena(RendererArenaScope::s_TaskGraphArena);
             const Core::GpuTaskGraphExternalCompletionToken prefixCompletionToken{
                 .completion = m_shadowVisibilityPrefixCompletion,
@@ -3590,14 +3500,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 }
             }
 
-            if(!submitAvboitLightingAndComposite() || !submitDeferredPresent())
-                return;
-            break;
         }
-        default:
-            NWB_ASSERT(false);
-            break;
-        }
+        if(!submitAvboitLightingAndComposite() || !submitDeferredPresent())
+            return;
     }
 
     if(captureLaggedLightingHistory){

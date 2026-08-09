@@ -24,23 +24,6 @@ namespace __hidden_renderer_task_graph{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace Work = ECSRenderDetail::FrameExecutionWork;
-
-struct WorkMetadata{
-    Name identity = NAME_NONE;
-    AStringView markerLabel;
-    Core::GpuQueueRequest queue;
-    Core::GpuTaskSchedulingHint scheduling;
-
-    WorkMetadata() = default;
-    WorkMetadata(const Name& value, const AStringView label, const Core::GpuQueueRequest& request)
-        : identity(value)
-        , markerLabel(label)
-        , queue(request)
-    {}
-};
-
-
 [[nodiscard]] static Core::GpuQueueRequest GraphicsQueueRequest(){
     return Core::GpuQueueRequest{
         Core::GpuQueueCapability::Graphics,
@@ -384,16 +367,6 @@ struct DeferredPresentGraphTask{
 };
 
 
-[[nodiscard]] static WorkMetadata WorkMetadataFor(const Work::Enum work){
-    switch(work){
-    case Work::GraphicsPrefix:
-        return WorkMetadata{ Name("render.task_graph.graphics_prefix"), "Graphics Prefix", GraphicsQueueRequest() };
-    default:
-        NWB_ASSERT(false);
-        return {};
-    }
-}
-
 [[nodiscard]] static Core::GpuGraphResourceDesc TextureResourceDesc(const Name& identity, const AStringView label){
     Core::GpuGraphResourceDesc desc;
     desc
@@ -479,61 +452,50 @@ struct DeferredPresentGraphTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererSystem::buildGpuTaskGraph(
+void RendererSystem::buildGraphicsPrefixTaskGraph(
     const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
-    const DeferredFrameTargets& deferredTargets,
-    const ECSRenderDetail::FrameExecutionPlan& frameExecutionPlan
+    const DeferredFrameTargets& deferredTargets
 ){
     using namespace __hidden_renderer_task_graph;
 
-    // The history-copy task is independent of the observational sidecar below. A parity mismatch in remaining
-    // legacy work must not restore a retired graph-owned task or its submission path.
-    buildLaggedLightingHistoryTaskGraph(input, deferredTargets);
+    m_graphicsPrefixTaskGraphValid = false;
+    m_graphicsPrefixTask = {};
+    m_graphicsPrefixTaskGraph.reset();
+    m_graphicsPrefixTaskGraphAnalysis.reset();
+    m_graphicsPrefixTaskGraphQueueAssignments.reset();
+    m_graphicsPrefixCompiledGraph.reset();
+    m_graphicsPrefixRecordedGraph.reset(m_graphicsPrefixCompiledGraph);
+    m_graphicsPrefixSubmissionTransaction.reset(m_graphicsPrefixCompiledGraph);
 
-    m_gpuTaskGraphValid = false;
-    m_gpuTaskGraphWorkTasks.clear();
-    m_gpuTaskGraphLegacyQueueMismatches.clear();
-    m_gpuTaskGraph.reset();
-    m_gpuTaskGraphAnalysis.reset();
-    m_gpuTaskGraphQueueAssignments.reset();
-
-    m_gpuTaskGraphWorkTasks.reserve(Work::kCount);
-    for(usize workIndex = 0u; workIndex < Work::kCount; ++workIndex){
-        m_gpuTaskGraphWorkTasks.push_back(Core::GpuTaskId{});
-    }
-
-    const auto& device = graphics().getDevice();
-    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
-    const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
-    // The existing renderer reports dedicated AsyncCompute only for a distinct compute transport. Recheck the
-    // physical family identity here so a future backend cannot accidentally make the graph compiler invent overlap.
-    const bool dedicatedAsyncCompute = input.dedicatedAsyncCompute
-        && computeFamilyIndex != Limit<u32>::s_Max
-        && computeFamilyIndex != graphicsFamilyIndex
-    ;
-    const ECSRenderDetail::GpuTaskGraphFrameSchedule graphSchedule(input);
-
-    if(
-        dedicatedAsyncCompute != input.dedicatedAsyncCompute
-        || dedicatedAsyncCompute != graphSchedule.usesDedicatedAsyncCompute()
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph queue topology disagrees with the legacy frame plan"));
+    if(!deferredTargets.valid() || !m_drawState.m_meshViewBuffer)
         return;
-    }
+
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
-        return m_gpuTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
+        return m_graphicsPrefixTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
     };
-    const Core::GpuGraphResourceId albedo = importTexture(deferredTargets.albedo, Name("render.task_graph.albedo"), "Albedo");
-    const Core::GpuGraphResourceId normal = importTexture(deferredTargets.normal, Name("render.task_graph.normal"), "Normal");
+    const Core::GpuGraphResourceId albedo = importTexture(
+        deferredTargets.albedo,
+        Name("render.graphics_prefix.albedo"),
+        "Albedo"
+    );
+    const Core::GpuGraphResourceId normal = importTexture(
+        deferredTargets.normal,
+        Name("render.graphics_prefix.normal"),
+        "Normal"
+    );
     const Core::GpuGraphResourceId worldPosition = importTexture(
         deferredTargets.worldPosition,
-        Name("render.task_graph.world_position"),
+        Name("render.graphics_prefix.world_position"),
         "World Position"
     );
-    const Core::GpuGraphResourceId depth = importTexture(deferredTargets.depth, Name("render.task_graph.depth"), "Depth");
-    const Core::GpuGraphResourceId meshViewBuffer = m_gpuTaskGraph.importBuffer(
+    const Core::GpuGraphResourceId depth = importTexture(
+        deferredTargets.depth,
+        Name("render.graphics_prefix.depth"),
+        "Depth"
+    );
+    const Core::GpuGraphResourceId meshViewBuffer = m_graphicsPrefixTaskGraph.importBuffer(
         m_drawState.m_meshViewBuffer,
-        BufferResourceDesc(Name("render.task_graph.mesh_view"), "Mesh View")
+        BufferResourceDesc(Name("render.graphics_prefix.mesh_view"), "Mesh View")
     );
     if(
         !albedo.valid()
@@ -542,65 +504,42 @@ void RendererSystem::buildGpuTaskGraph(
         || !depth.valid()
         || !meshViewBuffer.valid()
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph could not import required renderer resources"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graphics-prefix graph resources"));
         return;
     }
 
-    Core::GraphicsVector<Core::GpuTaskId>& workTasks = m_gpuTaskGraphWorkTasks;
-    const auto addWorkTask = [&](const Work::Enum work, const Core::GpuTaskResourceUse* const resourceUses, const usize resourceUseCount){
-        if(!graphSchedule.hasWork(work))
-            return true;
-
-        Core::GpuTaskId dependencies[Work::kCount] = {};
-        usize dependencyCount = 0u;
-        for(usize producerWorkIndex = 0u; producerWorkIndex < Work::kCount; ++producerWorkIndex){
-            const Work::Enum producerWork = static_cast<Work::Enum>(producerWorkIndex);
-            if(!graphSchedule.workDependsOn(work, producerWork))
-                continue;
-
-            const Core::GpuTaskId dependency = workTasks[producerWorkIndex];
-            if(!dependency.valid() || dependencyCount >= LengthOf(dependencies))
-                return false;
-            dependencies[dependencyCount++] = dependency;
-        }
-        const WorkMetadata metadata = WorkMetadataFor(work);
-        Core::GpuTaskDesc desc;
-        desc
-            .setIdentity(metadata.identity)
-            .setMarkerLabel(metadata.markerLabel)
-            .setQueue(metadata.queue)
-            .setScheduling(metadata.scheduling)
-            .setDependencies(dependencies, dependencyCount)
-            .setResourceUses(resourceUses, resourceUseCount)
-        ;
-        workTasks[static_cast<usize>(work)] = m_gpuTaskGraph.addTask(desc);
-        return workTasks[static_cast<usize>(work)].valid();
-    };
-
-    const Core::GpuTaskResourceUse graphicsPrefixUses[] = {
+    const Core::GpuTaskResourceUse resourceUses[] = {
         WriteUse(meshViewBuffer, Core::ResourceStates::UnorderedAccess),
         WriteUse(albedo, Core::ResourceStates::RenderTarget),
         WriteUse(normal, Core::ResourceStates::RenderTarget),
         WriteUse(worldPosition, Core::ResourceStates::RenderTarget),
         WriteUse(depth, Core::ResourceStates::DepthWrite),
     };
-    const bool graphBuilt =
-        addWorkTask(Work::GraphicsPrefix, graphicsPrefixUses, LengthOf(graphicsPrefixUses))
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Core::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("render.graphics_prefix"))
+        .setMarkerLabel("Graphics Prefix")
+        .setQueue(GraphicsQueueRequest())
+        .setScheduling(scheduling)
+        .setResourceUses(resourceUses, LengthOf(resourceUses))
     ;
-    if(!graphBuilt){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph could not declare semantic work dependencies"));
+    m_graphicsPrefixTask = m_graphicsPrefixTaskGraph.addTask(desc);
+    if(!m_graphicsPrefixTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graphics-prefix graph task"));
         return;
     }
 
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-    const Core::GpuTaskGraphCompiler compiler;
-    if(!compiler.analyze(m_gpuTaskGraph, m_gpuTaskGraphAnalysis, scratchArena)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph validation failed (status {})")
-            , static_cast<u32>(m_gpuTaskGraphAnalysis.diagnostic().status)
-        );
-        return;
-    }
-
+    const auto& device = graphics().getDevice();
+    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
+    const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
+    const bool dedicatedAsyncCompute = input.dedicatedAsyncCompute
+        && computeFamilyIndex != Limit<u32>::s_Max
+        && computeFamilyIndex != graphicsFamilyIndex
+    ;
     const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
         static_cast<u8>(Core::GpuQueueCapability::Graphics)
         | static_cast<u8>(Core::GpuQueueCapability::Compute)
@@ -610,9 +549,9 @@ void RendererSystem::buildGpuTaskGraph(
         static_cast<u8>(Core::GpuQueueCapability::Compute)
         | static_cast<u8>(Core::GpuQueueCapability::Transfer)
     );
-    const Core::GpuPhysicalQueueInfo queueTopologyInfos[] = {
+    const Core::GpuPhysicalQueueInfo queues[] = {
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Graphics,
             .capabilities = graphicsQueueCapabilities,
             .familyIndex = graphicsFamilyIndex,
@@ -620,7 +559,7 @@ void RendererSystem::buildGpuTaskGraph(
             .dedicated = false,
         },
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 1u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Compute,
             .capabilities = computeQueueCapabilities,
             .familyIndex = computeFamilyIndex,
@@ -628,60 +567,26 @@ void RendererSystem::buildGpuTaskGraph(
             .dedicated = true,
         },
     };
-    const Core::GpuTaskGraphQueueTopology queueTopology{
-        .queues = queueTopologyInfos,
-        .queueCount = dedicatedAsyncCompute ? LengthOf(queueTopologyInfos) : 1u,
+    const Core::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = dedicatedAsyncCompute ? LengthOf(queues) : 1u,
     };
-    if(!compiler.assignQueues(m_gpuTaskGraph, m_gpuTaskGraphAnalysis, queueTopology, m_gpuTaskGraphQueueAssignments)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph queue assignment failed (status {})")
-            , static_cast<u32>(m_gpuTaskGraphQueueAssignments.diagnostic().status)
-        );
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+    const Core::GpuTaskGraphCompiler compiler;
+    if(!compiler.compile(
+        m_graphicsPrefixTaskGraph,
+        m_graphicsPrefixTaskGraphAnalysis,
+        topology,
+        m_graphicsPrefixTaskGraphQueueAssignments,
+        m_graphicsPrefixCompiledGraph,
+        scratchArena
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile graphics-prefix task graph"));
         return;
     }
-    bool workSetMatchesLegacyPlan = true;
-    usize workSetMismatchCount = 0u;
-    for(usize workIndex = 0u; workIndex < Work::kCount; ++workIndex){
-        const Work::Enum work = static_cast<Work::Enum>(workIndex);
-        if(graphSchedule.hasWork(work) == frameExecutionPlan.hasWork(work))
-            continue;
-        workSetMatchesLegacyPlan = false;
-        ++workSetMismatchCount;
-    }
-    if(!workSetMatchesLegacyPlan){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph work set differs from FrameExecutionPlan ({})")
-            , workSetMismatchCount
-        );
-    }
-
-    for(usize workIndex = 0u; workIndex < Work::kCount; ++workIndex){
-        const Work::Enum work = static_cast<Work::Enum>(workIndex);
-        if(!graphSchedule.hasWork(work))
-            continue;
-
-        if(!frameExecutionPlan.hasWork(work))
-            continue;
-
-        const Core::GpuTaskQueueAssignment* const assignment = m_gpuTaskGraphQueueAssignments.find(workTasks[workIndex]);
-        if(!assignment){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph queue assignment is missing declared work"));
-            m_gpuTaskGraphLegacyQueueMismatches.push_back(workTasks[workIndex]);
-            continue;
-        }
-        const Core::CommandQueue::Enum legacyQueue = device.resolveRenderLane(frameExecutionPlan.laneForWork(work));
-        if(
-            legacyQueue != frameExecutionPlan.expectedQueueForWork(work)
-            || !frameExecutionPlan.workMatchesExpectedQueue(work, assignment->queueClass)
-        ){
-            m_gpuTaskGraphLegacyQueueMismatches.push_back(workTasks[workIndex]);
-        }
-    }
-    if(!m_gpuTaskGraphLegacyQueueMismatches.empty()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph queue assignment differs from FrameExecutionPlan ({})")
-            , m_gpuTaskGraphLegacyQueueMismatches.size()
-        );
-    }
-
-    m_gpuTaskGraphValid = true;
+    m_graphicsPrefixRecordedGraph.reset(m_graphicsPrefixCompiledGraph);
+    m_graphicsPrefixSubmissionTransaction.reset(m_graphicsPrefixCompiledGraph);
+    m_graphicsPrefixTaskGraphValid = true;
 }
 
 
@@ -825,7 +730,7 @@ void RendererSystem::buildLaggedLightingHistoryTaskGraph(
     );
     const Core::GpuPhysicalQueueInfo queues[] = {
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Graphics,
             .capabilities = graphicsQueueCapabilities,
             .familyIndex = graphicsFamilyIndex,
@@ -833,7 +738,7 @@ void RendererSystem::buildLaggedLightingHistoryTaskGraph(
             .dedicated = false,
         },
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 1u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Compute,
             .capabilities = computeQueueCapabilities,
             .familyIndex = computeFamilyIndex,
@@ -1199,7 +1104,7 @@ void RendererSystem::buildShadowVisibilityTaskGraph(
     );
     const Core::GpuPhysicalQueueInfo queues[] = {
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Graphics,
             .capabilities = graphicsQueueCapabilities,
             .familyIndex = graphicsFamilyIndex,
@@ -1207,7 +1112,7 @@ void RendererSystem::buildShadowVisibilityTaskGraph(
             .dedicated = false,
         },
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 1u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Compute,
             .capabilities = computeQueueCapabilities,
             .familyIndex = computeFamilyIndex,
@@ -1474,7 +1379,7 @@ void RendererSystem::buildHardwareCausticsTaskGraph(
     );
     const Core::GpuPhysicalQueueInfo queues[] = {
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Graphics,
             .capabilities = graphicsQueueCapabilities,
             .familyIndex = graphicsFamilyIndex,
@@ -1709,7 +1614,7 @@ void RendererSystem::buildSoftwareCausticsTaskGraph(
     );
     const Core::GpuPhysicalQueueInfo queues[] = {
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Graphics,
             .capabilities = graphicsQueueCapabilities,
             .familyIndex = graphicsFamilyIndex,
@@ -1717,7 +1622,7 @@ void RendererSystem::buildSoftwareCausticsTaskGraph(
             .dedicated = false,
         },
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 1u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Compute,
             .capabilities = computeQueueCapabilities,
             .familyIndex = computeFamilyIndex,
@@ -1978,7 +1883,7 @@ void RendererSystem::buildSurfelGiTaskGraph(
     );
     const Core::GpuPhysicalQueueInfo queues[] = {
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Graphics,
             .capabilities = graphicsQueueCapabilities,
             .familyIndex = graphicsFamilyIndex,
@@ -1986,7 +1891,7 @@ void RendererSystem::buildSurfelGiTaskGraph(
             .dedicated = false,
         },
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 1u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Compute,
             .capabilities = computeQueueCapabilities,
             .familyIndex = computeFamilyIndex,
@@ -2376,7 +2281,7 @@ void RendererSystem::buildAvboitTaskGraph(
     );
     const Core::GpuPhysicalQueueInfo queues[] = {
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Graphics,
             .capabilities = graphicsQueueCapabilities,
             .familyIndex = graphicsFamilyIndex,
@@ -2384,7 +2289,7 @@ void RendererSystem::buildAvboitTaskGraph(
             .dedicated = false,
         },
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 1u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Compute,
             .capabilities = computeQueueCapabilities,
             .familyIndex = computeFamilyIndex,
@@ -2622,7 +2527,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     );
     const Core::GpuPhysicalQueueInfo queues[] = {
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Graphics,
             .capabilities = graphicsQueueCapabilities,
             .familyIndex = graphicsFamilyIndex,
@@ -2630,7 +2535,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .dedicated = false,
         },
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 1u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Compute,
             .capabilities = computeQueueCapabilities,
             .familyIndex = computeFamilyIndex,
@@ -2782,7 +2687,7 @@ void RendererSystem::buildDeferredCompositeTaskGraph(
     );
     const Core::GpuPhysicalQueueInfo queues[] = {
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Graphics,
             .capabilities = graphicsQueueCapabilities,
             .familyIndex = graphicsFamilyIndex,
@@ -2790,7 +2695,7 @@ void RendererSystem::buildDeferredCompositeTaskGraph(
             .dedicated = false,
         },
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 1u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Compute,
             .capabilities = computeQueueCapabilities,
             .familyIndex = computeFamilyIndex,
@@ -2959,7 +2864,7 @@ void RendererSystem::buildDeferredPresentTaskGraph(
     );
     const Core::GpuPhysicalQueueInfo queues[] = {
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Graphics,
             .capabilities = graphicsQueueCapabilities,
             .familyIndex = graphicsFamilyIndex,
@@ -2967,7 +2872,7 @@ void RendererSystem::buildDeferredPresentTaskGraph(
             .dedicated = false,
         },
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 1u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Compute,
             .capabilities = computeQueueCapabilities,
             .familyIndex = computeFamilyIndex,

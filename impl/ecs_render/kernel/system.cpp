@@ -122,8 +122,6 @@ RendererSystem::RendererSystem(
     , m_surfelGiComputePersistentStateHandoff(arena)
     , m_surfelGiStateHandoff(arena)
     , m_surfelIrradianceReturnStateHandoff(arena)
-    , m_deferredLightingStateHandoff(arena)
-    , m_deferredCompositeStateHandoff(arena)
     , m_laggedLightingHistoryCopyInputStateHandoff(arena)
     , m_laggedLightingHistoryCopyStateHandoff(arena)
     , m_shaderSystem(*this)
@@ -217,8 +215,6 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     m_surfelGiComputePersistentStateHandoff.reset();
     m_surfelGiStateHandoff.reset();
     m_surfelIrradianceReturnStateHandoff.reset();
-    m_deferredLightingStateHandoff.reset();
-    m_deferredCompositeStateHandoff.reset();
     resetLaggedLightingHistoryCopyStateHandoffs();
 }
 
@@ -252,8 +248,6 @@ void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
     m_surfelGiComputeBaseStateHandoff.reset();
     m_surfelGiComputeInputStateHandoff.reset();
     m_surfelGiStateHandoff.reset();
-    m_deferredLightingStateHandoff.reset();
-    m_deferredCompositeStateHandoff.reset();
     resetLaggedLightingHistoryCopyStateHandoffs();
 }
 
@@ -273,8 +267,6 @@ void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
     m_surfelGiComputeBaseStateHandoff.reset();
     m_surfelGiComputeInputStateHandoff.reset();
     m_surfelGiStateHandoff.reset();
-    m_deferredLightingStateHandoff.reset();
-    m_deferredCompositeStateHandoff.reset();
     resetLaggedLightingHistoryCopyStateHandoffs();
 }
 
@@ -290,8 +282,6 @@ void RendererSystem::resetRejectedShadowVisibilityStateHandoffs()noexcept{
     m_surfelGiComputeBaseStateHandoff.reset();
     m_surfelGiComputeInputStateHandoff.reset();
     m_surfelGiStateHandoff.reset();
-    m_deferredLightingStateHandoff.reset();
-    m_deferredCompositeStateHandoff.reset();
 }
 
 
@@ -2339,7 +2329,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuNativePacketRecorder deferredLightingRecorder(device);
     const Core::GpuNativePacketRecordDesc deferredLightingRecordDesc{
         .packet = deferredLightingPacket,
-        .finalStates = &m_deferredLightingStateHandoff,
         .externalStateSources = deferredLightingStateSources,
         .externalStateSourceCount = deferredLightingStateSourceCount,
         .applyCompiledBarriers = true,
@@ -2356,7 +2345,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             deferredLightingRecordDesc,
             m_deferredLightingRecordedGraph
         )
-        && m_deferredLightingStateHandoff.valid()
     ;
     if(!deferredLightingRecorded){
         m_deferredLightingSubmissionTransaction.discardUnaccepted(
@@ -2365,6 +2353,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         );
         deferredLightingTimingTicket.discard();
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned deferred lighting"));
+        discardRenderPackets();
+        return;
+    }
+    const Core::CommandListResourceStateHandoff* const deferredLightingFinalStateSeed =
+        m_deferredLightingRecordedGraph.packetFinalStateSeed(deferredLightingPacket)
+    ;
+    if(!deferredLightingFinalStateSeed){
+        m_deferredLightingSubmissionTransaction.discardUnaccepted(
+            m_deferredLightingTaskGraph,
+            m_deferredLightingCompiledGraph
+        );
+        deferredLightingTimingTicket.discard();
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-lighting graph did not retain its final state seed"));
         discardRenderPackets();
         return;
     }
@@ -2391,7 +2392,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             .textureCount = LengthOf(avboitCompositeTextures),
         },
         Core::GpuExternalPacketStateSource{
-            .states = &m_deferredLightingStateHandoff,
+            .states = deferredLightingFinalStateSeed,
             .textures = opaqueColorCompositeTextures,
             .textureCount = LengthOf(opaqueColorCompositeTextures),
         },
@@ -2403,7 +2404,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuNativePacketRecorder deferredCompositeRecorder(device);
     const Core::GpuNativePacketRecordDesc deferredCompositeRecordDesc{
         .packet = deferredCompositePacket,
-        .finalStates = &m_deferredCompositeStateHandoff,
         .externalStateSources = deferredCompositeStateSources,
         .externalStateSourceCount = LengthOf(deferredCompositeStateSources),
         .applyCompiledBarriers = true,
@@ -2419,7 +2419,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             deferredCompositeRecordDesc,
             m_deferredCompositeRecordedGraph
         )
-        && m_deferredCompositeStateHandoff.valid()
     ;
     if(!deferredCompositeRecorded){
         m_deferredCompositeSubmissionTransaction.discardUnaccepted(
@@ -2428,6 +2427,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         );
         deferredCompositeTimingTicket.discard();
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned deferred composite"));
+        discardRenderPackets();
+        return;
+    }
+    const Core::CommandListResourceStateHandoff* const deferredCompositeFinalStateSeed =
+        m_deferredCompositeRecordedGraph.packetFinalStateSeed(deferredCompositePacket)
+    ;
+    if(!deferredCompositeFinalStateSeed){
+        m_deferredCompositeSubmissionTransaction.discardUnaccepted(
+            m_deferredCompositeTaskGraph,
+            m_deferredCompositeCompiledGraph
+        );
+        deferredCompositeTimingTicket.discard();
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-composite graph did not retain its final state seed"));
         discardRenderPackets();
         return;
     }
@@ -2445,7 +2457,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             .bufferCount = LengthOf(deferredPresentBaseBuffers),
         },
         Core::GpuExternalPacketStateSource{
-            .states = &m_deferredCompositeStateHandoff,
+            .states = deferredCompositeFinalStateSeed,
             .textures = compositeColorPresentTextures,
             .textureCount = LengthOf(compositeColorPresentTextures),
         },
@@ -2798,16 +2810,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             deferredTargets.laggedLightingHistory.slotsUploaded = true;
         const bool lightingReturnStatesReady = !deferredLightingRunsOnCompute || laggedAsyncLightingSchedule || (
             m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
-                m_deferredLightingStateHandoff,
+                *deferredLightingFinalStateSeed,
                 deferredTargets.shadowVisibility.get()
             )
             // Bootstrap uses live caustics; active lagged mode uses the producer image directly.
             && m_causticIrradianceReturnStateHandoff.buildTextureSubset(
-                m_deferredLightingStateHandoff,
+                *deferredLightingFinalStateSeed,
                 deferredTargets.causticIrradiance.get()
             )
             && m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
-                m_deferredLightingStateHandoff,
+                *deferredLightingFinalStateSeed,
                 deferredTargets.surfelIrradiance.get()
             )
         );

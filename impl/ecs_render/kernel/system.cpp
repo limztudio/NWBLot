@@ -2009,38 +2009,104 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ;
         Core::Alloc::ScratchArena surfelGiScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter surfelGiSubmitter(device);
+        struct SurfelGiAcceptanceContext{
+            RendererSystem* renderer = nullptr;
+            DeferredFrameTargets* targets = nullptr;
+            const Core::CommandListResourceStateHandoff* finalState = nullptr;
+            Core::GpuSubmissionPacketId surfelGiPacket;
+            bool runsOnCompute = false;
+            bool stateReady = true;
+        };
+        SurfelGiAcceptanceContext surfelGiAcceptance{
+            .renderer = this,
+            .targets = &deferredTargets,
+            .finalState = surfelGiFinalStateSeed,
+            .surfelGiPacket = surfelGiPacket,
+            .runsOnCompute = surfelGiRunsOnCompute,
+        };
+        const auto acceptSurfelGiPacket = [](
+            void* const rawContext,
+            const Core::GpuSubmissionPacketId& packet,
+            const Core::QueueSubmissionToken& token
+        ) -> bool {
+            static_cast<void>(token);
+            SurfelGiAcceptanceContext* const context =
+                static_cast<SurfelGiAcceptanceContext*>(rawContext)
+            ;
+            if(!context)
+                return false;
+            if(packet != context->surfelGiPacket)
+                return true;
+            if(!context->renderer || !context->targets || !context->finalState){
+                context->stateReady = false;
+                return false;
+            }
+
+            RendererSystem& renderer = *context->renderer;
+            DeferredFrameTargets& targets = *context->targets;
+            context->stateReady = renderer.m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
+                *context->finalState,
+                targets.surfelIrradiance.get()
+            );
+            if(!context->stateReady || !context->runsOnCompute)
+                return context->stateReady;
+
+            Core::Texture* const surfelGiComputeScratchTextures[] = {
+                targets.surfelIrradianceHalf.get(),
+            };
+            Core::Buffer* const surfelGiComputeScratchBuffers[] = {
+                renderer.m_rayTracingState.m_surfelPoolBuffer.get(),
+                renderer.m_rayTracingState.m_surfelCellHeadBuffer.get(),
+                renderer.m_rayTracingState.m_surfelCounterBuffer.get(),
+                renderer.m_rayTracingState.m_surfelTraceIndirectArgsBuffer.get(),
+                renderer.m_rayTracingState.m_surfelFreeListBuffer.get(),
+                renderer.m_rayTracingState.m_surfelPoolSnapshotBuffer.get(),
+                renderer.m_rayTracingState.m_surfelCellHeadSnapshotBuffer.get(),
+                renderer.m_rayTracingState.m_surfelCounterReadback.get(),
+            };
+            context->stateReady = renderer.m_surfelGiComputePersistentStateHandoff.buildResourceSubset(
+                *context->finalState,
+                surfelGiComputeScratchTextures,
+                LengthOf(surfelGiComputeScratchTextures),
+                surfelGiComputeScratchBuffers,
+                LengthOf(surfelGiComputeScratchBuffers)
+            );
+            return context->stateReady;
+        };
+        const Core::GpuTaskGraphPacketAcceptedCallback surfelGiAcceptedCallback{
+            .context = &surfelGiAcceptance,
+            .invoke = acceptSurfelGiPacket,
+        };
+        const Core::GpuTaskGraphPacketTimingTicket surfelGiTimingTickets[] = {
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = surfelGiPacket,
+                .timingTicket = &surfelGiTimingTicket,
+            },
+        };
         const bool surfelGiAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredSurfelGiTask.valid()
             && effectsSubmissionToken.valid()
             && surfelGiPacket.valid()
             && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
-            && surfelGiSubmitter.submitPacket(
+            && surfelGiSubmitter.submitPacketRangeInCompileOrder(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
-                surfelGiPacket,
+                deferredSurfelGiPacketIndex,
+                LengthOf(surfelGiTimingTickets),
                 nullptr,
                 0u,
+                surfelGiTimingTickets,
+                LengthOf(surfelGiTimingTickets),
                 m_deferredLightingSubmissionTransaction,
                 surfelGiScratchArena,
-                &surfelGiTimingTicket
+                nullptr,
+                &surfelGiAcceptedCallback
             )
         ;
         surfelGiSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(surfelGiPacket);
-        if(!surfelGiAccepted || !surfelGiSubmissionToken.valid()){
-            const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
-            discardTimingTickets();
-            restoreUnacceptedShadowEffectsCpuState();
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred surfel-GI packet was rejected"));
-            if(!recovered)
-                failFrameRenderRecovery();
-            return false;
-        }
-        if(!m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
-            *surfelGiFinalStateSeed,
-            deferredTargets.surfelIrradiance.get()
-        )){
+        if(!surfelGiAcceptance.stateReady){
             const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
             if(!recovered)
@@ -2049,34 +2115,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             failFrameRenderRecovery();
             return false;
         }
-        if(surfelGiRunsOnCompute){
-            Core::Texture* const surfelGiComputeScratchTextures[] = {
-                deferredTargets.surfelIrradianceHalf.get(),
-            };
-            Core::Buffer* const surfelGiComputeScratchBuffers[] = {
-                m_rayTracingState.m_surfelPoolBuffer.get(),
-                m_rayTracingState.m_surfelCellHeadBuffer.get(),
-                m_rayTracingState.m_surfelCounterBuffer.get(),
-                m_rayTracingState.m_surfelTraceIndirectArgsBuffer.get(),
-                m_rayTracingState.m_surfelFreeListBuffer.get(),
-                m_rayTracingState.m_surfelPoolSnapshotBuffer.get(),
-                m_rayTracingState.m_surfelCellHeadSnapshotBuffer.get(),
-                m_rayTracingState.m_surfelCounterReadback.get(),
-            };
-            if(!m_surfelGiComputePersistentStateHandoff.buildResourceSubset(
-                *surfelGiFinalStateSeed,
-                surfelGiComputeScratchTextures,
-                LengthOf(surfelGiComputeScratchTextures),
-                surfelGiComputeScratchBuffers,
-                LengthOf(surfelGiComputeScratchBuffers)
-            )){
-                const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
-                discardTimingTickets();
-                if(!recovered)
-                    failFrameRenderRecovery();
+        if(!surfelGiAccepted || !surfelGiSubmissionToken.valid()){
+            const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
+            discardTimingTickets();
+            restoreUnacceptedShadowEffectsCpuState();
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred surfel-GI packet was rejected"));
+            if(!recovered)
                 failFrameRenderRecovery();
-                return false;
-            }
+            return false;
         }
         return true;
     };

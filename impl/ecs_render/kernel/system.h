@@ -185,6 +185,14 @@ private:
         DeferredFrameTargets& deferredTargets,
         bool shadowVisibilityPrepared,
         bool hardwareShadowSupported,
+        Core::GpuTimingSubmissionTicket& shadowVisibilityTimingTicket,
+        Core::GpuTimingSubmissionTicket& softwareCausticsTimingTicket
+    );
+    [[nodiscard]] bool declareSoftwareCausticsTask(
+        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+        DeferredFrameTargets& deferredTargets,
+        bool shadowVisibilityPrepared,
+        const Core::GpuTaskId& shadowVisibilityTask,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     void buildHardwareCausticsTaskGraph(
@@ -192,12 +200,6 @@ private:
         DeferredFrameTargets& deferredTargets,
         bool shadowVisibilityPrepared,
         bool waitsForLaggedLightingHistory,
-        Core::GpuTimingSubmissionTicket& timingTicket
-    );
-    void buildSoftwareCausticsTaskGraph(
-        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
-        DeferredFrameTargets& deferredTargets,
-        bool shadowVisibilityPrepared,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     void buildSurfelGiTaskGraph(
@@ -310,8 +312,9 @@ private:
     Core::GpuExternalCompletionId m_deferredPresentCompositeCompletion;
     Core::GpuExternalCompletionId m_deferredPresentSurfelGiCompletion;
     bool m_deferredPresentTaskGraphValid = false;
-    // Shadow visibility owns its graph task, physical queue, and submission completion.  The manual state handoff
-    // remains only until automatic graph barriers replace this migration bridge.
+    // Shadow visibility and the software-caustics successor share one graph. The latter is present only on the
+    // software route, so its ordering, state seed, and submission token are graph-internal rather than a renderer
+    // completion ladder.
     Core::GpuTaskGraph m_shadowVisibilityTaskGraph;
     Core::GpuTaskGraphAnalysis m_shadowVisibilityTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_shadowVisibilityTaskGraphQueueAssignments;
@@ -319,6 +322,7 @@ private:
     Core::GpuRecordedGraph m_shadowVisibilityRecordedGraph;
     Core::GpuGraphSubmissionTransaction m_shadowVisibilitySubmissionTransaction;
     Core::GpuTaskId m_shadowVisibilityTask;
+    Core::GpuTaskId m_softwareCausticsTask;
     Core::GpuExternalCompletionId m_shadowVisibilityPrefixCompletion;
     bool m_shadowVisibilityTaskGraphValid = false;
     // Hardware dispatch-rays caustics stay on Graphics but own their graph packet and completion imports. The manual
@@ -333,16 +337,6 @@ private:
     Core::GpuExternalCompletionId m_hardwareCausticsPrefixCompletion;
     Core::GpuExternalCompletionId m_hardwareCausticsLaggedHistoryCompletion;
     bool m_hardwareCausticsTaskGraphValid = false;
-    // Software caustics use the parallel graph-owned variant when hardware ray tracing is unavailable.
-    Core::GpuTaskGraph m_softwareCausticsTaskGraph;
-    Core::GpuTaskGraphAnalysis m_softwareCausticsTaskGraphAnalysis;
-    Core::GpuTaskGraphQueueAssignments m_softwareCausticsTaskGraphQueueAssignments;
-    Core::GpuCompiledGraph m_softwareCausticsCompiledGraph;
-    Core::GpuRecordedGraph m_softwareCausticsRecordedGraph;
-    Core::GpuGraphSubmissionTransaction m_softwareCausticsSubmissionTransaction;
-    Core::GpuTaskId m_softwareCausticsTask;
-    Core::GpuExternalCompletionId m_softwareCausticsShadowVisibilityCompletion;
-    bool m_softwareCausticsTaskGraphValid = false;
     // Surfel GI is a coarse graph-owned compute task. Its manual state handoffs remain until the barrier phase,
     // while its producer and consumer completion edges are already graph submissions.
     Core::GpuTaskGraph m_surfelGiTaskGraph;

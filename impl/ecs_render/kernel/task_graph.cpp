@@ -1655,12 +1655,14 @@ void RendererSystem::buildShadowVisibilityTaskGraph(
     DeferredFrameTargets& deferredTargets,
     const bool shadowVisibilityPrepared,
     const bool hardwareShadowSupported,
-    Core::GpuTimingSubmissionTicket& timingTicket
+    Core::GpuTimingSubmissionTicket& shadowVisibilityTimingTicket,
+    Core::GpuTimingSubmissionTicket& softwareCausticsTimingTicket
 ){
     using namespace __hidden_renderer_task_graph;
 
     m_shadowVisibilityTaskGraphValid = false;
     m_shadowVisibilityTask = {};
+    m_softwareCausticsTask = {};
     m_shadowVisibilityPrefixCompletion = {};
     m_shadowVisibilityTaskGraph.reset();
     m_shadowVisibilityTaskGraphAnalysis.reset();
@@ -1969,12 +1971,20 @@ void RendererSystem::buildShadowVisibilityTaskGraph(
         deferredTargets,
         shadowVisibilityPrepared,
         hardwareShadowSupported,
-        timingTicket
+        shadowVisibilityTimingTicket
     );
     if(!m_shadowVisibilityTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shadow-visibility graph task"));
         return;
     }
+    if(!hardwareShadowSupported && !declareSoftwareCausticsTask(
+        input,
+        deferredTargets,
+        shadowVisibilityPrepared,
+        m_shadowVisibilityTask,
+        softwareCausticsTimingTicket
+    ))
+        return;
 
     const auto& device = graphics().getDevice();
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
@@ -2023,7 +2033,7 @@ void RendererSystem::buildShadowVisibilityTaskGraph(
         m_shadowVisibilityCompiledGraph,
         scratchArena
     )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile shadow-visibility task graph"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile shadow-visibility/software-caustics task graph"));
         return;
     }
     m_shadowVisibilityRecordedGraph.reset(m_shadowVisibilityCompiledGraph);
@@ -2306,43 +2316,41 @@ void RendererSystem::buildHardwareCausticsTaskGraph(
 }
 
 
-void RendererSystem::buildSoftwareCausticsTaskGraph(
+bool RendererSystem::declareSoftwareCausticsTask(
     const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
     DeferredFrameTargets& deferredTargets,
     const bool shadowVisibilityPrepared,
+    const Core::GpuTaskId& shadowVisibilityTask,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace __hidden_renderer_task_graph;
 
-    m_softwareCausticsTaskGraphValid = false;
     m_softwareCausticsTask = {};
-    m_softwareCausticsShadowVisibilityCompletion = {};
-    m_softwareCausticsTaskGraph.reset();
-    m_softwareCausticsTaskGraphAnalysis.reset();
-    m_softwareCausticsTaskGraphQueueAssignments.reset();
-    m_softwareCausticsCompiledGraph.reset();
-    m_softwareCausticsRecordedGraph.reset(m_softwareCausticsCompiledGraph);
-    m_softwareCausticsSubmissionTransaction.reset(m_softwareCausticsCompiledGraph);
 
-    // The software producer owns the complete non-hardware path on both a dedicated Compute queue and its
-    // compiler-selected Graphics fallback.
-    if(input.hardwareCaustics || !deferredTargets.valid() || !deferredTargets.bindless.valid())
-        return;
+    // This is the direct successor in the software-effects graph. A distinct Compute family remains an optional
+    // compiler assignment; on other devices the same packet routes through Graphics.
+    if(
+        input.hardwareCaustics
+        || !shadowVisibilityTask.valid()
+        || !deferredTargets.valid()
+        || !deferredTargets.bindless.valid()
+    )
+        return false;
 
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
-        return m_softwareCausticsTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
+        return m_shadowVisibilityTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
     };
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
-        return m_softwareCausticsTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
+        return m_shadowVisibilityTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
     const Core::GpuGraphResourceId worldPosition = importTexture(
         deferredTargets.worldPosition,
-        Name("render.software_caustics.world_position"),
+        Name("render.shadow_visibility.world_position"),
         "G-Buffer World Position"
     );
     const Core::GpuGraphResourceId depth = importTexture(
         deferredTargets.depth,
-        Name("render.software_caustics.depth"),
+        Name("render.shadow_visibility.depth"),
         "G-Buffer Depth"
     );
     const Core::GpuGraphResourceId causticAccumulator = importTexture(
@@ -2372,10 +2380,10 @@ void RendererSystem::buildSoftwareCausticsTaskGraph(
     );
     const Core::GpuGraphResourceId bindlessSlots = importBuffer(
         deferredTargets.bindless.slotsBuffer,
-        Name("render.software_caustics.bindless_slots"),
+        Name("render.shadow_visibility.bindless_slots"),
         "Deferred Bindless Slots"
     );
-    const Core::GpuGraphResourceId sceneGeometryDomain = m_softwareCausticsTaskGraph.importHazardDomain(
+    const Core::GpuGraphResourceId sceneGeometryDomain = m_shadowVisibilityTaskGraph.importHazardDomain(
         HazardDomainDesc(
             Name("render.software_caustics.scene_geometry"),
             "Software BVH Scene Geometry"
@@ -2393,20 +2401,7 @@ void RendererSystem::buildSoftwareCausticsTaskGraph(
         || !sceneGeometryDomain.valid()
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import software-caustics graph resources"));
-        return;
-    }
-
-    Core::GpuExternalCompletionDesc shadowVisibilityCompletionDesc;
-    shadowVisibilityCompletionDesc
-        .setIdentity(Name("render.software_caustics.shadow_visibility_complete"))
-        .setMarkerLabel("Shadow Visibility Complete")
-    ;
-    m_softwareCausticsShadowVisibilityCompletion = m_softwareCausticsTaskGraph.importExternalCompletion(
-        shadowVisibilityCompletionDesc
-    );
-    if(!m_softwareCausticsShadowVisibilityCompletion.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shadow-visibility completion for software caustics"));
-        return;
+        return false;
     }
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
@@ -2434,13 +2429,13 @@ void RendererSystem::buildSoftwareCausticsTaskGraph(
     const bool optionalResourcesImported =
         appendOptionalReadBuffer(
             m_deferredState.m_sceneShadingBuffer,
-            Name("render.software_caustics.scene_shading"),
+            Name("render.shadow_visibility.scene_shading"),
             "Scene Shading",
             Core::ResourceStates::ConstantBuffer
         )
         && appendOptionalReadBuffer(
             m_deferredState.m_lightBuffer,
-            Name("render.software_caustics.lights"),
+            Name("render.shadow_visibility.lights"),
             "Lights",
             Core::ResourceStates::ShaderResource
         )
@@ -2458,31 +2453,32 @@ void RendererSystem::buildSoftwareCausticsTaskGraph(
         )
         && appendOptionalReadBuffer(
             m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer,
-            Name("render.software_caustics.material_context_slots"),
+            Name("render.shadow_visibility.material_context_slots"),
             "Ray Trace Material Context Slots",
             Core::ResourceStates::ConstantBuffer
         )
     ;
     if(!optionalResourcesImported){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a software-caustics dynamic resource"));
-        return;
+        return false;
     }
 
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
+    const Core::GpuTaskId dependencies[] = { shadowVisibilityTask };
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.software_caustics"))
         .setMarkerLabel("Software Caustics")
         .setQueue(ComputeQueueRequest())
         .setScheduling(scheduling)
-        .setExternalDependencies(&m_softwareCausticsShadowVisibilityCompletion, 1u)
+        .setDependencies(dependencies, LengthOf(dependencies))
         .setResourceUses(resourceUses.data(), resourceUses.size())
     ;
     m_softwareCausticsTask = m_raytracingSystem.declareSoftwareCausticsTask(
-        m_softwareCausticsTaskGraph,
+        m_shadowVisibilityTaskGraph,
         desc,
         deferredTargets,
         shadowVisibilityPrepared,
@@ -2490,62 +2486,9 @@ void RendererSystem::buildSoftwareCausticsTaskGraph(
     );
     if(!m_softwareCausticsTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare software-caustics graph task"));
-        return;
+        return false;
     }
-
-    const auto& device = graphics().getDevice();
-    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
-    const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
-    const bool dedicatedAsyncCompute = input.dedicatedAsyncCompute
-        && computeFamilyIndex != Limit<u32>::s_Max
-        && computeFamilyIndex != graphicsFamilyIndex
-    ;
-    const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
-        static_cast<u8>(Core::GpuQueueCapability::Graphics)
-        | static_cast<u8>(Core::GpuQueueCapability::Compute)
-        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
-    );
-    const Core::GpuQueueCapability::Mask computeQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
-        static_cast<u8>(Core::GpuQueueCapability::Compute)
-        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
-    );
-    const Core::GpuPhysicalQueueInfo queues[] = {
-        Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
-            .queueClass = Core::CommandQueue::Graphics,
-            .capabilities = graphicsQueueCapabilities,
-            .familyIndex = graphicsFamilyIndex,
-            .queueIndex = 0u,
-            .dedicated = false,
-        },
-        Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 1u, m_taskGraphDeviceGeneration },
-            .queueClass = Core::CommandQueue::Compute,
-            .capabilities = computeQueueCapabilities,
-            .familyIndex = computeFamilyIndex,
-            .queueIndex = 0u,
-            .dedicated = true,
-        },
-    };
-    const Core::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = dedicatedAsyncCompute ? LengthOf(queues) : 1u,
-    };
-    const Core::GpuTaskGraphCompiler compiler;
-    if(!compiler.compile(
-        m_softwareCausticsTaskGraph,
-        m_softwareCausticsTaskGraphAnalysis,
-        topology,
-        m_softwareCausticsTaskGraphQueueAssignments,
-        m_softwareCausticsCompiledGraph,
-        scratchArena
-    )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile software-caustics task graph"));
-        return;
-    }
-    m_softwareCausticsRecordedGraph.reset(m_softwareCausticsCompiledGraph);
-    m_softwareCausticsSubmissionTransaction.reset(m_softwareCausticsCompiledGraph);
-    m_softwareCausticsTaskGraphValid = true;
+    return true;
 }
 
 

@@ -28,8 +28,8 @@ static constexpr AStringView s_HwRaygenExportName = "CausticHwRayGen";
 static constexpr AStringView s_HwMissExportName = "CausticHwMiss";
 static constexpr AStringView s_HwHitGroupExportName = "CausticHwHitGroup";
 
-// Caustic producers own graph packets independently. The renderer still supplies the temporary manual state handoff
-// until graph barriers replace that migration bridge.
+// Caustic producers own typed graph-task payloads; RendererSystem composes their packet chain. The renderer still
+// supplies declaration-filtered external state until the graph has every producer in the same frame transaction.
 struct SoftwareCausticsGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;

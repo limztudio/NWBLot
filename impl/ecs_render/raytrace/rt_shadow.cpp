@@ -21,8 +21,8 @@ NWB_IMPL_BEGIN
 namespace __hidden_shadow_visibility_task{
 
 
-// Shadow visibility owns its graph packet and submission lifetime.  RendererSystem still provides the temporary
-// state-handoff bridge until the automatic-barrier migration phase replaces it.
+// Shadow visibility owns its graph task; RendererSystem composes the optional software-caustics successor into the
+// same packet chain. It still provides declaration-filtered external state for producers outside that graph.
 struct ShadowVisibilityGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;

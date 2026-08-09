@@ -379,6 +379,16 @@ struct DeferredPresentGraphTask{
     };
 }
 
+[[nodiscard]] static Core::GpuTaskResourceUse ReadTextureUse(
+    const Core::GpuGraphResourceId resource,
+    const Core::TextureSubresourceSet& subresources,
+    const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource
+){
+    Core::GpuTaskResourceUse result = ReadUse(resource, state);
+    result.range.textureSubresources = subresources;
+    return result;
+}
+
 [[nodiscard]] static Core::GpuTaskResourceUse WriteUse(
     const Core::GpuGraphResourceId resource,
     const Core::ResourceStates::Mask state
@@ -389,6 +399,16 @@ struct DeferredPresentGraphTask{
         .requiredState = state,
         .access = Core::GpuTaskResourceAccess::Write,
     };
+}
+
+[[nodiscard]] static Core::GpuTaskResourceUse WriteTextureUse(
+    const Core::GpuGraphResourceId resource,
+    const Core::TextureSubresourceSet& subresources,
+    const Core::ResourceStates::Mask state
+){
+    Core::GpuTaskResourceUse result = WriteUse(resource, state);
+    result.range.textureSubresources = subresources;
+    return result;
 }
 
 [[nodiscard]] static Core::GpuGraphResourceDesc AccelStructResourceDesc(const Name& identity, const AStringView label){
@@ -2441,17 +2461,17 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         dependentEffectsCompletion,
     };
     const Core::GpuTaskResourceUse resourceUses[] = {
-        ReadUse(albedo),
-        ReadUse(normal),
-        ReadUse(worldPosition),
-        ReadUse(depth),
-        ReadUse(shadowVisibility),
-        ReadUse(causticIrradiance),
-        ReadUse(surfelIrradiance),
+        ReadTextureUse(albedo, ECSRenderDetail::s_FramebufferSubresources),
+        ReadTextureUse(normal, ECSRenderDetail::s_FramebufferSubresources),
+        ReadTextureUse(worldPosition, ECSRenderDetail::s_FramebufferSubresources),
+        ReadTextureUse(depth, ECSRenderDetail::s_FramebufferSubresources),
+        ReadTextureUse(shadowVisibility, ECSRenderDetail::s_ShadowVisibilitySubresources),
+        ReadTextureUse(causticIrradiance, ECSRenderDetail::s_FramebufferSubresources),
+        ReadTextureUse(surfelIrradiance, ECSRenderDetail::s_FramebufferSubresources),
         ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer),
         ReadUse(lights),
         ReadUse(bindlessSlots, Core::ResourceStates::ConstantBuffer),
-        WriteUse(opaqueColor, Core::ResourceStates::UnorderedAccess),
+        WriteTextureUse(opaqueColor, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
     };
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;

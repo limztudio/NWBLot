@@ -2522,13 +2522,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // The graph now owns the lighting command list and native recording. State fan-in remains manual only until
-    // compiler-produced barriers replace this temporary bridge.
+    // The graph owns native recording and packet-boundary barriers.  The handoff only seeds actual cross-graph state
+    // until compiled packet-state seeds eliminate renderer-owned fan-in.
     Core::GpuNativePacketRecorder deferredLightingRecorder(device);
     const Core::GpuNativePacketRecordDesc deferredLightingRecordDesc{
         .packet = deferredLightingPacket,
         .initialStates = &m_deferredLightingInputStateHandoff,
         .finalStates = &m_deferredLightingStateHandoff,
+        .applyCompiledBarriers = true,
     };
     const bool deferredLightingRecorded =
         m_deferredLightingTaskGraphValid

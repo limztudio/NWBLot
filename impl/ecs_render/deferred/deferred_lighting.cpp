@@ -294,36 +294,13 @@ bool RendererDeferredSystem::renderDeferredLighting(
     if(useLaggedLightingHistory && (!laggedHistory || !laggedHistory->valid()))
         return false;
 
-    Core::Texture* const shadowVisibility = laggedHistory
-        ? laggedHistory->shadowVisibility.get()
-        : targets.shadowVisibility.get()
-    ;
-    Core::Texture* const causticIrradiance = laggedHistory
-        ? laggedHistory->causticIrradiance.get()
-        : targets.causticIrradiance.get()
-    ;
-    Core::Texture* const surfelIrradiance = laggedHistory
-        ? laggedHistory->surfelIrradiance.get()
-        : targets.surfelIrradiance.get()
-    ;
     const Core::GpuDescriptorHandle resourceSlots = laggedHistory
         ? laggedHistory->slotsBufferDescriptor
         : targets.bindless.slotsBufferDescriptor
     ;
 
-    // Heap writes are persistent descriptors rather than command-state items, so state tracking cannot discover these
-    // resources automatically. Transition every sampled target and the sole storage output explicitly. When the
-    // optional lagged mode is live, only the shadow, caustic, and surfel inputs come from its accepted history; current-frame
-    // G-buffer data and the opaque output always remain current.
-    commandList.setTextureState(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(shadowVisibility, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(causticIrradiance, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(surfelIrradiance, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
-    commandList.setTextureState(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.commitBarriers();
+    // The compiled task graph owns every packet-boundary bindless transition, including the lagged-history variant.
+    // This thunk keeps only its descriptor upload and native lighting commands.
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredLighting, graphics().getDevice(), commandList);
 

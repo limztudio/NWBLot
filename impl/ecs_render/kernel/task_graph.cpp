@@ -1109,21 +1109,28 @@ void RendererSystem::buildShadowPrepareTaskGraph(
 }
 
 
-void RendererSystem::buildGraphicsPrefixTaskGraph(
-    const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     DeferredFrameTargets& deferredTargets,
     const CsgFrameState& csgFrameState,
     const bool hasOpaqueCsgFrameWork,
     const f32 meshViewAspectRatio,
-    const bool shadowVisibilityRunsOnCompute,
-    const bool surfelGiRunsOnCompute,
+    const bool shadowVisibilityExpectedCompute,
+    const bool surfelGiExpectedCompute,
+    const Core::GpuGraphResourceId albedo,
+    const Core::GpuGraphResourceId normal,
+    const Core::GpuGraphResourceId worldPosition,
+    const Core::GpuGraphResourceId depth,
+    const Core::GpuGraphResourceId opaqueColor,
+    const Core::GpuGraphResourceId currentSurfelIrradiance,
+    const Core::GpuGraphResourceId sceneShading,
+    const Core::GpuGraphResourceId lights,
+    const Core::GpuGraphResourceId meshView,
     Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace __hidden_renderer_task_graph;
 
-    m_graphicsPrefixTaskGraphValid = false;
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearTask = {};
@@ -1131,87 +1138,28 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
     m_graphicsPrefixTask = {};
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
-    m_graphicsPrefixTaskGraph.reset();
-    m_graphicsPrefixTaskGraphAnalysis.reset();
-    m_graphicsPrefixTaskGraphQueueAssignments.reset();
-    m_graphicsPrefixCompiledGraph.reset();
-    m_graphicsPrefixRecordedGraph.reset(m_graphicsPrefixCompiledGraph);
-    m_graphicsPrefixSubmissionTransaction.reset(m_graphicsPrefixCompiledGraph);
 
     if(
         !deferredTargets.valid()
         || !m_drawState.m_meshViewBuffer
         || !m_deferredState.m_sceneShadingBuffer
         || !m_deferredState.m_lightBuffer
-    )
-        return;
-
-    const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
-        return m_graphicsPrefixTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
-    };
-    const Core::GpuGraphResourceId albedo = importTexture(
-        deferredTargets.albedo,
-        Name("render.graphics_prefix.albedo"),
-        "Albedo"
-    );
-    const Core::GpuGraphResourceId normal = importTexture(
-        deferredTargets.normal,
-        Name("render.graphics_prefix.normal"),
-        "Normal"
-    );
-    const Core::GpuGraphResourceId worldPosition = importTexture(
-        deferredTargets.worldPosition,
-        Name("render.graphics_prefix.world_position"),
-        "World Position"
-    );
-    const Core::GpuGraphResourceId depth = importTexture(
-        deferredTargets.depth,
-        Name("render.graphics_prefix.depth"),
-        "Depth"
-    );
-    const Core::GpuGraphResourceId opaqueColor = importTexture(
-        deferredTargets.opaqueColor,
-        Name("render.graphics_prefix.opaque_color"),
-        "Opaque Color"
-    );
-    const bool clearSurfelIrradiance = !surfelGiRunsOnCompute && deferredTargets.surfelIrradiance != nullptr;
-    Core::GpuGraphResourceId surfelIrradiance;
-    if(clearSurfelIrradiance){
-        surfelIrradiance = importTexture(
-            deferredTargets.surfelIrradiance,
-            Name("render.graphics_prefix.surfel_irradiance"),
-            "Surfel Irradiance"
-        );
-    }
-    const Core::GpuGraphResourceId sceneShadingBuffer = m_graphicsPrefixTaskGraph.importBuffer(
-        m_deferredState.m_sceneShadingBuffer,
-        BufferResourceDesc(Name("render.graphics_prefix.scene_shading"), "Scene Shading")
-    );
-    const Core::GpuGraphResourceId lightBuffer = m_graphicsPrefixTaskGraph.importBuffer(
-        m_deferredState.m_lightBuffer,
-        BufferResourceDesc(Name("render.graphics_prefix.lights"), "Lights")
-    );
-    const Core::GpuGraphResourceId meshViewBuffer = m_graphicsPrefixTaskGraph.importBuffer(
-        m_drawState.m_meshViewBuffer,
-        BufferResourceDesc(Name("render.graphics_prefix.mesh_view"), "Mesh View")
-    );
-    if(
-        !albedo.valid()
+        || !albedo.valid()
         || !normal.valid()
         || !worldPosition.valid()
         || !depth.valid()
         || !opaqueColor.valid()
-        || (clearSurfelIrradiance && !surfelIrradiance.valid())
-        || !sceneShadingBuffer.valid()
-        || !lightBuffer.valid()
-        || !meshViewBuffer.valid()
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graphics-prefix graph resources"));
-        return;
-    }
+        || !sceneShading.valid()
+        || !lights.valid()
+        || !meshView.valid()
+    )
+        return false;
+    const bool clearSurfelIrradiance = !surfelGiExpectedCompute && deferredTargets.surfelIrradiance != nullptr;
+    if(clearSurfelIrradiance && !currentSurfelIrradiance.valid())
+        return false;
 
     const Core::GpuTaskResourceUse meshViewSetupResourceUses[] = {
-        WriteUse(meshViewBuffer, Core::ResourceStates::ConstantBuffer),
+        WriteUse(meshView, Core::ResourceStates::ConstantBuffer),
     };
     Core::GpuTaskSchedulingHint meshViewSetupScheduling;
     meshViewSetupScheduling.cost = Core::GpuTaskCostHint::Medium;
@@ -1225,7 +1173,7 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
         .setScheduling(meshViewSetupScheduling)
         .setResourceUses(meshViewSetupResourceUses, LengthOf(meshViewSetupResourceUses))
     ;
-    m_graphicsPrefixMeshViewSetupTask = m_graphicsPrefixTaskGraph.addTask<ECSRenderDetail::MeshViewSetupGraphTask>(
+    m_graphicsPrefixMeshViewSetupTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::MeshViewSetupGraphTask>(
         meshViewSetupDesc,
         ECSRenderDetail::MeshViewSetupGraphTask::Payload{
             .renderer = this,
@@ -1234,17 +1182,17 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
             .timingTicket = &timingTicket,
             .ready = &m_graphicsPrefixMeshViewSetupReady,
             .meshViewAspectRatio = meshViewAspectRatio,
-            .shadowVisibilityRunsOnCompute = shadowVisibilityRunsOnCompute,
+            .shadowVisibilityRunsOnCompute = shadowVisibilityExpectedCompute,
         }
     );
     if(!m_graphicsPrefixMeshViewSetupTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare mesh-view setup task"));
-        return;
+        return false;
     }
 
     const Core::GpuTaskResourceUse sceneShadingSetupResourceUses[] = {
-        WriteUse(sceneShadingBuffer, Core::ResourceStates::ConstantBuffer),
-        WriteUse(lightBuffer, Core::ResourceStates::ShaderResource),
+        WriteUse(sceneShading, Core::ResourceStates::ConstantBuffer),
+        WriteUse(lights, Core::ResourceStates::ShaderResource),
     };
     Core::GpuTaskSchedulingHint sceneShadingSetupScheduling;
     sceneShadingSetupScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -1260,7 +1208,7 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
         .setDependencies(&m_graphicsPrefixMeshViewSetupTask, 1u)
         .setResourceUses(sceneShadingSetupResourceUses, LengthOf(sceneShadingSetupResourceUses))
     ;
-    m_graphicsPrefixSceneShadingSetupTask = m_graphicsPrefixTaskGraph.addTask<ECSRenderDetail::SceneShadingSetupGraphTask>(
+    m_graphicsPrefixSceneShadingSetupTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::SceneShadingSetupGraphTask>(
         sceneShadingSetupDesc,
         ECSRenderDetail::SceneShadingSetupGraphTask::Payload{
             .renderer = this,
@@ -1271,7 +1219,7 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
     );
     if(!m_graphicsPrefixSceneShadingSetupTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare scene-shading setup task"));
-        return;
+        return false;
     }
 
     {
@@ -1305,7 +1253,7 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
         ));
         if(clearSurfelIrradiance){
             clearResourceUses.push_back(WriteTextureUse(
-                surfelIrradiance,
+                currentSurfelIrradiance,
                 ECSRenderDetail::s_FramebufferSubresources,
                 Core::ResourceStates::CopyDest
             ));
@@ -1325,7 +1273,7 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
             .setDependencies(&m_graphicsPrefixSceneShadingSetupTask, 1u)
             .setResourceUses(clearResourceUses.data(), clearResourceUses.size())
         ;
-        m_graphicsPrefixDeferredClearTask = m_graphicsPrefixTaskGraph.addTask<ECSRenderDetail::DeferredClearGraphTask>(
+        m_graphicsPrefixDeferredClearTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::DeferredClearGraphTask>(
             clearDesc,
             ECSRenderDetail::DeferredClearGraphTask::Payload{
                 .renderer = this,
@@ -1337,11 +1285,11 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
     }
     if(!m_graphicsPrefixDeferredClearTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-clear task"));
-        return;
+        return false;
     }
 
     const Core::GpuTaskResourceUse gbufferResourceUses[] = {
-        ReadUse(meshViewBuffer, Core::ResourceStates::ConstantBuffer),
+        ReadUse(meshView, Core::ResourceStates::ConstantBuffer),
         WriteUse(albedo, Core::ResourceStates::RenderTarget),
         WriteUse(normal, Core::ResourceStates::RenderTarget),
         WriteUse(worldPosition, Core::ResourceStates::RenderTarget),
@@ -1361,7 +1309,7 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
         .setDependencies(&m_graphicsPrefixDeferredClearTask, 1u)
         .setResourceUses(gbufferResourceUses, LengthOf(gbufferResourceUses))
     ;
-    m_graphicsPrefixGbufferTask = m_graphicsPrefixTaskGraph.addTask<ECSRenderDetail::GbufferGraphTask>(
+    m_graphicsPrefixGbufferTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::GbufferGraphTask>(
         gbufferDesc,
         ECSRenderDetail::GbufferGraphTask::Payload{
             .renderer = this,
@@ -1375,11 +1323,11 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
     );
     if(!m_graphicsPrefixGbufferTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque G-buffer task"));
-        return;
+        return false;
     }
 
     const Core::GpuTaskResourceUse normalizeResourceUses[] = {
-        ReadUse(meshViewBuffer, Core::ResourceStates::ConstantBuffer),
+        ReadUse(meshView, Core::ResourceStates::ConstantBuffer),
         ReadUse(normal, Core::ResourceStates::ShaderResource),
         ReadUse(worldPosition, Core::ResourceStates::ShaderResource),
         ReadUse(depth, Core::ResourceStates::ShaderResource),
@@ -1398,75 +1346,21 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
         .setDependencies(&m_graphicsPrefixGbufferTask, 1u)
         .setResourceUses(normalizeResourceUses, LengthOf(normalizeResourceUses))
     ;
-    m_graphicsPrefixTask = m_graphicsPrefixTaskGraph.addTask<PostGbufferNormalizeGraphTask>(
+    m_graphicsPrefixTask = m_deferredLightingTaskGraph.addTask<PostGbufferNormalizeGraphTask>(
         normalizeDesc,
         PostGbufferNormalizeGraphTask::Payload{
             .raytracingSystem = &m_raytracingSystem,
             .targets = &deferredTargets,
             .asyncPrefixTiming = &asyncPrefixTiming,
             .timingTicket = &timingTicket,
-            .shadowVisibilityRunsOnCompute = shadowVisibilityRunsOnCompute,
+            .shadowVisibilityRunsOnCompute = shadowVisibilityExpectedCompute,
         }
     );
     if(!m_graphicsPrefixTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare post-G-buffer normalization task"));
-        return;
+        return false;
     }
-
-    const auto& device = graphics().getDevice();
-    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
-    const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
-    const bool dedicatedAsyncCompute = input.dedicatedAsyncCompute
-        && computeFamilyIndex != Limit<u32>::s_Max
-        && computeFamilyIndex != graphicsFamilyIndex
-    ;
-    const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
-        static_cast<u8>(Core::GpuQueueCapability::Graphics)
-        | static_cast<u8>(Core::GpuQueueCapability::Compute)
-        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
-    );
-    const Core::GpuQueueCapability::Mask computeQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
-        static_cast<u8>(Core::GpuQueueCapability::Compute)
-        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
-    );
-    const Core::GpuPhysicalQueueInfo queues[] = {
-        Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
-            .queueClass = Core::CommandQueue::Graphics,
-            .capabilities = graphicsQueueCapabilities,
-            .familyIndex = graphicsFamilyIndex,
-            .queueIndex = 0u,
-            .dedicated = false,
-        },
-        Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 1u, m_taskGraphDeviceGeneration },
-            .queueClass = Core::CommandQueue::Compute,
-            .capabilities = computeQueueCapabilities,
-            .familyIndex = computeFamilyIndex,
-            .queueIndex = 0u,
-            .dedicated = true,
-        },
-    };
-    const Core::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = dedicatedAsyncCompute ? LengthOf(queues) : 1u,
-    };
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-    const Core::GpuTaskGraphCompiler compiler;
-    if(!compiler.compile(
-        m_graphicsPrefixTaskGraph,
-        m_graphicsPrefixTaskGraphAnalysis,
-        topology,
-        m_graphicsPrefixTaskGraphQueueAssignments,
-        m_graphicsPrefixCompiledGraph,
-        scratchArena
-    )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile graphics-prefix task graph"));
-        return;
-    }
-    m_graphicsPrefixRecordedGraph.reset(m_graphicsPrefixCompiledGraph);
-    m_graphicsPrefixSubmissionTransaction.reset(m_graphicsPrefixCompiledGraph);
-    m_graphicsPrefixTaskGraphValid = true;
+    return true;
 }
 
 
@@ -1482,7 +1376,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     const Core::GpuGraphResourceId sceneShading,
     const Core::GpuGraphResourceId lights,
     const Core::GpuGraphResourceId materialContextSlots,
-    const Core::GpuExternalCompletionId prefixCompletion,
+    const Core::GpuTaskId prefixTask,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace __hidden_renderer_task_graph;
@@ -1498,7 +1392,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         || !currentBindlessSlots.valid()
         || !sceneShading.valid()
         || !lights.valid()
-        || !prefixCompletion.valid()
+        || !prefixTask.valid()
     )
         return false;
 
@@ -1733,7 +1627,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         .setMarkerLabel("Shadow Visibility")
         .setQueue(ComputeQueueRequest())
         .setScheduling(scheduling)
-        .setExternalDependencies(&prefixCompletion, 1u)
+        .setDependencies(&prefixTask, 1u)
         .setResourceUses(resourceUses.data(), resourceUses.size())
     ;
     m_deferredShadowVisibilityTask = m_raytracingSystem.declareShadowVisibilityTask(
@@ -1861,7 +1755,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         )
         && appendOptionalReadBuffer(
             m_drawState.m_meshViewBuffer,
-            Name("render.software_caustics.mesh_view"),
+            Name("render.deferred.mesh_view"),
             "Mesh View",
             Core::ResourceStates::ConstantBuffer
         )
@@ -2078,9 +1972,14 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     const bool clearAvboitTargets,
     const bool hasTransparentRenderers,
     const bool shadowVisibilityPrepared,
+    const bool hasOpaqueCsgFrameWork,
+    const f32 meshViewAspectRatio,
     Core::Framebuffer* const presentationFramebuffer,
     const bool shadowVisibilityExpectedCompute,
+    const bool surfelGiExpectedCompute,
     Core::GpuTimingFrameTransaction& frameTimingTransaction,
+    Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
+    Core::GpuTimingSubmissionTicket& graphicsPrefixTimingTicket,
     Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
     Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
     Core::GpuTimingSubmissionTicket& avboitDepthWarpTimingTicket,
@@ -2099,6 +1998,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     using namespace __hidden_renderer_task_graph;
 
     m_deferredLightingTaskGraphValid = false;
+    m_graphicsPrefixMeshViewSetupTask = {};
+    m_graphicsPrefixSceneShadingSetupTask = {};
+    m_graphicsPrefixDeferredClearTask = {};
+    m_graphicsPrefixGbufferTask = {};
+    m_graphicsPrefixTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
     m_deferredSurfelGiTask = {};
@@ -2112,8 +2016,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredCompositeTask = {};
     m_deferredPresentTask = {};
     m_deferredLaggedLightingHistoryTask = {};
-    m_deferredLightingPrefixCompletion = {};
     m_deferredLightingHistoryCompletion = {};
+    m_graphicsPrefixMeshViewSetupReady = false;
+    m_graphicsPrefixSceneShadingSetupReady = false;
     m_deferredLightingTaskGraph.reset();
     m_deferredLightingTaskGraphAnalysis.reset();
     m_deferredLightingTaskGraphQueueAssignments.reset();
@@ -2153,6 +2058,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     if(
         !deferredTargets.valid()
         || !deferredTargets.bindless.valid()
+        || !m_drawState.m_meshViewBuffer
         || !m_deferredState.m_sceneShadingBuffer
         || !m_deferredState.m_lightBuffer
         || !presentationFramebuffer
@@ -2241,6 +2147,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         m_deferredState.m_lightBuffer,
         Name("render.deferred_lighting.lights"),
         "Lights"
+    );
+    const Core::GpuGraphResourceId meshView = importBuffer(
+        m_drawState.m_meshViewBuffer,
+        Name("render.deferred.mesh_view"),
+        "Mesh View"
     );
     const Core::GpuGraphResourceId bindlessSlots = importBuffer(
         history ? history->slotsBuffer : deferredTargets.bindless.slotsBuffer,
@@ -2373,6 +2284,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         || !opaqueColor.valid()
         || !sceneShading.valid()
         || !lights.valid()
+        || !meshView.valid()
         || !bindlessSlots.valid()
         || !currentBindlessSlots.valid()
         || (m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer && !materialContextSlots.valid())
@@ -2400,16 +2312,27 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         return;
     }
 
-    Core::GpuExternalCompletionDesc lightingPrefixCompletionDesc;
-    lightingPrefixCompletionDesc
-        .setIdentity(Name("render.deferred_lighting.graphics_prefix_complete"))
-        .setMarkerLabel("Graphics Prefix Complete")
-    ;
-    m_deferredLightingPrefixCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
-        lightingPrefixCompletionDesc
-    );
-    if(!m_deferredLightingPrefixCompletion.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graphics-prefix completion for deferred AVBOIT"));
+    if(!declareDeferredGraphicsPrefixTasks(
+        deferredTargets,
+        csgFrameState,
+        hasOpaqueCsgFrameWork,
+        meshViewAspectRatio,
+        shadowVisibilityExpectedCompute,
+        surfelGiExpectedCompute,
+        albedo,
+        normal,
+        worldPosition,
+        depth,
+        opaqueColor,
+        currentSurfelIrradiance,
+        sceneShading,
+        lights,
+        meshView,
+        frameTimingTransaction,
+        asyncPrefixTiming,
+        graphicsPrefixTimingTicket
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred graphics-prefix packet"));
         return;
     }
 
@@ -2442,7 +2365,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         sceneShading,
         lights,
         materialContextSlots,
-        m_deferredLightingPrefixCompletion,
+        m_graphicsPrefixTask,
         shadowVisibilityTimingTicket
     ))
         return;
@@ -2562,7 +2485,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         bool optionalResourcesImported =
             appendOptionalReadBuffer(
                 m_drawState.m_meshViewBuffer,
-                Name("render.hardware_caustics.mesh_view"),
+                Name("render.deferred.mesh_view"),
                 "Mesh View",
                 Core::ResourceStates::ConstantBuffer
             )
@@ -2619,14 +2542,12 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             return;
         }
 
-        const Core::GpuExternalCompletionId hardwareExternalDependencies[2] = {
-            m_deferredLightingPrefixCompletion,
-            m_deferredLightingHistoryCompletion,
-        };
-        const usize hardwareExternalDependencyCount = useLaggedLightingHistory
-            ? LengthOf(hardwareExternalDependencies)
-            : 1u
+        const Core::GpuTaskId hardwareDependencies[] = { m_graphicsPrefixTask };
+        const Core::GpuExternalCompletionId* const hardwareExternalDependencies = useLaggedLightingHistory
+            ? &m_deferredLightingHistoryCompletion
+            : nullptr
         ;
+        const usize hardwareExternalDependencyCount = useLaggedLightingHistory ? 1u : 0u;
         Core::GpuTaskSchedulingHint hardwareScheduling;
         hardwareScheduling.cost = Core::GpuTaskCostHint::Large;
         hardwareScheduling.forceSubmissionBoundary = true;
@@ -2637,6 +2558,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .setMarkerLabel("Hardware Caustics")
             .setQueue(GraphicsQueueRequest())
             .setScheduling(hardwareScheduling)
+            .setDependencies(hardwareDependencies, LengthOf(hardwareDependencies))
             .setExternalDependencies(hardwareExternalDependencies, hardwareExternalDependencyCount)
             .setResourceUses(hardwareResourceUses.data(), hardwareResourceUses.size())
         ;
@@ -2681,7 +2603,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .setMarkerLabel(splitAvboitStages ? "AVBOIT Pre" : "AVBOIT")
         .setQueue(GraphicsQueueRequest())
         .setScheduling(avboitGraphicsScheduling)
-        .setExternalDependencies(&m_deferredLightingPrefixCompletion, 1u)
+        .setDependencies(&m_graphicsPrefixTask, 1u)
         .setResourceUses(avboitPreResourceUses, LengthOf(avboitPreResourceUses))
     ;
     m_deferredAvboitPreTask = m_deferredLightingTaskGraph.addTask<AvboitPreGraphTask>(
@@ -2840,7 +2762,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     ;
 
     const Core::GpuExternalCompletionId laggedLightingExternalDependencies[] = {
-        m_deferredLightingPrefixCompletion,
         m_deferredLightingHistoryCompletion,
     };
     const Core::GpuExternalCompletionId* const lightingExternalDependencies = useLaggedLightingHistory
@@ -2865,12 +2786,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         m_deferredSurfelGiTask,
         avboitFinalTask,
     };
+    const Core::GpuTaskId laggedLightingDependencies[] = { m_graphicsPrefixTask };
     const Core::GpuTaskId* const lightingDependencies = declaresHardwareCaustics
-        ? hardwareLightingDependencies
-        : softwareLightingDependencies
+        ? (useLaggedLightingHistory ? laggedLightingDependencies : hardwareLightingDependencies)
+        : (useLaggedLightingHistory ? laggedLightingDependencies : softwareLightingDependencies)
     ;
     const usize lightingDependencyCount = useLaggedLightingHistory
-        ? 0u
+        ? LengthOf(laggedLightingDependencies)
         : LengthOf(hardwareLightingDependencies)
     ;
     // Active lagged Lighting receives these shared read-only states directly from the accepted prefix source. This

@@ -154,14 +154,22 @@ private:
         DeferredFrameTargets& deferredTargets,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
-    void buildGraphicsPrefixTaskGraph(
-        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+    [[nodiscard]] bool declareDeferredGraphicsPrefixTasks(
         DeferredFrameTargets& deferredTargets,
         const CsgFrameState& csgFrameState,
         bool hasOpaqueCsgFrameWork,
         f32 meshViewAspectRatio,
-        bool shadowVisibilityRunsOnCompute,
-        bool surfelGiRunsOnCompute,
+        bool shadowVisibilityExpectedCompute,
+        bool surfelGiExpectedCompute,
+        Core::GpuGraphResourceId albedo,
+        Core::GpuGraphResourceId normal,
+        Core::GpuGraphResourceId worldPosition,
+        Core::GpuGraphResourceId depth,
+        Core::GpuGraphResourceId opaqueColor,
+        Core::GpuGraphResourceId currentSurfelIrradiance,
+        Core::GpuGraphResourceId sceneShading,
+        Core::GpuGraphResourceId lights,
+        Core::GpuGraphResourceId meshView,
         Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
         Core::GpuTimingSubmissionTicket& timingTicket
@@ -178,7 +186,7 @@ private:
         Core::GpuGraphResourceId sceneShading,
         Core::GpuGraphResourceId lights,
         Core::GpuGraphResourceId materialContextSlots,
-        Core::GpuExternalCompletionId prefixCompletion,
+        Core::GpuTaskId prefixTask,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] bool declareDeferredSoftwareCausticsTask(
@@ -213,9 +221,14 @@ private:
         bool clearAvboitTargets,
         bool hasTransparentRenderers,
         bool shadowVisibilityPrepared,
+        bool hasOpaqueCsgFrameWork,
+        f32 meshViewAspectRatio,
         Core::Framebuffer* presentationFramebuffer,
         bool shadowVisibilityExpectedCompute,
+        bool surfelGiExpectedCompute,
         Core::GpuTimingFrameTransaction& frameTimingTransaction,
+        Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
+        Core::GpuTimingSubmissionTicket& graphicsPrefixTimingTicket,
         Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
         Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
         Core::GpuTimingSubmissionTicket& avboitDepthWarpTimingTicket,
@@ -279,34 +292,21 @@ private:
     Core::GpuGraphSubmissionTransaction m_shadowPrepareSubmissionTransaction;
     Core::GpuTaskId m_shadowPrepareTask;
     bool m_shadowPrepareTaskGraphValid = false;
-    // The graphics prefix is fully native: its graph owns recording, transport, submission, completion, and
-    // lifecycle from mesh-view setup through post-G-buffer normalization.
-    Core::GpuTaskGraph m_graphicsPrefixTaskGraph;
-    Core::GpuTaskGraphAnalysis m_graphicsPrefixTaskGraphAnalysis;
-    Core::GpuTaskGraphQueueAssignments m_graphicsPrefixTaskGraphQueueAssignments;
-    Core::GpuCompiledGraph m_graphicsPrefixCompiledGraph;
-    Core::GpuRecordedGraph m_graphicsPrefixRecordedGraph;
-    Core::GpuGraphSubmissionTransaction m_graphicsPrefixSubmissionTransaction;
-    Core::GpuTaskId m_graphicsPrefixMeshViewSetupTask;
-    Core::GpuTaskId m_graphicsPrefixSceneShadingSetupTask;
-    Core::GpuTaskId m_graphicsPrefixDeferredClearTask;
-    Core::GpuTaskId m_graphicsPrefixGbufferTask;
-    Core::GpuTaskId m_graphicsPrefixTask;
     u16 m_taskGraphDeviceGeneration = 1u;
-    bool m_graphicsPrefixMeshViewSetupReady = false;
-    bool m_graphicsPrefixSceneShadingSetupReady = false;
-    bool m_graphicsPrefixTaskGraphValid = false;
-    // Shadow Visibility, Software Caustics, Surfel GI, AVBOIT, Hardware Caustics, Deferred Lighting, Composite,
-    // Present, and the optional lagged-history copy share one packet graph. The AVBOIT split topology is selected
-    // only when a distinct Compute family exists; otherwise it records as one Graphics packet in the same
-    // transaction as its consumers. Hardware and AVBOIT remain staged Graphics producers; live Lighting consumes
-    // current producers through internal edges, while lagged Lighting reads history on the dedicated Compute lane.
+    // The native Graphics prefix, Shadow Visibility, Software Caustics, Surfel GI, AVBOIT, Hardware Caustics,
+    // Deferred Lighting, Composite, Present, and the optional lagged-history copy share one packet graph. The
+    // prefix's five command lists remain a temporary recording bridge inside its first Graphics packet.
     Core::GpuTaskGraph m_deferredLightingTaskGraph;
     Core::GpuTaskGraphAnalysis m_deferredLightingTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_deferredLightingTaskGraphQueueAssignments;
     Core::GpuCompiledGraph m_deferredLightingCompiledGraph;
     Core::GpuRecordedGraph m_deferredLightingRecordedGraph;
     Core::GpuGraphSubmissionTransaction m_deferredLightingSubmissionTransaction;
+    Core::GpuTaskId m_graphicsPrefixMeshViewSetupTask;
+    Core::GpuTaskId m_graphicsPrefixSceneShadingSetupTask;
+    Core::GpuTaskId m_graphicsPrefixDeferredClearTask;
+    Core::GpuTaskId m_graphicsPrefixGbufferTask;
+    Core::GpuTaskId m_graphicsPrefixTask;
     Core::GpuTaskId m_deferredShadowVisibilityTask;
     Core::GpuTaskId m_deferredSoftwareCausticsTask;
     Core::GpuTaskId m_deferredSurfelGiTask;
@@ -320,8 +320,9 @@ private:
     Core::GpuTaskId m_deferredCompositeTask;
     Core::GpuTaskId m_deferredPresentTask;
     Core::GpuTaskId m_deferredLaggedLightingHistoryTask;
-    Core::GpuExternalCompletionId m_deferredLightingPrefixCompletion;
     Core::GpuExternalCompletionId m_deferredLightingHistoryCompletion;
+    bool m_graphicsPrefixMeshViewSetupReady = false;
+    bool m_graphicsPrefixSceneShadingSetupReady = false;
     bool m_deferredLightingTaskGraphValid = false;
 
 private:

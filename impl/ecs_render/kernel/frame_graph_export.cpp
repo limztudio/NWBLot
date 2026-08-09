@@ -182,19 +182,6 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
         ))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: shadow-preparation graph telemetry export failed"));
     }
-    if(m_graphicsPrefixTaskGraphValid){
-        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-        const Core::GpuTaskGraphTelemetryOptions prefixTelemetryOptions{
-            .queueAssignments = &m_graphicsPrefixTaskGraphQueueAssignments,
-        };
-        if(!m_graphicsPrefixTaskGraph.appendFrameGraphTelemetry(
-            builder,
-            m_graphicsPrefixTaskGraphAnalysis,
-            scratchArena,
-            prefixTelemetryOptions
-        ))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graphics-prefix graph telemetry export failed"));
-    }
     if(m_deferredLightingTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphTelemetryOptions deferredLightingTelemetryOptions{

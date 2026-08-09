@@ -48,12 +48,6 @@ RendererSystem::RendererSystem(
     , m_shadowPrepareCompiledGraph(arena)
     , m_shadowPrepareRecordedGraph(arena)
     , m_shadowPrepareSubmissionTransaction(arena)
-    , m_graphicsPrefixTaskGraph(arena)
-    , m_graphicsPrefixTaskGraphAnalysis(arena)
-    , m_graphicsPrefixTaskGraphQueueAssignments(arena)
-    , m_graphicsPrefixCompiledGraph(arena)
-    , m_graphicsPrefixRecordedGraph(arena)
-    , m_graphicsPrefixSubmissionTransaction(arena)
     , m_deferredLightingTaskGraph(arena)
     , m_deferredLightingTaskGraphAnalysis(arena)
     , m_deferredLightingTaskGraphQueueAssignments(arena)
@@ -234,7 +228,6 @@ void RendererSystem::invalidateResources(){
     m_shadowPrepareCompiledGraph.reset();
     m_shadowPrepareRecordedGraph.reset(m_shadowPrepareCompiledGraph);
     m_shadowPrepareSubmissionTransaction.reset(m_shadowPrepareCompiledGraph);
-    m_graphicsPrefixTaskGraphValid = false;
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearTask = {};
@@ -242,12 +235,6 @@ void RendererSystem::invalidateResources(){
     m_graphicsPrefixTask = {};
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
-    m_graphicsPrefixTaskGraph.reset();
-    m_graphicsPrefixTaskGraphAnalysis.reset();
-    m_graphicsPrefixTaskGraphQueueAssignments.reset();
-    m_graphicsPrefixCompiledGraph.reset();
-    m_graphicsPrefixRecordedGraph.reset(m_graphicsPrefixCompiledGraph);
-    m_graphicsPrefixSubmissionTransaction.reset(m_graphicsPrefixCompiledGraph);
     m_deferredLightingTaskGraphValid = false;
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
@@ -262,7 +249,6 @@ void RendererSystem::invalidateResources(){
     m_deferredCompositeTask = {};
     m_deferredPresentTask = {};
     m_deferredLaggedLightingHistoryTask = {};
-    m_deferredLightingPrefixCompletion = {};
     m_deferredLightingHistoryCompletion = {};
     m_deferredLightingTaskGraph.reset();
     m_deferredLightingTaskGraphAnalysis.reset();
@@ -560,7 +546,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_frameRecoveryCompiledGraph.reset();
     m_frameRecoveryRecordedGraph.reset(m_frameRecoveryCompiledGraph);
     m_frameRecoverySubmissionTransaction.reset(m_frameRecoveryCompiledGraph);
-    m_graphicsPrefixTaskGraphValid = false;
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearTask = {};
@@ -568,12 +553,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_graphicsPrefixTask = {};
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
-    m_graphicsPrefixTaskGraph.reset();
-    m_graphicsPrefixTaskGraphAnalysis.reset();
-    m_graphicsPrefixTaskGraphQueueAssignments.reset();
-    m_graphicsPrefixCompiledGraph.reset();
-    m_graphicsPrefixRecordedGraph.reset(m_graphicsPrefixCompiledGraph);
-    m_graphicsPrefixSubmissionTransaction.reset(m_graphicsPrefixCompiledGraph);
     m_deferredLightingTaskGraphValid = false;
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
@@ -588,7 +567,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredCompositeTask = {};
     m_deferredPresentTask = {};
     m_deferredLaggedLightingHistoryTask = {};
-    m_deferredLightingPrefixCompletion = {};
     m_deferredLightingHistoryCompletion = {};
     m_deferredLightingTaskGraph.reset();
     m_deferredLightingTaskGraphAnalysis.reset();
@@ -670,6 +648,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // otherwise the compiler routes the same task through Graphics without a renderer fallback topology.
     const bool shadowVisibilityExpectedCompute = dedicatedAsyncCompute;
     const bool softwareCausticsExpectedCompute = dedicatedAsyncCompute && !hardwareShadowSupported;
+    const bool surfelGiExpectedCompute = dedicatedAsyncCompute;
     const bool shadowVisibilityPrepared = m_preparedShadowVisibilityReady;
     // Compile every independent graph before native recording. The graphics prefix records all five ordered tasks
     // natively from mesh-view setup through post-G-buffer normalization.
@@ -811,6 +790,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingFrameTransaction frameTimingTransaction(m_graphics.gpuTiming());
     Optional<Core::GpuTimingMeasure> asyncFinalTiming;
     Core::GpuTimingSubmissionTicket deferredPresentTimingTicket(m_graphics.gpuTiming());
+    const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(
+        deferredTargets.framebuffer->getFramebufferInfo()
+    );
     buildDeferredLightingTaskGraph(
         taskGraphInput,
         deferredTargets,
@@ -818,9 +800,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         clearAvboitTargets,
         hasTransparentRenderers,
         shadowVisibilityPrepared,
+        hasOpaqueCsgFrameWork,
+        meshViewAspectRatio,
         framebuffer,
         shadowVisibilityExpectedCompute,
+        surfelGiExpectedCompute,
         frameTimingTransaction,
+        asyncPrefixTiming,
+        graphicsPrefixTimingTicket,
         asyncFinalTiming,
         avboitPreTimingTicket,
         avboitDepthWarpTimingTicket,
@@ -845,9 +832,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             clearAvboitTargets,
             hasTransparentRenderers,
             shadowVisibilityPrepared,
+            hasOpaqueCsgFrameWork,
+            meshViewAspectRatio,
             framebuffer,
             shadowVisibilityExpectedCompute,
+            surfelGiExpectedCompute,
             frameTimingTransaction,
+            asyncPrefixTiming,
+            graphicsPrefixTimingTicket,
             asyncFinalTiming,
             avboitPreTimingTicket,
             avboitDepthWarpTimingTicket,
@@ -865,6 +857,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         );
     }
     const bool captureLaggedLightingHistory = m_deferredLaggedLightingHistoryTask.valid();
+    const Core::GpuSubmissionPacketId graphicsPrefixPacket = m_deferredLightingCompiledGraph.packetForTask(
+        m_graphicsPrefixTask
+    );
     const Core::GpuSubmissionPacketId shadowVisibilityPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredShadowVisibilityTask
     );
@@ -874,6 +869,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = shadowVisibilityPacket.valid()
         ? m_deferredLightingCompiledGraph.queueInfo(
             m_deferredLightingCompiledGraph.packet(shadowVisibilityPacket).queue
+        )
+        : nullptr
+    ;
+    const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue = graphicsPrefixPacket.valid()
+        ? m_deferredLightingCompiledGraph.queueInfo(
+            m_deferredLightingCompiledGraph.packet(graphicsPrefixPacket).queue
         )
         : nullptr
     ;
@@ -981,7 +982,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         : nullptr
     ;
     const bool surfelGiRunsOnCompute = surfelGiQueue && surfelGiQueue->queueClass == Core::CommandQueue::Compute;
-    const usize deferredShadowVisibilityPacketIndex = 0u;
+    const usize graphicsPrefixPacketIndex = 0u;
+    const usize deferredShadowVisibilityPacketIndex = graphicsPrefixPacketIndex + 1u;
     const usize deferredSoftwareCausticsPacketCount = hardwareShadowSupported ? 0u : 1u;
     const usize deferredSoftwareCausticsPacketIndex = deferredShadowVisibilityPacketIndex + 1u;
     const usize deferredSurfelGiPacketIndex = deferredSoftwareCausticsPacketIndex + deferredSoftwareCausticsPacketCount;
@@ -1001,8 +1003,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const usize deferredPacketCount = deferredInitialPacketCount + (captureLaggedLightingHistory ? 1u : 0u);
     if(
         !m_deferredLightingTaskGraphValid
+        || !m_graphicsPrefixMeshViewSetupTask.valid()
+        || !m_graphicsPrefixSceneShadingSetupTask.valid()
+        || !m_graphicsPrefixDeferredClearTask.valid()
+        || !m_graphicsPrefixGbufferTask.valid()
+        || !m_graphicsPrefixTask.valid()
+        || !graphicsPrefixPacket.valid()
+        || !graphicsPrefixQueue
+        || graphicsPrefixQueue->queueClass != Core::CommandQueue::Graphics
         || !m_deferredShadowVisibilityTask.valid()
-        || !m_deferredLightingPrefixCompletion.valid()
         || !shadowVisibilityPacket.valid()
         || !shadowVisibilityQueue
         || shadowVisibilityRunsOnCompute != shadowVisibilityExpectedCompute
@@ -1015,6 +1024,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredSurfelGiTask.valid()
         || !surfelGiPacket.valid()
         || !surfelGiQueue
+        || surfelGiRunsOnCompute != surfelGiExpectedCompute
         || (hardwareShadowSupported && (
             !m_deferredHardwareCausticsTask.valid()
             || !hardwareCausticsPacket.valid()
@@ -1022,7 +1032,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || hardwareCausticsQueue->queueClass != Core::CommandQueue::Graphics
         ))
         || !m_deferredAvboitPreTask.valid()
-        || !m_deferredLightingPrefixCompletion.valid()
         || !avboitPrePacket.valid()
         || !avboitPreQueue
         || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
@@ -1060,6 +1069,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !deferredLightingQueue
         || !deferredCompositeQueue
         || !deferredPresentQueue
+        || m_deferredLightingCompiledGraph.packetIdAt(graphicsPrefixPacketIndex) != graphicsPrefixPacket
         || m_deferredLightingCompiledGraph.packetIdAt(deferredShadowVisibilityPacketIndex) != shadowVisibilityPacket
         || (!hardwareShadowSupported && (
             m_deferredLightingCompiledGraph.packetIdAt(deferredSoftwareCausticsPacketIndex) != softwareCausticsPacket
@@ -1086,7 +1096,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || (laggedAsyncLightingSchedule && deferredCompositeQueue->queueClass != Core::CommandQueue::Graphics)
         || deferredPresentQueue->queueClass != Core::CommandQueue::Graphics
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred AVBOIT/lighting/composite/present was unavailable"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned prefix/effects/deferred packet chain was unavailable"));
         deferredPresentTimingTicket.discard();
         deferredCompositeTimingTicket.discard();
         deferredLightingTimingTicket.discard();
@@ -1133,10 +1143,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredPresentTimingTicket.discard();
     };
     const auto discardUnacceptedGraphPackets = [&](){
-        m_graphicsPrefixSubmissionTransaction.discardUnaccepted(
-            m_graphicsPrefixTaskGraph,
-            m_graphicsPrefixCompiledGraph
-        );
         m_deferredLightingSubmissionTransaction.discardUnaccepted(
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph
@@ -1159,80 +1165,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         resetAbandonedFrameStateHandoffs();
     };
 
-    // The native prefix begins from the serial Graphics preparation snapshot and records mesh-view setup, scene
-    // setup, clear, opaque G-buffer, and normalization as one graph-owned packet.
-    const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(deferredTargets.framebuffer->getFramebufferInfo());
-    buildGraphicsPrefixTaskGraph(
-        taskGraphInput,
-        deferredTargets,
-        csgFrameState,
-        hasOpaqueCsgFrameWork,
-        meshViewAspectRatio,
-        shadowVisibilityRunsOnCompute,
-        surfelGiRunsOnCompute,
-        frameTimingTransaction,
-        asyncPrefixTiming,
-        graphicsPrefixTimingTicket
-    );
-    const Core::GpuSubmissionPacketId graphicsPrefixPacket = m_graphicsPrefixCompiledGraph.packetForTask(
-        m_graphicsPrefixTask
-    );
-    const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue = graphicsPrefixPacket.valid()
-        ? m_graphicsPrefixCompiledGraph.queueInfo(
-            m_graphicsPrefixCompiledGraph.packet(graphicsPrefixPacket).queue
-        )
-        : nullptr
-    ;
-    if(
-        !m_graphicsPrefixTaskGraphValid
-        || !m_graphicsPrefixMeshViewSetupTask.valid()
-        || !m_graphicsPrefixSceneShadingSetupTask.valid()
-        || !m_graphicsPrefixDeferredClearTask.valid()
-        || !m_graphicsPrefixGbufferTask.valid()
-        || !m_graphicsPrefixTask.valid()
-        || !graphicsPrefixQueue
-        || graphicsPrefixQueue->queueClass != Core::CommandQueue::Graphics
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned graphics prefix was unavailable"));
-        discardRenderPackets();
-        return;
-    }
-
-    Core::GpuNativePacketRecorder graphicsPrefixRecorder(device);
-    const Core::GpuNativePacketRecordDesc graphicsPrefixRecordDesc{
-        .packet = graphicsPrefixPacket,
-        .serialStateSeed = shadowPrepareStateSeed,
-    };
-    const bool graphicsPrefixRecorded =
-        m_graphicsPrefixTaskGraphValid
-        && m_graphicsPrefixMeshViewSetupTask.valid()
-        && m_graphicsPrefixSceneShadingSetupTask.valid()
-        && m_graphicsPrefixDeferredClearTask.valid()
-        && m_graphicsPrefixGbufferTask.valid()
-        && m_graphicsPrefixTask.valid()
-        && graphicsPrefixPacket.valid()
-        && graphicsPrefixRecorder.recordPacket(
-            m_graphicsPrefixTaskGraph,
-            m_graphicsPrefixCompiledGraph,
-            graphicsPrefixRecordDesc,
-            m_graphicsPrefixRecordedGraph
-        )
-    ;
-    const Core::CommandListResourceStateHandoff* const graphicsPrefixStateSeed = graphicsPrefixRecorded
-        ? m_graphicsPrefixRecordedGraph.packetFinalStateSeed(graphicsPrefixPacket)
-        : nullptr
-    ;
-    if(!graphicsPrefixRecorded || !graphicsPrefixStateSeed){
-        m_graphicsPrefixSubmissionTransaction.discardUnaccepted(
-            m_graphicsPrefixTaskGraph,
-            m_graphicsPrefixCompiledGraph
-        );
-        graphicsPrefixTimingTicket.discard();
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to capture graph-owned graphics-prefix state"));
-        discardRenderPackets();
-        return;
-    }
-
     const auto appendDeclaredStateSource = [](
         Core::GpuExternalPacketStateSource* const sources,
         const usize capacity,
@@ -1247,15 +1179,46 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return true;
     };
 
-    // Native graph packets seed every declared resource from the native prefix export and, on the dedicated
-    // Compute route, from accepted cross-frame state. No renderer-side input subset or fan-in is needed.
+    // Record the ordered Prefix packet first.  Its complete snapshot remains a local recording source for the
+    // declared read-only paths that intentionally omit an internal state seed to preserve Graphics/Compute overlap.
+    // This never crosses a graph or a submission transaction: all consumers still receive compiler-owned packet
+    // dependencies, while the filtered source gives their command lists the established common prefix state.
+    const Core::GpuNativePacketRecorder deferredRecorder(device);
+    const bool graphicsPrefixRecorded =
+        m_deferredLightingTaskGraphValid
+        && m_graphicsPrefixMeshViewSetupTask.valid()
+        && m_graphicsPrefixSceneShadingSetupTask.valid()
+        && m_graphicsPrefixDeferredClearTask.valid()
+        && m_graphicsPrefixGbufferTask.valid()
+        && m_graphicsPrefixTask.valid()
+        && graphicsPrefixPacket.valid()
+        && deferredRecorder.recordPacket(
+            m_deferredLightingTaskGraph,
+            m_deferredLightingCompiledGraph,
+            Core::GpuNativePacketRecordDesc{
+                .packet = graphicsPrefixPacket,
+                .serialStateSeed = shadowPrepareStateSeed,
+            },
+            m_deferredLightingRecordedGraph
+        )
+    ;
+    const Core::CommandListResourceStateHandoff* const graphicsPrefixFinalStateSeed = graphicsPrefixRecorded
+        ? m_deferredLightingRecordedGraph.packetFinalStateSeed(graphicsPrefixPacket)
+        : nullptr
+    ;
+    if(!graphicsPrefixRecorded || !graphicsPrefixFinalStateSeed){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to retain the graph-owned graphics-prefix state"));
+        discardRenderPackets();
+        return;
+    }
+
     Core::GpuExternalPacketStateSource shadowVisibilityStateSources[3] = {};
     usize shadowVisibilityStateSourceCount = 0u;
     bool shadowVisibilityStateSourcesReady = appendDeclaredStateSource(
         shadowVisibilityStateSources,
         LengthOf(shadowVisibilityStateSources),
         shadowVisibilityStateSourceCount,
-        graphicsPrefixStateSeed
+        graphicsPrefixFinalStateSeed
     );
     if(shadowVisibilityRunsOnCompute && m_shadowComputePersistentStateHandoff.valid()){
         shadowVisibilityStateSourcesReady = shadowVisibilityStateSourcesReady
@@ -1280,14 +1243,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     Core::GpuExternalPacketStateSource softwareCausticsStateSources[3] = {};
     usize softwareCausticsStateSourceCount = 0u;
-    bool softwareCausticsStateSourcesReady = true;
+    bool softwareCausticsStateSourcesReady = appendDeclaredStateSource(
+        softwareCausticsStateSources,
+        LengthOf(softwareCausticsStateSources),
+        softwareCausticsStateSourceCount,
+        graphicsPrefixFinalStateSeed
+    );
     if(!hardwareShadowSupported){
-        softwareCausticsStateSourcesReady = appendDeclaredStateSource(
-            softwareCausticsStateSources,
-            LengthOf(softwareCausticsStateSources),
-            softwareCausticsStateSourceCount,
-            graphicsPrefixStateSeed
-        );
         if(softwareCausticsRunsOnCompute && m_causticsComputePersistentStateHandoff.valid()){
             softwareCausticsStateSourcesReady = softwareCausticsStateSourcesReady
                 && appendDeclaredStateSource(
@@ -1310,18 +1272,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    // Shadow Visibility, optional Software Caustics, and Surfel GI now record in compiler order in the deferred
-    // graph. Every effect starts from the prefix state; cross-frame Compute handoffs remain declaration-filtered.
+    // Shadow Visibility, optional Software Caustics, and Surfel GI record after Prefix in compiler order.
     Core::GpuExternalPacketStateSource surfelGiStateSources[3] = {};
     usize surfelGiStateSourceCount = 0u;
-    bool surfelGiStateSourcesReady =
-        appendDeclaredStateSource(
-            surfelGiStateSources,
-            LengthOf(surfelGiStateSources),
-            surfelGiStateSourceCount,
-            graphicsPrefixStateSeed
-        )
-    ;
+    bool surfelGiStateSourcesReady = appendDeclaredStateSource(
+        surfelGiStateSources,
+        LengthOf(surfelGiStateSources),
+        surfelGiStateSourceCount,
+        graphicsPrefixFinalStateSeed
+    );
     if(surfelGiRunsOnCompute && m_surfelGiComputePersistentStateHandoff.valid()){
         surfelGiStateSourcesReady = surfelGiStateSourcesReady
             && appendDeclaredStateSource(
@@ -1343,27 +1302,22 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ;
     }
 
-    // AVBOIT's raster entry point imports the prefix packet state. Both routes now live in the deferred graph:
-    // active lagged frames use the single Graphics packet, while live frames retain their five-stage G/C chain.
+    // AVBOIT, Hardware Caustics, and lagged Lighting each retain the same filtered Prefix source for their
+    // independent common reads.  Their packet ordering remains internal to this compiled graph.
     m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
     const Core::GpuExternalPacketStateSource avboitPreStateSources[] = {
         Core::GpuExternalPacketStateSource{
-            .states = graphicsPrefixStateSeed,
+            .states = graphicsPrefixFinalStateSeed,
         },
     };
-    // Lighting consumes all current-frame effect outputs through compiler-owned packet seeds. Active lagged Lighting
-    // keeps its direct prefix/history sources for overlap while sampling accepted history instead of current effects.
-    Core::GpuExternalPacketStateSource deferredLightingStateSources[4] = {};
+    Core::GpuExternalPacketStateSource deferredLightingStateSources[1] = {};
     usize deferredLightingStateSourceCount = 0u;
-    bool deferredLightingStateSourcesReady = appendDeclaredStateSource(
+    const bool deferredLightingStateSourcesReady = appendDeclaredStateSource(
         deferredLightingStateSources,
         LengthOf(deferredLightingStateSources),
         deferredLightingStateSourceCount,
-        graphicsPrefixStateSeed
+        graphicsPrefixFinalStateSeed
     );
-    // Hardware Caustics joins Lighting and Composite in one graph. Hardware starts from the prefix state; on the
-    // live route its current irradiance state feeds Lighting internally, while Composite keeps its AVBOIT/prefix
-    // sources declaration-filtered and receives opaque color through the compiler-produced Lighting seed.
     Core::GpuExternalPacketStateSource hardwareCausticsStateSources[1] = {};
     usize hardwareCausticsStateSourceCount = 0u;
     const bool hardwareCausticsStateSourcesReady =
@@ -1372,16 +1326,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             hardwareCausticsStateSources,
             LengthOf(hardwareCausticsStateSources),
             hardwareCausticsStateSourceCount,
-            graphicsPrefixStateSeed
+            graphicsPrefixFinalStateSeed
         )
     ;
     Core::GpuExternalPacketStateSource deferredCompositeStateSources[1] = {};
     usize deferredCompositeStateSourceCount = 0u;
-    bool deferredCompositeStateSourcesReady = appendDeclaredStateSource(
+    const bool deferredCompositeStateSourcesReady = appendDeclaredStateSource(
         deferredCompositeStateSources,
         LengthOf(deferredCompositeStateSources),
         deferredCompositeStateSourceCount,
-        graphicsPrefixStateSeed
+        graphicsPrefixFinalStateSeed
     );
     Core::GpuNativePacketRecordDesc deferredRecordDescs[11] = {};
     usize deferredRecordDescCount = 0u;
@@ -1441,9 +1395,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
         .packet = deferredPresentPacket,
     };
-    const Core::GpuNativePacketRecorder deferredRecorder(device);
     // The optional history tail records after Present accepts because only then are its current-frame producer
-    // snapshots eligible to become external state sources. Record this compile-order prefix packet-by-packet so the
+    // snapshots eligible to become external state sources. Record the remaining compile-order packet range so the
     // late tail can join the same recorded graph and submission transaction without a renderer completion bridge.
     bool deferredPacketsRecorded =
         hardwareCausticsStateSourcesReady
@@ -1453,6 +1406,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && deferredLightingStateSourcesReady
         && deferredCompositeStateSourcesReady
         && m_deferredLightingTaskGraphValid
+        && m_graphicsPrefixMeshViewSetupTask.valid()
+        && m_graphicsPrefixSceneShadingSetupTask.valid()
+        && m_graphicsPrefixDeferredClearTask.valid()
+        && m_graphicsPrefixGbufferTask.valid()
+        && m_graphicsPrefixTask.valid()
+        && graphicsPrefixPacket.valid()
         && m_deferredShadowVisibilityTask.valid()
         && shadowVisibilityPacket.valid()
         && (hardwareShadowSupported || (
@@ -1466,7 +1425,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && hardwareCausticsPacket.valid()
         ))
         && m_deferredAvboitPreTask.valid()
-        && m_deferredLightingPrefixCompletion.valid()
         && avboitPrePacket.valid()
         && (!avboitUsesAsyncCompute || (
             m_deferredAvboitDepthWarpTask.valid()
@@ -1490,7 +1448,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && deferredCompositePacket.valid()
         && deferredPresentPacket.valid()
         && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
-        && deferredRecordDescCount == deferredInitialPacketCount
+        && deferredRecordDescCount == deferredInitialPacketCount - 1u
+        && m_deferredLightingCompiledGraph.packetIdAt(graphicsPrefixPacketIndex) == graphicsPrefixPacket
         && m_deferredLightingCompiledGraph.packetIdAt(deferredShadowVisibilityPacketIndex) == shadowVisibilityPacket
         && (hardwareShadowSupported || (
             m_deferredLightingCompiledGraph.packetIdAt(deferredSoftwareCausticsPacketIndex) == softwareCausticsPacket
@@ -1514,12 +1473,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 == deferredLaggedLightingHistoryPacket
         ))
     ;
-    for(
-        usize packetIndex = 0u;
-        deferredPacketsRecorded && packetIndex < deferredRecordDescCount;
-        ++packetIndex
+    for(usize recordDescIndex = 0u, packetIndex = graphicsPrefixPacketIndex + 1u;
+        deferredPacketsRecorded && recordDescIndex < deferredRecordDescCount;
+        ++recordDescIndex, ++packetIndex
     ){
-        const Core::GpuNativePacketRecordDesc& recordDesc = deferredRecordDescs[packetIndex];
+        const Core::GpuNativePacketRecordDesc& recordDesc = deferredRecordDescs[recordDescIndex];
         if(
             recordDesc.packet != m_deferredLightingCompiledGraph.packetIdAt(packetIndex)
             || !deferredRecorder.recordPacket(
@@ -1536,6 +1494,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph
         );
+        graphicsPrefixTimingTicket.discard();
         avboitPreTimingTicket.discard();
         shadowVisibilityTimingTicket.discard();
         softwareCausticsTimingTicket.discard();
@@ -1567,7 +1526,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         : nullptr
     ;
     if(
-        !shadowVisibilityFinalStateSeed
+        !graphicsPrefixFinalStateSeed
+        || !shadowVisibilityFinalStateSeed
         || (!hardwareShadowSupported && !softwareCausticsFinalStateSeed)
         || !surfelGiFinalStateSeed
         || !deferredLightingFinalStateSeed
@@ -1577,6 +1537,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph
         );
+        graphicsPrefixTimingTicket.discard();
         avboitPreTimingTicket.discard();
         shadowVisibilityTimingTicket.discard();
         softwareCausticsTimingTicket.discard();
@@ -1760,14 +1721,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const auto submitAvboitLightingAndComposite = [&]() -> bool {
         Core::Alloc::ScratchArena deferredScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter deferredSubmitter(device);
-        const Core::GpuTaskGraphExternalCompletionToken avboitPrefixCompletionToken{
-            .completion = m_deferredLightingPrefixCompletion,
-            .token = prefixSubmissionToken,
-        };
         const bool avboitPreAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredAvboitPreTask.valid()
-            && m_deferredLightingPrefixCompletion.valid()
             && avboitPrePacket.valid()
             && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
             && deferredSubmitter.submitPacket(
@@ -1775,8 +1731,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
                 avboitPrePacket,
-                &avboitPrefixCompletionToken,
-                1u,
+                nullptr,
+                0u,
                 m_deferredLightingSubmissionTransaction,
                 deferredScratchArena,
                 &avboitPreTimingTicket
@@ -1877,15 +1833,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return false;
         }
 
-        // Surfel GI, Hardware Caustics, and AVBOIT now share this transaction. Live Lighting waits on their internal
-        // producer edges; active lagged Lighting still receives prefix/history directly for its Compute overlap.
-        Core::GpuTaskGraphExternalCompletionToken deferredLightingCompletionTokens[2] = {};
+        // Prefix and all current-frame producers are internal. Active lagged Lighting alone imports prior history.
+        Core::GpuTaskGraphExternalCompletionToken deferredLightingCompletionTokens[1] = {};
         usize deferredLightingCompletionCount = 0u;
         if(laggedAsyncLightingSchedule){
-            deferredLightingCompletionTokens[deferredLightingCompletionCount++] = {
-                .completion = m_deferredLightingPrefixCompletion,
-                .token = prefixSubmissionToken,
-            };
             deferredLightingCompletionTokens[deferredLightingCompletionCount++] = {
                 .completion = m_deferredLightingHistoryCompletion,
                 .token = m_laggedLightingHistorySubmissionToken,
@@ -2125,31 +2076,33 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return true;
     };
 
-    // The graph owns the prefix packet and publishes the completion consumed by every subsequent producer.
+    // Prefix is the first packet in the shared transaction. Every following task resolves its compiler-owned
+    // dependency token rather than crossing a renderer-side completion bridge.
     {
         Core::Alloc::ScratchArena graphicsPrefixScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter graphicsPrefixSubmitter(device);
         const bool graphicsPrefixAccepted =
-            m_graphicsPrefixTaskGraphValid
+            m_deferredLightingTaskGraphValid
             && m_graphicsPrefixMeshViewSetupTask.valid()
             && m_graphicsPrefixSceneShadingSetupTask.valid()
             && m_graphicsPrefixDeferredClearTask.valid()
             && m_graphicsPrefixGbufferTask.valid()
             && m_graphicsPrefixTask.valid()
+            && graphicsPrefixPacket.valid()
             && graphicsPrefixSubmitter.submitPacket(
-                m_graphicsPrefixTaskGraph,
-                m_graphicsPrefixCompiledGraph,
-                m_graphicsPrefixRecordedGraph,
+                m_deferredLightingTaskGraph,
+                m_deferredLightingCompiledGraph,
+                m_deferredLightingRecordedGraph,
                 graphicsPrefixPacket,
                 nullptr,
                 0u,
-                m_graphicsPrefixSubmissionTransaction,
+                m_deferredLightingSubmissionTransaction,
                 graphicsPrefixScratchArena,
                 &graphicsPrefixTimingTicket
             )
         ;
         prefixSubmissionToken = graphicsPrefixAccepted
-            ? m_graphicsPrefixSubmissionTransaction.packetToken(graphicsPrefixPacket)
+            ? m_deferredLightingSubmissionTransaction.packetToken(graphicsPrefixPacket)
             : Core::QueueSubmissionToken{}
         ;
         if(!prefixSubmissionToken.valid()){
@@ -2157,18 +2110,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return;
         }
         frameTimingTransaction.confirmBeginSubmission();
-        // The shared deferred transaction now stages the effects producer chain first. Every packet after the
-        // prefix resolves its own internal producer tokens rather than crossing a renderer-side graph handoff.
-        const Core::GpuTaskGraphExternalCompletionToken prefixCompletionToken{
-            .completion = m_deferredLightingPrefixCompletion,
-            .token = prefixSubmissionToken,
-        };
         Core::Alloc::ScratchArena shadowEffectsScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter shadowEffectsSubmitter(device);
         const bool shadowVisibilityAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredShadowVisibilityTask.valid()
-            && m_deferredLightingPrefixCompletion.valid()
             && shadowVisibilityPacket.valid()
             && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
             && shadowEffectsSubmitter.submitPacket(
@@ -2176,8 +2122,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
                 shadowVisibilityPacket,
-                &prefixCompletionToken,
-                1u,
+                nullptr,
+                0u,
                 m_deferredLightingSubmissionTransaction,
                 shadowEffectsScratchArena,
                 &shadowVisibilityTimingTicket
@@ -2296,13 +2242,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return;
 
         if(hardwareShadowSupported){
-            Core::GpuTaskGraphExternalCompletionToken hardwareCausticsCompletionTokens[2] = {
-                Core::GpuTaskGraphExternalCompletionToken{
-                    .completion = m_deferredLightingPrefixCompletion,
-                    .token = prefixSubmissionToken,
-                },
-            };
-            usize hardwareCausticsCompletionCount = 1u;
+            Core::GpuTaskGraphExternalCompletionToken hardwareCausticsCompletionTokens[1] = {};
+            usize hardwareCausticsCompletionCount = 0u;
             if(laggedAsyncLightingSchedule){
                 hardwareCausticsCompletionTokens[hardwareCausticsCompletionCount++] = {
                     .completion = m_deferredLightingHistoryCompletion,
@@ -2314,7 +2255,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             const bool hardwareCausticsAccepted =
                 m_deferredLightingTaskGraphValid
                 && m_deferredHardwareCausticsTask.valid()
-                && m_deferredLightingPrefixCompletion.valid()
                 && (!laggedAsyncLightingSchedule || m_deferredLightingHistoryCompletion.valid())
                 && hardwareCausticsPacket.valid()
                 && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount

@@ -191,18 +191,6 @@ private:
         const Core::GpuTaskId& effectsTask,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
-    void buildAvboitTaskGraph(
-        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
-        DeferredFrameTargets& deferredTargets,
-        const CsgFrameState& csgFrameState,
-        bool clearTargets,
-        bool hasTransparentRenderers,
-        Core::GpuTimingSubmissionTicket& preTimingTicket,
-        Core::GpuTimingSubmissionTicket& depthWarpTimingTicket,
-        Core::GpuTimingSubmissionTicket& extinctionTimingTicket,
-        Core::GpuTimingSubmissionTicket& integrationTimingTicket,
-        Core::GpuTimingSubmissionTicket& accumulationTimingTicket
-    );
     void buildDeferredLightingTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         DeferredFrameTargets& deferredTargets,
@@ -215,6 +203,10 @@ private:
         Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
         Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
+        Core::GpuTimingSubmissionTicket& avboitDepthWarpTimingTicket,
+        Core::GpuTimingSubmissionTicket& avboitExtinctionTimingTicket,
+        Core::GpuTimingSubmissionTicket& avboitIntegrationTimingTicket,
+        Core::GpuTimingSubmissionTicket& avboitAccumulationTimingTicket,
         Core::GpuTimingSubmissionTicket& hardwareCausticsTimingTicket,
         Core::GpuTimingSubmissionTicket& lightingTimingTicket,
         Core::GpuTimingSubmissionTicket& compositeTimingTicket,
@@ -309,23 +301,9 @@ private:
     Core::GpuTaskId m_surfelGiTask;
     Core::GpuExternalCompletionId m_shadowVisibilityPrefixCompletion;
     bool m_shadowVisibilityTaskGraphValid = false;
-    // AVBOIT owns its complete raster/compute chain as one graph. The split topology is selected only when a
-    // distinct Compute family exists; otherwise the complete chain records as one Graphics packet.
-    Core::GpuTaskGraph m_avboitTaskGraph;
-    Core::GpuTaskGraphAnalysis m_avboitTaskGraphAnalysis;
-    Core::GpuTaskGraphQueueAssignments m_avboitTaskGraphQueueAssignments;
-    Core::GpuCompiledGraph m_avboitCompiledGraph;
-    Core::GpuRecordedGraph m_avboitRecordedGraph;
-    Core::GpuGraphSubmissionTransaction m_avboitSubmissionTransaction;
-    Core::GpuTaskId m_avboitPreTask;
-    Core::GpuTaskId m_avboitDepthWarpTask;
-    Core::GpuTaskId m_avboitExtinctionTask;
-    Core::GpuTaskId m_avboitIntegrationTask;
-    Core::GpuTaskId m_avboitAccumulationTask;
-    Core::GpuExternalCompletionId m_avboitPrefixCompletion;
-    bool m_avboitTaskGraphValid = false;
-    // Hardware Caustics, Deferred Lighting, Composite, and Present share one packet graph. Active-lagged AVBOIT
-    // Pre joins the same graph while the live route retains its split AVBOIT producer graph.
+    // AVBOIT, Hardware Caustics, Deferred Lighting, Composite, and Present share one packet graph. The AVBOIT
+    // split topology is selected only when a distinct Compute family exists; otherwise it records as one Graphics
+    // packet in the same transaction as its consumers.
     // Hardware and AVBOIT remain staged Graphics producers; live Lighting consumes Hardware through an internal
     // edge, while lagged Lighting reads history and can run independently on the dedicated Compute lane.
     Core::GpuTaskGraph m_deferredLightingTaskGraph;
@@ -336,12 +314,15 @@ private:
     Core::GpuGraphSubmissionTransaction m_deferredLightingSubmissionTransaction;
     Core::GpuTaskId m_deferredHardwareCausticsTask;
     Core::GpuTaskId m_deferredAvboitPreTask;
+    Core::GpuTaskId m_deferredAvboitDepthWarpTask;
+    Core::GpuTaskId m_deferredAvboitExtinctionTask;
+    Core::GpuTaskId m_deferredAvboitIntegrationTask;
+    Core::GpuTaskId m_deferredAvboitAccumulationTask;
     Core::GpuTaskId m_deferredLightingTask;
     Core::GpuTaskId m_deferredCompositeTask;
     Core::GpuTaskId m_deferredPresentTask;
     Core::GpuExternalCompletionId m_deferredHardwareCausticsPrefixCompletion;
     Core::GpuExternalCompletionId m_deferredLightingPrefixCompletion;
-    Core::GpuExternalCompletionId m_deferredAvboitCompletion;
     Core::GpuExternalCompletionId m_deferredLightingSurfelGiCompletion;
     Core::GpuExternalCompletionId m_deferredLightingHistoryCompletion;
     Core::GpuExternalCompletionId m_deferredPresentSurfelGiCompletion;

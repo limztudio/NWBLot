@@ -313,7 +313,7 @@ bool RendererDeferredSystem::renderDeferredLighting(
 
     // Heap writes are persistent descriptors rather than command-state items, so state tracking cannot discover these
     // resources automatically. Transition every sampled target and the sole storage output explicitly. When the
-    // optional lagged mode is live, only the three ray-effect inputs come from its accepted history; current-frame
+    // optional lagged mode is live, only the shadow, caustic, and surfel inputs come from its accepted history; current-frame
     // G-buffer data and the opaque output always remain current.
     commandList.setTextureState(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);

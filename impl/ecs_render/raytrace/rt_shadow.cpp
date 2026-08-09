@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/raytrace/rt_private.h>
 
+#include <core/graphics/task_graph/compiled_graph.h>
+
 #include <global/algorithm.h>
 
 
@@ -11,6 +13,97 @@
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_shadow_visibility_task{
+
+
+// Shadow visibility owns its graph packet and submission lifetime.  RendererSystem still provides the temporary
+// state-handoff bridge until the automatic-barrier migration phase replaces it.
+struct ShadowVisibilityGraphTask{
+    struct Payload{
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+        Core::Graphics* graphics = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        bool prepared = false;
+        bool hardwareShadowSupported = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        if(
+            !payload.raytracingSystem
+            || !payload.graphics
+            || !payload.targets
+            || !payload.timingTicket
+        )
+            return false;
+
+        const Core::GpuPhysicalQueueInfo* const queue = context.graph.queueInfo(context.queue);
+        if(!queue)
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        Optional<Core::GpuTimingMeasure> asyncTiming;
+        if(queue->queueClass == Core::CommandQueue::Compute){
+            asyncTiming.emplace(
+                payload.graphics->gpuTiming(),
+                RendererGpuTimingScope::s_AsyncShadow,
+                payload.graphics->getDevice(),
+                commandList
+            );
+        }
+
+        bool shadowVisibilityWritten = false;
+        if(payload.prepared && payload.hardwareShadowSupported){
+            shadowVisibilityWritten = payload.raytracingSystem->renderShadowVisibility(commandList, *payload.targets);
+            if(!shadowVisibilityWritten)
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
+            else if(
+                !payload.raytracingSystem->softTransparentShadowReady()
+                && payload.raytracingSystem->hybridTransparentShadowReady()
+            ){
+                if(!payload.raytracingSystem->renderGpuBvhShadowVisibility(commandList, *payload.targets, true))
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow pass failed"));
+            }
+        }
+        else if(payload.prepared){
+            shadowVisibilityWritten = payload.raytracingSystem->renderGpuBvhShadowVisibility(
+                commandList,
+                *payload.targets
+            );
+        }
+        // Retain all-lit visibility when no shadow producer records.
+        if(!shadowVisibilityWritten)
+            payload.raytracingSystem->clearShadowVisibility(commandList, *payload.targets);
+
+        if(asyncTiming){
+            asyncTiming->finishTiming(commandList);
+            asyncTiming.reset();
+        }
+        return true;
+    }
+
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        if(payload.raytracingSystem)
+            payload.raytracingSystem->confirmShadowVisibilitySubmission(token);
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.raytracingSystem)
+            payload.raytracingSystem->discardSoftShadowTemporalHistory();
+    }
+};
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -467,6 +560,27 @@ bool RendererRayTracingSystem::renderShadowVisibility(Core::CommandList& command
         );
     }
     return true;
+}
+
+Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    const bool prepared,
+    const bool hardwareShadowSupported,
+    Core::GpuTimingSubmissionTicket& timingTicket
+){
+    return graph.addTask<__hidden_shadow_visibility_task::ShadowVisibilityGraphTask>(
+        desc,
+        __hidden_shadow_visibility_task::ShadowVisibilityGraphTask::Payload{
+            .raytracingSystem = this,
+            .graphics = &graphics(),
+            .targets = &targets,
+            .timingTicket = &timingTicket,
+            .prepared = prepared,
+            .hardwareShadowSupported = hardwareShadowSupported,
+        }
+    );
 }
 
 void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets){

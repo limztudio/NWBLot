@@ -60,13 +60,10 @@ public:
             m_workEnabled[static_cast<usize>(work)] = true;
         };
         enable(FrameExecutionWork::GraphicsPrefix);
-        enable(FrameExecutionWork::RayEffects);
         if(m_hardwareCaustics)
             enable(FrameExecutionWork::HardwareCaustics);
         enable(FrameExecutionWork::AvboitRaster);
         enable(FrameExecutionWork::GraphicsPresent);
-        if(m_usesDedicatedAsyncCompute)
-            enable(FrameExecutionWork::AsyncEffectsTiming);
         if(m_usesAsyncAvboit){
             enable(FrameExecutionWork::AvboitDepthWarp);
             enable(FrameExecutionWork::AvboitExtinction);
@@ -100,10 +97,8 @@ public:
             return false;
 
         switch(consumer){
-        case FrameExecutionWork::RayEffects:
         case FrameExecutionWork::HardwareCaustics:
         case FrameExecutionWork::AvboitRaster:
-        case FrameExecutionWork::AsyncEffectsTiming:
             return producer == FrameExecutionWork::GraphicsPrefix;
         case FrameExecutionWork::AvboitDepthWarp:
             return producer == FrameExecutionWork::AvboitRaster;
@@ -114,7 +109,7 @@ public:
         case FrameExecutionWork::AvboitAccumulation:
             return producer == FrameExecutionWork::AvboitIntegration;
         case FrameExecutionWork::GraphicsPresent:
-            return m_usesLaggedLightingHistory && producer == FrameExecutionWork::RayEffects;
+            return false;
         default:
             return false;
         }

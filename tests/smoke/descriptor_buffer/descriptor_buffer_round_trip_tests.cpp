@@ -1504,7 +1504,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneLetsGraphicsCausticsFeedLi
 
 
 // Deferred lighting and the logical composite now join the dedicated Compute lane after AVBOIT. The exclusive
-// ray-effect outputs therefore remain Compute-local through their only consumer; Graphics imports only the linear
+// shadow, caustic, and surfel outputs therefore remain Compute-local through their only consumer; Graphics imports only the linear
 // composite image for presentation. This exercises the narrow handoffs and verifies that no Graphics acquire/release
 // is needed before the next Compute reuse of shadow/caustic/surfel outputs.
 TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCompositeOnComputeUntilPresent){
@@ -1789,7 +1789,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneKeepsDeferredLightingAndCo
 }
 
 
-// The optional latency trade-off keeps the three exclusive live ray-effect outputs on AsyncCompute, but copies an
+// The optional latency trade-off keeps the three exclusive live effect outputs on AsyncCompute, but copies an
 // accepted snapshot into concurrent, keep-initial-state history images. The next frame's Graphics lighting samples
 // only those history images while AsyncCompute writes a new live triple; final still joins the current producer before
 // the next snapshot. This verifies the precise queue and state topology without relying on a renderer pipeline.

@@ -28,14 +28,12 @@ namespace RendererGpuTimingScope{
 inline constexpr Core::GpuTimingScopeDefinition s_MeshDispatch("render.mesh_dispatch");
 inline constexpr Core::GpuTimingScopeDefinition s_Raster("render.raster");
 inline constexpr Core::GpuTimingScopeDefinition s_Frame("render.frame");
-// Dedicated-queue packet envelopes. render.frame remains the end-to-end critical path, while these isolate the
-// individual submissions and render.async_shadow_effects_overlap reports their measured timestamp intersection.
+// Dedicated-queue packet envelopes. render.frame remains the end-to-end critical path while these isolate graph and
+// remaining packet submissions without assuming a particular physical route.
 inline constexpr Core::GpuTimingScopeDefinition s_AsyncPrefix("render.async_prefix");
 inline constexpr Core::GpuTimingScopeDefinition s_AsyncShadow("render.async_shadow");
 inline constexpr Core::GpuTimingScopeDefinition s_AsyncSurfelGi("render.async_surfel_gi");
-inline constexpr Core::GpuTimingScopeDefinition s_AsyncEffects("render.async_effects");
 inline constexpr Core::GpuTimingScopeDefinition s_AsyncFinal("render.async_final");
-inline constexpr Core::GpuTimingScopeDefinition s_AsyncShadowEffectsOverlap("render.async_shadow_effects_overlap");
 inline constexpr Core::GpuTimingScopeDefinition s_DeferredClear("render.deferred_clear");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowVisibility("render.shadow_visibility");
 // Keep the aggregate shadow envelope for frame-level ranking, and publish its expensive compute phases separately so

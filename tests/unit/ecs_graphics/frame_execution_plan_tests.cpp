@@ -129,7 +129,6 @@ TEST(EcsGraphics, FrameExecutionPlanRoutesRemainingWorkThroughGraphicsWithoutDed
     }
     EXPECT_FALSE(plan.hasWork(FrameExecutionWork::AvboitDepthWarp));
     EXPECT_TRUE(plan.packet(FrameExecutionPacket::GraphicsPrefix).enabled);
-    EXPECT_TRUE(plan.packet(FrameExecutionPacket::AsyncRayEffects).enabled);
     EXPECT_TRUE(plan.packet(FrameExecutionPacket::GraphicsEffects).enabled);
     EXPECT_TRUE(plan.packet(FrameExecutionPacket::GraphicsPresent).enabled);
     EXPECT_TRUE(plan.packetWaitsForExternalToken(
@@ -155,8 +154,8 @@ TEST(EcsGraphics, FrameExecutionPlanKeepsOnlyRemainingWorkInTheParityOracle){
     const FrameExecutionPlan dedicatedPlan(FrameExecutionPlanInput{
         true, false, false, false, true, false,
     });
-    EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::RayEffects), CommandQueue::Compute);
     EXPECT_FALSE(dedicatedPlan.hasWork(FrameExecutionWork::HardwareCaustics));
+    EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::AvboitDepthWarp), CommandQueue::Compute);
     EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::GraphicsPresent), CommandQueue::Graphics);
 
     const FrameExecutionPlan hardwarePlan(FrameExecutionPlanInput{
@@ -232,7 +231,6 @@ TEST(EcsGraphics, FrameExecutionPlanOwnsOnlyTheRemainingOrderedSubmissionBatches
     });
     const FrameExecutionSubmissionBatch::Enum expectedBatches[] = {
         FrameExecutionSubmissionBatch::GraphicsPrefix,
-        FrameExecutionSubmissionBatch::AsyncRayEffects,
         FrameExecutionSubmissionBatch::GraphicsEffects,
         FrameExecutionSubmissionBatch::GraphicsPresent,
     };
@@ -241,7 +239,6 @@ TEST(EcsGraphics, FrameExecutionPlanOwnsOnlyTheRemainingOrderedSubmissionBatches
         EXPECT_EQ(opaquePlan.submissionBatchID(batchIndex), expectedBatches[batchIndex]);
 
     const FrameExecutionPacket::Enum prefixPackets[] = { FrameExecutionPacket::GraphicsPrefix };
-    const FrameExecutionPacket::Enum rayPackets[] = { FrameExecutionPacket::AsyncRayEffects };
     const FrameExecutionPacket::Enum effectsPackets[] = { FrameExecutionPacket::GraphicsEffects };
     const FrameExecutionPacket::Enum presentPackets[] = { FrameExecutionPacket::GraphicsPresent };
     ExpectSubmissionBatch(
@@ -249,12 +246,6 @@ TEST(EcsGraphics, FrameExecutionPlanOwnsOnlyTheRemainingOrderedSubmissionBatches
         FrameExecutionSubmissionBatch::GraphicsPrefix,
         prefixPackets,
         LengthOf(prefixPackets)
-    );
-    ExpectSubmissionBatch(
-        opaquePlan,
-        FrameExecutionSubmissionBatch::AsyncRayEffects,
-        rayPackets,
-        LengthOf(rayPackets)
     );
     ExpectSubmissionBatch(
         opaquePlan,
@@ -306,8 +297,7 @@ TEST(EcsGraphics, FrameExecutionPlanLeavesGraphOwnedLightingOutOfPacketDependenc
         true, true, true, true, false, true,
     });
     const auto& present = activeLaggedPlan.packet(FrameExecutionPacket::GraphicsPresent);
-    ASSERT_EQ(present.waitPacketCount, 1u);
-    EXPECT_EQ(present.waitPackets[0], FrameExecutionPacket::AsyncRayEffects);
+    ASSERT_EQ(present.waitPacketCount, 0u);
     ASSERT_EQ(present.externalWaitCount, 2u);
     EXPECT_EQ(present.externalWaits[0], FrameExecutionExternalWait::DeferredComposite);
     EXPECT_EQ(present.externalWaits[1], FrameExecutionExternalWait::SurfelGi);
@@ -324,16 +314,14 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsRouteOnlyRemainingPlanWork){
     });
     FrameExecutionPacketCommandLists commandLists(plan);
     NWB::Core::CommandList* const prefix = TestCommandList(1u);
-    NWB::Core::CommandList* const rayEffects = TestCommandList(2u);
-    NWB::Core::CommandList* const avboitPre = TestCommandList(3u);
-    NWB::Core::CommandList* const depthWarp = TestCommandList(4u);
-    NWB::Core::CommandList* const extinction = TestCommandList(5u);
-    NWB::Core::CommandList* const integration = TestCommandList(6u);
-    NWB::Core::CommandList* const accumulation = TestCommandList(7u);
-    NWB::Core::CommandList* const present = TestCommandList(8u);
+    NWB::Core::CommandList* const avboitPre = TestCommandList(2u);
+    NWB::Core::CommandList* const depthWarp = TestCommandList(3u);
+    NWB::Core::CommandList* const extinction = TestCommandList(4u);
+    NWB::Core::CommandList* const integration = TestCommandList(5u);
+    NWB::Core::CommandList* const accumulation = TestCommandList(6u);
+    NWB::Core::CommandList* const present = TestCommandList(7u);
     const FrameExecutionWorkCommandListBinding bindings[] = {
         { FrameExecutionWork::GraphicsPrefix, prefix },
-        { FrameExecutionWork::RayEffects, rayEffects },
         { FrameExecutionWork::AvboitRaster, avboitPre },
         { FrameExecutionWork::AvboitDepthWarp, depthWarp },
         { FrameExecutionWork::AvboitExtinction, extinction },
@@ -346,9 +334,6 @@ TEST(EcsGraphics, FrameExecutionPacketCommandListsRouteOnlyRemainingPlanWork){
     const auto prefixLists = commandLists.commandLists(FrameExecutionPacket::GraphicsPrefix);
     ASSERT_EQ(prefixLists.commandListCount, 1u);
     EXPECT_EQ(prefixLists.commandLists[0], prefix);
-    const auto rayLists = commandLists.commandLists(FrameExecutionPacket::AsyncRayEffects);
-    ASSERT_EQ(rayLists.commandListCount, 1u);
-    EXPECT_EQ(rayLists.commandLists[0], rayEffects);
     const auto accumulationLists = commandLists.commandLists(FrameExecutionPacket::GraphicsAvboitAccumulation);
     ASSERT_EQ(accumulationLists.commandListCount, 1u);
     EXPECT_EQ(accumulationLists.commandLists[0], accumulation);
@@ -390,16 +375,6 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateWaitsForGraphCompositeBeforeP
         NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 11u }
     );
     ASSERT_TRUE(submissions.prepareSubmission(
-        FrameExecutionPacket::AsyncRayEffects,
-        submitDesc,
-        waitTokens,
-        LengthOf(waitTokens)
-    ));
-    submissions.acceptSubmission(
-        FrameExecutionPacket::AsyncRayEffects,
-        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 22u }
-    );
-    ASSERT_TRUE(submissions.prepareSubmission(
         FrameExecutionPacket::GraphicsEffects,
         submitDesc,
         waitTokens,
@@ -430,7 +405,7 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateWaitsForGraphCompositeBeforeP
 }
 
 
-TEST(EcsGraphics, FrameExecutionPlanSubmissionStateRetainsLaggedProducerAndGraphCompletions){
+TEST(EcsGraphics, FrameExecutionPlanSubmissionStateRetainsLaggedHistoryAndGraphCompletions){
     const FrameExecutionPlan plan(FrameExecutionPlanInput{
         true, true, true, true, false, true,
     });
@@ -445,17 +420,6 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateRetainsLaggedProducerAndGraph
         FrameExecutionPacket::GraphicsPrefix,
         NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 11u }
     );
-    ASSERT_TRUE(submissions.prepareSubmission(
-        FrameExecutionPacket::AsyncRayEffects,
-        submitDesc,
-        waitTokens,
-        LengthOf(waitTokens)
-    ));
-    ASSERT_EQ(submitDesc.waitTokenCount, 1u);
-    EXPECT_EQ(waitTokens[0].value, 11u);
-    const NWB::Core::QueueSubmissionToken rayEffectsToken{ CommandQueue::Compute, 22u };
-    submissions.acceptSubmission(FrameExecutionPacket::AsyncRayEffects, rayEffectsToken);
-
     ASSERT_TRUE(submissions.prepareSubmission(
         FrameExecutionPacket::GraphicsEffects,
         submitDesc,
@@ -480,12 +444,10 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateRetainsLaggedProducerAndGraph
         waitTokens,
         LengthOf(waitTokens)
     ));
-    ASSERT_EQ(submitDesc.waitTokenCount, 3u);
-    ExpectSubmissionToken(waitTokens[0], rayEffectsToken);
-    ExpectSubmissionToken(waitTokens[1], compositeToken);
-    ExpectSubmissionToken(waitTokens[2], surfelGiToken);
-    ASSERT_NE(submissions.asyncRecoveryWaitToken(), nullptr);
-    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, rayEffectsToken.value);
+    ASSERT_EQ(submitDesc.waitTokenCount, 2u);
+    ExpectSubmissionToken(waitTokens[0], compositeToken);
+    ExpectSubmissionToken(waitTokens[1], surfelGiToken);
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken(), nullptr);
 }
 
 
@@ -499,34 +461,29 @@ TEST(EcsGraphics, FrameExecutionPlanSubmissionStateTracksNewestRemainingComputeP
         FrameExecutionPacket::GraphicsPrefix,
         NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 11u }
     );
-    submissions.acceptSubmission(
-        FrameExecutionPacket::AsyncRayEffects,
-        NWB::Core::QueueSubmissionToken{ CommandQueue::Compute, 22u }
-    );
-    ASSERT_NE(submissions.asyncRecoveryWaitToken(), nullptr);
-    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, 22u);
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken(), nullptr);
 
     submissions.acceptSubmission(
         FrameExecutionPacket::GraphicsAvboitPre,
-        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 33u }
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 22u }
     );
     submissions.acceptSubmission(
         FrameExecutionPacket::AsyncAvboitDepthWarp,
-        NWB::Core::QueueSubmissionToken{ CommandQueue::Compute, 44u }
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Compute, 33u }
     );
     ASSERT_NE(submissions.asyncRecoveryWaitToken(), nullptr);
-    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, 44u);
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, 33u);
 
     submissions.acceptSubmission(
         FrameExecutionPacket::GraphicsAvboitExtinction,
-        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 55u }
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Graphics, 44u }
     );
     submissions.acceptSubmission(
         FrameExecutionPacket::AsyncAvboitIntegration,
-        NWB::Core::QueueSubmissionToken{ CommandQueue::Compute, 66u }
+        NWB::Core::QueueSubmissionToken{ CommandQueue::Compute, 55u }
     );
     ASSERT_NE(submissions.asyncRecoveryWaitToken(), nullptr);
-    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, 66u);
+    EXPECT_EQ(submissions.asyncRecoveryWaitToken()->value, 55u);
 }
 
 

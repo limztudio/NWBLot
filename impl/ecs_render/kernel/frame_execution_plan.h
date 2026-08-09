@@ -29,7 +29,6 @@ namespace ECSRenderDetail{
 namespace FrameExecutionPacket{
     enum Enum : u8{
         GraphicsPrefix,
-        AsyncRayEffects,
         GraphicsEffects,
         GraphicsAvboitPre,
         AsyncAvboitDepthWarp,
@@ -47,7 +46,6 @@ namespace FrameExecutionPacket{
 namespace FrameExecutionSubmissionBatch{
     enum Enum : u8{
         GraphicsPrefix,
-        AsyncRayEffects,
         GraphicsEffects,
         GraphicsPresent,
 
@@ -60,11 +58,9 @@ namespace FrameExecutionSubmissionBatch{
 namespace FrameExecutionWork{
     enum Enum : u8{
         GraphicsPrefix,
-        RayEffects,
         // Only hardware dispatch-rays caustics still use the legacy packet plan. Software caustics are graph-owned.
         HardwareCaustics,
         AvboitRaster,
-        AsyncEffectsTiming,
         AvboitDepthWarp,
         AvboitExtinction,
         AvboitIntegration,
@@ -147,13 +143,6 @@ public:
 
 public:
     explicit FrameExecutionPlan(const FrameExecutionPlanInput& input){
-        const bool usesDedicatedAsyncCompute = input.dedicatedAsyncCompute;
-        // Keep one packet topology on every adapter.  Without a distinct compute-only family the plan routes this
-        // work to Graphics, preserving packet order without a renderer-specific alternate path.
-        const Core::RenderLane::Enum computeWorkLane = usesDedicatedAsyncCompute
-            ? Core::RenderLane::AsyncCompute
-            : Core::RenderLane::Graphics
-        ;
         const bool capturesLaggedLightingHistory =
             input.dedicatedAsyncCompute
             && input.frameLaggedAsyncLightingEnabled
@@ -171,9 +160,6 @@ public:
 
         enablePacket(FrameExecutionPacket::GraphicsPrefix, Core::RenderLane::Graphics);
         assignWork(FrameExecutionWork::GraphicsPrefix, FrameExecutionPacket::GraphicsPrefix);
-        enablePacket(FrameExecutionPacket::AsyncRayEffects, computeWorkLane);
-        addPacketWait(FrameExecutionPacket::AsyncRayEffects, FrameExecutionPacket::GraphicsPrefix);
-        assignWork(FrameExecutionWork::RayEffects, FrameExecutionPacket::AsyncRayEffects);
 
         if(usesAsyncAvboit){
             enablePacket(FrameExecutionPacket::GraphicsAvboitPre, Core::RenderLane::Graphics);
@@ -188,7 +174,6 @@ public:
                     );
             }
             assignWork(FrameExecutionWork::AvboitRaster, FrameExecutionPacket::GraphicsAvboitPre);
-            assignWork(FrameExecutionWork::AsyncEffectsTiming, FrameExecutionPacket::GraphicsAvboitPre);
 
             enablePacket(FrameExecutionPacket::AsyncAvboitDepthWarp, Core::RenderLane::AsyncCompute);
             addPacketWait(FrameExecutionPacket::AsyncAvboitDepthWarp, FrameExecutionPacket::GraphicsAvboitPre);
@@ -218,17 +203,12 @@ public:
                     );
             }
             assignWork(FrameExecutionWork::AvboitRaster, FrameExecutionPacket::GraphicsEffects);
-            // This envelope measures inter-queue async effects, so it is intentionally absent when the same work
-            // is serialized on Graphics.
-            if(usesDedicatedAsyncCompute)
-                assignWork(FrameExecutionWork::AsyncEffectsTiming, FrameExecutionPacket::GraphicsEffects);
         }
 
         enablePacket(FrameExecutionPacket::GraphicsPresent, Core::RenderLane::Graphics);
         addExternalWait(FrameExecutionPacket::GraphicsPresent, FrameExecutionExternalWait::DeferredComposite);
         assignWork(FrameExecutionWork::GraphicsPresent, FrameExecutionPacket::GraphicsPresent);
         if(usesLaggedAsyncLighting){
-            addPacketWait(FrameExecutionPacket::GraphicsPresent, FrameExecutionPacket::AsyncRayEffects);
             addExternalWait(FrameExecutionPacket::GraphicsPresent, FrameExecutionExternalWait::SurfelGi);
         }
 
@@ -392,10 +372,6 @@ private:
         appendSubmissionPacket(
             FrameExecutionSubmissionBatch::GraphicsPrefix,
             FrameExecutionPacket::GraphicsPrefix
-        );
-        appendSubmissionPacket(
-            FrameExecutionSubmissionBatch::AsyncRayEffects,
-            FrameExecutionPacket::AsyncRayEffects
         );
         if(hasWork(FrameExecutionWork::AvboitDepthWarp)){
             appendSubmissionPacket(

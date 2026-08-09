@@ -107,7 +107,7 @@ public:
     virtual bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override;
     [[nodiscard]] CsgShapeRegistry& csgShapeRegistry(){ return m_csgShapeRegistry; }
     [[nodiscard]] const CsgShapeRegistry& csgShapeRegistry()const{ return m_csgShapeRegistry; }
-    // This explicitly trades one frame of ray-effect latency for overlap: Graphics lights the current G-buffer from
+    // This explicitly trades one frame of shadow/caustic/surfel latency for overlap: Graphics lights the current G-buffer from
     // an accepted prior shadow/caustic/surfel snapshot while AsyncCompute produces the next one. It is off by default
     // and self-bootstraps through the normal current-frame path after every toggle or target recreation.
     void setFrameLaggedAsyncLightingEnabled(const bool enabled)noexcept{
@@ -134,7 +134,7 @@ private:
     void resetInvalidatedResourceStateHandoffs()noexcept;
     void resetFrameRecordingStateHandoffs()noexcept;
     void resetAbandonedFrameStateHandoffs()noexcept;
-    void resetRejectedAsyncRayEffectsStateHandoffs()noexcept;
+    void resetRejectedShadowVisibilityStateHandoffs()noexcept;
     void resetLaggedLightingHistoryCopyStateHandoffs()noexcept;
     void invalidateLaggedLightingHistorySubmission()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
@@ -150,6 +150,13 @@ private:
     void buildDeferredCompositeTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         DeferredFrameTargets& deferredTargets,
+        Core::GpuTimingSubmissionTicket& timingTicket
+    );
+    void buildShadowVisibilityTaskGraph(
+        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+        DeferredFrameTargets& deferredTargets,
+        bool shadowVisibilityPrepared,
+        bool hardwareShadowSupported,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     void buildSoftwareCausticsTaskGraph(
@@ -227,6 +234,17 @@ private:
     Core::GpuTaskId m_deferredCompositeTask;
     Core::GpuExternalCompletionId m_deferredCompositeLightingCompletion;
     bool m_deferredCompositeTaskGraphValid = false;
+    // Shadow visibility owns its graph task, physical queue, and submission completion.  The manual state handoff
+    // remains only until automatic graph barriers replace this migration bridge.
+    Core::GpuTaskGraph m_shadowVisibilityTaskGraph;
+    Core::GpuTaskGraphAnalysis m_shadowVisibilityTaskGraphAnalysis;
+    Core::GpuTaskGraphQueueAssignments m_shadowVisibilityTaskGraphQueueAssignments;
+    Core::GpuCompiledGraph m_shadowVisibilityCompiledGraph;
+    Core::GpuRecordedGraph m_shadowVisibilityRecordedGraph;
+    Core::GpuGraphSubmissionTransaction m_shadowVisibilitySubmissionTransaction;
+    Core::GpuTaskId m_shadowVisibilityTask;
+    Core::GpuExternalCompletionId m_shadowVisibilityPrefixCompletion;
+    bool m_shadowVisibilityTaskGraphValid = false;
     // Software caustics own their graph task and native packet. The manual state handoff remains only until the
     // automatic-barrier phase; the hardware dispatch-rays variant retains its separate legacy migration step.
     Core::GpuTaskGraph m_softwareCausticsTaskGraph;
@@ -236,7 +254,7 @@ private:
     Core::GpuRecordedGraph m_softwareCausticsRecordedGraph;
     Core::GpuGraphSubmissionTransaction m_softwareCausticsSubmissionTransaction;
     Core::GpuTaskId m_softwareCausticsTask;
-    Core::GpuExternalCompletionId m_softwareCausticsRayEffectsCompletion;
+    Core::GpuExternalCompletionId m_softwareCausticsShadowVisibilityCompletion;
     bool m_softwareCausticsTaskGraphValid = false;
     // Surfel GI is a coarse graph-owned compute task. Its manual state handoffs remain until the barrier phase,
     // while its producer and consumer completion edges are already graph submissions.
@@ -288,7 +306,7 @@ private:
     Core::CommandListResourceStateHandoff m_shadowVisibilityLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityReturnStateHandoff;
     // Software caustics retain their temporal scratch on the dedicated Compute lane. Hardware dispatch-rays caustics
-    // use the Graphics overlap packet; normal deferred lighting consumes either resolved irradiance on Compute, while
+    // use the Graphics hardware-caustics packet; normal deferred lighting consumes either resolved irradiance on Compute, while
     // the optional lagged path snapshots it for the next Graphics lighting packet.
     Core::CommandListResourceStateHandoff m_causticsComputeBaseStateHandoff;
     Core::CommandListResourceStateHandoff m_causticsComputeInputStateHandoff;
@@ -342,14 +360,9 @@ private:
     Core::CommandListHandle m_deferredClearCommandList;
     Core::CommandListHandle m_gbufferCommandList;
     Core::CommandListHandle m_postGbufferNormalizeCommandList;
-    Core::CommandListHandle m_shadowVisibilityCommandList;
     // A small Graphics recovery packet retires an accepted frame timing scope when a later dependent packet is
     // rejected.  If it joins AsyncCompute, cross-lane resources remain concurrently shared.
     Core::CommandListHandle m_frameRecoveryCommandList;
-    // Empty Graphics packets that bracket the independently recorded effects submission for an aggregate queue-time
-    // envelope. They are submitted only on the dedicated async-shadow schedule.
-    Core::CommandListHandle m_asyncEffectsTimingBeginCommandList;
-    Core::CommandListHandle m_asyncEffectsTimingEndCommandList;
     // Hardware dispatch-rays caustics retain this Graphics list until their later graph-migration step.
     Core::CommandListHandle m_hardwareCausticsCommandList;
     // The hybrid AVBOIT packet uses Graphics lists for raster phases and AsyncCompute lists for its two pure dispatches.

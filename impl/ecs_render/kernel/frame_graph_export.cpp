@@ -199,6 +199,19 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
         ))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred-composite graph telemetry export failed"));
     }
+    if(m_shadowVisibilityTaskGraphValid){
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+        const Core::GpuTaskGraphTelemetryOptions shadowVisibilityTelemetryOptions{
+            .queueAssignments = &m_shadowVisibilityTaskGraphQueueAssignments,
+        };
+        if(!m_shadowVisibilityTaskGraph.appendFrameGraphTelemetry(
+            builder,
+            m_shadowVisibilityTaskGraphAnalysis,
+            scratchArena,
+            shadowVisibilityTelemetryOptions
+        ))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: shadow-visibility graph telemetry export failed"));
+    }
     if(m_softwareCausticsTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphTelemetryOptions softwareCausticsTelemetryOptions{

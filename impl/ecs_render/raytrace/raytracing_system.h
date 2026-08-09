@@ -59,6 +59,14 @@ public:
     // Normalize inputs shared by independently recorded effect packets.
     void normalizePostGbufferPacketResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool renderShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
+    [[nodiscard]] Core::GpuTaskId declareShadowVisibilityTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        bool prepared,
+        bool hardwareShadowSupported,
+        Core::GpuTimingSubmissionTicket& timingTicket
+    );
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearCausticTargets(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearSurfelIrradiance(Core::CommandList& commandList, DeferredFrameTargets& targets);

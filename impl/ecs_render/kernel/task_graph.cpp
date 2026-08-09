@@ -172,14 +172,10 @@ struct LaggedLightingHistoryCopyTask{
     switch(work){
     case Work::GraphicsPrefix:
         return WorkMetadata{ Name("render.task_graph.graphics_prefix"), "Graphics Prefix", GraphicsQueueRequest() };
-    case Work::RayEffects:
-        return WorkMetadata{ Name("render.task_graph.ray_effects"), "Ray Effects", ComputeQueueRequest() };
     case Work::HardwareCaustics:
         return WorkMetadata{ Name("render.task_graph.hardware_caustics"), "Hardware Caustics", GraphicsQueueRequest() };
     case Work::AvboitRaster:
         return WorkMetadata{ Name("render.task_graph.avboit_raster"), "AVBOIT Raster", GraphicsQueueRequest() };
-    case Work::AsyncEffectsTiming:
-        return WorkMetadata{ Name("render.task_graph.async_effects_timing"), "Async Effects Timing", GraphicsQueueRequest() };
     case Work::AvboitDepthWarp:
         return WorkMetadata{ Name("render.task_graph.avboit_depth_warp"), "AVBOIT Depth Warp", ComputeQueueRequest() };
     case Work::AvboitExtinction:
@@ -248,6 +244,16 @@ struct LaggedLightingHistoryCopyTask{
         .requiredState = state,
         .access = Core::GpuTaskResourceAccess::Write,
     };
+}
+
+[[nodiscard]] static Core::GpuGraphResourceDesc AccelStructResourceDesc(const Name& identity, const AStringView label){
+    Core::GpuGraphResourceDesc desc;
+    desc
+        .setIdentity(identity)
+        .setMarkerLabel(label)
+        .setType(Core::GpuGraphResourceType::AccelStruct)
+    ;
+    return desc;
 }
 
 [[nodiscard]] static Core::GpuTaskResourceUse ReadWriteUse(
@@ -338,10 +344,6 @@ void RendererSystem::buildGpuTaskGraph(
     if(
         dedicatedAsyncCompute != input.dedicatedAsyncCompute
         || dedicatedAsyncCompute != graphSchedule.usesDedicatedAsyncCompute()
-        || dedicatedAsyncCompute != frameExecutionPlan.workRunsOnLane(
-            Work::RayEffects,
-            Core::RenderLane::AsyncCompute
-        )
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph queue topology disagrees with the legacy frame plan"));
         return;
@@ -357,11 +359,6 @@ void RendererSystem::buildGpuTaskGraph(
         "World Position"
     );
     const Core::GpuGraphResourceId depth = importTexture(deferredTargets.depth, Name("render.task_graph.depth"), "Depth");
-    const Core::GpuGraphResourceId shadowVisibility = importTexture(
-        deferredTargets.shadowVisibility,
-        Name("render.task_graph.shadow_visibility"),
-        "Shadow Visibility"
-    );
     const Core::GpuGraphResourceId causticIrradiance = importTexture(
         deferredTargets.causticIrradiance,
         Name("render.task_graph.caustic_irradiance"),
@@ -394,7 +391,6 @@ void RendererSystem::buildGpuTaskGraph(
         || !normal.valid()
         || !worldPosition.valid()
         || !depth.valid()
-        || !shadowVisibility.valid()
         || !causticIrradiance.valid()
         || !surfelIrradiance.valid()
         || !opaqueColor.valid()
@@ -494,13 +490,6 @@ void RendererSystem::buildGpuTaskGraph(
         WriteUse(worldPosition, Core::ResourceStates::RenderTarget),
         WriteUse(depth, Core::ResourceStates::DepthWrite),
     };
-    const Core::GpuTaskResourceUse rayEffectsUses[] = {
-        ReadUse(meshViewBuffer),
-        ReadUse(worldPosition),
-        ReadUse(normal),
-        ReadUse(depth, Core::ResourceStates::DepthRead),
-        WriteUse(shadowVisibility, Core::ResourceStates::UnorderedAccess),
-    };
     const Core::GpuTaskResourceUse hardwareCausticsUses[] = {
         ReadUse(worldPosition),
         ReadUse(normal),
@@ -534,10 +523,8 @@ void RendererSystem::buildGpuTaskGraph(
     };
     const bool graphBuilt =
         addWorkTask(Work::GraphicsPrefix, graphicsPrefixUses, LengthOf(graphicsPrefixUses))
-        && addWorkTask(Work::RayEffects, rayEffectsUses, LengthOf(rayEffectsUses))
         && addWorkTask(Work::HardwareCaustics, hardwareCausticsUses, LengthOf(hardwareCausticsUses))
         && addWorkTask(Work::AvboitRaster, avboitRasterUses, LengthOf(avboitRasterUses))
-        && addWorkTask(Work::AsyncEffectsTiming, nullptr, 0u)
         && addWorkTask(Work::AvboitDepthWarp, avboitDepthWarpUses, LengthOf(avboitDepthWarpUses))
         && addWorkTask(Work::AvboitExtinction, avboitExtinctionUses, LengthOf(avboitExtinctionUses))
         && addWorkTask(Work::AvboitIntegration, avboitIntegrationUses, LengthOf(avboitIntegrationUses))
@@ -886,6 +873,379 @@ void RendererSystem::buildLaggedLightingHistoryTaskGraph(
 }
 
 
+void RendererSystem::buildShadowVisibilityTaskGraph(
+    const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+    DeferredFrameTargets& deferredTargets,
+    const bool shadowVisibilityPrepared,
+    const bool hardwareShadowSupported,
+    Core::GpuTimingSubmissionTicket& timingTicket
+){
+    using namespace __hidden_renderer_task_graph;
+
+    m_shadowVisibilityTaskGraphValid = false;
+    m_shadowVisibilityTask = {};
+    m_shadowVisibilityPrefixCompletion = {};
+    m_shadowVisibilityTaskGraph.reset();
+    m_shadowVisibilityTaskGraphAnalysis.reset();
+    m_shadowVisibilityTaskGraphQueueAssignments.reset();
+    m_shadowVisibilityCompiledGraph.reset();
+    m_shadowVisibilityRecordedGraph.reset(m_shadowVisibilityCompiledGraph);
+    m_shadowVisibilitySubmissionTransaction.reset(m_shadowVisibilityCompiledGraph);
+
+    if(!deferredTargets.valid() || !deferredTargets.bindless.valid())
+        return;
+
+    const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
+        return m_shadowVisibilityTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
+    };
+    const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
+        return m_shadowVisibilityTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
+    };
+    const Core::GpuGraphResourceId worldPosition = importTexture(
+        deferredTargets.worldPosition,
+        Name("render.shadow_visibility.world_position"),
+        "G-Buffer World Position"
+    );
+    const Core::GpuGraphResourceId normal = importTexture(
+        deferredTargets.normal,
+        Name("render.shadow_visibility.normal"),
+        "G-Buffer Normal"
+    );
+    const Core::GpuGraphResourceId depth = importTexture(
+        deferredTargets.depth,
+        Name("render.shadow_visibility.depth"),
+        "G-Buffer Depth"
+    );
+    const Core::GpuGraphResourceId shadowVisibility = importTexture(
+        deferredTargets.shadowVisibility,
+        Name("render.shadow_visibility.output"),
+        "Shadow Visibility"
+    );
+    const Core::GpuGraphResourceId bindlessSlots = importBuffer(
+        deferredTargets.bindless.slotsBuffer,
+        Name("render.shadow_visibility.bindless_slots"),
+        "Deferred Bindless Slots"
+    );
+    const Core::GpuGraphResourceId sceneGeometryDomain = m_shadowVisibilityTaskGraph.importHazardDomain(
+        HazardDomainDesc(Name("render.shadow_visibility.scene_geometry"), "Scene Acceleration and Geometry")
+    );
+    if(
+        !worldPosition.valid()
+        || !normal.valid()
+        || !depth.valid()
+        || !shadowVisibility.valid()
+        || !bindlessSlots.valid()
+        || !sceneGeometryDomain.valid()
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shadow-visibility graph resources"));
+        return;
+    }
+
+    Core::GpuExternalCompletionDesc prefixCompletionDesc;
+    prefixCompletionDesc
+        .setIdentity(Name("render.shadow_visibility.graphics_prefix_complete"))
+        .setMarkerLabel("Graphics Prefix Complete")
+    ;
+    m_shadowVisibilityPrefixCompletion = m_shadowVisibilityTaskGraph.importExternalCompletion(prefixCompletionDesc);
+    if(!m_shadowVisibilityPrefixCompletion.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graphics-prefix completion for shadow visibility"));
+        return;
+    }
+
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
+    resourceUses.reserve(40u);
+    resourceUses.push_back(ReadUse(worldPosition));
+    resourceUses.push_back(ReadUse(normal));
+    resourceUses.push_back(ReadUse(depth, Core::ResourceStates::DepthRead));
+    resourceUses.push_back(ReadUse(bindlessSlots, Core::ResourceStates::ConstantBuffer));
+    // Hybrid transparent shadows multiply onto the opaque result, so this remains a read/write declaration even
+    // when the hardware-only path overwrites it.
+    resourceUses.push_back(ReadWriteUse(shadowVisibility, Core::ResourceStates::UnorderedAccess));
+    resourceUses.push_back(ReadUse(sceneGeometryDomain));
+
+    const auto appendOptionalReadWriteTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
+        if(!texture)
+            return true;
+        const Core::GpuGraphResourceId resource = importTexture(texture, identity, label);
+        if(!resource.valid())
+            return false;
+        resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::UnorderedAccess));
+        return true;
+    };
+    const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
+        if(!buffer)
+            return true;
+        const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
+        if(!resource.valid())
+            return false;
+        resourceUses.push_back(ReadUse(resource, state));
+        return true;
+    };
+    const auto appendOptionalReadWriteBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
+        if(!buffer)
+            return true;
+        const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
+        if(!resource.valid())
+            return false;
+        resourceUses.push_back(ReadWriteUse(resource, state));
+        return true;
+    };
+    const auto appendOptionalWriteBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
+        if(!buffer)
+            return true;
+        const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
+        if(!resource.valid())
+            return false;
+        resourceUses.push_back(WriteUse(resource, state));
+        return true;
+    };
+    bool optionalResourcesImported =
+        appendOptionalReadWriteTexture(
+            deferredTargets.shadowCoarseTransmittance,
+            Name("render.shadow_visibility.coarse_transmittance"),
+            "Shadow Coarse Transmittance"
+        )
+        && appendOptionalReadWriteTexture(
+            deferredTargets.shadowSoftHalfA,
+            Name("render.shadow_visibility.soft_half_a"),
+            "Shadow Soft Half A"
+        )
+        && appendOptionalReadWriteTexture(
+            deferredTargets.shadowSoftHalfB,
+            Name("render.shadow_visibility.soft_half_b"),
+            "Shadow Soft Half B"
+        )
+        && appendOptionalReadWriteTexture(
+            deferredTargets.shadowSoftGeometry,
+            Name("render.shadow_visibility.soft_geometry"),
+            "Shadow Soft Geometry"
+        )
+        && appendOptionalReadWriteTexture(
+            deferredTargets.shadowSoftGeometryPrev,
+            Name("render.shadow_visibility.soft_geometry_previous"),
+            "Previous Shadow Soft Geometry"
+        )
+        && appendOptionalReadWriteTexture(
+            deferredTargets.shadowHistA,
+            Name("render.shadow_visibility.history_a"),
+            "Shadow History A"
+        )
+        && appendOptionalReadWriteTexture(
+            deferredTargets.shadowHistB,
+            Name("render.shadow_visibility.history_b"),
+            "Shadow History B"
+        )
+        && appendOptionalReadWriteTexture(
+            deferredTargets.shadowMomentsA,
+            Name("render.shadow_visibility.moments_a"),
+            "Shadow Moments A"
+        )
+        && appendOptionalReadWriteTexture(
+            deferredTargets.shadowMomentsB,
+            Name("render.shadow_visibility.moments_b"),
+            "Shadow Moments B"
+        )
+        && appendOptionalReadWriteTexture(
+            deferredTargets.transparentSoftHalf,
+            Name("render.shadow_visibility.transparent_soft_half"),
+            "Transparent Shadow Soft Half"
+        )
+        && appendOptionalReadWriteTexture(
+            deferredTargets.transparentHistA,
+            Name("render.shadow_visibility.transparent_history_a"),
+            "Transparent Shadow History A"
+        )
+        && appendOptionalReadWriteTexture(
+            deferredTargets.transparentHistB,
+            Name("render.shadow_visibility.transparent_history_b"),
+            "Transparent Shadow History B"
+        )
+        && appendOptionalReadWriteTexture(
+            deferredTargets.transparentMomentsA,
+            Name("render.shadow_visibility.transparent_moments_a"),
+            "Transparent Shadow Moments A"
+        )
+        && appendOptionalReadWriteTexture(
+            deferredTargets.transparentMomentsB,
+            Name("render.shadow_visibility.transparent_moments_b"),
+            "Transparent Shadow Moments B"
+        )
+        && appendOptionalReadBuffer(
+            m_deferredState.m_sceneShadingBuffer,
+            Name("render.shadow_visibility.scene_shading"),
+            "Scene Shading",
+            Core::ResourceStates::ConstantBuffer
+        )
+        && appendOptionalReadBuffer(
+            m_deferredState.m_lightBuffer,
+            Name("render.shadow_visibility.lights"),
+            "Lights",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalReadBuffer(
+            m_rayTracingState.m_sceneBvhNodeBuffer,
+            Name("render.shadow_visibility.scene_bvh_nodes"),
+            "Scene BVH Nodes",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalReadBuffer(
+            m_rayTracingState.m_sceneInstanceBuffer,
+            Name("render.shadow_visibility.scene_instances"),
+            "Scene Instances",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalReadBuffer(
+            m_rayTracingState.m_shadowInstanceMaterialBuffer,
+            Name("render.shadow_visibility.instance_material"),
+            "Shadow Instance Materials",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalReadBuffer(
+            m_rayTracingState.m_shadowMaterialTypedBuffer,
+            Name("render.shadow_visibility.material_typed"),
+            "Shadow Typed Materials",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalReadBuffer(
+            m_rayTracingState.m_shadowInstanceBuffer,
+            Name("render.shadow_visibility.shadow_instances"),
+            "Shadow Instances",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalReadBuffer(
+            m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer,
+            Name("render.shadow_visibility.material_context_slots"),
+            "Ray Trace Material Context Slots",
+            Core::ResourceStates::ConstantBuffer
+        )
+        && appendOptionalReadWriteBuffer(
+            m_rayTracingState.m_swShadowEdgeStatsBuffer,
+            Name("render.shadow_visibility.edge_stats"),
+            "Shadow Edge Statistics",
+            Core::ResourceStates::UnorderedAccess
+        )
+        && appendOptionalWriteBuffer(
+            m_rayTracingState.m_swShadowEdgeStatsReadback,
+            Name("render.shadow_visibility.edge_stats_readback"),
+            "Shadow Edge Statistics Readback",
+            Core::ResourceStates::CopyDest
+        )
+        && appendOptionalReadWriteBuffer(
+            m_rayTracingState.m_swShadowEdgeCounterBuffer,
+            Name("render.shadow_visibility.edge_counter"),
+            "Shadow Edge Counter",
+            Core::ResourceStates::UnorderedAccess
+        )
+        && appendOptionalReadWriteBuffer(
+            m_rayTracingState.m_swShadowEdgeListBuffer,
+            Name("render.shadow_visibility.edge_list"),
+            "Shadow Edge List",
+            Core::ResourceStates::UnorderedAccess
+        )
+        && appendOptionalReadWriteBuffer(
+            m_rayTracingState.m_swShadowIndirectArgsBuffer,
+            Name("render.shadow_visibility.indirect_args"),
+            "Shadow Indirect Arguments",
+            Core::ResourceStates::UnorderedAccess
+        )
+    ;
+    if(m_rayTracingState.m_tlas){
+        const Core::GpuGraphResourceId tlas = m_shadowVisibilityTaskGraph.importAccelStruct(
+            m_rayTracingState.m_tlas,
+            AccelStructResourceDesc(Name("render.shadow_visibility.tlas"), "Scene TLAS")
+        );
+        optionalResourcesImported = optionalResourcesImported && tlas.valid();
+        if(tlas.valid())
+            resourceUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
+    }
+    if(!optionalResourcesImported){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a shadow-visibility dynamic resource"));
+        return;
+    }
+
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Large;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Core::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("render.shadow_visibility"))
+        .setMarkerLabel("Shadow Visibility")
+        .setQueue(ComputeQueueRequest())
+        .setScheduling(scheduling)
+        .setExternalDependencies(&m_shadowVisibilityPrefixCompletion, 1u)
+        .setResourceUses(resourceUses.data(), resourceUses.size())
+    ;
+    m_shadowVisibilityTask = m_raytracingSystem.declareShadowVisibilityTask(
+        m_shadowVisibilityTaskGraph,
+        desc,
+        deferredTargets,
+        shadowVisibilityPrepared,
+        hardwareShadowSupported,
+        timingTicket
+    );
+    if(!m_shadowVisibilityTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shadow-visibility graph task"));
+        return;
+    }
+
+    const auto& device = graphics().getDevice();
+    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
+    const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
+    const bool dedicatedAsyncCompute = input.dedicatedAsyncCompute
+        && computeFamilyIndex != Limit<u32>::s_Max
+        && computeFamilyIndex != graphicsFamilyIndex
+    ;
+    const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
+        static_cast<u8>(Core::GpuQueueCapability::Graphics)
+        | static_cast<u8>(Core::GpuQueueCapability::Compute)
+        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
+    );
+    const Core::GpuQueueCapability::Mask computeQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
+        static_cast<u8>(Core::GpuQueueCapability::Compute)
+        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
+    );
+    const Core::GpuPhysicalQueueInfo queues[] = {
+        Core::GpuPhysicalQueueInfo{
+            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
+            .queueClass = Core::CommandQueue::Graphics,
+            .capabilities = graphicsQueueCapabilities,
+            .familyIndex = graphicsFamilyIndex,
+            .queueIndex = 0u,
+            .dedicated = false,
+        },
+        Core::GpuPhysicalQueueInfo{
+            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphDeviceGeneration },
+            .queueClass = Core::CommandQueue::Compute,
+            .capabilities = computeQueueCapabilities,
+            .familyIndex = computeFamilyIndex,
+            .queueIndex = 0u,
+            .dedicated = true,
+        },
+    };
+    const Core::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = dedicatedAsyncCompute ? LengthOf(queues) : 1u,
+    };
+    const Core::GpuTaskGraphCompiler compiler;
+    if(!compiler.compile(
+        m_shadowVisibilityTaskGraph,
+        m_shadowVisibilityTaskGraphAnalysis,
+        topology,
+        m_shadowVisibilityTaskGraphQueueAssignments,
+        m_shadowVisibilityCompiledGraph,
+        scratchArena
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile shadow-visibility task graph"));
+        return;
+    }
+    m_shadowVisibilityRecordedGraph.reset(m_shadowVisibilityCompiledGraph);
+    m_shadowVisibilitySubmissionTransaction.reset(m_shadowVisibilityCompiledGraph);
+    m_shadowVisibilityTaskGraphValid = true;
+}
+
+
 void RendererSystem::buildSoftwareCausticsTaskGraph(
     const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
     DeferredFrameTargets& deferredTargets,
@@ -896,7 +1256,7 @@ void RendererSystem::buildSoftwareCausticsTaskGraph(
 
     m_softwareCausticsTaskGraphValid = false;
     m_softwareCausticsTask = {};
-    m_softwareCausticsRayEffectsCompletion = {};
+    m_softwareCausticsShadowVisibilityCompletion = {};
     m_softwareCausticsTaskGraph.reset();
     m_softwareCausticsTaskGraphAnalysis.reset();
     m_softwareCausticsTaskGraphQueueAssignments.reset();
@@ -976,16 +1336,16 @@ void RendererSystem::buildSoftwareCausticsTaskGraph(
         return;
     }
 
-    Core::GpuExternalCompletionDesc rayEffectsCompletionDesc;
-    rayEffectsCompletionDesc
-        .setIdentity(Name("render.software_caustics.ray_effects_complete"))
-        .setMarkerLabel("Ray Effects Complete")
+    Core::GpuExternalCompletionDesc shadowVisibilityCompletionDesc;
+    shadowVisibilityCompletionDesc
+        .setIdentity(Name("render.software_caustics.shadow_visibility_complete"))
+        .setMarkerLabel("Shadow Visibility Complete")
     ;
-    m_softwareCausticsRayEffectsCompletion = m_softwareCausticsTaskGraph.importExternalCompletion(
-        rayEffectsCompletionDesc
+    m_softwareCausticsShadowVisibilityCompletion = m_softwareCausticsTaskGraph.importExternalCompletion(
+        shadowVisibilityCompletionDesc
     );
-    if(!m_softwareCausticsRayEffectsCompletion.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import ray-effects completion for software caustics"));
+    if(!m_softwareCausticsShadowVisibilityCompletion.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shadow-visibility completion for software caustics"));
         return;
     }
 
@@ -1058,7 +1418,7 @@ void RendererSystem::buildSoftwareCausticsTaskGraph(
         .setMarkerLabel("Software Caustics")
         .setQueue(ComputeQueueRequest())
         .setScheduling(scheduling)
-        .setExternalDependencies(&m_softwareCausticsRayEffectsCompletion, 1u)
+        .setExternalDependencies(&m_softwareCausticsShadowVisibilityCompletion, 1u)
         .setResourceUses(resourceUses.data(), resourceUses.size())
     ;
     m_softwareCausticsTask = m_raytracingSystem.declareSoftwareCausticsTask(
@@ -1201,9 +1561,9 @@ void RendererSystem::buildSurfelGiTaskGraph(
         .setIdentity(
             waitsForSoftwareCaustics
                 ? Name("render.surfel_gi.software_caustics_complete")
-                : Name("render.surfel_gi.ray_effects_complete")
+                : Name("render.surfel_gi.shadow_visibility_complete")
         )
-        .setMarkerLabel(waitsForSoftwareCaustics ? "Software Caustics Complete" : "Ray Effects Complete")
+        .setMarkerLabel(waitsForSoftwareCaustics ? "Software Caustics Complete" : "Shadow Visibility Complete")
     ;
     m_surfelGiEffectsCompletion = m_surfelGiTaskGraph.importExternalCompletion(effectsCompletionDesc);
     if(!m_surfelGiEffectsCompletion.valid()){

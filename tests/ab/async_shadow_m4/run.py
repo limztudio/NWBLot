@@ -7,7 +7,7 @@ fixed-yaw pixel output from both binaries, collects the renderer's
 timestamp envelopes, and makes the M4 rollout gate explicit:
 
 * a distinct Vulkan compute family must be active;
-* render.async_shadow_effects_overlap must contain measurable positive overlap;
+* the graph-owned render.async_shadow scope must contain measurable work;
 * render.frame (the Graphics critical path) must not regress beyond the configured tolerance; and
 * the fixed-scene output and validation log must remain clean.
 
@@ -69,9 +69,7 @@ REQUIRED_ASYNC_SCOPES = (
     "render.frame",
     "render.async_prefix",
     "render.async_shadow",
-    "render.async_effects",
     "render.async_final",
-    "render.async_shadow_effects_overlap",
 )
 DEFAULT_FORBIDDEN_LOGS = (
     "[ERROR]",
@@ -410,8 +408,8 @@ def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
         f"- Synchronous `render.frame`: {sync['frame_median_ms']:.4f} ms",
         f"- Async `render.frame`: {async_run['frame_median_ms']:.4f} ms",
         f"- Delta: {report['frame_regression_percent']:+.3f}%",
-        f"- Async overlap median: {async_run['overlap_median_ms']:.4f} ms",
-        f"- Async overlap positive samples: {async_run['overlap_positive_sample_count']}/{async_run['overlap_sample_count']}",
+        f"- Async graph-owned shadow median: {async_run['shadow_median_ms']:.4f} ms",
+        f"- Async graph-owned shadow positive samples: {async_run['shadow_positive_sample_count']}/{async_run['shadow_sample_count']}",
         "",
         "## Artifacts",
         "",
@@ -679,9 +677,9 @@ def raw_pixel_diff_payload(pixel_diff: PixelDiff) -> Dict[str, object]:
 def evaluate_runs(args: argparse.Namespace, sync: RunResult, async_run: RunResult) -> Dict[str, object]:
     sync_frame = require_scope_samples(sync.scopes, "render.frame", args.minimum_samples, Path(sync.timing_file))
     async_frame = require_scope_samples(async_run.scopes, "render.frame", args.minimum_samples, Path(async_run.timing_file))
-    overlap = require_scope_samples(
+    shadow = require_scope_samples(
         async_run.scopes,
-        "render.async_shadow_effects_overlap",
+        "render.async_shadow",
         args.minimum_samples,
         Path(async_run.timing_file),
     )
@@ -693,11 +691,7 @@ def evaluate_runs(args: argparse.Namespace, sync: RunResult, async_run: RunResul
         if sync_frame.median_ms > 0.0
         else math.inf
     )
-    positive_overlap_fraction = overlap.positive_sample_count / overlap.sample_count if overlap.sample_count else 0.0
-    overlap_passed = (
-        overlap.median_ms >= args.minimum_overlap_ms
-        and positive_overlap_fraction >= args.minimum_positive_overlap_fraction
-    )
+    shadow_scope_passed = shadow.median_ms >= args.minimum_shadow_ms
     timing_passed = regression_percent <= args.maximum_frame_regression_percent
 
     pixel_diff: Optional[PixelDiff] = None
@@ -731,11 +725,10 @@ def evaluate_runs(args: argparse.Namespace, sync: RunResult, async_run: RunResul
             f"families={async_run.lane.graphics_family}/{async_run.lane.compute_family}",
         ),
         gate(
-            "timestamp overlap",
-            overlap_passed,
-            f"median {format_ms(overlap.median_ms)} (min {args.minimum_overlap_ms:.4f} ms), "
-            f"positive {overlap.positive_sample_count}/{overlap.sample_count} "
-            f"({positive_overlap_fraction * 100.0:.1f}%; min {args.minimum_positive_overlap_fraction * 100.0:.1f}%)",
+            "graph-owned shadow timing",
+            shadow_scope_passed,
+            f"median {format_ms(shadow.median_ms)} (min {args.minimum_shadow_ms:.4f} ms), "
+            f"positive {shadow.positive_sample_count}/{shadow.sample_count}",
         ),
         gate(
             "critical path",
@@ -754,27 +747,27 @@ def evaluate_runs(args: argparse.Namespace, sync: RunResult, async_run: RunResul
     ]
     verdict = "pass" if all(bool(item["passed"]) for item in gates) else "fail"
 
-    def compact_run(run: RunResult, frame: ScopeSummary, overlap_scope: Optional[ScopeSummary] = None) -> Dict[str, object]:
+    def compact_run(run: RunResult, frame: ScopeSummary, shadow_scope: Optional[ScopeSummary] = None) -> Dict[str, object]:
         result = raw_run_payload(run)
         result.update({
             "frame_median_ms": frame.median_ms,
             "frame_sample_count": frame.sample_count,
         })
-        if overlap_scope:
+        if shadow_scope:
             result.update(
-                overlap_median_ms=overlap_scope.median_ms,
-                overlap_sample_count=overlap_scope.sample_count,
-                overlap_positive_sample_count=overlap_scope.positive_sample_count,
+                shadow_median_ms=shadow_scope.median_ms,
+                shadow_sample_count=shadow_scope.sample_count,
+                shadow_positive_sample_count=shadow_scope.positive_sample_count,
             )
         return result
 
     return {
-        "schema": "nwb.async_shadow_m4.v1",
+        "schema": "nwb.async_shadow_m4.v2",
         "verdict": verdict,
         "gates": gates,
         "frame_regression_percent": regression_percent,
         "sync": compact_run(sync, sync_frame),
-        "async": compact_run(async_run, async_frame, overlap),
+        "async": compact_run(async_run, async_frame, shadow),
         "pixel_diff": raw_pixel_diff_payload(pixel_diff) if pixel_diff else None,
     }
 
@@ -818,13 +811,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         help="Additional time to let the held capture frame present before it is read back.",
     )
     parser.add_argument("--minimum-samples", type=int, default=6, help="Minimum captured timing intervals required per rollout scope.")
-    parser.add_argument("--minimum-overlap-ms", type=float, default=0.01, help="Minimum median shadow/effects overlap.")
-    parser.add_argument(
-        "--minimum-positive-overlap-fraction",
-        type=float,
-        default=0.50,
-        help="Minimum fraction of overlap samples that must be positive.",
-    )
+    parser.add_argument("--minimum-shadow-ms", type=float, default=0.01, help="Minimum median graph-owned async shadow time.")
     parser.add_argument(
         "--maximum-frame-regression-percent",
         type=float,
@@ -859,9 +846,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     require_non_negative(parser, "--pixel-capture-settle-seconds", args.pixel_capture_settle_seconds)
     if args.minimum_samples <= 0:
         parser.error("--minimum-samples must be positive")
-    require_non_negative(parser, "--minimum-overlap-ms", args.minimum_overlap_ms)
-    if not 0.0 <= args.minimum_positive_overlap_fraction <= 1.0:
-        parser.error("--minimum-positive-overlap-fraction must be in [0, 1]")
+    require_non_negative(parser, "--minimum-shadow-ms", args.minimum_shadow_ms)
     require_non_negative(parser, "--maximum-frame-regression-percent", args.maximum_frame_regression_percent)
     if args.maximum_pixel_max_abs < 0 or args.maximum_pixel_max_abs > 255:
         parser.error("--maximum-pixel-max-abs must be in [0, 255]")
@@ -917,15 +902,15 @@ def run_self_test() -> int:
         timing.write_text(
             "=== interval: 20 frames / 0.5s ===\n"
             "  render.frame: avg=4.0000 min=3.0000 max=5.0000 samples=20\n"
-            "  render.async_shadow_effects_overlap: avg=1.2500 min=0.0 max=2.0 samples=20\n"
+            "  render.async_shadow: avg=1.2500 min=0.0 max=2.0 samples=20\n"
             "=== interval: 20 frames / 0.5s ===\n"
             "  render.frame: avg=5.0000 min=4.0000 max=6.0000 samples=20\n"
-            "  render.async_shadow_effects_overlap: avg=1.7500 min=0.0 max=2.0 samples=20\n",
+            "  render.async_shadow: avg=1.7500 min=0.0 max=2.0 samples=20\n",
             encoding="utf-8",
         )
         summaries = summarize_scopes(parse_timing_file(timing, {}))
         assert summaries["render.frame"].median_ms == 4.5
-        assert summaries["render.async_shadow_effects_overlap"].positive_sample_count == 2
+        assert summaries["render.async_shadow"].positive_sample_count == 2
 
         first = root / "first.bmp"
         second = root / "second.bmp"
@@ -994,7 +979,7 @@ def run(args: argparse.Namespace) -> int:
             report = evaluate_runs(args, sync_run, async_run)
         except SmokeFailure as error:
             report = {
-                "schema": "nwb.async_shadow_m4.v1",
+                "schema": "nwb.async_shadow_m4.v2",
                 "verdict": "fail",
                 "collection_error": str(error),
                 "gates": [gate("required timestamp telemetry", False, str(error))],

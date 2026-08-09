@@ -1624,6 +1624,52 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
     );
     ASSERT_EQ(compiledGraph.packet(exclusiveComputePacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(exclusiveComputePacket)[0u].producer, exclusiveGraphicsPacket);
+
+    // The combined sharing mask becomes Vulkan-concurrent only when the queues have distinct families. A pair of
+    // logical queues in one family still uses exclusive ownership in the backend, so it must retain the handoff.
+    Graphics::GpuPhysicalQueueInfo sameFamilyComputeQueue = DedicatedComputeQueue();
+    sameFamilyComputeQueue.familyIndex = GraphicsQueue().familyIndex;
+    const Graphics::GpuPhysicalQueueInfo sameFamilyQueues[] = {
+        GraphicsQueue(),
+        sameFamilyComputeQueue,
+    };
+    const Graphics::GpuTaskGraphQueueTopology sameFamilyTopology{
+        .queues = sameFamilyQueues,
+        .queueCount = LengthOf(sameFamilyQueues),
+    };
+    Graphics::GpuTaskGraphAnalysis sameFamilyAnalysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments sameFamilyAssignments(testArena.arena);
+    Graphics::GpuCompiledGraph sameFamilyCompiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(
+        graph,
+        sameFamilyAnalysis,
+        sameFamilyTopology,
+        sameFamilyAssignments,
+        sameFamilyCompiledGraph
+    ));
+    const Graphics::GpuSubmissionPacketId sameFamilyGraphicsPacket = sameFamilyCompiledGraph.packetForTask(
+        concurrentGraphics
+    );
+    const Graphics::GpuSubmissionPacketId sameFamilyComputePacket = sameFamilyCompiledGraph.packetForTask(
+        concurrentCompute
+    );
+    const Graphics::GpuCompiledTask* const sameFamilyCompiledCompute = sameFamilyCompiledGraph.findTask(
+        concurrentCompute
+    );
+    ASSERT_TRUE(sameFamilyGraphicsPacket.valid());
+    ASSERT_TRUE(sameFamilyComputePacket.valid());
+    ASSERT_NE(sameFamilyCompiledCompute, nullptr);
+    ASSERT_EQ(sameFamilyCompiledCompute->prologueStateSeedCount, 1u);
+    const Graphics::GpuPacketStateSeed* const sameFamilySeed = sameFamilyCompiledGraph.taskPrologueStateSeeds(
+        concurrentCompute
+    );
+    ASSERT_NE(sameFamilySeed, nullptr);
+    EXPECT_EQ(sameFamilySeed[0u].sourcePacket, sameFamilyGraphicsPacket);
+    ASSERT_EQ(sameFamilyCompiledGraph.packet(sameFamilyComputePacket).dependencyCount, 1u);
+    EXPECT_EQ(
+        sameFamilyCompiledGraph.packetDependencies(sameFamilyComputePacket)[0u].producer,
+        sameFamilyGraphicsPacket
+    );
 }
 
 

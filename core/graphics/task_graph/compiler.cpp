@@ -1048,11 +1048,6 @@ bool GpuTaskGraphCompiler::compile(
                         && before == use.requiredState
                         && !needsUavDependency
                     ;
-                    const bool sameQueueFamily =
-                        sourceQueue
-                        && destinationQueue
-                        && sourceQueue->familyIndex == destinationQueue->familyIndex
-                    ;
                     const u8 requiredConcurrentSharing = static_cast<u8>(
                         ResourceQueueSharing::GraphicsAndAsyncCompute
                     );
@@ -1060,6 +1055,7 @@ bool GpuTaskGraphCompiler::compile(
                         sourceQueue
                         && destinationQueue
                         && sourceQueue->queueClass != destinationQueue->queueClass
+                        && sourceQueue->familyIndex != destinationQueue->familyIndex
                         && (
                             static_cast<u8>(resource.queueSharing) & requiredConcurrentSharing
                         ) == requiredConcurrentSharing
@@ -1067,7 +1063,7 @@ bool GpuTaskGraphCompiler::compile(
                     const bool mayOmitInternalStateSeed =
                         use.hasIndependentStateSource
                         && readOnlySameState
-                        && (sameQueueFamily || concurrentGraphicsAndCompute)
+                        && concurrentGraphicsAndCompute
                     ;
                     if(!mayOmitInternalStateSeed){
                         outCompiledGraph.m_prologueStateSeeds.push_back(GpuPacketStateSeed{

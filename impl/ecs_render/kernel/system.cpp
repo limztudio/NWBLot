@@ -1698,8 +1698,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
 
 
-    // AVBOIT's raster entry point imports the prefix packet state; all following stage boundaries are compiler
-    // seeded from the preceding AVBOIT packet.
+    // AVBOIT's raster entry point imports the prefix packet state; every later stage is recorded in the compiler's
+    // dependency order, so its state seeds stay internal to the declared packet chain.
     m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
     Core::GpuNativePacketRecorder avboitRecorder(device);
     const Core::GpuExternalPacketStateSource avboitPreStateSources[] = {
@@ -1707,101 +1707,49 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             .states = graphicsPrefixStateSeed,
         },
     };
-    const Core::GpuNativePacketRecordDesc avboitPreRecordDesc{
-        .packet = avboitPrePacket,
-        .externalStateSources = avboitPreStateSources,
-        .externalStateSourceCount = LengthOf(avboitPreStateSources),
+    const Core::GpuNativePacketRecordDesc avboitRecordDescs[] = {
+        Core::GpuNativePacketRecordDesc{
+            .packet = avboitPrePacket,
+            .externalStateSources = avboitPreStateSources,
+            .externalStateSourceCount = LengthOf(avboitPreStateSources),
+        },
+        Core::GpuNativePacketRecordDesc{
+            .packet = avboitDepthWarpPacket,
+        },
+        Core::GpuNativePacketRecordDesc{
+            .packet = avboitExtinctionPacket,
+        },
+        Core::GpuNativePacketRecordDesc{
+            .packet = avboitIntegrationPacket,
+        },
+        Core::GpuNativePacketRecordDesc{
+            .packet = avboitAccumulationPacket,
+        },
     };
-    const bool avboitPreRecorded =
+    const usize avboitRecordDescCount = avboitUsesAsyncCompute ? LengthOf(avboitRecordDescs) : 1u;
+    const bool avboitRecorded =
         m_avboitTaskGraphValid
         && m_avboitPreTask.valid()
         && m_avboitPrefixCompletion.valid()
         && avboitPrePacket.valid()
-        && avboitRecorder.recordPacket(
+        && (!avboitUsesAsyncCompute || (
+            m_avboitDepthWarpTask.valid()
+            && m_avboitExtinctionTask.valid()
+            && m_avboitIntegrationTask.valid()
+            && m_avboitAccumulationTask.valid()
+        ))
+        && avboitRecorder.recordPacketsInCompileOrder(
             m_avboitTaskGraph,
             m_avboitCompiledGraph,
-            avboitPreRecordDesc,
+            avboitRecordDescs,
+            avboitRecordDescCount,
             m_avboitRecordedGraph
         )
     ;
-    if(!avboitPreRecorded){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned AVBOIT pre packet"));
+    if(!avboitRecorded){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned AVBOIT packet chain"));
         discardRenderPackets();
         return;
-    }
-
-    if(avboitUsesAsyncCompute){
-        const Core::GpuNativePacketRecordDesc avboitDepthWarpRecordDesc{
-            .packet = avboitDepthWarpPacket,
-        };
-        const bool avboitDepthWarpRecorded =
-            avboitDepthWarpPacket.valid()
-            && avboitRecorder.recordPacket(
-                m_avboitTaskGraph,
-                m_avboitCompiledGraph,
-                avboitDepthWarpRecordDesc,
-                m_avboitRecordedGraph
-            )
-        ;
-        if(!avboitDepthWarpRecorded){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned AVBOIT depth warp"));
-            discardRenderPackets();
-            return;
-        }
-
-        const Core::GpuNativePacketRecordDesc avboitExtinctionRecordDesc{
-            .packet = avboitExtinctionPacket,
-        };
-        const bool avboitExtinctionRecorded =
-            avboitExtinctionPacket.valid()
-            && avboitRecorder.recordPacket(
-                m_avboitTaskGraph,
-                m_avboitCompiledGraph,
-                avboitExtinctionRecordDesc,
-                m_avboitRecordedGraph
-            )
-        ;
-        if(!avboitExtinctionRecorded){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned AVBOIT extinction"));
-            discardRenderPackets();
-            return;
-        }
-
-        const Core::GpuNativePacketRecordDesc avboitIntegrationRecordDesc{
-            .packet = avboitIntegrationPacket,
-        };
-        const bool avboitIntegrationRecorded =
-            avboitIntegrationPacket.valid()
-            && avboitRecorder.recordPacket(
-                m_avboitTaskGraph,
-                m_avboitCompiledGraph,
-                avboitIntegrationRecordDesc,
-                m_avboitRecordedGraph
-            )
-        ;
-        if(!avboitIntegrationRecorded){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned AVBOIT integration"));
-            discardRenderPackets();
-            return;
-        }
-
-        const Core::GpuNativePacketRecordDesc avboitAccumulationRecordDesc{
-            .packet = avboitAccumulationPacket,
-        };
-        const bool avboitAccumulationRecorded =
-            avboitAccumulationPacket.valid()
-            && avboitRecorder.recordPacket(
-                m_avboitTaskGraph,
-                m_avboitCompiledGraph,
-                avboitAccumulationRecordDesc,
-                m_avboitRecordedGraph
-            )
-        ;
-        if(!avboitAccumulationRecorded){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned AVBOIT accumulation"));
-            discardRenderPackets();
-            return;
-        }
     }
 
     const Core::GpuSubmissionPacketId avboitFinalPacket = avboitUsesAsyncCompute
@@ -2175,119 +2123,71 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_graphics.requestDeviceRecreation();
     };
 
-    const auto submitAvboitPacket = [&](
-        const Core::GpuSubmissionPacketId packet,
-        const Core::GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
-        const usize externalCompletionTokenCount,
-        Core::GpuTimingSubmissionTicket& timingTicket
-    ) -> Core::QueueSubmissionToken {
-        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-        const Core::GpuTaskGraphSubmitter submitter(device);
-        const bool accepted =
-            m_avboitTaskGraphValid
-            && packet.valid()
-            && submitter.submitPacket(
-                m_avboitTaskGraph,
-                m_avboitCompiledGraph,
-                m_avboitRecordedGraph,
-                packet,
-                externalCompletionTokens,
-                externalCompletionTokenCount,
-                m_avboitSubmissionTransaction,
-                scratchArena,
-                &timingTicket
-            )
-        ;
-        return accepted ? m_avboitSubmissionTransaction.packetToken(packet) : Core::QueueSubmissionToken{};
-    };
     const auto submitAvboitLightingAndComposite = [&]() -> bool {
         const Core::GpuTaskGraphExternalCompletionToken avboitPrefixCompletionToken{
             .completion = m_avboitPrefixCompletion,
             .token = prefixSubmissionToken,
         };
-        avboitPreSubmissionToken =
-            m_avboitPreTask.valid()
+        const Core::GpuTaskGraphPacketTimingTicket avboitTimingTickets[] = {
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = avboitPrePacket,
+                .timingTicket = &avboitPreTimingTicket,
+            },
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = avboitDepthWarpPacket,
+                .timingTicket = &avboitDepthWarpTimingTicket,
+            },
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = avboitExtinctionPacket,
+                .timingTicket = &avboitExtinctionTimingTicket,
+            },
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = avboitIntegrationPacket,
+                .timingTicket = &avboitIntegrationTimingTicket,
+            },
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = avboitAccumulationPacket,
+                .timingTicket = &avboitAccumulationTimingTicket,
+            },
+        };
+        const usize avboitTimingTicketCount = avboitUsesAsyncCompute ? LengthOf(avboitTimingTickets) : 1u;
+        Core::Alloc::ScratchArena avboitScratchArena(RendererArenaScope::s_TaskGraphArena);
+        const Core::GpuTaskGraphSubmitter avboitSubmitter(device);
+        const bool avboitPacketsAccepted =
+            m_avboitTaskGraphValid
+            && m_avboitPreTask.valid()
             && m_avboitPrefixCompletion.valid()
-            ? submitAvboitPacket(
-                avboitPrePacket,
+            && avboitPrePacket.valid()
+            && avboitSubmitter.submitPacketsInCompileOrder(
+                m_avboitTaskGraph,
+                m_avboitCompiledGraph,
+                m_avboitRecordedGraph,
                 &avboitPrefixCompletionToken,
                 1u,
-                avboitPreTimingTicket
+                avboitTimingTickets,
+                avboitTimingTicketCount,
+                m_avboitSubmissionTransaction,
+                avboitScratchArena
             )
-            : Core::QueueSubmissionToken{}
         ;
-        if(!avboitPreSubmissionToken.valid()){
+        avboitPreSubmissionToken = m_avboitSubmissionTransaction.packetToken(avboitPrePacket);
+        avboitDepthWarpSubmissionToken = m_avboitSubmissionTransaction.packetToken(avboitDepthWarpPacket);
+        avboitExtinctionSubmissionToken = m_avboitSubmissionTransaction.packetToken(avboitExtinctionPacket);
+        avboitIntegrationSubmissionToken = m_avboitSubmissionTransaction.packetToken(avboitIntegrationPacket);
+        avboitAccumulationSubmissionToken = m_avboitSubmissionTransaction.packetToken(avboitAccumulationPacket);
+        avboitFinalSubmissionToken = m_avboitSubmissionTransaction.packetToken(
+            avboitUsesAsyncCompute ? avboitAccumulationPacket : avboitPrePacket
+        );
+        if(!avboitPacketsAccepted || !avboitPreSubmissionToken.valid() || !avboitFinalSubmissionToken.valid()){
+            const bool avboitPreWasRejected = !avboitPreSubmissionToken.valid();
             discardUnacceptedGraphPackets();
             discardTimingTickets();
-            restoreAvboitCpuState();
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned AVBOIT pre submission was rejected"));
+            if(avboitPreWasRejected)
+                restoreAvboitCpuState();
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned AVBOIT packet chain was rejected"));
             if(!recoverPendingFrameSubmission())
                 failFrameRenderRecovery();
             return false;
-        }
-        avboitFinalSubmissionToken = avboitPreSubmissionToken;
-
-        if(avboitUsesAsyncCompute){
-            avboitDepthWarpSubmissionToken = submitAvboitPacket(
-                avboitDepthWarpPacket,
-                nullptr,
-                0u,
-                avboitDepthWarpTimingTicket
-            );
-            if(!avboitDepthWarpSubmissionToken.valid()){
-                discardUnacceptedGraphPackets();
-                discardTimingTickets();
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned AVBOIT depth-warp submission was rejected"));
-                if(!recoverPendingFrameSubmission())
-                    failFrameRenderRecovery();
-                return false;
-            }
-
-            avboitExtinctionSubmissionToken = submitAvboitPacket(
-                avboitExtinctionPacket,
-                nullptr,
-                0u,
-                avboitExtinctionTimingTicket
-            );
-            if(!avboitExtinctionSubmissionToken.valid()){
-                discardUnacceptedGraphPackets();
-                discardTimingTickets();
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned AVBOIT extinction submission was rejected"));
-                if(!recoverPendingFrameSubmission())
-                    failFrameRenderRecovery();
-                return false;
-            }
-
-            avboitIntegrationSubmissionToken = submitAvboitPacket(
-                avboitIntegrationPacket,
-                nullptr,
-                0u,
-                avboitIntegrationTimingTicket
-            );
-            if(!avboitIntegrationSubmissionToken.valid()){
-                discardUnacceptedGraphPackets();
-                discardTimingTickets();
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned AVBOIT integration submission was rejected"));
-                if(!recoverPendingFrameSubmission())
-                    failFrameRenderRecovery();
-                return false;
-            }
-
-            avboitAccumulationSubmissionToken = submitAvboitPacket(
-                avboitAccumulationPacket,
-                nullptr,
-                0u,
-                avboitAccumulationTimingTicket
-            );
-            if(!avboitAccumulationSubmissionToken.valid()){
-                discardUnacceptedGraphPackets();
-                discardTimingTickets();
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned AVBOIT accumulation submission was rejected"));
-                if(!recoverPendingFrameSubmission())
-                    failFrameRenderRecovery();
-                return false;
-            }
-            avboitFinalSubmissionToken = avboitAccumulationSubmissionToken;
         }
 
         // Deferred lighting now imports the graph-owned AVBOIT completion directly. The live path additionally

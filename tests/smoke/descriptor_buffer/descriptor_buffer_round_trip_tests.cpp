@@ -649,12 +649,20 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndCarrie
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
-    const GpuNativePacketRecordDesc recordDesc{
-        .packet = packet,
-        .serialStateSeed = &serialState,
+    const GpuNativePacketRecordDesc recordDescs[] = {
+        GpuNativePacketRecordDesc{
+            .packet = packet,
+            .serialStateSeed = &serialState,
+        },
     };
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacket(graph, compiledGraph, recordDesc, recordedGraph));
+    ASSERT_TRUE(recorder.recordPacketsInCompileOrder(
+        graph,
+        compiledGraph,
+        recordDescs,
+        LengthOf(recordDescs),
+        recordedGraph
+    ));
     ASSERT_TRUE(nativeMeshViewSetupRecorded);
     ASSERT_TRUE(nativeSceneSetupRecorded);
     ASSERT_TRUE(nativeClearRecorded);
@@ -676,17 +684,175 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndCarrie
     stateProbe->close();
 
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacket(
+    ASSERT_TRUE(submitter.submitPacketsInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        packet,
+        nullptr,
+        0u,
         nullptr,
         0u,
         transaction,
         scratchArena
     ));
     EXPECT_TRUE(transaction.packetToken(packet).valid());
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketChain){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(256u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId resource = graph.importBuffer(
+        buffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/compile_order_buffer"))
+            .setMarkerLabel("Compile Order Buffer")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    ASSERT_TRUE(resource.valid());
+
+    const GpuTaskResourceUse writerUses[] = {
+        GpuTaskResourceUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = ResourceStates::CopyDest,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    GpuTaskSchedulingHint writerScheduling;
+    writerScheduling.forceSubmissionBoundary = true;
+    writerScheduling.allowPacketMerge = false;
+    GpuTaskDesc writerDesc;
+    writerDesc
+        .setIdentity(Name("tests/descriptor_buffer/compile_order_writer"))
+        .setMarkerLabel("Compile Order Writer")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(writerScheduling)
+        .setResourceUses(writerUses, LengthOf(writerUses))
+    ;
+    bool writerRecorded = false;
+    const GpuTaskId writer = graph.addTask<NativePacketPrefixTask>(
+        writerDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = buffer.get(),
+            .expectedState = ResourceStates::CopyDest,
+            .recorded = &writerRecorded,
+        }
+    );
+    ASSERT_TRUE(writer.valid());
+
+    const GpuTaskResourceUse readerUses[] = {
+        GpuTaskResourceUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskSchedulingHint readerScheduling;
+    readerScheduling.forceSubmissionBoundary = true;
+    readerScheduling.allowPacketMerge = false;
+    GpuTaskDesc readerDesc;
+    readerDesc
+        .setIdentity(Name("tests/descriptor_buffer/compile_order_reader"))
+        .setMarkerLabel("Compile Order Reader")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(readerScheduling)
+        .setDependencies(&writer, 1u)
+        .setResourceUses(readerUses, LengthOf(readerUses))
+    ;
+    bool readerRecorded = false;
+    const GpuTaskId reader = graph.addTask<NativePacketPrefixTask>(
+        readerDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = buffer.get(),
+            .expectedState = ResourceStates::ConstantBuffer,
+            .recorded = &readerRecorded,
+        }
+    );
+    ASSERT_TRUE(reader.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/compile_order_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+    const GpuSubmissionPacketId writerPacket = compiledGraph.packetForTask(writer);
+    const GpuSubmissionPacketId readerPacket = compiledGraph.packetForTask(reader);
+    ASSERT_TRUE(writerPacket.valid());
+    ASSERT_TRUE(readerPacket.valid());
+    EXPECT_EQ(compiledGraph.packetIdAt(0u), writerPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(1u), readerPacket);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecordDesc recordDescs[] = {
+        GpuNativePacketRecordDesc{ .packet = writerPacket },
+        GpuNativePacketRecordDesc{ .packet = readerPacket },
+    };
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketsInCompileOrder(
+        graph,
+        compiledGraph,
+        recordDescs,
+        LengthOf(recordDescs),
+        recordedGraph
+    ));
+    EXPECT_TRUE(writerRecorded);
+    EXPECT_TRUE(readerRecorded);
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketsInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(transaction.packetToken(writerPacket).valid());
+    EXPECT_TRUE(transaction.packetToken(readerPacket).valid());
     EXPECT_TRUE(device.waitForIdle());
 }
 

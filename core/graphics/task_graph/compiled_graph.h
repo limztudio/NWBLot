@@ -69,6 +69,8 @@ public:
     [[nodiscard]] usize taskCount()const noexcept{ return m_tasks.size(); }
     [[nodiscard]] usize packetCount()const noexcept{ return m_packets.size(); }
     [[nodiscard]] bool validPacket(const GpuSubmissionPacketId& packet)const noexcept;
+    // Compiler packet indices follow the stable topological task order.  Full-graph native record/submit traversal
+    // consumes this order so each packet observes already-recorded and accepted internal producers.
     [[nodiscard]] GpuSubmissionPacketId packetIdAt(usize index)const noexcept;
     [[nodiscard]] const GpuCompiledTask* findTask(const GpuTaskId& task)const noexcept;
     [[nodiscard]] GpuSubmissionPacketId packetForTask(const GpuTaskId& task)const noexcept;

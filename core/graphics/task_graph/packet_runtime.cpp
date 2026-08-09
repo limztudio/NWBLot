@@ -364,6 +364,42 @@ bool GpuNativePacketRecorder::recordPacket(
 }
 
 
+bool GpuNativePacketRecorder::recordPacketsInCompileOrder(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuNativePacketRecordDesc* const recordDescs,
+    const usize recordDescCount,
+    GpuRecordedGraph& outRecordedGraph,
+    GpuSubmissionPacketId* const outFailedPacket
+)const{
+    if(outFailedPacket)
+        *outFailedPacket = {};
+    if(
+        !compiledGraph.validFor(graph)
+        || !recordDescs
+        || recordDescCount != compiledGraph.packetCount()
+    )
+        return false;
+
+    // The compiler emits packet IDs in stable topological order, so native recording preserves the graph's
+    // internal state-seed chain without requiring renderer-side stage ladders.
+    for(usize packetIndex = 0u; packetIndex < recordDescCount; ++packetIndex){
+        const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
+        if(recordDescs[packetIndex].packet != packet || !recordPacket(
+            graph,
+            compiledGraph,
+            recordDescs[packetIndex],
+            outRecordedGraph
+        )){
+            if(outFailedPacket)
+                *outFailedPacket = packet;
+            return false;
+        }
+    }
+    return true;
+}
+
+
 void GpuGraphSubmissionTransaction::reset(const GpuCompiledGraph& compiledGraph){
     m_packets.clear();
     m_latestAcceptedQueueTokens.clear();
@@ -575,6 +611,80 @@ bool GpuTaskGraphSubmitter::submitPacket(
     }
 
     transaction.acceptPacket(graph, compiledGraph, packetID, token);
+    return true;
+}
+
+
+bool GpuTaskGraphSubmitter::submitPacketsInCompileOrder(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuRecordedGraph& recordedGraph,
+    const GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
+    const usize externalCompletionTokenCount,
+    const GpuTaskGraphPacketTimingTicket* const timingTickets,
+    const usize timingTicketCount,
+    GpuGraphSubmissionTransaction& transaction,
+    Alloc::ScratchArena& scratchArena,
+    GpuSubmissionPacketId* const outFailedPacket
+)const{
+    if(outFailedPacket)
+        *outFailedPacket = {};
+    if(
+        !compiledGraph.validFor(graph)
+        || !recordedGraph.validFor(compiledGraph)
+        || !transaction.validFor(compiledGraph)
+        || (externalCompletionTokenCount != 0u && !externalCompletionTokens)
+        || (timingTicketCount != 0u && !timingTickets)
+    )
+        return false;
+
+    for(usize tokenIndex = 0u; tokenIndex < externalCompletionTokenCount; ++tokenIndex){
+        const GpuTaskGraphExternalCompletionToken& token = externalCompletionTokens[tokenIndex];
+        if(!token.completion.valid() || !token.token.valid())
+            return false;
+        for(usize previousIndex = 0u; previousIndex < tokenIndex; ++previousIndex){
+            if(externalCompletionTokens[previousIndex].completion == token.completion)
+                return false;
+        }
+    }
+    for(usize ticketIndex = 0u; ticketIndex < timingTicketCount; ++ticketIndex){
+        const GpuTaskGraphPacketTimingTicket& ticket = timingTickets[ticketIndex];
+        if(!ticket.timingTicket || !compiledGraph.validPacket(ticket.packet))
+            return false;
+        for(usize previousIndex = 0u; previousIndex < ticketIndex; ++previousIndex){
+            if(timingTickets[previousIndex].packet == ticket.packet)
+                return false;
+        }
+    }
+
+    // Packet IDs follow the compiler's topological task order. submitPacket resolves each internal producer from
+    // transaction state, while every external completion remains a graph-wide binding rather than a renderer-side
+    // per-stage submission argument.
+    for(usize packetIndex = 0u; packetIndex < compiledGraph.packetCount(); ++packetIndex){
+        const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
+        GpuTimingSubmissionTicket* timingTicket = nullptr;
+        for(usize ticketIndex = 0u; ticketIndex < timingTicketCount; ++ticketIndex){
+            if(timingTickets[ticketIndex].packet == packet){
+                timingTicket = timingTickets[ticketIndex].timingTicket;
+                break;
+            }
+        }
+        if(!submitPacket(
+            graph,
+            compiledGraph,
+            recordedGraph,
+            packet,
+            externalCompletionTokens,
+            externalCompletionTokenCount,
+            transaction,
+            scratchArena,
+            timingTicket
+        )){
+            if(outFailedPacket)
+                *outFailedPacket = packet;
+            return false;
+        }
+    }
     return true;
 }
 

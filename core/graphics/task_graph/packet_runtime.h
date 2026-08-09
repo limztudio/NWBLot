@@ -127,6 +127,16 @@ public:
         const GpuNativePacketRecordDesc& desc,
         GpuRecordedGraph& outRecordedGraph
     )const;
+    // Records every compiler packet in its stable dependency order.  This is the native path for a graph whose
+    // complete packet chain is known before submission; callers retain recordPacket for intentional partial work.
+    [[nodiscard]] bool recordPacketsInCompileOrder(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuNativePacketRecordDesc* recordDescs,
+        usize recordDescCount,
+        GpuRecordedGraph& outRecordedGraph,
+        GpuSubmissionPacketId* outFailedPacket = nullptr
+    )const;
 
 
 private:
@@ -152,6 +162,14 @@ struct GpuPacketRuntime{
 struct GpuTaskGraphExternalCompletionToken{
     GpuExternalCompletionId completion;
     QueueSubmissionToken token;
+};
+
+
+// Associates one compiler-generated packet with the timing ticket that must submit its native command list.  A
+// packet omitted from a compile-order submission uses the ordinary non-timing transport.
+struct GpuTaskGraphPacketTimingTicket{
+    GpuSubmissionPacketId packet;
+    GpuTimingSubmissionTicket* timingTicket = nullptr;
 };
 
 
@@ -218,6 +236,20 @@ public:
         GpuGraphSubmissionTransaction& transaction,
         Alloc::ScratchArena& scratchArena,
         GpuTimingSubmissionTicket* timingTicket = nullptr
+    )const;
+    // Submits every compiler packet in its stable dependency order.  Internal packet dependencies are resolved
+    // from the shared transaction; external bindings and timing tickets are supplied once for the whole graph.
+    [[nodiscard]] bool submitPacketsInCompileOrder(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuRecordedGraph& recordedGraph,
+        const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
+        usize externalCompletionTokenCount,
+        const GpuTaskGraphPacketTimingTicket* timingTickets,
+        usize timingTicketCount,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
 
 

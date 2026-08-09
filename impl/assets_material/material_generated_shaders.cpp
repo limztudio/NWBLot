@@ -54,6 +54,19 @@ static void AppendGeneratedMaterialShaderIncludes(
     outSource += "\"\n";
 }
 
+static void AssignGeneratedMaterialShaderSource(
+    CookString& outSource,
+    ScratchArena& scratchArena,
+    const Path& sourcePath
+){
+    ScratchString sourceText = PathToString(scratchArena, sourcePath);
+    for(char& ch : sourceText){
+        if(ch == '\\')
+            ch = '/';
+    }
+    outSource += sourceText;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -143,14 +156,7 @@ bool EmitMaterialPixelShadersImpl(
         GeneratedMaterialPixelShader generated(arena);
         generated.name += "generated/material_ps/";
         generated.name += entry.virtualPath;
-        {
-            ScratchString sourceText = PathToString(scratchArena, outputPath);
-            for(char& ch : sourceText){
-                if(ch == '\\')
-                    ch = '/';
-            }
-            generated.source += sourceText;
-        }
+        AssignGeneratedMaterialShaderSource(generated.source, scratchArena, outputPath);
 
         const Name pixelShaderName = ToName(AStringView(generated.name));
         if(!pixelShaderName){
@@ -263,14 +269,7 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
         GeneratedMaterialPixelShader generated(arena);
         generated.name += generatedNamePrefix;
         generated.name += entry.virtualPath;
-        {
-            ScratchString sourceText = PathToString(scratchArena, outputPath);
-            for(char& ch : sourceText){
-                if(ch == '\\')
-                    ch = '/';
-            }
-            generated.source += sourceText;
-        }
+        AssignGeneratedMaterialShaderSource(generated.source, scratchArena, outputPath);
 
         const Name pixelShaderName = ToName(AStringView(generated.name));
         if(!pixelShaderName){

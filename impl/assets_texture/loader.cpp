@@ -365,6 +365,49 @@ static void InitializeBasisTranscoder(){
     return true;
 }
 
+template<typename StoreTexelT>
+[[nodiscard]] static bool VisitDecodedUastcTexels(
+    const TextureMipLevel& mip,
+    const u8* const sourceData,
+    const bool srgb,
+    StoreTexelT&& storeTexel
+){
+    for(u32 blockY = 0u; blockY < mip.blockCountY; ++blockY){
+        for(u32 blockX = 0u; blockX < mip.blockCountX; ++blockX){
+            const u64 blockIndex = static_cast<u64>(blockY) * static_cast<u64>(mip.blockCountX) + blockX;
+            const u64 blockOffset = blockIndex * s_UastcBytesPerBlock;
+            basist::uastc_block sourceBlock;
+            NWB_MEMCPY(
+                &sourceBlock,
+                sizeof(sourceBlock),
+                sourceData + static_cast<usize>(blockOffset),
+                sizeof(sourceBlock)
+            );
+
+            basist::color32 decodedTexels[s_UastcBlockWidth * s_UastcBlockHeight];
+            if(!basist::unpack_uastc(sourceBlock, decodedTexels, srgb))
+                return false;
+
+            for(u32 localY = 0u; localY < s_UastcBlockHeight; ++localY){
+                const u64 destinationY = static_cast<u64>(blockY) * s_UastcBlockHeight + localY;
+                if(destinationY >= mip.height)
+                    break;
+
+                for(u32 localX = 0u; localX < s_UastcBlockWidth; ++localX){
+                    const u64 destinationX = static_cast<u64>(blockX) * s_UastcBlockWidth + localX;
+                    if(destinationX >= mip.width)
+                        break;
+
+                    const usize sourceTexelIndex = static_cast<usize>(localY * s_UastcBlockWidth + localX);
+                    const usize destinationTexelIndex = static_cast<usize>(destinationY * static_cast<u64>(mip.width) + destinationX);
+                    storeTexel(decodedTexels[sourceTexelIndex], destinationTexelIndex);
+                }
+            }
+        }
+    }
+    return true;
+}
+
 [[nodiscard]] static bool DecodeTextureSliceAsRgba(
     const Texture& textureAsset,
     const TextureMipLevel& mip,
@@ -392,46 +435,15 @@ static void InitializeBasisTranscoder(){
     }
 
     const bool srgb = textureAsset.colorSpace() == TextureColorSpace::Srgb;
-    for(u32 blockY = 0u; blockY < mip.blockCountY; ++blockY){
-        for(u32 blockX = 0u; blockX < mip.blockCountX; ++blockX){
-            const u64 blockIndex = static_cast<u64>(blockY) * static_cast<u64>(mip.blockCountX) + blockX;
-            const u64 blockOffset = blockIndex * s_UastcBytesPerBlock;
-            basist::uastc_block sourceBlock;
-            NWB_MEMCPY(
-                &sourceBlock,
-                sizeof(sourceBlock),
-                sourceData + static_cast<usize>(blockOffset),
-                sizeof(sourceBlock)
-            );
-
-            basist::color32 decodedTexels[s_UastcBlockWidth * s_UastcBlockHeight];
-            if(!basist::unpack_uastc(sourceBlock, decodedTexels, srgb)){
-                NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: UASTC-to-RGBA8 decoding failed"));
-                return false;
-            }
-
-            for(u32 localY = 0u; localY < s_UastcBlockHeight; ++localY){
-                const u64 destinationY = static_cast<u64>(blockY) * s_UastcBlockHeight + localY;
-                if(destinationY >= mip.height)
-                    break;
-
-                for(u32 localX = 0u; localX < s_UastcBlockWidth; ++localX){
-                    const u64 destinationX = static_cast<u64>(blockX) * s_UastcBlockWidth + localX;
-                    if(destinationX >= mip.width)
-                        break;
-
-                    const usize sourceTexelIndex = static_cast<usize>(localY * s_UastcBlockWidth + localX);
-                    const usize destinationByteOffset = static_cast<usize>(
-                        (destinationY * static_cast<u64>(mip.width) + destinationX) * s_RgbaBytesPerTexel
-                    );
-                    const basist::color32& sourceTexel = decodedTexels[sourceTexelIndex];
-                    outUploadBytes[destinationByteOffset + 0u] = sourceTexel.r;
-                    outUploadBytes[destinationByteOffset + 1u] = sourceTexel.g;
-                    outUploadBytes[destinationByteOffset + 2u] = sourceTexel.b;
-                    outUploadBytes[destinationByteOffset + 3u] = sourceTexel.a;
-                }
-            }
-        }
+    if(!VisitDecodedUastcTexels(mip, sourceData, srgb, [outUploadBytes](const basist::color32& sourceTexel, const usize destinationTexelIndex){
+        const usize destinationByteOffset = destinationTexelIndex * s_RgbaBytesPerTexel;
+        outUploadBytes[destinationByteOffset + 0u] = sourceTexel.r;
+        outUploadBytes[destinationByteOffset + 1u] = sourceTexel.g;
+        outUploadBytes[destinationByteOffset + 2u] = sourceTexel.b;
+        outUploadBytes[destinationByteOffset + 3u] = sourceTexel.a;
+    })){
+        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: UASTC-to-RGBA8 decoding failed"));
+        return false;
     }
     return true;
 }
@@ -561,45 +573,35 @@ static void StoreHdrAlpha(
         return false;
     }
 
-    for(u32 blockY = 0u; blockY < mip.blockCountY; ++blockY){
-        for(u32 blockX = 0u; blockX < mip.blockCountX; ++blockX){
-            const u64 blockIndex = static_cast<u64>(blockY) * mip.blockCountX + blockX;
-            const u64 blockOffset = blockIndex * s_UastcBytesPerBlock;
-            basist::uastc_block sourceBlock;
-            NWB_MEMCPY(
-                &sourceBlock,
-                sizeof(sourceBlock),
-                alphaSourceData + static_cast<usize>(blockOffset),
-                sizeof(sourceBlock)
-            );
-
-            basist::color32 decodedTexels[s_UastcBlockWidth * s_UastcBlockHeight];
-            if(!basist::unpack_uastc(sourceBlock, decodedTexels, false)){
-                NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: UASTC alpha decoding failed"));
-                return false;
-            }
-
-            for(u32 localY = 0u; localY < s_UastcBlockHeight; ++localY){
-                const u64 destinationY = static_cast<u64>(blockY) * s_UastcBlockHeight + localY;
-                if(destinationY >= mip.height)
-                    break;
-
-                for(u32 localX = 0u; localX < s_UastcBlockWidth; ++localX){
-                    const u64 destinationX = static_cast<u64>(blockX) * s_UastcBlockWidth + localX;
-                    if(destinationX >= mip.width)
-                        break;
-
-                    const usize sourceTexelIndex = static_cast<usize>(localY * s_UastcBlockWidth + localX);
-                    const usize destinationTexelIndex = static_cast<usize>(
-                        destinationY * static_cast<u64>(mip.width) + destinationX
-                    );
-                    // The companion stream is a grayscale LDR mask: (a, a, a, 255).
-                    StoreHdrAlpha(outRgba16FloatBytes, destinationTexelIndex, decodedTexels[sourceTexelIndex].r);
-                }
-            }
-        }
+    if(!VisitDecodedUastcTexels(mip, alphaSourceData, false, [outRgba16FloatBytes](const basist::color32& sourceTexel, const usize destinationTexelIndex){
+        // The companion stream is a grayscale LDR mask: (a, a, a, 255).
+        StoreHdrAlpha(outRgba16FloatBytes, destinationTexelIndex, sourceTexel.r);
+    })){
+        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: UASTC alpha decoding failed"));
+        return false;
     }
     return true;
+}
+
+static void WriteTextureMipSlices(
+    Core::CommandList& commandList,
+    Core::Texture& texture,
+    const Texture& textureAsset,
+    const TextureMipLevel& mip,
+    const u32 mipLevel,
+    const u8* const uploadBytes,
+    const usize rowPitch,
+    const usize sliceUploadByteCount
+){
+    if(textureAsset.dimension() == TextureDimension::Texture3D){
+        commandList.writeTexture(&texture, 0u, mipLevel, uploadBytes, rowPitch, sliceUploadByteCount);
+        return;
+    }
+
+    for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
+        const u8* const sliceBytes = uploadBytes + static_cast<usize>(sliceIndex) * sliceUploadByteCount;
+        commandList.writeTexture(&texture, sliceIndex, mipLevel, sliceBytes, rowPitch, sliceUploadByteCount);
+    }
 }
 
 [[nodiscard]] static bool UploadLdrTextureMip(
@@ -650,15 +652,7 @@ static void StoreHdrAlpha(
             return false;
     }
 
-    if(textureAsset.dimension() == TextureDimension::Texture3D){
-        commandList.writeTexture(&texture, 0u, mipLevel, scratchBytes.data(), rowPitch, sliceUploadByteCount);
-        return true;
-    }
-
-    for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
-        const u8* const source = scratchBytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount;
-        commandList.writeTexture(&texture, sliceIndex, mipLevel, source, rowPitch, sliceUploadByteCount);
-    }
+    WriteTextureMipSlices(commandList, texture, textureAsset, mip, mipLevel, scratchBytes.data(), rowPitch, sliceUploadByteCount);
     return true;
 }
 
@@ -710,15 +704,7 @@ static void StoreHdrAlpha(
             return false;
     }
 
-    if(textureAsset.dimension() == TextureDimension::Texture3D){
-        commandList.writeTexture(&texture, 0u, mipLevel, scratchBytes.data(), rowPitch, sliceUploadByteCount);
-        return true;
-    }
-
-    for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
-        const u8* const source = scratchBytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount;
-        commandList.writeTexture(&texture, sliceIndex, mipLevel, source, rowPitch, sliceUploadByteCount);
-    }
+    WriteTextureMipSlices(commandList, texture, textureAsset, mip, mipLevel, scratchBytes.data(), rowPitch, sliceUploadByteCount);
     return true;
 }
 

@@ -161,6 +161,18 @@ TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
             ++multiViewCount;
         }
     );
+    testWorld.world.view<PositionComponent>().parallelEach(
+        testWorld.threadPool,
+        [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&){
+            ++singleViewCount;
+        }
+    );
+    testWorld.world.view<PositionComponent, VelocityComponent>().parallelEach(
+        testWorld.threadPool,
+        [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&){
+            ++multiViewCount;
+        }
+    );
 
     EXPECT_EQ(singleViewCount, 0u);
     EXPECT_EQ(multiViewCount, 0u);
@@ -346,7 +358,6 @@ TEST(Ecs, ParallelEachVisitsSingleAndMultiComponentViews){
     Atomic<u32> positionVisits{ 0u };
     world.view<PositionComponent>().parallelEach(
         threadPool,
-        32u,
         [&positionVisits](NWB::Core::ECS::EntityID, PositionComponent& position){
             position.y = position.x + 1;
             positionVisits.fetch_add(1u, MemoryOrder::relaxed);

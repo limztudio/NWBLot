@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import List, Sequence, Tuple
+from typing import List, Sequence
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -49,10 +49,6 @@ class M4Paths:
     output_directory: Path
 
 
-def resolve_path(root: Path, path: Path) -> Path:
-    return path if path.is_absolute() else root / path
-
-
 def default_output_directory(root: Path) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return root / ".cozter" / "out" / "ab-results" / "async-shadow-m4" / stamp
@@ -74,12 +70,12 @@ def resolve_paths(args: argparse.Namespace, settings) -> M4Paths:
         args.dry_run,
     )
     runtime_directory = (
-        resolve_path(settings.root, args.runtime_dir)
+        ROOT_LAUNCHER.resolve_path(settings.root, args.runtime_dir)
         if args.runtime_dir is not None
         else settings.build_dir / RUNTIME_DIRECTORY / settings.config
     )
     output_directory = (
-        resolve_path(settings.root, args.output_dir)
+        ROOT_LAUNCHER.resolve_path(settings.root, args.output_dir)
         if args.output_dir is not None
         else default_output_directory(settings.root)
     )
@@ -87,21 +83,7 @@ def resolve_paths(args: argparse.Namespace, settings) -> M4Paths:
 
 
 def build_benchmark_targets(args: argparse.Namespace, settings, environment) -> None:
-    if args.skip_build:
-        return
-
-    command: List[object] = list(settings.cmake) + [
-        "--build",
-        str(settings.build_dir),
-        "--target",
-        SYNC_TARGET,
-        ASYNC_TARGET,
-        "--config",
-        settings.config,
-    ]
-    if args.jobs:
-        command += ["--parallel", str(args.jobs)]
-    ROOT_LAUNCHER.run_checked(command, settings.root, environment, args.dry_run)
+    ROOT_LAUNCHER.build_targets(args, settings, (SYNC_TARGET, ASYNC_TARGET), environment)
 
 
 def runner_command(args: argparse.Namespace, paths: M4Paths) -> List[object]:
@@ -122,7 +104,7 @@ def runner_command(args: argparse.Namespace, paths: M4Paths) -> List[object]:
     if args.no_logserver:
         command.append("--no-logserver")
     elif args.logserver_executable is not None:
-        command += ["--logserver-executable", resolve_path(REPO, args.logserver_executable)]
+        command += ["--logserver-executable", ROOT_LAUNCHER.resolve_path(REPO, args.logserver_executable)]
     command += list(args.runner_args)
     return command
 
@@ -134,14 +116,6 @@ def run_runner(args: argparse.Namespace, paths: M4Paths) -> int:
     if args.dry_run:
         return 0
     return subprocess.run([str(part) for part in command], cwd=REPO).returncode
-
-
-def split_runner_args(argv: Sequence[str]) -> Tuple[List[str], List[str]]:
-    values = list(argv)
-    if "--" not in values:
-        return values, []
-    separator = values.index("--")
-    return values[:separator], values[separator + 1 :]
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -172,7 +146,7 @@ def make_parser() -> argparse.ArgumentParser:
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
-    launcher_args, runner_args = split_runner_args(argv)
+    launcher_args, runner_args = ROOT_LAUNCHER.split_application_args(argv)
     args = make_parser().parse_args(launcher_args)
     args.runner_args = runner_args
     return args

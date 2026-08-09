@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from return_value_handling import blank_non_code
+from return_value_handling import blank_non_code, line_number
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -21,10 +21,6 @@ INTEROP_BOUNDARIES = (
     "utilities/tex_conv/command_line.cpp",
 )
 DIRECT_INTEROP_CONTAINER = re.compile(r"\bstd\s*::\s*(?:string|vector)\b")
-
-
-def line_number(source: str, position: int) -> int:
-    return source.count("\n", 0, position) + 1
 
 
 def find_direct_interop_containers(source: str) -> list[int]:

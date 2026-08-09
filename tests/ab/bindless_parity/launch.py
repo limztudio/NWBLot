@@ -123,10 +123,6 @@ class PixelDifference:
         return self.changed_pixels / self.total_pixels if self.total_pixels else 0.0
 
 
-def resolve_path(root: Path, path: Path) -> Path:
-    return path if path.is_absolute() else root / path
-
-
 def default_output_directory(root: Path, case_name: str) -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     return root / ".cozter" / "out" / "ab-results" / "bindless-parity" / case_name / stamp
@@ -148,12 +144,12 @@ def resolve_paths(args: argparse.Namespace, settings, case_name: str, case: Pari
         args.dry_run,
     )
     runtime_directory = (
-        resolve_path(settings.root, args.runtime_dir)
+        ROOT_LAUNCHER.resolve_path(settings.root, args.runtime_dir)
         if args.runtime_dir is not None
         else settings.build_dir / case.runtime_directory / settings.config
     )
     output_directory = (
-        resolve_path(settings.root, args.output_dir)
+        ROOT_LAUNCHER.resolve_path(settings.root, args.output_dir)
         if args.output_dir is not None
         else default_output_directory(settings.root, case_name)
     )
@@ -161,21 +157,7 @@ def resolve_paths(args: argparse.Namespace, settings, case_name: str, case: Pari
 
 
 def build_case_targets(args: argparse.Namespace, settings, case: ParityCase, environment: Dict[str, str]) -> None:
-    if args.skip_build:
-        return
-
-    command: List[object] = list(settings.cmake) + [
-        "--build",
-        str(settings.build_dir),
-        "--target",
-        case.hardware_target,
-        case.software_target,
-        "--config",
-        settings.config,
-    ]
-    if args.jobs:
-        command += ["--parallel", str(args.jobs)]
-    ROOT_LAUNCHER.run_checked(command, settings.root, environment, args.dry_run)
+    ROOT_LAUNCHER.build_targets(args, settings, (case.hardware_target, case.software_target), environment)
 
 
 def capture_launch_args(args: argparse.Namespace, runtime_directory: Path) -> SimpleNamespace:
@@ -488,7 +470,7 @@ def run(args: argparse.Namespace) -> int:
         return 0
 
     if args.logserver_executable is not None:
-        args.logserver_executable = resolve_path(settings.root, args.logserver_executable)
+        args.logserver_executable = ROOT_LAUNCHER.resolve_path(settings.root, args.logserver_executable)
     paths.output_directory.mkdir(parents=True, exist_ok=True)
     args.runtime_directory = paths.runtime_directory
     settle_seconds = case.default_settle_seconds if args.settle_seconds is None else args.settle_seconds

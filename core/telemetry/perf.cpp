@@ -72,6 +72,48 @@ namespace __hidden_telemetry_perf{
     return !delta.hasSamples || delta.currentFrameIndex == snapshot.frameIndex;
 }
 
+template<typename HeaderT>
+[[nodiscard]] static bool AppendPerfPayloadWithScopeText(
+    const HeaderT& header,
+    const AStringView scopeText,
+    TelemetryBytes& outPayload
+){
+    usize payloadBytes = sizeof(HeaderT);
+    if(!AddBinaryReserveBytes(payloadBytes, scopeText.size()))
+        return false;
+
+    outPayload.reserve(payloadBytes);
+    AppendPOD(outPayload, header);
+    AppendTextBytesNoReserveUnchecked(outPayload, scopeText);
+    return outPayload.size() == payloadBytes;
+}
+
+template<typename HeaderT>
+[[nodiscard]] static bool ParsePerfPayloadWithScopeText(
+    const void* const payload,
+    const usize payloadBytes,
+    HeaderT& outHeader,
+    AStringView& outScopeText
+){
+    outScopeText = {};
+    if(payloadBytes < sizeof(HeaderT) || !payload)
+        return false;
+
+    const BinaryByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
+    usize cursor = 0u;
+    if(!ReadPOD(encoded, cursor, outHeader))
+        return false;
+    if(!ValidateHeader(outHeader))
+        return false;
+    if(!BinaryDetail::CanReadBytes(encoded, cursor, outHeader.scopeNameBytes))
+        return false;
+    if(payloadBytes - cursor != outHeader.scopeNameBytes)
+        return false;
+
+    outScopeText = AStringView(reinterpret_cast<const char*>(encoded.data() + cursor), outHeader.scopeNameBytes);
+    return true;
+}
+
 static void RecordTimingView(
     Recorder& recorder,
     const PerfTimingSource::Enum source,
@@ -156,10 +198,6 @@ bool BuildPerfTimingPayload(
     if(!__hidden_telemetry_perf::ValidateTimingInput(source, scopeName, scopeText, stats))
         return false;
 
-    usize payloadBytes = sizeof(EncodedPerfTimingPayloadHeader);
-    if(!AddBinaryReserveBytes(payloadBytes, scopeText.size()))
-        return false;
-
     EncodedPerfTimingPayloadHeader header;
     header.source = source;
     header.scopeHash = scopeName.hash();
@@ -173,10 +211,7 @@ bool BuildPerfTimingPayload(
     header.sampleCount = stats.sampleCount;
     header.scopeNameBytes = static_cast<u32>(scopeText.size());
 
-    outPayload.reserve(payloadBytes);
-    AppendPOD(outPayload, header);
-    AppendTextBytesNoReserveUnchecked(outPayload, scopeText);
-    return outPayload.size() == payloadBytes;
+    return __hidden_telemetry_perf::AppendPerfPayloadWithScopeText(header, scopeText, outPayload);
 }
 
 bool BuildPerfTimingPayload(
@@ -197,25 +232,14 @@ bool ParsePerfTimingPayload(
 ){
     outPayload = PerfTimingPayload(arena);
 
-    if(payloadBytes < sizeof(EncodedPerfTimingPayloadHeader) || !payload)
-        return false;
-
-    const BinaryByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
-    usize cursor = 0u;
-
     EncodedPerfTimingPayloadHeader header;
-    if(!ReadPOD(encoded, cursor, header))
-        return false;
-    if(!__hidden_telemetry_perf::ValidateHeader(header))
-        return false;
-    if(!BinaryDetail::CanReadBytes(encoded, cursor, header.scopeNameBytes))
-        return false;
-    if(payloadBytes - cursor != header.scopeNameBytes)
+    AStringView scopeText;
+    if(!__hidden_telemetry_perf::ParsePerfPayloadWithScopeText(payload, payloadBytes, header, scopeText))
         return false;
 
     outPayload.source = static_cast<PerfTimingSource::Enum>(header.source);
     outPayload.scopeName = Name(header.scopeHash);
-    outPayload.scopeText.assign(reinterpret_cast<const char*>(encoded.data() + cursor), header.scopeNameBytes);
+    outPayload.scopeText.assign(scopeText.data(), scopeText.size());
     outPayload.stats.seconds = header.seconds;
     outPayload.stats.minSeconds = header.minSeconds;
     outPayload.stats.maxSeconds = header.maxSeconds;
@@ -269,10 +293,6 @@ bool BuildPerfMemoryPayload(
     if(!__hidden_telemetry_perf::ValidateMemoryInput(scopeName, scopeText, snapshot, delta))
         return false;
 
-    usize payloadBytes = sizeof(EncodedPerfMemoryPayloadHeader);
-    if(!AddBinaryReserveBytes(payloadBytes, scopeText.size()))
-        return false;
-
     EncodedPerfMemoryPayloadHeader header;
     header.flags = delta.hasSamples ? PerfMemoryPayloadFlag::HasDelta : PerfMemoryPayloadFlag::None;
     header.scopeHash = scopeName.hash();
@@ -295,10 +315,7 @@ bool BuildPerfMemoryPayload(
         header.deltaDeallocationCount = delta.deallocationCount;
     }
 
-    outPayload.reserve(payloadBytes);
-    AppendPOD(outPayload, header);
-    AppendTextBytesNoReserveUnchecked(outPayload, scopeText);
-    return outPayload.size() == payloadBytes;
+    return __hidden_telemetry_perf::AppendPerfPayloadWithScopeText(header, scopeText, outPayload);
 }
 
 bool BuildPerfMemoryPayload(
@@ -319,24 +336,13 @@ bool ParsePerfMemoryPayload(
 ){
     outPayload = PerfMemoryPayload(arena);
 
-    if(payloadBytes < sizeof(EncodedPerfMemoryPayloadHeader) || !payload)
-        return false;
-
-    const BinaryByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
-    usize cursor = 0u;
-
     EncodedPerfMemoryPayloadHeader header;
-    if(!ReadPOD(encoded, cursor, header))
-        return false;
-    if(!__hidden_telemetry_perf::ValidateHeader(header))
-        return false;
-    if(!BinaryDetail::CanReadBytes(encoded, cursor, header.scopeNameBytes))
-        return false;
-    if(payloadBytes - cursor != header.scopeNameBytes)
+    AStringView scopeText;
+    if(!__hidden_telemetry_perf::ParsePerfPayloadWithScopeText(payload, payloadBytes, header, scopeText))
         return false;
 
     outPayload.scopeName = Name(header.scopeHash);
-    outPayload.scopeText.assign(reinterpret_cast<const char*>(encoded.data() + cursor), header.scopeNameBytes);
+    outPayload.scopeText.assign(scopeText.data(), scopeText.size());
     outPayload.snapshot.scopeName = outPayload.scopeName;
     outPayload.snapshot.frameIndex = header.frameIndex;
     outPayload.snapshot.reservedBytes = header.reservedBytes;

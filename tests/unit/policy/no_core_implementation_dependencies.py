@@ -7,7 +7,7 @@ import re
 import sys
 from pathlib import Path
 
-from return_value_handling import blank_non_code
+from return_value_handling import blank_non_code, line_number
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -17,10 +17,6 @@ SOURCE_SUFFIXES = frozenset((".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", "
 INCLUDE_DIRECTIVE = re.compile(r"^\s*#\s*include\b", re.MULTILINE)
 FORBIDDEN_INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]\s*(?:impl|CoolStuff|tests|utilities)(?:/|[">])')
 IMPLEMENTATION_TARGET_DECLARATION = re.compile(r"\bnwb_declare_(?:static|interface)_library\s*\(\s*(nwb_[A-Za-z0-9_]+)")
-
-
-def line_number(source: str, position: int) -> int:
-    return source.count("\n", 0, position) + 1
 
 
 def source_line(source: str, position: int) -> str:

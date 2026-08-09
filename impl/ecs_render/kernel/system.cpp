@@ -1482,21 +1482,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredLightingCompiledGraph.packetIdAt(deferredFrameRecoveryPacketIndex)
             == deferredFrameRecoveryPacket
     ;
-    for(usize recordDescIndex = 0u, packetIndex = graphicsPrefixPacketIndex + 1u;
-        deferredPacketsRecorded && recordDescIndex < deferredRecordDescCount;
-        ++recordDescIndex, ++packetIndex
-    ){
-        const Core::GpuNativePacketRecordDesc& recordDesc = deferredRecordDescs[recordDescIndex];
-        if(
-            recordDesc.packet != m_deferredLightingCompiledGraph.packetIdAt(packetIndex)
-            || !deferredRecorder.recordPacket(
-                m_deferredLightingTaskGraph,
-                m_deferredLightingCompiledGraph,
-                recordDesc,
-                m_deferredLightingRecordedGraph
-            )
-        )
-            deferredPacketsRecorded = false;
+    if(deferredPacketsRecorded){
+        deferredPacketsRecorded = deferredRecorder.recordPacketRangeInCompileOrder(
+            m_deferredLightingTaskGraph,
+            m_deferredLightingCompiledGraph,
+            graphicsPrefixPacketIndex + 1u,
+            deferredRecordDescs,
+            deferredRecordDescCount,
+            m_deferredLightingRecordedGraph
+        );
     }
     if(!deferredPacketsRecorded){
         m_deferredLightingSubmissionTransaction.discardUnaccepted(
@@ -1734,107 +1728,70 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const auto submitAvboitLightingAndComposite = [&]() -> bool {
         Core::Alloc::ScratchArena deferredScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter deferredSubmitter(device);
-        const bool avboitPreAccepted =
+        const Core::GpuTaskGraphPacketTimingTicket avboitTimingTickets[] = {
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = avboitPrePacket,
+                .timingTicket = &avboitPreTimingTicket,
+            },
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = avboitDepthWarpPacket,
+                .timingTicket = &avboitDepthWarpTimingTicket,
+            },
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = avboitExtinctionPacket,
+                .timingTicket = &avboitExtinctionTimingTicket,
+            },
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = avboitIntegrationPacket,
+                .timingTicket = &avboitIntegrationTimingTicket,
+            },
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = avboitAccumulationPacket,
+                .timingTicket = &avboitAccumulationTimingTicket,
+            },
+        };
+        const usize avboitPacketCount = avboitUsesAsyncCompute ? LengthOf(avboitTimingTickets) : 1u;
+        const bool avboitPacketsAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredAvboitPreTask.valid()
             && avboitPrePacket.valid()
             && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
-            && deferredSubmitter.submitPacket(
+            && (!avboitUsesAsyncCompute || (
+                m_deferredAvboitDepthWarpTask.valid()
+                && m_deferredAvboitExtinctionTask.valid()
+                && m_deferredAvboitIntegrationTask.valid()
+                && m_deferredAvboitAccumulationTask.valid()
+                && avboitDepthWarpPacket.valid()
+                && avboitExtinctionPacket.valid()
+                && avboitIntegrationPacket.valid()
+                && avboitAccumulationPacket.valid()
+            ))
+            && deferredSubmitter.submitPacketRangeInCompileOrder(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
-                avboitPrePacket,
+                deferredAvboitPrePacketIndex,
+                avboitPacketCount,
                 nullptr,
                 0u,
+                avboitTimingTickets,
+                avboitPacketCount,
                 m_deferredLightingSubmissionTransaction,
-                deferredScratchArena,
-                &avboitPreTimingTicket
+                deferredScratchArena
             )
         ;
         avboitPreSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(avboitPrePacket);
-        bool avboitPacketsAccepted = avboitPreAccepted && avboitPreSubmissionToken.valid();
-        if(avboitPacketsAccepted && avboitUsesAsyncCompute){
-            const bool depthWarpAccepted =
-                m_deferredAvboitDepthWarpTask.valid()
-                && avboitDepthWarpPacket.valid()
-                && deferredSubmitter.submitPacket(
-                    m_deferredLightingTaskGraph,
-                    m_deferredLightingCompiledGraph,
-                    m_deferredLightingRecordedGraph,
-                    avboitDepthWarpPacket,
-                    nullptr,
-                    0u,
-                    m_deferredLightingSubmissionTransaction,
-                    deferredScratchArena,
-                    &avboitDepthWarpTimingTicket
-                )
-            ;
-            avboitDepthWarpSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(avboitDepthWarpPacket);
-            const bool extinctionAccepted =
-                depthWarpAccepted
-                && avboitDepthWarpSubmissionToken.valid()
-                && m_deferredAvboitExtinctionTask.valid()
-                && avboitExtinctionPacket.valid()
-                && deferredSubmitter.submitPacket(
-                    m_deferredLightingTaskGraph,
-                    m_deferredLightingCompiledGraph,
-                    m_deferredLightingRecordedGraph,
-                    avboitExtinctionPacket,
-                    nullptr,
-                    0u,
-                    m_deferredLightingSubmissionTransaction,
-                    deferredScratchArena,
-                    &avboitExtinctionTimingTicket
-                )
-            ;
-            avboitExtinctionSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(avboitExtinctionPacket);
-            const bool integrationAccepted =
-                extinctionAccepted
-                && avboitExtinctionSubmissionToken.valid()
-                && m_deferredAvboitIntegrationTask.valid()
-                && avboitIntegrationPacket.valid()
-                && deferredSubmitter.submitPacket(
-                    m_deferredLightingTaskGraph,
-                    m_deferredLightingCompiledGraph,
-                    m_deferredLightingRecordedGraph,
-                    avboitIntegrationPacket,
-                    nullptr,
-                    0u,
-                    m_deferredLightingSubmissionTransaction,
-                    deferredScratchArena,
-                    &avboitIntegrationTimingTicket
-                )
-            ;
-            avboitIntegrationSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(
-                avboitIntegrationPacket
-            );
-            const bool accumulationAccepted =
-                integrationAccepted
-                && avboitIntegrationSubmissionToken.valid()
-                && m_deferredAvboitAccumulationTask.valid()
-                && avboitAccumulationPacket.valid()
-                && deferredSubmitter.submitPacket(
-                    m_deferredLightingTaskGraph,
-                    m_deferredLightingCompiledGraph,
-                    m_deferredLightingRecordedGraph,
-                    avboitAccumulationPacket,
-                    nullptr,
-                    0u,
-                    m_deferredLightingSubmissionTransaction,
-                    deferredScratchArena,
-                    &avboitAccumulationTimingTicket
-                )
-            ;
-            avboitAccumulationSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(
-                avboitAccumulationPacket
-            );
-            avboitPacketsAccepted = accumulationAccepted && avboitAccumulationSubmissionToken.valid();
-        }
+        avboitDepthWarpSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(avboitDepthWarpPacket);
+        avboitExtinctionSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(avboitExtinctionPacket);
+        avboitIntegrationSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(avboitIntegrationPacket);
+        avboitAccumulationSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(
+            avboitAccumulationPacket
+        );
         avboitFinalSubmissionToken = avboitUsesAsyncCompute
             ? avboitAccumulationSubmissionToken
             : avboitPreSubmissionToken
         ;
-        if(!avboitPacketsAccepted || !avboitFinalSubmissionToken.valid()){
+        if(!avboitPacketsAccepted || !avboitPreSubmissionToken.valid() || !avboitFinalSubmissionToken.valid()){
             const bool avboitPreWasRejected = !avboitPreSubmissionToken.valid();
             const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();

@@ -127,6 +127,17 @@ public:
         const GpuNativePacketRecordDesc& desc,
         GpuRecordedGraph& outRecordedGraph
     )const;
+    // Records one non-empty contiguous compiler-order range. Earlier producer packets needed by the range must
+    // already be recorded, which keeps deliberate late tails separate from the ordinary graph prefix.
+    [[nodiscard]] bool recordPacketRangeInCompileOrder(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        usize firstPacketIndex,
+        const GpuNativePacketRecordDesc* recordDescs,
+        usize recordDescCount,
+        GpuRecordedGraph& outRecordedGraph,
+        GpuSubmissionPacketId* outFailedPacket = nullptr
+    )const;
     // Records every compiler packet in its stable dependency order.  This is the native path for a graph whose
     // complete packet chain is known before submission; callers retain recordPacket for intentional partial work.
     [[nodiscard]] bool recordPacketsInCompileOrder(
@@ -236,6 +247,22 @@ public:
         GpuGraphSubmissionTransaction& transaction,
         Alloc::ScratchArena& scratchArena,
         GpuTimingSubmissionTicket* timingTicket = nullptr
+    )const;
+    // Submits one non-empty contiguous compiler-order range. Dependencies outside the range must already be
+    // accepted in the transaction; this preserves graph-owned waits while allowing intentional late tails.
+    [[nodiscard]] bool submitPacketRangeInCompileOrder(
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuRecordedGraph& recordedGraph,
+        usize firstPacketIndex,
+        usize packetCount,
+        const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
+        usize externalCompletionTokenCount,
+        const GpuTaskGraphPacketTimingTicket* timingTickets,
+        usize timingTicketCount,
+        GpuGraphSubmissionTransaction& transaction,
+        Alloc::ScratchArena& scratchArena,
+        GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
     // Submits every compiler packet in its stable dependency order.  Internal packet dependencies are resolved
     // from the shared transaction; external bindings and timing tickets are supplied once for the whole graph.

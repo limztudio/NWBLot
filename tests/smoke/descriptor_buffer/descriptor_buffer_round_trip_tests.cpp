@@ -801,7 +801,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndCarrie
 }
 
 
-TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketChain){
+TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto buffer = device.createBuffer(
         BufferDesc()
@@ -934,21 +934,32 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketChain){
         GpuNativePacketRecordDesc{ .packet = readerPacket },
     };
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacketsInCompileOrder(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
+        0u,
         recordDescs,
-        LengthOf(recordDescs),
+        1u,
+        recordedGraph
+    ));
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        1u,
+        recordDescs + 1u,
+        1u,
         recordedGraph
     ));
     EXPECT_TRUE(writerRecorded);
     EXPECT_TRUE(readerRecorded);
 
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacketsInCompileOrder(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
+        0u,
+        1u,
         nullptr,
         0u,
         nullptr,
@@ -957,6 +968,20 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketChain){
         scratchArena
     ));
     EXPECT_TRUE(transaction.packetToken(writerPacket).valid());
+    EXPECT_FALSE(transaction.packetToken(readerPacket).valid());
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        1u,
+        1u,
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
     EXPECT_TRUE(transaction.packetToken(readerPacket).valid());
     EXPECT_TRUE(device.waitForIdle());
 }

@@ -374,21 +374,51 @@ bool GpuNativePacketRecorder::recordPacketsInCompileOrder(
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
+    if(recordDescCount != compiledGraph.packetCount())
+        return false;
+
+    return recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        0u,
+        recordDescs,
+        recordDescCount,
+        outRecordedGraph,
+        outFailedPacket
+    );
+}
+
+
+bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const usize firstPacketIndex,
+    const GpuNativePacketRecordDesc* const recordDescs,
+    const usize recordDescCount,
+    GpuRecordedGraph& outRecordedGraph,
+    GpuSubmissionPacketId* const outFailedPacket
+)const{
+    if(outFailedPacket)
+        *outFailedPacket = {};
     if(
         !compiledGraph.validFor(graph)
         || !recordDescs
-        || recordDescCount != compiledGraph.packetCount()
+        || recordDescCount == 0u
+        || firstPacketIndex >= compiledGraph.packetCount()
+        || recordDescCount > compiledGraph.packetCount() - firstPacketIndex
     )
         return false;
 
     // The compiler emits packet IDs in stable topological order, so native recording preserves the graph's
-    // internal state-seed chain without requiring renderer-side stage ladders.
-    for(usize packetIndex = 0u; packetIndex < recordDescCount; ++packetIndex){
+    // internal state-seed chain without requiring renderer-side stage ladders. Callers can retain only an
+    // intentional late tail outside this range.
+    for(usize recordDescIndex = 0u; recordDescIndex < recordDescCount; ++recordDescIndex){
+        const usize packetIndex = firstPacketIndex + recordDescIndex;
         const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
-        if(recordDescs[packetIndex].packet != packet || !recordPacket(
+        if(recordDescs[recordDescIndex].packet != packet || !recordPacket(
             graph,
             compiledGraph,
-            recordDescs[packetIndex],
+            recordDescs[recordDescIndex],
             outRecordedGraph
         )){
             if(outFailedPacket)
@@ -629,10 +659,46 @@ bool GpuTaskGraphSubmitter::submitPacketsInCompileOrder(
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
+    return submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        0u,
+        compiledGraph.packetCount(),
+        externalCompletionTokens,
+        externalCompletionTokenCount,
+        timingTickets,
+        timingTicketCount,
+        transaction,
+        scratchArena,
+        outFailedPacket
+    );
+}
+
+
+bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
+    GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuRecordedGraph& recordedGraph,
+    const usize firstPacketIndex,
+    const usize packetCount,
+    const GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
+    const usize externalCompletionTokenCount,
+    const GpuTaskGraphPacketTimingTicket* const timingTickets,
+    const usize timingTicketCount,
+    GpuGraphSubmissionTransaction& transaction,
+    Alloc::ScratchArena& scratchArena,
+    GpuSubmissionPacketId* const outFailedPacket
+)const{
+    if(outFailedPacket)
+        *outFailedPacket = {};
     if(
         !compiledGraph.validFor(graph)
         || !recordedGraph.validFor(compiledGraph)
         || !transaction.validFor(compiledGraph)
+        || packetCount == 0u
+        || firstPacketIndex >= compiledGraph.packetCount()
+        || packetCount > compiledGraph.packetCount() - firstPacketIndex
         || (externalCompletionTokenCount != 0u && !externalCompletionTokens)
         || (timingTicketCount != 0u && !timingTickets)
     )
@@ -649,7 +715,12 @@ bool GpuTaskGraphSubmitter::submitPacketsInCompileOrder(
     }
     for(usize ticketIndex = 0u; ticketIndex < timingTicketCount; ++ticketIndex){
         const GpuTaskGraphPacketTimingTicket& ticket = timingTickets[ticketIndex];
-        if(!ticket.timingTicket || !compiledGraph.validPacket(ticket.packet))
+        if(
+            !ticket.timingTicket
+            || !compiledGraph.validPacket(ticket.packet)
+            || ticket.packet.index < firstPacketIndex
+            || ticket.packet.index >= firstPacketIndex + packetCount
+        )
             return false;
         for(usize previousIndex = 0u; previousIndex < ticketIndex; ++previousIndex){
             if(timingTickets[previousIndex].packet == ticket.packet)
@@ -658,9 +729,9 @@ bool GpuTaskGraphSubmitter::submitPacketsInCompileOrder(
     }
 
     // Packet IDs follow the compiler's topological task order. submitPacket resolves each internal producer from
-    // transaction state, while every external completion remains a graph-wide binding rather than a renderer-side
+    // transaction state, while every external completion remains a range-wide binding rather than a renderer-side
     // per-stage submission argument.
-    for(usize packetIndex = 0u; packetIndex < compiledGraph.packetCount(); ++packetIndex){
+    for(usize packetIndex = firstPacketIndex; packetIndex < firstPacketIndex + packetCount; ++packetIndex){
         const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
         GpuTimingSubmissionTicket* timingTicket = nullptr;
         for(usize ticketIndex = 0u; ticketIndex < timingTicketCount; ++ticketIndex){

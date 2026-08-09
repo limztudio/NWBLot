@@ -195,19 +195,6 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
         ))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graphics-prefix graph telemetry export failed"));
     }
-    if(m_shadowVisibilityTaskGraphValid){
-        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-        const Core::GpuTaskGraphTelemetryOptions shadowVisibilityTelemetryOptions{
-            .queueAssignments = &m_shadowVisibilityTaskGraphQueueAssignments,
-        };
-        if(!m_shadowVisibilityTaskGraph.appendFrameGraphTelemetry(
-            builder,
-            m_shadowVisibilityTaskGraphAnalysis,
-            scratchArena,
-            shadowVisibilityTelemetryOptions
-        ))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: shadow-effects graph telemetry export failed"));
-    }
     if(m_deferredLightingTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphTelemetryOptions deferredLightingTelemetryOptions{
@@ -219,7 +206,7 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
             scratchArena,
             deferredLightingTelemetryOptions
         ))
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred-lighting/composite/present graph telemetry export failed"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred-effects/lighting/composite/present graph telemetry export failed"));
     }
 
     return true;

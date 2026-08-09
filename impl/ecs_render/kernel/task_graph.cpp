@@ -1470,85 +1470,50 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
 }
 
 
-void RendererSystem::buildShadowVisibilityTaskGraph(
-    const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+bool RendererSystem::declareDeferredShadowVisibilityTask(
     DeferredFrameTargets& deferredTargets,
     const bool shadowVisibilityPrepared,
     const bool hardwareShadowSupported,
-    Core::GpuTimingSubmissionTicket& shadowVisibilityTimingTicket,
-    Core::GpuTimingSubmissionTicket& softwareCausticsTimingTicket
+    const Core::GpuGraphResourceId worldPosition,
+    const Core::GpuGraphResourceId normal,
+    const Core::GpuGraphResourceId depth,
+    const Core::GpuGraphResourceId shadowVisibility,
+    const Core::GpuGraphResourceId currentBindlessSlots,
+    const Core::GpuGraphResourceId sceneShading,
+    const Core::GpuGraphResourceId lights,
+    const Core::GpuGraphResourceId materialContextSlots,
+    const Core::GpuExternalCompletionId prefixCompletion,
+    Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace __hidden_renderer_task_graph;
 
-    m_shadowVisibilityTaskGraphValid = false;
-    m_shadowVisibilityTask = {};
-    m_softwareCausticsTask = {};
-    m_shadowVisibilityPrefixCompletion = {};
-    m_shadowVisibilityTaskGraph.reset();
-    m_shadowVisibilityTaskGraphAnalysis.reset();
-    m_shadowVisibilityTaskGraphQueueAssignments.reset();
-    m_shadowVisibilityCompiledGraph.reset();
-    m_shadowVisibilityRecordedGraph.reset(m_shadowVisibilityCompiledGraph);
-    m_shadowVisibilitySubmissionTransaction.reset(m_shadowVisibilityCompiledGraph);
-
-    if(!deferredTargets.valid() || !deferredTargets.bindless.valid())
-        return;
-
-    const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
-        return m_shadowVisibilityTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
-    };
-    const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
-        return m_shadowVisibilityTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
-    };
-    const Core::GpuGraphResourceId worldPosition = importTexture(
-        deferredTargets.worldPosition,
-        Name("render.shadow_visibility.world_position"),
-        "G-Buffer World Position"
-    );
-    const Core::GpuGraphResourceId normal = importTexture(
-        deferredTargets.normal,
-        Name("render.shadow_visibility.normal"),
-        "G-Buffer Normal"
-    );
-    const Core::GpuGraphResourceId depth = importTexture(
-        deferredTargets.depth,
-        Name("render.shadow_visibility.depth"),
-        "G-Buffer Depth"
-    );
-    const Core::GpuGraphResourceId shadowVisibility = importTexture(
-        deferredTargets.shadowVisibility,
-        Name("render.shadow_visibility.output"),
-        "Shadow Visibility"
-    );
-    const Core::GpuGraphResourceId bindlessSlots = importBuffer(
-        deferredTargets.bindless.slotsBuffer,
-        Name("render.shadow_visibility.bindless_slots"),
-        "Deferred Bindless Slots"
-    );
-    const Core::GpuGraphResourceId sceneGeometryDomain = m_shadowVisibilityTaskGraph.importHazardDomain(
-        HazardDomainDesc(Name("render.shadow_visibility.scene_geometry"), "Scene Acceleration and Geometry")
-    );
+    m_deferredShadowVisibilityTask = {};
     if(
-        !worldPosition.valid()
+        !deferredTargets.valid()
+        || !deferredTargets.bindless.valid()
+        || !worldPosition.valid()
         || !normal.valid()
         || !depth.valid()
         || !shadowVisibility.valid()
-        || !bindlessSlots.valid()
-        || !sceneGeometryDomain.valid()
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shadow-visibility graph resources"));
-        return;
-    }
+        || !currentBindlessSlots.valid()
+        || !sceneShading.valid()
+        || !lights.valid()
+        || !prefixCompletion.valid()
+    )
+        return false;
 
-    Core::GpuExternalCompletionDesc prefixCompletionDesc;
-    prefixCompletionDesc
-        .setIdentity(Name("render.shadow_visibility.graphics_prefix_complete"))
-        .setMarkerLabel("Graphics Prefix Complete")
-    ;
-    m_shadowVisibilityPrefixCompletion = m_shadowVisibilityTaskGraph.importExternalCompletion(prefixCompletionDesc);
-    if(!m_shadowVisibilityPrefixCompletion.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graphics-prefix completion for shadow visibility"));
-        return;
+    const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
+        return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
+    };
+    const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
+        return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
+    };
+    const Core::GpuGraphResourceId sceneGeometryDomain = m_deferredLightingTaskGraph.importHazardDomain(
+        HazardDomainDesc(Name("render.shadow_visibility.scene_geometry"), "Scene Acceleration and Geometry")
+    );
+    if(!sceneGeometryDomain.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred shadow-visibility graph resources"));
+        return false;
     }
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
@@ -1557,7 +1522,7 @@ void RendererSystem::buildShadowVisibilityTaskGraph(
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));
     resourceUses.push_back(ReadUse(depth, Core::ResourceStates::DepthRead));
-    resourceUses.push_back(ReadUse(bindlessSlots, Core::ResourceStates::ConstantBuffer));
+    resourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     // Hybrid transparent shadows multiply onto the opaque result, so this remains a read/write declaration even
     // when the hardware-only path overwrites it.
     resourceUses.push_back(ReadWriteUse(shadowVisibility, Core::ResourceStates::UnorderedAccess));
@@ -1671,18 +1636,6 @@ void RendererSystem::buildShadowVisibilityTaskGraph(
             "Transparent Shadow Moments B"
         )
         && appendOptionalReadBuffer(
-            m_deferredState.m_sceneShadingBuffer,
-            Name("render.shadow_visibility.scene_shading"),
-            "Scene Shading",
-            Core::ResourceStates::ConstantBuffer
-        )
-        && appendOptionalReadBuffer(
-            m_deferredState.m_lightBuffer,
-            Name("render.shadow_visibility.lights"),
-            "Lights",
-            Core::ResourceStates::ShaderResource
-        )
-        && appendOptionalReadBuffer(
             m_rayTracingState.m_sceneBvhNodeBuffer,
             Name("render.shadow_visibility.scene_bvh_nodes"),
             "Scene BVH Nodes",
@@ -1696,27 +1649,21 @@ void RendererSystem::buildShadowVisibilityTaskGraph(
         )
         && appendOptionalReadBuffer(
             m_rayTracingState.m_shadowInstanceMaterialBuffer,
-            Name("render.shadow_visibility.instance_material"),
+            Name("render.deferred_effects.instance_material"),
             "Shadow Instance Materials",
             Core::ResourceStates::ShaderResource
         )
         && appendOptionalReadBuffer(
             m_rayTracingState.m_shadowMaterialTypedBuffer,
-            Name("render.shadow_visibility.material_typed"),
+            Name("render.deferred_effects.material_typed"),
             "Shadow Typed Materials",
             Core::ResourceStates::ShaderResource
         )
         && appendOptionalReadBuffer(
             m_rayTracingState.m_shadowInstanceBuffer,
-            Name("render.shadow_visibility.shadow_instances"),
+            Name("render.deferred_effects.shadow_instances"),
             "Shadow Instances",
             Core::ResourceStates::ShaderResource
-        )
-        && appendOptionalReadBuffer(
-            m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer,
-            Name("render.shadow_visibility.material_context_slots"),
-            "Ray Trace Material Context Slots",
-            Core::ResourceStates::ConstantBuffer
         )
         && appendOptionalReadWriteBuffer(
             m_rayTracingState.m_swShadowEdgeStatsBuffer,
@@ -1750,13 +1697,13 @@ void RendererSystem::buildShadowVisibilityTaskGraph(
         )
     ;
     if(m_rayTracingState.m_tlas){
-        const Core::GpuGraphResourceId tlas = m_shadowVisibilityTaskGraph.importAccelStruct(
+        const Core::GpuGraphResourceId tlas = m_deferredLightingTaskGraph.importAccelStruct(
             m_rayTracingState.m_tlas,
-            AccelStructResourceDesc(Name("render.shadow_visibility.tlas"), "Scene TLAS")
+            AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
         );
         const Core::GpuGraphResourceId tlasBackingBuffer = importBuffer(
             m_rayTracingState.m_tlas->getBackingBufferHandle(),
-            Name("render.shadow_visibility.tlas_backing"),
+            Name("render.deferred_effects.tlas_backing"),
             "Scene TLAS Backing"
         );
         optionalResourcesImported = optionalResourcesImported && tlas.valid() && tlasBackingBuffer.valid();
@@ -1768,9 +1715,13 @@ void RendererSystem::buildShadowVisibilityTaskGraph(
         }
     }
     if(!optionalResourcesImported){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a shadow-visibility dynamic resource"));
-        return;
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a deferred shadow-visibility dynamic resource"));
+        return false;
     }
+    resourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
+    resourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource));
+    if(materialContextSlots.valid())
+        resourceUses.push_back(ReadUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
 
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
@@ -1782,122 +1733,64 @@ void RendererSystem::buildShadowVisibilityTaskGraph(
         .setMarkerLabel("Shadow Visibility")
         .setQueue(ComputeQueueRequest())
         .setScheduling(scheduling)
-        .setExternalDependencies(&m_shadowVisibilityPrefixCompletion, 1u)
+        .setExternalDependencies(&prefixCompletion, 1u)
         .setResourceUses(resourceUses.data(), resourceUses.size())
     ;
-    m_shadowVisibilityTask = m_raytracingSystem.declareShadowVisibilityTask(
-        m_shadowVisibilityTaskGraph,
+    m_deferredShadowVisibilityTask = m_raytracingSystem.declareShadowVisibilityTask(
+        m_deferredLightingTaskGraph,
         desc,
         deferredTargets,
         shadowVisibilityPrepared,
         hardwareShadowSupported,
-        shadowVisibilityTimingTicket
+        timingTicket
     );
-    if(!m_shadowVisibilityTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shadow-visibility graph task"));
-        return;
+    if(!m_deferredShadowVisibilityTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred shadow-visibility graph task"));
+        return false;
     }
-    if(!hardwareShadowSupported && !declareSoftwareCausticsTask(
-        input,
-        deferredTargets,
-        shadowVisibilityPrepared,
-        m_shadowVisibilityTask,
-        softwareCausticsTimingTicket
-    ))
-        return;
-    const auto& device = graphics().getDevice();
-    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
-    const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
-    const bool dedicatedAsyncCompute = input.dedicatedAsyncCompute
-        && computeFamilyIndex != Limit<u32>::s_Max
-        && computeFamilyIndex != graphicsFamilyIndex
-    ;
-    const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
-        static_cast<u8>(Core::GpuQueueCapability::Graphics)
-        | static_cast<u8>(Core::GpuQueueCapability::Compute)
-        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
-    );
-    const Core::GpuQueueCapability::Mask computeQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
-        static_cast<u8>(Core::GpuQueueCapability::Compute)
-        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
-    );
-    const Core::GpuPhysicalQueueInfo queues[] = {
-        Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
-            .queueClass = Core::CommandQueue::Graphics,
-            .capabilities = graphicsQueueCapabilities,
-            .familyIndex = graphicsFamilyIndex,
-            .queueIndex = 0u,
-            .dedicated = false,
-        },
-        Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 1u, m_taskGraphDeviceGeneration },
-            .queueClass = Core::CommandQueue::Compute,
-            .capabilities = computeQueueCapabilities,
-            .familyIndex = computeFamilyIndex,
-            .queueIndex = 0u,
-            .dedicated = true,
-        },
-    };
-    const Core::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = dedicatedAsyncCompute ? LengthOf(queues) : 1u,
-    };
-    const Core::GpuTaskGraphCompiler compiler;
-    if(!compiler.compile(
-        m_shadowVisibilityTaskGraph,
-        m_shadowVisibilityTaskGraphAnalysis,
-        topology,
-        m_shadowVisibilityTaskGraphQueueAssignments,
-        m_shadowVisibilityCompiledGraph,
-        scratchArena
-    )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile shadow-visibility/software-caustics task graph"));
-        return;
-    }
-    m_shadowVisibilityRecordedGraph.reset(m_shadowVisibilityCompiledGraph);
-    m_shadowVisibilitySubmissionTransaction.reset(m_shadowVisibilityCompiledGraph);
-    m_shadowVisibilityTaskGraphValid = true;
+    return true;
 }
 
 
-bool RendererSystem::declareSoftwareCausticsTask(
+bool RendererSystem::declareDeferredSoftwareCausticsTask(
     const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
     DeferredFrameTargets& deferredTargets,
     const bool shadowVisibilityPrepared,
-    const Core::GpuTaskId& shadowVisibilityTask,
+    const Core::GpuGraphResourceId worldPosition,
+    const Core::GpuGraphResourceId depth,
+    const Core::GpuGraphResourceId causticIrradiance,
+    const Core::GpuGraphResourceId currentBindlessSlots,
+    const Core::GpuGraphResourceId sceneShading,
+    const Core::GpuGraphResourceId lights,
+    const Core::GpuGraphResourceId materialContextSlots,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace __hidden_renderer_task_graph;
 
-    m_softwareCausticsTask = {};
+    m_deferredSoftwareCausticsTask = {};
 
-    // This is the direct successor in the software-effects graph. A distinct Compute family remains an optional
-    // compiler assignment; on other devices the same packet routes through Graphics.
+    // This remains the direct successor of Shadow Visibility in the deferred graph. A distinct Compute family is
+    // optional; on other devices the compiler routes the same packet through Graphics.
     if(
         input.hardwareCaustics
-        || !shadowVisibilityTask.valid()
+        || !m_deferredShadowVisibilityTask.valid()
         || !deferredTargets.valid()
         || !deferredTargets.bindless.valid()
+        || !worldPosition.valid()
+        || !depth.valid()
+        || !causticIrradiance.valid()
+        || !currentBindlessSlots.valid()
+        || !sceneShading.valid()
+        || !lights.valid()
     )
         return false;
 
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
-        return m_shadowVisibilityTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
+        return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
     };
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
-        return m_shadowVisibilityTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
+        return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
-    const Core::GpuGraphResourceId worldPosition = importTexture(
-        deferredTargets.worldPosition,
-        Name("render.shadow_visibility.world_position"),
-        "G-Buffer World Position"
-    );
-    const Core::GpuGraphResourceId depth = importTexture(
-        deferredTargets.depth,
-        Name("render.shadow_visibility.depth"),
-        "G-Buffer Depth"
-    );
     const Core::GpuGraphResourceId causticAccumulator = importTexture(
         deferredTargets.causticAccumulator,
         Name("render.software_caustics.accumulator"),
@@ -1918,17 +1811,7 @@ bool RendererSystem::declareSoftwareCausticsTask(
         Name("render.software_caustics.resolve_geometry"),
         "Caustic Resolve Geometry"
     );
-    const Core::GpuGraphResourceId causticIrradiance = importTexture(
-        deferredTargets.causticIrradiance,
-        Name("render.software_caustics.irradiance"),
-        "Caustic Irradiance"
-    );
-    const Core::GpuGraphResourceId bindlessSlots = importBuffer(
-        deferredTargets.bindless.slotsBuffer,
-        Name("render.shadow_visibility.bindless_slots"),
-        "Deferred Bindless Slots"
-    );
-    const Core::GpuGraphResourceId sceneGeometryDomain = m_shadowVisibilityTaskGraph.importHazardDomain(
+    const Core::GpuGraphResourceId sceneGeometryDomain = m_deferredLightingTaskGraph.importHazardDomain(
         HazardDomainDesc(
             Name("render.software_caustics.scene_geometry"),
             "Software BVH Scene Geometry"
@@ -1941,11 +1824,9 @@ bool RendererSystem::declareSoftwareCausticsTask(
         || !causticHistory.valid()
         || !causticResolveHalf.valid()
         || !causticResolveGeometry.valid()
-        || !causticIrradiance.valid()
-        || !bindlessSlots.valid()
         || !sceneGeometryDomain.valid()
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import software-caustics graph resources"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred software-caustics graph resources"));
         return false;
     }
 
@@ -1954,7 +1835,7 @@ bool RendererSystem::declareSoftwareCausticsTask(
     resourceUses.reserve(20u);
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(depth, Core::ResourceStates::DepthRead));
-    resourceUses.push_back(ReadUse(bindlessSlots, Core::ResourceStates::ConstantBuffer));
+    resourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     resourceUses.push_back(ReadWriteUse(causticAccumulator, Core::ResourceStates::UnorderedAccess));
     resourceUses.push_back(ReadWriteUse(causticHistory, Core::ResourceStates::UnorderedAccess));
     resourceUses.push_back(ReadWriteUse(causticResolveHalf, Core::ResourceStates::UnorderedAccess));
@@ -1973,18 +1854,6 @@ bool RendererSystem::declareSoftwareCausticsTask(
     };
     const bool optionalResourcesImported =
         appendOptionalReadBuffer(
-            m_deferredState.m_sceneShadingBuffer,
-            Name("render.shadow_visibility.scene_shading"),
-            "Scene Shading",
-            Core::ResourceStates::ConstantBuffer
-        )
-        && appendOptionalReadBuffer(
-            m_deferredState.m_lightBuffer,
-            Name("render.shadow_visibility.lights"),
-            "Lights",
-            Core::ResourceStates::ShaderResource
-        )
-        && appendOptionalReadBuffer(
             m_rayTracingState.m_causticEmissionTargetBuffer,
             Name("render.software_caustics.emission_targets"),
             "Caustic Emission Targets",
@@ -1996,23 +1865,21 @@ bool RendererSystem::declareSoftwareCausticsTask(
             "Mesh View",
             Core::ResourceStates::ConstantBuffer
         )
-        && appendOptionalReadBuffer(
-            m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer,
-            Name("render.shadow_visibility.material_context_slots"),
-            "Ray Trace Material Context Slots",
-            Core::ResourceStates::ConstantBuffer
-        )
     ;
     if(!optionalResourcesImported){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a software-caustics dynamic resource"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a deferred software-caustics dynamic resource"));
         return false;
     }
+    resourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
+    resourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource));
+    if(materialContextSlots.valid())
+        resourceUses.push_back(ReadUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
 
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
-    const Core::GpuTaskId dependencies[] = { shadowVisibilityTask };
+    const Core::GpuTaskId dependencies[] = { m_deferredShadowVisibilityTask };
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.software_caustics"))
@@ -2022,15 +1889,15 @@ bool RendererSystem::declareSoftwareCausticsTask(
         .setDependencies(dependencies, LengthOf(dependencies))
         .setResourceUses(resourceUses.data(), resourceUses.size())
     ;
-    m_softwareCausticsTask = m_raytracingSystem.declareSoftwareCausticsTask(
-        m_shadowVisibilityTaskGraph,
+    m_deferredSoftwareCausticsTask = m_raytracingSystem.declareSoftwareCausticsTask(
+        m_deferredLightingTaskGraph,
         desc,
         deferredTargets,
         shadowVisibilityPrepared,
         timingTicket
     );
-    if(!m_softwareCausticsTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare software-caustics graph task"));
+    if(!m_deferredSoftwareCausticsTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics graph task"));
         return false;
     }
     return true;
@@ -2046,7 +1913,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     const Core::GpuGraphResourceId sceneShading,
     const Core::GpuGraphResourceId lights,
     const Core::GpuGraphResourceId materialContextSlots,
-    const Core::GpuExternalCompletionId effectsCompletion,
+    const Core::GpuTaskId effectsTask,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace __hidden_renderer_task_graph;
@@ -2061,7 +1928,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         || !currentBindlessSlots.valid()
         || !sceneShading.valid()
         || !lights.valid()
-        || !effectsCompletion.valid()
+        || !effectsTask.valid()
     )
         return false;
 
@@ -2187,7 +2054,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         .setMarkerLabel("Surfel GI")
         .setQueue(ComputeQueueRequest())
         .setScheduling(scheduling)
-        .setExternalDependencies(&effectsCompletion, 1u)
+        .setDependencies(&effectsTask, 1u)
         .setResourceUses(resourceUses.data(), resourceUses.size())
     ;
     m_deferredSurfelGiTask = m_raytracingSystem.declareSurfelGiTask(
@@ -2212,7 +2079,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     const bool hasTransparentRenderers,
     const bool shadowVisibilityPrepared,
     Core::Framebuffer* const presentationFramebuffer,
-    const bool shadowVisibilityRunsOnCompute,
+    const bool shadowVisibilityExpectedCompute,
     Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
     Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
@@ -2220,6 +2087,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::GpuTimingSubmissionTicket& avboitExtinctionTimingTicket,
     Core::GpuTimingSubmissionTicket& avboitIntegrationTimingTicket,
     Core::GpuTimingSubmissionTicket& avboitAccumulationTimingTicket,
+    Core::GpuTimingSubmissionTicket& shadowVisibilityTimingTicket,
+    Core::GpuTimingSubmissionTicket& softwareCausticsTimingTicket,
     Core::GpuTimingSubmissionTicket& surfelGiTimingTicket,
     Core::GpuTimingSubmissionTicket& hardwareCausticsTimingTicket,
     Core::GpuTimingSubmissionTicket& lightingTimingTicket,
@@ -2230,6 +2099,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     using namespace __hidden_renderer_task_graph;
 
     m_deferredLightingTaskGraphValid = false;
+    m_deferredShadowVisibilityTask = {};
+    m_deferredSoftwareCausticsTask = {};
     m_deferredSurfelGiTask = {};
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitPreTask = {};
@@ -2241,8 +2112,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredCompositeTask = {};
     m_deferredPresentTask = {};
     m_deferredLaggedLightingHistoryTask = {};
-    m_deferredSurfelGiEffectsCompletion = {};
-    m_deferredHardwareCausticsPrefixCompletion = {};
     m_deferredLightingPrefixCompletion = {};
     m_deferredLightingHistoryCompletion = {};
     m_deferredLightingTaskGraph.reset();
@@ -2269,7 +2138,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         avboitAccumulationTimingTicket.discard();
     }
     const bool declaresHardwareCaustics = input.hardwareCaustics;
-    const bool lightingDependsOnHardwareCaustics = declaresHardwareCaustics && !useLaggedLightingHistory;
     const bool capturesLaggedLightingHistory = includeLaggedLightingHistoryCapture
         && schedule.capturesLaggedLightingHistory()
         && dedicatedAsyncCompute
@@ -2335,6 +2203,22 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         Name("render.deferred_lighting.surfel_irradiance"),
         history ? "Lagged Surfel Irradiance" : "Surfel Irradiance"
     );
+    const Core::GpuGraphResourceId currentShadowVisibility = !history
+        ? shadowVisibility
+        : importTexture(
+            deferredTargets.shadowVisibility,
+            Name("render.deferred_shadow_visibility.current_output"),
+            "Shadow Visibility"
+        )
+    ;
+    const Core::GpuGraphResourceId currentCausticIrradiance = !history
+        ? causticIrradiance
+        : importTexture(
+            deferredTargets.causticIrradiance,
+            Name("render.deferred_effects.current_caustic_irradiance"),
+            "Caustic Irradiance"
+        )
+    ;
     const Core::GpuGraphResourceId currentSurfelIrradiance = !history
         ? surfelIrradiance
         : importTexture(
@@ -2380,15 +2264,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         )
         : Core::GpuGraphResourceId{}
     ;
-    const Core::GpuGraphResourceId hardwareCausticIrradiance =
-        !declaresHardwareCaustics || !history
-            ? causticIrradiance
-            : importTexture(
-                deferredTargets.causticIrradiance,
-                Name("render.hardware_caustics.irradiance"),
-                "Caustic Irradiance"
-            )
-    ;
     // The optional history copy is declared in this graph after Present, but records only after its accepted
     // producer snapshots exist. Active lighting samples the history resources above, so reuse those exact graph
     // identities for copy destinations and import only the current producer images that are otherwise absent.
@@ -2399,25 +2274,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::GpuGraphResourceId historyCopyDestinationCausticIrradiance;
     Core::GpuGraphResourceId historyCopyDestinationSurfelIrradiance;
     if(capturesLaggedLightingHistory){
-        historyCopyShadowVisibility = history
-            ? importTexture(
-                deferredTargets.shadowVisibility,
-                Name("render.lagged_history_copy.shadow_visibility"),
-                "Shadow Visibility"
-            )
-            : shadowVisibility
-        ;
-        historyCopyCausticIrradiance = !history
-            ? causticIrradiance
-            : (declaresHardwareCaustics
-                ? hardwareCausticIrradiance
-                : importTexture(
-                    deferredTargets.causticIrradiance,
-                    Name("render.lagged_history_copy.caustic_irradiance"),
-                    "Caustic Irradiance"
-                )
-            )
-        ;
+        historyCopyShadowVisibility = currentShadowVisibility;
+        historyCopyCausticIrradiance = currentCausticIrradiance;
         historyCopySurfelIrradiance = history
             ? currentSurfelIrradiance
             : surfelIrradiance
@@ -2509,6 +2367,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         || !shadowVisibility.valid()
         || !causticIrradiance.valid()
         || !surfelIrradiance.valid()
+        || !currentShadowVisibility.valid()
+        || !currentCausticIrradiance.valid()
         || !currentSurfelIrradiance.valid()
         || !opaqueColor.valid()
         || !sceneShading.valid()
@@ -2516,7 +2376,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         || !bindlessSlots.valid()
         || !currentBindlessSlots.valid()
         || (m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer && !materialContextSlots.valid())
-        || (declaresHardwareCaustics && !hardwareCausticIrradiance.valid())
         || (capturesLaggedLightingHistory && (
             !historyCopyShadowVisibility.valid()
             || !historyCopyCausticIrradiance.valid()
@@ -2554,18 +2413,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         return;
     }
 
-    Core::GpuExternalCompletionDesc surfelGiEffectsCompletionDesc;
-    surfelGiEffectsCompletionDesc
-        .setIdentity(Name("render.deferred_surfel_gi.effects_complete"))
-        .setMarkerLabel("Shadow Effects Complete")
-    ;
-    m_deferredSurfelGiEffectsCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
-        surfelGiEffectsCompletionDesc
-    );
-    if(!m_deferredSurfelGiEffectsCompletion.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shadow-effects completion for deferred surfel GI"));
-        return;
-    }
     if(useLaggedLightingHistory){
         Core::GpuExternalCompletionDesc lightingHistoryCompletionDesc;
         lightingHistoryCompletionDesc
@@ -2581,8 +2428,44 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         }
     }
 
-    // Surfel GI remains the terminal Shadow/Software effect, but its completion is now the first deferred packet
-    // boundary. Declaring it before hardware/AVBOIT preserves the established effects -> surfel -> suffix order.
+    // Effects start from the accepted graphics-prefix packet and remain compiler-owned through the deferred suffix.
+    // Shadow/Software are declared first so their queue assignments are stable before Surf, AVBOIT, and Lighting.
+    if(!declareDeferredShadowVisibilityTask(
+        deferredTargets,
+        shadowVisibilityPrepared,
+        declaresHardwareCaustics,
+        worldPosition,
+        normal,
+        depth,
+        currentShadowVisibility,
+        currentBindlessSlots,
+        sceneShading,
+        lights,
+        materialContextSlots,
+        m_deferredLightingPrefixCompletion,
+        shadowVisibilityTimingTicket
+    ))
+        return;
+    if(!declaresHardwareCaustics && !declareDeferredSoftwareCausticsTask(
+        input,
+        deferredTargets,
+        shadowVisibilityPrepared,
+        worldPosition,
+        depth,
+        currentCausticIrradiance,
+        currentBindlessSlots,
+        sceneShading,
+        lights,
+        materialContextSlots,
+        softwareCausticsTimingTicket
+    ))
+        return;
+    const Core::GpuTaskId effectsTask = declaresHardwareCaustics
+        ? m_deferredShadowVisibilityTask
+        : m_deferredSoftwareCausticsTask
+    ;
+    // Surfel GI remains the terminal effects task. Declaring it before hardware/AVBOIT preserves the established
+    // effects -> surfel -> suffix order without renderer-side completion stitching.
     if(!declareDeferredSurfelGiTask(
         deferredTargets,
         worldPosition,
@@ -2592,7 +2475,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         sceneShading,
         lights,
         materialContextSlots,
-        m_deferredSurfelGiEffectsCompletion,
+        effectsTask,
         surfelGiTimingTicket
     ))
         return;
@@ -2601,19 +2484,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     // It is declared before Lighting: declaration order establishes the live current-irradiance RAW edge, while the
     // lagged route uses distinct current/history targets and intentionally has no Hardware-to-Lighting dependency.
     if(declaresHardwareCaustics){
-        Core::GpuExternalCompletionDesc hardwarePrefixCompletionDesc;
-        hardwarePrefixCompletionDesc
-            .setIdentity(Name("render.hardware_caustics.graphics_prefix_complete"))
-            .setMarkerLabel("Graphics Prefix Complete")
-        ;
-        m_deferredHardwareCausticsPrefixCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
-            hardwarePrefixCompletionDesc
-        );
-        if(!m_deferredHardwareCausticsPrefixCompletion.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graphics-prefix completion for hardware caustics"));
-            return;
-        }
-
         const Core::GpuGraphResourceId causticAccumulator = importTexture(
             deferredTargets.causticAccumulator,
             Name("render.hardware_caustics.accumulator"),
@@ -2673,7 +2543,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwareResourceUses.push_back(ReadWriteUse(causticHistory, Core::ResourceStates::UnorderedAccess));
         hardwareResourceUses.push_back(ReadWriteUse(causticResolveHalf, Core::ResourceStates::UnorderedAccess));
         hardwareResourceUses.push_back(ReadWriteUse(causticResolveGeometry, Core::ResourceStates::UnorderedAccess));
-        hardwareResourceUses.push_back(WriteUse(hardwareCausticIrradiance, Core::ResourceStates::UnorderedAccess));
+        hardwareResourceUses.push_back(WriteUse(currentCausticIrradiance, Core::ResourceStates::UnorderedAccess));
 
         const auto appendOptionalReadBuffer = [&](
             const Core::BufferHandle& buffer,
@@ -2698,19 +2568,19 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             )
             && appendOptionalReadBuffer(
                 m_rayTracingState.m_shadowInstanceMaterialBuffer,
-                Name("render.hardware_caustics.instance_material"),
+                Name("render.deferred_effects.instance_material"),
                 "Shadow Instance Materials",
                 Core::ResourceStates::ShaderResource
             )
             && appendOptionalReadBuffer(
                 m_rayTracingState.m_shadowMaterialTypedBuffer,
-                Name("render.hardware_caustics.material_typed"),
+                Name("render.deferred_effects.material_typed"),
                 "Shadow Typed Materials",
                 Core::ResourceStates::ShaderResource
             )
             && appendOptionalReadBuffer(
                 m_rayTracingState.m_shadowInstanceBuffer,
-                Name("render.hardware_caustics.shadow_instances"),
+                Name("render.deferred_effects.shadow_instances"),
                 "Shadow Instances",
                 Core::ResourceStates::ShaderResource
             )
@@ -2731,11 +2601,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         if(m_rayTracingState.m_tlas){
             const Core::GpuGraphResourceId tlas = m_deferredLightingTaskGraph.importAccelStruct(
                 m_rayTracingState.m_tlas,
-                AccelStructResourceDesc(Name("render.hardware_caustics.tlas"), "Scene TLAS")
+                AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
             );
             const Core::GpuGraphResourceId tlasBackingBuffer = importBuffer(
                 m_rayTracingState.m_tlas->getBackingBufferHandle(),
-                Name("render.hardware_caustics.tlas_backing"),
+                Name("render.deferred_effects.tlas_backing"),
                 "Scene TLAS Backing"
             );
             optionalResourcesImported = optionalResourcesImported && tlas.valid() && tlasBackingBuffer.valid();
@@ -2750,7 +2620,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         }
 
         const Core::GpuExternalCompletionId hardwareExternalDependencies[2] = {
-            m_deferredHardwareCausticsPrefixCompletion,
+            m_deferredLightingPrefixCompletion,
             m_deferredLightingHistoryCompletion,
         };
         const usize hardwareExternalDependencyCount = useLaggedLightingHistory
@@ -2981,16 +2851,27 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ? LengthOf(laggedLightingExternalDependencies)
         : 0u
     ;
-    // Live Lighting joins Surfel GI, AVBOIT, and Hardware Caustics through internal graph edges. Active lagged
-    // Lighting instead reads history and stays independent from the current-frame Surfel/Hardware producers.
-    const Core::GpuTaskId lightingDependencies[] = {
+    // Live Lighting joins Shadow/Software, Surfel GI, AVBOIT, and Hardware Caustics through internal graph edges.
+    // Active lagged Lighting instead reads history and stays independent from the current-frame producers.
+    const Core::GpuTaskId hardwareLightingDependencies[] = {
+        m_deferredShadowVisibilityTask,
         m_deferredSurfelGiTask,
         avboitFinalTask,
         m_deferredHardwareCausticsTask,
     };
+    const Core::GpuTaskId softwareLightingDependencies[] = {
+        m_deferredShadowVisibilityTask,
+        m_deferredSoftwareCausticsTask,
+        m_deferredSurfelGiTask,
+        avboitFinalTask,
+    };
+    const Core::GpuTaskId* const lightingDependencies = declaresHardwareCaustics
+        ? hardwareLightingDependencies
+        : softwareLightingDependencies
+    ;
     const usize lightingDependencyCount = useLaggedLightingHistory
         ? 0u
-        : (lightingDependsOnHardwareCaustics ? LengthOf(lightingDependencies) : 2u)
+        : LengthOf(hardwareLightingDependencies)
     ;
     // Active lagged Lighting receives these shared read-only states directly from the accepted prefix source. This
     // lets it avoid importing the recorded snapshots from Hardware Caustics and AVBOIT Pre while it reads history.
@@ -3162,7 +3043,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .frameTimingTransaction = &frameTimingTransaction,
             .asyncFinalTiming = &asyncFinalTiming,
             .timingTicket = &presentTimingTicket,
-            .shadowVisibilityRunsOnCompute = shadowVisibilityRunsOnCompute,
+            .shadowVisibilityRunsOnCompute = shadowVisibilityExpectedCompute,
         }
     );
     if(!m_deferredPresentTask.valid()){

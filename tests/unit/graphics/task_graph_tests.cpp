@@ -1741,14 +1741,8 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
             .setIdentity(Name("tests/task_graph/lagged_history_complete"))
             .setMarkerLabel("Lagged History Complete")
     );
-    const Graphics::GpuExternalCompletionId effectsCompletion = graph.importExternalCompletion(
-        Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/lagged_shadow_effects_complete"))
-            .setMarkerLabel("Shadow Effects Complete")
-    );
     ASSERT_TRUE(prefixCompletion.valid());
     ASSERT_TRUE(historyCompletion.valid());
-    ASSERT_TRUE(effectsCompletion.valid());
 
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Graphics::GpuTaskCostHint::Large;
@@ -1776,6 +1770,25 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
         prefixCompletion,
         historyCompletion,
     };
+    const Graphics::GpuTaskResourceUse shadowVisibilityUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = sharedPrefixRead,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskDesc shadowVisibilityDesc;
+    shadowVisibilityDesc
+        .setIdentity(Name("tests/task_graph/lagged_shadow_visibility"))
+        .setMarkerLabel("Shadow Visibility")
+        .setQueue(computeRequest)
+        .setScheduling(scheduling)
+        .setExternalDependencies(&prefixCompletion, 1u)
+        .setResourceUses(shadowVisibilityUses, LengthOf(shadowVisibilityUses))
+    ;
+    const Graphics::GpuTaskId shadowVisibility = graph.addTask(shadowVisibilityDesc);
+    ASSERT_TRUE(shadowVisibility.valid());
     const Graphics::GpuTaskResourceUse surfelGiUses[] = {
         Graphics::GpuTaskResourceUse{
             .resource = sharedPrefixRead,
@@ -1790,13 +1803,14 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
     };
+    const Graphics::GpuTaskId surfelGiDependencies[] = { shadowVisibility };
     Graphics::GpuTaskDesc surfelGiDesc;
     surfelGiDesc
         .setIdentity(Name("tests/task_graph/lagged_surfel_gi"))
         .setMarkerLabel("Surfel GI")
         .setQueue(computeRequest)
         .setScheduling(scheduling)
-        .setExternalDependencies(&effectsCompletion, 1u)
+        .setDependencies(surfelGiDependencies, LengthOf(surfelGiDependencies))
         .setResourceUses(surfelGiUses, LengthOf(surfelGiUses))
     ;
     const Graphics::GpuTaskId surfelGi = graph.addTask(surfelGiDesc);
@@ -1988,6 +2002,7 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
 
+    const Graphics::GpuTaskQueueAssignment* const shadowVisibilityAssignment = assignments.find(shadowVisibility);
     const Graphics::GpuTaskQueueAssignment* const surfelGiAssignment = assignments.find(surfelGi);
     const Graphics::GpuTaskQueueAssignment* const hardwareAssignment = assignments.find(hardware);
     const Graphics::GpuTaskQueueAssignment* const avboitPreAssignment = assignments.find(avboitPre);
@@ -1995,6 +2010,7 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     const Graphics::GpuTaskQueueAssignment* const compositeAssignment = assignments.find(composite);
     const Graphics::GpuTaskQueueAssignment* const presentAssignment = assignments.find(present);
     const Graphics::GpuTaskQueueAssignment* const historyCopyAssignment = assignments.find(historyCopy);
+    ASSERT_NE(shadowVisibilityAssignment, nullptr);
     ASSERT_NE(surfelGiAssignment, nullptr);
     ASSERT_NE(hardwareAssignment, nullptr);
     ASSERT_NE(avboitPreAssignment, nullptr);
@@ -2002,6 +2018,7 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     ASSERT_NE(compositeAssignment, nullptr);
     ASSERT_NE(presentAssignment, nullptr);
     ASSERT_NE(historyCopyAssignment, nullptr);
+    EXPECT_EQ(shadowVisibilityAssignment->queueClass, Graphics::CommandQueue::Compute);
     EXPECT_EQ(surfelGiAssignment->queueClass, Graphics::CommandQueue::Compute);
     EXPECT_EQ(hardwareAssignment->queueClass, Graphics::CommandQueue::Graphics);
     EXPECT_EQ(avboitPreAssignment->queueClass, Graphics::CommandQueue::Graphics);
@@ -2010,6 +2027,7 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     EXPECT_EQ(compositeAssignment->queueClass, Graphics::CommandQueue::Graphics);
     EXPECT_EQ(presentAssignment->queueClass, Graphics::CommandQueue::Graphics);
 
+    const Graphics::GpuSubmissionPacketId shadowVisibilityPacket = compiledGraph.packetForTask(shadowVisibility);
     const Graphics::GpuSubmissionPacketId surfelGiPacket = compiledGraph.packetForTask(surfelGi);
     const Graphics::GpuSubmissionPacketId hardwarePacket = compiledGraph.packetForTask(hardware);
     const Graphics::GpuSubmissionPacketId avboitPrePacket = compiledGraph.packetForTask(avboitPre);
@@ -2017,6 +2035,7 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     const Graphics::GpuSubmissionPacketId compositePacket = compiledGraph.packetForTask(composite);
     const Graphics::GpuSubmissionPacketId presentPacket = compiledGraph.packetForTask(present);
     const Graphics::GpuSubmissionPacketId historyCopyPacket = compiledGraph.packetForTask(historyCopy);
+    ASSERT_TRUE(shadowVisibilityPacket.valid());
     ASSERT_TRUE(surfelGiPacket.valid());
     ASSERT_TRUE(hardwarePacket.valid());
     ASSERT_TRUE(avboitPrePacket.valid());
@@ -2024,14 +2043,15 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     ASSERT_TRUE(compositePacket.valid());
     ASSERT_TRUE(presentPacket.valid());
     ASSERT_TRUE(historyCopyPacket.valid());
-    ASSERT_EQ(compiledGraph.packetCount(), 7u);
-    EXPECT_EQ(compiledGraph.packetIdAt(0u), surfelGiPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(1u), hardwarePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(2u), avboitPrePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(3u), lightingPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(4u), compositePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(5u), presentPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(6u), historyCopyPacket);
+    ASSERT_EQ(compiledGraph.packetCount(), 8u);
+    EXPECT_EQ(compiledGraph.packetIdAt(0u), shadowVisibilityPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(1u), surfelGiPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(2u), hardwarePacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(3u), avboitPrePacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(4u), lightingPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(5u), compositePacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(6u), presentPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(7u), historyCopyPacket);
     EXPECT_EQ(FindEdge(analysis, avboitPre, lighting), nullptr);
     EXPECT_EQ(FindEdge(analysis, surfelGi, lighting), nullptr);
     const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting);
@@ -2046,11 +2066,18 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     EXPECT_EQ(lightingExternalDependencies[0u], prefixCompletion);
     EXPECT_EQ(lightingExternalDependencies[1u], historyCompletion);
 
-    ASSERT_EQ(compiledGraph.packet(surfelGiPacket).externalDependencyCount, 1u);
-    const Graphics::GpuExternalCompletionId* const surfelGiExternalDependencies =
-        compiledGraph.packetExternalDependencies(surfelGiPacket);
-    ASSERT_NE(surfelGiExternalDependencies, nullptr);
-    EXPECT_EQ(surfelGiExternalDependencies[0u], effectsCompletion);
+    ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).externalDependencyCount, 1u);
+    const Graphics::GpuExternalCompletionId* const shadowVisibilityExternalDependencies =
+        compiledGraph.packetExternalDependencies(shadowVisibilityPacket);
+    ASSERT_NE(shadowVisibilityExternalDependencies, nullptr);
+    EXPECT_EQ(shadowVisibilityExternalDependencies[0u], prefixCompletion);
+    ASSERT_EQ(compiledGraph.packet(surfelGiPacket).externalDependencyCount, 0u);
+    ASSERT_EQ(compiledGraph.packet(surfelGiPacket).dependencyCount, 1u);
+    const Graphics::GpuPacketDependency* const surfelGiPacketDependencies = compiledGraph.packetDependencies(
+        surfelGiPacket
+    );
+    ASSERT_NE(surfelGiPacketDependencies, nullptr);
+    EXPECT_EQ(surfelGiPacketDependencies[0u].producer, shadowVisibilityPacket);
 
     ASSERT_EQ(compiledGraph.packet(avboitPrePacket).externalDependencyCount, 1u);
     const Graphics::GpuExternalCompletionId* const avboitPreExternalDependencies =
@@ -2139,6 +2166,16 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
         "Current Surfel Irradiance",
         Graphics::ResourceStates::Common
     );
+    const Graphics::GpuGraphResourceId currentShadowVisibility = importTexture(
+        Name("tests/task_graph/live_current_shadow_visibility"),
+        "Current Shadow Visibility",
+        Graphics::ResourceStates::Common
+    );
+    const Graphics::GpuGraphResourceId currentCausticIrradiance = importTexture(
+        Name("tests/task_graph/live_current_caustic_irradiance"),
+        "Current Caustic Irradiance",
+        Graphics::ResourceStates::Common
+    );
     const Graphics::GpuGraphResourceId avboitWorking = importTexture(
         Name("tests/task_graph/live_avboit_working"),
         "AVBOIT Working",
@@ -2166,6 +2203,8 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     );
     ASSERT_TRUE(sharedPrefixRead.valid());
     ASSERT_TRUE(currentIrradiance.valid());
+    ASSERT_TRUE(currentShadowVisibility.valid());
+    ASSERT_TRUE(currentCausticIrradiance.valid());
     ASSERT_TRUE(avboitWorking.valid());
     ASSERT_TRUE(avboitAccumulation.valid());
     ASSERT_TRUE(opaqueColor.valid());
@@ -2177,13 +2216,7 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
             .setIdentity(Name("tests/task_graph/live_prefix_complete"))
             .setMarkerLabel("Graphics Prefix Complete")
     );
-    const Graphics::GpuExternalCompletionId effectsCompletion = graph.importExternalCompletion(
-        Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/live_shadow_effects_complete"))
-            .setMarkerLabel("Shadow Effects Complete")
-    );
     ASSERT_TRUE(prefixCompletion.valid());
-    ASSERT_TRUE(effectsCompletion.valid());
 
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Graphics::GpuTaskCostHint::Large;
@@ -2202,6 +2235,59 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
         true,
     };
 
+    const Graphics::GpuTaskResourceUse shadowVisibilityUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = sharedPrefixRead,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = currentShadowVisibility,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc shadowVisibilityDesc;
+    shadowVisibilityDesc
+        .setIdentity(Name("tests/task_graph/live_shadow_visibility"))
+        .setMarkerLabel("Shadow Visibility")
+        .setQueue(computeRequest)
+        .setScheduling(scheduling)
+        .setExternalDependencies(&prefixCompletion, 1u)
+        .setResourceUses(shadowVisibilityUses, LengthOf(shadowVisibilityUses))
+    ;
+    const Graphics::GpuTaskId shadowVisibility = graph.addTask(shadowVisibilityDesc);
+    ASSERT_TRUE(shadowVisibility.valid());
+
+    const Graphics::GpuTaskResourceUse softwareCausticsUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = sharedPrefixRead,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = currentCausticIrradiance,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskId softwareCausticsDependencies[] = { shadowVisibility };
+    Graphics::GpuTaskDesc softwareCausticsDesc;
+    softwareCausticsDesc
+        .setIdentity(Name("tests/task_graph/live_software_caustics"))
+        .setMarkerLabel("Software Caustics")
+        .setQueue(computeRequest)
+        .setScheduling(scheduling)
+        .setDependencies(softwareCausticsDependencies, LengthOf(softwareCausticsDependencies))
+        .setResourceUses(softwareCausticsUses, LengthOf(softwareCausticsUses))
+    ;
+    const Graphics::GpuTaskId softwareCaustics = graph.addTask(softwareCausticsDesc);
+    ASSERT_TRUE(softwareCaustics.valid());
+
     const Graphics::GpuTaskResourceUse surfelGiUses[] = {
         Graphics::GpuTaskResourceUse{
             .resource = sharedPrefixRead,
@@ -2216,13 +2302,14 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
     };
+    const Graphics::GpuTaskId surfelGiDependencies[] = { softwareCaustics };
     Graphics::GpuTaskDesc surfelGiDesc;
     surfelGiDesc
         .setIdentity(Name("tests/task_graph/live_surfel_gi"))
         .setMarkerLabel("Surfel GI")
         .setQueue(computeRequest)
         .setScheduling(scheduling)
-        .setExternalDependencies(&effectsCompletion, 1u)
+        .setDependencies(surfelGiDependencies, LengthOf(surfelGiDependencies))
         .setResourceUses(surfelGiUses, LengthOf(surfelGiUses))
     ;
     const Graphics::GpuTaskId surfelGi = graph.addTask(surfelGiDesc);
@@ -2365,6 +2452,18 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
             .access = Graphics::GpuTaskResourceAccess::Read,
         },
         Graphics::GpuTaskResourceUse{
+            .resource = currentShadowVisibility,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = currentCausticIrradiance,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
             .resource = opaqueColor,
             .range = {},
             .requiredState = Graphics::ResourceStates::UnorderedAccess,
@@ -2372,6 +2471,8 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
         },
     };
     const Graphics::GpuTaskId lightingDependencies[] = {
+        shadowVisibility,
+        softwareCaustics,
         surfelGi,
         accumulation,
     };
@@ -2463,6 +2564,8 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
 
+    const Graphics::GpuTaskQueueAssignment* const shadowVisibilityAssignment = assignments.find(shadowVisibility);
+    const Graphics::GpuTaskQueueAssignment* const softwareCausticsAssignment = assignments.find(softwareCaustics);
     const Graphics::GpuTaskQueueAssignment* const surfelGiAssignment = assignments.find(surfelGi);
     const Graphics::GpuTaskQueueAssignment* const preAssignment = assignments.find(pre);
     const Graphics::GpuTaskQueueAssignment* const depthWarpAssignment = assignments.find(depthWarp);
@@ -2472,6 +2575,8 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     const Graphics::GpuTaskQueueAssignment* const lightingAssignment = assignments.find(lighting);
     const Graphics::GpuTaskQueueAssignment* const compositeAssignment = assignments.find(composite);
     const Graphics::GpuTaskQueueAssignment* const presentAssignment = assignments.find(present);
+    ASSERT_NE(shadowVisibilityAssignment, nullptr);
+    ASSERT_NE(softwareCausticsAssignment, nullptr);
     ASSERT_NE(surfelGiAssignment, nullptr);
     ASSERT_NE(preAssignment, nullptr);
     ASSERT_NE(depthWarpAssignment, nullptr);
@@ -2481,6 +2586,8 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     ASSERT_NE(lightingAssignment, nullptr);
     ASSERT_NE(compositeAssignment, nullptr);
     ASSERT_NE(presentAssignment, nullptr);
+    EXPECT_EQ(shadowVisibilityAssignment->queueClass, Graphics::CommandQueue::Compute);
+    EXPECT_EQ(softwareCausticsAssignment->queueClass, Graphics::CommandQueue::Compute);
     EXPECT_EQ(surfelGiAssignment->queueClass, Graphics::CommandQueue::Compute);
     EXPECT_EQ(preAssignment->queueClass, Graphics::CommandQueue::Graphics);
     EXPECT_EQ(depthWarpAssignment->queueClass, Graphics::CommandQueue::Compute);
@@ -2491,6 +2598,8 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     EXPECT_EQ(compositeAssignment->queueClass, Graphics::CommandQueue::Compute);
     EXPECT_EQ(presentAssignment->queueClass, Graphics::CommandQueue::Graphics);
 
+    const Graphics::GpuSubmissionPacketId shadowVisibilityPacket = compiledGraph.packetForTask(shadowVisibility);
+    const Graphics::GpuSubmissionPacketId softwareCausticsPacket = compiledGraph.packetForTask(softwareCaustics);
     const Graphics::GpuSubmissionPacketId surfelGiPacket = compiledGraph.packetForTask(surfelGi);
     const Graphics::GpuSubmissionPacketId prePacket = compiledGraph.packetForTask(pre);
     const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledGraph.packetForTask(depthWarp);
@@ -2500,6 +2609,8 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
     const Graphics::GpuSubmissionPacketId compositePacket = compiledGraph.packetForTask(composite);
     const Graphics::GpuSubmissionPacketId presentPacket = compiledGraph.packetForTask(present);
+    ASSERT_TRUE(shadowVisibilityPacket.valid());
+    ASSERT_TRUE(softwareCausticsPacket.valid());
     ASSERT_TRUE(surfelGiPacket.valid());
     ASSERT_TRUE(prePacket.valid());
     ASSERT_TRUE(depthWarpPacket.valid());
@@ -2509,17 +2620,21 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     ASSERT_TRUE(lightingPacket.valid());
     ASSERT_TRUE(compositePacket.valid());
     ASSERT_TRUE(presentPacket.valid());
-    ASSERT_EQ(compiledGraph.packetCount(), 9u);
-    EXPECT_EQ(compiledGraph.packetIdAt(0u), surfelGiPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(1u), prePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(2u), depthWarpPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(3u), extinctionPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(4u), integrationPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(5u), accumulationPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(6u), lightingPacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(7u), compositePacket);
-    EXPECT_EQ(compiledGraph.packetIdAt(8u), presentPacket);
+    ASSERT_EQ(compiledGraph.packetCount(), 11u);
+    EXPECT_EQ(compiledGraph.packetIdAt(0u), shadowVisibilityPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(1u), softwareCausticsPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(2u), surfelGiPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(3u), prePacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(4u), depthWarpPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(5u), extinctionPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(6u), integrationPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(7u), accumulationPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(8u), lightingPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(9u), compositePacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(10u), presentPacket);
 
+    EXPECT_NE(FindEdge(analysis, shadowVisibility, lighting), nullptr);
+    EXPECT_NE(FindEdge(analysis, softwareCaustics, lighting), nullptr);
     EXPECT_NE(FindEdge(analysis, surfelGi, lighting), nullptr);
     EXPECT_NE(FindEdge(analysis, accumulation, lighting), nullptr);
     const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting);
@@ -2527,9 +2642,17 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
     ASSERT_GT(compiledLighting->prologueStateSeedCount, 0u);
     const Graphics::GpuPacketStateSeed* const lightingSeeds = compiledGraph.taskPrologueStateSeeds(lighting);
     ASSERT_NE(lightingSeeds, nullptr);
+    bool lightingImportsShadowVisibilityState = false;
+    bool lightingImportsSoftwareCausticsState = false;
     bool lightingImportsSurfelGiState = false;
     bool lightingImportsAccumulationState = false;
     for(usize index = 0u; index < compiledLighting->prologueStateSeedCount; ++index){
+        lightingImportsShadowVisibilityState = lightingImportsShadowVisibilityState
+            || lightingSeeds[index].sourcePacket == shadowVisibilityPacket
+        ;
+        lightingImportsSoftwareCausticsState = lightingImportsSoftwareCausticsState
+            || lightingSeeds[index].sourcePacket == softwareCausticsPacket
+        ;
         lightingImportsSurfelGiState = lightingImportsSurfelGiState
             || lightingSeeds[index].sourcePacket == surfelGiPacket
         ;
@@ -2537,14 +2660,24 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
             || lightingSeeds[index].sourcePacket == accumulationPacket
         ;
     }
+    EXPECT_TRUE(lightingImportsShadowVisibilityState);
+    EXPECT_TRUE(lightingImportsSoftwareCausticsState);
     EXPECT_TRUE(lightingImportsSurfelGiState);
     EXPECT_TRUE(lightingImportsAccumulationState);
-    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 2u);
+    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 4u);
     const Graphics::GpuPacketDependency* const lightingPacketDependencies = compiledGraph.packetDependencies(lightingPacket);
     ASSERT_NE(lightingPacketDependencies, nullptr);
+    bool lightingWaitsForShadowVisibility = false;
+    bool lightingWaitsForSoftwareCaustics = false;
     bool lightingWaitsForSurfelGi = false;
     bool lightingWaitsForAccumulation = false;
     for(usize index = 0u; index < compiledGraph.packet(lightingPacket).dependencyCount; ++index){
+        lightingWaitsForShadowVisibility = lightingWaitsForShadowVisibility
+            || lightingPacketDependencies[index].producer == shadowVisibilityPacket
+        ;
+        lightingWaitsForSoftwareCaustics = lightingWaitsForSoftwareCaustics
+            || lightingPacketDependencies[index].producer == softwareCausticsPacket
+        ;
         lightingWaitsForSurfelGi = lightingWaitsForSurfelGi
             || lightingPacketDependencies[index].producer == surfelGiPacket
         ;
@@ -2552,15 +2685,31 @@ TEST(GpuTaskGraph, RoutesLiveAvboitBeforeDeferredLighting){
             || lightingPacketDependencies[index].producer == accumulationPacket
         ;
     }
+    EXPECT_TRUE(lightingWaitsForShadowVisibility);
+    EXPECT_TRUE(lightingWaitsForSoftwareCaustics);
     EXPECT_TRUE(lightingWaitsForSurfelGi);
     EXPECT_TRUE(lightingWaitsForAccumulation);
     EXPECT_EQ(compiledGraph.packet(lightingPacket).externalDependencyCount, 0u);
 
-    ASSERT_EQ(compiledGraph.packet(surfelGiPacket).externalDependencyCount, 1u);
-    const Graphics::GpuExternalCompletionId* const surfelGiExternalDependencies =
-        compiledGraph.packetExternalDependencies(surfelGiPacket);
-    ASSERT_NE(surfelGiExternalDependencies, nullptr);
-    EXPECT_EQ(surfelGiExternalDependencies[0u], effectsCompletion);
+    ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).externalDependencyCount, 1u);
+    const Graphics::GpuExternalCompletionId* const shadowVisibilityExternalDependencies =
+        compiledGraph.packetExternalDependencies(shadowVisibilityPacket);
+    ASSERT_NE(shadowVisibilityExternalDependencies, nullptr);
+    EXPECT_EQ(shadowVisibilityExternalDependencies[0u], prefixCompletion);
+    ASSERT_EQ(compiledGraph.packet(softwareCausticsPacket).externalDependencyCount, 0u);
+    ASSERT_EQ(compiledGraph.packet(softwareCausticsPacket).dependencyCount, 1u);
+    const Graphics::GpuPacketDependency* const softwareCausticsPacketDependencies = compiledGraph.packetDependencies(
+        softwareCausticsPacket
+    );
+    ASSERT_NE(softwareCausticsPacketDependencies, nullptr);
+    EXPECT_EQ(softwareCausticsPacketDependencies[0u].producer, shadowVisibilityPacket);
+    ASSERT_EQ(compiledGraph.packet(surfelGiPacket).externalDependencyCount, 0u);
+    ASSERT_EQ(compiledGraph.packet(surfelGiPacket).dependencyCount, 1u);
+    const Graphics::GpuPacketDependency* const surfelGiPacketDependencies = compiledGraph.packetDependencies(
+        surfelGiPacket
+    );
+    ASSERT_NE(surfelGiPacketDependencies, nullptr);
+    EXPECT_EQ(surfelGiPacketDependencies[0u].producer, softwareCausticsPacket);
 
     const Graphics::GpuPacketDependency* const compositePacketDependencies = compiledGraph.packetDependencies(compositePacket);
     ASSERT_NE(compositePacketDependencies, nullptr);

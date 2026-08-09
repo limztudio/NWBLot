@@ -335,6 +335,7 @@ void RendererSystem::invalidateResources(){
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredLightingAvboitCompletion = {};
+    m_deferredLightingHardwareCausticsCompletion = {};
     m_deferredLightingSurfelGiCompletion = {};
     m_deferredLightingHistoryCompletion = {};
     m_deferredLightingTaskGraph.reset();
@@ -704,6 +705,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredLightingAvboitCompletion = {};
+    m_deferredLightingHardwareCausticsCompletion = {};
     m_deferredLightingSurfelGiCompletion = {};
     m_deferredLightingHistoryCompletion = {};
     m_deferredLightingTaskGraph.reset();
@@ -1163,12 +1165,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? m_deferredLightingHistoryCompletion
         : m_deferredLightingSurfelGiCompletion
     ;
+    // Live deferred lighting samples the current hardware-caustics target; lagged lighting reads its accepted
+    // history instead, so only the live route needs an execution dependency on this independent Graphics packet.
+    const bool deferredLightingWaitsForHardwareCaustics = hardwareShadowSupported && !laggedAsyncLightingSchedule;
     if(
         !m_deferredLightingTaskGraphValid
         || !m_deferredLightingTask.valid()
         || !m_deferredCompositeTask.valid()
         || !m_deferredLightingAvboitCompletion.valid()
         || !deferredLightingDependentCompletion.valid()
+        || (
+            deferredLightingWaitsForHardwareCaustics
+            && !m_deferredLightingHardwareCausticsCompletion.valid()
+        )
         || !deferredLightingPacket.valid()
         || !deferredCompositePacket.valid()
         || m_deferredLightingCompiledGraph.packetCount() != 2u
@@ -1780,6 +1789,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredCompositeTask.valid()
         && m_deferredLightingAvboitCompletion.valid()
         && deferredLightingDependentCompletion.valid()
+        && (
+            !deferredLightingWaitsForHardwareCaustics
+            || m_deferredLightingHardwareCausticsCompletion.valid()
+        )
         && deferredLightingPacket.valid()
         && deferredCompositePacket.valid()
         && m_deferredLightingCompiledGraph.packetCount() == LengthOf(deferredRecordDescs)
@@ -2100,9 +2113,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return false;
         }
 
-        // The deferred suffix imports AVBOIT plus the selected effects producer once. Its internal lighting-to-
-        // composite edge, packet states, and submission order are all compiled from task declarations.
-        const Core::GpuTaskGraphExternalCompletionToken deferredCompletionTokens[] = {
+        // The deferred suffix imports AVBOIT plus the selected effects producer once.  Live hardware caustics is
+        // an independent Graphics packet, so bind its completion here as well when Lighting samples its current
+        // target. Its internal lighting-to-composite edge, packet states, and submission order stay compiled.
+        Core::GpuTaskGraphExternalCompletionToken deferredCompletionTokens[3] = {
             Core::GpuTaskGraphExternalCompletionToken{
                 .completion = m_deferredLightingAvboitCompletion,
                 .token = avboitFinalSubmissionToken,
@@ -2114,6 +2128,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     : surfelGiSubmissionToken,
             },
         };
+        usize deferredCompletionTokenCount = 2u;
+        if(deferredLightingWaitsForHardwareCaustics){
+            deferredCompletionTokens[deferredCompletionTokenCount++] = Core::GpuTaskGraphExternalCompletionToken{
+                .completion = m_deferredLightingHardwareCausticsCompletion,
+                .token = hardwareCausticsSubmissionToken,
+            };
+        }
         const Core::GpuTaskGraphPacketTimingTicket deferredTimingTickets[] = {
             Core::GpuTaskGraphPacketTimingTicket{
                 .packet = deferredLightingPacket,
@@ -2132,6 +2153,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredCompositeTask.valid()
             && m_deferredLightingAvboitCompletion.valid()
             && deferredLightingDependentCompletion.valid()
+            && (
+                !deferredLightingWaitsForHardwareCaustics
+                || (
+                    m_deferredLightingHardwareCausticsCompletion.valid()
+                    && hardwareCausticsSubmissionToken.valid()
+                )
+            )
             && deferredLightingPacket.valid()
             && deferredCompositePacket.valid()
             && m_deferredLightingCompiledGraph.packetCount() == LengthOf(deferredTimingTickets)
@@ -2140,7 +2168,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
                 deferredCompletionTokens,
-                LengthOf(deferredCompletionTokens),
+                deferredCompletionTokenCount,
                 deferredTimingTickets,
                 LengthOf(deferredTimingTickets),
                 m_deferredLightingSubmissionTransaction,

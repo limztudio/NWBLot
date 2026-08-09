@@ -3103,6 +3103,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredLightingAvboitCompletion = {};
+    m_deferredLightingHardwareCausticsCompletion = {};
     m_deferredLightingSurfelGiCompletion = {};
     m_deferredLightingHistoryCompletion = {};
     m_deferredLightingTaskGraph.reset();
@@ -3114,6 +3115,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
 
     const ECSRenderDetail::GpuTaskGraphFrameSchedule schedule(input);
     const bool useLaggedLightingHistory = schedule.usesLaggedLightingHistory();
+    const bool waitsForHardwareCaustics = input.hardwareCaustics && !useLaggedLightingHistory;
     const DeferredLaggedLightingHistoryResources* const history = useLaggedLightingHistory
         ? &deferredTargets.laggedLightingHistory
         : nullptr
@@ -3239,10 +3241,27 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     else
         m_deferredLightingSurfelGiCompletion = dependentEffectsCompletion;
 
-    const Core::GpuExternalCompletionId externalDependencies[] = {
+    if(waitsForHardwareCaustics){
+        Core::GpuExternalCompletionDesc hardwareCausticsCompletionDesc;
+        hardwareCausticsCompletionDesc
+            .setIdentity(Name("render.deferred_lighting.hardware_caustics_complete"))
+            .setMarkerLabel("Hardware Caustics Complete")
+        ;
+        m_deferredLightingHardwareCausticsCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
+            hardwareCausticsCompletionDesc
+        );
+        if(!m_deferredLightingHardwareCausticsCompletion.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import hardware-caustics completion for deferred lighting"));
+            return;
+        }
+    }
+
+    const Core::GpuExternalCompletionId externalDependencies[3] = {
         m_deferredLightingAvboitCompletion,
         dependentEffectsCompletion,
+        m_deferredLightingHardwareCausticsCompletion,
     };
+    const usize externalDependencyCount = waitsForHardwareCaustics ? LengthOf(externalDependencies) : 2u;
     const Core::GpuTaskResourceUse resourceUses[] = {
         ReadTextureUse(albedo, ECSRenderDetail::s_FramebufferSubresources),
         ReadTextureUse(normal, ECSRenderDetail::s_FramebufferSubresources),
@@ -3267,7 +3286,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .setMarkerLabel("Deferred Lighting")
         .setQueue(ComputeQueueRequest())
         .setScheduling(scheduling)
-        .setExternalDependencies(externalDependencies, LengthOf(externalDependencies))
+        .setExternalDependencies(externalDependencies, externalDependencyCount)
         .setResourceUses(resourceUses, LengthOf(resourceUses))
     ;
     m_deferredLightingTask = m_deferredSystem.declareDeferredLightingTask(

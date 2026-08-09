@@ -141,7 +141,6 @@ RendererSystem::RendererSystem(
     , m_laggedLightingHistoryCopyStateHandoff(arena)
     , m_avboitPreStateHandoff(arena)
     , m_avboitDepthWarpStateHandoff(arena)
-    , m_avboitExtinctionInputStateHandoff(arena)
     , m_avboitExtinctionStateHandoff(arena)
     , m_avboitIntegrationInputStateHandoff(arena)
     , m_avboitIntegrationStateHandoff(arena)
@@ -256,7 +255,6 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     resetLaggedLightingHistoryCopyStateHandoffs();
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
-    m_avboitExtinctionInputStateHandoff.reset();
     m_avboitExtinctionStateHandoff.reset();
     m_avboitIntegrationInputStateHandoff.reset();
     m_avboitIntegrationStateHandoff.reset();
@@ -312,7 +310,6 @@ void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
     resetLaggedLightingHistoryCopyStateHandoffs();
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
-    m_avboitExtinctionInputStateHandoff.reset();
     m_avboitExtinctionStateHandoff.reset();
     m_avboitIntegrationInputStateHandoff.reset();
     m_avboitIntegrationStateHandoff.reset();
@@ -354,7 +351,6 @@ void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
     resetLaggedLightingHistoryCopyStateHandoffs();
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
-    m_avboitExtinctionInputStateHandoff.reset();
     m_avboitExtinctionStateHandoff.reset();
     m_avboitIntegrationInputStateHandoff.reset();
     m_avboitIntegrationStateHandoff.reset();
@@ -391,7 +387,6 @@ void RendererSystem::resetRejectedShadowVisibilityStateHandoffs()noexcept{
     m_deferredPresentStateHandoff.reset();
     m_avboitPreStateHandoff.reset();
     m_avboitDepthWarpStateHandoff.reset();
-    m_avboitExtinctionInputStateHandoff.reset();
     m_avboitExtinctionStateHandoff.reset();
     m_avboitIntegrationInputStateHandoff.reset();
     m_avboitIntegrationStateHandoff.reset();
@@ -2309,22 +2304,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return;
         }
 
-        const Core::CommandListResourceStateHandoff* avboitExtinctionBranches[] = {
-            &m_avboitDepthWarpStateHandoff,
-        };
-        if(!m_avboitExtinctionInputStateHandoff.buildFanIn(
-            m_avboitPreStateHandoff,
-            avboitExtinctionBranches,
-            LengthOf(avboitExtinctionBranches)
-        )){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT extinction state fan-in failed"));
-            discardRenderPackets();
-            return;
-        }
         const Core::GpuNativePacketRecordDesc avboitExtinctionRecordDesc{
             .packet = avboitExtinctionPacket,
-            .initialStates = &m_avboitExtinctionInputStateHandoff,
             .finalStates = &m_avboitExtinctionStateHandoff,
+            .useCompiledStateSeeds = true,
+            .applyCompiledBarriers = true,
         };
         const bool avboitExtinctionRecorded =
             avboitExtinctionPacket.valid()

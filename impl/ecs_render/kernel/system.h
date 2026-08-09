@@ -411,11 +411,10 @@ private:
     Core::CommandListResourceStateHandoff m_laggedLightingHistoryCopyInputStateHandoff;
     Core::CommandListResourceStateHandoff m_laggedLightingHistoryCopyStateHandoff;
     // AVBOIT's raster occupancy/extinction/accumulation stages stay on Graphics, while the depth-warp and integration
-    // dispatches may use the graph-selected Compute packet. The graph now owns the depth-warp input seed; remaining
-    // handoffs are retired stage by stage as their packets migrate to compiled state seeds.
+    // dispatches may use the graph-selected Compute packet. The graph now owns the depth-warp and extinction input
+    // seeds; remaining handoffs are retired stage by stage as their packets migrate to compiled state seeds.
     Core::CommandListResourceStateHandoff m_avboitPreStateHandoff;
     Core::CommandListResourceStateHandoff m_avboitDepthWarpStateHandoff;
-    Core::CommandListResourceStateHandoff m_avboitExtinctionInputStateHandoff;
     Core::CommandListResourceStateHandoff m_avboitExtinctionStateHandoff;
     Core::CommandListResourceStateHandoff m_avboitIntegrationInputStateHandoff;
     Core::CommandListResourceStateHandoff m_avboitIntegrationStateHandoff;

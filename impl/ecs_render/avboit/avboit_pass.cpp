@@ -369,12 +369,8 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
 ){
     NWB_ASSERT(avboitTargets.valid());
 
-    // Extinction reads the warp/control outputs and writes both packed-extinction buffers through the heap.
-    commandList.setBufferState(avboitTargets.depthWarpBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(avboitTargets.controlBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(avboitTargets.extinctionBuffer.get(), Core::ResourceStates::UnorderedAccess);
-    commandList.setBufferState(avboitTargets.extinctionOverflowBuffer.get(), Core::ResourceStates::UnorderedAccess);
-    commandList.commitBarriers();
+    // The graph records the warp/control reads and packed-extinction writes as packet-boundary state; this thunk
+    // contains only the native raster pass.
 
     m_renderer.materialSystem().renderMaterialPass(
         commandList,

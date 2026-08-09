@@ -305,8 +305,6 @@ template<typename ArenaT>
     AppendHexU64(value, result);
     return result;
 }
-template<typename ArenaT>
-[[nodiscard]] inline auto FormatHex64(ArenaT& arena, const u64 value){ return FormatHex64A(arena, value); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

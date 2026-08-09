@@ -671,7 +671,8 @@ bool GpuTaskGraphSubmitter::submitPacketsInCompileOrder(
         timingTicketCount,
         transaction,
         scratchArena,
-        outFailedPacket
+        outFailedPacket,
+        nullptr
     );
 }
 
@@ -688,7 +689,8 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
     const usize timingTicketCount,
     GpuGraphSubmissionTransaction& transaction,
     Alloc::ScratchArena& scratchArena,
-    GpuSubmissionPacketId* const outFailedPacket
+    GpuSubmissionPacketId* const outFailedPacket,
+    const GpuTaskGraphPacketAcceptedCallback* const acceptedCallback
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
@@ -701,6 +703,7 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
         || packetCount > compiledGraph.packetCount() - firstPacketIndex
         || (externalCompletionTokenCount != 0u && !externalCompletionTokens)
         || (timingTicketCount != 0u && !timingTickets)
+        || (acceptedCallback && !acceptedCallback->invoke)
     )
         return false;
 
@@ -751,6 +754,16 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
             scratchArena,
             timingTicket
         )){
+            if(outFailedPacket)
+                *outFailedPacket = packet;
+            return false;
+        }
+        const QueueSubmissionToken token = transaction.packetToken(packet);
+        if(acceptedCallback && (!token.valid() || !acceptedCallback->invoke(
+            acceptedCallback->context,
+            packet,
+            token
+        ))){
             if(outFailedPacket)
                 *outFailedPacket = packet;
             return false;

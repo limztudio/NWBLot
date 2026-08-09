@@ -1812,7 +1812,80 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 .token = m_laggedLightingHistorySubmissionToken,
             };
         }
-        const bool deferredLightingAccepted =
+        struct DeferredLightingAcceptanceContext{
+            RendererSystem* renderer = nullptr;
+            DeferredFrameTargets* targets = nullptr;
+            const Core::CommandListResourceStateHandoff* finalState = nullptr;
+            Core::GpuSubmissionPacketId lightingPacket;
+            bool runsOnCompute = false;
+            bool usesLaggedHistory = false;
+            bool returnStatesReady = true;
+        };
+        DeferredLightingAcceptanceContext deferredLightingAcceptance{
+            .renderer = this,
+            .targets = &deferredTargets,
+            .finalState = deferredLightingFinalStateSeed,
+            .lightingPacket = deferredLightingPacket,
+            .runsOnCompute = deferredLightingRunsOnCompute,
+            .usesLaggedHistory = laggedAsyncLightingSchedule,
+        };
+        const auto acceptDeferredLightingPacket = [](
+            void* const rawContext,
+            const Core::GpuSubmissionPacketId& packet,
+            const Core::QueueSubmissionToken& token
+        ) -> bool {
+            static_cast<void>(token);
+            DeferredLightingAcceptanceContext* const context =
+                static_cast<DeferredLightingAcceptanceContext*>(rawContext)
+            ;
+            if(!context || !context->renderer || !context->targets || !context->finalState)
+                return false;
+            if(packet != context->lightingPacket)
+                return true;
+
+            RendererSystem& renderer = *context->renderer;
+            if(context->usesLaggedHistory)
+                context->targets->laggedLightingHistory.slotsUploaded = true;
+            context->returnStatesReady = !context->runsOnCompute || context->usesLaggedHistory || (
+                renderer.m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
+                    *context->finalState,
+                    context->targets->shadowVisibility.get()
+                )
+                // Bootstrap uses live caustics; active lagged mode uses the producer image directly.
+                && renderer.m_causticIrradianceReturnStateHandoff.buildTextureSubset(
+                    *context->finalState,
+                    context->targets->causticIrradiance.get()
+                )
+                && renderer.m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
+                    *context->finalState,
+                    context->targets->surfelIrradiance.get()
+                )
+            );
+            if(!context->returnStatesReady)
+                return false;
+            if(context->usesLaggedHistory){
+                renderer.reportLaggedLightingTransition(
+                    LaggedLightingReport::ActiveHistoryAccepted,
+                    context->targets->laggedLightingHistory.generation
+                );
+            }
+            return true;
+        };
+        const Core::GpuTaskGraphPacketAcceptedCallback deferredLightingAcceptedCallback{
+            .context = &deferredLightingAcceptance,
+            .invoke = acceptDeferredLightingPacket,
+        };
+        const Core::GpuTaskGraphPacketTimingTicket deferredLightingCompositeTimingTickets[] = {
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = deferredLightingPacket,
+                .timingTicket = &deferredLightingTimingTicket,
+            },
+            Core::GpuTaskGraphPacketTimingTicket{
+                .packet = deferredCompositePacket,
+                .timingTicket = &deferredCompositeTimingTicket,
+            },
+        };
+        const bool deferredLightingCompositeAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredShadowVisibilityTask.valid()
             && shadowVisibilitySubmissionToken.valid()
@@ -1832,73 +1905,35 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && deferredLightingPacket.valid()
             && deferredCompositePacket.valid()
             && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
-            && deferredSubmitter.submitPacket(
+            && deferredSubmitter.submitPacketRangeInCompileOrder(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
-                deferredLightingPacket,
+                deferredLightingPacketIndex,
+                LengthOf(deferredLightingCompositeTimingTickets),
                 deferredLightingCompletionTokens,
                 deferredLightingCompletionCount,
+                deferredLightingCompositeTimingTickets,
+                LengthOf(deferredLightingCompositeTimingTickets),
                 m_deferredLightingSubmissionTransaction,
                 deferredScratchArena,
-                &deferredLightingTimingTicket
+                nullptr,
+                &deferredLightingAcceptedCallback
             )
         ;
         deferredLightingSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(deferredLightingPacket);
-        if(deferredLightingSubmissionToken.valid()){
-            if(laggedAsyncLightingSchedule)
-                deferredTargets.laggedLightingHistory.slotsUploaded = true;
-            const bool lightingReturnStatesReady = !deferredLightingRunsOnCompute || laggedAsyncLightingSchedule || (
-                m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
-                    *deferredLightingFinalStateSeed,
-                    deferredTargets.shadowVisibility.get()
-                )
-                // Bootstrap uses live caustics; active lagged mode uses the producer image directly.
-                && m_causticIrradianceReturnStateHandoff.buildTextureSubset(
-                    *deferredLightingFinalStateSeed,
-                    deferredTargets.causticIrradiance.get()
-                )
-                && m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
-                    *deferredLightingFinalStateSeed,
-                    deferredTargets.surfelIrradiance.get()
-                )
-            );
-            if(!lightingReturnStatesReady){
-                const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
-                discardTimingTickets();
-                if(!recovered)
-                    failFrameRenderRecovery();
-                // Lost post-lighting state leaves no safe producer layout.
-                failFrameRenderRecovery();
-                return false;
-            }
-            if(laggedAsyncLightingSchedule){
-                reportLaggedLightingTransition(
-                    LaggedLightingReport::ActiveHistoryAccepted,
-                    deferredTargets.laggedLightingHistory.generation
-                );
-            }
-        }
-        const bool deferredCompositeAccepted =
-            deferredLightingAccepted
-            && m_deferredCompositeTask.valid()
-            && deferredCompositePacket.valid()
-            && deferredSubmitter.submitPacket(
-                m_deferredLightingTaskGraph,
-                m_deferredLightingCompiledGraph,
-                m_deferredLightingRecordedGraph,
-                deferredCompositePacket,
-                nullptr,
-                0u,
-                m_deferredLightingSubmissionTransaction,
-                deferredScratchArena,
-                &deferredCompositeTimingTicket
-            )
-        ;
         deferredCompositeSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(deferredCompositePacket);
+        if(!deferredLightingAcceptance.returnStatesReady){
+            const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
+            discardTimingTickets();
+            if(!recovered)
+                failFrameRenderRecovery();
+            // Lost post-lighting state leaves no safe producer layout.
+            failFrameRenderRecovery();
+            return false;
+        }
         if(
-            !deferredLightingAccepted
-            || !deferredCompositeAccepted
+            !deferredLightingCompositeAccepted
             || !deferredLightingSubmissionToken.valid()
             || !deferredCompositeSubmissionToken.valid()
         ){

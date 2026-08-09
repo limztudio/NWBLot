@@ -287,6 +287,31 @@ struct NativePacketPrefixTask{
 };
 
 
+struct NativePacketRangeAcceptanceObserver{
+    u32 acceptedCount = 0u;
+    GpuSubmissionPacketId lastPacket;
+    QueueSubmissionToken lastToken;
+    bool continueSubmission = true;
+};
+
+
+[[nodiscard]] static bool ObserveNativePacketRangeAcceptance(
+    void* const rawContext,
+    const GpuSubmissionPacketId& packet,
+    const QueueSubmissionToken& token
+){
+    NativePacketRangeAcceptanceObserver* const context =
+        static_cast<NativePacketRangeAcceptanceObserver*>(rawContext)
+    ;
+    if(!context || !packet.valid() || !token.valid())
+        return false;
+    ++context->acceptedCount;
+    context->lastPacket = packet;
+    context->lastToken = token;
+    return context->continueSubmission;
+}
+
+
 // Minimal graph-native timing endpoints used to exercise a late recovery packet in the same submission transaction.
 struct NativeFrameTimingPacketTask{
     enum class Endpoint : u8{
@@ -954,7 +979,14 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     EXPECT_TRUE(readerRecorded);
 
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+    NativePacketRangeAcceptanceObserver acceptanceObserver;
+    acceptanceObserver.continueSubmission = false;
+    const GpuTaskGraphPacketAcceptedCallback acceptedCallback{
+        .context = &acceptanceObserver,
+        .invoke = ObserveNativePacketRangeAcceptance,
+    };
+    GpuSubmissionPacketId stoppedPacket;
+    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
@@ -965,10 +997,16 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
         nullptr,
         0u,
         transaction,
-        scratchArena
+        scratchArena,
+        &stoppedPacket,
+        &acceptedCallback
     ));
+    EXPECT_EQ(stoppedPacket, writerPacket);
+    EXPECT_EQ(acceptanceObserver.acceptedCount, 1u);
+    EXPECT_EQ(acceptanceObserver.lastPacket, writerPacket);
     EXPECT_TRUE(transaction.packetToken(writerPacket).valid());
     EXPECT_FALSE(transaction.packetToken(readerPacket).valid());
+    acceptanceObserver.continueSubmission = true;
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -980,8 +1018,12 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
         nullptr,
         0u,
         transaction,
-        scratchArena
+        scratchArena,
+        nullptr,
+        &acceptedCallback
     ));
+    EXPECT_EQ(acceptanceObserver.acceptedCount, 2u);
+    EXPECT_EQ(acceptanceObserver.lastPacket, readerPacket);
     EXPECT_TRUE(transaction.packetToken(readerPacket).valid());
     EXPECT_TRUE(device.waitForIdle());
 }

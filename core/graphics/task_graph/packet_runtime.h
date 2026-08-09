@@ -184,6 +184,18 @@ struct GpuTaskGraphPacketTimingTicket{
 };
 
 
+// Runs immediately after a packet accepts its submission token. Returning false stops the current range traversal,
+// but retains the accepted packet so the caller can submit an appropriate recovery or finalization tail.
+struct GpuTaskGraphPacketAcceptedCallback{
+    void* context = nullptr;
+    [[nodiscard]] bool (*invoke)(
+        void* context,
+        const GpuSubmissionPacketId& packet,
+        const QueueSubmissionToken& token
+    ) = nullptr;
+};
+
+
 class GpuGraphSubmissionTransaction final : NoCopy{
 public:
     explicit GpuGraphSubmissionTransaction(GraphicsArena& arena)
@@ -249,7 +261,8 @@ public:
         GpuTimingSubmissionTicket* timingTicket = nullptr
     )const;
     // Submits one non-empty contiguous compiler-order range. Dependencies outside the range must already be
-    // accepted in the transaction; this preserves graph-owned waits while allowing intentional late tails.
+    // accepted in the transaction; this preserves graph-owned waits while allowing intentional late tails. An
+    // accepted callback may stop the range after retaining its packet for recovery or finalization.
     [[nodiscard]] bool submitPacketRangeInCompileOrder(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -262,7 +275,8 @@ public:
         usize timingTicketCount,
         GpuGraphSubmissionTransaction& transaction,
         Alloc::ScratchArena& scratchArena,
-        GpuSubmissionPacketId* outFailedPacket = nullptr
+        GpuSubmissionPacketId* outFailedPacket = nullptr,
+        const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr
     )const;
     // Submits every compiler packet in its stable dependency order.  Internal packet dependencies are resolved
     // from the shared transaction; external bindings and timing tickets are supplied once for the whole graph.

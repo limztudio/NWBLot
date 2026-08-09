@@ -211,6 +211,30 @@ AString BuildMetadata(const TexturePayload& payload, const Path& dataPath){
     return output.str();
 }
 
+bool WriteTexturePayloadPart(OutputFileStream& stream, const Vector<u8>& bytes){
+    if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(bytes.size())))
+        return false;
+    if(bytes.empty())
+        return true;
+
+    stream.write(
+        reinterpret_cast<const char*>(bytes.data()),
+        static_cast<StreamSize>(bytes.size())
+    );
+    return stream.good();
+}
+
+bool WriteTexturePayload(const Path& path, const TexturePayload& payload){
+    OutputFileStream stream(path, s_FileOpenBinary | s_FileOpenTruncate);
+    if(!stream.is_open())
+        return false;
+
+    return
+        WriteTexturePayloadPart(stream, payload.bytes)
+        && WriteTexturePayloadPart(stream, payload.alphaBytes)
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -267,11 +291,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload,
         NWB_LOGGER_WARNING(NWB_TEXT("tex_conv: texture payload is too large to write."));
         return false;
     }
-    Vector<u8> completePayload;
-    completePayload.reserve(payload.bytes.size() + payload.alphaBytes.size());
-    completePayload.insert(completePayload.end(), payload.bytes.begin(), payload.bytes.end());
-    completePayload.insert(completePayload.end(), payload.alphaBytes.begin(), payload.alphaBytes.end());
-    if(!WriteBinaryFile(outputPaths.dataTemporary, completePayload)){
+    if(!__hidden_output::WriteTexturePayload(outputPaths.dataTemporary, payload)){
         NWB_LOGGER_WARNING(NWB_TEXT("tex_conv: failed to write output data file '{}'.")
             , PathToString<tchar>(outputPaths.dataTemporary)
         );

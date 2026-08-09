@@ -389,12 +389,8 @@ private:
     Core::CommandListResourceStateHandoff m_surfelGiStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelIrradianceReturnStateHandoff;
     // Normal lighting runs on AsyncCompute after the Graphics AVBOIT chain. Its external producer states are seeded
-    // directly by the packet recorder; only the output handoff remains for the not-yet-merged composite graph.
+    // directly by the packet recorder; both lighting and composite retain only their outbound handoffs.
     Core::CommandListResourceStateHandoff m_deferredLightingStateHandoff;
-    Core::CommandListResourceStateHandoff m_avboitCompositeStateHandoff;
-    Core::CommandListResourceStateHandoff m_opaqueColorCompositeStateHandoff;
-    Core::CommandListResourceStateHandoff m_deferredCompositeBaseStateHandoff;
-    Core::CommandListResourceStateHandoff m_deferredCompositeInputStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredCompositeStateHandoff;
     Core::CommandListResourceStateHandoff m_compositeColorPresentStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredPresentBaseStateHandoff;

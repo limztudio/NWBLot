@@ -123,10 +123,6 @@ RendererSystem::RendererSystem(
     , m_surfelGiStateHandoff(arena)
     , m_surfelIrradianceReturnStateHandoff(arena)
     , m_deferredLightingStateHandoff(arena)
-    , m_avboitCompositeStateHandoff(arena)
-    , m_opaqueColorCompositeStateHandoff(arena)
-    , m_deferredCompositeBaseStateHandoff(arena)
-    , m_deferredCompositeInputStateHandoff(arena)
     , m_deferredCompositeStateHandoff(arena)
     , m_compositeColorPresentStateHandoff(arena)
     , m_deferredPresentBaseStateHandoff(arena)
@@ -226,10 +222,6 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     m_surfelGiStateHandoff.reset();
     m_surfelIrradianceReturnStateHandoff.reset();
     m_deferredLightingStateHandoff.reset();
-    m_avboitCompositeStateHandoff.reset();
-    m_opaqueColorCompositeStateHandoff.reset();
-    m_deferredCompositeBaseStateHandoff.reset();
-    m_deferredCompositeInputStateHandoff.reset();
     m_deferredCompositeStateHandoff.reset();
     m_compositeColorPresentStateHandoff.reset();
     m_deferredPresentBaseStateHandoff.reset();
@@ -269,10 +261,6 @@ void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
     m_surfelGiComputeInputStateHandoff.reset();
     m_surfelGiStateHandoff.reset();
     m_deferredLightingStateHandoff.reset();
-    m_avboitCompositeStateHandoff.reset();
-    m_opaqueColorCompositeStateHandoff.reset();
-    m_deferredCompositeBaseStateHandoff.reset();
-    m_deferredCompositeInputStateHandoff.reset();
     m_deferredCompositeStateHandoff.reset();
     m_compositeColorPresentStateHandoff.reset();
     m_deferredPresentBaseStateHandoff.reset();
@@ -298,10 +286,6 @@ void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
     m_surfelGiComputeInputStateHandoff.reset();
     m_surfelGiStateHandoff.reset();
     m_deferredLightingStateHandoff.reset();
-    m_avboitCompositeStateHandoff.reset();
-    m_opaqueColorCompositeStateHandoff.reset();
-    m_deferredCompositeBaseStateHandoff.reset();
-    m_deferredCompositeInputStateHandoff.reset();
     m_deferredCompositeStateHandoff.reset();
     m_compositeColorPresentStateHandoff.reset();
     m_deferredPresentBaseStateHandoff.reset();
@@ -323,10 +307,6 @@ void RendererSystem::resetRejectedShadowVisibilityStateHandoffs()noexcept{
     m_surfelGiComputeInputStateHandoff.reset();
     m_surfelGiStateHandoff.reset();
     m_deferredLightingStateHandoff.reset();
-    m_avboitCompositeStateHandoff.reset();
-    m_opaqueColorCompositeStateHandoff.reset();
-    m_deferredCompositeBaseStateHandoff.reset();
-    m_deferredCompositeInputStateHandoff.reset();
     m_deferredCompositeStateHandoff.reset();
     m_compositeColorPresentStateHandoff.reset();
     m_deferredPresentBaseStateHandoff.reset();
@@ -2409,56 +2389,33 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    if(!m_opaqueColorCompositeStateHandoff.buildTextureSubset(
-        m_deferredLightingStateHandoff,
-        deferredTargets.opaqueColor.get()
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the deferred-lighting output for Compute composite"));
-        discardRenderPackets();
-        return;
-    }
     Core::Texture* const avboitCompositeTextures[] = {
         deferredTargets.avboit.accumColor.get(),
         deferredTargets.avboit.accumExtinction.get(),
     };
-    if(!m_avboitCompositeStateHandoff.buildResourceSubset(
-        *avboitFinalStateSeed,
-        avboitCompositeTextures,
-        LengthOf(avboitCompositeTextures),
-        nullptr,
-        0u
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to isolate the AVBOIT composite inputs"));
-        discardRenderPackets();
-        return;
-    }
+    Core::Texture* const opaqueColorCompositeTextures[] = {
+        deferredTargets.opaqueColor.get(),
+    };
     Core::Buffer* const deferredCompositeBaseBuffers[] = {
         deferredTargets.bindless.slotsBuffer.get(),
     };
-    if(!m_deferredCompositeBaseStateHandoff.buildResourceSubset(
-        m_postGbufferNormalizedStateHandoff,
-        nullptr,
-        0u,
-        deferredCompositeBaseBuffers,
-        LengthOf(deferredCompositeBaseBuffers)
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-composite base state selection failed"));
-        discardRenderPackets();
-        return;
-    }
-    const Core::CommandListResourceStateHandoff* deferredCompositeBranchStates[] = {
-        &m_avboitCompositeStateHandoff,
-        &m_opaqueColorCompositeStateHandoff,
+    const Core::GpuExternalPacketStateSource deferredCompositeStateSources[] = {
+        Core::GpuExternalPacketStateSource{
+            .states = &m_postGbufferNormalizedStateHandoff,
+            .buffers = deferredCompositeBaseBuffers,
+            .bufferCount = LengthOf(deferredCompositeBaseBuffers),
+        },
+        Core::GpuExternalPacketStateSource{
+            .states = avboitFinalStateSeed,
+            .textures = avboitCompositeTextures,
+            .textureCount = LengthOf(avboitCompositeTextures),
+        },
+        Core::GpuExternalPacketStateSource{
+            .states = &m_deferredLightingStateHandoff,
+            .textures = opaqueColorCompositeTextures,
+            .textureCount = LengthOf(opaqueColorCompositeTextures),
+        },
     };
-    if(!m_deferredCompositeInputStateHandoff.buildFanIn(
-        m_deferredCompositeBaseStateHandoff,
-        deferredCompositeBranchStates,
-        2u
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred-composite state fan-in failed"));
-        discardRenderPackets();
-        return;
-    }
 
     const Core::GpuSubmissionPacketId deferredCompositePacket = m_deferredCompositeCompiledGraph.packetForTask(
         m_deferredCompositeTask
@@ -2466,8 +2423,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuNativePacketRecorder deferredCompositeRecorder(device);
     const Core::GpuNativePacketRecordDesc deferredCompositeRecordDesc{
         .packet = deferredCompositePacket,
-        .initialStates = &m_deferredCompositeInputStateHandoff,
         .finalStates = &m_deferredCompositeStateHandoff,
+        .externalStateSources = deferredCompositeStateSources,
+        .externalStateSourceCount = LengthOf(deferredCompositeStateSources),
         .applyCompiledBarriers = true,
     };
     const bool deferredCompositeRecorded =
@@ -2506,7 +2464,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredTargets.bindless.slotsBuffer.get(),
     };
     if(!m_deferredPresentBaseStateHandoff.buildResourceSubset(
-        m_deferredCompositeBaseStateHandoff,
+        m_postGbufferNormalizedStateHandoff,
         nullptr,
         0u,
         deferredPresentBaseBuffers,

@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/kernel/system.h>
 
+#include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/renderer_private.h>
 
 #include <core/graphics/frame_graph_nodes.h>
@@ -21,6 +22,11 @@ NWB_IMPL_BEGIN
 bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder){
     if(!m_deferredState.m_targets.valid())
         return false;
+
+    if(m_gpuTaskGraphShadowPending){
+        buildGpuTaskGraphShadow(m_gpuTaskGraphShadowInput, m_deferredState.m_targets);
+        m_gpuTaskGraphShadowPending = false;
+    }
 
     using Handle = Core::Telemetry::FrameGraphNodeHandle;
     namespace Edge = Core::Telemetry::FrameGraphEdgeKind;
@@ -154,6 +160,18 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
     const Handle deferredPresent = appendPass(RendererGpuTimingScope::s_DeferredPresent, "Deferred Present");
     builder.addEdge(deferredComposite, deferredPresent, Edge::DependsOn);
     builder.addEdge(deferredPresent, backBuffer, Edge::Writes);
+
+    if(m_gpuTaskGraphShadowValid){
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphShadowArena);
+        if(!m_gpuTaskGraph.appendFrameGraphTelemetry(
+            builder,
+            m_gpuTaskGraphAnalysis,
+            scratchArena,
+            m_gpuTaskGraphShadowLegacyMismatches.data(),
+            m_gpuTaskGraphShadowLegacyMismatches.size()
+        ))
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph shadow telemetry export failed"));
+    }
 
     return true;
 }

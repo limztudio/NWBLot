@@ -12,6 +12,7 @@
 
 #include <core/ecs/system.h>
 #include <core/graphics/render_pass.h>
+#include <core/graphics/task_graph/compiler.h>
 #include <core/telemetry/frame_graph_contributor.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets_material/asset.h>
@@ -78,6 +79,15 @@ private:
         CurrentFrameAccepted,
     };
 
+    struct GpuTaskGraphShadowFrameInput{
+        bool dedicatedAsyncCompute = false;
+        bool frameLaggedAsyncLightingEnabled = false;
+        bool laggedLightingHistoryReady = false;
+        bool laggedLightingHistoryAccepted = false;
+        bool hasTransparentRenderers = false;
+        bool hardwareCaustics = false;
+    };
+
 public:
     using ShaderPathResolveCallback = RendererShaderPathResolveCallback;
 
@@ -135,6 +145,10 @@ private:
     void resetLaggedLightingStashStateHandoffs()noexcept;
     void invalidateLaggedLightingHistorySubmission()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
+    void buildGpuTaskGraphShadow(
+        const GpuTaskGraphShadowFrameInput& input,
+        const DeferredFrameTargets& deferredTargets
+    );
     void reportLaggedLightingTransition(LaggedLightingReport report, u64 targetGeneration);
     [[nodiscard]] Core::Alloc::GlobalArena& arena()noexcept{ return m_arena; }
     [[nodiscard]] Core::ECS::World& world()noexcept{ return m_world; }
@@ -162,6 +176,14 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;
+    // The generic task graph is observational through Phase 1. It owns imported handles until the telemetry capture
+    // following render(), while FrameExecutionPlan remains the only live scheduling and submission authority.
+    Core::GpuTaskGraph m_gpuTaskGraph;
+    Core::GpuTaskGraphAnalysis m_gpuTaskGraphAnalysis;
+    Core::GraphicsVector<Core::GpuTaskDependencyEdge> m_gpuTaskGraphShadowLegacyMismatches;
+    GpuTaskGraphShadowFrameInput m_gpuTaskGraphShadowInput;
+    bool m_gpuTaskGraphShadowValid = false;
+    bool m_gpuTaskGraphShadowPending = false;
 
 private:
     RendererMeshState m_meshState;

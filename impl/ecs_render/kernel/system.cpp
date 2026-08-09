@@ -124,6 +124,9 @@ RendererSystem::RendererSystem(
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_csgShapeRegistry(arena)
+    , m_gpuTaskGraph(arena)
+    , m_gpuTaskGraphAnalysis(arena)
+    , m_gpuTaskGraphShadowLegacyMismatches(arena)
     , m_meshState(arena)
     , m_materialState(arena)
     , m_rayTracingState(arena)
@@ -483,6 +486,12 @@ void RendererSystem::invalidateResources(){
     m_preparedCsgFrameStateValid = false;
     m_preparedHasTransparentRenderers = false;
     m_preparedShadowVisibilityReady = false;
+    m_gpuTaskGraphShadowValid = false;
+    m_gpuTaskGraphShadowPending = false;
+    m_gpuTaskGraphShadowInput = GpuTaskGraphShadowFrameInput{};
+    m_gpuTaskGraphShadowLegacyMismatches.clear();
+    m_gpuTaskGraph.reset();
+    m_gpuTaskGraphAnalysis.reset();
     resetInvalidatedResourceStateHandoffs();
     m_meshViewSetupCommandList.reset();
     m_sceneShadingSetupCommandList.reset();
@@ -1003,6 +1012,13 @@ bool RendererSystem::recordShadowPrepareCommandList(DeferredFrameTargets& deferr
 }
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
+    m_gpuTaskGraphShadowValid = false;
+    m_gpuTaskGraphShadowPending = false;
+    m_gpuTaskGraphShadowInput = GpuTaskGraphShadowFrameInput{};
+    m_gpuTaskGraphShadowLegacyMismatches.clear();
+    m_gpuTaskGraph.reset();
+    m_gpuTaskGraphAnalysis.reset();
+
     if(!framebuffer)
         return;
 
@@ -1091,6 +1107,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp,
         Core::RenderLane::AsyncCompute
     );
+    // Graph declaration is deferred until appendFrameGraph(), which only runs while frame-graph telemetry is being
+    // captured. The legacy FrameExecutionPlan remains the sole live recording and submission authority.
+    m_gpuTaskGraphShadowInput = GpuTaskGraphShadowFrameInput{
+        .dedicatedAsyncCompute = dedicatedAsyncCompute,
+        .frameLaggedAsyncLightingEnabled = m_frameLaggedAsyncLightingEnabled,
+        .laggedLightingHistoryReady = laggedLightingHistoryResourcesReady,
+        .laggedLightingHistoryAccepted = m_laggedLightingHistorySubmissionToken.valid(),
+        .hasTransparentRenderers = hasTransparentRenderers,
+        .hardwareCaustics = hardwareShadowSupported,
+    };
+    m_gpuTaskGraphShadowPending = true;
     Core::CommandList* meshViewSetupCommandList = m_meshViewSetupCommandList.get();
     Core::CommandList* sceneShadingSetupCommandList = m_sceneShadingSetupCommandList.get();
     Core::CommandList* deferredClearCommandList = m_deferredClearCommandList.get();

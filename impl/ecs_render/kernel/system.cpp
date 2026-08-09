@@ -1123,7 +1123,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     );
     // Compile the graph before native recording.  Its physical queue result may choose a paired command list only
     // after it matches every legacy-plan route; packet grouping and submission remain legacy-owned for this slice.
-    buildGpuTaskGraph(GpuTaskGraphFrameInput{
+    buildGpuTaskGraph(ECSRenderDetail::GpuTaskGraphFrameScheduleInput{
         .dedicatedAsyncCompute = dedicatedAsyncCompute,
         .frameLaggedAsyncLightingEnabled = m_frameLaggedAsyncLightingEnabled,
         .laggedLightingHistoryReady = laggedLightingHistoryResourcesReady,

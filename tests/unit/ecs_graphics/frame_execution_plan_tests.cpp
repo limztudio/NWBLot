@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/kernel/frame_execution_plan.h>
+#include <impl/ecs_render/kernel/task_graph_schedule.h>
 
 #include <gtest/gtest.h>
 
@@ -18,6 +19,8 @@ namespace __hidden_ecs_graphics_frame_execution_plan_tests{
 
 using FrameExecutionPlan = NWB::Impl::ECSRenderDetail::FrameExecutionPlan;
 using FrameExecutionPlanInput = NWB::Impl::ECSRenderDetail::FrameExecutionPlanInput;
+using GpuTaskGraphFrameSchedule = NWB::Impl::ECSRenderDetail::GpuTaskGraphFrameSchedule;
+using GpuTaskGraphFrameScheduleInput = NWB::Impl::ECSRenderDetail::GpuTaskGraphFrameScheduleInput;
 using FrameExecutionLaneCommandListPair = NWB::Impl::ECSRenderDetail::FrameExecutionLaneCommandListPair;
 using FrameExecutionPacketCommandLists = NWB::Impl::ECSRenderDetail::FrameExecutionPacketCommandLists;
 using FrameExecutionWorkCommandListBinding = NWB::Impl::ECSRenderDetail::FrameExecutionWorkCommandListBinding;
@@ -133,6 +136,35 @@ TEST(EcsGraphics, FrameExecutionPlanRoutesNoDedicatedComputeWorkThroughGraphicsP
 }
 
 
+[[nodiscard]] bool PacketPathExists(
+    const FrameExecutionPlan& plan,
+    const FrameExecutionPacket::Enum producer,
+    const FrameExecutionPacket::Enum consumer
+){
+    if(producer == consumer)
+        return true;
+
+    bool visited[FrameExecutionPacket::kCount] = {};
+    const auto visit = [&](auto&& self, const FrameExecutionPacket::Enum current) -> bool{
+        if(current == producer)
+            return true;
+
+        const usize currentIndex = static_cast<usize>(current);
+        if(visited[currentIndex])
+            return false;
+        visited[currentIndex] = true;
+
+        const auto& packet = plan.packet(current);
+        for(u8 waitIndex = 0u; waitIndex < packet.waitPacketCount; ++waitIndex){
+            if(self(self, packet.waitPackets[waitIndex]))
+                return true;
+        }
+        return false;
+    };
+    return visit(visit, consumer);
+}
+
+
 TEST(EcsGraphics, FrameExecutionPlanExposesLegacyPhysicalQueueParityOracle){
     const FrameExecutionPlan graphicsPlan(FrameExecutionPlanInput{
         false,
@@ -197,6 +229,73 @@ TEST(EcsGraphics, FrameExecutionPlanExposesLegacyPhysicalQueueParityOracle){
         FrameExecutionPlan::commandListForResolvedQueue(CommandQueue::kCount, commandLists),
         nullptr
     );
+}
+
+
+TEST(EcsGraphics, GpuTaskGraphFrameScheduleUsesSemanticDependenciesCoveredByLegacyPlan){
+    const GpuTaskGraphFrameScheduleInput inputs[] = {
+        GpuTaskGraphFrameScheduleInput{ false, true, true, true, true, true },
+        GpuTaskGraphFrameScheduleInput{ true, false, false, false, false, false },
+        GpuTaskGraphFrameScheduleInput{ true, false, false, false, true, false },
+        GpuTaskGraphFrameScheduleInput{ true, true, true, false, true, true },
+        GpuTaskGraphFrameScheduleInput{ true, true, true, true, true, true },
+        GpuTaskGraphFrameScheduleInput{ true, true, true, true, false, false },
+    };
+    for(const GpuTaskGraphFrameScheduleInput& input : inputs){
+        const GpuTaskGraphFrameSchedule schedule(input);
+        const FrameExecutionPlan plan(FrameExecutionPlanInput{
+            input.dedicatedAsyncCompute,
+            input.frameLaggedAsyncLightingEnabled,
+            input.laggedLightingHistoryReady,
+            input.laggedLightingHistoryAccepted,
+            input.hasTransparentRenderers,
+            input.hardwareCaustics,
+        });
+        for(usize workIndex = 0u; workIndex < FrameExecutionWork::kCount; ++workIndex){
+            const FrameExecutionWork::Enum work = static_cast<FrameExecutionWork::Enum>(workIndex);
+            ASSERT_EQ(schedule.hasWork(work), plan.hasWork(work));
+            if(!schedule.hasWork(work))
+                continue;
+
+            for(usize producerIndex = 0u; producerIndex < FrameExecutionWork::kCount; ++producerIndex){
+                const FrameExecutionWork::Enum producer = static_cast<FrameExecutionWork::Enum>(producerIndex);
+                if(!schedule.workDependsOn(work, producer))
+                    continue;
+                ASSERT_TRUE(plan.hasWork(producer));
+                EXPECT_TRUE(PacketPathExists(
+                    plan,
+                    plan.packetForWork(producer),
+                    plan.packetForWork(work)
+                ));
+            }
+            if(schedule.workWaitsForLaggedLightingHistory(work)){
+                EXPECT_TRUE(plan.workWaitsForExternalToken(
+                    work,
+                    FrameExecutionExternalWait::LaggedLightingHistory
+                ));
+            }
+        }
+    }
+
+    const GpuTaskGraphFrameSchedule activeHardwareLagged(GpuTaskGraphFrameScheduleInput{
+        true, true, true, true, true, true,
+    });
+    EXPECT_TRUE(activeHardwareLagged.usesLaggedLightingHistory());
+    EXPECT_FALSE(activeHardwareLagged.usesAsyncAvboit());
+    EXPECT_TRUE(activeHardwareLagged.hasWork(FrameExecutionWork::LaggedLightingStash));
+    EXPECT_TRUE(activeHardwareLagged.workWaitsForLaggedLightingHistory(FrameExecutionWork::Caustics));
+    EXPECT_TRUE(activeHardwareLagged.workWaitsForLaggedLightingHistory(FrameExecutionWork::DeferredLighting));
+    EXPECT_FALSE(activeHardwareLagged.workDependsOn(
+        FrameExecutionWork::DeferredLighting,
+        FrameExecutionWork::RayEffects
+    ));
+
+    const GpuTaskGraphFrameSchedule activeSoftwareLagged(GpuTaskGraphFrameScheduleInput{
+        true, true, true, true, false, false,
+    });
+    EXPECT_TRUE(activeSoftwareLagged.usesAsyncCaustics());
+    EXPECT_FALSE(activeSoftwareLagged.workWaitsForLaggedLightingHistory(FrameExecutionWork::Caustics));
+    EXPECT_TRUE(activeSoftwareLagged.workWaitsForLaggedLightingHistory(FrameExecutionWork::DeferredLighting));
 }
 
 

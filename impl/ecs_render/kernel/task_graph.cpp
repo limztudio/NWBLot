@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_renderer_task_graph_shadow{
+namespace __hidden_renderer_task_graph{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -205,11 +205,11 @@ struct WorkMetadata{
 
 
 void RendererSystem::buildGpuTaskGraph(
-    const GpuTaskGraphFrameInput& input,
+    const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
     const DeferredFrameTargets& deferredTargets,
     const ECSRenderDetail::FrameExecutionPlan& frameExecutionPlan
 ){
-    using namespace __hidden_renderer_task_graph_shadow;
+    using namespace __hidden_renderer_task_graph;
 
     m_gpuTaskGraphValid = false;
     m_gpuTaskGraphLiveRoutingValid = false;
@@ -237,9 +237,11 @@ void RendererSystem::buildGpuTaskGraph(
         && computeFamilyIndex != Limit<u32>::s_Max
         && computeFamilyIndex != graphicsFamilyIndex
     ;
+    const ECSRenderDetail::GpuTaskGraphFrameSchedule graphSchedule(input);
 
     if(
         dedicatedAsyncCompute != input.dedicatedAsyncCompute
+        || dedicatedAsyncCompute != graphSchedule.usesDedicatedAsyncCompute()
         || dedicatedAsyncCompute != frameExecutionPlan.workRunsOnLane(
             Work::RayEffects,
             Core::RenderLane::AsyncCompute
@@ -308,42 +310,37 @@ void RendererSystem::buildGpuTaskGraph(
         return;
     }
 
-    Core::GpuGraphResourceId avboitLowRaster;
-    Core::GpuGraphResourceId avboitAccumColor;
-    Core::GpuGraphResourceId avboitExtinction;
-    Core::GpuGraphResourceId avboitTransmittance;
-    const bool usesAsyncAvboit = frameExecutionPlan.hasWork(Work::AvboitDepthWarp);
-    if(usesAsyncAvboit){
-        avboitLowRaster = importTexture(
-            deferredTargets.avboit.lowRasterTarget,
-            Name("render.task_graph.avboit_low_raster"),
-            "AVBOIT Low Raster"
-        );
-        avboitAccumColor = importTexture(
-            deferredTargets.avboit.accumColor,
-            Name("render.task_graph.avboit_accum_color"),
-            "AVBOIT Accumulation Color"
-        );
-        avboitExtinction = importTexture(
-            deferredTargets.avboit.accumExtinction,
-            Name("render.task_graph.avboit_extinction"),
-            "AVBOIT Extinction"
-        );
-        avboitTransmittance = importTexture(
-            deferredTargets.avboit.transmittanceTexture,
-            Name("render.task_graph.avboit_transmittance"),
-            "AVBOIT Transmittance"
-        );
-        if(!avboitLowRaster.valid() || !avboitAccumColor.valid() || !avboitExtinction.valid() || !avboitTransmittance.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph could not import AVBOIT resources"));
-            return;
-        }
+    // AVBOIT raster work clears these targets even when no transparent draw needs the split compute stages, so the
+    // semantic graph must import them on every valid deferred-target generation.
+    const Core::GpuGraphResourceId avboitLowRaster = importTexture(
+        deferredTargets.avboit.lowRasterTarget,
+        Name("render.task_graph.avboit_low_raster"),
+        "AVBOIT Low Raster"
+    );
+    const Core::GpuGraphResourceId avboitAccumColor = importTexture(
+        deferredTargets.avboit.accumColor,
+        Name("render.task_graph.avboit_accum_color"),
+        "AVBOIT Accumulation Color"
+    );
+    const Core::GpuGraphResourceId avboitExtinction = importTexture(
+        deferredTargets.avboit.accumExtinction,
+        Name("render.task_graph.avboit_extinction"),
+        "AVBOIT Extinction"
+    );
+    const Core::GpuGraphResourceId avboitTransmittance = importTexture(
+        deferredTargets.avboit.transmittanceTexture,
+        Name("render.task_graph.avboit_transmittance"),
+        "AVBOIT Transmittance"
+    );
+    if(!avboitLowRaster.valid() || !avboitAccumColor.valid() || !avboitExtinction.valid() || !avboitTransmittance.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph could not import AVBOIT resources"));
+        return;
     }
 
     Core::GpuGraphResourceId historyShadowVisibility;
     Core::GpuGraphResourceId historyCausticIrradiance;
     Core::GpuGraphResourceId historySurfelIrradiance;
-    const bool capturesLaggedLightingHistory = frameExecutionPlan.hasWork(Work::LaggedLightingStash);
+    const bool capturesLaggedLightingHistory = graphSchedule.capturesLaggedLightingHistory();
     if(capturesLaggedLightingHistory){
         const DeferredLaggedLightingHistoryResources& history = deferredTargets.laggedLightingHistory;
         historyShadowVisibility = importTexture(
@@ -367,13 +364,7 @@ void RendererSystem::buildGpuTaskGraph(
         }
     }
 
-    bool consumesLaggedLightingHistory = false;
-    for(usize workIndex = 0u; workIndex < Work::kCount; ++workIndex){
-        const Work::Enum work = static_cast<Work::Enum>(workIndex);
-        consumesLaggedLightingHistory = consumesLaggedLightingHistory
-            || frameExecutionPlan.workWaitsForExternalToken(work, ExternalWait::LaggedLightingHistory)
-        ;
-    }
+    const bool consumesLaggedLightingHistory = graphSchedule.usesLaggedLightingHistory();
     Core::GpuExternalCompletionId laggedHistoryCompletion;
     if(consumesLaggedLightingHistory){
         Core::GpuExternalCompletionDesc completion;
@@ -388,41 +379,31 @@ void RendererSystem::buildGpuTaskGraph(
         }
     }
 
-    const bool usesLaggedLightingHistory = frameExecutionPlan.workWaitsForExternalToken(
-        Work::DeferredLighting,
-        ExternalWait::LaggedLightingHistory
-    );
+    const bool usesLaggedLightingHistory = graphSchedule.usesLaggedLightingHistory();
 
     Core::GraphicsVector<Core::GpuTaskId>& workTasks = m_gpuTaskGraphWorkTasks;
     const auto addWorkTask = [&](const Work::Enum work, const Core::GpuTaskResourceUse* const resourceUses, const usize resourceUseCount){
-        if(!frameExecutionPlan.hasWork(work))
+        if(!graphSchedule.hasWork(work))
             return true;
 
-        const Packet::Enum packet = frameExecutionPlan.packetForWork(work);
-        const ECSRenderDetail::FrameExecutionPacketPlan& packetPlan = frameExecutionPlan.packet(packet);
         Core::GpuTaskId dependencies[Work::kCount] = {};
         usize dependencyCount = 0u;
-        for(u8 waitIndex = 0u; waitIndex < packetPlan.waitPacketCount; ++waitIndex){
-            const Packet::Enum producerPacket = packetPlan.waitPackets[waitIndex];
-            for(usize producerWorkIndex = 0u; producerWorkIndex < Work::kCount; ++producerWorkIndex){
-                const Work::Enum producerWork = static_cast<Work::Enum>(producerWorkIndex);
-                if(
-                    !frameExecutionPlan.hasWork(producerWork)
-                    || frameExecutionPlan.packetForWork(producerWork) != producerPacket
-                )
-                    continue;
+        for(usize producerWorkIndex = 0u; producerWorkIndex < Work::kCount; ++producerWorkIndex){
+            const Work::Enum producerWork = static_cast<Work::Enum>(producerWorkIndex);
+            if(!graphSchedule.workDependsOn(work, producerWork))
+                continue;
 
-                const Core::GpuTaskId dependency = workTasks[producerWorkIndex];
-                if(!dependency.valid() || dependencyCount >= LengthOf(dependencies))
-                    return false;
-                dependencies[dependencyCount++] = dependency;
-            }
+            const Core::GpuTaskId dependency = workTasks[producerWorkIndex];
+            if(!dependency.valid() || dependencyCount >= LengthOf(dependencies))
+                return false;
+            dependencies[dependencyCount++] = dependency;
         }
         Core::GpuExternalCompletionId externalDependencies[ExternalWait::kCount] = {};
-        for(u8 waitIndex = 0u; waitIndex < packetPlan.externalWaitCount; ++waitIndex){
-            if(packetPlan.externalWaits[waitIndex] != ExternalWait::LaggedLightingHistory || !laggedHistoryCompletion.valid())
+        usize externalDependencyCount = 0u;
+        if(graphSchedule.workWaitsForLaggedLightingHistory(work)){
+            if(!laggedHistoryCompletion.valid())
                 return false;
-            externalDependencies[waitIndex] = laggedHistoryCompletion;
+            externalDependencies[externalDependencyCount++] = laggedHistoryCompletion;
         }
 
         const WorkMetadata metadata = WorkMetadataFor(work, input.hardwareCaustics, usesLaggedLightingHistory);
@@ -433,7 +414,7 @@ void RendererSystem::buildGpuTaskGraph(
             .setQueue(metadata.queue)
             .setScheduling(metadata.scheduling)
             .setDependencies(dependencies, dependencyCount)
-            .setExternalDependencies(externalDependencies, packetPlan.externalWaitCount)
+            .setExternalDependencies(externalDependencies, externalDependencyCount)
             .setResourceUses(resourceUses, resourceUseCount)
         ;
         workTasks[static_cast<usize>(work)] = m_gpuTaskGraph.addTask(desc);
@@ -543,11 +524,11 @@ void RendererSystem::buildGpuTaskGraph(
         && addWorkTask(Work::LaggedLightingStash, laggedLightingStashUses, LengthOf(laggedLightingStashUses))
     ;
     if(!graphBuilt){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph could not reproduce frame-plan dependencies"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph could not declare semantic work dependencies"));
         return;
     }
 
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphShadowArena);
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     const Core::GpuTaskGraphCompiler compiler;
     if(!compiler.analyze(m_gpuTaskGraph, m_gpuTaskGraphAnalysis, scratchArena)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph validation failed (status {})")
@@ -593,16 +574,35 @@ void RendererSystem::buildGpuTaskGraph(
         );
         return;
     }
-    bool queueRoutingMatchesLegacyPlan = true;
+    bool workSetMatchesLegacyPlan = true;
+    usize workSetMismatchCount = 0u;
     for(usize workIndex = 0u; workIndex < Work::kCount; ++workIndex){
         const Work::Enum work = static_cast<Work::Enum>(workIndex);
+        if(graphSchedule.hasWork(work) == frameExecutionPlan.hasWork(work))
+            continue;
+        workSetMatchesLegacyPlan = false;
+        ++workSetMismatchCount;
+    }
+    if(!workSetMatchesLegacyPlan){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph work set differs from FrameExecutionPlan; retaining legacy command-list routing for this frame ({})")
+            , workSetMismatchCount
+        );
+    }
+
+    bool queueRoutingMatchesLegacyPlan = workSetMatchesLegacyPlan;
+    for(usize workIndex = 0u; workIndex < Work::kCount; ++workIndex){
+        const Work::Enum work = static_cast<Work::Enum>(workIndex);
+        if(!graphSchedule.hasWork(work))
+            continue;
+
         if(!frameExecutionPlan.hasWork(work))
             continue;
 
         const Core::GpuTaskQueueAssignment* const assignment = m_gpuTaskGraphQueueAssignments.find(workTasks[workIndex]);
         if(!assignment){
-            NWB_ASSERT(false);
-            return;
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph queue assignment is missing declared work"));
+            queueRoutingMatchesLegacyPlan = false;
+            continue;
         }
         m_gpuTaskGraphWorkQueues[workIndex] = assignment->queueClass;
         const Core::CommandQueue::Enum legacyQueue = device.resolveRenderLane(frameExecutionPlan.laneForWork(work));
@@ -620,46 +620,80 @@ void RendererSystem::buildGpuTaskGraph(
         );
     }
 
-    const auto packetForTask = [&](const Core::GpuTaskId task, Packet::Enum& outPacket){
+    const auto workForTask = [&](const Core::GpuTaskId task, Work::Enum& outWork){
         for(usize workIndex = 0u; workIndex < Work::kCount; ++workIndex){
             if(workTasks[workIndex] != task)
                 continue;
-            outPacket = frameExecutionPlan.packetForWork(static_cast<Work::Enum>(workIndex));
+            outWork = static_cast<Work::Enum>(workIndex);
             return true;
         }
         return false;
     };
-    for(const Core::GpuTaskDependencyEdge& inferredEdge : m_gpuTaskGraphAnalysis.inferredEdges()){
+    const auto packetForTask = [&](const Core::GpuTaskId task, Packet::Enum& outPacket){
+        Work::Enum work = Work::kCount;
+        if(!workForTask(task, work) || !frameExecutionPlan.hasWork(work))
+            return false;
+        outPacket = frameExecutionPlan.packetForWork(work);
+        return true;
+    };
+    const auto recordLegacyScheduleMismatch = [&](const Core::GpuTaskDependencyEdge& graphEdge){
+        for(const Core::GpuTaskDependencyEdge& mismatch : m_gpuTaskGraphLegacyMismatches){
+            if(mismatch.producer == graphEdge.producer && mismatch.consumer == graphEdge.consumer)
+                return;
+        }
+        m_gpuTaskGraphLegacyMismatches.push_back(graphEdge);
+    };
+    bool schedulingMatchesLegacyPlan = workSetMatchesLegacyPlan;
+    for(const Core::GpuTaskDependencyEdge& graphEdge : m_gpuTaskGraphAnalysis.edges()){
         Packet::Enum producerPacket = Packet::kCount;
         Packet::Enum consumerPacket = Packet::kCount;
         if(
-            !packetForTask(inferredEdge.producer, producerPacket)
-            || !packetForTask(inferredEdge.consumer, consumerPacket)
+            !packetForTask(graphEdge.producer, producerPacket)
+            || !packetForTask(graphEdge.consumer, consumerPacket)
         ){
-            NWB_ASSERT(false);
-            return;
+            schedulingMatchesLegacyPlan = false;
+            continue;
         }
         if(PacketPathExists(frameExecutionPlan, producerPacket, consumerPacket))
             continue;
 
-        bool alreadyRecorded = false;
-        for(const Core::GpuTaskDependencyEdge& mismatch : m_gpuTaskGraphLegacyMismatches){
-            if(mismatch.producer == inferredEdge.producer && mismatch.consumer == inferredEdge.consumer){
-                alreadyRecorded = true;
-                break;
-            }
-        }
-        if(!alreadyRecorded)
-            m_gpuTaskGraphLegacyMismatches.push_back(inferredEdge);
+        schedulingMatchesLegacyPlan = false;
+        recordLegacyScheduleMismatch(graphEdge);
     }
     if(!m_gpuTaskGraphLegacyMismatches.empty()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph found {} inferred dependencies absent from FrameExecutionPlan")
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph found {} semantic dependencies absent from FrameExecutionPlan")
             , m_gpuTaskGraphLegacyMismatches.size()
         );
     }
 
+    bool externalDependenciesMatchLegacyPlan = true;
+    usize externalDependencyMismatchCount = 0u;
+    for(const Core::GpuTaskExternalDependencyEdge& graphEdge : m_gpuTaskGraphAnalysis.externalDependencies()){
+        Work::Enum consumerWork = Work::kCount;
+        if(
+            graphEdge.completion != laggedHistoryCompletion
+            || !workForTask(graphEdge.consumer, consumerWork)
+            || !frameExecutionPlan.workWaitsForExternalToken(
+                consumerWork,
+                ExternalWait::LaggedLightingHistory
+            )
+        ){
+            externalDependenciesMatchLegacyPlan = false;
+            ++externalDependencyMismatchCount;
+        }
+    }
+    if(!externalDependenciesMatchLegacyPlan){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph found {} external dependencies absent from FrameExecutionPlan; retaining legacy command-list routing for this frame")
+            , externalDependencyMismatchCount
+        );
+    }
+
     m_gpuTaskGraphValid = true;
-    m_gpuTaskGraphLiveRoutingValid = queueRoutingMatchesLegacyPlan;
+    m_gpuTaskGraphLiveRoutingValid =
+        queueRoutingMatchesLegacyPlan
+        && schedulingMatchesLegacyPlan
+        && externalDependenciesMatchLegacyPlan
+    ;
 }
 
 

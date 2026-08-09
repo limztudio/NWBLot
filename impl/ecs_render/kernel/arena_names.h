@@ -25,7 +25,7 @@ namespace RendererArenaScope{
 
 inline constexpr Name s_PrepareArena("impl/ecs_render/prepare");
 inline constexpr Name s_RenderArena("impl/ecs_render/render");
-inline constexpr Name s_TaskGraphShadowArena("impl/ecs_render/task_graph_shadow");
+inline constexpr Name s_TaskGraphArena("impl/ecs_render/task_graph");
 inline constexpr Name s_TransparentCsgIntervalArena("impl/ecs_render/avboit_transparent_csg");
 inline constexpr Name s_PreparePassArena("impl/ecs_render/material_pass_prepare");
 inline constexpr Name s_RenderPassArena("impl/ecs_render/material_pass_render");

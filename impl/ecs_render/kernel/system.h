@@ -9,6 +9,7 @@
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/shared/renderer_state.h>
 #include <impl/ecs_render/kernel/subsystems.h>
+#include <impl/ecs_render/kernel/task_graph_schedule.h>
 
 #include <core/ecs/system.h>
 #include <core/graphics/render_pass.h>
@@ -80,15 +81,6 @@ private:
         CurrentFrameAccepted,
     };
 
-    struct GpuTaskGraphFrameInput{
-        bool dedicatedAsyncCompute = false;
-        bool frameLaggedAsyncLightingEnabled = false;
-        bool laggedLightingHistoryReady = false;
-        bool laggedLightingHistoryAccepted = false;
-        bool hasTransparentRenderers = false;
-        bool hardwareCaustics = false;
-    };
-
 public:
     using ShaderPathResolveCallback = RendererShaderPathResolveCallback;
 
@@ -147,7 +139,7 @@ private:
     void invalidateLaggedLightingHistorySubmission()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
     void buildGpuTaskGraph(
-        const GpuTaskGraphFrameInput& input,
+        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         const DeferredFrameTargets& deferredTargets,
         const ECSRenderDetail::FrameExecutionPlan& legacyPlan
     );
@@ -178,9 +170,10 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;
-    // The graph compiles before native recording.  Its resolved CommandQueue selects paired command lists only after
-    // every enabled work item agrees with FrameExecutionPlan's parity contract; the legacy plan retains packet
-    // grouping, submissions, timing, recovery, and the fallback route.  FrameGraph remains telemetry only.
+    // The graph compiles before native recording. Its resolved CommandQueue selects paired command lists only after
+    // its work set, semantic dependencies, and queue assignments agree with FrameExecutionPlan's parity contract;
+    // the legacy plan retains packet grouping, submissions, timing, recovery, and the fallback route. FrameGraph
+    // remains telemetry only.
     Core::GpuTaskGraph m_gpuTaskGraph;
     Core::GpuTaskGraphAnalysis m_gpuTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_gpuTaskGraphQueueAssignments;

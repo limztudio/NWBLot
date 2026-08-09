@@ -132,8 +132,8 @@ private:
     bool m_valid = false;
 };
 
-// Queue assignment is a separate immutable compile result so Phase 2 can compare physical routing without making
-// it authoritative for native recording or submission yet.
+// Queue assignment is a separate immutable compile result. Renderer integrations may use it for native-recording
+// selection only after their own legacy-parity checks; graph core never creates a command list or submits work.
 class GpuTaskGraphQueueAssignments final : NoCopy{
     friend class GpuTaskGraphCompiler;
 
@@ -176,8 +176,8 @@ public:
         Alloc::ScratchArena& scratchArena
     )const;
 
-    // Phase 2 only produces an observational physical-queue decision. It never creates a command list or changes
-    // FrameExecutionPlan's live route; the caller supplies the concrete topology discovered from its current device.
+    // This produces only a physical-queue decision. It never creates a command list or changes submission; the
+    // caller supplies the concrete topology discovered from its current device and owns any parity-gated use.
     [[nodiscard]] bool assignQueues(
         const GpuTaskGraph& graph,
         const GpuTaskGraphAnalysis& analysis,

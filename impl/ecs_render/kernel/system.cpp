@@ -101,7 +101,6 @@ RendererSystem::RendererSystem(
     , m_rayTracingState(arena)
     , m_shadowPrepareStateHandoff(arena)
     , m_meshViewSetupStateHandoff(arena)
-    , m_sceneShadingSetupStateHandoff(arena)
     , m_shadowComputePersistentStateHandoff(arena)
     , m_shadowVisibilityReturnStateHandoff(arena)
     , m_causticsComputePersistentStateHandoff(arena)
@@ -192,21 +191,18 @@ void RendererSystem::resetInvalidatedResourceStateHandoffs()noexcept{
     // Full invalidation also drops preparation and prefix handoffs.
     m_shadowPrepareStateHandoff.reset();
     m_meshViewSetupStateHandoff.reset();
-    m_sceneShadingSetupStateHandoff.reset();
     resetTargetGenerationStateHandoffs();
 }
 
 void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
     // Preserve accepted compute-local state across fresh recordings.
     m_meshViewSetupStateHandoff.reset();
-    m_sceneShadingSetupStateHandoff.reset();
     m_causticIrradianceLightingStateHandoff.reset();
 }
 
 void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
     // Rejected frames keep only cross-frame state from earlier accepted producers.
     m_meshViewSetupStateHandoff.reset();
-    m_sceneShadingSetupStateHandoff.reset();
     m_causticIrradianceLightingStateHandoff.reset();
 }
 
@@ -268,9 +264,11 @@ void RendererSystem::invalidateResources(){
     m_preparedShadowVisibilityReady = false;
     m_graphicsPrefixTaskGraphValid = false;
     m_graphicsPrefixBridgeTask = {};
+    m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixTask = {};
+    m_graphicsPrefixSceneShadingSetupReady = false;
     m_graphicsPrefixTaskGraph.reset();
     m_graphicsPrefixTaskGraphAnalysis.reset();
     m_graphicsPrefixTaskGraphQueueAssignments.reset();
@@ -372,7 +370,6 @@ void RendererSystem::invalidateResources(){
     ;
     resetInvalidatedResourceStateHandoffs();
     m_meshViewSetupCommandList.reset();
-    m_sceneShadingSetupCommandList.reset();
     m_frameRecoveryCommandList.reset();
     m_shadowPrepareCommandList.reset();
     resetLaggedLightingHistoryTracking();
@@ -412,14 +409,6 @@ bool RendererSystem::ensureFrameCommandLists(){
         m_meshViewSetupCommandList = device.createCommandList();
         if(!m_meshViewSetupCommandList){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create mesh-view setup command list"));
-            return false;
-        }
-    }
-
-    if(!m_sceneShadingSetupCommandList){
-        m_sceneShadingSetupCommandList = device.createCommandList();
-        if(!m_sceneShadingSetupCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene-shading setup command list"));
             return false;
         }
     }
@@ -589,7 +578,6 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
         return false;
 
     NWB_ASSERT(m_meshViewSetupCommandList);
-    NWB_ASSERT(m_sceneShadingSetupCommandList);
     NWB_ASSERT(m_shadowPrepareCommandList);
 
     auto& device = m_graphics.getDevice();
@@ -670,9 +658,11 @@ bool RendererSystem::recordShadowPrepareCommandList(DeferredFrameTargets& deferr
 void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_graphicsPrefixTaskGraphValid = false;
     m_graphicsPrefixBridgeTask = {};
+    m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixTask = {};
+    m_graphicsPrefixSceneShadingSetupReady = false;
     m_graphicsPrefixTaskGraph.reset();
     m_graphicsPrefixTaskGraphAnalysis.reset();
     m_graphicsPrefixTaskGraphQueueAssignments.reset();
@@ -831,8 +821,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const bool shadowVisibilityExpectedCompute = dedicatedAsyncCompute;
     const bool softwareCausticsExpectedCompute = dedicatedAsyncCompute && !hardwareShadowSupported;
     const bool shadowVisibilityPrepared = m_preparedShadowVisibilityReady;
-    // Compile every independent graph before native recording. The graphics prefix waits until its two imported
-    // setup lists are ready, then adds its native clear, G-buffer, and normalization suffixes.
+    // Compile every independent graph before native recording. The graphics prefix waits until its remaining
+    // mesh-view import is ready, then adds native scene setup, clear, G-buffer, and normalization suffixes.
     const ECSRenderDetail::GpuTaskGraphFrameScheduleInput taskGraphInput{
         .dedicatedAsyncCompute = dedicatedAsyncCompute,
         .frameLaggedAsyncLightingEnabled = m_frameLaggedAsyncLightingEnabled,
@@ -843,10 +833,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     };
     buildLaggedLightingHistoryTaskGraph(taskGraphInput, deferredTargets);
     Core::CommandList* meshViewSetupCommandList = m_meshViewSetupCommandList.get();
-    Core::CommandList* sceneShadingSetupCommandList = m_sceneShadingSetupCommandList.get();
     Core::CommandList* frameRecoveryCommandList = m_frameRecoveryCommandList.get();
     NWB_ASSERT(meshViewSetupCommandList);
-    NWB_ASSERT(sceneShadingSetupCommandList);
     NWB_ASSERT(frameRecoveryCommandList);
 
     resetFrameRecordingStateHandoffs();
@@ -958,8 +946,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         restorePostGbufferEffectsCpuState();
     };
 
-    // The graph-owned prefix packet retains the established timing scope across its two imported setup lists and
-    // native deferred-clear, G-buffer, and normalization suffixes.
+    // The graph-owned prefix packet retains the established timing scope across its imported mesh-view list and
+    // native scene-shading setup, deferred-clear, G-buffer, and normalization suffixes.
     Core::GpuTimingSubmissionTicket graphicsPrefixTimingTicket(m_graphics.gpuTiming());
     Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
     Core::GpuTimingSubmissionTicket shadowVisibilityTimingTicket(m_graphics.gpuTiming());
@@ -1358,14 +1346,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         resetAbandonedFrameStateHandoffs();
     };
 
-    // The temporary imported prefix bridge records its setup lists in submission order.  Each list inherits the
-    // preceding final state, so the G-buffer list receives one authoritative snapshot instead of a renderer-side
-    // fan-in of independently recorded branches.
+    // The temporary imported prefix bridge retains only mesh-view setup. Its native suffix preserves scene setup,
+    // clear, opaque, and normalization order in one command list without a renderer-side state fan-in.
     const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(deferredTargets.framebuffer->getFramebufferInfo());
     bool meshViewSetupReady = false;
-    bool sceneShadingSetupReady = false;
     bool meshViewSetupCommandListReady = false;
-    bool sceneShadingSetupCommandListReady = false;
     const Core::Graphics::JobHandle meshViewSetupRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
         &device,
@@ -1425,45 +1410,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    const Core::Graphics::JobHandle sceneShadingSetupRecordingJob = m_graphics.scheduleGraphicsJob([
-        this,
-        meshViewAspectRatio,
-        sceneShadingSetupCommandList,
-        &sceneShadingSetupReady,
-        &sceneShadingSetupCommandListReady,
-        &graphicsPrefixTimingTicket
-    ](){
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(graphicsPrefixTimingTicket);
-        sceneShadingSetupCommandList->open(&m_meshViewSetupStateHandoff);
-        if(!sceneShadingSetupCommandList->hasCommandBuffer())
-            return;
-
-        const bool sceneShadingReady = m_deferredSystem.updateSceneShadingBuffer(*sceneShadingSetupCommandList, meshViewAspectRatio);
-        sceneShadingSetupCommandList->close(&m_sceneShadingSetupStateHandoff);
-        sceneShadingSetupReady = sceneShadingReady;
-        sceneShadingSetupCommandListReady =
-            m_sceneShadingSetupStateHandoff.valid()
-            && sceneShadingSetupCommandList->hasCommandBuffer()
-        ;
-    });
-    if(!sceneShadingSetupRecordingJob.valid()){
-        discardRenderPackets();
-        return;
-    }
-
-    m_graphics.waitJob(sceneShadingSetupRecordingJob);
-    if(!sceneShadingSetupCommandListReady){
-        discardRenderPackets();
-        return;
-    }
-
-    const bool frameSetupReady = meshViewSetupReady && sceneShadingSetupReady;
     buildGraphicsPrefixTaskGraph(
         taskGraphInput,
         deferredTargets,
         csgFrameState,
         hasOpaqueCsgFrameWork,
-        frameSetupReady,
+        meshViewSetupReady,
+        meshViewAspectRatio,
         shadowVisibilityRunsOnCompute,
         surfelGiRunsOnCompute,
         asyncPrefixTiming,
@@ -1481,6 +1434,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(
         !m_graphicsPrefixTaskGraphValid
         || !m_graphicsPrefixBridgeTask.valid()
+        || !m_graphicsPrefixSceneShadingSetupTask.valid()
         || !m_graphicsPrefixDeferredClearTask.valid()
         || !m_graphicsPrefixGbufferTask.valid()
         || !m_graphicsPrefixTask.valid()
@@ -1492,22 +1446,23 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // The retained bridge records only setup lists. The graph appends native deferred clear, opaque G-buffer, and
-    // normalization work to the same packet, captures the final state once, and preserves one ordered submission.
+    // The retained bridge records only mesh-view setup. The graph appends native scene setup, deferred clear,
+    // opaque G-buffer, and normalization work to the same packet, captures the final state once, and preserves one
+    // ordered submission.
     Core::CommandList* const graphicsPrefixCommandLists[] = {
         meshViewSetupCommandList,
-        sceneShadingSetupCommandList,
     };
     Core::GpuNativePacketRecorder graphicsPrefixRecorder(device);
     const Core::GpuImportedPacketNativeSuffixRecordDesc graphicsPrefixRecordDesc{
         .packet = graphicsPrefixPacket,
         .importedCommandLists = graphicsPrefixCommandLists,
         .importedCommandListCount = LengthOf(graphicsPrefixCommandLists),
-        .importedStateSeed = &m_sceneShadingSetupStateHandoff,
+        .importedStateSeed = &m_meshViewSetupStateHandoff,
     };
     const bool graphicsPrefixRecorded =
         m_graphicsPrefixTaskGraphValid
         && m_graphicsPrefixBridgeTask.valid()
+        && m_graphicsPrefixSceneShadingSetupTask.valid()
         && m_graphicsPrefixDeferredClearTask.valid()
         && m_graphicsPrefixGbufferTask.valid()
         && m_graphicsPrefixTask.valid()
@@ -2528,6 +2483,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const bool graphicsPrefixAccepted =
             m_graphicsPrefixTaskGraphValid
             && m_graphicsPrefixBridgeTask.valid()
+            && m_graphicsPrefixSceneShadingSetupTask.valid()
             && m_graphicsPrefixDeferredClearTask.valid()
             && m_graphicsPrefixGbufferTask.valid()
             && m_graphicsPrefixTask.valid()

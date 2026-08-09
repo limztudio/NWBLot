@@ -359,6 +359,42 @@ TEST_F(DescriptorBufferRoundTripTest, MergedImportedPacketRecordsNativeSuffixSeq
     const GpuTaskId bridgeTask = graph.addTask(bridgeDesc);
     ASSERT_TRUE(bridgeTask.valid());
 
+    const GpuTaskResourceUse sceneSetupUses[] = {
+        GpuTaskResourceUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskSchedulingHint sceneSetupScheduling;
+    sceneSetupScheduling.allowPacketMerge = true;
+    sceneSetupScheduling.mergeWithPrevious = true;
+    GpuTaskDesc sceneSetupDesc;
+    sceneSetupDesc
+        .setIdentity(Name("tests/descriptor_buffer/merged_packet_scene_setup"))
+        .setMarkerLabel("Merged Packet Scene Setup")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(sceneSetupScheduling)
+        .setDependencies(&bridgeTask, 1u)
+        .setResourceUses(sceneSetupUses, LengthOf(sceneSetupUses))
+    ;
+    bool nativeSceneSetupRecorded = false;
+    const GpuTaskId sceneSetupTask = graph.addTask<ImportedPacketNativeSuffixTask>(
+        sceneSetupDesc,
+        ImportedPacketNativeSuffixTask::Payload{
+            .buffer = buffer.get(),
+            .expectedState = ResourceStates::ConstantBuffer,
+            .recorded = &nativeSceneSetupRecorded,
+        }
+    );
+    ASSERT_TRUE(sceneSetupTask.valid());
+
     const GpuTaskResourceUse clearUses[] = {
         GpuTaskResourceUse{
             .resource = resource,
@@ -393,7 +429,7 @@ TEST_F(DescriptorBufferRoundTripTest, MergedImportedPacketRecordsNativeSuffixSeq
             false,
         })
         .setScheduling(clearScheduling)
-        .setDependencies(&bridgeTask, 1u)
+        .setDependencies(&sceneSetupTask, 1u)
         .setResourceUses(clearUses, LengthOf(clearUses))
     ;
     bool nativeClearRecorded = false;
@@ -529,19 +565,23 @@ TEST_F(DescriptorBufferRoundTripTest, MergedImportedPacketRecordsNativeSuffixSeq
     const GpuSubmissionPacketId packet = compiledGraph.packetForTask(normalizeTask);
     ASSERT_TRUE(packet.valid());
     EXPECT_EQ(packet, compiledGraph.packetForTask(bridgeTask));
+    EXPECT_EQ(packet, compiledGraph.packetForTask(sceneSetupTask));
     EXPECT_EQ(packet, compiledGraph.packetForTask(clearTask));
     EXPECT_EQ(packet, compiledGraph.packetForTask(gbufferTask));
     const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
-    ASSERT_EQ(packetPlan.taskCount, 4u);
+    ASSERT_EQ(packetPlan.taskCount, 5u);
     ASSERT_NE(compiledGraph.packetTasks(packet), nullptr);
     EXPECT_EQ(compiledGraph.packetTasks(packet)[0u], bridgeTask);
-    EXPECT_EQ(compiledGraph.packetTasks(packet)[1u], clearTask);
-    EXPECT_EQ(compiledGraph.packetTasks(packet)[2u], gbufferTask);
-    EXPECT_EQ(compiledGraph.packetTasks(packet)[3u], normalizeTask);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[1u], sceneSetupTask);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[2u], clearTask);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[3u], gbufferTask);
+    EXPECT_EQ(compiledGraph.packetTasks(packet)[4u], normalizeTask);
     EXPECT_FALSE(graph.taskAt(bridgeTask.index).hasPayload);
+    EXPECT_TRUE(graph.taskAt(sceneSetupTask.index).hasPayload);
     EXPECT_TRUE(graph.taskAt(clearTask.index).hasPayload);
     EXPECT_TRUE(graph.taskAt(gbufferTask.index).hasPayload);
     EXPECT_TRUE(graph.taskAt(normalizeTask.index).hasPayload);
+    ASSERT_NE(compiledGraph.findTask(sceneSetupTask), nullptr);
     ASSERT_NE(compiledGraph.findTask(clearTask), nullptr);
     ASSERT_NE(compiledGraph.findTask(gbufferTask), nullptr);
     ASSERT_NE(compiledGraph.findTask(normalizeTask), nullptr);
@@ -568,6 +608,7 @@ TEST_F(DescriptorBufferRoundTripTest, MergedImportedPacketRecordsNativeSuffixSeq
     };
     const GpuNativePacketRecorder recorder(device);
     ASSERT_TRUE(recorder.recordImportedPacketNativeSuffix(graph, compiledGraph, recordDesc, recordedGraph));
+    ASSERT_TRUE(nativeSceneSetupRecorded);
     ASSERT_TRUE(nativeClearRecorded);
     ASSERT_TRUE(nativeGbufferRecorded);
     ASSERT_TRUE(nativeNormalizeRecorded);

@@ -21,6 +21,35 @@ NWB_IMPL_BEGIN
 namespace ECSRenderDetail{
 
 
+// Scene-shading setup is the first native suffix after the remaining mesh-view import. It retains dynamic upload
+// barriers internally while graph declarations establish the final states consumed by later prefix work.
+struct SceneShadingSetupGraphTask{
+    struct Payload{
+        RendererSystem* renderer = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        bool* ready = nullptr;
+        f32 meshViewAspectRatio = 1.f;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.renderer || !payload.timingTicket || !payload.ready)
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        *payload.ready = payload.renderer->m_deferredSystem.updateSceneShadingBuffer(
+            commandList,
+            payload.meshViewAspectRatio
+        );
+        return true;
+    }
+};
+
+
 // Deferred clear is the first native suffix after the imported setup bridge. Its entry transitions are fully
 // declaration-driven, so the recording body contains only clear commands and timing.
 struct DeferredClearGraphTask{
@@ -60,7 +89,8 @@ struct GbufferGraphTask{
         const CsgFrameState* csgFrameState = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool hasOpaqueCsgFrameWork = false;
-        bool frameSetupReady = false;
+        bool meshViewSetupReady = false;
+        const bool* sceneShadingSetupReady = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -89,7 +119,12 @@ struct GbufferGraphTask{
         Core::ViewportState deferredViewportState;
         deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
 
-        if(payload.frameSetupReady){
+        const bool frameSetupReady =
+            payload.meshViewSetupReady
+            && payload.sceneShadingSetupReady
+            && *payload.sceneShadingSetupReady
+        ;
+        if(frameSetupReady){
             renderer.m_materialSystem.gatherMaterialPassDrawItems(
                 deferredTargets.framebuffer.get(),
                 MaterialPipelinePass::Opaque,
@@ -684,7 +719,8 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
     DeferredFrameTargets& deferredTargets,
     const CsgFrameState& csgFrameState,
     const bool hasOpaqueCsgFrameWork,
-    const bool frameSetupReady,
+    const bool meshViewSetupReady,
+    const f32 meshViewAspectRatio,
     const bool shadowVisibilityRunsOnCompute,
     const bool surfelGiRunsOnCompute,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
@@ -694,9 +730,11 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
 
     m_graphicsPrefixTaskGraphValid = false;
     m_graphicsPrefixBridgeTask = {};
+    m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixTask = {};
+    m_graphicsPrefixSceneShadingSetupReady = false;
     m_graphicsPrefixTaskGraph.reset();
     m_graphicsPrefixTaskGraphAnalysis.reset();
     m_graphicsPrefixTaskGraphQueueAssignments.reset();
@@ -704,7 +742,12 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
     m_graphicsPrefixRecordedGraph.reset(m_graphicsPrefixCompiledGraph);
     m_graphicsPrefixSubmissionTransaction.reset(m_graphicsPrefixCompiledGraph);
 
-    if(!deferredTargets.valid() || !m_drawState.m_meshViewBuffer)
+    if(
+        !deferredTargets.valid()
+        || !m_drawState.m_meshViewBuffer
+        || !m_deferredState.m_sceneShadingBuffer
+        || !m_deferredState.m_lightBuffer
+    )
         return;
 
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
@@ -744,6 +787,14 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
             "Surfel Irradiance"
         );
     }
+    const Core::GpuGraphResourceId sceneShadingBuffer = m_graphicsPrefixTaskGraph.importBuffer(
+        m_deferredState.m_sceneShadingBuffer,
+        BufferResourceDesc(Name("render.graphics_prefix.scene_shading"), "Scene Shading")
+    );
+    const Core::GpuGraphResourceId lightBuffer = m_graphicsPrefixTaskGraph.importBuffer(
+        m_deferredState.m_lightBuffer,
+        BufferResourceDesc(Name("render.graphics_prefix.lights"), "Lights")
+    );
     const Core::GpuGraphResourceId meshViewBuffer = m_graphicsPrefixTaskGraph.importBuffer(
         m_drawState.m_meshViewBuffer,
         BufferResourceDesc(Name("render.graphics_prefix.mesh_view"), "Mesh View")
@@ -755,14 +806,17 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
         || !depth.valid()
         || !opaqueColor.valid()
         || (clearSurfelIrradiance && !surfelIrradiance.valid())
+        || !sceneShadingBuffer.valid()
+        || !lightBuffer.valid()
         || !meshViewBuffer.valid()
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graphics-prefix graph resources"));
         return;
     }
 
-    // This metadata-only task represents the two retained setup lists. Native deferred clear, G-buffer, and
-    // normalization suffixes receive their barrier plans from their own declarations in one Graphics submission.
+    // This metadata-only task represents the remaining mesh-view setup list. Native scene setup, deferred clear,
+    // G-buffer, and normalization suffixes receive their barrier plans from their own declarations in one Graphics
+    // submission.
     const Core::GpuTaskResourceUse bridgeResourceUses[] = {
         WriteUse(meshViewBuffer, Core::ResourceStates::ConstantBuffer),
     };
@@ -781,6 +835,38 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
     m_graphicsPrefixBridgeTask = m_graphicsPrefixTaskGraph.addTask(bridgeDesc);
     if(!m_graphicsPrefixBridgeTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graphics-prefix bridge task"));
+        return;
+    }
+
+    const Core::GpuTaskResourceUse sceneShadingSetupResourceUses[] = {
+        WriteUse(sceneShadingBuffer, Core::ResourceStates::ConstantBuffer),
+        WriteUse(lightBuffer, Core::ResourceStates::ShaderResource),
+    };
+    Core::GpuTaskSchedulingHint sceneShadingSetupScheduling;
+    sceneShadingSetupScheduling.cost = Core::GpuTaskCostHint::Tiny;
+    sceneShadingSetupScheduling.forceSubmissionBoundary = false;
+    sceneShadingSetupScheduling.allowPacketMerge = true;
+    sceneShadingSetupScheduling.mergeWithPrevious = true;
+    Core::GpuTaskDesc sceneShadingSetupDesc;
+    sceneShadingSetupDesc
+        .setIdentity(Name("render.graphics_prefix.scene_shading_setup"))
+        .setMarkerLabel("Scene Shading Setup")
+        .setQueue(GraphicsQueueRequest())
+        .setScheduling(sceneShadingSetupScheduling)
+        .setDependencies(&m_graphicsPrefixBridgeTask, 1u)
+        .setResourceUses(sceneShadingSetupResourceUses, LengthOf(sceneShadingSetupResourceUses))
+    ;
+    m_graphicsPrefixSceneShadingSetupTask = m_graphicsPrefixTaskGraph.addTask<ECSRenderDetail::SceneShadingSetupGraphTask>(
+        sceneShadingSetupDesc,
+        ECSRenderDetail::SceneShadingSetupGraphTask::Payload{
+            .renderer = this,
+            .timingTicket = &timingTicket,
+            .ready = &m_graphicsPrefixSceneShadingSetupReady,
+            .meshViewAspectRatio = meshViewAspectRatio,
+        }
+    );
+    if(!m_graphicsPrefixSceneShadingSetupTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare scene-shading setup task"));
         return;
     }
 
@@ -832,7 +918,7 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
             .setMarkerLabel("Deferred Clear")
             .setQueue(GraphicsQueueRequest())
             .setScheduling(clearScheduling)
-            .setDependencies(&m_graphicsPrefixBridgeTask, 1u)
+            .setDependencies(&m_graphicsPrefixSceneShadingSetupTask, 1u)
             .setResourceUses(clearResourceUses.data(), clearResourceUses.size())
         ;
         m_graphicsPrefixDeferredClearTask = m_graphicsPrefixTaskGraph.addTask<ECSRenderDetail::DeferredClearGraphTask>(
@@ -879,7 +965,8 @@ void RendererSystem::buildGraphicsPrefixTaskGraph(
             .csgFrameState = &csgFrameState,
             .timingTicket = &timingTicket,
             .hasOpaqueCsgFrameWork = hasOpaqueCsgFrameWork,
-            .frameSetupReady = frameSetupReady,
+            .meshViewSetupReady = meshViewSetupReady,
+            .sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady,
         }
     );
     if(!m_graphicsPrefixGbufferTask.valid()){

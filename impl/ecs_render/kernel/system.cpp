@@ -103,7 +103,6 @@ RendererSystem::RendererSystem(
     , m_meshViewSetupStateHandoff(arena)
     , m_sceneShadingSetupStateHandoff(arena)
     , m_deferredClearStateHandoff(arena)
-    , m_frameSetupStateFanInHandoff(arena)
     , m_gbufferStateHandoff(arena)
     , m_postGbufferNormalizedStateHandoff(arena)
     , m_shadowComputePersistentStateHandoff(arena)
@@ -198,7 +197,6 @@ void RendererSystem::resetInvalidatedResourceStateHandoffs()noexcept{
     m_meshViewSetupStateHandoff.reset();
     m_sceneShadingSetupStateHandoff.reset();
     m_deferredClearStateHandoff.reset();
-    m_frameSetupStateFanInHandoff.reset();
     m_gbufferStateHandoff.reset();
     m_postGbufferNormalizedStateHandoff.reset();
     resetTargetGenerationStateHandoffs();
@@ -209,7 +207,6 @@ void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
     m_meshViewSetupStateHandoff.reset();
     m_sceneShadingSetupStateHandoff.reset();
     m_deferredClearStateHandoff.reset();
-    m_frameSetupStateFanInHandoff.reset();
     m_gbufferStateHandoff.reset();
     m_postGbufferNormalizedStateHandoff.reset();
     m_causticIrradianceLightingStateHandoff.reset();
@@ -220,7 +217,6 @@ void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
     m_meshViewSetupStateHandoff.reset();
     m_sceneShadingSetupStateHandoff.reset();
     m_deferredClearStateHandoff.reset();
-    m_frameSetupStateFanInHandoff.reset();
     m_gbufferStateHandoff.reset();
     m_postGbufferNormalizedStateHandoff.reset();
     m_causticIrradianceLightingStateHandoff.reset();
@@ -1422,7 +1418,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         resetAbandonedFrameStateHandoffs();
     };
 
-    // Record independent uploads/clears in parallel; CSG clear waits for its gathered rect.
+    // The temporary imported prefix bridge records its setup lists in submission order.  Each list inherits the
+    // preceding final state, so the G-buffer list receives one authoritative snapshot instead of a renderer-side
+    // fan-in of independently recorded branches.
     const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(deferredTargets.framebuffer->getFramebufferInfo());
     bool meshViewSetupReady = false;
     bool sceneShadingSetupReady = false;
@@ -1477,6 +1475,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && meshViewSetupCommandList->hasCommandBuffer()
         ;
     });
+    if(!meshViewSetupRecordingJob.valid()){
+        discardRenderPackets();
+        return;
+    }
+
+    m_graphics.waitJob(meshViewSetupRecordingJob);
+    if(!meshViewSetupCommandListReady){
+        discardRenderPackets();
+        return;
+    }
+
     const Core::Graphics::JobHandle sceneShadingSetupRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
         meshViewAspectRatio,
@@ -1486,7 +1495,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &graphicsPrefixTimingTicket
     ](){
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(graphicsPrefixTimingTicket);
-        sceneShadingSetupCommandList->open(&m_shadowPrepareStateHandoff);
+        sceneShadingSetupCommandList->open(&m_meshViewSetupStateHandoff);
         if(!sceneShadingSetupCommandList->hasCommandBuffer())
             return;
 
@@ -1498,6 +1507,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && sceneShadingSetupCommandList->hasCommandBuffer()
         ;
     });
+    if(!sceneShadingSetupRecordingJob.valid()){
+        discardRenderPackets();
+        return;
+    }
+
+    m_graphics.waitJob(sceneShadingSetupRecordingJob);
+    if(!sceneShadingSetupCommandListReady){
+        discardRenderPackets();
+        return;
+    }
+
     const Core::Graphics::JobHandle deferredClearRecordingJob = m_graphics.scheduleGraphicsJob([
         this,
         &deferredTargets,
@@ -1507,7 +1527,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &graphicsPrefixTimingTicket
     ](){
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(graphicsPrefixTimingTicket);
-        deferredClearCommandList->open(&m_shadowPrepareStateHandoff);
+        deferredClearCommandList->open(&m_sceneShadingSetupStateHandoff);
         if(!deferredClearCommandList->hasCommandBuffer())
             return;
 
@@ -1525,44 +1545,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && deferredClearCommandList->hasCommandBuffer()
         ;
     });
-    if(
-        !meshViewSetupRecordingJob.valid()
-        || !sceneShadingSetupRecordingJob.valid()
-        || !deferredClearRecordingJob.valid()
-    ){
-        if(meshViewSetupRecordingJob.valid())
-            m_graphics.waitJob(meshViewSetupRecordingJob);
-        if(sceneShadingSetupRecordingJob.valid())
-            m_graphics.waitJob(sceneShadingSetupRecordingJob);
-        if(deferredClearRecordingJob.valid())
-            m_graphics.waitJob(deferredClearRecordingJob);
+    if(!deferredClearRecordingJob.valid()){
         discardRenderPackets();
         return;
     }
 
-    m_graphics.waitJob(meshViewSetupRecordingJob);
-    m_graphics.waitJob(sceneShadingSetupRecordingJob);
     m_graphics.waitJob(deferredClearRecordingJob);
-    if(
-        !meshViewSetupCommandListReady
-        || !sceneShadingSetupCommandListReady
-        || !deferredClearCommandListReady
-    ){
-        discardRenderPackets();
-        return;
-    }
-
-    const Core::CommandListResourceStateHandoff* frameSetupBranchStates[] = {
-        &m_meshViewSetupStateHandoff,
-        &m_sceneShadingSetupStateHandoff,
-        &m_deferredClearStateHandoff,
-    };
-    if(!m_frameSetupStateFanInHandoff.buildFanIn(
-        m_shadowPrepareStateHandoff,
-        frameSetupBranchStates,
-        3u
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frame-setup packet state fan-in failed"));
+    if(!deferredClearCommandListReady){
         discardRenderPackets();
         return;
     }
@@ -1583,7 +1572,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(graphicsPrefixTimingTicket);
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
         Core::CommandList* commandList = gbufferCommandList;
-        commandList->open(&m_frameSetupStateFanInHandoff);
+        commandList->open(&m_deferredClearStateHandoff);
         if(!commandList->hasCommandBuffer())
             return;
 

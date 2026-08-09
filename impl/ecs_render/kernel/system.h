@@ -359,7 +359,6 @@ private:
     Core::CommandListResourceStateHandoff m_meshViewSetupStateHandoff;
     Core::CommandListResourceStateHandoff m_sceneShadingSetupStateHandoff;
     Core::CommandListResourceStateHandoff m_deferredClearStateHandoff;
-    Core::CommandListResourceStateHandoff m_frameSetupStateFanInHandoff;
     Core::CommandListResourceStateHandoff m_gbufferStateHandoff;
     Core::CommandListResourceStateHandoff m_postGbufferNormalizedStateHandoff;
     // Compute-only shadow scratch/history retains accepted graph packet state across frames. Deferred lighting now

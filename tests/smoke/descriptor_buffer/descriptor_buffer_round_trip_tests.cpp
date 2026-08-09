@@ -2653,11 +2653,10 @@ TEST_F(DescriptorBufferRoundTripTest, NormalizedStatePreludeFansInIndependentBra
 }
 
 
-// Mirrors RendererSystem's split frame sequence: record mesh-view and scene-shading setup plus the non-CSG deferred
-// clear from the completed shadow-preparation snapshot, fan their disjoint outputs in for the opaque producer, then
-// normalize the G-buffer once. Shadow, caustics, surfel GI, and AVBOIT record from that same snapshot; their
-// four-way fan-in feeds compute lighting, then compute composite and the final Graphics presentation consumer.
-TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFanInThroughComputePresent){
+// Mirrors RendererSystem's temporary graphics-prefix bridge: mesh-view setup, scene-shading setup, and deferred
+// clear form one state chain before the opaque producer records.  The later post-G-buffer producers remain
+// independently recorded, then feed compute lighting, compute composite, and the final Graphics presentation.
+TEST_F(DescriptorBufferRoundTripTest, RendererGraphicsPrefixStateChainThroughComputePresent){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto makeGbufferTarget = [&device](){
@@ -2745,7 +2744,6 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
     CommandListResourceStateHandoff meshViewSetupState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff sceneShadingSetupState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff deferredClearState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff frameSetupFanInState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff gbufferState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff normalizedState(DescriptorBufferRoundTripTest::arena());
     CommandListResourceStateHandoff shadowState(DescriptorBufferRoundTripTest::arena());
@@ -2806,61 +2804,34 @@ TEST_F(DescriptorBufferRoundTripTest, RendererFrameSetupAndPostGbufferPacketsFan
     EXPECT_GT(device.executeCommandLists(shadowPrepareCommandLists, LengthOf(shadowPrepareCommandLists), CommandQueue::Graphics, &shadowPrepareSubmitted), 0u);
     ASSERT_TRUE(shadowPrepareSubmitted);
 
-    Latch frameSetupRecordingStarted(2);
-    bool meshViewSetupRecorded = false;
-    bool sceneShadingSetupRecorded = false;
-    bool deferredClearRecorded = false;
-    const Graphics::JobHandle meshViewSetupJob = graphics.scheduleGraphicsJob([&](){
-        frameSetupRecordingStarted.count_down();
-        frameSetupRecordingStarted.wait();
-        meshViewSetup->open(&shadowPrepareState);
-        meshViewSetup->setBufferState(meshViewBuffer.get(), ResourceStates::CopyDest);
-        meshViewSetup->setBufferState(meshViewBuffer.get(), ResourceStates::ConstantBuffer);
-        meshViewSetup->close(&meshViewSetupState);
-        meshViewSetupRecorded = meshViewSetupState.valid() && meshViewSetup->hasCommandBuffer();
-    });
-    const Graphics::JobHandle sceneShadingSetupJob = graphics.scheduleGraphicsJob([&](){
-        frameSetupRecordingStarted.count_down();
-        frameSetupRecordingStarted.wait();
-        sceneShadingSetup->open(&shadowPrepareState);
-        sceneShadingSetup->setBufferState(sceneShadingBuffer.get(), ResourceStates::CopyDest);
-        sceneShadingSetup->setBufferState(sceneShadingBuffer.get(), ResourceStates::ConstantBuffer);
-        sceneShadingSetup->setBufferState(lightBuffer.get(), ResourceStates::CopyDest);
-        sceneShadingSetup->setBufferState(lightBuffer.get(), ResourceStates::ShaderResource);
-        sceneShadingSetup->close(&sceneShadingSetupState);
-        sceneShadingSetupRecorded = sceneShadingSetupState.valid() && sceneShadingSetup->hasCommandBuffer();
-    });
-    const Graphics::JobHandle deferredClearJob = graphics.scheduleGraphicsJob([&](){
-        deferredClear->open(&shadowPrepareState);
-        deferredClear->setTextureState(albedo.get(), s_AllSubresources, ResourceStates::CopyDest);
-        deferredClear->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::CopyDest);
-        deferredClear->setTextureState(normal.get(), s_AllSubresources, ResourceStates::CopyDest);
-        deferredClear->setTextureState(depth.get(), s_AllSubresources, ResourceStates::CopyDest);
-        deferredClear->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::CopyDest);
-        deferredClear->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::CopyDest);
-        deferredClear->close(&deferredClearState);
-        deferredClearRecorded = deferredClearState.valid() && deferredClear->hasCommandBuffer();
-    });
-    ASSERT_TRUE(meshViewSetupJob.valid());
-    ASSERT_TRUE(sceneShadingSetupJob.valid());
-    ASSERT_TRUE(deferredClearJob.valid());
+    meshViewSetup->open(&shadowPrepareState);
+    meshViewSetup->setBufferState(meshViewBuffer.get(), ResourceStates::CopyDest);
+    meshViewSetup->setBufferState(meshViewBuffer.get(), ResourceStates::ConstantBuffer);
+    meshViewSetup->close(&meshViewSetupState);
+    ASSERT_TRUE(meshViewSetupState.valid());
+    ASSERT_TRUE(meshViewSetup->hasCommandBuffer());
 
-    graphics.waitJob(meshViewSetupJob);
-    graphics.waitJob(sceneShadingSetupJob);
-    graphics.waitJob(deferredClearJob);
-    ASSERT_TRUE(meshViewSetupRecorded);
-    ASSERT_TRUE(sceneShadingSetupRecorded);
-    ASSERT_TRUE(deferredClearRecorded);
+    sceneShadingSetup->open(&meshViewSetupState);
+    sceneShadingSetup->setBufferState(sceneShadingBuffer.get(), ResourceStates::CopyDest);
+    sceneShadingSetup->setBufferState(sceneShadingBuffer.get(), ResourceStates::ConstantBuffer);
+    sceneShadingSetup->setBufferState(lightBuffer.get(), ResourceStates::CopyDest);
+    sceneShadingSetup->setBufferState(lightBuffer.get(), ResourceStates::ShaderResource);
+    sceneShadingSetup->close(&sceneShadingSetupState);
+    ASSERT_TRUE(sceneShadingSetupState.valid());
+    ASSERT_TRUE(sceneShadingSetup->hasCommandBuffer());
 
-    const CommandListResourceStateHandoff* frameSetupBranchStates[] = {
-        &meshViewSetupState,
-        &sceneShadingSetupState,
-        &deferredClearState,
-    };
-    ASSERT_TRUE(frameSetupFanInState.buildFanIn(shadowPrepareState, frameSetupBranchStates, 3u));
-    ASSERT_TRUE(frameSetupFanInState.valid());
+    deferredClear->open(&sceneShadingSetupState);
+    deferredClear->setTextureState(albedo.get(), s_AllSubresources, ResourceStates::CopyDest);
+    deferredClear->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::CopyDest);
+    deferredClear->setTextureState(normal.get(), s_AllSubresources, ResourceStates::CopyDest);
+    deferredClear->setTextureState(depth.get(), s_AllSubresources, ResourceStates::CopyDest);
+    deferredClear->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::CopyDest);
+    deferredClear->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::CopyDest);
+    deferredClear->close(&deferredClearState);
+    ASSERT_TRUE(deferredClearState.valid());
+    ASSERT_TRUE(deferredClear->hasCommandBuffer());
 
-    gbuffer->open(&frameSetupFanInState);
+    gbuffer->open(&deferredClearState);
     EXPECT_EQ(gbuffer->getBufferState(meshViewBuffer.get()), ResourceStates::ConstantBuffer);
     EXPECT_EQ(gbuffer->getBufferState(sceneShadingBuffer.get()), ResourceStates::ConstantBuffer);
     EXPECT_EQ(gbuffer->getBufferState(lightBuffer.get()), ResourceStates::ShaderResource);

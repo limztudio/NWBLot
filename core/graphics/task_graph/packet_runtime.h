@@ -55,6 +55,11 @@ public:
 
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
     [[nodiscard]] const GpuRecordedPacket* find(const GpuSubmissionPacketId& packet)const noexcept;
+    // Transitional read-only export for an external graph that still needs a packet's actual native final state.
+    // Graph-internal consumers use compiler-produced state seeds instead.
+    [[nodiscard]] const CommandListResourceStateHandoff* packetFinalStateSeed(
+        const GpuSubmissionPacketId& packet
+    )const noexcept;
 
 
 private:

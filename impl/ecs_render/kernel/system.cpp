@@ -139,7 +139,6 @@ RendererSystem::RendererSystem(
     , m_deferredPresentStateHandoff(arena)
     , m_laggedLightingHistoryCopyInputStateHandoff(arena)
     , m_laggedLightingHistoryCopyStateHandoff(arena)
-    , m_avboitStateHandoff(arena)
     , m_shaderSystem(*this)
     , m_meshSystem(*this)
     , m_materialSystem(*this)
@@ -247,7 +246,6 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     m_deferredPresentInputStateHandoff.reset();
     m_deferredPresentStateHandoff.reset();
     resetLaggedLightingHistoryCopyStateHandoffs();
-    m_avboitStateHandoff.reset();
 }
 
 void RendererSystem::resetInvalidatedResourceStateHandoffs()noexcept{
@@ -296,7 +294,6 @@ void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
     m_deferredPresentInputStateHandoff.reset();
     m_deferredPresentStateHandoff.reset();
     resetLaggedLightingHistoryCopyStateHandoffs();
-    m_avboitStateHandoff.reset();
 }
 
 void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
@@ -331,7 +328,6 @@ void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
     m_deferredPresentInputStateHandoff.reset();
     m_deferredPresentStateHandoff.reset();
     resetLaggedLightingHistoryCopyStateHandoffs();
-    m_avboitStateHandoff.reset();
 }
 
 void RendererSystem::resetRejectedShadowVisibilityStateHandoffs()noexcept{
@@ -361,7 +357,6 @@ void RendererSystem::resetRejectedShadowVisibilityStateHandoffs()noexcept{
     m_deferredPresentBaseStateHandoff.reset();
     m_deferredPresentInputStateHandoff.reset();
     m_deferredPresentStateHandoff.reset();
-    m_avboitStateHandoff.reset();
 }
 
 
@@ -2230,7 +2225,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuNativePacketRecordDesc avboitPreRecordDesc{
         .packet = avboitPrePacket,
         .initialStates = &m_postGbufferNormalizedStateHandoff,
-        .finalStates = avboitUsesAsyncCompute ? nullptr : &m_avboitStateHandoff,
     };
     const bool avboitPreRecorded =
         m_avboitTaskGraphValid
@@ -2243,7 +2237,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitPreRecordDesc,
             m_avboitRecordedGraph
         )
-        && (!avboitUsesAsyncCompute || m_avboitStateHandoff.valid())
     ;
     if(!avboitPreRecorded){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned AVBOIT pre packet"));
@@ -2314,7 +2307,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
         const Core::GpuNativePacketRecordDesc avboitAccumulationRecordDesc{
             .packet = avboitAccumulationPacket,
-            .finalStates = &m_avboitStateHandoff,
             .useCompiledStateSeeds = true,
             .applyCompiledBarriers = true,
         };
@@ -2326,13 +2318,25 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 avboitAccumulationRecordDesc,
                 m_avboitRecordedGraph
             )
-            && m_avboitStateHandoff.valid()
         ;
         if(!avboitAccumulationRecorded){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned AVBOIT accumulation"));
             discardRenderPackets();
             return;
         }
+    }
+
+    const Core::GpuSubmissionPacketId avboitFinalPacket = avboitUsesAsyncCompute
+        ? avboitAccumulationPacket
+        : avboitPrePacket
+    ;
+    const Core::CommandListResourceStateHandoff* const avboitFinalStateSeed =
+        m_avboitRecordedGraph.packetFinalStateSeed(avboitFinalPacket)
+    ;
+    if(!avboitFinalStateSeed){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT graph did not retain its final state seed"));
+        discardRenderPackets();
+        return;
     }
 
     // Lighting imports live effects only on the default path; lagged mode uses accepted history.
@@ -2390,7 +2394,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredTargets.depth.get(),
     };
     if(!m_avboitLightingStateHandoff.buildResourceSubset(
-        m_avboitStateHandoff,
+        *avboitFinalStateSeed,
         avboitLightingTextures,
         LengthOf(avboitLightingTextures),
         nullptr,
@@ -2466,7 +2470,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredTargets.avboit.accumExtinction.get(),
     };
     if(!m_avboitCompositeStateHandoff.buildResourceSubset(
-        m_avboitStateHandoff,
+        *avboitFinalStateSeed,
         avboitCompositeTextures,
         LengthOf(avboitCompositeTextures),
         nullptr,

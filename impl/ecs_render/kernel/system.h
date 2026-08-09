@@ -410,11 +410,6 @@ private:
     // records into separately tracked history. The history textures themselves restore to Common on close.
     Core::CommandListResourceStateHandoff m_laggedLightingHistoryCopyInputStateHandoff;
     Core::CommandListResourceStateHandoff m_laggedLightingHistoryCopyStateHandoff;
-    // AVBOIT's raster occupancy/extinction/accumulation stages stay on Graphics, while the depth-warp and integration
-    // dispatches may use the graph-selected Compute packet. The graph owns every inter-stage state seed; this sole
-    // compatibility handoff exports completed AVBOIT state to deferred lighting and composite until those consumers
-    // migrate into graph-owned state seeds as well.
-    Core::CommandListResourceStateHandoff m_avboitStateHandoff;
     Core::CommandListHandle m_meshViewSetupCommandList;
     Core::CommandListHandle m_sceneShadingSetupCommandList;
     Core::CommandListHandle m_deferredClearCommandList;

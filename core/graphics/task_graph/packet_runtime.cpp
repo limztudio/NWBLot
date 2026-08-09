@@ -52,6 +52,13 @@ const GpuRecordedPacket* GpuRecordedGraph::find(const GpuSubmissionPacketId& pac
     return nullptr;
 }
 
+const CommandListResourceStateHandoff* GpuRecordedGraph::packetFinalStateSeed(
+    const GpuSubmissionPacketId& packet
+)const noexcept{
+    const CommandListResourceStateHandoff* const stateSeed = packetStateSeed(packet);
+    return find(packet) && stateSeed && stateSeed->valid() ? stateSeed : nullptr;
+}
+
 CommandListResourceStateHandoff* GpuRecordedGraph::packetStateSeed(const GpuSubmissionPacketId& packet)noexcept{
     if(!packet.valid() || packet.generation != m_generation || packet.index >= m_packetStateSeeds.size())
         return nullptr;

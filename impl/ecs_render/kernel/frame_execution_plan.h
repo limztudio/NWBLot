@@ -37,7 +37,6 @@ namespace FrameExecutionPacket{
         AsyncAvboitIntegration,
         GraphicsAvboitAccumulation,
         DeferredLighting,
-        DeferredComposite,
         GraphicsPresent,
 
         kCount,
@@ -52,7 +51,6 @@ namespace FrameExecutionSubmissionBatch{
         AsyncRayEffects,
         GraphicsEffects,
         DeferredLighting,
-        DeferredComposite,
         GraphicsPresent,
 
         kCount,
@@ -74,7 +72,6 @@ namespace FrameExecutionWork{
         AvboitIntegration,
         AvboitAccumulation,
         DeferredLighting,
-        DeferredComposite,
         GraphicsPresent,
 
         kCount,
@@ -86,6 +83,8 @@ namespace FrameExecutionWork{
 namespace FrameExecutionExternalWait{
     enum Enum : u8{
         LaggedLightingHistory,
+        // Graph-owned deferred composite publishes this accepted token before legacy presentation submits.
+        DeferredComposite,
 
         kCount,
     };
@@ -127,7 +126,7 @@ struct FrameExecutionWorkPlan{
 };
 
 
-// RendererSystem supplies accepted history tokens as external dependencies.
+// RendererSystem supplies accepted graph-produced tokens as external dependencies.
 struct FrameExecutionExternalWaitTokens{
     Core::QueueSubmissionToken tokens[FrameExecutionExternalWait::kCount] = {};
 
@@ -257,12 +256,8 @@ public:
         else
             addPacketWait(FrameExecutionPacket::DeferredLighting, FrameExecutionPacket::AsyncRayEffects);
 
-        enablePacket(FrameExecutionPacket::DeferredComposite, deferredLane);
-        addPacketWait(FrameExecutionPacket::DeferredComposite, FrameExecutionPacket::DeferredLighting);
-        assignWork(FrameExecutionWork::DeferredComposite, FrameExecutionPacket::DeferredComposite);
-
         enablePacket(FrameExecutionPacket::GraphicsPresent, Core::RenderLane::Graphics);
-        addPacketWait(FrameExecutionPacket::GraphicsPresent, FrameExecutionPacket::DeferredComposite);
+        addExternalWait(FrameExecutionPacket::GraphicsPresent, FrameExecutionExternalWait::DeferredComposite);
         assignWork(FrameExecutionWork::GraphicsPresent, FrameExecutionPacket::GraphicsPresent);
         if(usesLaggedAsyncLighting)
             addPacketWait(FrameExecutionPacket::GraphicsPresent, FrameExecutionPacket::AsyncRayEffects);
@@ -484,10 +479,6 @@ private:
             FrameExecutionPacket::DeferredLighting
         );
         appendSubmissionPacket(
-            FrameExecutionSubmissionBatch::DeferredComposite,
-            FrameExecutionPacket::DeferredComposite
-        );
-        appendSubmissionPacket(
             FrameExecutionSubmissionBatch::GraphicsPresent,
             FrameExecutionPacket::GraphicsPresent
         );
@@ -656,6 +647,15 @@ public:
         const Core::RenderLane::Enum lane = m_plan.packet(packet).lane;
         if(lane == Core::RenderLane::AsyncCompute)
             m_asyncRecoveryWaitToken = submissionToken;
+    }
+    // A graph-migrated producer can publish an accepted completion between legacy plan batches.  The remaining
+    // packet consumer still uses the plan's established wait builder until it too migrates.
+    void setExternalWaitToken(
+        const FrameExecutionExternalWait::Enum externalWait,
+        const Core::QueueSubmissionToken submissionToken
+    )noexcept{
+        NWB_ASSERT(externalWait < FrameExecutionExternalWait::kCount);
+        m_externalWaitTokens.tokens[static_cast<usize>(externalWait)] = submissionToken;
     }
 
     [[nodiscard]] Core::QueueSubmissionToken token(const FrameExecutionPacket::Enum packet)const noexcept{

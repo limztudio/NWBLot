@@ -35,6 +35,28 @@ struct PresentPushConstants{
 static_assert(sizeof(PresentPushConstants) == sizeof(u32) * 2u);
 
 
+struct DeferredCompositeGraphTask{
+    struct Payload{
+        RendererDeferredSystem* deferredSystem = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.deferredSystem || !payload.targets || !payload.timingTicket)
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        return payload.deferredSystem->renderDeferredComposite(commandList, *payload.targets);
+    }
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -166,6 +188,23 @@ bool RendererDeferredSystem::createDeferredPresentPipeline(Core::Framebuffer* pr
 
     return true;
 }
+
+Core::GpuTaskId RendererDeferredSystem::declareDeferredCompositeTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc,
+    DeferredFrameTargets& targets,
+    Core::GpuTimingSubmissionTicket& timingTicket
+){
+    return graph.addTask<__hidden_deferred_composite::DeferredCompositeGraphTask>(
+        desc,
+        __hidden_deferred_composite::DeferredCompositeGraphTask::Payload{
+            .deferredSystem = this,
+            .targets = &targets,
+            .timingTicket = &timingTicket,
+        }
+    );
+}
+
 
 bool RendererDeferredSystem::renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets){
     NWB_ASSERT(deferredState().m_compositeComputePipeline);

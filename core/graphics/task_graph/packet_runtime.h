@@ -20,6 +20,9 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class GpuTimingSubmissionTicket;
+
+
 struct GpuRecordedPacket{
     GpuSubmissionPacketId packet;
     CommandListHandle commandList;
@@ -162,7 +165,8 @@ public:
         const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
         usize externalCompletionTokenCount,
         GpuGraphSubmissionTransaction& transaction,
-        Alloc::ScratchArena& scratchArena
+        Alloc::ScratchArena& scratchArena,
+        GpuTimingSubmissionTicket* timingTicket = nullptr
     )const;
 
 

@@ -288,6 +288,15 @@ public:
         RenderLane::Enum executionLane,
         const QueueSubmissionDesc& submitDesc
     );
+    // Graph-owned packets already resolve a physical CommandQueue during compilation.  Keep timing ownership tied to
+    // that exact submission instead of translating back through renderer-facing lane intent.
+    [[nodiscard]] QueueSubmissionToken submit(
+        Device& device,
+        CommandList* const* commandLists,
+        usize commandListCount,
+        CommandQueue::Enum executionQueue,
+        const QueueSubmissionDesc& submitDesc
+    );
     // Explicitly releases all timing scopes when a caller elects not to submit its recorded command lists.
     void discard();
 

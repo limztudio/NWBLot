@@ -6,6 +6,8 @@
 
 #include "task_graph.h"
 
+#include <core/graphics/gpu_timing.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -220,7 +222,8 @@ bool GpuTaskGraphSubmitter::submitPacket(
     const GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
     const usize externalCompletionTokenCount,
     GpuGraphSubmissionTransaction& transaction,
-    Alloc::ScratchArena& scratchArena
+    Alloc::ScratchArena& scratchArena,
+    GpuTimingSubmissionTicket* const timingTicket
 )const{
     if(
         !compiledGraph.validFor(graph)
@@ -274,12 +277,21 @@ bool GpuTaskGraphSubmitter::submitPacket(
     if(!waitTokens.empty())
         submitDesc.setWaitTokens(waitTokens.data(), waitTokens.size());
     CommandList* const commandLists[] = { recordedPacket->commandList.get() };
-    const QueueSubmissionToken token = m_device.executeCommandLists(
-        commandLists,
-        LengthOf(commandLists),
-        queue->queueClass,
-        submitDesc
-    );
+    const QueueSubmissionToken token = timingTicket
+        ? timingTicket->submit(
+            m_device,
+            commandLists,
+            LengthOf(commandLists),
+            queue->queueClass,
+            submitDesc
+        )
+        : m_device.executeCommandLists(
+            commandLists,
+            LengthOf(commandLists),
+            queue->queueClass,
+            submitDesc
+        )
+    ;
     if(!token.valid()){
         transaction.rejectPacket(graph, compiledGraph, packetID);
         return false;

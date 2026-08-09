@@ -7,7 +7,6 @@
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/renderer_private.h>
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -168,6 +167,7 @@ struct LaggedLightingHistoryCopyTask{
     }
 };
 
+
 [[nodiscard]] static WorkMetadata WorkMetadataFor(
     const Work::Enum work,
     const bool hardwareCaustics,
@@ -202,11 +202,6 @@ struct LaggedLightingHistoryCopyTask{
         WorkMetadata metadata{ Name("render.task_graph.deferred_lighting"), "Deferred Lighting", ComputeQueueRequest() };
         // The active lagged path keeps its final lighting chain on Graphics to avoid a no-overlap return crossing
         // before presentation. This is a semantic scheduling hint, not a live FrameExecutionPlan override.
-        metadata.scheduling.avoidQueueCrossing = usesLaggedLightingHistory;
-        return metadata;
-    }
-    case Work::DeferredComposite:{
-        WorkMetadata metadata{ Name("render.task_graph.deferred_composite"), "Deferred Composite", ComputeQueueRequest() };
         metadata.scheduling.avoidQueueCrossing = usesLaggedLightingHistory;
         return metadata;
     }
@@ -600,10 +595,6 @@ void RendererSystem::buildGpuTaskGraph(
         ReadUse(lightingSurfelIrradiance),
         WriteUse(opaqueColor, Core::ResourceStates::UnorderedAccess),
     };
-    const Core::GpuTaskResourceUse deferredCompositeUses[] = {
-        ReadUse(opaqueColor),
-        WriteUse(compositeColor, Core::ResourceStates::UnorderedAccess),
-    };
     const Core::GpuTaskResourceUse presentUses[] = {
         ReadUse(compositeColor),
         WriteUse(backbuffer, Core::ResourceStates::Present),
@@ -620,7 +611,6 @@ void RendererSystem::buildGpuTaskGraph(
         && addWorkTask(Work::AvboitIntegration, avboitIntegrationUses, LengthOf(avboitIntegrationUses))
         && addWorkTask(Work::AvboitAccumulation, avboitAccumulationUses, LengthOf(avboitAccumulationUses))
         && addWorkTask(Work::DeferredLighting, deferredLightingUses, LengthOf(deferredLightingUses))
-        && addWorkTask(Work::DeferredComposite, deferredCompositeUses, LengthOf(deferredCompositeUses))
         && addWorkTask(Work::GraphicsPresent, presentUses, LengthOf(presentUses))
     ;
     if(!graphBuilt){
@@ -973,6 +963,166 @@ void RendererSystem::buildLaggedLightingHistoryTaskGraph(
     m_laggedLightingHistoryRecordedGraph.reset(m_laggedLightingHistoryCompiledGraph);
     m_laggedLightingHistorySubmissionTransaction.reset(m_laggedLightingHistoryCompiledGraph);
     m_laggedLightingHistoryTaskGraphValid = true;
+}
+
+
+void RendererSystem::buildDeferredCompositeTaskGraph(
+    const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+    DeferredFrameTargets& deferredTargets,
+    Core::GpuTimingSubmissionTicket& timingTicket
+){
+    using namespace __hidden_renderer_task_graph;
+
+    m_deferredCompositeTaskGraphValid = false;
+    m_deferredCompositeTask = {};
+    m_deferredCompositeLightingCompletion = {};
+    m_deferredCompositeTaskGraph.reset();
+    m_deferredCompositeTaskGraphAnalysis.reset();
+    m_deferredCompositeTaskGraphQueueAssignments.reset();
+    m_deferredCompositeCompiledGraph.reset();
+    m_deferredCompositeRecordedGraph.reset(m_deferredCompositeCompiledGraph);
+    m_deferredCompositeSubmissionTransaction.reset(m_deferredCompositeCompiledGraph);
+
+    if(!deferredTargets.valid() || !deferredTargets.bindless.slotsBuffer)
+        return;
+
+    const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
+        return m_deferredCompositeTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
+    };
+    const Core::GpuGraphResourceId opaqueColor = importTexture(
+        deferredTargets.opaqueColor,
+        Name("render.deferred_composite.opaque_color"),
+        "Opaque Color"
+    );
+    const Core::GpuGraphResourceId avboitAccumColor = importTexture(
+        deferredTargets.avboit.accumColor,
+        Name("render.deferred_composite.avboit_accum_color"),
+        "AVBOIT Accumulated Color"
+    );
+    const Core::GpuGraphResourceId avboitAccumExtinction = importTexture(
+        deferredTargets.avboit.accumExtinction,
+        Name("render.deferred_composite.avboit_accum_extinction"),
+        "AVBOIT Accumulated Extinction"
+    );
+    const Core::GpuGraphResourceId compositeColor = importTexture(
+        deferredTargets.compositeColor,
+        Name("render.deferred_composite.composite_color"),
+        "Composite Color"
+    );
+    const Core::GpuGraphResourceId bindlessSlots = m_deferredCompositeTaskGraph.importBuffer(
+        deferredTargets.bindless.slotsBuffer,
+        BufferResourceDesc(Name("render.deferred_composite.bindless_slots"), "Deferred Bindless Slots")
+    );
+    if(
+        !opaqueColor.valid()
+        || !avboitAccumColor.valid()
+        || !avboitAccumExtinction.valid()
+        || !compositeColor.valid()
+        || !bindlessSlots.valid()
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-composite graph resources"));
+        return;
+    }
+
+    Core::GpuExternalCompletionDesc lightingCompletionDesc;
+    lightingCompletionDesc
+        .setIdentity(Name("render.deferred_composite.deferred_lighting_complete"))
+        .setMarkerLabel("Deferred Lighting Complete")
+    ;
+    m_deferredCompositeLightingCompletion = m_deferredCompositeTaskGraph.importExternalCompletion(
+        lightingCompletionDesc
+    );
+    if(!m_deferredCompositeLightingCompletion.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-lighting completion for composite"));
+        return;
+    }
+
+    const Core::GpuTaskResourceUse resourceUses[] = {
+        ReadUse(opaqueColor),
+        ReadUse(avboitAccumColor),
+        ReadUse(avboitAccumExtinction),
+        ReadUse(bindlessSlots, Core::ResourceStates::ConstantBuffer),
+        WriteUse(compositeColor, Core::ResourceStates::UnorderedAccess),
+    };
+    const ECSRenderDetail::GpuTaskGraphFrameSchedule schedule(input);
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Medium;
+    scheduling.avoidQueueCrossing = schedule.usesLaggedLightingHistory();
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Core::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("render.deferred_composite"))
+        .setMarkerLabel("Deferred Composite")
+        .setQueue(ComputeQueueRequest())
+        .setScheduling(scheduling)
+        .setExternalDependencies(&m_deferredCompositeLightingCompletion, 1u)
+        .setResourceUses(resourceUses, LengthOf(resourceUses))
+    ;
+    m_deferredCompositeTask = m_deferredSystem.declareDeferredCompositeTask(
+        desc,
+        deferredTargets,
+        timingTicket
+    );
+    if(!m_deferredCompositeTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-composite graph task"));
+        return;
+    }
+
+    const auto& device = graphics().getDevice();
+    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
+    const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
+    const bool dedicatedAsyncCompute = input.dedicatedAsyncCompute
+        && computeFamilyIndex != Limit<u32>::s_Max
+        && computeFamilyIndex != graphicsFamilyIndex
+    ;
+    const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
+        static_cast<u8>(Core::GpuQueueCapability::Graphics)
+        | static_cast<u8>(Core::GpuQueueCapability::Compute)
+        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
+    );
+    const Core::GpuQueueCapability::Mask computeQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
+        static_cast<u8>(Core::GpuQueueCapability::Compute)
+        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
+    );
+    const Core::GpuPhysicalQueueInfo queues[] = {
+        Core::GpuPhysicalQueueInfo{
+            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
+            .queueClass = Core::CommandQueue::Graphics,
+            .capabilities = graphicsQueueCapabilities,
+            .familyIndex = graphicsFamilyIndex,
+            .queueIndex = 0u,
+            .dedicated = false,
+        },
+        Core::GpuPhysicalQueueInfo{
+            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphDeviceGeneration },
+            .queueClass = Core::CommandQueue::Compute,
+            .capabilities = computeQueueCapabilities,
+            .familyIndex = computeFamilyIndex,
+            .queueIndex = 0u,
+            .dedicated = true,
+        },
+    };
+    const Core::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = dedicatedAsyncCompute ? LengthOf(queues) : 1u,
+    };
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+    const Core::GpuTaskGraphCompiler compiler;
+    if(!compiler.compile(
+        m_deferredCompositeTaskGraph,
+        m_deferredCompositeTaskGraphAnalysis,
+        topology,
+        m_deferredCompositeTaskGraphQueueAssignments,
+        m_deferredCompositeCompiledGraph,
+        scratchArena
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile deferred-composite task graph"));
+        return;
+    }
+    m_deferredCompositeRecordedGraph.reset(m_deferredCompositeCompiledGraph);
+    m_deferredCompositeSubmissionTransaction.reset(m_deferredCompositeCompiledGraph);
+    m_deferredCompositeTaskGraphValid = true;
 }
 
 

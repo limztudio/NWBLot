@@ -147,6 +147,11 @@ private:
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         const DeferredFrameTargets& deferredTargets
     );
+    void buildDeferredCompositeTaskGraph(
+        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+        DeferredFrameTargets& deferredTargets,
+        Core::GpuTimingSubmissionTicket& timingTicket
+    );
     void reportLaggedLightingTransition(LaggedLightingReport report, u64 targetGeneration);
     [[nodiscard]] Core::Alloc::GlobalArena& arena()noexcept{ return m_arena; }
     [[nodiscard]] Core::ECS::World& world()noexcept{ return m_world; }
@@ -188,8 +193,8 @@ private:
     u16 m_gpuTaskGraphDeviceGeneration = 1u;
     bool m_gpuTaskGraphValid = false;
     bool m_gpuTaskGraphLiveRoutingValid = false;
-    // The first live graph pilot is intentionally isolated from the telemetry sidecar: its sole packet is submitted
-    // by the graph, while the remaining renderer work still uses the legacy plan until it is migrated.
+    // Live graph tasks are intentionally isolated from the telemetry sidecar. Each owns its packet submission while
+    // the remaining renderer work continues through the legacy plan until it is individually migrated.
     Core::GpuTaskGraph m_laggedLightingHistoryTaskGraph;
     Core::GpuTaskGraphAnalysis m_laggedLightingHistoryTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_laggedLightingHistoryTaskGraphQueueAssignments;
@@ -199,6 +204,17 @@ private:
     Core::GpuTaskId m_laggedLightingHistoryTask;
     Core::GpuExternalCompletionId m_laggedLightingPresentationCompletion;
     bool m_laggedLightingHistoryTaskGraphValid = false;
+    // Deferred composite is the first renderer pass migrated after the built-in copy pilot. It retains only the
+    // existing state-handoff bridge until compiler-generated barriers supersede it.
+    Core::GpuTaskGraph m_deferredCompositeTaskGraph;
+    Core::GpuTaskGraphAnalysis m_deferredCompositeTaskGraphAnalysis;
+    Core::GpuTaskGraphQueueAssignments m_deferredCompositeTaskGraphQueueAssignments;
+    Core::GpuCompiledGraph m_deferredCompositeCompiledGraph;
+    Core::GpuRecordedGraph m_deferredCompositeRecordedGraph;
+    Core::GpuGraphSubmissionTransaction m_deferredCompositeSubmissionTransaction;
+    Core::GpuTaskId m_deferredCompositeTask;
+    Core::GpuExternalCompletionId m_deferredCompositeLightingCompletion;
+    bool m_deferredCompositeTaskGraphValid = false;
 
 private:
     RendererMeshState m_meshState;
@@ -297,14 +313,12 @@ private:
     Core::CommandListHandle m_surfelGiCommandList;
     Core::CommandListHandle m_asyncDeferredLightingCommandList;
     Core::CommandListHandle m_deferredLightingCommandList;
-    Core::CommandListHandle m_asyncDeferredCompositeCommandList;
     // The hybrid AVBOIT packet uses Graphics lists for raster phases and AsyncCompute lists for its two pure dispatches.
     Core::CommandListHandle m_avboitCommandList;
     Core::CommandListHandle m_asyncAvboitDepthWarpCommandList;
     Core::CommandListHandle m_avboitExtinctionCommandList;
     Core::CommandListHandle m_asyncAvboitIntegrationCommandList;
     Core::CommandListHandle m_avboitAccumulateCommandList;
-    Core::CommandListHandle m_deferredCompositeCommandList;
     // Surface images are not required to support storage writes, so a short Graphics raster present pass follows the
     // composite result. The normal dedicated schedule obtains that result from Compute; the optional lagged schedule
     // keeps lighting/composite on Graphics.

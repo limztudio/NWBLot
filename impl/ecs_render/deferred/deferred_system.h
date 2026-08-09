@@ -7,6 +7,9 @@
 
 #include <impl/ecs_render/kernel/subsystem_base.h>
 
+#include <core/graphics/gpu_timing.h>
+#include <core/graphics/task_graph/task_graph.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,6 +45,12 @@ public:
     void resetDeferredFrameTargets();
     void clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, bool clearCsgTargets, const Core::Rect& csgClearRect, bool clearSurfelIrradiance);
     void clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::Rect& csgClearRect);
+    [[nodiscard]] Core::GpuTaskId declareDeferredCompositeTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc,
+        DeferredFrameTargets& targets,
+        Core::GpuTimingSubmissionTicket& timingTicket
+    );
     [[nodiscard]] bool renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool renderDeferredPresent(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Framebuffer* presentationFramebuffer);
     // One-time target-generation upload shared by every consumer of DeferredBindlessResourceSlots. Shadow tracing runs

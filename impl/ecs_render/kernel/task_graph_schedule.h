@@ -69,7 +69,6 @@ public:
         enable(FrameExecutionWork::SurfelGi);
         enable(FrameExecutionWork::AvboitRaster);
         enable(FrameExecutionWork::DeferredLighting);
-        enable(FrameExecutionWork::DeferredComposite);
         enable(FrameExecutionWork::GraphicsPresent);
         if(m_usesDedicatedAsyncCompute)
             enable(FrameExecutionWork::AsyncEffectsTiming);
@@ -135,12 +134,8 @@ public:
                     || producer == FrameExecutionWork::SurfelGi
                 )
             ;
-        case FrameExecutionWork::DeferredComposite:
-            return producer == FrameExecutionWork::DeferredLighting;
         case FrameExecutionWork::GraphicsPresent:
-            return producer == FrameExecutionWork::DeferredComposite
-                || (m_usesLaggedLightingHistory && producer == FrameExecutionWork::RayEffects)
-            ;
+            return m_usesLaggedLightingHistory && producer == FrameExecutionWork::RayEffects;
         default:
             return false;
         }

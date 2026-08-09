@@ -27,7 +27,6 @@ CommandList::CommandList(Device& device, const CommandListParameters& params)
     , m_pendingBufferBarriers(device.m_context.objectArena)
     , m_textureOwnershipReleaseDestinations(0u, TextureSubresourceStateKeyHasher(), TextureSubresourceStateKeyEqualTo(), device.m_context.objectArena)
     , m_bufferOwnershipReleaseDestinations(0u, Hasher<Buffer*>(), EqualTo<Buffer*>(), device.m_context.objectArena)
-    , m_pendingCompactions(device.m_context.objectArena)
 {
     if(m_device.isAnyGpuMarkerEnabled())
         m_device.getGpuCrashTracker().registerGpuCrashMarkerTracker(m_gpuCrashMarkerTracker);

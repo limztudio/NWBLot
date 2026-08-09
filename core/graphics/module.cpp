@@ -316,7 +316,7 @@ Graphics::Graphics(
     , m_jobSystem(jobSystem)
     , m_deviceCreationParams(m_allocator.getObjectArena())
     , m_gpuTiming(m_allocator.getObjectArena(), gpuTiming)
-    , m_backend(MakeGlobalUnique<Backend>(m_allocator.getObjectArena(), m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool))
+    , m_backend(MakeNotNullUnique(MakeGlobalUnique<Backend>(m_allocator.getObjectArena(), m_deviceCreationParams, m_swapChainState, m_allocator, m_threadPool)))
     , m_renderPasses(m_allocator.getObjectArena())
     , m_swapChainFramebuffers(m_allocator.getObjectArena())
     , m_windowTitle(m_allocator.getObjectArena())
@@ -890,9 +890,6 @@ bool Graphics::animateRenderPresent(){
         requestDeviceRecreation();
         return false;
     }
-    // Advance the global bindless heap's deferred-free clock alongside device GC so slots return to the free list only
-    // after in-flight frames can no longer reference them.
-    device.getDescriptorHeap().advanceFrame();
 
     updateAverageFrameTime(elapsedTime);
     m_previousFrameTimestamp = now;

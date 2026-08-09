@@ -23,6 +23,7 @@ NWB_CORE_BEGIN
 class Graphics{
 private:
     using Backend = GraphicsBackend::Backend;
+    using BackendOwner = GlobalUniquePtr<Backend>;
 
 
 public:
@@ -223,7 +224,7 @@ private:
     GpuTimingRecorder m_gpuTiming;
 
 private:
-    GlobalUniquePtr<Backend> m_backend;
+    NotNullUniquePtr<Backend, BackendOwner::deleter_type> m_backend;
 
     bool m_skipRenderOnFirstFrame = false;
     bool m_hasPresentedFrame = false;

@@ -48,6 +48,10 @@ using NWB::Tests::Smoke::ReadSmokeFrozenYawFromEnvironment;
 using NWB::Tests::Smoke::SetSmokeYawWindowTitle;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
+using StressModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
+using StressMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+using StressMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -59,11 +63,31 @@ using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 // changes every frame -- exercising the per-frame scene BVH/TLAS rebuild + the hybrid shadow path (opaque->HW binary,
 // transparent->SW colored) across TWO shadowed lights as the occluders sweep. Reuses the body model + transparent_multi
 // glass/ground materials (no new assets).
-static constexpr AStringView s_ModelPath = "project/characters/body/model";
-static constexpr AStringView s_TransparentMaterialPath = "project/smoke/transparent_multi/materials/shared"; // glass
-static constexpr AStringView s_OpaqueMaterialPath = "project/smoke/transparent_multi/materials/ground";      // opaque lambert
-static constexpr AStringView s_GroundMaterialPath = "project/smoke/transparent_multi/materials/ground";
-static constexpr AStringView s_GroundMeshPath = "project/meshes/shadow_plane";
+static constexpr StressModelRef s_Model = []() constexpr{
+    StressModelRef result;
+    result.virtualPath = Name("project/characters/body/model");
+    return result;
+}();
+static constexpr StressMaterialRef s_TransparentMaterial = []() constexpr{
+    StressMaterialRef result;
+    result.virtualPath = Name("project/smoke/transparent_multi/materials/shared");
+    return result;
+}(); // glass
+static constexpr StressMaterialRef s_OpaqueMaterial = []() constexpr{
+    StressMaterialRef result;
+    result.virtualPath = Name("project/smoke/transparent_multi/materials/ground");
+    return result;
+}(); // opaque lambert
+static constexpr StressMaterialRef s_GroundMaterial = []() constexpr{
+    StressMaterialRef result;
+    result.virtualPath = Name("project/smoke/transparent_multi/materials/ground");
+    return result;
+}();
+static constexpr StressMeshRef s_GroundMesh = []() constexpr{
+    StressMeshRef result;
+    result.virtualPath = Name("project/meshes/shadow_plane");
+    return result;
+}();
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 static constexpr u32 s_CharactersPerClass = 5u;                       // 5 transparent + 5 opaque
@@ -181,8 +205,8 @@ private:
         const NWB::Core::ECS::EntityID entity = CreateTintedModelEntity(
             *m_world,
             m_context.objectArena,
-            s_ModelPath,
-            transparent ? s_TransparentMaterialPath : s_OpaqueMaterialPath,
+            s_Model,
+            transparent ? s_TransparentMaterial : s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
             CharacterTint(classIndex, transparent),
             Float4(x, s_CharacterLift, z, 0.0f),
@@ -210,8 +234,8 @@ private:
         const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_GroundMeshPath,
-            s_OpaqueMaterialPath,
+            s_GroundMesh,
+            s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
             colorTint,
             position,
@@ -231,8 +255,8 @@ private:
         const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_GroundMeshPath,
-            s_OpaqueMaterialPath,
+            s_GroundMesh,
+            s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
             colorTint,
             Float4(0.0f, s_BoxHeight, 0.0f, 0.0f),
@@ -312,8 +336,8 @@ public:
         m_groundEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_GroundMeshPath,
-            s_GroundMaterialPath,
+            s_GroundMesh,
+            s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.82f, 0.82f, 0.85f, 1.0f),
             Float4(0.0f, 0.0f, 0.0f, 0.0f),

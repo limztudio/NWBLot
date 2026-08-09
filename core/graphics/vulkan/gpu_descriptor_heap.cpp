@@ -99,6 +99,7 @@ GpuDescriptorHeap::GpuDescriptorHeap(Device& device)
     , m_samplerSlots(device.m_context.objectArena)
     , m_accelStructSlots(device.m_context.objectArena)
     , m_retired(device.m_context.objectArena)
+    , m_heapUses(device.m_context.objectArena)
 {}
 GpuDescriptorHeap::~GpuDescriptorHeap(){
     shutdown();
@@ -173,6 +174,121 @@ void GpuDescriptorHeap::releaseRetainedDescriptorResource(const GpuDescriptorHan
     ;
     if(handle.slot() < resources.size())
         resources[handle.slot()].reset();
+}
+
+void GpuDescriptorHeap::trackCommandBufferUse(TrackedCommandBuffer& commandBuffer){
+    ScopedLock lock(m_mutex);
+    if(!m_initialized)
+        return;
+
+    for(GpuDescriptorHeap* trackedHeap : commandBuffer.m_referencedDescriptorHeaps){
+        if(trackedHeap == this)
+            return;
+    }
+
+    commandBuffer.m_referencedDescriptorHeaps.push_back(this);
+    m_heapUses.push_back(HeapUse{ &commandBuffer, {}, ++m_lastHeapUseID });
+}
+
+void GpuDescriptorHeap::submitCommandBufferUse(
+    TrackedCommandBuffer& commandBuffer,
+    const QueueSubmissionToken submissionToken
+){
+    if(!submissionToken.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap received an invalid command-buffer submission token."));
+        return;
+    }
+
+    ScopedLock lock(m_mutex);
+    for(HeapUse& heapUse : m_heapUses){
+        if(heapUse.commandBuffer != &commandBuffer || heapUse.submissionToken.valid())
+            continue;
+
+        heapUse.submissionToken = submissionToken;
+        return;
+    }
+
+    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap could not resolve command-buffer heap use for accepted submission {}."), submissionToken.value);
+}
+
+void GpuDescriptorHeap::discardCommandBufferUse(TrackedCommandBuffer& commandBuffer){
+    ScopedLock lock(m_mutex);
+    for(HeapUse& heapUse : m_heapUses){
+        if(heapUse.commandBuffer == &commandBuffer)
+            heapUse.commandBuffer = nullptr;
+    }
+}
+
+void GpuDescriptorHeap::collectRetired(){
+    constexpr u32 s_QueueCount = static_cast<u32>(CommandQueue::kCount);
+    bool requiresCompletionQuery[s_QueueCount] = {};
+    u64 completedValues[s_QueueCount] = {};
+
+    {
+        ScopedLock lock(m_mutex);
+        for(const HeapUse& heapUse : m_heapUses){
+            if(!heapUse.submissionToken.valid())
+                continue;
+
+            const u32 queueIndex = static_cast<u32>(heapUse.submissionToken.queue);
+            if(queueIndex < s_QueueCount)
+                requiresCompletionQuery[queueIndex] = true;
+        }
+    }
+
+    for(u32 queueIndex = 0u; queueIndex < s_QueueCount; ++queueIndex){
+        if(requiresCompletionQuery[queueIndex])
+            completedValues[queueIndex] = m_device.queueGetCompletedInstance(static_cast<CommandQueue::Enum>(queueIndex));
+    }
+
+    ScopedLock lock(m_mutex);
+    const auto heapUseComplete = [&](const HeapUse& heapUse) -> bool {
+        if(!heapUse.submissionToken.valid())
+            return heapUse.commandBuffer == nullptr;
+
+        const u32 queueIndex = static_cast<u32>(heapUse.submissionToken.queue);
+        return queueIndex < s_QueueCount && completedValues[queueIndex] >= heapUse.submissionToken.value;
+    };
+
+    usize keptRetired = 0u;
+    for(usize retiredIndex = 0u; retiredIndex < m_retired.size(); ++retiredIndex){
+        const RetiredSlot& retired = m_retired[retiredIndex];
+        bool canRetire = true;
+        for(const HeapUse& heapUse : m_heapUses){
+            if(heapUse.id > retired.lastRequiredHeapUseID)
+                continue;
+            if(!heapUseComplete(heapUse)){
+                canRetire = false;
+                break;
+            }
+        }
+
+        if(canRetire){
+            releaseRetainedDescriptorResource(retired.handle);
+            SlotAllocator& allocator = allocatorForClass(retired.handle.descriptorClass());
+            if(retired.handle.slot() < allocator.liveSlots.size() && allocator.liveSlots[retired.handle.slot()] == 0u)
+                allocator.freeList.push_back(retired.handle.slot());
+            else{
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::collectRetired found an invalid retired handle {}."), retired.handle.value);
+            }
+        }
+        else{
+            m_retired[keptRetired] = retired;
+            ++keptRetired;
+        }
+    }
+    m_retired.resize(keptRetired);
+
+    usize keptHeapUses = 0u;
+    for(usize heapUseIndex = 0u; heapUseIndex < m_heapUses.size(); ++heapUseIndex){
+        const HeapUse& heapUse = m_heapUses[heapUseIndex];
+        if(heapUseComplete(heapUse))
+            continue;
+
+        m_heapUses[keptHeapUses] = heapUse;
+        ++keptHeapUses;
+    }
+    m_heapUses.resize(keptHeapUses);
 }
 
 
@@ -356,7 +472,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
             Handle<GraphicsResource>::deleter_type(&m_context.objectArena)
         );
     }
-    m_frameCounter = 0u;
+    m_lastHeapUseID = 0u;
     m_initialized = true;
 
     NWB_LOGGER_INFO(NWB_TEXT("Vulkan: GpuDescriptorHeap initialized (descriptor buffer): resource capacity {}, sampler capacity {} (sets {}/{}).")
@@ -370,6 +486,21 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
 
 void GpuDescriptorHeap::shutdown(){
     ScopedLock lock(m_mutex);
+
+    for(HeapUse& heapUse : m_heapUses){
+        if(!heapUse.commandBuffer)
+            continue;
+
+        auto& referencedHeaps = heapUse.commandBuffer->m_referencedDescriptorHeaps;
+        for(usize heapIndex = 0u; heapIndex < referencedHeaps.size(); ++heapIndex){
+            if(referencedHeaps[heapIndex] != this)
+                continue;
+
+            referencedHeaps.erase(referencedHeaps.begin() + heapIndex);
+            break;
+        }
+        heapUse.commandBuffer = nullptr;
+    }
 
     if(m_context.descriptorBufferManager){
         if(m_resourceBufferBlock.valid())
@@ -408,7 +539,8 @@ void GpuDescriptorHeap::shutdown(){
     m_accelStructSlots.capacity = 0u;
     m_accelStructSlots.nextFresh = 0u;
     m_retired.clear();
-    m_frameCounter = 0u;
+    m_heapUses.clear();
+    m_lastHeapUseID = 0u;
     m_desc = {};
 
     m_initialized = false;
@@ -476,39 +608,18 @@ void GpuDescriptorHeap::free(const GpuDescriptorHandle handle){
     if(handle.descriptorClass() == GpuDescriptorClass::AccelStruct && !m_accelStructLayout)
         return;
 
-    ScopedLock lock(m_mutex);
-    SlotAllocator& allocator = allocatorForClass(handle.descriptorClass());
-    if(handle.slot() >= allocator.liveSlots.size() || allocator.liveSlots[handle.slot()] == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::free rejected stale or already-retired handle {}."), handle.value);
-        return;
-    }
-    allocator.liveSlots[handle.slot()] = 0u;
-    m_retired.push_back(RetiredSlot{handle, m_frameCounter + s_MaxFramesInFlight});
-}
-
-void GpuDescriptorHeap::advanceFrame(){
-    ScopedLock lock(m_mutex);
-
-    ++m_frameCounter;
-
-    usize kept = 0;
-    for(usize i = 0; i < m_retired.size(); ++i){
-        const RetiredSlot& retired = m_retired[i];
-        if(retired.retireAtFrame <= m_frameCounter){
-            releaseRetainedDescriptorResource(retired.handle);
-            SlotAllocator& allocator = allocatorForClass(retired.handle.descriptorClass());
-            if(retired.handle.slot() < allocator.liveSlots.size() && allocator.liveSlots[retired.handle.slot()] == 0u)
-                allocator.freeList.push_back(retired.handle.slot());
-            else{
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::advanceFrame found an invalid retired handle {}."), retired.handle.value);
-            }
+    {
+        ScopedLock lock(m_mutex);
+        SlotAllocator& allocator = allocatorForClass(handle.descriptorClass());
+        if(handle.slot() >= allocator.liveSlots.size() || allocator.liveSlots[handle.slot()] == 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap::free rejected stale or already-retired handle {}."), handle.value);
+            return;
         }
-        else{
-            m_retired[kept] = retired;
-            ++kept;
-        }
+        allocator.liveSlots[handle.slot()] = 0u;
+        m_retired.push_back(RetiredSlot{ handle, m_lastHeapUseID });
     }
-    m_retired.resize(kept);
+
+    collectRetired();
 }
 
 

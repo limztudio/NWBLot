@@ -44,6 +44,10 @@ using NWB::Tests::Smoke::ReadSmokeEnvironmentF32;
 using NWB::Tests::Smoke::ReadSmokeFrozenYawFromEnvironment;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
+using SoftShadowModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
+using SoftShadowMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+using SoftShadowMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -68,10 +72,26 @@ using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 //   - Arrow keys (Left/Right) scrub the character yaw so the sweeping soft edge can be checked for crawl (it should NOT
 //     crawl -- a soft edge has nothing to alias); NWB_SOFT_SHADOW_TEST_SPIN_ANGLE pins a fixed yaw for a deterministic A/B.
 // Reuses the benchmark's cooked body model + ground material (no new assets).
-static constexpr AStringView s_ModelPath = "project/characters/body/model";
-static constexpr AStringView s_OpaqueMaterialPath = "project/smoke/transparent_multi/materials/ground";  // opaque lambert
-static constexpr AStringView s_TransparentMaterialPath = "project/smoke/transparent_multi/materials/shared"; // glass (colored transmittance)
-static constexpr AStringView s_GroundMeshPath = "project/meshes/shadow_plane";
+static constexpr SoftShadowModelRef s_Model = []() constexpr{
+    SoftShadowModelRef result;
+    result.virtualPath = Name("project/characters/body/model");
+    return result;
+}();
+static constexpr SoftShadowMaterialRef s_OpaqueMaterial = []() constexpr{
+    SoftShadowMaterialRef result;
+    result.virtualPath = Name("project/smoke/transparent_multi/materials/ground");
+    return result;
+}(); // opaque lambert
+static constexpr SoftShadowMaterialRef s_TransparentMaterial = []() constexpr{
+    SoftShadowMaterialRef result;
+    result.virtualPath = Name("project/smoke/transparent_multi/materials/shared");
+    return result;
+}(); // glass (colored transmittance)
+static constexpr SoftShadowMeshRef s_GroundMesh = []() constexpr{
+    SoftShadowMeshRef result;
+    result.virtualPath = Name("project/meshes/shadow_plane");
+    return result;
+}();
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 static constexpr f32 s_GroundScale = 8.0f;
@@ -236,8 +256,8 @@ public:
         m_groundEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_GroundMeshPath,
-            s_OpaqueMaterialPath,
+            s_GroundMesh,
+            s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.82f, 0.82f, 0.85f, 1.0f),
             Float4(0.0f, 0.0f, 0.0f, 0.0f),
@@ -250,8 +270,8 @@ public:
         m_characterOwner = CreateTintedModelEntity(
             *m_world,
             m_context.objectArena,
-            s_ModelPath,
-            s_OpaqueMaterialPath,
+            s_Model,
+            s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.86f, 0.80f, 0.74f, 1.0f),
             Float4(0.7f, 0.0f, -1.1f, 0.0f),
@@ -268,8 +288,8 @@ public:
         m_glassOwner = CreateTintedModelEntity(
             *m_world,
             m_context.objectArena,
-            s_ModelPath,
-            s_TransparentMaterialPath,
+            s_Model,
+            s_TransparentMaterial,
             s_SmokeSurfaceMaterialInterface,
             // Glass tint is (shadow colour . DENSITY): the RGB is the colour the shadow KEEPS, the A is the glass
             // DENSITY (how solid). nwbMakeGlassSurface (smoke_transparent.surface) seeds BOTH consumers together --

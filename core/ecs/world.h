@@ -60,6 +60,7 @@ public:
 
 public:
     Entity createEntity();
+    [[nodiscard]] Entity entity(EntityID entityId);
     void destroyEntity(EntityID entityId);
     usize entityCount()const{ return m_entityManager.count(); }
 
@@ -91,7 +92,7 @@ public:
     }
 
 
-public:
+private:
     template<typename T, typename... Args>
     T& addComponent(EntityID entityId, Args&&... args){
         NWB_ASSERT(m_entityManager.alive(entityId));

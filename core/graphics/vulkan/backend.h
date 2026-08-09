@@ -44,13 +44,6 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AccelStructCompactionMode{
-    enum Enum : u8{
-        Disabled = 0u,
-        Allowed = 1u,
-    };
-};
-
 namespace PipelineStencilFaceMode{
     enum Enum : u8{
         DepthOnly = 0u,
@@ -312,7 +305,7 @@ u32 GetPushConstantByteSize(const BindingLayoutDesc& desc);
 bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, const tchar* operationName);
 bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, const tchar* operationName);
 void DestroyPipelineAndOwnedLayout(VkDevice device, const VkAllocationCallbacks* allocationCallbacks, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
-VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags, AccelStructCompactionMode::Enum compactionMode);
+VkBuildAccelerationStructureFlagsKHR ConvertAccelStructBuildFlags(RayTracingAccelStructBuildFlags::Mask buildFlags);
 bool BuildGraphicsPipelineFixedState(
     const FramebufferInfo& fbinfo,
     const RenderState& renderState,
@@ -537,6 +530,7 @@ inline void CopyHostMemory(
 class Device;
 class Queue;
 class TrackedCommandBuffer;
+class GpuDescriptorHeap;
 class DescriptorBufferManager;
 
 class Buffer;
@@ -685,6 +679,7 @@ inline QueueFamilySharingInfo ResolveQueueFamilySharing(
 class TrackedCommandBuffer final : public RefCounter<GraphicsResource>, NoCopy{
     friend class CommandList;
     friend class Queue;
+    friend class GpuDescriptorHeap;
 
 
 public:
@@ -702,7 +697,7 @@ private:
 
     Vector<Handle<GraphicsResource>, Alloc::GlobalArena> m_referencedResources;
     Vector<BufferHandle, Alloc::GlobalArena> m_referencedStagingBuffers;
-    Vector<VkAccelerationStructureKHR, Alloc::GlobalArena> m_referencedAccelStructHandles;
+    Vector<GpuDescriptorHeap*, Alloc::GlobalArena> m_referencedDescriptorHeaps;
 
     u64 m_recordingID = 0;
     u64 m_submissionID = 0;
@@ -1490,6 +1485,8 @@ private:
 class GpuDescriptorHeap final : NoCopy{
     friend class Device;
     friend class CommandList;
+    friend class Queue;
+    friend class TrackedCommandBuffer;
 
 
 public:
@@ -1506,8 +1503,11 @@ public:
     // Returns invalid (logged) when the class namespace is exhausted.
     [[nodiscard]] GpuDescriptorHandle allocate(GpuDescriptorClass::Enum descriptorClass);
 
-    // Quarantines freed slots for frames in flight.
+    // Defers slot reuse until every command buffer that bound this heap before the free has completed or been abandoned.
     void free(GpuDescriptorHandle handle);
+
+    // Resolves deferred reuse from accepted queue tokens and their completed timelines.
+    void collectRetired();
 
     // Caller must not overwrite a slot read by in-flight work.
     bool write(GpuDescriptorHandle handle, const DescriptorWriteItem& item);
@@ -1529,9 +1529,6 @@ public:
         const RayTracingPipeline& pipeline,
         GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::invalid()
     );
-
-    // Advances deferred-free slot retirement.
-    void advanceFrame();
 
     [[nodiscard]] u32 getResourceCapacity()const{ return m_resourceSlots.capacity; }
     [[nodiscard]] u32 getSamplerCapacity()const{ return m_samplerSlots.capacity; }
@@ -1568,12 +1565,20 @@ private:
     };
     struct RetiredSlot{
         GpuDescriptorHandle handle;
-        u64 retireAtFrame = 0;
+        u64 lastRequiredHeapUseID = 0u;
+    };
+    struct HeapUse{
+        TrackedCommandBuffer* commandBuffer = nullptr;
+        QueueSubmissionToken submissionToken;
+        u64 id = 0u;
     };
 
     [[nodiscard]] SlotAllocator& allocatorForClass(GpuDescriptorClass::Enum descriptorClass);
     void releaseAccelStructDescriptorBlock(u32 slot);
     void releaseRetainedDescriptorResource(GpuDescriptorHandle handle);
+    void trackCommandBufferUse(TrackedCommandBuffer& commandBuffer);
+    void submitCommandBufferUse(TrackedCommandBuffer& commandBuffer, QueueSubmissionToken submissionToken);
+    void discardCommandBufferUse(TrackedCommandBuffer& commandBuffer);
 
     // Allocates persistent resource/sampler blocks; TLAS blocks are per handle.
     bool initializeDescriptorBufferBlocks(u32 offsetAlignmentBytes);
@@ -1608,7 +1613,8 @@ private:
     SlotAllocator m_accelStructSlots;
 
     Vector<RetiredSlot, Alloc::GlobalArena> m_retired;
-    u64 m_frameCounter = 0;
+    Vector<HeapUse, Alloc::GlobalArena> m_heapUses;
+    u64 m_lastHeapUseID = 0u;
 
     mutable Futex m_mutex;
     bool m_initialized = false;
@@ -1855,7 +1861,6 @@ public:
 
 public:
     [[nodiscard]] const RayTracingAccelStructDesc& getDescription()const{ return m_desc; }
-    [[nodiscard]] bool isCompacted()const{ return m_compacted; }
     [[nodiscard]] u64 getDeviceAddress()const{ return m_deviceAddress; }
     // Exposed for explicit scheduling handoffs.
     [[nodiscard]] Buffer* getBackingBuffer()const{ return m_buffer.get(); }
@@ -1867,11 +1872,8 @@ private:
     VkAccelerationStructureKHR m_accelStruct = VK_NULL_HANDLE;
     BufferHandle m_buffer;
     u64 m_deviceAddress = 0;
-    VkQueryPool m_compactionQueryPool = VK_NULL_HANDLE;
 
     const VulkanContext& m_context;
-    u32 m_compactionQueryIndex = 0;
-    bool m_compacted = false;
     bool m_built = false;
 };
 
@@ -2091,7 +2093,6 @@ public:
     void setRayTracingState(const RayTracingState& state);
     void dispatchRays(const RayTracingDispatchRaysArguments& args);
     void buildBottomLevelAccelStruct(RayTracingAccelStruct* as, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None);
-    void compactBottomLevelAccelStructs();
     void buildTopLevelAccelStruct(RayTracingAccelStruct* as, const RayTracingInstanceDesc* pInstances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None);
     void buildOpacityMicromap(RayTracingOpacityMicromap* omm, const RayTracingOpacityMicromapDesc& desc);
     void buildTopLevelAccelStructFromBuffer(RayTracingAccelStruct* as, Buffer* instanceBuffer, u64 instanceBufferOffset, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags = RayTracingAccelStructBuildFlags::None);
@@ -2182,8 +2183,6 @@ private:
     Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena> m_pendingBufferBarriers;
     HashMap<TextureSubresourceStateKey, CommandQueue::Enum, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureOwnershipReleaseDestinations;
     HashMap<Buffer*, CommandQueue::Enum, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferOwnershipReleaseDestinations;
-
-    Vector<Handle<AccelStruct>, Alloc::GlobalArena> m_pendingCompactions;
 };
 
 

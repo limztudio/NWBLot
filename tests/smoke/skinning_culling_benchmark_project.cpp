@@ -82,8 +82,16 @@ static constexpr f32 s_FarCameraDistance = 5.6f;
 static constexpr f32 s_CameraHeight = 1.1f;
 static constexpr u32 s_AnimatedJointModulo = 16u;
 static constexpr u32 s_StaticPreviewAnimatedJointModulo = 2u;
-static constexpr AStringView s_BenchmarkModelPath = "project/characters/body/model";
-static constexpr AStringView s_SkinningBenchmarkMaterialPath = "project/smoke/skinning_culling_benchmark/materials/solid";
+static constexpr BenchmarkModelRef s_BenchmarkModel = []() constexpr{
+    BenchmarkModelRef result;
+    result.virtualPath = Name("project/characters/body/model");
+    return result;
+}();
+static constexpr BenchmarkMaterialRef s_SkinningBenchmarkMaterial = []() constexpr{
+    BenchmarkMaterialRef result;
+    result.virtualPath = Name("project/smoke/skinning_culling_benchmark/materials/solid");
+    return result;
+}();
 static constexpr StringView s_StaticPreviewEnv = "NWB_SKINNING_CULLING_STATIC_PREVIEW";
 static constexpr Name s_ModelSkeletonObject("skeleton");
 
@@ -310,7 +318,7 @@ private:
 
     [[nodiscard]] bool loadSkeletonBindJoints(){
         UniquePtr<NWB::Core::Assets::IAsset> loadedModelAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), Name(s_BenchmarkModelPath), loadedModelAsset)){
+        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_BenchmarkModel.name(), loadedModelAsset)){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to load benchmark model"));
             return false;
         }
@@ -335,8 +343,7 @@ private:
         }
 
         UniquePtr<NWB::Core::Assets::IAsset> loadedSkeletonAsset;
-        const Name skeletonPath = skeletonObject->skeleton.name();
-        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), skeletonPath, loadedSkeletonAsset)){
+        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), skeletonObject->skeleton.name(), loadedSkeletonAsset)){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to load benchmark skeleton"));
             return false;
         }
@@ -521,10 +528,8 @@ public:
             return true;
         }
 
-        BenchmarkModelRef model;
-        model.virtualPath = Name(s_BenchmarkModelPath);
-        BenchmarkMaterialRef material;
-        material.virtualPath = Name(s_SkinningBenchmarkMaterialPath);
+        const BenchmarkModelRef& model = s_BenchmarkModel;
+        const BenchmarkMaterialRef& material = s_SkinningBenchmarkMaterial;
         const u32 characterCount = m_staticPreview ? 1u : s_CharacterCount;
         m_entities.reserve(characterCount);
         Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::GlobalArena> modelOwners(m_context.objectArena);

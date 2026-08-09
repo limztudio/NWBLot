@@ -291,8 +291,6 @@ Device::Device(const DeviceDesc& desc)
             || !vkGetAccelerationStructureBuildSizesKHR
             || !vkGetAccelerationStructureDeviceAddressKHR
             || !vkCmdBuildAccelerationStructuresKHR
-            || !vkCmdCopyAccelerationStructureKHR
-            || !vkCmdWriteAccelerationStructuresPropertiesKHR
         )
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Acceleration structure entry points are unavailable."));
@@ -943,6 +941,7 @@ bool Device::waitForIdle(){
         if(m_queues[i])
             m_queues[i]->waitForIdle();
     }
+    m_gpuDescriptorHeap.collectRetired();
 
     return true;
 }
@@ -1181,6 +1180,7 @@ void Device::runGarbageCollection(){
             m_queues[i]->updateLastFinishedID();
         }
     }
+    m_gpuDescriptorHeap.collectRetired();
 }
 
 

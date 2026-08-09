@@ -44,15 +44,30 @@ using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::FindSpawnedModelObject;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
+using CsgSkinnedModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
+using CsgSkinnedMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr AStringView s_ModelPath = "project/characters/body/model";
+static constexpr CsgSkinnedModelRef s_Model = []() constexpr{
+    CsgSkinnedModelRef result;
+    result.virtualPath = Name("project/characters/body/model");
+    return result;
+}();
 #if defined(NWB_CSG_SKINNED_VISIBLE_TRANSPARENT_RECEIVER)
-static constexpr AStringView s_ReceiverMaterialPath = "project/smoke/transparent_multi/materials/shared";
+static constexpr CsgSkinnedMaterialRef s_ReceiverMaterial = []() constexpr{
+    CsgSkinnedMaterialRef result;
+    result.virtualPath = Name("project/smoke/transparent_multi/materials/shared");
+    return result;
+}();
 #else
-static constexpr AStringView s_ReceiverMaterialPath = "project/smoke/csg_visible/materials/solid";
+static constexpr CsgSkinnedMaterialRef s_ReceiverMaterial = []() constexpr{
+    CsgSkinnedMaterialRef result;
+    result.virtualPath = Name("project/smoke/csg_visible/materials/solid");
+    return result;
+}();
 #endif
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 static constexpr Name s_ReceiverGroup("project/smoke/csg_skinned_visible/female_receiver");
@@ -169,8 +184,8 @@ private:
         const NWB::Core::ECS::EntityID entity = CreateTintedModelEntity(
             *m_world,
             m_context.objectArena,
-            s_ModelPath,
-            s_ReceiverMaterialPath,
+            s_Model,
+            s_ReceiverMaterial,
             s_SmokeSurfaceMaterialInterface,
             colorTint,
             position,
@@ -220,7 +235,7 @@ private:
         const SIMDVector fallback = VectorSet(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
 
         UniquePtr<NWB::Core::Assets::IAsset> modelAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), Name(s_ModelPath), modelAsset) || !modelAsset){
+        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name(), modelAsset) || !modelAsset){
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to load model for cutter anchor"));
             return fallback;
         }
@@ -228,9 +243,8 @@ private:
         if(model->skeletonObjects().empty())
             return fallback;
 
-        const Name skeletonPath = model->skeletonObjects().front().skeleton.name();
         UniquePtr<NWB::Core::Assets::IAsset> skeletonAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), skeletonPath, skeletonAsset) || !skeletonAsset){
+        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model->skeletonObjects().front().skeleton.name(), skeletonAsset) || !skeletonAsset){
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to load skeleton for cutter anchor"));
             return fallback;
         }

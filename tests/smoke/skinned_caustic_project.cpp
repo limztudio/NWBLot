@@ -43,6 +43,10 @@ using NWB::Tests::Smoke::DestroySmokeSkinnedRenderWorld;
 using NWB::Tests::Smoke::FindSpawnedModelObject;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
+using SkinnedCausticModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
+using SkinnedCausticMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+using SkinnedCausticMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -52,10 +56,26 @@ using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 // per-frame skinned-normal repack (repack_normals_cs / dispatchRepackNormals): the RT shadow + caustic must bend on
 // the LIVE deformed normals -- if they read the bind pose instead, the refractive shadow + caustic would not track
 // the animation. Reuses the existing refractive glass + ground materials (no new assets).
-static constexpr AStringView s_ModelPath = "project/characters/body/model";
-static constexpr AStringView s_GlassMaterialPath = "project/smoke/transparent_multi/materials/shared";
-static constexpr AStringView s_GroundMaterialPath = "project/smoke/transparent_multi/materials/ground";
-static constexpr AStringView s_GroundMeshPath = "project/meshes/shadow_plane";
+static constexpr SkinnedCausticModelRef s_Model = []() constexpr{
+    SkinnedCausticModelRef result;
+    result.virtualPath = Name("project/characters/body/model");
+    return result;
+}();
+static constexpr SkinnedCausticMaterialRef s_GlassMaterial = []() constexpr{
+    SkinnedCausticMaterialRef result;
+    result.virtualPath = Name("project/smoke/transparent_multi/materials/shared");
+    return result;
+}();
+static constexpr SkinnedCausticMaterialRef s_GroundMaterial = []() constexpr{
+    SkinnedCausticMaterialRef result;
+    result.virtualPath = Name("project/smoke/transparent_multi/materials/ground");
+    return result;
+}();
+static constexpr SkinnedCausticMeshRef s_GroundMesh = []() constexpr{
+    SkinnedCausticMeshRef result;
+    result.virtualPath = Name("project/meshes/shadow_plane");
+    return result;
+}();
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 static constexpr Name s_ModelSkeletonObject("skeleton");
 
@@ -134,7 +154,7 @@ private:
 
     [[nodiscard]] bool loadSkeletonBindJoints(){
         UniquePtr<NWB::Core::Assets::IAsset> modelAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), Name(s_ModelPath), modelAsset) || !modelAsset){
+        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name(), modelAsset) || !modelAsset){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: failed to load model for skeleton bind joints"));
             return false;
         }
@@ -144,9 +164,8 @@ private:
             return false;
         }
 
-        const Name skeletonPath = model->skeletonObjects().front().skeleton.name();
         UniquePtr<NWB::Core::Assets::IAsset> skeletonAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), skeletonPath, skeletonAsset) || !skeletonAsset){
+        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model->skeletonObjects().front().skeleton.name(), skeletonAsset) || !skeletonAsset){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: failed to load skeleton for bind joints"));
             return false;
         }
@@ -168,8 +187,8 @@ private:
         const NWB::Core::ECS::EntityID entity = CreateTintedModelEntity(
             *m_world,
             m_context.objectArena,
-            s_ModelPath,
-            s_GlassMaterialPath,
+            s_Model,
+            s_GlassMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.72f, 0.86f, 1.0f, 0.42f),
             Float4(0.0f, s_CharacterLift, 0.0f, 0.0f),
@@ -236,8 +255,8 @@ public:
         m_groundEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_GroundMeshPath,
-            s_GroundMaterialPath,
+            s_GroundMesh,
+            s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.82f, 0.82f, 0.85f, 1.0f),
             Float4(0.0f, 0.0f, 0.0f, 0.0f),

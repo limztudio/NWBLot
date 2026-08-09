@@ -64,10 +64,26 @@ static constexpr f32 s_UiInitialPositionX = 18.0f;
 static constexpr f32 s_UiInitialPositionY = 18.0f;
 static constexpr f32 s_UiInitialWidth = 360.0f;
 static constexpr f32 s_UiInitialHeightAuto = 0.0f;
-static constexpr AStringView s_FemaleModelPath = "project/characters/female/model";
-static constexpr AStringView s_ModelMaterialPath = "project/materials/mat_skinned_uv";
-static constexpr AStringView s_GroundPlaneModelPath = "project/meshes/ground_plane/model";
-static constexpr AStringView s_GroundPlaneMaterialPath = "project/materials/mat_white_opaque";
+static constexpr TestbedModelRef s_FemaleModel = []() constexpr{
+    TestbedModelRef result;
+    result.virtualPath = Name("project/characters/female/model");
+    return result;
+}();
+static constexpr TestbedMaterialRef s_ModelMaterial = []() constexpr{
+    TestbedMaterialRef result;
+    result.virtualPath = Name("project/materials/mat_skinned_uv");
+    return result;
+}();
+static constexpr TestbedModelRef s_GroundPlaneModel = []() constexpr{
+    TestbedModelRef result;
+    result.virtualPath = Name("project/meshes/ground_plane/model");
+    return result;
+}();
+static constexpr TestbedMaterialRef s_GroundPlaneMaterial = []() constexpr{
+    TestbedMaterialRef result;
+    result.virtualPath = Name("project/materials/mat_white_opaque");
+    return result;
+}();
 static constexpr tchar s_DefaultSceneDescription[] = NWB_TEXT("45-degree directional + point light, female skinned character on a white ground plane");
 
 
@@ -214,14 +230,9 @@ static void ApplyFlyCameraInputToMainCamera(
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateModelEntity(
     NWB::Core::ECS::World& world,
-    const AStringView modelPath,
-    const AStringView materialPath
+    const TestbedModelRef& model,
+    const TestbedMaterialRef& material
 ){
-    TestbedModelRef model;
-    model.virtualPath = Name(modelPath);
-    TestbedMaterialRef material;
-    material.virtualPath = Name(materialPath);
-
     auto entity = world.createEntity();
     auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
     transform.position = Float4(0.0f, 0.0f, 0.0f);
@@ -236,11 +247,11 @@ static void ApplyFlyCameraInputToMainCamera(
 }
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateSkinnedCharacterEntity(NWB::Core::ECS::World& world){
-    return CreateModelEntity(world, s_FemaleModelPath, s_ModelMaterialPath);
+    return CreateModelEntity(world, s_FemaleModel, s_ModelMaterial);
 }
 
 static void CreateStaticGroundPlaneEntity(NWB::Core::ECS::World& world){
-    const auto groundEntity = CreateModelEntity(world, s_GroundPlaneModelPath, s_GroundPlaneMaterialPath);
+    const auto groundEntity = CreateModelEntity(world, s_GroundPlaneModel, s_GroundPlaneMaterial);
     NWB_FATAL_ASSERT(groundEntity.valid());
 }
 

@@ -52,6 +52,9 @@ using NWB::Tests::Smoke::AssignCsgCutterParameters;
 using NWB::Tests::Smoke::AssignCsgCutterTransform;
 #endif
 
+using TransparentMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
+using TransparentMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+
 
 static constexpr f32 s_CameraStartDepth = 2.2f;
 static constexpr f32 s_CameraTargetY = 0.85f;
@@ -63,14 +66,30 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 30.0f;
 // key still sweeps a full turn in a few seconds -- enough control to park on the exact angle an artifact appears at.
 static constexpr f32 s_ManualYawSpeed = 0.6f;
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-static constexpr AStringView s_TransparentShapeMeshPath = "project/meshes/caustic_sphere";
+static constexpr TransparentMeshRef s_TransparentShapeMesh = []() constexpr{
+    TransparentMeshRef result;
+    result.virtualPath = Name("project/meshes/caustic_sphere");
+    return result;
+}();
 #else
 // Three DISTINCT spinning glass refractors (left/center/right): a cylinder, an octahedron, and a cone. The cylinder
 // + cone have smooth curved silhouettes while the octahedron is faceted, giving the transparent-shadow test a mix of
 // curved and hard-edged tinted occlusion without enabling the additive caustic photon pass.
-static constexpr AStringView s_TransparentLeftMeshPath = "project/meshes/cylinder";
-static constexpr AStringView s_TransparentCenterMeshPath = "project/meshes/octahedron";
-static constexpr AStringView s_TransparentRightMeshPath = "project/meshes/cone";
+static constexpr TransparentMeshRef s_TransparentLeftMesh = []() constexpr{
+    TransparentMeshRef result;
+    result.virtualPath = Name("project/meshes/cylinder");
+    return result;
+}();
+static constexpr TransparentMeshRef s_TransparentCenterMesh = []() constexpr{
+    TransparentMeshRef result;
+    result.virtualPath = Name("project/meshes/octahedron");
+    return result;
+}();
+static constexpr TransparentMeshRef s_TransparentRightMesh = []() constexpr{
+    TransparentMeshRef result;
+    result.virtualPath = Name("project/meshes/cone");
+    return result;
+}();
 #endif
 // Scene rotation. The plain transparent-shadow scene spins for overlap inspection; the caustic sphere stays static so
 // its focused photon result is easy to inspect.
@@ -79,10 +98,22 @@ static constexpr f32 s_TransparentSceneRotationSpeed = 0.0f;
 #else
 static constexpr f32 s_TransparentSceneRotationSpeed = 0.55f;
 #endif
-static constexpr AStringView s_ShadowPlaneMeshPath = "project/meshes/shadow_plane";
+static constexpr TransparentMeshRef s_ShadowPlaneMesh = []() constexpr{
+    TransparentMeshRef result;
+    result.virtualPath = Name("project/meshes/shadow_plane");
+    return result;
+}();
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
-static constexpr AStringView s_TransparentSharedMaterialPath = "project/smoke/transparent_multi/materials/shared";
-static constexpr AStringView s_GroundMaterialPath = "project/smoke/transparent_multi/materials/ground";
+static constexpr TransparentMaterialRef s_TransparentSharedMaterial = []() constexpr{
+    TransparentMaterialRef result;
+    result.virtualPath = Name("project/smoke/transparent_multi/materials/shared");
+    return result;
+}();
+static constexpr TransparentMaterialRef s_GroundMaterial = []() constexpr{
+    TransparentMaterialRef result;
+    result.virtualPath = Name("project/smoke/transparent_multi/materials/ground");
+    return result;
+}();
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_multi/center_receiver");
 #endif
@@ -228,8 +259,8 @@ static void ApplyTransparentCsgSceneTransform(
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateTransparentStaticMeshEntity(
     NWB::Core::ECS::World& world,
     NWB::Core::Alloc::GlobalArena& arena,
-    const AStringView meshPath,
-    const AStringView materialPath,
+    const TransparentMeshRef& mesh,
+    const TransparentMaterialRef& material,
     const Float4& colorTint,
     const Float4& position,
     const Float4& scale,
@@ -238,8 +269,8 @@ static void ApplyTransparentCsgSceneTransform(
     const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(
         world,
         arena,
-        meshPath,
-        materialPath,
+        mesh,
+        material,
         s_SmokeSurfaceMaterialInterface,
         colorTint,
         position,
@@ -343,8 +374,8 @@ public:
         const auto centerShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_TransparentShapeMeshPath,
-            s_TransparentSharedMaterialPath,
+            s_TransparentShapeMesh,
+            s_TransparentSharedMaterial,
             Float4(0.55f, 0.78f, 1.0f, 0.30f),
             TransparentCenterShapeBasePosition(),
             Float4(0.70f, 0.70f, 0.70f)
@@ -355,8 +386,8 @@ public:
         const auto shapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_TransparentLeftMeshPath, // cylinder
-            s_TransparentSharedMaterialPath,
+            s_TransparentLeftMesh, // cylinder
+            s_TransparentSharedMaterial,
             Float4(1.0f, 0.42f, 0.20f, 0.42f),
             TransparentLeftShapeBasePosition(),
             Float4(0.62f, 0.62f, 0.62f)
@@ -364,8 +395,8 @@ public:
         const auto centerShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_TransparentCenterMeshPath, // octahedron
-            s_TransparentSharedMaterialPath,
+            s_TransparentCenterMesh, // octahedron
+            s_TransparentSharedMaterial,
             Float4(0.10f, 1.0f, 0.45f, 0.42f),
             TransparentCenterShapeBasePosition(),
             Float4(0.78f, 0.78f, 0.78f),
@@ -374,8 +405,8 @@ public:
         const auto rightShapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_TransparentRightMeshPath, // cone
-            s_TransparentSharedMaterialPath,
+            s_TransparentRightMesh, // cone
+            s_TransparentSharedMaterial,
             Float4(0.12f, 0.44f, 1.0f, 0.42f),
             TransparentRightShapeBasePosition(),
             Float4(0.68f, 0.68f, 0.68f)
@@ -392,8 +423,8 @@ public:
         const auto opaqueLeftEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_TransparentCenterMeshPath, // octahedron mesh, OPAQUE ground material
-            s_GroundMaterialPath,
+            s_TransparentCenterMesh, // octahedron mesh, OPAQUE ground material
+            s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.66f, 0.66f, 0.70f, 1.0f),
             OpaqueLeftShapeBasePosition(),
@@ -402,8 +433,8 @@ public:
         const auto opaqueRightEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_TransparentRightMeshPath, // cone mesh, OPAQUE ground material
-            s_GroundMaterialPath,
+            s_TransparentRightMesh, // cone mesh, OPAQUE ground material
+            s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.72f, 0.68f, 0.62f, 1.0f),
             OpaqueRightShapeBasePosition(),
@@ -423,8 +454,8 @@ public:
         const auto shadowPlaneEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_ShadowPlaneMeshPath,
-            s_GroundMaterialPath,
+            s_ShadowPlaneMesh,
+            s_GroundMaterial,
             s_SmokeSurfaceMaterialInterface,
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
             Float4(1.0f, 1.0f, 1.0f, 1.0f),    // sphere money-shot keeps the original light ground (the validated look)

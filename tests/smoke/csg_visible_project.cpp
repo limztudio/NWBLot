@@ -35,6 +35,9 @@ using NWB::Tests::Smoke::AssignCsgCutterTransform;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::DestroySmokeRenderWorld;
 
+using CsgVisibleMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
+using CsgVisibleMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -55,8 +58,16 @@ static constexpr f32 s_ReceiverBaseScale = 0.72f;
 static constexpr f32 s_ReceiverScale = 1.08f;
 static constexpr f32 s_CutterScale = s_ReceiverScale / s_ReceiverBaseScale;
 static constexpr usize s_CsgVisibleShapeCount = 4u;
-static constexpr AStringView s_CubeMeshPath = "project/meshes/cube_hard_edges";
-static constexpr AStringView s_SolidMaterialPath = "project/smoke/csg_visible/materials/solid";
+static constexpr CsgVisibleMeshRef s_CubeMesh = []() constexpr{
+    CsgVisibleMeshRef result;
+    result.virtualPath = Name("project/meshes/cube_hard_edges");
+    return result;
+}();
+static constexpr CsgVisibleMaterialRef s_SolidMaterial = []() constexpr{
+    CsgVisibleMaterialRef result;
+    result.virtualPath = Name("project/smoke/csg_visible/materials/solid");
+    return result;
+}();
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 namespace CsgVisibleShapeSlot{
@@ -102,8 +113,8 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
     const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(
         world,
         arena,
-        s_CubeMeshPath,
-        s_SolidMaterialPath,
+        s_CubeMesh,
+        s_SolidMaterial,
         s_SmokeSurfaceMaterialInterface,
         colorTint,
         position,

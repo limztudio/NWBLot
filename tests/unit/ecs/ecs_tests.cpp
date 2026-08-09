@@ -145,6 +145,21 @@ TEST(Ecs, ComponentStorageAndView){
     EXPECT_EQ(viewCount, 1u);
 }
 
+TEST(Ecs, EntityFacadeRehydratesEntityId){
+    TestWorld testWorld;
+
+    const auto entityId = testWorld.world.createEntity().id();
+    auto entity = testWorld.world.entity(entityId);
+    auto& position = entity.addComponent<PositionComponent>();
+    position.x = 17;
+
+    EXPECT_TRUE(entity.hasComponent<PositionComponent>());
+    EXPECT_EQ(entity.getComponent<PositionComponent>().x, 17);
+
+    entity.removeComponent<PositionComponent>();
+    EXPECT_FALSE(entity.hasComponent<PositionComponent>());
+}
+
 TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
     TestWorld testWorld;
 

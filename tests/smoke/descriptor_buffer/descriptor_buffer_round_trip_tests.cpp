@@ -207,6 +207,23 @@ Optional<Common::LoggerRegistrationGuard> DescriptorBufferRoundTripTest::s_logge
 }
 
 
+// Minimal Vulkan 1.3 compute shader: `void main(){}`. The retirement test needs a real pipeline layout containing
+// the heap's explicit set-8/9 layouts so CommandList::bindDescriptorBufferHeap records an actual heap use.
+static constexpr u32 s_DescriptorHeapRetirementComputeSpirv[] = {
+    0x07230203u, 0x00010600u, 0x00070000u, 0x00000005u, 0x00000000u,
+    0x00020011u, 0x00000001u,
+    0x0003000eu, 0x00000000u, 0x00000001u,
+    0x0005000fu, 0x00000005u, 0x00000001u, 0x6e69616du, 0x00000000u,
+    0x00060010u, 0x00000001u, 0x00000011u, 0x00000001u, 0x00000001u, 0x00000001u,
+    0x00020013u, 0x00000002u,
+    0x00030021u, 0x00000003u, 0x00000002u,
+    0x00050036u, 0x00000002u, 0x00000001u, 0x00000000u, 0x00000003u,
+    0x000200f8u, 0x00000004u,
+    0x000100fdu,
+    0x00010038u,
+};
+
+
 // RendererSystem requests this terminal policy only when accepted cross-queue ownership cannot be recovered. The
 // Graphics owner must stop the current generation before it records another frame, leaving orderly teardown and
 // recreation to the caller that owns the device lifetime.
@@ -3572,14 +3589,138 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRejectsRetiredAndDoubleFreed
     heap.free(retired);
 #endif
 
-    for(u32 frame = 0u; frame < 8u; ++frame)
-        heap.advanceFrame();
-
     const GpuDescriptorHandle first = heap.allocate(GpuDescriptorClass::StorageBuffer);
     const GpuDescriptorHandle second = heap.allocate(GpuDescriptorClass::StorageBuffer);
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     EXPECT_NE(first, second);
+}
+
+
+// A heap binding belongs to its recording command buffer, not to a CPU frame. A free therefore stays pinned while
+// that command buffer is unsubmitted, becomes reclaimable when a rejected submission abandons it, and follows the
+// accepted queue token through completion on the normal path.
+TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBufferSubmissionAndAbandonment){
+#if defined(NWB_FINAL) && !defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
+    GTEST_SKIP() << "descriptor-heap rejection coverage requires test submission overrides";
+#else
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    GraphicsBackend::GpuDescriptorHeap heap(device);
+    GpuDescriptorHeapDesc heapDesc;
+    heapDesc
+        .setResourceCapacity(2u)
+        .setSamplerCapacity(1u)
+        .setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
+    ;
+    ASSERT_TRUE(heap.initialize(heapDesc));
+
+    ShaderDesc shaderDesc(DescriptorBufferRoundTripTest::arena());
+    shaderDesc
+        .setShaderType(ShaderType::Compute)
+        .setDebugName(Name{"tests/descriptor_buffer/heap_retirement"})
+    ;
+    auto shader = device.createShader(shaderDesc, s_DescriptorHeapRetirementComputeSpirv, sizeof(s_DescriptorHeapRetirementComputeSpirv));
+    ASSERT_TRUE(shader);
+
+    ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(shader)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
+    ;
+    auto pipeline = device.createComputePipeline(pipelineDesc);
+    ASSERT_TRUE(pipeline);
+
+    auto storageBuffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(4096u)
+            .setStructStride(16u)
+            .setCanHaveRawViews(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_TRUE(storageBuffer);
+
+    const GpuDescriptorHandle unsubmittedHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(unsubmittedHandle.valid());
+    ASSERT_TRUE(heap.write(unsubmittedHandle, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
+    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u);
+
+    auto unsubmittedCommandList = device.createCommandList();
+    ASSERT_TRUE(unsubmittedCommandList);
+    unsubmittedCommandList->open();
+    heap.bindCompute(*unsubmittedCommandList, *pipeline);
+    unsubmittedCommandList->close();
+    ASSERT_TRUE(unsubmittedCommandList->hasCommandBuffer());
+
+    heap.free(unsubmittedHandle);
+    heap.collectRetired();
+    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u)
+        << "an unsubmitted command buffer lost its descriptor resource";
+
+    const GpuDescriptorHandle heldSlot = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(heldSlot.valid());
+    EXPECT_NE(heldSlot.slot(), unsubmittedHandle.slot())
+        << "an unsubmitted command buffer allowed its descriptor slot to be recycled";
+    heap.free(heldSlot);
+
+    device.runGarbageCollection();
+    heap.collectRetired();
+    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u)
+        << "CPU garbage collection released an unsubmitted descriptor heap use";
+
+    device.rejectNextSubmissionForTesting(CommandQueue::Graphics);
+    CommandList* unsubmittedCommandLists[] = { unsubmittedCommandList.get() };
+    bool unsubmittedAccepted = true;
+    device.executeCommandLists(unsubmittedCommandLists, 1u, CommandQueue::Graphics, &unsubmittedAccepted);
+    EXPECT_FALSE(unsubmittedAccepted);
+
+    heap.collectRetired();
+    EXPECT_EQ(storageBuffer->getReferenceCount(), 1u)
+        << "a rejected submission did not release the abandoned descriptor heap use";
+
+    const GpuDescriptorHandle recycledFirst = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    const GpuDescriptorHandle recycledSecond = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(recycledFirst.valid());
+    ASSERT_TRUE(recycledSecond.valid());
+    EXPECT_TRUE(recycledFirst.slot() == unsubmittedHandle.slot() || recycledSecond.slot() == unsubmittedHandle.slot())
+        << "a rejected submission did not return the abandoned descriptor slot";
+
+    heap.free(recycledFirst);
+    heap.free(recycledSecond);
+    heap.collectRetired();
+
+    const GpuDescriptorHandle acceptedHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(acceptedHandle.valid());
+    ASSERT_TRUE(heap.write(acceptedHandle, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
+
+    auto acceptedCommandList = device.createCommandList();
+    ASSERT_TRUE(acceptedCommandList);
+    acceptedCommandList->open();
+    heap.bindCompute(*acceptedCommandList, *pipeline);
+    acceptedCommandList->close();
+    ASSERT_TRUE(acceptedCommandList->hasCommandBuffer());
+
+    heap.free(acceptedHandle);
+    heap.collectRetired();
+    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u)
+        << "an unsubmitted accepted-path command buffer lost its descriptor resource";
+
+    CommandList* acceptedCommandLists[] = { acceptedCommandList.get() };
+    const QueueSubmissionToken acceptedToken = device.executeCommandLists(
+        acceptedCommandLists,
+        1u,
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(acceptedToken.valid());
+    ASSERT_TRUE(device.waitForIdle());
+
+    heap.collectRetired();
+    EXPECT_EQ(storageBuffer->getReferenceCount(), 1u)
+        << "a completed queue submission did not release its descriptor heap use";
+#endif
 }
 
 
@@ -3672,8 +3813,6 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitSharedPushLayoutAndMaterialHeapResou
     heap.free(controlHandle);
     heap.free(extinctionHandle);
     heap.free(overflowDepthHandle);
-    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
-        heap.advanceFrame();
 }
 
 
@@ -3727,8 +3866,6 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitComputeResourcesUseSharedPushLayout)
     EXPECT_TRUE(heap.getSamplerLayout()->isDescriptorBufferCompatible());
 
     heap.free(transmittanceStorageHandle);
-    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
-        heap.advanceFrame();
 }
 
 
@@ -3861,8 +3998,6 @@ TEST_F(DescriptorBufferRoundTripTest, CsgMaterialTailShapesBuildAsDescriptorBuff
         heap.free(materialTypedHandle);
     if(instanceHandle.valid())
         heap.free(instanceHandle);
-    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
-        heap.advanceFrame();
 }
 
 
@@ -4426,8 +4561,6 @@ TEST_F(DescriptorBufferRoundTripTest, BvhBuildPushOnlyHeapLayoutRegistersScratch
     }
     for(const GpuDescriptorHandle handle : handles)
         heap.free(handle);
-    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
-        heap.advanceFrame();
 }
 
 
@@ -4710,12 +4843,8 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRequiresDescriptorBuff
         << "heap write() did not retain the persistent Texture2DArray resource";
 
     heap.free(sampledImageArrayHandle);
-    EXPECT_EQ(sampledImageArray->getReferenceCount(), 2u)
-        << "heap free() released a descriptor resource before its in-flight quarantine matured";
-    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
-        heap.advanceFrame();
     EXPECT_EQ(sampledImageArray->getReferenceCount(), 1u)
-        << "heap did not release the descriptor resource after its in-flight quarantine matured";
+        << "heap did not release an unused descriptor resource immediately";
 
     // The caustic resolve reads its R32_UINT fixed-point accumulator through a dedicated typed uint Texture2DArray
     // descriptor table. Its image-view format differs from the floating-point array above, so verify the distinct
@@ -4753,16 +4882,12 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRequiresDescriptorBuff
         << "heap write() did not retain the typed Texture2DArray resource";
 
     heap.free(sampledImageArrayUintHandle);
-    EXPECT_EQ(sampledImageArrayUint->getReferenceCount(), 2u)
-        << "heap free() released the typed descriptor resource before its in-flight quarantine matured";
-    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
-        heap.advanceFrame();
     EXPECT_EQ(sampledImageArrayUint->getReferenceCount(), 1u)
-        << "heap did not release the typed Texture2DArray resource after its in-flight quarantine matured";
+        << "heap did not release an unused typed Texture2DArray resource immediately";
 
     // AVBOIT accumulation consumes its integrated transmittance as Texture3D. This needs a separate shader-side
     // descriptor array from Texture2D/Texture2DArray even though all three encode VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE.
-    // Verify the new class routes through the descriptor-buffer path and retains the volume through the same in-flight quarantine.
+    // Verify the new class routes through the descriptor-buffer path and keeps the volume alive while its handle is live.
     auto sampledImage3D = device.createTexture(
         TextureDesc()
             .setWidth(32u)
@@ -4796,12 +4921,8 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRequiresDescriptorBuff
         << "heap write() did not retain the persistent Texture3D resource";
 
     heap.free(sampledImage3DHandle);
-    EXPECT_EQ(sampledImage3D->getReferenceCount(), 2u)
-        << "heap free() released the Texture3D resource before its in-flight quarantine matured";
-    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
-        heap.advanceFrame();
     EXPECT_EQ(sampledImage3D->getReferenceCount(), 1u)
-        << "heap did not release the Texture3D resource after its in-flight quarantine matured";
+        << "heap did not release an unused Texture3D resource immediately";
 
     // TextureCube has a distinct image-view type from the other sampled-image arrays. The heap therefore gives it
     // its own appended ABI binding/class instead of exposing a cube through the Texture2D table.
@@ -4838,12 +4959,8 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRequiresDescriptorBuff
         << "heap write() did not retain the persistent TextureCube resource";
 
     heap.free(sampledImageCubeHandle);
-    EXPECT_EQ(sampledImageCube->getReferenceCount(), 2u)
-        << "heap free() released the TextureCube resource before its in-flight quarantine matured";
-    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
-        heap.advanceFrame();
     EXPECT_EQ(sampledImageCube->getReferenceCount(), 1u)
-        << "heap did not release the TextureCube resource after its in-flight quarantine matured";
+        << "heap did not release an unused TextureCube resource immediately";
 }
 
 
@@ -4908,11 +5025,8 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapWritesImmutableTlasBlo
     EXPECT_GT(block.sizeBytes, 0u);
 
     heap.free(handle);
-    // The production heap intentionally quarantines handles for the in-flight-frame window. This headless test has
-    // no submitted work, so advance the synthetic frame counter to retire the block and its retained TLAS before the
+    // This headless test records no heap binding, so retirement is immediate and the block is released before the
     // device fixture tears down.
-    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
-        heap.advanceFrame();
 }
 
 
@@ -4967,12 +5081,10 @@ TEST_F(DescriptorBufferRoundTripTest, ImguiHeapTextureAndSamplerLayoutBuildsAsDe
     ));
     EXPECT_TRUE(heap.write(samplerHandle, DescriptorWriteItem::Sampler(0u, sampler.get())));
 
-    // Free mirrors ImGui texture destruction: deferred retirement keeps both resources alive until recorded UI draws
-    // have drained, even though the owning ImTextureData resource may be erased immediately.
+    // Free mirrors ImGui texture destruction. This headless test records no UI command buffer, so both heap uses can
+    // retire immediately.
     heap.free(textureHandle);
     heap.free(samplerHandle);
-    for(u32 frame = 0u; frame < s_MaxFramesInFlight; ++frame)
-        heap.advanceFrame();
 }
 
 

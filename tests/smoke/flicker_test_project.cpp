@@ -45,6 +45,10 @@ using NWB::Tests::Smoke::SetSmokeYawWindowTitle;
 using NWB::Tests::Smoke::SmokeEnvironmentString;
 using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 
+using FlickerModelRef = NWB::Core::Assets::AssetRef<NWB::Impl::Model>;
+using FlickerMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+using FlickerMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -54,10 +58,26 @@ using NWB::Tests::Smoke::SyncSmokeModelRuntimes;
 // sweep. Arrow keys (Left/Right) scrub the yaw by hand; the live angle shows in the title bar so the exact orientation a
 // flicker appears at can be read off and reproduced via NWB_FLICKER_TEST_SPIN_ANGLE. Reuses the benchmark's cooked body
 // model + ground material (no new assets).
-static constexpr AStringView s_ModelPath = "project/characters/body/model";
-static constexpr AStringView s_OpaqueMaterialPath = "project/smoke/transparent_multi/materials/ground";  // opaque lambert
-static constexpr AStringView s_TransparentMaterialPath = "project/smoke/transparent_multi/materials/shared"; // glass
-static constexpr AStringView s_GroundMeshPath = "project/meshes/shadow_plane";
+static constexpr FlickerModelRef s_Model = []() constexpr{
+    FlickerModelRef result;
+    result.virtualPath = Name("project/characters/body/model");
+    return result;
+}();
+static constexpr FlickerMaterialRef s_OpaqueMaterial = []() constexpr{
+    FlickerMaterialRef result;
+    result.virtualPath = Name("project/smoke/transparent_multi/materials/ground");
+    return result;
+}(); // opaque lambert
+static constexpr FlickerMaterialRef s_TransparentMaterial = []() constexpr{
+    FlickerMaterialRef result;
+    result.virtualPath = Name("project/smoke/transparent_multi/materials/shared");
+    return result;
+}(); // glass
+static constexpr FlickerMeshRef s_GroundMesh = []() constexpr{
+    FlickerMeshRef result;
+    result.virtualPath = Name("project/meshes/shadow_plane");
+    return result;
+}();
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 static constexpr f32 s_GroundScale = 8.0f;
@@ -179,8 +199,8 @@ public:
         m_groundEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_GroundMeshPath,
-            s_OpaqueMaterialPath,
+            s_GroundMesh,
+            s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.82f, 0.82f, 0.85f, 1.0f),
             Float4(0.0f, 0.0f, 0.0f, 0.0f),
@@ -192,8 +212,8 @@ public:
         m_opaqueOwner = CreateTintedModelEntity(
             *m_world,
             m_context.objectArena,
-            s_ModelPath,
-            s_OpaqueMaterialPath,
+            s_Model,
+            s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.86f, 0.80f, 0.74f, 1.0f),
             Float4(-s_CharacterSpacingX, 0.0f, s_OpaqueBackZ, 0.0f),
@@ -204,8 +224,8 @@ public:
         m_transparentOwner = CreateTintedModelEntity(
             *m_world,
             m_context.objectArena,
-            s_ModelPath,
-            s_TransparentMaterialPath,
+            s_Model,
+            s_TransparentMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.72f, 0.86f, 1.00f, 0.42f), // glass tint, sub-1 alpha
             Float4(s_CharacterSpacingX, 0.0f, s_TransparentFrontZ, 0.0f),

@@ -87,7 +87,6 @@ inline constexpr usize s_MaxRetryCountAcquireNextImage = 3;
 inline constexpr u32 s_TimerQueryTimestampCount = 2;
 inline constexpr u32 s_TimerQueryBeginIndex = 0;
 inline constexpr u32 s_TimerQueryEndIndex = 1;
-inline constexpr u32 s_SingleQueryCount = 1;
 inline constexpr f32 s_DefaultRasterLineWidth = 1.0f;
 inline constexpr usize s_MeshletPipelineStageReserveCount = 3;
 

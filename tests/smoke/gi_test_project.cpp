@@ -40,6 +40,9 @@ using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::DestroySmokeRenderWorld;
 using NWB::Tests::Smoke::AddSmokeRenderSystems;
 
+using GiTestMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
+using GiTestMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -58,8 +61,16 @@ using NWB::Tests::Smoke::AddSmokeRenderSystems;
 //
 // Reuses the benchmark's cooked ground material + the per-instance colour_tint mutable (no new assets).
 
-static constexpr AStringView s_GroundMeshPath = "project/meshes/shadow_plane";
-static constexpr AStringView s_OpaqueMaterialPath = "project/smoke/transparent_multi/materials/ground";  // opaque lambert
+static constexpr GiTestMeshRef s_GroundMesh = []() constexpr{
+    GiTestMeshRef result;
+    result.virtualPath = Name("project/meshes/shadow_plane");
+    return result;
+}();
+static constexpr GiTestMaterialRef s_OpaqueMaterial = []() constexpr{
+    GiTestMaterialRef result;
+    result.virtualPath = Name("project/smoke/transparent_multi/materials/ground");
+    return result;
+}(); // opaque lambert
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 // Box geometry: a 4x4 unit open-top box centered at the origin. Each wall/floor is a scaled plane.
@@ -142,8 +153,8 @@ public:
         m_floorEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_GroundMeshPath,
-            s_OpaqueMaterialPath,
+            s_GroundMesh,
+            s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.90f, 0.90f, 0.90f, 1.0f),   // near-white floor
             Float4(0.0f, 0.0f, 0.0f, 0.0f),       // at the origin
@@ -223,8 +234,8 @@ private:
         auto entity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
-            s_GroundMeshPath,
-            s_OpaqueMaterialPath,
+            s_GroundMesh,
+            s_OpaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
             colorTint,
             position,

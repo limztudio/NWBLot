@@ -10,6 +10,7 @@
 
 #include "smoke_scene_helpers.h"
 
+#include <core/ecs/entity.h>
 #include <impl/assets_model/asset.h>
 #include <impl/ecs_mesh/skinning/module.h>
 #include <impl/ecs_model/module.h>
@@ -25,6 +26,9 @@ namespace Smoke{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using SmokeModelRef = Core::Assets::AssetRef<Impl::Model>;
 
 
 inline void AddSmokeSkinnedRenderSystems(
@@ -74,8 +78,8 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
 [[nodiscard]] inline Core::ECS::EntityID CreateTintedModelEntity(
     Core::ECS::World& world,
     Core::Alloc::GlobalArena& arena,
-    const AStringView modelPath,
-    const AStringView materialPath,
+    const SmokeModelRef& model,
+    const SmokeMaterialRef& material,
     const AStringView materialInterfacePath,
     const Float4& colorTint,
     const Float4& position,
@@ -85,18 +89,16 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
     if(outTintApplied)
         *outTintApplied = false;
 
-    Core::Assets::AssetRef<Impl::Model> model;
-    model.virtualPath = Name(modelPath);
     const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(
         world,
         arena,
-        materialPath,
+        material,
         materialInterfacePath,
         position,
         scale
     );
 
-    auto& modelComponent = world.addComponent<Impl::ModelComponent>(setup.entity);
+    auto& modelComponent = world.entity(setup.entity).addComponent<Impl::ModelComponent>();
     modelComponent.model = model;
 
     const bool tintApplied = ApplySmokeMaterialTint(world, setup, colorTint);

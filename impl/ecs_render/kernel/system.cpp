@@ -257,7 +257,6 @@ void RendererSystem::invalidateResources(){
     m_shadowVisibilityTaskGraphValid = false;
     m_shadowVisibilityTask = {};
     m_softwareCausticsTask = {};
-    m_surfelGiTask = {};
     m_shadowVisibilityPrefixCompletion = {};
     m_shadowVisibilityTaskGraph.reset();
     m_shadowVisibilityTaskGraphAnalysis.reset();
@@ -266,6 +265,7 @@ void RendererSystem::invalidateResources(){
     m_shadowVisibilityRecordedGraph.reset(m_shadowVisibilityCompiledGraph);
     m_shadowVisibilitySubmissionTransaction.reset(m_shadowVisibilityCompiledGraph);
     m_deferredLightingTaskGraphValid = false;
+    m_deferredSurfelGiTask = {};
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitPreTask = {};
     m_deferredAvboitDepthWarpTask = {};
@@ -276,11 +276,10 @@ void RendererSystem::invalidateResources(){
     m_deferredCompositeTask = {};
     m_deferredPresentTask = {};
     m_deferredLaggedLightingHistoryTask = {};
+    m_deferredSurfelGiEffectsCompletion = {};
     m_deferredHardwareCausticsPrefixCompletion = {};
     m_deferredLightingPrefixCompletion = {};
-    m_deferredLightingSurfelGiCompletion = {};
     m_deferredLightingHistoryCompletion = {};
-    m_deferredPresentSurfelGiCompletion = {};
     m_deferredLightingTaskGraph.reset();
     m_deferredLightingTaskGraphAnalysis.reset();
     m_deferredLightingTaskGraphQueueAssignments.reset();
@@ -594,7 +593,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_shadowVisibilityTaskGraphValid = false;
     m_shadowVisibilityTask = {};
     m_softwareCausticsTask = {};
-    m_surfelGiTask = {};
     m_shadowVisibilityPrefixCompletion = {};
     m_shadowVisibilityTaskGraph.reset();
     m_shadowVisibilityTaskGraphAnalysis.reset();
@@ -603,6 +601,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_shadowVisibilityRecordedGraph.reset(m_shadowVisibilityCompiledGraph);
     m_shadowVisibilitySubmissionTransaction.reset(m_shadowVisibilityCompiledGraph);
     m_deferredLightingTaskGraphValid = false;
+    m_deferredSurfelGiTask = {};
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitPreTask = {};
     m_deferredAvboitDepthWarpTask = {};
@@ -613,11 +612,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredCompositeTask = {};
     m_deferredPresentTask = {};
     m_deferredLaggedLightingHistoryTask = {};
+    m_deferredSurfelGiEffectsCompletion = {};
     m_deferredHardwareCausticsPrefixCompletion = {};
     m_deferredLightingPrefixCompletion = {};
-    m_deferredLightingSurfelGiCompletion = {};
     m_deferredLightingHistoryCompletion = {};
-    m_deferredPresentSurfelGiCompletion = {};
     m_deferredLightingTaskGraph.reset();
     m_deferredLightingTaskGraphAnalysis.reset();
     m_deferredLightingTaskGraphQueueAssignments.reset();
@@ -831,8 +829,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         shadowVisibilityPrepared,
         hardwareShadowSupported,
         shadowVisibilityTimingTicket,
-        softwareCausticsTimingTicket,
-        surfelGiTimingTicket
+        softwareCausticsTimingTicket
     );
     const Core::GpuSubmissionPacketId shadowVisibilityPacket = m_shadowVisibilityCompiledGraph.packetForTask(
         m_shadowVisibilityTask
@@ -840,7 +837,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId softwareCausticsPacket = m_shadowVisibilityCompiledGraph.packetForTask(
         m_softwareCausticsTask
     );
-    const Core::GpuSubmissionPacketId surfelGiPacket = m_shadowVisibilityCompiledGraph.packetForTask(m_surfelGiTask);
     const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = shadowVisibilityPacket.valid()
         ? m_shadowVisibilityCompiledGraph.queueInfo(
             m_shadowVisibilityCompiledGraph.packet(shadowVisibilityPacket).queue
@@ -853,32 +849,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         )
         : nullptr
     ;
-    const Core::GpuPhysicalQueueInfo* const surfelGiQueue = surfelGiPacket.valid()
-        ? m_shadowVisibilityCompiledGraph.queueInfo(m_shadowVisibilityCompiledGraph.packet(surfelGiPacket).queue)
-        : nullptr
-    ;
-    const usize shadowEffectsPacketCount = hardwareShadowSupported ? 2u : 3u;
+    const usize shadowEffectsPacketCount = hardwareShadowSupported ? 1u : 2u;
     if(
         !m_shadowVisibilityTaskGraphValid
         || !m_shadowVisibilityTask.valid()
-        || !m_surfelGiTask.valid()
         || !m_shadowVisibilityPrefixCompletion.valid()
         || !shadowVisibilityPacket.valid()
-        || !surfelGiPacket.valid()
         || m_shadowVisibilityCompiledGraph.packetCount() != shadowEffectsPacketCount
         || !shadowVisibilityQueue
-        || !surfelGiQueue
         || m_shadowVisibilityCompiledGraph.packetIdAt(0u) != shadowVisibilityPacket
-        || (hardwareShadowSupported
-            ? m_shadowVisibilityCompiledGraph.packetIdAt(1u) != surfelGiPacket
-            : (
+        || (!hardwareShadowSupported && (
                 !m_softwareCausticsTask.valid()
                 || !softwareCausticsPacket.valid()
                 || !softwareCausticsQueue
                 || m_shadowVisibilityCompiledGraph.packetIdAt(1u) != softwareCausticsPacket
-                || m_shadowVisibilityCompiledGraph.packetIdAt(2u) != surfelGiPacket
-            )
-        )
+        ))
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned shadow effects chain was unavailable"));
         surfelGiTimingTicket.discard();
@@ -910,7 +895,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         graphicsPrefixTimingTicket.discard();
         return;
     }
-    const bool surfelGiRunsOnCompute = surfelGiQueue->queueClass == Core::CommandQueue::Compute;
     const bool clearAvboitTargets = hasTransparentRenderers || m_avboitState.m_targetsNeedClear;
     Core::GpuTimingSubmissionTicket avboitPreTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket avboitDepthWarpTimingTicket(m_graphics.gpuTiming());
@@ -940,6 +924,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         avboitExtinctionTimingTicket,
         avboitIntegrationTimingTicket,
         avboitAccumulationTimingTicket,
+        surfelGiTimingTicket,
         hardwareCausticsTimingTicket,
         deferredLightingTimingTicket,
         deferredCompositeTimingTicket,
@@ -964,6 +949,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitExtinctionTimingTicket,
             avboitIntegrationTimingTicket,
             avboitAccumulationTimingTicket,
+            surfelGiTimingTicket,
             hardwareCausticsTimingTicket,
             deferredLightingTimingTicket,
             deferredCompositeTimingTicket,
@@ -1019,6 +1005,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId hardwareCausticsPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredHardwareCausticsTask
     );
+    const Core::GpuSubmissionPacketId surfelGiPacket = m_deferredLightingCompiledGraph.packetForTask(
+        m_deferredSurfelGiTask
+    );
     const Core::GpuSubmissionPacketId deferredLightingPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredLightingTask
     );
@@ -1055,18 +1044,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         )
         : nullptr
     ;
-    const Core::GpuExternalCompletionId deferredLightingDependentCompletion = laggedAsyncLightingSchedule
-        ? m_deferredLightingHistoryCompletion
-        : m_deferredLightingSurfelGiCompletion
+    const Core::GpuPhysicalQueueInfo* const surfelGiQueue = surfelGiPacket.valid()
+        ? m_deferredLightingCompiledGraph.queueInfo(m_deferredLightingCompiledGraph.packet(surfelGiPacket).queue)
+        : nullptr
     ;
+    const bool surfelGiRunsOnCompute = surfelGiQueue && surfelGiQueue->queueClass == Core::CommandQueue::Compute;
+    const usize deferredSurfelGiPacketIndex = 0u;
     const usize deferredHardwarePacketCount = hardwareShadowSupported ? 1u : 0u;
+    const usize deferredHardwareCausticsPacketIndex = deferredSurfelGiPacketIndex + 1u;
     const usize deferredAvboitPacketCount = avboitUsesAsyncCompute ? 5u : 1u;
-    const usize deferredAvboitPrePacketIndex = deferredHardwarePacketCount;
+    const usize deferredAvboitPrePacketIndex = deferredHardwareCausticsPacketIndex + deferredHardwarePacketCount;
     const usize deferredAvboitDepthWarpPacketIndex = deferredAvboitPrePacketIndex + 1u;
     const usize deferredAvboitExtinctionPacketIndex = deferredAvboitDepthWarpPacketIndex + 1u;
     const usize deferredAvboitIntegrationPacketIndex = deferredAvboitExtinctionPacketIndex + 1u;
     const usize deferredAvboitAccumulationPacketIndex = deferredAvboitIntegrationPacketIndex + 1u;
-    const usize deferredLightingPacketIndex = deferredHardwarePacketCount + deferredAvboitPacketCount;
+    const usize deferredLightingPacketIndex = deferredAvboitPrePacketIndex + deferredAvboitPacketCount;
     const usize deferredCompositePacketIndex = deferredLightingPacketIndex + 1u;
     const usize deferredPresentPacketIndex = deferredCompositePacketIndex + 1u;
     const usize deferredInitialPacketCount = deferredPresentPacketIndex + 1u;
@@ -1074,6 +1066,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const usize deferredPacketCount = deferredInitialPacketCount + (captureLaggedLightingHistory ? 1u : 0u);
     if(
         !m_deferredLightingTaskGraphValid
+        || !m_deferredSurfelGiTask.valid()
+        || !m_deferredSurfelGiEffectsCompletion.valid()
+        || !surfelGiPacket.valid()
+        || !surfelGiQueue
         || (hardwareShadowSupported && (
             !m_deferredHardwareCausticsTask.valid()
             || !m_deferredHardwareCausticsPrefixCompletion.valid()
@@ -1112,8 +1108,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !deferredLaggedLightingHistoryPacket.valid()
             || !deferredLaggedLightingHistoryQueue
         ))
-        || (laggedAsyncLightingSchedule && !m_deferredPresentSurfelGiCompletion.valid())
-        || !deferredLightingDependentCompletion.valid()
+        || (laggedAsyncLightingSchedule && !m_deferredLightingHistoryCompletion.valid())
         || !deferredLightingPacket.valid()
         || !deferredCompositePacket.valid()
         || !deferredPresentPacket.valid()
@@ -1121,7 +1116,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !deferredLightingQueue
         || !deferredCompositeQueue
         || !deferredPresentQueue
-        || (hardwareShadowSupported && m_deferredLightingCompiledGraph.packetIdAt(0u) != hardwareCausticsPacket)
+        || m_deferredLightingCompiledGraph.packetIdAt(deferredSurfelGiPacketIndex) != surfelGiPacket
+        || (hardwareShadowSupported && (
+            m_deferredLightingCompiledGraph.packetIdAt(deferredHardwareCausticsPacketIndex) != hardwareCausticsPacket
+        ))
         || m_deferredLightingCompiledGraph.packetIdAt(deferredAvboitPrePacketIndex) != avboitPrePacket
         || (avboitUsesAsyncCompute && (
             m_deferredLightingCompiledGraph.packetIdAt(deferredAvboitDepthWarpPacketIndex) != avboitDepthWarpPacket
@@ -1368,14 +1366,94 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
+    // Shadow Visibility and its optional Software Caustics successor record in compiler order. Deferred Surfel GI
+    // is gated by their accepted completion and receives its declared state sources below.
+    const Core::GpuNativePacketRecordDesc hardwareShadowEffectsRecordDescs[] = {
+        Core::GpuNativePacketRecordDesc{
+            .packet = shadowVisibilityPacket,
+            .externalStateSources = shadowVisibilityStateSources,
+            .externalStateSourceCount = shadowVisibilityStateSourceCount,
+        },
+    };
+    const Core::GpuNativePacketRecordDesc softwareShadowEffectsRecordDescs[] = {
+        Core::GpuNativePacketRecordDesc{
+            .packet = shadowVisibilityPacket,
+            .externalStateSources = shadowVisibilityStateSources,
+            .externalStateSourceCount = shadowVisibilityStateSourceCount,
+        },
+        Core::GpuNativePacketRecordDesc{
+            .packet = softwareCausticsPacket,
+            .externalStateSources = softwareCausticsStateSources,
+            .externalStateSourceCount = softwareCausticsStateSourceCount,
+        },
+    };
+    const Core::GpuNativePacketRecordDesc* const shadowEffectsRecordDescs = hardwareShadowSupported
+        ? hardwareShadowEffectsRecordDescs
+        : softwareShadowEffectsRecordDescs
+    ;
+    const usize shadowEffectsRecordDescCount = hardwareShadowSupported
+        ? LengthOf(hardwareShadowEffectsRecordDescs)
+        : LengthOf(softwareShadowEffectsRecordDescs)
+    ;
+    const Core::GpuNativePacketRecorder shadowEffectsRecorder(device);
+    const bool shadowEffectsRecorded =
+        shadowVisibilityStateSourcesReady
+        && m_shadowVisibilityTaskGraphValid
+        && m_shadowVisibilityTask.valid()
+        && m_shadowVisibilityPrefixCompletion.valid()
+        && shadowVisibilityPacket.valid()
+        && m_shadowVisibilityCompiledGraph.packetCount() == shadowEffectsRecordDescCount
+        && m_shadowVisibilityCompiledGraph.packetIdAt(0u) == shadowVisibilityPacket
+        && (hardwareShadowSupported || (
+                softwareCausticsStateSourcesReady
+                && m_softwareCausticsTask.valid()
+                && softwareCausticsPacket.valid()
+                && m_shadowVisibilityCompiledGraph.packetIdAt(1u) == softwareCausticsPacket
+        ))
+        && shadowEffectsRecorder.recordPacketsInCompileOrder(
+            m_shadowVisibilityTaskGraph,
+            m_shadowVisibilityCompiledGraph,
+            shadowEffectsRecordDescs,
+            shadowEffectsRecordDescCount,
+            m_shadowVisibilityRecordedGraph
+        )
+    ;
+    const Core::CommandListResourceStateHandoff* const shadowVisibilityFinalStateSeed = shadowEffectsRecorded
+        ? m_shadowVisibilityRecordedGraph.packetFinalStateSeed(shadowVisibilityPacket)
+        : nullptr
+    ;
+    const Core::CommandListResourceStateHandoff* const softwareCausticsFinalStateSeed =
+        shadowEffectsRecorded && !hardwareShadowSupported
+            ? m_shadowVisibilityRecordedGraph.packetFinalStateSeed(softwareCausticsPacket)
+            : nullptr
+    ;
+    if(
+        !shadowEffectsRecorded
+        || !shadowVisibilityFinalStateSeed
+        || (!hardwareShadowSupported && !softwareCausticsFinalStateSeed)
+    ){
+        surfelGiTimingTicket.discard();
+        softwareCausticsTimingTicket.discard();
+        shadowVisibilityTimingTicket.discard();
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned shadow effects chain"));
+        discardRenderPackets();
+        return;
+    }
+
+    const Core::CommandListResourceStateHandoff* const causticsFinalStateSeed = softwareCausticsFinalStateSeed;
+
+    // Surfel GI now records in the deferred graph. Its selected effects producer is an execution completion; the
+    // prefix remains the authoritative state source because Shadow/Software only read its shared G-buffer inputs.
     Core::GpuExternalPacketStateSource surfelGiStateSources[3] = {};
     usize surfelGiStateSourceCount = 0u;
-    bool surfelGiStateSourcesReady = appendDeclaredStateSource(
-        surfelGiStateSources,
-        LengthOf(surfelGiStateSources),
-        surfelGiStateSourceCount,
-        graphicsPrefixStateSeed
-    );
+    bool surfelGiStateSourcesReady =
+        appendDeclaredStateSource(
+            surfelGiStateSources,
+            LengthOf(surfelGiStateSources),
+            surfelGiStateSourceCount,
+            graphicsPrefixStateSeed
+        )
+    ;
     if(surfelGiRunsOnCompute && m_surfelGiComputePersistentStateHandoff.valid()){
         surfelGiStateSourcesReady = surfelGiStateSourcesReady
             && appendDeclaredStateSource(
@@ -1396,105 +1474,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             )
         ;
     }
-
-    // Shadow Visibility, its optional Software Caustics successor, and Surfel GI record in compiler order. Each
-    // packet retains declaration-filtered prefix/return sources; the selected effects predecessor and all shared
-    // state seeds stay graph-internal.
-    const Core::GpuNativePacketRecordDesc hardwareShadowEffectsRecordDescs[] = {
-        Core::GpuNativePacketRecordDesc{
-            .packet = shadowVisibilityPacket,
-            .externalStateSources = shadowVisibilityStateSources,
-            .externalStateSourceCount = shadowVisibilityStateSourceCount,
-        },
-        Core::GpuNativePacketRecordDesc{
-            .packet = surfelGiPacket,
-            .externalStateSources = surfelGiStateSources,
-            .externalStateSourceCount = surfelGiStateSourceCount,
-        },
-    };
-    const Core::GpuNativePacketRecordDesc softwareShadowEffectsRecordDescs[] = {
-        Core::GpuNativePacketRecordDesc{
-            .packet = shadowVisibilityPacket,
-            .externalStateSources = shadowVisibilityStateSources,
-            .externalStateSourceCount = shadowVisibilityStateSourceCount,
-        },
-        Core::GpuNativePacketRecordDesc{
-            .packet = softwareCausticsPacket,
-            .externalStateSources = softwareCausticsStateSources,
-            .externalStateSourceCount = softwareCausticsStateSourceCount,
-        },
-        Core::GpuNativePacketRecordDesc{
-            .packet = surfelGiPacket,
-            .externalStateSources = surfelGiStateSources,
-            .externalStateSourceCount = surfelGiStateSourceCount,
-        },
-    };
-    const Core::GpuNativePacketRecordDesc* const shadowEffectsRecordDescs = hardwareShadowSupported
-        ? hardwareShadowEffectsRecordDescs
-        : softwareShadowEffectsRecordDescs
-    ;
-    const usize shadowEffectsRecordDescCount = hardwareShadowSupported
-        ? LengthOf(hardwareShadowEffectsRecordDescs)
-        : LengthOf(softwareShadowEffectsRecordDescs)
-    ;
-    const Core::GpuNativePacketRecorder shadowEffectsRecorder(device);
-    const bool shadowEffectsRecorded =
-        shadowVisibilityStateSourcesReady
-        && m_shadowVisibilityTaskGraphValid
-        && m_shadowVisibilityTask.valid()
-        && m_surfelGiTask.valid()
-        && m_shadowVisibilityPrefixCompletion.valid()
-        && shadowVisibilityPacket.valid()
-        && surfelGiPacket.valid()
-        && surfelGiStateSourcesReady
-        && m_shadowVisibilityCompiledGraph.packetCount() == shadowEffectsRecordDescCount
-        && m_shadowVisibilityCompiledGraph.packetIdAt(0u) == shadowVisibilityPacket
-        && (hardwareShadowSupported
-            ? m_shadowVisibilityCompiledGraph.packetIdAt(1u) == surfelGiPacket
-            : (
-                softwareCausticsStateSourcesReady
-                && m_softwareCausticsTask.valid()
-                && softwareCausticsPacket.valid()
-                && m_shadowVisibilityCompiledGraph.packetIdAt(1u) == softwareCausticsPacket
-                && m_shadowVisibilityCompiledGraph.packetIdAt(2u) == surfelGiPacket
-            )
-        )
-        && shadowEffectsRecorder.recordPacketsInCompileOrder(
-            m_shadowVisibilityTaskGraph,
-            m_shadowVisibilityCompiledGraph,
-            shadowEffectsRecordDescs,
-            shadowEffectsRecordDescCount,
-            m_shadowVisibilityRecordedGraph
-        )
-    ;
-    const Core::CommandListResourceStateHandoff* const shadowVisibilityFinalStateSeed = shadowEffectsRecorded
-        ? m_shadowVisibilityRecordedGraph.packetFinalStateSeed(shadowVisibilityPacket)
-        : nullptr
-    ;
-    const Core::CommandListResourceStateHandoff* const softwareCausticsFinalStateSeed =
-        shadowEffectsRecorded && !hardwareShadowSupported
-            ? m_shadowVisibilityRecordedGraph.packetFinalStateSeed(softwareCausticsPacket)
-            : nullptr
-    ;
-    const Core::CommandListResourceStateHandoff* const surfelGiFinalStateSeed = shadowEffectsRecorded
-        ? m_shadowVisibilityRecordedGraph.packetFinalStateSeed(surfelGiPacket)
-        : nullptr
-    ;
-    if(
-        !shadowEffectsRecorded
-        || !shadowVisibilityFinalStateSeed
-        || !surfelGiFinalStateSeed
-        || (!hardwareShadowSupported && !softwareCausticsFinalStateSeed)
-    ){
-        surfelGiTimingTicket.discard();
-        softwareCausticsTimingTicket.discard();
-        shadowVisibilityTimingTicket.discard();
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned shadow effects chain"));
-        discardRenderPackets();
-        return;
-    }
-
-    const Core::CommandListResourceStateHandoff* const causticsFinalStateSeed = softwareCausticsFinalStateSeed;
 
     // AVBOIT's raster entry point imports the prefix packet state. Both routes now live in the deferred graph:
     // active lagged frames use the single Graphics packet, while live frames retain their five-stage G/C chain.
@@ -1533,14 +1512,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 )
             ;
         }
-        deferredLightingStateSourcesReady = deferredLightingStateSourcesReady
-            && appendDeclaredStateSource(
-                deferredLightingStateSources,
-                LengthOf(deferredLightingStateSources),
-                deferredLightingStateSourceCount,
-                surfelGiFinalStateSeed
-            )
-        ;
     }
 
     // Hardware Caustics joins Lighting and Composite in one graph. Hardware starts from the prefix state; on the
@@ -1565,8 +1536,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredCompositeStateSourceCount,
         graphicsPrefixStateSeed
     );
-    Core::GpuNativePacketRecordDesc deferredRecordDescs[9] = {};
+    Core::GpuNativePacketRecordDesc deferredRecordDescs[10] = {};
     usize deferredRecordDescCount = 0u;
+    deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
+        .packet = surfelGiPacket,
+        .externalStateSources = surfelGiStateSources,
+        .externalStateSourceCount = surfelGiStateSourceCount,
+    };
     if(hardwareShadowSupported){
         deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
             .packet = hardwareCausticsPacket,
@@ -1612,9 +1588,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // late tail can join the same recorded graph and submission transaction without a renderer completion bridge.
     bool deferredPacketsRecorded =
         hardwareCausticsStateSourcesReady
+        && surfelGiStateSourcesReady
         && deferredLightingStateSourcesReady
         && deferredCompositeStateSourcesReady
         && m_deferredLightingTaskGraphValid
+        && m_deferredSurfelGiTask.valid()
+        && m_deferredSurfelGiEffectsCompletion.valid()
+        && surfelGiPacket.valid()
         && (!hardwareShadowSupported || (
             m_deferredHardwareCausticsTask.valid()
             && m_deferredHardwareCausticsPrefixCompletion.valid()
@@ -1640,14 +1620,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLaggedLightingHistoryTask.valid()
             && deferredLaggedLightingHistoryPacket.valid()
         ))
-        && (!laggedAsyncLightingSchedule || m_deferredPresentSurfelGiCompletion.valid())
-        && deferredLightingDependentCompletion.valid()
+        && (!laggedAsyncLightingSchedule || m_deferredLightingHistoryCompletion.valid())
         && deferredLightingPacket.valid()
         && deferredCompositePacket.valid()
         && deferredPresentPacket.valid()
         && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
         && deferredRecordDescCount == deferredInitialPacketCount
-        && (!hardwareShadowSupported || m_deferredLightingCompiledGraph.packetIdAt(0u) == hardwareCausticsPacket)
+        && m_deferredLightingCompiledGraph.packetIdAt(deferredSurfelGiPacketIndex) == surfelGiPacket
+        && (!hardwareShadowSupported || (
+            m_deferredLightingCompiledGraph.packetIdAt(deferredHardwareCausticsPacketIndex) == hardwareCausticsPacket
+        ))
         && m_deferredLightingCompiledGraph.packetIdAt(deferredAvboitPrePacketIndex) == avboitPrePacket
         && (!avboitUsesAsyncCompute || (
             m_deferredLightingCompiledGraph.packetIdAt(deferredAvboitDepthWarpPacketIndex) == avboitDepthWarpPacket
@@ -1686,6 +1668,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingCompiledGraph
         );
         avboitPreTimingTicket.discard();
+        surfelGiTimingTicket.discard();
         hardwareCausticsTimingTicket.discard();
         deferredLightingTimingTicket.discard();
         deferredCompositeTimingTicket.discard();
@@ -1697,12 +1680,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::CommandListResourceStateHandoff* const deferredLightingFinalStateSeed =
         m_deferredLightingRecordedGraph.packetFinalStateSeed(deferredLightingPacket)
     ;
+    const Core::CommandListResourceStateHandoff* const surfelGiFinalStateSeed =
+        m_deferredLightingRecordedGraph.packetFinalStateSeed(surfelGiPacket)
+    ;
     const Core::CommandListResourceStateHandoff* const hardwareCausticsFinalStateSeed = hardwareShadowSupported
         ? m_deferredLightingRecordedGraph.packetFinalStateSeed(hardwareCausticsPacket)
         : nullptr
     ;
     if(
-        !deferredLightingFinalStateSeed
+        !surfelGiFinalStateSeed
+        || !deferredLightingFinalStateSeed
         || (hardwareShadowSupported && !hardwareCausticsFinalStateSeed)
     ){
         m_deferredLightingSubmissionTransaction.discardUnaccepted(
@@ -1710,6 +1697,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingCompiledGraph
         );
         avboitPreTimingTicket.discard();
+        surfelGiTimingTicket.discard();
         hardwareCausticsTimingTicket.discard();
         deferredLightingTimingTicket.discard();
         deferredCompositeTimingTicket.discard();
@@ -2006,9 +1994,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return false;
         }
 
-        // Hardware Caustics and AVBOIT have already accepted from this shared transaction. Live Lighting waits on
-        // AVBOIT through its graph-internal final-task edge; active lagged Lighting still receives prefix/history
-        // directly so it can overlap the Graphics AVBOIT packet on the dedicated Compute lane.
+        // Surfel GI, Hardware Caustics, and AVBOIT now share this transaction. Live Lighting waits on their internal
+        // producer edges; active lagged Lighting still receives prefix/history directly for its Compute overlap.
         Core::GpuTaskGraphExternalCompletionToken deferredLightingCompletionTokens[2] = {};
         usize deferredLightingCompletionCount = 0u;
         if(laggedAsyncLightingSchedule){
@@ -2017,25 +2004,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 .token = prefixSubmissionToken,
             };
             deferredLightingCompletionTokens[deferredLightingCompletionCount++] = {
-                .completion = deferredLightingDependentCompletion,
+                .completion = m_deferredLightingHistoryCompletion,
                 .token = m_laggedLightingHistorySubmissionToken,
-            };
-        }
-        else{
-            deferredLightingCompletionTokens[deferredLightingCompletionCount++] = {
-                .completion = deferredLightingDependentCompletion,
-                .token = surfelGiSubmissionToken,
             };
         }
         const bool deferredLightingAccepted =
             m_deferredLightingTaskGraphValid
+            && m_deferredSurfelGiTask.valid()
+            && surfelGiSubmissionToken.valid()
             && (!hardwareShadowSupported || (
                 m_deferredHardwareCausticsTask.valid()
                 && hardwareCausticsSubmissionToken.valid()
             ))
             && m_deferredLightingTask.valid()
             && m_deferredCompositeTask.valid()
-            && deferredLightingDependentCompletion.valid()
+            && (!laggedAsyncLightingSchedule || m_deferredLightingHistoryCompletion.valid())
             && deferredLightingPacket.valid()
             && deferredCompositePacket.valid()
             && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
@@ -2121,23 +2104,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
     Core::QueueSubmissionToken finalPresentationSubmissionToken;
     const auto submitDeferredPresent = [&]() -> bool {
-        Core::GpuTaskGraphExternalCompletionToken presentSurfelGiCompletionToken;
-        const Core::GpuTaskGraphExternalCompletionToken* presentCompletionTokens = nullptr;
-        usize presentCompletionCount = 0u;
-        if(laggedAsyncLightingSchedule){
-            presentSurfelGiCompletionToken = {
-                .completion = m_deferredPresentSurfelGiCompletion,
-                .token = surfelGiSubmissionToken,
-            };
-            presentCompletionTokens = &presentSurfelGiCompletionToken;
-            presentCompletionCount = 1u;
-        }
         Core::Alloc::ScratchArena presentScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter deferredPresentSubmitter(device);
         const bool deferredPresentAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredPresentTask.valid()
-            && (!laggedAsyncLightingSchedule || m_deferredPresentSurfelGiCompletion.valid())
+            && m_deferredSurfelGiTask.valid()
+            && surfelGiSubmissionToken.valid()
             && deferredCompositeSubmissionToken.valid()
             && deferredPresentPacket.valid()
             && deferredPresentSubmitter.submitPacket(
@@ -2145,8 +2118,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
                 deferredPresentPacket,
-                presentCompletionTokens,
-                presentCompletionCount,
+                nullptr,
+                0u,
                 m_deferredLightingSubmissionTransaction,
                 presentScratchArena,
                 &deferredPresentTimingTicket
@@ -2184,6 +2157,90 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return true;
     };
 
+    const auto submitDeferredSurfelGi = [&]() -> bool {
+        const Core::QueueSubmissionToken& effectsSubmissionToken = hardwareShadowSupported
+            ? shadowVisibilitySubmissionToken
+            : softwareCausticsSubmissionToken
+        ;
+        const Core::GpuTaskGraphExternalCompletionToken effectsCompletionToken{
+            .completion = m_deferredSurfelGiEffectsCompletion,
+            .token = effectsSubmissionToken,
+        };
+        Core::Alloc::ScratchArena surfelGiScratchArena(RendererArenaScope::s_TaskGraphArena);
+        const Core::GpuTaskGraphSubmitter surfelGiSubmitter(device);
+        const bool surfelGiAccepted =
+            m_deferredLightingTaskGraphValid
+            && m_deferredSurfelGiTask.valid()
+            && m_deferredSurfelGiEffectsCompletion.valid()
+            && effectsSubmissionToken.valid()
+            && surfelGiPacket.valid()
+            && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
+            && surfelGiSubmitter.submitPacket(
+                m_deferredLightingTaskGraph,
+                m_deferredLightingCompiledGraph,
+                m_deferredLightingRecordedGraph,
+                surfelGiPacket,
+                &effectsCompletionToken,
+                1u,
+                m_deferredLightingSubmissionTransaction,
+                surfelGiScratchArena,
+                &surfelGiTimingTicket
+            )
+        ;
+        surfelGiSubmissionToken = m_deferredLightingSubmissionTransaction.packetToken(surfelGiPacket);
+        if(!surfelGiAccepted || !surfelGiSubmissionToken.valid()){
+            discardUnacceptedGraphPackets();
+            discardTimingTickets();
+            restoreUnacceptedShadowEffectsCpuState();
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred surfel-GI packet was rejected"));
+            if(!recoverPendingFrameSubmission())
+                failFrameRenderRecovery();
+            return false;
+        }
+        if(!m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
+            *surfelGiFinalStateSeed,
+            deferredTargets.surfelIrradiance.get()
+        )){
+            discardUnacceptedGraphPackets();
+            discardTimingTickets();
+            if(!recoverPendingFrameSubmission())
+                failFrameRenderRecovery();
+            // An accepted graph producer without a retained state cannot safely feed a later frame.
+            failFrameRenderRecovery();
+            return false;
+        }
+        if(surfelGiRunsOnCompute){
+            Core::Texture* const surfelGiComputeScratchTextures[] = {
+                deferredTargets.surfelIrradianceHalf.get(),
+            };
+            Core::Buffer* const surfelGiComputeScratchBuffers[] = {
+                m_rayTracingState.m_surfelPoolBuffer.get(),
+                m_rayTracingState.m_surfelCellHeadBuffer.get(),
+                m_rayTracingState.m_surfelCounterBuffer.get(),
+                m_rayTracingState.m_surfelTraceIndirectArgsBuffer.get(),
+                m_rayTracingState.m_surfelFreeListBuffer.get(),
+                m_rayTracingState.m_surfelPoolSnapshotBuffer.get(),
+                m_rayTracingState.m_surfelCellHeadSnapshotBuffer.get(),
+                m_rayTracingState.m_surfelCounterReadback.get(),
+            };
+            if(!m_surfelGiComputePersistentStateHandoff.buildResourceSubset(
+                *surfelGiFinalStateSeed,
+                surfelGiComputeScratchTextures,
+                LengthOf(surfelGiComputeScratchTextures),
+                surfelGiComputeScratchBuffers,
+                LengthOf(surfelGiComputeScratchBuffers)
+            )){
+                discardUnacceptedGraphPackets();
+                discardTimingTickets();
+                if(!recoverPendingFrameSubmission())
+                    failFrameRenderRecovery();
+                failFrameRenderRecovery();
+                return false;
+            }
+        }
+        return true;
+    };
+
     // The graph owns the prefix packet and publishes the completion consumed by every subsequent producer.
     {
         Core::Alloc::ScratchArena graphicsPrefixScratchArena(RendererArenaScope::s_TaskGraphArena);
@@ -2216,9 +2273,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return;
         }
         frameTimingTransaction.confirmBeginSubmission();
-        // The ordered shadow-effects graph consumes the accepted prefix token once. Software Caustics is optional,
-        // and Surfel GI is the compiled successor of the selected effects producer rather than a renderer-submitted
-        // external completion.
+        // The ordered shadow-effects graph consumes the accepted prefix token once. Surfel GI is now the first
+        // deferred packet, externally gated by this graph's selected terminal producer.
         {
             const Core::GpuTaskGraphExternalCompletionToken prefixCompletionToken{
                 .completion = m_shadowVisibilityPrefixCompletion,
@@ -2229,10 +2285,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     .packet = shadowVisibilityPacket,
                     .timingTicket = &shadowVisibilityTimingTicket,
                 },
-                Core::GpuTaskGraphPacketTimingTicket{
-                    .packet = surfelGiPacket,
-                    .timingTicket = &surfelGiTimingTicket,
-                },
             };
             const Core::GpuTaskGraphPacketTimingTicket softwareShadowEffectsTimingTickets[] = {
                 Core::GpuTaskGraphPacketTimingTicket{
@@ -2242,10 +2294,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 Core::GpuTaskGraphPacketTimingTicket{
                     .packet = softwareCausticsPacket,
                     .timingTicket = &softwareCausticsTimingTicket,
-                },
-                Core::GpuTaskGraphPacketTimingTicket{
-                    .packet = surfelGiPacket,
-                    .timingTicket = &surfelGiTimingTicket,
                 },
             };
             const Core::GpuTaskGraphPacketTimingTicket* const shadowEffectsTimingTickets = hardwareShadowSupported
@@ -2261,21 +2309,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             const bool shadowEffectsAccepted =
                 m_shadowVisibilityTaskGraphValid
                 && m_shadowVisibilityTask.valid()
-                && m_surfelGiTask.valid()
                 && m_shadowVisibilityPrefixCompletion.valid()
                 && shadowVisibilityPacket.valid()
-                && surfelGiPacket.valid()
                 && m_shadowVisibilityCompiledGraph.packetCount() == shadowEffectsTimingTicketCount
                 && m_shadowVisibilityCompiledGraph.packetIdAt(0u) == shadowVisibilityPacket
-                && (hardwareShadowSupported
-                    ? m_shadowVisibilityCompiledGraph.packetIdAt(1u) == surfelGiPacket
-                    : (
+                && (hardwareShadowSupported || (
                         m_softwareCausticsTask.valid()
                         && softwareCausticsPacket.valid()
                         && m_shadowVisibilityCompiledGraph.packetIdAt(1u) == softwareCausticsPacket
-                        && m_shadowVisibilityCompiledGraph.packetIdAt(2u) == surfelGiPacket
-                    )
-                )
+                ))
                 && shadowEffectsSubmitter.submitPacketsInCompileOrder(
                     m_shadowVisibilityTaskGraph,
                     m_shadowVisibilityCompiledGraph,
@@ -2290,7 +2332,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ;
             shadowVisibilitySubmissionToken = m_shadowVisibilitySubmissionTransaction.packetToken(shadowVisibilityPacket);
             softwareCausticsSubmissionToken = m_shadowVisibilitySubmissionTransaction.packetToken(softwareCausticsPacket);
-            surfelGiSubmissionToken = m_shadowVisibilitySubmissionTransaction.packetToken(surfelGiPacket);
             if(!shadowVisibilitySubmissionToken.valid()){
                 discardUnacceptedGraphPackets();
                 discardTimingTickets();
@@ -2368,7 +2409,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             if(
                 !shadowEffectsAccepted
                 || (!hardwareShadowSupported && !softwareCausticsSubmissionToken.valid())
-                || !surfelGiSubmissionToken.valid()
             ){
                 discardUnacceptedGraphPackets();
                 discardTimingTickets();
@@ -2378,48 +2418,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     failFrameRenderRecovery();
                 return;
             }
-            if(!m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
-                *surfelGiFinalStateSeed,
-                deferredTargets.surfelIrradiance.get()
-            )){
-                discardUnacceptedGraphPackets();
-                discardTimingTickets();
-                if(!recoverPendingFrameSubmission())
-                    failFrameRenderRecovery();
-                // An accepted graph producer without a retained state cannot safely feed a later frame.
-                failFrameRenderRecovery();
+            if(!submitDeferredSurfelGi())
                 return;
-            }
-
-            if(surfelGiRunsOnCompute){
-                Core::Texture* const surfelGiComputeScratchTextures[] = {
-                    deferredTargets.surfelIrradianceHalf.get(),
-                };
-                Core::Buffer* const surfelGiComputeScratchBuffers[] = {
-                    m_rayTracingState.m_surfelPoolBuffer.get(),
-                    m_rayTracingState.m_surfelCellHeadBuffer.get(),
-                    m_rayTracingState.m_surfelCounterBuffer.get(),
-                    m_rayTracingState.m_surfelTraceIndirectArgsBuffer.get(),
-                    m_rayTracingState.m_surfelFreeListBuffer.get(),
-                    m_rayTracingState.m_surfelPoolSnapshotBuffer.get(),
-                    m_rayTracingState.m_surfelCellHeadSnapshotBuffer.get(),
-                    m_rayTracingState.m_surfelCounterReadback.get(),
-                };
-                if(!m_surfelGiComputePersistentStateHandoff.buildResourceSubset(
-                    *surfelGiFinalStateSeed,
-                    surfelGiComputeScratchTextures,
-                    LengthOf(surfelGiComputeScratchTextures),
-                    surfelGiComputeScratchBuffers,
-                    LengthOf(surfelGiComputeScratchBuffers)
-                )){
-                    discardUnacceptedGraphPackets();
-                    discardTimingTickets();
-                    if(!recoverPendingFrameSubmission())
-                        failFrameRenderRecovery();
-                    failFrameRenderRecovery();
-                    return;
-                }
-            }
             if(hardwareShadowSupported){
                 Core::GpuTaskGraphExternalCompletionToken hardwareCausticsCompletionTokens[2] = {
                     Core::GpuTaskGraphExternalCompletionToken{

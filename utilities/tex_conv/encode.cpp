@@ -429,41 +429,39 @@ static void ResetPayload(
     const bool srgb
 ){
     const u32 count = static_cast<u32>(planes.size());
-    u32 alpha = 0u;
     if(!srgb){
-        u32 red = 0u;
-        u32 green = 0u;
-        u32 blue = 0u;
+        SIMDVector channelSums = VectorZero();
         for(const basisu::image& plane : planes){
             const basisu::color_rgba& color = plane(x, y);
-            red += color.r;
-            green += color.g;
-            blue += color.b;
-            alpha += color.a;
+            channelSums = VectorAddInt(channelSums, VectorSetInt(color.r, color.g, color.b, color.a));
         }
+        const u32 rounding = count / 2u;
         return basisu::color_rgba(
-            static_cast<int>((red + count / 2u) / count),
-            static_cast<int>((green + count / 2u) / count),
-            static_cast<int>((blue + count / 2u) / count),
-            static_cast<int>((alpha + count / 2u) / count)
+            static_cast<int>((VectorGetIntX(channelSums) + rounding) / count),
+            static_cast<int>((VectorGetIntY(channelSums) + rounding) / count),
+            static_cast<int>((VectorGetIntZ(channelSums) + rounding) / count),
+            static_cast<int>((VectorGetIntW(channelSums) + rounding) / count)
         );
     }
 
-    float red = 0.0f;
-    float green = 0.0f;
-    float blue = 0.0f;
+    SIMDVector linearRgbSum = VectorZero();
+    u32 alphaSum = 0u;
     for(const basisu::image& plane : planes){
         const basisu::color_rgba& color = plane(x, y);
-        red += basisu::srgb_to_linear(static_cast<float>(color.r) / s_BasisColorChannelMax);
-        green += basisu::srgb_to_linear(static_cast<float>(color.g) / s_BasisColorChannelMax);
-        blue += basisu::srgb_to_linear(static_cast<float>(color.b) / s_BasisColorChannelMax);
-        alpha += color.a;
+        linearRgbSum = VectorAdd(linearRgbSum, VectorSet(
+            basisu::srgb_to_linear(static_cast<f32>(color.r) / s_BasisColorChannelMax),
+            basisu::srgb_to_linear(static_cast<f32>(color.g) / s_BasisColorChannelMax),
+            basisu::srgb_to_linear(static_cast<f32>(color.b) / s_BasisColorChannelMax),
+            0.0f
+        ));
+        alphaSum += color.a;
     }
+    const f32 floatCount = static_cast<f32>(count);
     return basisu::color_rgba(
-        static_cast<int>(basisu::linear_to_srgb(red / count) * s_BasisColorChannelMax + s_BasisColorChannelRoundingBias),
-        static_cast<int>(basisu::linear_to_srgb(green / count) * s_BasisColorChannelMax + s_BasisColorChannelRoundingBias),
-        static_cast<int>(basisu::linear_to_srgb(blue / count) * s_BasisColorChannelMax + s_BasisColorChannelRoundingBias),
-        static_cast<int>((alpha + count / 2u) / count)
+        static_cast<int>(basisu::linear_to_srgb(VectorGetX(linearRgbSum) / floatCount) * s_BasisColorChannelMax + s_BasisColorChannelRoundingBias),
+        static_cast<int>(basisu::linear_to_srgb(VectorGetY(linearRgbSum) / floatCount) * s_BasisColorChannelMax + s_BasisColorChannelRoundingBias),
+        static_cast<int>(basisu::linear_to_srgb(VectorGetZ(linearRgbSum) / floatCount) * s_BasisColorChannelMax + s_BasisColorChannelRoundingBias),
+        static_cast<int>((alphaSum + count / 2u) / count)
     );
 }
 
@@ -654,12 +652,14 @@ static void ResetPayload(
         for(u32 y = 0u; y < height; ++y){
             for(u32 x = 0u; x < width; ++x){
                 const basisu::vec4F& color = plane(x, y);
-                for(u32 channel = 0u; channel < 3u; ++channel){
-                    const f32 value = color[channel];
-                    if(!IsFinite(value) || value < 0.0f || value > s_UastcHdrMaximum){
-                        NWB_LOGGER_WARNING(NWB_TEXT("tex_conv: HDR RGB input must contain finite values in [0, 65216]."));
-                        return false;
-                    }
+                const SIMDVector rgb = VectorSet(color[0u], color[1u], color[2u], 0.0f);
+                if(
+                    !Vector3IsFinite(rgb)
+                    || !Vector3GreaterOrEqual(rgb, VectorZero())
+                    || !Vector3LessOrEqual(rgb, VectorReplicate(s_UastcHdrMaximum))
+                ){
+                    NWB_LOGGER_WARNING(NWB_TEXT("tex_conv: HDR RGB input must contain finite values in [0, 65216]."));
+                    return false;
                 }
             }
         }

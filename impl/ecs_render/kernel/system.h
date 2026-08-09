@@ -170,16 +170,6 @@ private:
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         const DeferredFrameTargets& deferredTargets
     );
-    void buildDeferredPresentTaskGraph(
-        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
-        DeferredFrameTargets& deferredTargets,
-        Core::Framebuffer* presentationFramebuffer,
-        bool waitsForSurfelGi,
-        bool shadowVisibilityRunsOnCompute,
-        Core::GpuTimingFrameTransaction& frameTimingTransaction,
-        Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
-        Core::GpuTimingSubmissionTicket& timingTicket
-    );
     void buildShadowVisibilityTaskGraph(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         DeferredFrameTargets& deferredTargets,
@@ -220,10 +210,15 @@ private:
         bool clearAvboitTargets,
         bool hasTransparentRenderers,
         bool shadowVisibilityPrepared,
+        Core::Framebuffer* presentationFramebuffer,
+        bool shadowVisibilityRunsOnCompute,
+        Core::GpuTimingFrameTransaction& frameTimingTransaction,
+        Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
         Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
         Core::GpuTimingSubmissionTicket& hardwareCausticsTimingTicket,
         Core::GpuTimingSubmissionTicket& lightingTimingTicket,
-        Core::GpuTimingSubmissionTicket& compositeTimingTicket
+        Core::GpuTimingSubmissionTicket& compositeTimingTicket,
+        Core::GpuTimingSubmissionTicket& presentTimingTicket
     );
     void reportLaggedLightingTransition(LaggedLightingReport report, u64 targetGeneration);
     [[nodiscard]] Core::Alloc::GlobalArena& arena()noexcept{ return m_arena; }
@@ -300,18 +295,6 @@ private:
     Core::GpuTaskId m_laggedLightingHistoryTask;
     Core::GpuExternalCompletionId m_laggedLightingPresentationCompletion;
     bool m_laggedLightingHistoryTaskGraphValid = false;
-    // Presentation is a Graphics graph task that imports the accepted composite result and, for active lagged
-    // lighting, the surfel producer that must remain alive through presentation.
-    Core::GpuTaskGraph m_deferredPresentTaskGraph;
-    Core::GpuTaskGraphAnalysis m_deferredPresentTaskGraphAnalysis;
-    Core::GpuTaskGraphQueueAssignments m_deferredPresentTaskGraphQueueAssignments;
-    Core::GpuCompiledGraph m_deferredPresentCompiledGraph;
-    Core::GpuRecordedGraph m_deferredPresentRecordedGraph;
-    Core::GpuGraphSubmissionTransaction m_deferredPresentSubmissionTransaction;
-    Core::GpuTaskId m_deferredPresentTask;
-    Core::GpuExternalCompletionId m_deferredPresentCompositeCompletion;
-    Core::GpuExternalCompletionId m_deferredPresentSurfelGiCompletion;
-    bool m_deferredPresentTaskGraphValid = false;
     // Shadow visibility owns the ordered effects graph. Software Caustics is present only on the software route;
     // Surfel GI follows the selected shadow-effects producer on both routes. Their ordering, state seeds, and
     // submission tokens are graph-internal rather than renderer completion ladders.
@@ -341,7 +324,8 @@ private:
     Core::GpuTaskId m_avboitAccumulationTask;
     Core::GpuExternalCompletionId m_avboitPrefixCompletion;
     bool m_avboitTaskGraphValid = false;
-    // Active-lagged AVBOIT Pre, Hardware Caustics, Deferred Lighting, and Composite share one packet graph.
+    // Hardware Caustics, Deferred Lighting, Composite, and Present share one packet graph. Active-lagged AVBOIT
+    // Pre joins the same graph while the live route retains its split AVBOIT producer graph.
     // Hardware and AVBOIT remain staged Graphics producers; live Lighting consumes Hardware through an internal
     // edge, while lagged Lighting reads history and can run independently on the dedicated Compute lane.
     Core::GpuTaskGraph m_deferredLightingTaskGraph;
@@ -354,11 +338,13 @@ private:
     Core::GpuTaskId m_deferredAvboitPreTask;
     Core::GpuTaskId m_deferredLightingTask;
     Core::GpuTaskId m_deferredCompositeTask;
+    Core::GpuTaskId m_deferredPresentTask;
     Core::GpuExternalCompletionId m_deferredHardwareCausticsPrefixCompletion;
     Core::GpuExternalCompletionId m_deferredLightingPrefixCompletion;
     Core::GpuExternalCompletionId m_deferredAvboitCompletion;
     Core::GpuExternalCompletionId m_deferredLightingSurfelGiCompletion;
     Core::GpuExternalCompletionId m_deferredLightingHistoryCompletion;
+    Core::GpuExternalCompletionId m_deferredPresentSurfelGiCompletion;
     bool m_deferredLightingTaskGraphValid = false;
 
 private:

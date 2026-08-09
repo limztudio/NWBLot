@@ -320,7 +320,8 @@ void RendererSystem::invalidateResources(){
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredHardwareCausticsPrefixCompletion = {};
-    m_deferredLightingAvboitCompletion = {};
+    m_deferredLightingPrefixCompletion = {};
+    m_deferredAvboitCompletion = {};
     m_deferredLightingSurfelGiCompletion = {};
     m_deferredLightingHistoryCompletion = {};
     m_deferredLightingTaskGraph.reset();
@@ -681,7 +682,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredHardwareCausticsPrefixCompletion = {};
-    m_deferredLightingAvboitCompletion = {};
+    m_deferredLightingPrefixCompletion = {};
+    m_deferredAvboitCompletion = {};
     m_deferredLightingSurfelGiCompletion = {};
     m_deferredLightingHistoryCompletion = {};
     m_deferredLightingTaskGraph.reset();
@@ -1104,6 +1106,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? m_deferredLightingHistoryCompletion
         : m_deferredLightingSurfelGiCompletion
     ;
+    const Core::GpuExternalCompletionId deferredLightingPrimaryCompletion = laggedAsyncLightingSchedule
+        ? m_deferredLightingPrefixCompletion
+        : m_deferredAvboitCompletion
+    ;
     const usize deferredPacketCount = hardwareShadowSupported ? 3u : 2u;
     if(
         !m_deferredLightingTaskGraphValid
@@ -1116,7 +1122,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ))
         || !m_deferredLightingTask.valid()
         || !m_deferredCompositeTask.valid()
-        || !m_deferredLightingAvboitCompletion.valid()
+        || !m_deferredAvboitCompletion.valid()
+        || !deferredLightingPrimaryCompletion.valid()
         || !deferredLightingDependentCompletion.valid()
         || !deferredLightingPacket.valid()
         || !deferredCompositePacket.valid()
@@ -1126,7 +1133,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || (hardwareShadowSupported && m_deferredLightingCompiledGraph.packetIdAt(0u) != hardwareCausticsPacket)
         || m_deferredLightingCompiledGraph.packetIdAt(hardwareShadowSupported ? 1u : 0u) != deferredLightingPacket
         || m_deferredLightingCompiledGraph.packetIdAt(hardwareShadowSupported ? 2u : 1u) != deferredCompositePacket
-        || (laggedAsyncLightingSchedule && deferredLightingQueue->queueClass != Core::CommandQueue::Graphics)
+        || (laggedAsyncLightingSchedule && deferredLightingQueue->queueClass != Core::CommandQueue::Compute)
+        || (laggedAsyncLightingSchedule && deferredCompositeQueue->queueClass != Core::CommandQueue::Graphics)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred lighting/composite was unavailable"));
         deferredCompositeTimingTicket.discard();
@@ -1604,8 +1612,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // Lighting imports live effects only on the default path; lagged mode uses accepted history.  Each source is
-    // filtered by the lighting task declaration, so the graph owns the formerly hand-written state fan-in.
+    // Lighting imports live effects plus AVBOIT only on the default path. Active lagged lighting reads accepted
+    // history and its direct prefix source, leaving AVBOIT state for Composite so the Compute packet can overlap it.
     Core::GpuExternalPacketStateSource deferredLightingStateSources[5] = {};
     usize deferredLightingStateSourceCount = 0u;
     bool deferredLightingStateSourcesReady = appendDeclaredStateSource(
@@ -1640,16 +1648,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 deferredLightingStateSourceCount,
                 surfelGiFinalStateSeed
             )
+            && appendDeclaredStateSource(
+                deferredLightingStateSources,
+                LengthOf(deferredLightingStateSources),
+                deferredLightingStateSourceCount,
+                avboitFinalStateSeed
+            )
         ;
     }
-    deferredLightingStateSourcesReady = deferredLightingStateSourcesReady
-        && appendDeclaredStateSource(
-            deferredLightingStateSources,
-            LengthOf(deferredLightingStateSources),
-            deferredLightingStateSourceCount,
-            avboitFinalStateSeed
-        )
-    ;
 
     // Hardware Caustics joins Lighting and Composite in one graph. Hardware starts from the prefix state; on the
     // live route its current irradiance state feeds Lighting internally, while Composite keeps its AVBOIT/prefix
@@ -1731,7 +1737,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ))
         && m_deferredLightingTask.valid()
         && m_deferredCompositeTask.valid()
-        && m_deferredLightingAvboitCompletion.valid()
+        && m_deferredAvboitCompletion.valid()
+        && deferredLightingPrimaryCompletion.valid()
         && deferredLightingDependentCompletion.valid()
         && deferredLightingPacket.valid()
         && deferredCompositePacket.valid()
@@ -2075,13 +2082,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return false;
         }
 
-        // Hardware Caustics has already accepted from this shared transaction before AVBOIT. Lighting now imports
-        // AVBOIT plus its selected effects producer, while the Hardware-to-Lighting and Lighting-to-Composite waits
-        // resolve from graph-internal packet tokens.
+        // Hardware Caustics has already accepted from this shared transaction before AVBOIT. Active lagged Lighting
+        // waits directly on the prefix/history pair; Composite alone joins AVBOIT with Lighting's internal token.
         const Core::GpuTaskGraphExternalCompletionToken deferredLightingCompletionTokens[] = {
             Core::GpuTaskGraphExternalCompletionToken{
-                .completion = m_deferredLightingAvboitCompletion,
-                .token = avboitFinalSubmissionToken,
+                .completion = deferredLightingPrimaryCompletion,
+                .token = laggedAsyncLightingSchedule
+                    ? prefixSubmissionToken
+                    : avboitFinalSubmissionToken,
             },
             Core::GpuTaskGraphExternalCompletionToken{
                 .completion = deferredLightingDependentCompletion,
@@ -2100,7 +2108,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             ))
             && m_deferredLightingTask.valid()
             && m_deferredCompositeTask.valid()
-            && m_deferredLightingAvboitCompletion.valid()
+            && m_deferredAvboitCompletion.valid()
+            && deferredLightingPrimaryCompletion.valid()
             && deferredLightingDependentCompletion.valid()
             && deferredLightingPacket.valid()
             && deferredCompositePacket.valid()
@@ -2152,6 +2161,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 );
             }
         }
+        const Core::GpuTaskGraphExternalCompletionToken deferredCompositeCompletionTokens[] = {
+            Core::GpuTaskGraphExternalCompletionToken{
+                .completion = m_deferredAvboitCompletion,
+                .token = avboitFinalSubmissionToken,
+            },
+        };
+        const usize deferredCompositeCompletionCount = laggedAsyncLightingSchedule
+            ? LengthOf(deferredCompositeCompletionTokens)
+            : 0u
+        ;
         const bool deferredCompositeAccepted =
             deferredLightingAccepted
             && m_deferredCompositeTask.valid()
@@ -2161,8 +2180,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
                 deferredCompositePacket,
-                nullptr,
-                0u,
+                deferredCompositeCompletionCount > 0u ? deferredCompositeCompletionTokens : nullptr,
+                deferredCompositeCompletionCount,
                 m_deferredLightingSubmissionTransaction,
                 deferredScratchArena,
                 &deferredCompositeTimingTicket

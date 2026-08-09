@@ -2835,7 +2835,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
     m_deferredHardwareCausticsPrefixCompletion = {};
-    m_deferredLightingAvboitCompletion = {};
+    m_deferredLightingPrefixCompletion = {};
+    m_deferredAvboitCompletion = {};
     m_deferredLightingSurfelGiCompletion = {};
     m_deferredLightingHistoryCompletion = {};
     m_deferredLightingTaskGraph.reset();
@@ -2965,12 +2966,27 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .setIdentity(Name("render.deferred_lighting.avboit_complete"))
         .setMarkerLabel("AVBOIT Complete")
     ;
-    m_deferredLightingAvboitCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
+    m_deferredAvboitCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
         avboitCompletionDesc
     );
-    if(!m_deferredLightingAvboitCompletion.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import AVBOIT completion for deferred lighting"));
+    if(!m_deferredAvboitCompletion.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import AVBOIT completion for deferred graph"));
         return;
+    }
+
+    if(useLaggedLightingHistory){
+        Core::GpuExternalCompletionDesc lightingPrefixCompletionDesc;
+        lightingPrefixCompletionDesc
+            .setIdentity(Name("render.deferred_lighting.graphics_prefix_complete"))
+            .setMarkerLabel("Graphics Prefix Complete")
+        ;
+        m_deferredLightingPrefixCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
+            lightingPrefixCompletionDesc
+        );
+        if(!m_deferredLightingPrefixCompletion.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import graphics-prefix completion for lagged lighting"));
+            return;
+        }
     }
 
     Core::GpuExternalCompletionDesc dependentEffectsCompletionDesc;
@@ -3167,10 +3183,18 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         }
     }
 
-    const Core::GpuExternalCompletionId externalDependencies[] = {
-        m_deferredLightingAvboitCompletion,
+    const Core::GpuExternalCompletionId liveLightingExternalDependencies[] = {
+        m_deferredAvboitCompletion,
         dependentEffectsCompletion,
     };
+    const Core::GpuExternalCompletionId laggedLightingExternalDependencies[] = {
+        m_deferredLightingPrefixCompletion,
+        dependentEffectsCompletion,
+    };
+    const Core::GpuExternalCompletionId* const lightingExternalDependencies = useLaggedLightingHistory
+        ? laggedLightingExternalDependencies
+        : liveLightingExternalDependencies
+    ;
     const Core::GpuTaskId lightingDependencies[] = { m_deferredHardwareCausticsTask };
     const usize lightingDependencyCount = lightingDependsOnHardwareCaustics ? LengthOf(lightingDependencies) : 0u;
     // Active lagged lighting receives these shared read-only states directly from the accepted prefix source. This
@@ -3209,7 +3233,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     };
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
-    scheduling.avoidQueueCrossing = useLaggedLightingHistory;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
     Core::GpuTaskDesc desc;
@@ -3219,7 +3242,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .setQueue(ComputeQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(lightingDependencies, lightingDependencyCount)
-        .setExternalDependencies(externalDependencies, LengthOf(externalDependencies))
+        .setExternalDependencies(lightingExternalDependencies, LengthOf(liveLightingExternalDependencies))
         .setResourceUses(resourceUses, LengthOf(resourceUses))
     ;
     m_deferredLightingTask = m_deferredSystem.declareDeferredLightingTask(
@@ -3279,6 +3302,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     compositeScheduling.forceSubmissionBoundary = true;
     compositeScheduling.allowPacketMerge = false;
     const Core::GpuTaskId compositeDependencies[] = { m_deferredLightingTask };
+    const Core::GpuExternalCompletionId compositeExternalDependencies[] = { m_deferredAvboitCompletion };
+    const usize compositeExternalDependencyCount = useLaggedLightingHistory
+        ? LengthOf(compositeExternalDependencies)
+        : 0u
+    ;
     Core::GpuTaskDesc compositeDesc;
     compositeDesc
         .setIdentity(Name("render.deferred_composite"))
@@ -3286,6 +3314,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         .setQueue(ComputeQueueRequest())
         .setScheduling(compositeScheduling)
         .setDependencies(compositeDependencies, LengthOf(compositeDependencies))
+        .setExternalDependencies(compositeExternalDependencies, compositeExternalDependencyCount)
         .setResourceUses(compositeResourceUses, LengthOf(compositeResourceUses))
     ;
     m_deferredCompositeTask = m_deferredSystem.declareDeferredCompositeTask(

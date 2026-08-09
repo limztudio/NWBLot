@@ -349,7 +349,8 @@ private:
     Core::GpuTaskId m_deferredLightingTask;
     Core::GpuTaskId m_deferredCompositeTask;
     Core::GpuExternalCompletionId m_deferredHardwareCausticsPrefixCompletion;
-    Core::GpuExternalCompletionId m_deferredLightingAvboitCompletion;
+    Core::GpuExternalCompletionId m_deferredLightingPrefixCompletion;
+    Core::GpuExternalCompletionId m_deferredAvboitCompletion;
     Core::GpuExternalCompletionId m_deferredLightingSurfelGiCompletion;
     Core::GpuExternalCompletionId m_deferredLightingHistoryCompletion;
     bool m_deferredLightingTaskGraphValid = false;

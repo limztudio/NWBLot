@@ -1673,6 +1673,218 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
 }
 
 
+TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    const auto importTexture = [&](const Name& identity, const AStringView label, const Graphics::ResourceStates::Mask initialState){
+        Graphics::GpuGraphResourceDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setType(Graphics::GpuGraphResourceType::Texture)
+            .setInitialState(initialState)
+            .setQueueSharing(Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        ;
+        return graph.importResource(desc);
+    };
+    const Graphics::GpuGraphResourceId sharedPrefixRead = importTexture(
+        Name("tests/task_graph/lagged_shared_prefix_read"),
+        "Shared Prefix Read",
+        Graphics::ResourceStates::ShaderResource
+    );
+    const Graphics::GpuGraphResourceId historyIrradiance = importTexture(
+        Name("tests/task_graph/lagged_history_irradiance"),
+        "Lagged Irradiance",
+        Graphics::ResourceStates::ShaderResource
+    );
+    const Graphics::GpuGraphResourceId opaqueColor = importTexture(
+        Name("tests/task_graph/lagged_opaque_color"),
+        "Opaque Color",
+        Graphics::ResourceStates::Common
+    );
+    const Graphics::GpuGraphResourceId avboitAccumulation = importTexture(
+        Name("tests/task_graph/lagged_avboit_accumulation"),
+        "AVBOIT Accumulation",
+        Graphics::ResourceStates::ShaderResource
+    );
+    ASSERT_TRUE(sharedPrefixRead.valid());
+    ASSERT_TRUE(historyIrradiance.valid());
+    ASSERT_TRUE(opaqueColor.valid());
+    ASSERT_TRUE(avboitAccumulation.valid());
+
+    const Graphics::GpuExternalCompletionId prefixCompletion = graph.importExternalCompletion(
+        Graphics::GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/task_graph/lagged_prefix_complete"))
+            .setMarkerLabel("Graphics Prefix Complete")
+    );
+    const Graphics::GpuExternalCompletionId historyCompletion = graph.importExternalCompletion(
+        Graphics::GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/task_graph/lagged_history_complete"))
+            .setMarkerLabel("Lagged History Complete")
+    );
+    const Graphics::GpuExternalCompletionId avboitCompletion = graph.importExternalCompletion(
+        Graphics::GpuExternalCompletionDesc{}
+            .setIdentity(Name("tests/task_graph/lagged_avboit_complete"))
+            .setMarkerLabel("AVBOIT Complete")
+    );
+    ASSERT_TRUE(prefixCompletion.valid());
+    ASSERT_TRUE(historyCompletion.valid());
+    ASSERT_TRUE(avboitCompletion.valid());
+
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Graphics::GpuTaskCostHint::Large;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        true,
+        true,
+    };
+    const Graphics::GpuExternalCompletionId prefixAndHistory[] = {
+        prefixCompletion,
+        historyCompletion,
+    };
+    const Graphics::GpuTaskResourceUse hardwareUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = sharedPrefixRead,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskDesc hardwareDesc;
+    hardwareDesc
+        .setIdentity(Name("tests/task_graph/lagged_hardware_caustics"))
+        .setMarkerLabel("Hardware Caustics")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+        .setExternalDependencies(prefixAndHistory, LengthOf(prefixAndHistory))
+        .setResourceUses(hardwareUses, LengthOf(hardwareUses))
+    ;
+    const Graphics::GpuTaskId hardware = graph.addTask(hardwareDesc);
+    ASSERT_TRUE(hardware.valid());
+
+    const Graphics::GpuTaskResourceUse lightingUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = sharedPrefixRead,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+            .hasIndependentStateSource = true,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = historyIrradiance,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = opaqueColor,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc lightingDesc;
+    lightingDesc
+        .setIdentity(Name("tests/task_graph/lagged_deferred_lighting"))
+        .setMarkerLabel("Deferred Lighting")
+        .setQueue(computeRequest)
+        .setScheduling(scheduling)
+        .setExternalDependencies(prefixAndHistory, LengthOf(prefixAndHistory))
+        .setResourceUses(lightingUses, LengthOf(lightingUses))
+    ;
+    const Graphics::GpuTaskId lighting = graph.addTask(lightingDesc);
+    ASSERT_TRUE(lighting.valid());
+
+    const Graphics::GpuTaskResourceUse compositeUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = opaqueColor,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = avboitAccumulation,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskDesc compositeDesc;
+    compositeDesc
+        .setIdentity(Name("tests/task_graph/lagged_deferred_composite"))
+        .setMarkerLabel("Deferred Composite")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+        .setDependencies(&lighting, 1u)
+        .setExternalDependencies(&avboitCompletion, 1u)
+        .setResourceUses(compositeUses, LengthOf(compositeUses))
+    ;
+    const Graphics::GpuTaskId composite = graph.addTask(compositeDesc);
+    ASSERT_TRUE(composite.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuTaskQueueAssignment* const hardwareAssignment = assignments.find(hardware);
+    const Graphics::GpuTaskQueueAssignment* const lightingAssignment = assignments.find(lighting);
+    const Graphics::GpuTaskQueueAssignment* const compositeAssignment = assignments.find(composite);
+    ASSERT_NE(hardwareAssignment, nullptr);
+    ASSERT_NE(lightingAssignment, nullptr);
+    ASSERT_NE(compositeAssignment, nullptr);
+    EXPECT_EQ(hardwareAssignment->queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(lightingAssignment->queueClass, Graphics::CommandQueue::Compute);
+    EXPECT_EQ(lightingAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute);
+    EXPECT_EQ(compositeAssignment->queueClass, Graphics::CommandQueue::Graphics);
+
+    const Graphics::GpuSubmissionPacketId hardwarePacket = compiledGraph.packetForTask(hardware);
+    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
+    const Graphics::GpuSubmissionPacketId compositePacket = compiledGraph.packetForTask(composite);
+    ASSERT_TRUE(hardwarePacket.valid());
+    ASSERT_TRUE(lightingPacket.valid());
+    ASSERT_TRUE(compositePacket.valid());
+    const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting);
+    ASSERT_NE(compiledLighting, nullptr);
+    EXPECT_EQ(compiledLighting->prologueStateSeedCount, 0u);
+    EXPECT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 0u);
+    ASSERT_EQ(compiledGraph.packet(lightingPacket).externalDependencyCount, 2u);
+    const Graphics::GpuExternalCompletionId* const lightingExternalDependencies = compiledGraph.packetExternalDependencies(
+        lightingPacket
+    );
+    ASSERT_NE(lightingExternalDependencies, nullptr);
+    EXPECT_EQ(lightingExternalDependencies[0u], prefixCompletion);
+    EXPECT_EQ(lightingExternalDependencies[1u], historyCompletion);
+
+    ASSERT_EQ(compiledGraph.packet(compositePacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(compositePacket)[0u].producer, lightingPacket);
+    ASSERT_EQ(compiledGraph.packet(compositePacket).externalDependencyCount, 1u);
+    const Graphics::GpuExternalCompletionId* const compositeExternalDependencies = compiledGraph.packetExternalDependencies(
+        compositePacket
+    );
+    ASSERT_NE(compositeExternalDependencies, nullptr);
+    EXPECT_EQ(compositeExternalDependencies[0u], avboitCompletion);
+}
+
+
 TEST(GpuTaskGraph, PlansTextureStatesPerDeclaredSubresourceRange){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

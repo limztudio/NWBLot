@@ -139,11 +139,6 @@ RendererSystem::RendererSystem(
     , m_deferredPresentStateHandoff(arena)
     , m_laggedLightingHistoryCopyInputStateHandoff(arena)
     , m_laggedLightingHistoryCopyStateHandoff(arena)
-    , m_avboitPreStateHandoff(arena)
-    , m_avboitDepthWarpStateHandoff(arena)
-    , m_avboitExtinctionStateHandoff(arena)
-    , m_avboitIntegrationStateHandoff(arena)
-    , m_avboitAccumulationInputStateHandoff(arena)
     , m_avboitStateHandoff(arena)
     , m_shaderSystem(*this)
     , m_meshSystem(*this)
@@ -252,11 +247,6 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     m_deferredPresentInputStateHandoff.reset();
     m_deferredPresentStateHandoff.reset();
     resetLaggedLightingHistoryCopyStateHandoffs();
-    m_avboitPreStateHandoff.reset();
-    m_avboitDepthWarpStateHandoff.reset();
-    m_avboitExtinctionStateHandoff.reset();
-    m_avboitIntegrationStateHandoff.reset();
-    m_avboitAccumulationInputStateHandoff.reset();
     m_avboitStateHandoff.reset();
 }
 
@@ -306,11 +296,6 @@ void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
     m_deferredPresentInputStateHandoff.reset();
     m_deferredPresentStateHandoff.reset();
     resetLaggedLightingHistoryCopyStateHandoffs();
-    m_avboitPreStateHandoff.reset();
-    m_avboitDepthWarpStateHandoff.reset();
-    m_avboitExtinctionStateHandoff.reset();
-    m_avboitIntegrationStateHandoff.reset();
-    m_avboitAccumulationInputStateHandoff.reset();
     m_avboitStateHandoff.reset();
 }
 
@@ -346,11 +331,6 @@ void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
     m_deferredPresentInputStateHandoff.reset();
     m_deferredPresentStateHandoff.reset();
     resetLaggedLightingHistoryCopyStateHandoffs();
-    m_avboitPreStateHandoff.reset();
-    m_avboitDepthWarpStateHandoff.reset();
-    m_avboitExtinctionStateHandoff.reset();
-    m_avboitIntegrationStateHandoff.reset();
-    m_avboitAccumulationInputStateHandoff.reset();
     m_avboitStateHandoff.reset();
 }
 
@@ -381,11 +361,6 @@ void RendererSystem::resetRejectedShadowVisibilityStateHandoffs()noexcept{
     m_deferredPresentBaseStateHandoff.reset();
     m_deferredPresentInputStateHandoff.reset();
     m_deferredPresentStateHandoff.reset();
-    m_avboitPreStateHandoff.reset();
-    m_avboitDepthWarpStateHandoff.reset();
-    m_avboitExtinctionStateHandoff.reset();
-    m_avboitIntegrationStateHandoff.reset();
-    m_avboitAccumulationInputStateHandoff.reset();
     m_avboitStateHandoff.reset();
 }
 
@@ -2255,7 +2230,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuNativePacketRecordDesc avboitPreRecordDesc{
         .packet = avboitPrePacket,
         .initialStates = &m_postGbufferNormalizedStateHandoff,
-        .finalStates = avboitUsesAsyncCompute ? &m_avboitPreStateHandoff : &m_avboitStateHandoff,
+        .finalStates = avboitUsesAsyncCompute ? nullptr : &m_avboitStateHandoff,
     };
     const bool avboitPreRecorded =
         m_avboitTaskGraphValid
@@ -2268,7 +2243,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             avboitPreRecordDesc,
             m_avboitRecordedGraph
         )
-        && (avboitUsesAsyncCompute ? m_avboitPreStateHandoff.valid() : m_avboitStateHandoff.valid())
+        && (!avboitUsesAsyncCompute || m_avboitStateHandoff.valid())
     ;
     if(!avboitPreRecorded){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned AVBOIT pre packet"));
@@ -2279,7 +2254,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(avboitUsesAsyncCompute){
         const Core::GpuNativePacketRecordDesc avboitDepthWarpRecordDesc{
             .packet = avboitDepthWarpPacket,
-            .finalStates = &m_avboitDepthWarpStateHandoff,
             .useCompiledStateSeeds = true,
             .applyCompiledBarriers = true,
         };
@@ -2291,7 +2265,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 avboitDepthWarpRecordDesc,
                 m_avboitRecordedGraph
             )
-            && m_avboitDepthWarpStateHandoff.valid()
         ;
         if(!avboitDepthWarpRecorded){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned AVBOIT depth warp"));
@@ -2301,7 +2274,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
         const Core::GpuNativePacketRecordDesc avboitExtinctionRecordDesc{
             .packet = avboitExtinctionPacket,
-            .finalStates = &m_avboitExtinctionStateHandoff,
             .useCompiledStateSeeds = true,
             .applyCompiledBarriers = true,
         };
@@ -2313,7 +2285,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 avboitExtinctionRecordDesc,
                 m_avboitRecordedGraph
             )
-            && m_avboitExtinctionStateHandoff.valid()
         ;
         if(!avboitExtinctionRecorded){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned AVBOIT extinction"));
@@ -2323,7 +2294,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
         const Core::GpuNativePacketRecordDesc avboitIntegrationRecordDesc{
             .packet = avboitIntegrationPacket,
-            .finalStates = &m_avboitIntegrationStateHandoff,
             .useCompiledStateSeeds = true,
             .applyCompiledBarriers = true,
         };
@@ -2335,7 +2305,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 avboitIntegrationRecordDesc,
                 m_avboitRecordedGraph
             )
-            && m_avboitIntegrationStateHandoff.valid()
         ;
         if(!avboitIntegrationRecorded){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned AVBOIT integration"));
@@ -2343,22 +2312,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return;
         }
 
-        const Core::CommandListResourceStateHandoff* avboitAccumulationBranches[] = {
-            &m_avboitIntegrationStateHandoff,
-        };
-        if(!m_avboitAccumulationInputStateHandoff.buildFanIn(
-            m_avboitExtinctionStateHandoff,
-            avboitAccumulationBranches,
-            LengthOf(avboitAccumulationBranches)
-        )){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT accumulation state fan-in failed"));
-            discardRenderPackets();
-            return;
-        }
         const Core::GpuNativePacketRecordDesc avboitAccumulationRecordDesc{
             .packet = avboitAccumulationPacket,
-            .initialStates = &m_avboitAccumulationInputStateHandoff,
             .finalStates = &m_avboitStateHandoff,
+            .useCompiledStateSeeds = true,
+            .applyCompiledBarriers = true,
         };
         const bool avboitAccumulationRecorded =
             avboitAccumulationPacket.valid()

@@ -391,16 +391,8 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
 
-    // All accumulation variants sample the integrated Texture3D and both work buffers through the heap, so transition
-    // them explicitly.
-    commandList.setTextureState(
-        avboitTargets.transmittanceTexture.get(),
-        ECSRenderDetail::s_FramebufferSubresources,
-        Core::ResourceStates::ShaderResource
-    );
-    commandList.setBufferState(avboitTargets.depthWarpBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(avboitTargets.controlBuffer.get(), Core::ResourceStates::ShaderResource);
-    commandList.commitBarriers();
+    // The graph records the integrated volume and work-buffer reads as packet-boundary state; this thunk owns only
+    // the native raster pass and its explicit final cross-graph transition below.
 
     m_renderer.materialSystem().renderMaterialPass(
         commandList,

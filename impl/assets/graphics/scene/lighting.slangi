@@ -22,8 +22,9 @@
 #define NWB_CAUSTIC_DEBUG_FORCE_GREY 0
 #endif
 
-// Shader-only default scene-light response. Keep these tunables here rather than in binding_slots.h: the latter is
-// included by C++ as well, while these values intentionally use Slang half/half3 expressions.
+// Engine-owned scene-light transport limits. Keep these tunables here rather than in binding_slots.h: the latter is
+// included by C++ as well, while these values intentionally use Slang half/half3 expressions. Project BXDFs own
+// BRDF and tone-map policy.
 #ifndef NWB_SCENE_CAUSTIC_DEBUG_IRRADIANCE
 #define NWB_SCENE_CAUSTIC_DEBUG_IRRADIANCE half3(0.15h, 0.15h, 0.15h)
 #endif
@@ -36,81 +37,6 @@
 #endif
 #ifndef NWB_SCENE_LIGHT_RANGE_MIN
 #define NWB_SCENE_LIGHT_RANGE_MIN 0.0001
-#endif
-
-#ifndef NWB_SCENE_LIGHT_RIM_EXPONENT
-#define NWB_SCENE_LIGHT_RIM_EXPONENT 3.0
-#endif
-#ifndef NWB_SCENE_LIGHT_SPECULAR_PRIMARY_EXPONENT
-#define NWB_SCENE_LIGHT_SPECULAR_PRIMARY_EXPONENT 72.0
-#endif
-#ifndef NWB_SCENE_LIGHT_SPECULAR_PRIMARY_WEIGHT
-#define NWB_SCENE_LIGHT_SPECULAR_PRIMARY_WEIGHT 0.85
-#endif
-#ifndef NWB_SCENE_LIGHT_SPECULAR_SECONDARY_EXPONENT
-#define NWB_SCENE_LIGHT_SPECULAR_SECONDARY_EXPONENT 18.0
-#endif
-#ifndef NWB_SCENE_LIGHT_SPECULAR_SECONDARY_WEIGHT
-#define NWB_SCENE_LIGHT_SPECULAR_SECONDARY_WEIGHT 0.18
-#endif
-#ifndef NWB_SCENE_LIGHT_VIEW_SPECULAR_EXPONENT
-#define NWB_SCENE_LIGHT_VIEW_SPECULAR_EXPONENT 22.0
-#endif
-#ifndef NWB_SCENE_LIGHT_VIEW_SPECULAR_WEIGHT
-#define NWB_SCENE_LIGHT_VIEW_SPECULAR_WEIGHT 0.28
-#endif
-#ifndef NWB_SCENE_LIGHT_FRAME_LOBE_EXPONENT
-#define NWB_SCENE_LIGHT_FRAME_LOBE_EXPONENT 18.0
-#endif
-
-#ifndef NWB_SCENE_LIGHT_SPECULAR_TINT_NEUTRAL
-#define NWB_SCENE_LIGHT_SPECULAR_TINT_NEUTRAL half3(0.78h)
-#endif
-#ifndef NWB_SCENE_LIGHT_SPECULAR_TINT_WARM
-#define NWB_SCENE_LIGHT_SPECULAR_TINT_WARM half3(1.0h, 0.9h, 0.68h)
-#endif
-#ifndef NWB_SCENE_LIGHT_SPECULAR_TINT_WARM_BLEND
-#define NWB_SCENE_LIGHT_SPECULAR_TINT_WARM_BLEND 0.65
-#endif
-#ifndef NWB_SCENE_LIGHT_DIFFUSE_FLOOR
-#define NWB_SCENE_LIGHT_DIFFUSE_FLOOR 0.02
-#endif
-#ifndef NWB_SCENE_LIGHT_DIFFUSE_KEY_WEIGHT
-#define NWB_SCENE_LIGHT_DIFFUSE_KEY_WEIGHT 0.98
-#endif
-#ifndef NWB_SCENE_LIGHT_SPECULAR_NDOTL_FLOOR
-#define NWB_SCENE_LIGHT_SPECULAR_NDOTL_FLOOR 0.08
-#endif
-#ifndef NWB_SCENE_LIGHT_SPECULAR_NDOTL_WEIGHT
-#define NWB_SCENE_LIGHT_SPECULAR_NDOTL_WEIGHT 0.92
-#endif
-#ifndef NWB_SCENE_LIGHT_RIM_TINT
-#define NWB_SCENE_LIGHT_RIM_TINT half3(0.12h, 0.26h, 0.52h)
-#endif
-#ifndef NWB_SCENE_LIGHT_RIM_RADIANCE_BLEND
-#define NWB_SCENE_LIGHT_RIM_RADIANCE_BLEND 0.25
-#endif
-#ifndef NWB_SCENE_LIGHT_RIM_NDOTL_FLOOR
-#define NWB_SCENE_LIGHT_RIM_NDOTL_FLOOR 0.04
-#endif
-#ifndef NWB_SCENE_LIGHT_RIM_NDOTL_WEIGHT
-#define NWB_SCENE_LIGHT_RIM_NDOTL_WEIGHT 0.96
-#endif
-#ifndef NWB_SCENE_LIGHT_FRAME_CUE_WEIGHT
-#define NWB_SCENE_LIGHT_FRAME_CUE_WEIGHT 0.16
-#endif
-#ifndef NWB_SCENE_LIGHT_FRAME_CUE_TANGENT_TINT
-#define NWB_SCENE_LIGHT_FRAME_CUE_TANGENT_TINT half3(1.0h, 0.35h, 0.2h)
-#endif
-#ifndef NWB_SCENE_LIGHT_FRAME_CUE_BITANGENT_TINT
-#define NWB_SCENE_LIGHT_FRAME_CUE_BITANGENT_TINT half3(0.2h, 0.7h, 1.0h)
-#endif
-#ifndef NWB_SCENE_LIGHT_BACKLIGHT_TINT
-#define NWB_SCENE_LIGHT_BACKLIGHT_TINT half3(0.012h, 0.02h, 0.04h)
-#endif
-
-#ifndef NWB_SCENE_TONEMAP_KNEE
-#define NWB_SCENE_TONEMAP_KNEE 0.65h
 #endif
 
 // Per-light transmittance and black-cleared additive caustic irradiance.
@@ -185,52 +111,12 @@ void nwbSceneResolveLight(NwbSceneLight light, float3 worldPosition, out float3 
     radiance = baseRadiance * attenuation;
 }
 
-half3 nwbSceneShadeLight(NwbSceneLight light, half3 baseColor, float3 normalVector, float3 tangentVector, float3 bitangentVector, float3 viewVector, half ndotv, float3 worldPosition){
-    float3 lightVector;
-    half3 lightRadiance;
-    nwbSceneResolveLight(light, worldPosition, lightVector, lightRadiance);
-    if(all(lightRadiance <= half3(0.0h)))
-        return half3(0.0h);
-
-    const float3 halfVector = nwbSafeNormalize(lightVector + viewVector, lightVector);
-    const half ndotl = half(max(dot(normalVector, lightVector), 0.0));
-    const half keyDiffuse = ndotl * ndotl;
-    const half rim = half(pow(max(1.0 - float(ndotv), 0.0), NWB_SCENE_LIGHT_RIM_EXPONENT));
-    const half halfDotNormal = half(max(dot(normalVector, halfVector), 0.0));
-    const float halfDotNormalF = float(halfDotNormal);
-    const half specular = half(
-        pow(halfDotNormalF, NWB_SCENE_LIGHT_SPECULAR_PRIMARY_EXPONENT) * NWB_SCENE_LIGHT_SPECULAR_PRIMARY_WEIGHT
-        + pow(halfDotNormalF, NWB_SCENE_LIGHT_SPECULAR_SECONDARY_EXPONENT) * NWB_SCENE_LIGHT_SPECULAR_SECONDARY_WEIGHT
-    );
-    const half viewSpecular = half(pow(float(ndotv), NWB_SCENE_LIGHT_VIEW_SPECULAR_EXPONENT) * NWB_SCENE_LIGHT_VIEW_SPECULAR_WEIGHT);
-    const half tangentLobe = half(pow(max(abs(dot(tangentVector, halfVector)), 0.0), NWB_SCENE_LIGHT_FRAME_LOBE_EXPONENT));
-    const half bitangentLobe = half(pow(max(abs(dot(bitangentVector, halfVector)), 0.0), NWB_SCENE_LIGHT_FRAME_LOBE_EXPONENT));
-    const half backLight = half(max(dot(-normalVector, lightVector), 0.0));
-
-    const half3 specularTint = lerp(NWB_SCENE_LIGHT_SPECULAR_TINT_NEUTRAL, NWB_SCENE_LIGHT_SPECULAR_TINT_WARM, half(NWB_SCENE_LIGHT_SPECULAR_TINT_WARM_BLEND));
-    const half3 diffuse = baseColor * lightRadiance * (half(NWB_SCENE_LIGHT_DIFFUSE_FLOOR) + half(NWB_SCENE_LIGHT_DIFFUSE_KEY_WEIGHT) * keyDiffuse);
-    const half3 specularColor = lightRadiance * specularTint * (specular * (half(NWB_SCENE_LIGHT_SPECULAR_NDOTL_FLOOR) + half(NWB_SCENE_LIGHT_SPECULAR_NDOTL_WEIGHT) * ndotl) + viewSpecular);
-    const half3 rimColor = lerp(NWB_SCENE_LIGHT_RIM_TINT, lightRadiance, half(NWB_SCENE_LIGHT_RIM_RADIANCE_BLEND)) * (rim * (half(NWB_SCENE_LIGHT_RIM_NDOTL_FLOOR) + half(NWB_SCENE_LIGHT_RIM_NDOTL_WEIGHT) * ndotl));
-    const half3 frameCue = half(NWB_SCENE_LIGHT_FRAME_CUE_WEIGHT) * (
-        NWB_SCENE_LIGHT_FRAME_CUE_TANGENT_TINT * half(tangentLobe)
-        + NWB_SCENE_LIGHT_FRAME_CUE_BITANGENT_TINT * half(bitangentLobe)
-    );
-    const half3 backLightCue = NWB_SCENE_LIGHT_BACKLIGHT_TINT * half(backLight);
-
-    return diffuse + specularColor + rimColor + frameCue + backLightCue;
-}
-
 // Configurable hemispherical ambient fallback.
 #ifndef NWB_GI_HEMI_AMBIENT_SKY
 #define NWB_GI_HEMI_AMBIENT_SKY half3(0.045h, 0.055h, 0.075h)
 #endif
 #ifndef NWB_GI_HEMI_AMBIENT_GROUND
 #define NWB_GI_HEMI_AMBIENT_GROUND half3(0.008h, 0.012h, 0.02h)
-#endif
-#ifndef NWB_SCENE_PRESENTATION_IS_HDR10
-// Tracing and material-generation shaders share this lighting library without a presentation push block. They keep
-// the existing SDR material result unless their caller explicitly provides an HDR decision.
-#define NWB_SCENE_PRESENTATION_IS_HDR10 false
 #endif
 half3 nwbGiHemiAmbient(float3 normalVector){
     const half skyAmount = half(normalVector.z * 0.5 + 0.5);
@@ -240,44 +126,6 @@ half3 nwbGiHemiAmbient(float3 normalVector){
 // Transparent and null-coverage indirect-light fallback.
 half3 nwbBxdfIndirectIrradiance(float3 worldPosition, float3 normalVector){
     return nwbGiHemiAmbient(normalVector);
-}
-
-half3 nwbSceneTonemap(half3 color){
-    return color / (color + half3(NWB_SCENE_TONEMAP_KNEE));
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// The caller supplies resolved indirect irradiance; never re-gather the surfel pool here.
-half3 nwbSceneApplyLighting(half3 baseColor, float3 normal, float4 tangent, float3 worldPosition, int2 pixel, half3 indirectIrradiance){
-    const float3 normalVector = nwbSafeNormalize(normal, float3(0.0, 0.0, 1.0));
-    const float3 tangentVector = nwbFrameOrthonormalTangent(tangent.xyz, normalVector);
-    const float tangentSign = tangent.w < 0.0 ? -1.0 : 1.0;
-    const float3 bitangentVector = nwbSafeNormalize(
-        cross(normalVector, tangentVector) * tangentSign,
-        cross(normalVector, nwbFrameFallbackTangent(normalVector))
-    );
-
-    const float3 viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - worldPosition, float3(0.0, 0.0, 1.0));
-    const half ndotv = half(max(dot(normalVector, viewVector), 0.0));
-
-    half3 litColor = baseColor * indirectIrradiance;
-    const uint lightCount = nwbSceneLightCount();
-    for(uint i = 0u; i < lightCount; ++i){
-        const half3 transmittance = nwbBxdfLightTransmittance(pixel, i);
-        litColor += transmittance * nwbSceneShadeLight(g_NwbSceneLights[i], baseColor, normalVector, tangentVector, bitangentVector, viewVector, ndotv, worldPosition);
-    }
-
-    litColor += nwbBxdfCausticIrradiance(pixel) * baseColor;
-
-    // Preserve linear highlight energy only when the active swap chain is HDR10. The SDR path intentionally
-    // keeps the established material-facing Reinhard result, so existing scenes retain their output.
-    return NWB_SCENE_PRESENTATION_IS_HDR10
-        ? max(litColor, half3(0.0h))
-        : nwbSceneTonemap(litColor)
-    ;
 }
 
 

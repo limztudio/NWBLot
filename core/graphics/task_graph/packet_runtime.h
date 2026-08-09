@@ -48,6 +48,8 @@ public:
         , m_initialStateSeed(arena)
         , m_stateSubsetScratch(arena)
         , m_stateMergeScratch(arena)
+        , m_externalBaseStateSeed(arena)
+        , m_externalMergedStateSeed(arena)
     {}
 
 
@@ -56,8 +58,8 @@ public:
 
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
     [[nodiscard]] const GpuRecordedPacket* find(const GpuSubmissionPacketId& packet)const noexcept;
-    // Transitional read-only export for an external graph that still needs a packet's actual native final state.
-    // Graph-internal consumers use compiler-produced state seeds instead.
+    // Read-only export for a later graph or cross-frame state cache that needs this packet's actual native final
+    // state. Graph-internal consumers use compiler-produced state seeds instead.
     [[nodiscard]] const CommandListResourceStateHandoff* packetFinalStateSeed(
         const GpuSubmissionPacketId& packet
     )const noexcept;
@@ -68,10 +70,8 @@ private:
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketId& packet,
-        const CommandListResourceStateHandoff* externalInitialStates,
         const GpuExternalPacketStateSource* externalStateSources,
         usize externalStateSourceCount,
-        bool includeCompiledStateSeeds,
         const CommandListResourceStateHandoff*& outInitialStates
     );
     [[nodiscard]] CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet)noexcept;
@@ -85,49 +85,40 @@ private:
     CommandListResourceStateHandoff m_initialStateSeed;
     CommandListResourceStateHandoff m_stateSubsetScratch;
     CommandListResourceStateHandoff m_stateMergeScratch;
+    CommandListResourceStateHandoff m_externalBaseStateSeed;
+    CommandListResourceStateHandoff m_externalMergedStateSeed;
     u64 m_generation = 0u;
     u16 m_deviceGeneration = 0u;
     bool m_valid = false;
 };
 
 
-// Selects the precise resources a packet needs from a completed external producer's native final state. This is the
-// transitional cross-graph/cross-frame counterpart to compiler-produced packet state seeds.
+// An external producer's native final state. Packet recording filters every source through the consuming task's
+// declared imported resources, including declared texture ranges, so renderer subsystems never hand-build state
+// subsets or fan-ins for graph-owned packet boundaries.
 struct GpuExternalPacketStateSource{
     const CommandListResourceStateHandoff* states = nullptr;
-    Texture* const* textures = nullptr;
-    usize textureCount = 0u;
-    Buffer* const* buffers = nullptr;
-    usize bufferCount = 0u;
 };
 
 
-// Transitional packet state handoffs seed imported/existing work at open and export final state at close. Graph
-// barriers already lower through this recorder; the remaining bridge disappears once compiler-produced packet
-// state seeds cover cross-graph and cross-frame imports.
+// Native graph packets always receive compiler-produced internal state seeds, declaration-selected external state
+// seeds, and compiler-planned packet-boundary barriers. Task thunks retain only intra-task synchronization.
 struct GpuNativePacketRecordDesc{
     GpuSubmissionPacketId packet;
-    const CommandListResourceStateHandoff* initialStates = nullptr;
-    CommandListResourceStateHandoff* finalStates = nullptr;
-    // Resource-filtered final states from completed external producers. They merge with initialStates before native
-    // recording and remain distinct from graph-internal compiler state seeds.
     const GpuExternalPacketStateSource* externalStateSources = nullptr;
     usize externalStateSourceCount = 0u;
-    // Uses compiler-selected producer snapshots for graph-internal resource state.  External/cross-frame inputs
-    // remain in initialStates until their producers join the same graph.
-    bool useCompiledStateSeeds = false;
-    // Transitional opt-in while renderer tasks shed their local boundary transitions.  New graph-owned tasks set
-    // this true; imported or not-yet-migrated record thunks retain their established state bridge.
-    bool applyCompiledBarriers = false;
 };
 
 
 // Imported command lists have already been opened, closed, and state-handoffed by their renderer work. The graph
-// becomes the authoritative packet/submission owner without forcing an all-at-once recording-body rewrite.
+// becomes the authoritative packet/submission owner without forcing an all-at-once recording-body rewrite.  The
+// imported packet captures its final seed once so following graph packets consume the graph-owned export instead
+// of the renderer's temporary handoff.
 struct GpuImportedPacketRecordDesc{
     GpuSubmissionPacketId packet;
     CommandList* const* commandLists = nullptr;
     usize commandListCount = 0u;
+    const CommandListResourceStateHandoff* stateSeed = nullptr;
 };
 
 

@@ -1859,6 +1859,8 @@ public:
     [[nodiscard]] u64 getDeviceAddress()const{ return m_deviceAddress; }
     // Exposed for explicit scheduling handoffs.
     [[nodiscard]] Buffer* getBackingBuffer()const{ return m_buffer.get(); }
+    // Graph declarations retain this handle when a task must seed or transition the backing storage explicitly.
+    [[nodiscard]] const BufferHandle& getBackingBufferHandle()const{ return m_buffer; }
     Object getNativeHandle(ObjectType objectType);
 
 

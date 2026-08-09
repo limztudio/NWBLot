@@ -106,24 +106,13 @@ RendererSystem::RendererSystem(
     , m_frameSetupStateFanInHandoff(arena)
     , m_gbufferStateHandoff(arena)
     , m_postGbufferNormalizedStateHandoff(arena)
-    , m_shadowComputeBaseStateHandoff(arena)
-    , m_shadowComputeInputStateHandoff(arena)
     , m_shadowComputePersistentStateHandoff(arena)
-    , m_shadowVisibilityStateHandoff(arena)
     , m_shadowVisibilityReturnStateHandoff(arena)
-    , m_causticsComputeBaseStateHandoff(arena)
-    , m_causticsComputeInputStateHandoff(arena)
     , m_causticsComputePersistentStateHandoff(arena)
-    , m_causticsStateHandoff(arena)
     , m_causticIrradianceLightingStateHandoff(arena)
     , m_causticIrradianceReturnStateHandoff(arena)
-    , m_surfelGiComputeBaseStateHandoff(arena)
-    , m_surfelGiComputeInputStateHandoff(arena)
     , m_surfelGiComputePersistentStateHandoff(arena)
-    , m_surfelGiStateHandoff(arena)
     , m_surfelIrradianceReturnStateHandoff(arena)
-    , m_laggedLightingHistoryCopyInputStateHandoff(arena)
-    , m_laggedLightingHistoryCopyStateHandoff(arena)
     , m_shaderSystem(*this)
     , m_meshSystem(*this)
     , m_materialSystem(*this)
@@ -183,11 +172,6 @@ void RendererSystem::reportLaggedLightingTransition(const LaggedLightingReport r
     }
 }
 
-void RendererSystem::resetLaggedLightingHistoryCopyStateHandoffs()noexcept{
-    m_laggedLightingHistoryCopyInputStateHandoff.reset();
-    m_laggedLightingHistoryCopyStateHandoff.reset();
-}
-
 void RendererSystem::invalidateLaggedLightingHistorySubmission()noexcept{
     m_laggedLightingHistorySubmissionToken = Core::QueueSubmissionToken{};
 }
@@ -199,23 +183,13 @@ void RendererSystem::resetLaggedLightingHistoryTracking()noexcept{
 
 void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     // Replaced targets invalidate retained compute-local state.
-    m_shadowComputeBaseStateHandoff.reset();
-    m_shadowComputeInputStateHandoff.reset();
     m_shadowComputePersistentStateHandoff.reset();
-    m_shadowVisibilityStateHandoff.reset();
     m_shadowVisibilityReturnStateHandoff.reset();
-    m_causticsComputeBaseStateHandoff.reset();
-    m_causticsComputeInputStateHandoff.reset();
     m_causticsComputePersistentStateHandoff.reset();
-    m_causticsStateHandoff.reset();
     m_causticIrradianceLightingStateHandoff.reset();
     m_causticIrradianceReturnStateHandoff.reset();
-    m_surfelGiComputeBaseStateHandoff.reset();
-    m_surfelGiComputeInputStateHandoff.reset();
     m_surfelGiComputePersistentStateHandoff.reset();
-    m_surfelGiStateHandoff.reset();
     m_surfelIrradianceReturnStateHandoff.reset();
-    resetLaggedLightingHistoryCopyStateHandoffs();
 }
 
 void RendererSystem::resetInvalidatedResourceStateHandoffs()noexcept{
@@ -238,17 +212,7 @@ void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
     m_frameSetupStateFanInHandoff.reset();
     m_gbufferStateHandoff.reset();
     m_postGbufferNormalizedStateHandoff.reset();
-    m_shadowComputeBaseStateHandoff.reset();
-    m_shadowComputeInputStateHandoff.reset();
-    m_shadowVisibilityStateHandoff.reset();
-    m_causticsComputeBaseStateHandoff.reset();
-    m_causticsComputeInputStateHandoff.reset();
-    m_causticsStateHandoff.reset();
     m_causticIrradianceLightingStateHandoff.reset();
-    m_surfelGiComputeBaseStateHandoff.reset();
-    m_surfelGiComputeInputStateHandoff.reset();
-    m_surfelGiStateHandoff.reset();
-    resetLaggedLightingHistoryCopyStateHandoffs();
 }
 
 void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
@@ -259,29 +223,12 @@ void RendererSystem::resetAbandonedFrameStateHandoffs()noexcept{
     m_frameSetupStateFanInHandoff.reset();
     m_gbufferStateHandoff.reset();
     m_postGbufferNormalizedStateHandoff.reset();
-    m_shadowComputeBaseStateHandoff.reset();
-    m_shadowComputeInputStateHandoff.reset();
-    m_shadowVisibilityStateHandoff.reset();
-    m_causticsStateHandoff.reset();
     m_causticIrradianceLightingStateHandoff.reset();
-    m_surfelGiComputeBaseStateHandoff.reset();
-    m_surfelGiComputeInputStateHandoff.reset();
-    m_surfelGiStateHandoff.reset();
-    resetLaggedLightingHistoryCopyStateHandoffs();
 }
 
 void RendererSystem::resetRejectedShadowVisibilityStateHandoffs()noexcept{
     // Preserve accepted Graphics prefix state when graph-owned shadow visibility rejects.
-    m_shadowComputeBaseStateHandoff.reset();
-    m_shadowComputeInputStateHandoff.reset();
-    m_shadowVisibilityStateHandoff.reset();
-    m_causticsComputeBaseStateHandoff.reset();
-    m_causticsComputeInputStateHandoff.reset();
-    m_causticsStateHandoff.reset();
     m_causticIrradianceLightingStateHandoff.reset();
-    m_surfelGiComputeBaseStateHandoff.reset();
-    m_surfelGiComputeInputStateHandoff.reset();
-    m_surfelGiStateHandoff.reset();
 }
 
 
@@ -901,7 +848,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(m_laggedLightingHistoryGeneration != historyGeneration){
             // Target generations prevent history from using recycled slots after resize.
             invalidateLaggedLightingHistorySubmission();
-            resetLaggedLightingHistoryCopyStateHandoffs();
             m_laggedLightingHistoryGeneration = historyGeneration;
         }
     }
@@ -1814,216 +1760,102 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // Compute imports only shared shadow inputs plus retained compute-local state.
-    if(shadowVisibilityRunsOnCompute){
-        Core::Alloc::ScratchArena shadowInputScratchArena(RendererArenaScope::s_RenderArena);
-        Vector<Core::Texture*, Core::Alloc::ScratchArena> shadowInputTextures{ shadowInputScratchArena };
-        Vector<Core::Buffer*, Core::Alloc::ScratchArena> shadowInputBuffers{ shadowInputScratchArena };
-        const auto appendTexture = [&](Core::Texture* texture){
-            if(texture)
-                shadowInputTextures.push_back(texture);
-        };
-        const auto appendBuffer = [&](Core::Buffer* buffer){
-            if(buffer)
-                shadowInputBuffers.push_back(buffer);
-        };
-
-        appendTexture(deferredTargets.worldPosition.get());
-        appendTexture(deferredTargets.normal.get());
-        appendTexture(deferredTargets.depth.get());
-        appendBuffer(m_deferredState.m_sceneShadingBuffer.get());
-        appendBuffer(m_deferredState.m_lightBuffer.get());
-        appendBuffer(deferredTargets.bindless.slotsBuffer.get());
-        appendBuffer(m_rayTracingState.m_sceneBvhNodeBuffer.get());
-        appendBuffer(m_rayTracingState.m_sceneInstanceBuffer.get());
-        appendBuffer(m_rayTracingState.m_shadowInstanceMaterialBuffer.get());
-        appendBuffer(m_rayTracingState.m_shadowInstanceBuffer.get());
-        appendBuffer(m_rayTracingState.m_shadowMaterialTypedBuffer.get());
-        appendBuffer(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get());
-        if(m_rayTracingState.m_tlas)
-            appendBuffer(m_rayTracingState.m_tlas->getBackingBuffer());
-        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshNodeBuffers)
-            appendBuffer(buffer);
-        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshPositionBuffers)
-            appendBuffer(buffer);
-        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshIndexBuffers)
-            appendBuffer(buffer);
-        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshAttributeBuffers)
-            appendBuffer(buffer);
-
-        if(!m_shadowComputeBaseStateHandoff.buildResourceSubset(
-            m_postGbufferNormalizedStateHandoff,
-            shadowInputTextures.data(),
-            shadowInputTextures.size(),
-            shadowInputBuffers.data(),
-            shadowInputBuffers.size()
-        )){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async shadow input state selection failed"));
-            discardRenderPackets();
-            return;
-        }
-
-        const Core::CommandListResourceStateHandoff* shadowInputBranches[2] = {};
-        usize shadowInputBranchCount = 0u;
-        if(m_shadowComputePersistentStateHandoff.valid())
-            shadowInputBranches[shadowInputBranchCount++] = &m_shadowComputePersistentStateHandoff;
-        if(m_shadowVisibilityReturnStateHandoff.valid())
-            shadowInputBranches[shadowInputBranchCount++] = &m_shadowVisibilityReturnStateHandoff;
-        if(!m_shadowComputeInputStateHandoff.buildFanIn(
-            m_shadowComputeBaseStateHandoff,
-            shadowInputBranches,
-            shadowInputBranchCount
-        )){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async shadow input state fan-in failed"));
-            discardRenderPackets();
-            return;
-        }
+    // Imported prefix lists retain their existing recording implementation, but the graph captures their final
+    // state once. Every graph-owned consumer below imports that packet export rather than a renderer-side handoff.
+    Core::CommandList* const graphicsPrefixCommandLists[] = {
+        meshViewSetupCommandList,
+        sceneShadingSetupCommandList,
+        deferredClearCommandList,
+        gbufferCommandList,
+        postGbufferNormalizeCommandList,
+    };
+    Core::GpuNativePacketRecorder graphicsPrefixRecorder(device);
+    const Core::GpuImportedPacketRecordDesc graphicsPrefixRecordDesc{
+        .packet = graphicsPrefixPacket,
+        .commandLists = graphicsPrefixCommandLists,
+        .commandListCount = LengthOf(graphicsPrefixCommandLists),
+        .stateSeed = &m_postGbufferNormalizedStateHandoff,
+    };
+    const bool graphicsPrefixRecorded =
+        m_graphicsPrefixTaskGraphValid
+        && m_graphicsPrefixTask.valid()
+        && graphicsPrefixPacket.valid()
+        && graphicsPrefixRecorder.recordImportedPacket(
+            m_graphicsPrefixTaskGraph,
+            m_graphicsPrefixCompiledGraph,
+            graphicsPrefixRecordDesc,
+            m_graphicsPrefixRecordedGraph
+        )
+    ;
+    const Core::CommandListResourceStateHandoff* const graphicsPrefixStateSeed = graphicsPrefixRecorded
+        ? m_graphicsPrefixRecordedGraph.packetFinalStateSeed(graphicsPrefixPacket)
+        : nullptr
+    ;
+    if(!graphicsPrefixRecorded || !graphicsPrefixStateSeed){
+        m_graphicsPrefixSubmissionTransaction.discardUnaccepted(
+            m_graphicsPrefixTaskGraph,
+            m_graphicsPrefixCompiledGraph
+        );
+        graphicsPrefixTimingTicket.discard();
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to capture graph-owned graphics-prefix state"));
+        discardRenderPackets();
+        return;
     }
 
-    // The graph-selected Compute route imports software-caustics inputs plus retained private scratch. Graphics
-    // fallback records from the normalized G-buffer handoff directly.
-    if(softwareCausticsRunsOnCompute){
-        Core::Alloc::ScratchArena causticsInputScratchArena(RendererArenaScope::s_RenderArena);
-        Vector<Core::Texture*, Core::Alloc::ScratchArena> causticsInputTextures{ causticsInputScratchArena };
-        Vector<Core::Buffer*, Core::Alloc::ScratchArena> causticsInputBuffers{ causticsInputScratchArena };
-        const auto appendTexture = [&](Core::Texture* texture){
-            if(texture)
-                causticsInputTextures.push_back(texture);
+    const auto appendDeclaredStateSource = [](
+        Core::GpuExternalPacketStateSource* const sources,
+        const usize capacity,
+        usize& sourceCount,
+        const Core::CommandListResourceStateHandoff* const states
+    ){
+        if(!states || !states->valid() || sourceCount >= capacity)
+            return false;
+        sources[sourceCount++] = Core::GpuExternalPacketStateSource{
+            .states = states,
         };
-        const auto appendBuffer = [&](Core::Buffer* buffer){
-            if(buffer)
-                causticsInputBuffers.push_back(buffer);
-        };
+        return true;
+    };
 
-        appendTexture(deferredTargets.worldPosition.get());
-        appendTexture(deferredTargets.depth.get());
-        appendBuffer(m_deferredState.m_sceneShadingBuffer.get());
-        appendBuffer(m_deferredState.m_lightBuffer.get());
-        appendBuffer(deferredTargets.bindless.slotsBuffer.get());
-        appendBuffer(m_rayTracingState.m_sceneBvhNodeBuffer.get());
-        appendBuffer(m_rayTracingState.m_sceneInstanceBuffer.get());
-        appendBuffer(m_rayTracingState.m_shadowInstanceMaterialBuffer.get());
-        appendBuffer(m_rayTracingState.m_shadowInstanceBuffer.get());
-        appendBuffer(m_rayTracingState.m_shadowMaterialTypedBuffer.get());
-        appendBuffer(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get());
-        appendBuffer(m_rayTracingState.m_causticEmissionTargetBuffer.get());
-        appendBuffer(m_drawState.m_meshViewBuffer.get());
-        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshNodeBuffers)
-            appendBuffer(buffer);
-        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshPositionBuffers)
-            appendBuffer(buffer);
-        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshIndexBuffers)
-            appendBuffer(buffer);
-        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshAttributeBuffers)
-            appendBuffer(buffer);
-
-        if(!m_causticsComputeBaseStateHandoff.buildResourceSubset(
-            m_postGbufferNormalizedStateHandoff,
-            causticsInputTextures.data(),
-            causticsInputTextures.size(),
-            causticsInputBuffers.data(),
-            causticsInputBuffers.size()
-        )){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async caustics input state selection failed"));
-            discardRenderPackets();
-            return;
-        }
-
-        const Core::CommandListResourceStateHandoff* causticsInputBranches[2] = {};
-        usize causticsInputBranchCount = 0u;
-        if(m_causticsComputePersistentStateHandoff.valid())
-            causticsInputBranches[causticsInputBranchCount++] = &m_causticsComputePersistentStateHandoff;
-        if(m_causticIrradianceReturnStateHandoff.valid())
-            causticsInputBranches[causticsInputBranchCount++] = &m_causticIrradianceReturnStateHandoff;
-        if(!m_causticsComputeInputStateHandoff.buildFanIn(
-            m_causticsComputeBaseStateHandoff,
-            causticsInputBranches,
-            causticsInputBranchCount
-        )){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async caustics input state fan-in failed"));
-            discardRenderPackets();
-            return;
-        }
+    // Native graph packets seed every declared resource from the imported prefix export and, on the dedicated
+    // Compute route, from accepted cross-frame state. No renderer-side input subset or fan-in is needed.
+    Core::GpuExternalPacketStateSource shadowVisibilityStateSources[3] = {};
+    usize shadowVisibilityStateSourceCount = 0u;
+    bool shadowVisibilityStateSourcesReady = appendDeclaredStateSource(
+        shadowVisibilityStateSources,
+        LengthOf(shadowVisibilityStateSources),
+        shadowVisibilityStateSourceCount,
+        graphicsPrefixStateSeed
+    );
+    if(shadowVisibilityRunsOnCompute && m_shadowComputePersistentStateHandoff.valid()){
+        shadowVisibilityStateSourcesReady = shadowVisibilityStateSourcesReady
+            && appendDeclaredStateSource(
+                shadowVisibilityStateSources,
+                LengthOf(shadowVisibilityStateSources),
+                shadowVisibilityStateSourceCount,
+                &m_shadowComputePersistentStateHandoff
+            )
+        ;
+    }
+    if(shadowVisibilityRunsOnCompute && m_shadowVisibilityReturnStateHandoff.valid()){
+        shadowVisibilityStateSourcesReady = shadowVisibilityStateSourcesReady
+            && appendDeclaredStateSource(
+                shadowVisibilityStateSources,
+                LengthOf(shadowVisibilityStateSources),
+                shadowVisibilityStateSourceCount,
+                &m_shadowVisibilityReturnStateHandoff
+            )
+        ;
     }
 
-    // The graph-selected Compute route imports current G-buffer inputs and retained field state. Graphics uses the
-    // established prefix handoff directly.
-    if(surfelGiRunsOnCompute){
-        Core::Alloc::ScratchArena surfelGiInputScratchArena(RendererArenaScope::s_RenderArena);
-        Vector<Core::Texture*, Core::Alloc::ScratchArena> surfelGiInputTextures{ surfelGiInputScratchArena };
-        Vector<Core::Buffer*, Core::Alloc::ScratchArena> surfelGiInputBuffers{ surfelGiInputScratchArena };
-        const auto appendTexture = [&](Core::Texture* texture){
-            if(texture)
-                surfelGiInputTextures.push_back(texture);
-        };
-        const auto appendBuffer = [&](Core::Buffer* buffer){
-            if(buffer)
-                surfelGiInputBuffers.push_back(buffer);
-        };
-
-        appendTexture(deferredTargets.worldPosition.get());
-        appendTexture(deferredTargets.normal.get());
-        appendBuffer(m_deferredState.m_sceneShadingBuffer.get());
-        appendBuffer(m_deferredState.m_lightBuffer.get());
-        appendBuffer(deferredTargets.bindless.slotsBuffer.get());
-        appendBuffer(m_rayTracingState.m_surfelConstants.get());
-        appendBuffer(m_rayTracingState.m_sceneBvhNodeBuffer.get());
-        appendBuffer(m_rayTracingState.m_sceneInstanceBuffer.get());
-        appendBuffer(m_rayTracingState.m_shadowInstanceMaterialBuffer.get());
-        appendBuffer(m_rayTracingState.m_shadowInstanceBuffer.get());
-        appendBuffer(m_rayTracingState.m_shadowMaterialTypedBuffer.get());
-        appendBuffer(m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get());
-        if(m_rayTracingState.m_tlas)
-            appendBuffer(m_rayTracingState.m_tlas->getBackingBuffer());
-        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshNodeBuffers)
-            appendBuffer(buffer);
-        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshPositionBuffers)
-            appendBuffer(buffer);
-        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshIndexBuffers)
-            appendBuffer(buffer);
-        for(Core::Buffer* buffer : m_rayTracingState.m_swShadowMeshAttributeBuffers)
-            appendBuffer(buffer);
-
-        if(!m_surfelGiComputeBaseStateHandoff.buildResourceSubset(
-            m_postGbufferNormalizedStateHandoff,
-            surfelGiInputTextures.data(),
-            surfelGiInputTextures.size(),
-            surfelGiInputBuffers.data(),
-            surfelGiInputBuffers.size()
-        )){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async surfel-GI input state selection failed"));
-            discardRenderPackets();
-            return;
-        }
-
-        const Core::CommandListResourceStateHandoff* surfelGiInputBranches[2] = {};
-        usize surfelGiInputBranchCount = 0u;
-        if(m_surfelGiComputePersistentStateHandoff.valid())
-            surfelGiInputBranches[surfelGiInputBranchCount++] = &m_surfelGiComputePersistentStateHandoff;
-        if(m_surfelIrradianceReturnStateHandoff.valid())
-            surfelGiInputBranches[surfelGiInputBranchCount++] = &m_surfelIrradianceReturnStateHandoff;
-        if(!m_surfelGiComputeInputStateHandoff.buildFanIn(
-            m_surfelGiComputeBaseStateHandoff,
-            surfelGiInputBranches,
-            surfelGiInputBranchCount
-        )){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: async surfel-GI input state fan-in failed"));
-            discardRenderPackets();
-            return;
-        }
-    }
-
-    // Shadow visibility owns its native graph packet. The manual state bridge remains until the barrier phase.
     Core::GpuNativePacketRecorder shadowVisibilityRecorder(device);
     const Core::GpuNativePacketRecordDesc shadowVisibilityRecordDesc{
         .packet = shadowVisibilityPacket,
-        .initialStates = shadowVisibilityRunsOnCompute
-            ? &m_shadowComputeInputStateHandoff
-            : &m_postGbufferNormalizedStateHandoff,
-        .finalStates = &m_shadowVisibilityStateHandoff,
+        .externalStateSources = shadowVisibilityStateSources,
+        .externalStateSourceCount = shadowVisibilityStateSourceCount,
     };
     const bool shadowVisibilityRecorded =
-        m_shadowVisibilityTaskGraphValid
+        shadowVisibilityStateSourcesReady
+        && m_shadowVisibilityTaskGraphValid
         && m_shadowVisibilityTask.valid()
         && m_shadowVisibilityPrefixCompletion.valid()
         && shadowVisibilityPacket.valid()
@@ -2033,26 +1865,37 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             shadowVisibilityRecordDesc,
             m_shadowVisibilityRecordedGraph
         )
-        && m_shadowVisibilityStateHandoff.valid()
     ;
-    if(!shadowVisibilityRecorded){
+    const Core::CommandListResourceStateHandoff* const shadowVisibilityFinalStateSeed = shadowVisibilityRecorded
+        ? m_shadowVisibilityRecordedGraph.packetFinalStateSeed(shadowVisibilityPacket)
+        : nullptr
+    ;
+    if(!shadowVisibilityRecorded || !shadowVisibilityFinalStateSeed){
         shadowVisibilityTimingTicket.discard();
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to record graph-owned shadow visibility"));
         discardRenderPackets();
         return;
     }
 
-    // Hardware dispatch-rays caustics own a Graphics graph packet. Their imported lagged-history completion, when
-    // active, is resolved at submission; the manual state handoff remains until the barrier phase.
+    const Core::CommandListResourceStateHandoff* causticsFinalStateSeed = nullptr;
     if(hardwareShadowSupported){
+        Core::GpuExternalPacketStateSource hardwareCausticsStateSources[1] = {};
+        usize hardwareCausticsStateSourceCount = 0u;
+        const bool hardwareCausticsStateSourcesReady = appendDeclaredStateSource(
+            hardwareCausticsStateSources,
+            LengthOf(hardwareCausticsStateSources),
+            hardwareCausticsStateSourceCount,
+            graphicsPrefixStateSeed
+        );
         Core::GpuNativePacketRecorder hardwareCausticsRecorder(device);
         const Core::GpuNativePacketRecordDesc hardwareCausticsRecordDesc{
             .packet = hardwareCausticsPacket,
-            .initialStates = &m_postGbufferNormalizedStateHandoff,
-            .finalStates = &m_causticsStateHandoff,
+            .externalStateSources = hardwareCausticsStateSources,
+            .externalStateSourceCount = hardwareCausticsStateSourceCount,
         };
         const bool hardwareCausticsRecorded =
-            m_hardwareCausticsTaskGraphValid
+            hardwareCausticsStateSourcesReady
+            && m_hardwareCausticsTaskGraphValid
             && m_hardwareCausticsTask.valid()
             && m_hardwareCausticsPrefixCompletion.valid()
             && (!laggedAsyncLightingSchedule || m_hardwareCausticsLaggedHistoryCompletion.valid())
@@ -2063,9 +1906,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 hardwareCausticsRecordDesc,
                 m_hardwareCausticsRecordedGraph
             )
-            && m_causticsStateHandoff.valid()
         ;
-        if(!hardwareCausticsRecorded){
+        causticsFinalStateSeed = hardwareCausticsRecorded
+            ? m_hardwareCausticsRecordedGraph.packetFinalStateSeed(hardwareCausticsPacket)
+            : nullptr
+        ;
+        if(!hardwareCausticsRecorded || !causticsFinalStateSeed){
             m_hardwareCausticsSubmissionTransaction.discardUnaccepted(
                 m_hardwareCausticsTaskGraph,
                 m_hardwareCausticsCompiledGraph
@@ -2077,19 +1923,45 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    // Software caustics own their native packet rather than an async persistent list. The shadow-visibility
-    // completion retains their historical order, while the manual state bridge remains until the barrier phase.
     if(!hardwareShadowSupported){
+        Core::GpuExternalPacketStateSource softwareCausticsStateSources[3] = {};
+        usize softwareCausticsStateSourceCount = 0u;
+        bool softwareCausticsStateSourcesReady = appendDeclaredStateSource(
+            softwareCausticsStateSources,
+            LengthOf(softwareCausticsStateSources),
+            softwareCausticsStateSourceCount,
+            graphicsPrefixStateSeed
+        );
+        if(softwareCausticsRunsOnCompute && m_causticsComputePersistentStateHandoff.valid()){
+            softwareCausticsStateSourcesReady = softwareCausticsStateSourcesReady
+                && appendDeclaredStateSource(
+                    softwareCausticsStateSources,
+                    LengthOf(softwareCausticsStateSources),
+                    softwareCausticsStateSourceCount,
+                    &m_causticsComputePersistentStateHandoff
+                )
+            ;
+        }
+        if(softwareCausticsRunsOnCompute && m_causticIrradianceReturnStateHandoff.valid()){
+            softwareCausticsStateSourcesReady = softwareCausticsStateSourcesReady
+                && appendDeclaredStateSource(
+                    softwareCausticsStateSources,
+                    LengthOf(softwareCausticsStateSources),
+                    softwareCausticsStateSourceCount,
+                    &m_causticIrradianceReturnStateHandoff
+                )
+            ;
+        }
+
         Core::GpuNativePacketRecorder softwareCausticsRecorder(device);
         const Core::GpuNativePacketRecordDesc softwareCausticsRecordDesc{
             .packet = softwareCausticsPacket,
-            .initialStates = softwareCausticsRunsOnCompute
-                ? &m_causticsComputeInputStateHandoff
-                : &m_postGbufferNormalizedStateHandoff,
-            .finalStates = &m_causticsStateHandoff,
+            .externalStateSources = softwareCausticsStateSources,
+            .externalStateSourceCount = softwareCausticsStateSourceCount,
         };
         const bool softwareCausticsRecorded =
-            m_softwareCausticsTaskGraphValid
+            softwareCausticsStateSourcesReady
+            && m_softwareCausticsTaskGraphValid
             && m_softwareCausticsTask.valid()
             && m_softwareCausticsShadowVisibilityCompletion.valid()
             && softwareCausticsPacket.valid()
@@ -2099,9 +1971,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 softwareCausticsRecordDesc,
                 m_softwareCausticsRecordedGraph
             )
-            && m_causticsStateHandoff.valid()
         ;
-        if(!softwareCausticsRecorded){
+        causticsFinalStateSeed = softwareCausticsRecorded
+            ? m_softwareCausticsRecordedGraph.packetFinalStateSeed(softwareCausticsPacket)
+            : nullptr
+        ;
+        if(!softwareCausticsRecorded || !causticsFinalStateSeed){
             m_softwareCausticsSubmissionTransaction.discardUnaccepted(
                 m_softwareCausticsTaskGraph,
                 m_softwareCausticsCompiledGraph
@@ -2113,26 +1988,59 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    // Surfel GI records only after the graph resolved its physical queue. Its imported completion follows software
-    // caustics or graph-owned shadow visibility; state fan-in stays manual until Phase 6.
+    Core::GpuExternalPacketStateSource surfelGiStateSources[3] = {};
+    usize surfelGiStateSourceCount = 0u;
+    bool surfelGiStateSourcesReady = appendDeclaredStateSource(
+        surfelGiStateSources,
+        LengthOf(surfelGiStateSources),
+        surfelGiStateSourceCount,
+        graphicsPrefixStateSeed
+    );
+    if(surfelGiRunsOnCompute && m_surfelGiComputePersistentStateHandoff.valid()){
+        surfelGiStateSourcesReady = surfelGiStateSourcesReady
+            && appendDeclaredStateSource(
+                surfelGiStateSources,
+                LengthOf(surfelGiStateSources),
+                surfelGiStateSourceCount,
+                &m_surfelGiComputePersistentStateHandoff
+            )
+        ;
+    }
+    if(surfelGiRunsOnCompute && m_surfelIrradianceReturnStateHandoff.valid()){
+        surfelGiStateSourcesReady = surfelGiStateSourcesReady
+            && appendDeclaredStateSource(
+                surfelGiStateSources,
+                LengthOf(surfelGiStateSources),
+                surfelGiStateSourceCount,
+                &m_surfelIrradianceReturnStateHandoff
+            )
+        ;
+    }
+
     Core::GpuNativePacketRecorder surfelGiRecorder(device);
     const Core::GpuNativePacketRecordDesc surfelGiRecordDesc{
         .packet = surfelGiPacket,
-        .initialStates = surfelGiRunsOnCompute
-            ? &m_surfelGiComputeInputStateHandoff
-            : &m_postGbufferNormalizedStateHandoff,
-        .finalStates = &m_surfelGiStateHandoff,
+        .externalStateSources = surfelGiStateSources,
+        .externalStateSourceCount = surfelGiStateSourceCount,
     };
-    const bool surfelGiRecorded = surfelGiPacket.valid()
+    const bool surfelGiRecorded =
+        surfelGiStateSourcesReady
+        && m_surfelGiTaskGraphValid
+        && m_surfelGiTask.valid()
+        && m_surfelGiEffectsCompletion.valid()
+        && surfelGiPacket.valid()
         && surfelGiRecorder.recordPacket(
             m_surfelGiTaskGraph,
             m_surfelGiCompiledGraph,
             surfelGiRecordDesc,
             m_surfelGiRecordedGraph
         )
-        && m_surfelGiStateHandoff.valid()
     ;
-    if(!surfelGiRecorded){
+    const Core::CommandListResourceStateHandoff* const surfelGiFinalStateSeed = surfelGiRecorded
+        ? m_surfelGiRecordedGraph.packetFinalStateSeed(surfelGiPacket)
+        : nullptr
+    ;
+    if(!surfelGiRecorded || !surfelGiFinalStateSeed){
         m_surfelGiSubmissionTransaction.discardUnaccepted(
             m_surfelGiTaskGraph,
             m_surfelGiCompiledGraph
@@ -2143,13 +2051,20 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // AVBOIT now records graph-selected packets. The clear mirror changes with this tentative recording and is
-    // restored by discardRenderPackets until the pre packet accepts.
+
+    // AVBOIT's raster entry point imports the prefix packet state; all following stage boundaries are compiler
+    // seeded from the preceding AVBOIT packet.
     m_avboitState.m_targetsNeedClear = hasTransparentRenderers;
     Core::GpuNativePacketRecorder avboitRecorder(device);
+    const Core::GpuExternalPacketStateSource avboitPreStateSources[] = {
+        Core::GpuExternalPacketStateSource{
+            .states = graphicsPrefixStateSeed,
+        },
+    };
     const Core::GpuNativePacketRecordDesc avboitPreRecordDesc{
         .packet = avboitPrePacket,
-        .initialStates = &m_postGbufferNormalizedStateHandoff,
+        .externalStateSources = avboitPreStateSources,
+        .externalStateSourceCount = LengthOf(avboitPreStateSources),
     };
     const bool avboitPreRecorded =
         m_avboitTaskGraphValid
@@ -2172,8 +2087,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(avboitUsesAsyncCompute){
         const Core::GpuNativePacketRecordDesc avboitDepthWarpRecordDesc{
             .packet = avboitDepthWarpPacket,
-            .useCompiledStateSeeds = true,
-            .applyCompiledBarriers = true,
         };
         const bool avboitDepthWarpRecorded =
             avboitDepthWarpPacket.valid()
@@ -2192,8 +2105,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
         const Core::GpuNativePacketRecordDesc avboitExtinctionRecordDesc{
             .packet = avboitExtinctionPacket,
-            .useCompiledStateSeeds = true,
-            .applyCompiledBarriers = true,
         };
         const bool avboitExtinctionRecorded =
             avboitExtinctionPacket.valid()
@@ -2212,8 +2123,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
         const Core::GpuNativePacketRecordDesc avboitIntegrationRecordDesc{
             .packet = avboitIntegrationPacket,
-            .useCompiledStateSeeds = true,
-            .applyCompiledBarriers = true,
         };
         const bool avboitIntegrationRecorded =
             avboitIntegrationPacket.valid()
@@ -2232,8 +2141,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
         const Core::GpuNativePacketRecordDesc avboitAccumulationRecordDesc{
             .packet = avboitAccumulationPacket,
-            .useCompiledStateSeeds = true,
-            .applyCompiledBarriers = true,
         };
         const bool avboitAccumulationRecorded =
             avboitAccumulationPacket.valid()
@@ -2264,77 +2171,57 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // Lighting imports live effects only on the default path; lagged mode uses accepted history.
-    Core::Texture* const deferredLightingBaseTextures[] = {
-        deferredTargets.albedo.get(),
-        deferredTargets.normal.get(),
-        deferredTargets.worldPosition.get(),
-        deferredTargets.depth.get(),
-        deferredTargets.opaqueColor.get(),
-    };
-    Core::Buffer* const deferredLightingBaseBuffers[] = {
-        m_deferredState.m_sceneShadingBuffer.get(),
-        m_deferredState.m_lightBuffer.get(),
-        deferredTargets.bindless.slotsBuffer.get(),
-    };
-    Core::Texture* const shadowVisibilityLightingTextures[] = {
-        deferredTargets.shadowVisibility.get(),
-    };
-    Core::Texture* const causticIrradianceLightingTextures[] = {
-        deferredTargets.causticIrradiance.get(),
-    };
-    Core::Texture* const surfelIrradianceLightingTextures[] = {
-        deferredTargets.surfelIrradiance.get(),
-    };
-    Core::Texture* const avboitLightingTextures[] = {
-        deferredTargets.albedo.get(),
-        deferredTargets.normal.get(),
-        deferredTargets.worldPosition.get(),
-        deferredTargets.depth.get(),
-    };
+    // Lighting imports live effects only on the default path; lagged mode uses accepted history.  Each source is
+    // filtered by the lighting task declaration, so the graph owns the formerly hand-written state fan-in.
     Core::GpuExternalPacketStateSource deferredLightingStateSources[5] = {};
     usize deferredLightingStateSourceCount = 0u;
-    deferredLightingStateSources[deferredLightingStateSourceCount++] = Core::GpuExternalPacketStateSource{
-        .states = &m_postGbufferNormalizedStateHandoff,
-        .textures = deferredLightingBaseTextures,
-        .textureCount = LengthOf(deferredLightingBaseTextures),
-        .buffers = deferredLightingBaseBuffers,
-        .bufferCount = LengthOf(deferredLightingBaseBuffers),
-    };
+    bool deferredLightingStateSourcesReady = appendDeclaredStateSource(
+        deferredLightingStateSources,
+        LengthOf(deferredLightingStateSources),
+        deferredLightingStateSourceCount,
+        graphicsPrefixStateSeed
+    );
     if(!laggedAsyncLightingSchedule){
-        deferredLightingStateSources[deferredLightingStateSourceCount++] = Core::GpuExternalPacketStateSource{
-            .states = &m_shadowVisibilityStateHandoff,
-            .textures = shadowVisibilityLightingTextures,
-            .textureCount = LengthOf(shadowVisibilityLightingTextures),
-        };
-        deferredLightingStateSources[deferredLightingStateSourceCount++] = Core::GpuExternalPacketStateSource{
-            .states = &m_causticsStateHandoff,
-            .textures = causticIrradianceLightingTextures,
-            .textureCount = LengthOf(causticIrradianceLightingTextures),
-        };
-        deferredLightingStateSources[deferredLightingStateSourceCount++] = Core::GpuExternalPacketStateSource{
-            .states = &m_surfelGiStateHandoff,
-            .textures = surfelIrradianceLightingTextures,
-            .textureCount = LengthOf(surfelIrradianceLightingTextures),
-        };
+        deferredLightingStateSourcesReady = deferredLightingStateSourcesReady
+            && appendDeclaredStateSource(
+                deferredLightingStateSources,
+                LengthOf(deferredLightingStateSources),
+                deferredLightingStateSourceCount,
+                shadowVisibilityFinalStateSeed
+            )
+            && appendDeclaredStateSource(
+                deferredLightingStateSources,
+                LengthOf(deferredLightingStateSources),
+                deferredLightingStateSourceCount,
+                causticsFinalStateSeed
+            )
+            && appendDeclaredStateSource(
+                deferredLightingStateSources,
+                LengthOf(deferredLightingStateSources),
+                deferredLightingStateSourceCount,
+                surfelGiFinalStateSeed
+            )
+        ;
     }
-    deferredLightingStateSources[deferredLightingStateSourceCount++] = Core::GpuExternalPacketStateSource{
-        .states = avboitFinalStateSeed,
-        .textures = avboitLightingTextures,
-        .textureCount = LengthOf(avboitLightingTextures),
-    };
+    deferredLightingStateSourcesReady = deferredLightingStateSourcesReady
+        && appendDeclaredStateSource(
+            deferredLightingStateSources,
+            LengthOf(deferredLightingStateSources),
+            deferredLightingStateSourceCount,
+            avboitFinalStateSeed
+        )
+    ;
 
-    // The graph owns native recording and packet-boundary barriers. The recorder seeds exact external resource state
-    // directly from completed producers, without renderer-owned subset or fan-in handoffs.
+    // The graph owns native recording and packet-boundary barriers.
     Core::GpuNativePacketRecorder deferredLightingRecorder(device);
     const Core::GpuNativePacketRecordDesc deferredLightingRecordDesc{
         .packet = deferredLightingPacket,
         .externalStateSources = deferredLightingStateSources,
         .externalStateSourceCount = deferredLightingStateSourceCount,
-        .applyCompiledBarriers = true,
     };
     const bool deferredLightingRecorded =
-        m_deferredLightingTaskGraphValid
+        deferredLightingStateSourcesReady
+        && m_deferredLightingTaskGraphValid
         && m_deferredLightingTask.valid()
         && m_deferredLightingAvboitCompletion.valid()
         && deferredLightingDependentCompletion.valid()
@@ -2370,33 +2257,29 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    Core::Texture* const avboitCompositeTextures[] = {
-        deferredTargets.avboit.accumColor.get(),
-        deferredTargets.avboit.accumExtinction.get(),
-    };
-    Core::Texture* const opaqueColorCompositeTextures[] = {
-        deferredTargets.opaqueColor.get(),
-    };
-    Core::Buffer* const deferredCompositeBaseBuffers[] = {
-        deferredTargets.bindless.slotsBuffer.get(),
-    };
-    const Core::GpuExternalPacketStateSource deferredCompositeStateSources[] = {
-        Core::GpuExternalPacketStateSource{
-            .states = &m_postGbufferNormalizedStateHandoff,
-            .buffers = deferredCompositeBaseBuffers,
-            .bufferCount = LengthOf(deferredCompositeBaseBuffers),
-        },
-        Core::GpuExternalPacketStateSource{
-            .states = avboitFinalStateSeed,
-            .textures = avboitCompositeTextures,
-            .textureCount = LengthOf(avboitCompositeTextures),
-        },
-        Core::GpuExternalPacketStateSource{
-            .states = deferredLightingFinalStateSeed,
-            .textures = opaqueColorCompositeTextures,
-            .textureCount = LengthOf(opaqueColorCompositeTextures),
-        },
-    };
+    Core::GpuExternalPacketStateSource deferredCompositeStateSources[3] = {};
+    usize deferredCompositeStateSourceCount = 0u;
+    const bool deferredCompositeStateSourcesReady =
+        appendDeclaredStateSource(
+            deferredCompositeStateSources,
+            LengthOf(deferredCompositeStateSources),
+            deferredCompositeStateSourceCount,
+            graphicsPrefixStateSeed
+        )
+        && appendDeclaredStateSource(
+            deferredCompositeStateSources,
+            LengthOf(deferredCompositeStateSources),
+            deferredCompositeStateSourceCount,
+            avboitFinalStateSeed
+        )
+        && appendDeclaredStateSource(
+            deferredCompositeStateSources,
+            LengthOf(deferredCompositeStateSources),
+            deferredCompositeStateSourceCount,
+            deferredLightingFinalStateSeed
+        )
+    ;
+
 
     const Core::GpuSubmissionPacketId deferredCompositePacket = m_deferredCompositeCompiledGraph.packetForTask(
         m_deferredCompositeTask
@@ -2405,11 +2288,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuNativePacketRecordDesc deferredCompositeRecordDesc{
         .packet = deferredCompositePacket,
         .externalStateSources = deferredCompositeStateSources,
-        .externalStateSourceCount = LengthOf(deferredCompositeStateSources),
-        .applyCompiledBarriers = true,
+        .externalStateSourceCount = deferredCompositeStateSourceCount,
     };
     const bool deferredCompositeRecorded =
-        m_deferredCompositeTaskGraphValid
+        deferredCompositeStateSourcesReady
+        && m_deferredCompositeTaskGraphValid
         && m_deferredCompositeTask.valid()
         && m_deferredCompositeLightingCompletion.valid()
         && deferredCompositePacket.valid()
@@ -2444,34 +2327,31 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    Core::Texture* const compositeColorPresentTextures[] = {
-        deferredTargets.compositeColor.get(),
-    };
-    Core::Buffer* const deferredPresentBaseBuffers[] = {
-        deferredTargets.bindless.slotsBuffer.get(),
-    };
-    const Core::GpuExternalPacketStateSource deferredPresentStateSources[] = {
-        Core::GpuExternalPacketStateSource{
-            .states = &m_postGbufferNormalizedStateHandoff,
-            .buffers = deferredPresentBaseBuffers,
-            .bufferCount = LengthOf(deferredPresentBaseBuffers),
-        },
-        Core::GpuExternalPacketStateSource{
-            .states = deferredCompositeFinalStateSeed,
-            .textures = compositeColorPresentTextures,
-            .textureCount = LengthOf(compositeColorPresentTextures),
-        },
-    };
-
+    Core::GpuExternalPacketStateSource deferredPresentStateSources[2] = {};
+    usize deferredPresentStateSourceCount = 0u;
+    const bool deferredPresentStateSourcesReady =
+        appendDeclaredStateSource(
+            deferredPresentStateSources,
+            LengthOf(deferredPresentStateSources),
+            deferredPresentStateSourceCount,
+            graphicsPrefixStateSeed
+        )
+        && appendDeclaredStateSource(
+            deferredPresentStateSources,
+            LengthOf(deferredPresentStateSources),
+            deferredPresentStateSourceCount,
+            deferredCompositeFinalStateSeed
+        )
+    ;
     Core::GpuNativePacketRecorder deferredPresentRecorder(device);
     const Core::GpuNativePacketRecordDesc deferredPresentRecordDesc{
         .packet = deferredPresentPacket,
         .externalStateSources = deferredPresentStateSources,
-        .externalStateSourceCount = LengthOf(deferredPresentStateSources),
-        .applyCompiledBarriers = true,
+        .externalStateSourceCount = deferredPresentStateSourceCount,
     };
     const bool deferredPresentRecorded =
-        m_deferredPresentTaskGraphValid
+        deferredPresentStateSourcesReady
+        && m_deferredPresentTaskGraphValid
         && m_deferredPresentTask.valid()
         && m_deferredPresentCompositeCompletion.valid()
         && (!laggedAsyncLightingSchedule || m_deferredPresentSurfelGiCompletion.valid())
@@ -2494,41 +2374,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // The graph packet imports the established parallel command-list bundle and becomes its sole submission owner.
-    Core::CommandList* const graphicsPrefixCommandLists[] = {
-        meshViewSetupCommandList,
-        sceneShadingSetupCommandList,
-        deferredClearCommandList,
-        gbufferCommandList,
-        postGbufferNormalizeCommandList,
-    };
-    Core::GpuNativePacketRecorder graphicsPrefixRecorder(device);
-    const Core::GpuImportedPacketRecordDesc graphicsPrefixRecordDesc{
-        .packet = graphicsPrefixPacket,
-        .commandLists = graphicsPrefixCommandLists,
-        .commandListCount = LengthOf(graphicsPrefixCommandLists),
-    };
-    const bool graphicsPrefixRecorded =
-        m_graphicsPrefixTaskGraphValid
-        && m_graphicsPrefixTask.valid()
-        && graphicsPrefixPacket.valid()
-        && graphicsPrefixRecorder.recordImportedPacket(
-            m_graphicsPrefixTaskGraph,
-            m_graphicsPrefixCompiledGraph,
-            graphicsPrefixRecordDesc,
-            m_graphicsPrefixRecordedGraph
-        )
-    ;
-    if(!graphicsPrefixRecorded){
-        m_graphicsPrefixSubmissionTransaction.discardUnaccepted(
-            m_graphicsPrefixTaskGraph,
-            m_graphicsPrefixCompiledGraph
-        );
-        graphicsPrefixTimingTicket.discard();
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to import graph-owned graphics prefix"));
-        discardRenderPackets();
-        return;
-    }
 
     const auto submitFrameRecoveryPacket = [&](const Core::QueueSubmissionToken* asyncWaitToken) -> bool {
         // Retire the accepted frame scope after a rejected packet and, when applicable, join accepted async work
@@ -3017,7 +2862,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 // Retain accepted producer state for recovery after later rejection.
                 const bool producerReturnStatesReady =
                     m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
-                        m_shadowVisibilityStateHandoff,
+                        *shadowVisibilityFinalStateSeed,
                         deferredTargets.shadowVisibility.get()
                     )
                 ;
@@ -3057,7 +2902,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     m_rayTracingState.m_swShadowIndirectArgsBuffer.get(),
                 };
                 if(!m_shadowComputePersistentStateHandoff.buildResourceSubset(
-                    m_shadowVisibilityStateHandoff,
+                    *shadowVisibilityFinalStateSeed,
                     shadowComputeScratchTextures,
                     LengthOf(shadowComputeScratchTextures),
                     shadowComputeScratchBuffers,
@@ -3166,7 +3011,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 if(softwareCausticsRunsOnCompute){
                     const bool softwareCausticsStateReady =
                         m_causticIrradianceReturnStateHandoff.buildTextureSubset(
-                            m_causticsStateHandoff,
+                            *causticsFinalStateSeed,
                             deferredTargets.causticIrradiance.get()
                         )
                     ;
@@ -3189,7 +3034,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                         deferredTargets.causticResolveGeometry.get(),
                     };
                     if(!m_causticsComputePersistentStateHandoff.buildResourceSubset(
-                        m_causticsStateHandoff,
+                        *causticsFinalStateSeed,
                         causticsComputeScratchTextures,
                         LengthOf(causticsComputeScratchTextures),
                         nullptr,
@@ -3247,7 +3092,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 return;
             }
             if(!m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
-                m_surfelGiStateHandoff,
+                *surfelGiFinalStateSeed,
                 deferredTargets.surfelIrradiance.get()
             )){
                 discardUnacceptedGraphPackets();
@@ -3274,7 +3119,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     m_rayTracingState.m_surfelCounterReadback.get(),
                 };
                 if(!m_surfelGiComputePersistentStateHandoff.buildResourceSubset(
-                    m_surfelGiStateHandoff,
+                    *surfelGiFinalStateSeed,
                     surfelGiComputeScratchTextures,
                     LengthOf(surfelGiComputeScratchTextures),
                     surfelGiComputeScratchBuffers,
@@ -3295,22 +3140,35 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     }
 
     if(captureLaggedLightingHistory){
-        // The graph task waits on the accepted final presentation token.  Manual state handoff remains only until
-        // compiler-produced packet state seeds replace the renderer's existing transition bridge.
+        // The graph task waits on the accepted final presentation token. Its declared source uses select the
+        // retained producer snapshots directly; the recorder owns all current-frame state fan-in and barriers.
         const Core::CommandListResourceStateHandoff* const causticHistoryCopySource = laggedAsyncLightingSchedule
             ? &m_causticIrradianceLightingStateHandoff
             : &m_causticIrradianceReturnStateHandoff
         ;
-        const Core::CommandListResourceStateHandoff* const historyCopyBranches[] = {
-            causticHistoryCopySource,
-            &m_surfelIrradianceReturnStateHandoff,
-        };
-        const bool historyCopyInputReady = m_laggedLightingHistoryCopyInputStateHandoff.buildFanIn(
-            m_shadowVisibilityReturnStateHandoff,
-            historyCopyBranches,
-            LengthOf(historyCopyBranches)
-        );
-        if(!historyCopyInputReady){
+        Core::GpuExternalPacketStateSource historyCopyStateSources[3] = {};
+        usize historyCopyStateSourceCount = 0u;
+        const bool historyCopyStateSourcesReady =
+            appendDeclaredStateSource(
+                historyCopyStateSources,
+                LengthOf(historyCopyStateSources),
+                historyCopyStateSourceCount,
+                &m_shadowVisibilityReturnStateHandoff
+            )
+            && appendDeclaredStateSource(
+                historyCopyStateSources,
+                LengthOf(historyCopyStateSources),
+                historyCopyStateSourceCount,
+                causticHistoryCopySource
+            )
+            && appendDeclaredStateSource(
+                historyCopyStateSources,
+                LengthOf(historyCopyStateSources),
+                historyCopyStateSourceCount,
+                &m_surfelIrradianceReturnStateHandoff
+            )
+        ;
+        if(!historyCopyStateSourcesReady){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged lighting-history capture skipped because its source state was unavailable"));
             invalidateLaggedLightingHistorySubmission();
         }
@@ -3322,7 +3180,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: lagged lighting-history graph was unavailable; reverting to current-frame lighting"));
             invalidateLaggedLightingHistorySubmission();
-            resetLaggedLightingHistoryCopyStateHandoffs();
         }
         else{
             const Core::GpuSubmissionPacketId historyPacket = m_laggedLightingHistoryCompiledGraph.packetForTask(
@@ -3331,9 +3188,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             Core::GpuNativePacketRecorder recorder(device);
             const Core::GpuNativePacketRecordDesc recordDesc{
                 .packet = historyPacket,
-                .initialStates = &m_laggedLightingHistoryCopyInputStateHandoff,
-                .finalStates = &m_laggedLightingHistoryCopyStateHandoff,
-                .applyCompiledBarriers = true,
+                .externalStateSources = historyCopyStateSources,
+                .externalStateSourceCount = historyCopyStateSourceCount,
             };
             const bool historyCopyRecorded = historyPacket.valid()
                 && recorder.recordPacket(
@@ -3342,16 +3198,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     recordDesc,
                     m_laggedLightingHistoryRecordedGraph
                 )
-                && m_laggedLightingHistoryCopyStateHandoff.valid()
             ;
-            if(!historyCopyRecorded){
+            const Core::CommandListResourceStateHandoff* const historyCopyFinalStateSeed = historyCopyRecorded
+                ? m_laggedLightingHistoryRecordedGraph.packetFinalStateSeed(historyPacket)
+                : nullptr
+            ;
+            if(!historyCopyRecorded || !historyCopyFinalStateSeed){
                 m_laggedLightingHistorySubmissionTransaction.discardUnaccepted(
                     m_laggedLightingHistoryTaskGraph,
                     m_laggedLightingHistoryCompiledGraph
                 );
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record graph-owned lagged lighting-history capture; reverting to current-frame lighting"));
                 invalidateLaggedLightingHistorySubmission();
-                resetLaggedLightingHistoryCopyStateHandoffs();
             }
             else{
                 Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
@@ -3377,20 +3235,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 if(!historyCopySubmissionToken.valid()){
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned lagged lighting-history capture submission was rejected; reverting to current-frame lighting"));
                     invalidateLaggedLightingHistorySubmission();
-                    resetLaggedLightingHistoryCopyStateHandoffs();
                 }
                 else{
                     const bool historyCopyReturnStatesReady =
                         m_shadowVisibilityReturnStateHandoff.buildTextureSubset(
-                            m_laggedLightingHistoryCopyStateHandoff,
+                            *historyCopyFinalStateSeed,
                             deferredTargets.shadowVisibility.get()
                         )
                         && m_causticIrradianceReturnStateHandoff.buildTextureSubset(
-                            m_laggedLightingHistoryCopyStateHandoff,
+                            *historyCopyFinalStateSeed,
                             deferredTargets.causticIrradiance.get()
                         )
                         && m_surfelIrradianceReturnStateHandoff.buildTextureSubset(
-                            m_laggedLightingHistoryCopyStateHandoff,
+                            *historyCopyFinalStateSeed,
                             deferredTargets.surfelIrradiance.get()
                         )
                     ;

@@ -121,7 +121,6 @@ public:
         m_laggedLightingReport = LaggedLightingReport::Unreported;
         m_laggedLightingReportGeneration = 0u;
         resetLaggedLightingHistoryTracking();
-        resetLaggedLightingHistoryCopyStateHandoffs();
     }
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept{ return m_frameLaggedAsyncLightingEnabled; }
 
@@ -136,7 +135,6 @@ private:
     void resetFrameRecordingStateHandoffs()noexcept;
     void resetAbandonedFrameStateHandoffs()noexcept;
     void resetRejectedShadowVisibilityStateHandoffs()noexcept;
-    void resetLaggedLightingHistoryCopyStateHandoffs()noexcept;
     void invalidateLaggedLightingHistorySubmission()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
     void buildGraphicsPrefixTaskGraph(
@@ -364,34 +362,21 @@ private:
     Core::CommandListResourceStateHandoff m_frameSetupStateFanInHandoff;
     Core::CommandListResourceStateHandoff m_gbufferStateHandoff;
     Core::CommandListResourceStateHandoff m_postGbufferNormalizedStateHandoff;
-    Core::CommandListResourceStateHandoff m_shadowComputeBaseStateHandoff;
-    Core::CommandListResourceStateHandoff m_shadowComputeInputStateHandoff;
-    // Compute-only shadow scratch/history retains its state across frames. Deferred lighting now consumes the
-    // visibility result on the same Compute lane, so the result snapshot remains Compute-local until the next frame.
+    // Compute-only shadow scratch/history retains accepted graph packet state across frames. Deferred lighting now
+    // consumes the visibility result on the same Compute lane, so the result snapshot remains Compute-local.
     Core::CommandListResourceStateHandoff m_shadowComputePersistentStateHandoff;
-    Core::CommandListResourceStateHandoff m_shadowVisibilityStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityReturnStateHandoff;
     // Software caustics retain their temporal scratch on the dedicated Compute lane. Hardware dispatch-rays caustics
     // use the Graphics hardware-caustics packet; normal deferred lighting consumes either resolved irradiance on Compute, while
     // the optional lagged path snapshots it for the next Graphics lighting packet.
-    Core::CommandListResourceStateHandoff m_causticsComputeBaseStateHandoff;
-    Core::CommandListResourceStateHandoff m_causticsComputeInputStateHandoff;
     Core::CommandListResourceStateHandoff m_causticsComputePersistentStateHandoff;
-    Core::CommandListResourceStateHandoff m_causticsStateHandoff;
     Core::CommandListResourceStateHandoff m_causticIrradianceLightingStateHandoff;
     Core::CommandListResourceStateHandoff m_causticIrradianceReturnStateHandoff;
     // Surfel GI is also entirely compute-dispatched, including its RayQuery trace variant. Its field/history stays on
     // AsyncCompute; the resolved full-resolution irradiance is either consumed there or snapshotted for optional
     // frame-lagged Graphics lighting.
-    Core::CommandListResourceStateHandoff m_surfelGiComputeBaseStateHandoff;
-    Core::CommandListResourceStateHandoff m_surfelGiComputeInputStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelGiComputePersistentStateHandoff;
-    Core::CommandListResourceStateHandoff m_surfelGiStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelIrradianceReturnStateHandoff;
-    // The source images leave the accepted producer/current-lighting path in this state while the graph-owned copy
-    // records into separately tracked history. The history textures themselves restore to Common on close.
-    Core::CommandListResourceStateHandoff m_laggedLightingHistoryCopyInputStateHandoff;
-    Core::CommandListResourceStateHandoff m_laggedLightingHistoryCopyStateHandoff;
     Core::CommandListHandle m_meshViewSetupCommandList;
     Core::CommandListHandle m_sceneShadingSetupCommandList;
     Core::CommandListHandle m_deferredClearCommandList;

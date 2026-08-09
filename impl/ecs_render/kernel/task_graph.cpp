@@ -1041,9 +1041,18 @@ void RendererSystem::buildShadowVisibilityTaskGraph(
             m_rayTracingState.m_tlas,
             AccelStructResourceDesc(Name("render.shadow_visibility.tlas"), "Scene TLAS")
         );
-        optionalResourcesImported = optionalResourcesImported && tlas.valid();
-        if(tlas.valid())
+        const Core::GpuGraphResourceId tlasBackingBuffer = importBuffer(
+            m_rayTracingState.m_tlas->getBackingBufferHandle(),
+            Name("render.shadow_visibility.tlas_backing"),
+            "Scene TLAS Backing"
+        );
+        optionalResourcesImported = optionalResourcesImported && tlas.valid() && tlasBackingBuffer.valid();
+        if(tlas.valid() && tlasBackingBuffer.valid()){
             resourceUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
+            // setAccelStructState lowers through this buffer; importing it explicitly keeps declaration-driven
+            // external state seeding and ownership handoff complete.
+            resourceUses.push_back(ReadUse(tlasBackingBuffer, Core::ResourceStates::AccelStructRead));
+        }
     }
     if(!optionalResourcesImported){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a shadow-visibility dynamic resource"));
@@ -1321,9 +1330,16 @@ void RendererSystem::buildHardwareCausticsTaskGraph(
             m_rayTracingState.m_tlas,
             AccelStructResourceDesc(Name("render.hardware_caustics.tlas"), "Scene TLAS")
         );
-        optionalResourcesImported = optionalResourcesImported && tlas.valid();
-        if(tlas.valid())
+        const Core::GpuGraphResourceId tlasBackingBuffer = importBuffer(
+            m_rayTracingState.m_tlas->getBackingBufferHandle(),
+            Name("render.hardware_caustics.tlas_backing"),
+            "Scene TLAS Backing"
+        );
+        optionalResourcesImported = optionalResourcesImported && tlas.valid() && tlasBackingBuffer.valid();
+        if(tlas.valid() && tlasBackingBuffer.valid()){
             resourceUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
+            resourceUses.push_back(ReadUse(tlasBackingBuffer, Core::ResourceStates::AccelStructRead));
+        }
     }
     if(!optionalResourcesImported){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a hardware-caustics dynamic resource"));

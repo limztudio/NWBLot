@@ -23,11 +23,6 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
     if(!m_deferredState.m_targets.valid())
         return false;
 
-    if(m_gpuTaskGraphShadowPending){
-        buildGpuTaskGraphShadow(m_gpuTaskGraphShadowInput, m_deferredState.m_targets);
-        m_gpuTaskGraphShadowPending = false;
-    }
-
     using Handle = Core::Telemetry::FrameGraphNodeHandle;
     namespace Edge = Core::Telemetry::FrameGraphEdgeKind;
 
@@ -161,14 +156,14 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
     builder.addEdge(deferredComposite, deferredPresent, Edge::DependsOn);
     builder.addEdge(deferredPresent, backBuffer, Edge::Writes);
 
-    if(m_gpuTaskGraphShadowValid){
+    if(m_gpuTaskGraphValid){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphShadowArena);
         const Core::GpuTaskGraphTelemetryOptions taskGraphTelemetryOptions{
-            .legacyScheduleMismatches = m_gpuTaskGraphShadowLegacyMismatches.data(),
-            .legacyScheduleMismatchCount = m_gpuTaskGraphShadowLegacyMismatches.size(),
+            .legacyScheduleMismatches = m_gpuTaskGraphLegacyMismatches.data(),
+            .legacyScheduleMismatchCount = m_gpuTaskGraphLegacyMismatches.size(),
             .queueAssignments = &m_gpuTaskGraphQueueAssignments,
-            .legacyQueueMismatches = m_gpuTaskGraphShadowLegacyQueueMismatches.data(),
-            .legacyQueueMismatchCount = m_gpuTaskGraphShadowLegacyQueueMismatches.size(),
+            .legacyQueueMismatches = m_gpuTaskGraphLegacyQueueMismatches.data(),
+            .legacyQueueMismatchCount = m_gpuTaskGraphLegacyQueueMismatches.size(),
         };
         if(!m_gpuTaskGraph.appendFrameGraphTelemetry(
             builder,

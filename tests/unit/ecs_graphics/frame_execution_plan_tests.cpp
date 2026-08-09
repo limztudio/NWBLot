@@ -133,6 +133,73 @@ TEST(EcsGraphics, FrameExecutionPlanRoutesNoDedicatedComputeWorkThroughGraphicsP
 }
 
 
+TEST(EcsGraphics, FrameExecutionPlanExposesLegacyPhysicalQueueParityOracle){
+    const FrameExecutionPlan graphicsPlan(FrameExecutionPlanInput{
+        false,
+        true,
+        true,
+        true,
+        true,
+    });
+    for(usize workIndex = 0u; workIndex < FrameExecutionWork::kCount; ++workIndex){
+        const FrameExecutionWork::Enum work = static_cast<FrameExecutionWork::Enum>(workIndex);
+        if(!graphicsPlan.hasWork(work))
+            continue;
+        EXPECT_EQ(graphicsPlan.expectedQueueForWork(work), CommandQueue::Graphics);
+        EXPECT_TRUE(graphicsPlan.workMatchesExpectedQueue(work, CommandQueue::Graphics));
+        EXPECT_FALSE(graphicsPlan.workMatchesExpectedQueue(work, CommandQueue::Compute));
+    }
+
+    const FrameExecutionPlan dedicatedPlan(FrameExecutionPlanInput{
+        true,
+        false,
+        false,
+        false,
+        true,
+    });
+    EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::RayEffects), CommandQueue::Compute);
+    EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::Caustics), CommandQueue::Compute);
+    EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::SurfelGi), CommandQueue::Compute);
+    EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::DeferredLighting), CommandQueue::Compute);
+    EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::DeferredComposite), CommandQueue::Compute);
+    EXPECT_TRUE(dedicatedPlan.workMatchesExpectedQueue(FrameExecutionWork::DeferredLighting, CommandQueue::Compute));
+    EXPECT_FALSE(dedicatedPlan.workMatchesExpectedQueue(FrameExecutionWork::DeferredLighting, CommandQueue::Graphics));
+    EXPECT_EQ(dedicatedPlan.expectedQueueForWork(FrameExecutionWork::LaggedLightingStash), CommandQueue::kCount);
+    EXPECT_FALSE(dedicatedPlan.workMatchesExpectedQueue(FrameExecutionWork::LaggedLightingStash, CommandQueue::Graphics));
+
+    const FrameExecutionPlan laggedPlan(FrameExecutionPlanInput{
+        true,
+        true,
+        true,
+        true,
+        false,
+    });
+    EXPECT_EQ(laggedPlan.expectedQueueForWork(FrameExecutionWork::RayEffects), CommandQueue::Compute);
+    EXPECT_EQ(laggedPlan.expectedQueueForWork(FrameExecutionWork::DeferredLighting), CommandQueue::Graphics);
+    EXPECT_EQ(laggedPlan.expectedQueueForWork(FrameExecutionWork::DeferredComposite), CommandQueue::Graphics);
+    EXPECT_EQ(laggedPlan.expectedQueueForWork(FrameExecutionWork::LaggedLightingStash), CommandQueue::Compute);
+    EXPECT_TRUE(laggedPlan.workMatchesExpectedQueue(FrameExecutionWork::DeferredLighting, CommandQueue::Graphics));
+    EXPECT_FALSE(laggedPlan.workMatchesExpectedQueue(FrameExecutionWork::DeferredLighting, CommandQueue::Compute));
+
+    const FrameExecutionLaneCommandListPair commandLists{
+        TestCommandList(1u),
+        TestCommandList(2u),
+    };
+    EXPECT_EQ(
+        FrameExecutionPlan::commandListForResolvedQueue(CommandQueue::Graphics, commandLists),
+        commandLists.graphics
+    );
+    EXPECT_EQ(
+        FrameExecutionPlan::commandListForResolvedQueue(CommandQueue::Compute, commandLists),
+        commandLists.asyncCompute
+    );
+    EXPECT_EQ(
+        FrameExecutionPlan::commandListForResolvedQueue(CommandQueue::kCount, commandLists),
+        nullptr
+    );
+}
+
+
 TEST(EcsGraphics, FrameExecutionPlanDescribesDedicatedBootstrapAndLaggedTopologies){
     const FrameExecutionPlan opaquePlan(FrameExecutionPlanInput{
         true,

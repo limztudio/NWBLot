@@ -308,6 +308,31 @@ public:
     )const noexcept{
         return work < FrameExecutionWork::kCount && hasWork(work) && laneForWork(work) == lane;
     }
+    // The legacy plan is the migration parity oracle.  Its scheduler lane is intent, while this is the concrete
+    // transport expected by the established two-queue renderer topology.  A graph route may drive native recording
+    // only after it agrees with this mapping for every enabled work item.
+    [[nodiscard]] Core::CommandQueue::Enum expectedQueueForWork(
+        const FrameExecutionWork::Enum work
+    )const noexcept{
+        if(work >= FrameExecutionWork::kCount || !hasWork(work))
+            return Core::CommandQueue::kCount;
+
+        switch(laneForWork(work)){
+            case Core::RenderLane::Graphics:
+                return Core::CommandQueue::Graphics;
+            case Core::RenderLane::AsyncCompute:
+                return Core::CommandQueue::Compute;
+            default:
+                NWB_ASSERT(false);
+                return Core::CommandQueue::kCount;
+        }
+    }
+    [[nodiscard]] bool workMatchesExpectedQueue(
+        const FrameExecutionWork::Enum work,
+        const Core::CommandQueue::Enum queue
+    )const noexcept{
+        return expectedQueueForWork(work) == queue;
+    }
     [[nodiscard]] bool packetWaitsForExternalToken(
         const FrameExecutionPacket::Enum packetID,
         const FrameExecutionExternalWait::Enum externalWait
@@ -332,16 +357,18 @@ public:
         const FrameExecutionWork::Enum work,
         const FrameExecutionLaneCommandListPair& commandLists
     )const noexcept{
-        if(work >= FrameExecutionWork::kCount || !hasWork(work))
-            return nullptr;
-
-        switch(laneForWork(work)){
-            case Core::RenderLane::Graphics:
+        return commandListForResolvedQueue(expectedQueueForWork(work), commandLists);
+    }
+    [[nodiscard]] static Core::CommandList* commandListForResolvedQueue(
+        const Core::CommandQueue::Enum queue,
+        const FrameExecutionLaneCommandListPair& commandLists
+    )noexcept{
+        switch(queue){
+            case Core::CommandQueue::Graphics:
                 return commandLists.graphics;
-            case Core::RenderLane::AsyncCompute:
+            case Core::CommandQueue::Compute:
                 return commandLists.asyncCompute;
             default:
-                NWB_ASSERT(false);
                 return nullptr;
         }
     }

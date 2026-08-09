@@ -54,6 +54,7 @@ namespace ECSRenderDetail{
 #if defined(NWB_DEBUG)
     struct MaterialTypedInstanceRangeVector;
 #endif
+    class FrameExecutionPlan;
 };
 
 
@@ -79,7 +80,7 @@ private:
         CurrentFrameAccepted,
     };
 
-    struct GpuTaskGraphShadowFrameInput{
+    struct GpuTaskGraphFrameInput{
         bool dedicatedAsyncCompute = false;
         bool frameLaggedAsyncLightingEnabled = false;
         bool laggedLightingHistoryReady = false;
@@ -145,9 +146,10 @@ private:
     void resetLaggedLightingStashStateHandoffs()noexcept;
     void invalidateLaggedLightingHistorySubmission()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
-    void buildGpuTaskGraphShadow(
-        const GpuTaskGraphShadowFrameInput& input,
-        const DeferredFrameTargets& deferredTargets
+    void buildGpuTaskGraph(
+        const GpuTaskGraphFrameInput& input,
+        const DeferredFrameTargets& deferredTargets,
+        const ECSRenderDetail::FrameExecutionPlan& legacyPlan
     );
     void reportLaggedLightingTransition(LaggedLightingReport report, u64 targetGeneration);
     [[nodiscard]] Core::Alloc::GlobalArena& arena()noexcept{ return m_arena; }
@@ -176,18 +178,19 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;
-    // The generic task graph is observational through Phase 2. It owns imported handles and physical queue
-    // assignment metadata until telemetry capture following render(), while FrameExecutionPlan remains the only live
-    // scheduling and submission authority.
+    // The graph compiles before native recording.  Its resolved CommandQueue selects paired command lists only after
+    // every enabled work item agrees with FrameExecutionPlan's parity contract; the legacy plan retains packet
+    // grouping, submissions, timing, recovery, and the fallback route.  FrameGraph remains telemetry only.
     Core::GpuTaskGraph m_gpuTaskGraph;
     Core::GpuTaskGraphAnalysis m_gpuTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_gpuTaskGraphQueueAssignments;
-    Core::GraphicsVector<Core::GpuTaskDependencyEdge> m_gpuTaskGraphShadowLegacyMismatches;
-    Core::GraphicsVector<Core::GpuTaskId> m_gpuTaskGraphShadowLegacyQueueMismatches;
-    GpuTaskGraphShadowFrameInput m_gpuTaskGraphShadowInput;
-    u16 m_gpuTaskGraphShadowDeviceGeneration = 1u;
-    bool m_gpuTaskGraphShadowValid = false;
-    bool m_gpuTaskGraphShadowPending = false;
+    Core::GraphicsVector<Core::GpuTaskId> m_gpuTaskGraphWorkTasks;
+    Core::GraphicsVector<Core::CommandQueue::Enum> m_gpuTaskGraphWorkQueues;
+    Core::GraphicsVector<Core::GpuTaskDependencyEdge> m_gpuTaskGraphLegacyMismatches;
+    Core::GraphicsVector<Core::GpuTaskId> m_gpuTaskGraphLegacyQueueMismatches;
+    u16 m_gpuTaskGraphDeviceGeneration = 1u;
+    bool m_gpuTaskGraphValid = false;
+    bool m_gpuTaskGraphLiveRoutingValid = false;
 
 private:
     RendererMeshState m_meshState;

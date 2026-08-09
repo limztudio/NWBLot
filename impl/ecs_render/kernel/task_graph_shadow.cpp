@@ -204,38 +204,50 @@ struct WorkMetadata{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererSystem::buildGpuTaskGraphShadow(
-    const GpuTaskGraphShadowFrameInput& input,
-    const DeferredFrameTargets& deferredTargets
+void RendererSystem::buildGpuTaskGraph(
+    const GpuTaskGraphFrameInput& input,
+    const DeferredFrameTargets& deferredTargets,
+    const ECSRenderDetail::FrameExecutionPlan& frameExecutionPlan
 ){
     using namespace __hidden_renderer_task_graph_shadow;
 
-    m_gpuTaskGraphShadowValid = false;
-    m_gpuTaskGraphShadowLegacyMismatches.clear();
-    m_gpuTaskGraphShadowLegacyQueueMismatches.clear();
+    m_gpuTaskGraphValid = false;
+    m_gpuTaskGraphLiveRoutingValid = false;
+    m_gpuTaskGraphWorkTasks.clear();
+    m_gpuTaskGraphWorkQueues.clear();
+    m_gpuTaskGraphLegacyMismatches.clear();
+    m_gpuTaskGraphLegacyQueueMismatches.clear();
     m_gpuTaskGraph.reset();
     m_gpuTaskGraphAnalysis.reset();
     m_gpuTaskGraphQueueAssignments.reset();
+
+    m_gpuTaskGraphWorkTasks.reserve(Work::kCount);
+    m_gpuTaskGraphWorkQueues.reserve(Work::kCount);
+    for(usize workIndex = 0u; workIndex < Work::kCount; ++workIndex){
+        m_gpuTaskGraphWorkTasks.push_back(Core::GpuTaskId{});
+        m_gpuTaskGraphWorkQueues.push_back(Core::CommandQueue::kCount);
+    }
 
     const auto& device = graphics().getDevice();
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
     const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
     // The existing renderer reports dedicated AsyncCompute only for a distinct compute transport. Recheck the
-    // physical family identity here so a future backend cannot accidentally make the shadow compiler invent overlap.
+    // physical family identity here so a future backend cannot accidentally make the graph compiler invent overlap.
     const bool dedicatedAsyncCompute = input.dedicatedAsyncCompute
         && computeFamilyIndex != Limit<u32>::s_Max
         && computeFamilyIndex != graphicsFamilyIndex
     ;
 
-    const ECSRenderDetail::FrameExecutionPlanInput frameExecutionPlanInput{
-        dedicatedAsyncCompute,
-        input.frameLaggedAsyncLightingEnabled,
-        input.laggedLightingHistoryReady,
-        input.laggedLightingHistoryAccepted,
-        input.hasTransparentRenderers,
-        input.hardwareCaustics,
-    };
-    const ECSRenderDetail::FrameExecutionPlan frameExecutionPlan(frameExecutionPlanInput);
+    if(
+        dedicatedAsyncCompute != input.dedicatedAsyncCompute
+        || dedicatedAsyncCompute != frameExecutionPlan.workRunsOnLane(
+            Work::RayEffects,
+            Core::RenderLane::AsyncCompute
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph queue topology disagrees with the legacy frame plan"));
+        return;
+    }
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_gpuTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
     };
@@ -292,7 +304,7 @@ void RendererSystem::buildGpuTaskGraphShadow(
         || !meshViewBuffer.valid()
         || !backbuffer.valid()
     ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph shadow could not import required renderer resources"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph could not import required renderer resources"));
         return;
     }
 
@@ -323,7 +335,7 @@ void RendererSystem::buildGpuTaskGraphShadow(
             "AVBOIT Transmittance"
         );
         if(!avboitLowRaster.valid() || !avboitAccumColor.valid() || !avboitExtinction.valid() || !avboitTransmittance.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph shadow could not import AVBOIT resources"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph could not import AVBOIT resources"));
             return;
         }
     }
@@ -350,7 +362,7 @@ void RendererSystem::buildGpuTaskGraphShadow(
             "History Surfel Irradiance"
         );
         if(!historyShadowVisibility.valid() || !historyCausticIrradiance.valid() || !historySurfelIrradiance.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph shadow could not import lagged-lighting history"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph could not import lagged-lighting history"));
             return;
         }
     }
@@ -371,7 +383,7 @@ void RendererSystem::buildGpuTaskGraphShadow(
         ;
         laggedHistoryCompletion = m_gpuTaskGraph.importExternalCompletion(completion);
         if(!laggedHistoryCompletion.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph shadow could not import lagged-lighting completion"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph could not import lagged-lighting completion"));
             return;
         }
     }
@@ -381,7 +393,7 @@ void RendererSystem::buildGpuTaskGraphShadow(
         ExternalWait::LaggedLightingHistory
     );
 
-    Core::GpuTaskId workTasks[Work::kCount] = {};
+    Core::GraphicsVector<Core::GpuTaskId>& workTasks = m_gpuTaskGraphWorkTasks;
     const auto addWorkTask = [&](const Work::Enum work, const Core::GpuTaskResourceUse* const resourceUses, const usize resourceUseCount){
         if(!frameExecutionPlan.hasWork(work))
             return true;
@@ -531,14 +543,14 @@ void RendererSystem::buildGpuTaskGraphShadow(
         && addWorkTask(Work::LaggedLightingStash, laggedLightingStashUses, LengthOf(laggedLightingStashUses))
     ;
     if(!graphBuilt){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph shadow could not reproduce frame-plan dependencies"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph could not reproduce frame-plan dependencies"));
         return;
     }
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphShadowArena);
     const Core::GpuTaskGraphCompiler compiler;
     if(!compiler.analyze(m_gpuTaskGraph, m_gpuTaskGraphAnalysis, scratchArena)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph shadow validation failed (status {})")
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph validation failed (status {})")
             , static_cast<u32>(m_gpuTaskGraphAnalysis.diagnostic().status)
         );
         return;
@@ -555,7 +567,7 @@ void RendererSystem::buildGpuTaskGraphShadow(
     );
     const Core::GpuPhysicalQueueInfo queueTopologyInfos[] = {
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphShadowDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 0u, m_gpuTaskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Graphics,
             .capabilities = graphicsQueueCapabilities,
             .familyIndex = graphicsFamilyIndex,
@@ -563,7 +575,7 @@ void RendererSystem::buildGpuTaskGraphShadow(
             .dedicated = false,
         },
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphShadowDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{ 1u, m_gpuTaskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Compute,
             .capabilities = computeQueueCapabilities,
             .familyIndex = computeFamilyIndex,
@@ -576,11 +588,12 @@ void RendererSystem::buildGpuTaskGraphShadow(
         .queueCount = dedicatedAsyncCompute ? LengthOf(queueTopologyInfos) : 1u,
     };
     if(!compiler.assignQueues(m_gpuTaskGraph, m_gpuTaskGraphAnalysis, queueTopology, m_gpuTaskGraphQueueAssignments)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph shadow queue assignment failed (status {})")
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph queue assignment failed (status {})")
             , static_cast<u32>(m_gpuTaskGraphQueueAssignments.diagnostic().status)
         );
         return;
     }
+    bool queueRoutingMatchesLegacyPlan = true;
     for(usize workIndex = 0u; workIndex < Work::kCount; ++workIndex){
         const Work::Enum work = static_cast<Work::Enum>(workIndex);
         if(!frameExecutionPlan.hasWork(work))
@@ -591,13 +604,19 @@ void RendererSystem::buildGpuTaskGraphShadow(
             NWB_ASSERT(false);
             return;
         }
+        m_gpuTaskGraphWorkQueues[workIndex] = assignment->queueClass;
         const Core::CommandQueue::Enum legacyQueue = device.resolveRenderLane(frameExecutionPlan.laneForWork(work));
-        if(assignment->queueClass != legacyQueue)
-            m_gpuTaskGraphShadowLegacyQueueMismatches.push_back(workTasks[workIndex]);
+        if(
+            legacyQueue != frameExecutionPlan.expectedQueueForWork(work)
+            || !frameExecutionPlan.workMatchesExpectedQueue(work, assignment->queueClass)
+        ){
+            queueRoutingMatchesLegacyPlan = false;
+            m_gpuTaskGraphLegacyQueueMismatches.push_back(workTasks[workIndex]);
+        }
     }
-    if(!m_gpuTaskGraphShadowLegacyQueueMismatches.empty()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph shadow found {} queue assignments differing from FrameExecutionPlan")
-            , m_gpuTaskGraphShadowLegacyQueueMismatches.size()
+    if(!m_gpuTaskGraphLegacyQueueMismatches.empty()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph queue assignment differs from FrameExecutionPlan; retaining legacy command-list routing for this frame ({})")
+            , m_gpuTaskGraphLegacyQueueMismatches.size()
         );
     }
 
@@ -624,22 +643,23 @@ void RendererSystem::buildGpuTaskGraphShadow(
             continue;
 
         bool alreadyRecorded = false;
-        for(const Core::GpuTaskDependencyEdge& mismatch : m_gpuTaskGraphShadowLegacyMismatches){
+        for(const Core::GpuTaskDependencyEdge& mismatch : m_gpuTaskGraphLegacyMismatches){
             if(mismatch.producer == inferredEdge.producer && mismatch.consumer == inferredEdge.consumer){
                 alreadyRecorded = true;
                 break;
             }
         }
         if(!alreadyRecorded)
-            m_gpuTaskGraphShadowLegacyMismatches.push_back(inferredEdge);
+            m_gpuTaskGraphLegacyMismatches.push_back(inferredEdge);
     }
-    if(!m_gpuTaskGraphShadowLegacyMismatches.empty()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph shadow found {} inferred dependencies absent from FrameExecutionPlan")
-            , m_gpuTaskGraphShadowLegacyMismatches.size()
+    if(!m_gpuTaskGraphLegacyMismatches.empty()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU task graph found {} inferred dependencies absent from FrameExecutionPlan")
+            , m_gpuTaskGraphLegacyMismatches.size()
         );
     }
 
-    m_gpuTaskGraphShadowValid = true;
+    m_gpuTaskGraphValid = true;
+    m_gpuTaskGraphLiveRoutingValid = queueRoutingMatchesLegacyPlan;
 }
 
 

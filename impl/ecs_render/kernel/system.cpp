@@ -127,8 +127,10 @@ RendererSystem::RendererSystem(
     , m_gpuTaskGraph(arena)
     , m_gpuTaskGraphAnalysis(arena)
     , m_gpuTaskGraphQueueAssignments(arena)
-    , m_gpuTaskGraphShadowLegacyMismatches(arena)
-    , m_gpuTaskGraphShadowLegacyQueueMismatches(arena)
+    , m_gpuTaskGraphWorkTasks(arena)
+    , m_gpuTaskGraphWorkQueues(arena)
+    , m_gpuTaskGraphLegacyMismatches(arena)
+    , m_gpuTaskGraphLegacyQueueMismatches(arena)
     , m_meshState(arena)
     , m_materialState(arena)
     , m_rayTracingState(arena)
@@ -488,17 +490,18 @@ void RendererSystem::invalidateResources(){
     m_preparedCsgFrameStateValid = false;
     m_preparedHasTransparentRenderers = false;
     m_preparedShadowVisibilityReady = false;
-    m_gpuTaskGraphShadowValid = false;
-    m_gpuTaskGraphShadowPending = false;
-    m_gpuTaskGraphShadowInput = GpuTaskGraphShadowFrameInput{};
-    m_gpuTaskGraphShadowLegacyMismatches.clear();
-    m_gpuTaskGraphShadowLegacyQueueMismatches.clear();
+    m_gpuTaskGraphValid = false;
+    m_gpuTaskGraphLiveRoutingValid = false;
+    m_gpuTaskGraphWorkTasks.clear();
+    m_gpuTaskGraphWorkQueues.clear();
+    m_gpuTaskGraphLegacyMismatches.clear();
+    m_gpuTaskGraphLegacyQueueMismatches.clear();
     m_gpuTaskGraph.reset();
     m_gpuTaskGraphAnalysis.reset();
     m_gpuTaskGraphQueueAssignments.reset();
-    m_gpuTaskGraphShadowDeviceGeneration = m_gpuTaskGraphShadowDeviceGeneration == Limit<u16>::s_Max
+    m_gpuTaskGraphDeviceGeneration = m_gpuTaskGraphDeviceGeneration == Limit<u16>::s_Max
         ? 1u
-        : static_cast<u16>(m_gpuTaskGraphShadowDeviceGeneration + 1u)
+        : static_cast<u16>(m_gpuTaskGraphDeviceGeneration + 1u)
     ;
     resetInvalidatedResourceStateHandoffs();
     m_meshViewSetupCommandList.reset();
@@ -1020,11 +1023,12 @@ bool RendererSystem::recordShadowPrepareCommandList(DeferredFrameTargets& deferr
 }
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
-    m_gpuTaskGraphShadowValid = false;
-    m_gpuTaskGraphShadowPending = false;
-    m_gpuTaskGraphShadowInput = GpuTaskGraphShadowFrameInput{};
-    m_gpuTaskGraphShadowLegacyMismatches.clear();
-    m_gpuTaskGraphShadowLegacyQueueMismatches.clear();
+    m_gpuTaskGraphValid = false;
+    m_gpuTaskGraphLiveRoutingValid = false;
+    m_gpuTaskGraphWorkTasks.clear();
+    m_gpuTaskGraphWorkQueues.clear();
+    m_gpuTaskGraphLegacyMismatches.clear();
+    m_gpuTaskGraphLegacyQueueMismatches.clear();
     m_gpuTaskGraph.reset();
     m_gpuTaskGraphAnalysis.reset();
     m_gpuTaskGraphQueueAssignments.reset();
@@ -1117,17 +1121,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ECSRenderDetail::FrameExecutionWork::AvboitDepthWarp,
         Core::RenderLane::AsyncCompute
     );
-    // Graph declaration is deferred until appendFrameGraph(), which only runs while frame-graph telemetry is being
-    // captured. The legacy FrameExecutionPlan remains the sole live recording and submission authority.
-    m_gpuTaskGraphShadowInput = GpuTaskGraphShadowFrameInput{
+    // Compile the graph before native recording.  Its physical queue result may choose a paired command list only
+    // after it matches every legacy-plan route; packet grouping and submission remain legacy-owned for this slice.
+    buildGpuTaskGraph(GpuTaskGraphFrameInput{
         .dedicatedAsyncCompute = dedicatedAsyncCompute,
         .frameLaggedAsyncLightingEnabled = m_frameLaggedAsyncLightingEnabled,
         .laggedLightingHistoryReady = laggedLightingHistoryResourcesReady,
         .laggedLightingHistoryAccepted = m_laggedLightingHistorySubmissionToken.valid(),
         .hasTransparentRenderers = hasTransparentRenderers,
         .hardwareCaustics = hardwareShadowSupported,
-    };
-    m_gpuTaskGraphShadowPending = true;
+    }, deferredTargets, frameExecutionPlan);
     Core::CommandList* meshViewSetupCommandList = m_meshViewSetupCommandList.get();
     Core::CommandList* sceneShadingSetupCommandList = m_sceneShadingSetupCommandList.get();
     Core::CommandList* deferredClearCommandList = m_deferredClearCommandList.get();
@@ -1137,28 +1140,43 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::CommandList* frameRecoveryCommandList = m_frameRecoveryCommandList.get();
     Core::CommandList* asyncEffectsTimingBeginCommandList = m_asyncEffectsTimingBeginCommandList.get();
     Core::CommandList* asyncEffectsTimingEndCommandList = m_asyncEffectsTimingEndCommandList.get();
-    Core::CommandList* const causticsCommandList = frameExecutionPlan.commandListForWork(
+    const auto commandListForWork = [&](const ECSRenderDetail::FrameExecutionWork::Enum work,
+                                        const ECSRenderDetail::FrameExecutionLaneCommandListPair& commandLists){
+        if(!m_gpuTaskGraphLiveRoutingValid)
+            return frameExecutionPlan.commandListForWork(work, commandLists);
+
+        const usize workIndex = static_cast<usize>(work);
+        if(workIndex >= m_gpuTaskGraphWorkQueues.size()){
+            NWB_ASSERT(false);
+            return frameExecutionPlan.commandListForWork(work, commandLists);
+        }
+        return ECSRenderDetail::FrameExecutionPlan::commandListForResolvedQueue(
+            m_gpuTaskGraphWorkQueues[workIndex],
+            commandLists
+        );
+    };
+    Core::CommandList* const causticsCommandList = commandListForWork(
         ECSRenderDetail::FrameExecutionWork::Caustics,
         ECSRenderDetail::FrameExecutionLaneCommandListPair{
             m_causticsCommandList.get(),
             m_asyncCausticsCommandList.get(),
         }
     );
-    Core::CommandList* const surfelGiCommandList = frameExecutionPlan.commandListForWork(
+    Core::CommandList* const surfelGiCommandList = commandListForWork(
         ECSRenderDetail::FrameExecutionWork::SurfelGi,
         ECSRenderDetail::FrameExecutionLaneCommandListPair{
             m_surfelGiCommandList.get(),
             m_asyncSurfelGiCommandList.get(),
         }
     );
-    Core::CommandList* const deferredLightingCommandList = frameExecutionPlan.commandListForWork(
+    Core::CommandList* const deferredLightingCommandList = commandListForWork(
         ECSRenderDetail::FrameExecutionWork::DeferredLighting,
         ECSRenderDetail::FrameExecutionLaneCommandListPair{
             m_deferredLightingCommandList.get(),
             m_asyncDeferredLightingCommandList.get(),
         }
     );
-    Core::CommandList* const deferredCompositeCommandList = frameExecutionPlan.commandListForWork(
+    Core::CommandList* const deferredCompositeCommandList = commandListForWork(
         ECSRenderDetail::FrameExecutionWork::DeferredComposite,
         ECSRenderDetail::FrameExecutionLaneCommandListPair{
             m_deferredCompositeCommandList.get(),

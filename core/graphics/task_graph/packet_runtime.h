@@ -122,12 +122,12 @@ struct GpuImportedPacketRecordDesc{
 };
 
 
-// One explicit merged packet may retain an imported metadata-only prefix while moving its final task into native
-// graph recording.  The imported lists must already be recorded in execution order and export the exact state from
-// which the native suffix begins.  Both tasks accept or discard together because they share one queue submission.
+// One explicit merged packet may retain an imported metadata-only prefix while moving its ordered suffix tasks into
+// native graph recording. The imported lists must already be recorded in execution order and export the exact state
+// from which the native suffix begins. Every task accepts or discards together because they share one queue
+// submission.
 struct GpuImportedPacketNativeSuffixRecordDesc{
     GpuSubmissionPacketId packet;
-    GpuTaskId nativeTask;
     CommandList* const* importedCommandLists = nullptr;
     usize importedCommandListCount = 0u;
     const CommandListResourceStateHandoff* importedStateSeed = nullptr;

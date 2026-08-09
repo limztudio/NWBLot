@@ -1268,6 +1268,19 @@ TEST(GpuTaskGraph, MergesExplicitCompatibleSuccessorIntoOnePacket){
     const Graphics::GpuTaskId suffix = graph.addTask(suffixDesc);
     ASSERT_TRUE(suffix.valid());
 
+    Graphics::GpuTaskSchedulingHint finalSuffixScheduling;
+    finalSuffixScheduling.allowPacketMerge = true;
+    finalSuffixScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskDesc finalSuffixDesc;
+    finalSuffixDesc
+        .setIdentity(Name("tests/task_graph/merged_final_suffix"))
+        .setMarkerLabel("Merged Final Suffix")
+        .setScheduling(finalSuffixScheduling)
+        .setDependencies(&suffix, 1u)
+    ;
+    const Graphics::GpuTaskId finalSuffix = graph.addTask(finalSuffixDesc);
+    ASSERT_TRUE(finalSuffix.valid());
+
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
     const Graphics::GpuTaskGraphQueueTopology topology{
         .queues = queues,
@@ -1282,13 +1295,16 @@ TEST(GpuTaskGraph, MergesExplicitCompatibleSuccessorIntoOnePacket){
 
     const Graphics::GpuSubmissionPacketId prefixPacket = compiledGraph.packetForTask(prefix);
     const Graphics::GpuSubmissionPacketId suffixPacket = compiledGraph.packetForTask(suffix);
+    const Graphics::GpuSubmissionPacketId finalSuffixPacket = compiledGraph.packetForTask(finalSuffix);
     ASSERT_TRUE(prefixPacket.valid());
     EXPECT_EQ(prefixPacket, suffixPacket);
+    EXPECT_EQ(prefixPacket, finalSuffixPacket);
     const Graphics::GpuSubmissionPacket& packet = compiledGraph.packet(prefixPacket);
-    ASSERT_EQ(packet.taskCount, 2u);
+    ASSERT_EQ(packet.taskCount, 3u);
     ASSERT_NE(compiledGraph.packetTasks(prefixPacket), nullptr);
     EXPECT_EQ(compiledGraph.packetTasks(prefixPacket)[0u], prefix);
     EXPECT_EQ(compiledGraph.packetTasks(prefixPacket)[1u], suffix);
+    EXPECT_EQ(compiledGraph.packetTasks(prefixPacket)[2u], finalSuffix);
     EXPECT_EQ(packet.dependencyCount, 0u);
 }
 

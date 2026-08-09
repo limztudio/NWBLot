@@ -1718,7 +1718,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuNativePacketRecorder graphicsPrefixRecorder(device);
     const Core::GpuImportedPacketNativeSuffixRecordDesc graphicsPrefixRecordDesc{
         .packet = graphicsPrefixPacket,
-        .nativeTask = m_graphicsPrefixTask,
         .importedCommandLists = graphicsPrefixCommandLists,
         .importedCommandListCount = LengthOf(graphicsPrefixCommandLists),
         .importedStateSeed = &m_gbufferStateHandoff,

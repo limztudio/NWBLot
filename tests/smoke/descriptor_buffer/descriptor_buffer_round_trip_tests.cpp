@@ -1368,8 +1368,8 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
 
 
 // The optional IR lowerer selects one packet from a full primitive capture only after graph-aware preflight. A
-// malformed later command in that packet must leave the earlier valid copy unrecorded; the success pass then proves
-// the same POD record lowers through the ordinary Core::CommandList API rather than a Vulkan-side bypass.
+// malformed later command in that packet must leave the earlier valid copy unrecorded; the success paths prove both
+// the ordinary Core::CommandList lowerer and the explicitly pre-stated direct-Vulkan CopyBuffer prototype.
 TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersCopyBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
     static constexpr u32 s_SourceWords[] = {
@@ -1641,6 +1641,113 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersC
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
         EXPECT_EQ(replayedWords[wordIndex], s_SourceWords[wordIndex]);
     device.unmapBuffer(destination.get());
+
+    auto resetDirectDestination = device.createCommandList();
+    ASSERT_NE(resetDirectDestination.get(), nullptr);
+    resetDirectDestination->open();
+    resetDirectDestination->clearBufferUInt(destination.get(), s_Sentinel);
+    resetDirectDestination->close();
+    CommandList* const resetDirectCommandLists[] = { resetDirectDestination.get() };
+    bool resetDirectSubmitted = false;
+    EXPECT_GT(device.executeCommandLists(
+        resetDirectCommandLists,
+        LengthOf(resetDirectCommandLists),
+        CommandQueue::Graphics,
+        &resetDirectSubmitted
+    ), 0u);
+    ASSERT_TRUE(resetDirectSubmitted);
+    ASSERT_TRUE(device.waitForIdle());
+
+    // The direct Vulkan prototype must reject an unsupported later opcode before it records the first valid copy.
+    // This synthetic trace passes current graph/resource preflight (a clear can use the copy task's whole-buffer
+    // CopyDest declaration), but it is intentionally outside the current CopyBuffer-only direct-lowering contract.
+    GpuCommandIrCapture unsupportedDirectCapture(DescriptorBufferRoundTripTest::arena());
+    ASSERT_TRUE(unsupportedDirectCapture.captureCopyBuffer(
+        copyTask,
+        packet,
+        queue.id,
+        sourceResource,
+        0u,
+        destinationResource,
+        0u,
+        sizeof(s_SourceWords)
+    ));
+    ASSERT_TRUE(unsupportedDirectCapture.captureClearBuffer(
+        copyTask,
+        packet,
+        queue.id,
+        destinationResource,
+        s_Sentinel
+    ));
+    auto unsupportedDirectReplay = device.createCommandList();
+    ASSERT_NE(unsupportedDirectReplay.get(), nullptr);
+    unsupportedDirectReplay->open();
+    ASSERT_TRUE(unsupportedDirectReplay->isRecording());
+    unsupportedDirectReplay->setBufferState(source.get(), ResourceStates::CopySource);
+    unsupportedDirectReplay->setBufferState(destination.get(), ResourceStates::CopyDest);
+    unsupportedDirectReplay->commitBarriers();
+    const GpuCommandIrReplayResult unsupportedDirectResult = ReplayGpuCommandIrPacketDirectVulkan(
+        unsupportedDirectCapture.commandBytes(),
+        graph,
+        compiledGraph,
+        packet,
+        *unsupportedDirectReplay
+    );
+    EXPECT_EQ(unsupportedDirectResult.error, GpuCommandIrReplayError::UnsupportedDirectVulkanOpcode);
+    EXPECT_EQ(unsupportedDirectResult.recordIndex, 1u);
+    EXPECT_TRUE(unsupportedDirectResult.streamValidation.valid());
+    unsupportedDirectReplay->close();
+    CommandList* const unsupportedDirectCommandLists[] = { unsupportedDirectReplay.get() };
+    bool unsupportedDirectSubmitted = false;
+    EXPECT_GT(device.executeCommandLists(
+        unsupportedDirectCommandLists,
+        LengthOf(unsupportedDirectCommandLists),
+        CommandQueue::Graphics,
+        &unsupportedDirectSubmitted
+    ), 0u);
+    ASSERT_TRUE(unsupportedDirectSubmitted);
+    ASSERT_TRUE(device.waitForIdle());
+    const u32* const stillSentinelWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    ASSERT_NE(stillSentinelWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
+        EXPECT_EQ(stillSentinelWords[wordIndex], s_Sentinel);
+    device.unmapBuffer(destination.get());
+
+    // Model the graph recorder's already-established packet state, then lower only the selected CopyBuffer body
+    // directly to Vulkan. The direct lowerer must not create implicit state transitions of its own.
+    auto directVulkanReplay = device.createCommandList();
+    ASSERT_NE(directVulkanReplay.get(), nullptr);
+    directVulkanReplay->open();
+    ASSERT_TRUE(directVulkanReplay->isRecording());
+    directVulkanReplay->setBufferState(source.get(), ResourceStates::CopySource);
+    directVulkanReplay->setBufferState(destination.get(), ResourceStates::CopyDest);
+    directVulkanReplay->commitBarriers();
+    const GpuCommandIrReplayResult directVulkanResult = ReplayGpuCommandIrPacketDirectVulkan(
+        capture.commandBytes(),
+        graph,
+        compiledGraph,
+        packet,
+        *directVulkanReplay
+    );
+    EXPECT_TRUE(directVulkanResult.valid());
+    EXPECT_TRUE(directVulkanResult.streamValidation.valid());
+    directVulkanReplay->close();
+    CommandList* const directVulkanCommandLists[] = { directVulkanReplay.get() };
+    bool directVulkanSubmitted = false;
+    EXPECT_GT(device.executeCommandLists(
+        directVulkanCommandLists,
+        LengthOf(directVulkanCommandLists),
+        CommandQueue::Graphics,
+        &directVulkanSubmitted
+    ), 0u);
+    ASSERT_TRUE(directVulkanSubmitted);
+    ASSERT_TRUE(device.waitForIdle());
+    const u32* const directVulkanWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    ASSERT_NE(directVulkanWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
+        EXPECT_EQ(directVulkanWords[wordIndex], s_SourceWords[wordIndex]);
+    device.unmapBuffer(destination.get());
+
     const u32* const untouchedSecondWords = static_cast<const u32*>(
         device.mapBuffer(secondDestination.get(), CpuAccessMode::Read)
     );

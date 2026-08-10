@@ -565,6 +565,52 @@ void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* 
     retainResource(destResource);
 }
 
+bool CommandList::recordPreflightedCopyBufferDirectVulkan(
+    Buffer* const destResource,
+    const u64 destOffsetBytes,
+    Buffer* const srcResource,
+    const u64 srcOffsetBytes,
+    const u64 dataSizeBytes
+){
+    // This is intentionally narrower than copyBuffer: command-IR replay has already validated every operand
+    // against the compiled graph, while graph packet recording has already made the CopySource/CopyDest states
+    // authoritative. Keep the direct lowerer from silently reintroducing per-command state tracking.
+    if(
+        !m_isRecording
+        || m_renderPassActive
+        || !m_currentCmdBuf
+        || m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE
+        || !destResource
+        || !srcResource
+        || dataSizeBytes == 0u
+    )
+        return false;
+
+    Buffer& dest = *destResource;
+    Buffer& src = *srcResource;
+    const BufferDesc& destDesc = dest.getDescription();
+    const BufferDesc& srcDesc = src.getDescription();
+    if(
+        !VulkanDetail::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)
+        || !VulkanDetail::IsBufferRangeInBounds(srcDesc, srcOffsetBytes, dataSizeBytes)
+        || (
+            dest.m_buffer == src.m_buffer
+            && VulkanDetail::BufferRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)
+        )
+    )
+        return false;
+
+    VkBufferCopy region{};
+    region.srcOffset = srcOffsetBytes;
+    region.dstOffset = destOffsetBytes;
+    region.size = dataSizeBytes;
+    vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, src.m_buffer, dest.m_buffer, 1u, &region);
+
+    retainResource(srcResource);
+    retainResource(destResource);
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

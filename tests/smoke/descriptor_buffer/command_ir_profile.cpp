@@ -4,9 +4,10 @@
 
 // Phase 11 optional-command-IR CPU probe for the copy-buffer record shape. This is intentionally a standalone
 // headless executable rather than a renderer benchmark: it compares ordinary native packet recording with the
-// explicit capture seam, then measures POD decoding, graph-aware preflight, and Core::CommandList lowering
-// separately. The default renderer path never creates this capture object, so this tool reports opt-in tooling cost
-// only; texture-copy and clear opcode shapes require their own explicitly labelled corpora.
+// explicit capture seam, then measures POD decoding, graph-aware preflight, Core::CommandList lowering, and the
+// experimental direct-Vulkan CopyBuffer lowerer separately. The default renderer path never creates this capture
+// object, so this tool reports opt-in tooling cost only; texture-copy and clear opcode shapes require their own
+// explicitly labelled corpora.
 
 
 #include <global/global.h>
@@ -102,17 +103,21 @@ struct Result{
     u64 decodedRecords = 0u;
     u64 preflightRecords = 0u;
     u64 replayedRecords = 0u;
+    u64 directVulkanReplayedRecords = 0u;
     u64 captureAllocationDelta = 0u;
     u64 captureReallocationDelta = 0u;
     u64 expectedHash = 0u;
     u64 observedHash = 0u;
+    u64 directVulkanObservedHash = 0u;
     bool streamValid = false;
     bool checksumVerified = false;
+    bool directVulkanChecksumVerified = false;
     TimingSamples nativeRecord;
     TimingSamples captureRecord;
     TimingSamples readerDecode;
     TimingSamples preflight;
     TimingSamples replay;
+    TimingSamples directVulkanReplay;
     u32 loggerErrors = 0u;
 };
 
@@ -327,6 +332,64 @@ struct Result{
     return outCount == expectedCount;
 }
 
+[[nodiscard]] static bool PrepareDirectVulkanReplayState(
+    CommandList& commandList,
+    Buffer* const source,
+    Buffer* const destination
+){
+    // The graph recorder normally lowers these exact packet transitions before a task body. Keep that required
+    // setup outside the direct-lowering timing window: this probe isolates reader/preflight plus raw vkCmdCopyBuffer
+    // emission, not graph barrier lowering.
+    if(!commandList.isRecording() || commandList.isRenderPassActive() || !source || !destination)
+        return false;
+    commandList.setBufferState(source, ResourceStates::CopySource);
+    commandList.setBufferState(destination, ResourceStates::CopyDest);
+    commandList.commitBarriers();
+    return commandList.isRecording();
+}
+
+[[nodiscard]] static bool ReplayDirectVulkanRecords(
+    Device& device,
+    const BinaryByteView bytes,
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId packet,
+    const u64 expectedCount,
+    Buffer* const source,
+    Buffer* const destination,
+    u64& outCount,
+    f64* const outNanoseconds
+){
+    outCount = 0u;
+    if(outNanoseconds)
+        *outNanoseconds = 0.0;
+
+    CommandListHandle commandList = device.createCommandList();
+    if(!commandList)
+        return false;
+    commandList->open();
+    if(!PrepareDirectVulkanReplayState(*commandList, source, destination))
+        return false;
+
+    const Timer begin = TimerNow();
+    const GpuCommandIrReplayResult replay = ReplayGpuCommandIrPacketDirectVulkan(
+        bytes,
+        graph,
+        compiledGraph,
+        packet,
+        *commandList
+    );
+    const Timer end = TimerNow();
+    commandList->close();
+    if(!replay.valid() || !replay.streamValidation.valid())
+        return false;
+
+    outCount = replay.recordIndex;
+    if(outNanoseconds)
+        *outNanoseconds = DurationInNS<f64>(end, begin);
+    return outCount == expectedCount;
+}
+
 [[nodiscard]] static bool VerifyReplay(
     Device& device,
     const BinaryByteView bytes,
@@ -364,6 +427,52 @@ struct Result{
     device.unmapBuffer(destination);
     outResult.checksumVerified = outResult.observedHash == outResult.expectedHash;
     return outResult.checksumVerified;
+}
+
+[[nodiscard]] static bool VerifyDirectVulkanReplay(
+    Device& device,
+    const BinaryByteView bytes,
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId packet,
+    const u64 expectedCount,
+    Buffer* const source,
+    Buffer* const destination,
+    const usize byteCount,
+    Result& outResult
+){
+    CommandListHandle commandList = device.createCommandList();
+    if(!commandList)
+        return false;
+    commandList->open();
+    if(!PrepareDirectVulkanReplayState(*commandList, source, destination))
+        return false;
+
+    const GpuCommandIrReplayResult replay = ReplayGpuCommandIrPacketDirectVulkan(
+        bytes,
+        graph,
+        compiledGraph,
+        packet,
+        *commandList
+    );
+    commandList->close();
+    if(!replay.valid() || !replay.streamValidation.valid() || replay.recordIndex != expectedCount)
+        return false;
+
+    CommandList* const commandLists[] = { commandList.get() };
+    bool submitted = false;
+    if(device.executeCommandLists(commandLists, LengthOf(commandLists), CommandQueue::Graphics, &submitted) == 0u || !submitted)
+        return false;
+    if(!device.waitForIdle())
+        return false;
+
+    const auto* const bytesRead = static_cast<const u8*>(device.mapBuffer(destination, CpuAccessMode::Read));
+    if(!bytesRead)
+        return false;
+    outResult.directVulkanObservedHash = HashBytes(bytesRead, byteCount);
+    device.unmapBuffer(destination);
+    outResult.directVulkanChecksumVerified = outResult.directVulkanObservedHash == outResult.expectedHash;
+    return outResult.directVulkanChecksumVerified;
 }
 
 [[nodiscard]] static bool RunProfile(
@@ -494,6 +603,7 @@ struct Result{
         u64 decoded = 0u;
         u64 preflight = 0u;
         u64 replayed = 0u;
+        u64 directVulkanReplayed = 0u;
         return DecodeRecords(capture.commandBytes(), arguments.recordCount, decoded)
             && PreflightRecords(capture.commandBytes(), graph, compiledGraph, packet, arguments.recordCount, preflight)
             && ReplayRecords(
@@ -504,6 +614,18 @@ struct Result{
                 packet,
                 arguments.recordCount,
                 replayed,
+                nullptr
+            )
+            && ReplayDirectVulkanRecords(
+                device,
+                capture.commandBytes(),
+                graph,
+                compiledGraph,
+                packet,
+                arguments.recordCount,
+                source.get(),
+                destination.get(),
+                directVulkanReplayed,
                 nullptr
             )
         ;
@@ -580,6 +702,25 @@ struct Result{
             return false;
         if(!outResult.replay.append(replayNanoseconds / static_cast<f64>(arguments.recordCount)))
             return false;
+
+        f64 directVulkanReplayNanoseconds = 0.0;
+        if(!ReplayDirectVulkanRecords(
+            device,
+            capture.commandBytes(),
+            graph,
+            compiledGraph,
+            packet,
+            arguments.recordCount,
+            source.get(),
+            destination.get(),
+            outResult.directVulkanReplayedRecords,
+            &directVulkanReplayNanoseconds
+        ))
+            return false;
+        if(!outResult.directVulkanReplay.append(
+            directVulkanReplayNanoseconds / static_cast<f64>(arguments.recordCount)
+        ))
+            return false;
     }
     const ArenaMemoryStats captureAfter = captureArena.memoryStats();
     outResult.captureAllocationDelta = captureAfter.allocationCount - captureBefore.allocationCount;
@@ -602,6 +743,7 @@ struct Result{
         || outResult.decodedRecords != arguments.recordCount
         || outResult.preflightRecords != arguments.recordCount
         || outResult.replayedRecords != arguments.recordCount
+        || outResult.directVulkanReplayedRecords != arguments.recordCount
     )
         return false;
 
@@ -612,6 +754,17 @@ struct Result{
         compiledGraph,
         packet,
         arguments.recordCount,
+        destination.get(),
+        sizeof(s_SourceWords),
+        outResult
+    ) && VerifyDirectVulkanReplay(
+        device,
+        capture.commandBytes(),
+        graph,
+        compiledGraph,
+        packet,
+        arguments.recordCount,
+        source.get(),
         destination.get(),
         sizeof(s_SourceWords),
         outResult
@@ -668,12 +821,16 @@ static void EmitResult(const Result& result){
         << "\"decoded_records\":" << result.decodedRecords << ','
         << "\"preflight_records\":" << result.preflightRecords << ','
         << "\"replayed_records\":" << result.replayedRecords << ','
+        << "\"direct_vulkan_replayed_records\":" << result.directVulkanReplayedRecords << ','
         << "\"capture_allocation_delta\":" << result.captureAllocationDelta << ','
         << "\"capture_reallocation_delta\":" << result.captureReallocationDelta << ','
         << "\"stream_valid\":" << (result.streamValid ? "true" : "false") << ','
         << "\"expected_hash\":" << result.expectedHash << ','
         << "\"observed_hash\":" << result.observedHash << ','
         << "\"checksum_verified\":" << (result.checksumVerified ? "true" : "false") << ','
+        << "\"direct_vulkan_observed_hash\":" << result.directVulkanObservedHash << ','
+        << "\"direct_vulkan_checksum_verified\":"
+        << (result.directVulkanChecksumVerified ? "true" : "false") << ','
         << "\"native_record\":"
     ;
     EmitTimingSamples(result.nativeRecord);
@@ -685,6 +842,8 @@ static void EmitResult(const Result& result){
     EmitTimingSamples(result.preflight);
     NWB_COUT << ",\"replay\":";
     EmitTimingSamples(result.replay);
+    NWB_COUT << ",\"direct_vulkan_replay\":";
+    EmitTimingSamples(result.directVulkanReplay);
     NWB_COUT
         << ",\"logger_errors\":" << result.loggerErrors
         << "}" << '\n'

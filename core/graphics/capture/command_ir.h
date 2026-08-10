@@ -338,6 +338,8 @@ namespace GpuCommandIrReplayError{
         CommandListRenderPassActive,
         CommandListQueueMismatch,
         StreamChangedDuringReplay,
+        UnsupportedDirectVulkanOpcode,
+        DirectVulkanLoweringFailed,
     };
 };
 
@@ -368,6 +370,19 @@ struct GpuCommandIrReplayResult{
 // duration of the call, and resources must belong to that command list's device. This does not apply graph state
 // seeds or barriers and does not submit work; callers retain the surrounding packet-recording contract.
 [[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
+    BinaryByteView bytes,
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    GpuSubmissionPacketId packet,
+    CommandList& commandList
+)noexcept;
+
+// Experimental Vulkan-only tooling lowerer for a CopyBuffer-only packet body. It repeats complete graph-aware
+// preflight and rejects any selected opcode it cannot lower before recording the first native command. The caller
+// must already have applied the compiler-owned initial-state seed and CopySource/CopyDest barriers to commandList:
+// unlike ReplayGpuCommandIrPacket, this path deliberately bypasses CommandList's automatic copy-state tracking.
+// It is not part of native packet recording and does not own barriers, state snapshots, or submission.
+[[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
     BinaryByteView bytes,
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,

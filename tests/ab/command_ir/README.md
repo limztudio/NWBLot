@@ -2,9 +2,10 @@
 
 This Phase 11 workflow measures the optional command-IR path after native recording is stable. One native process
 records the same built-in buffer-copy workload through the direct path and through command-IR capture, then measures
-reader decode, replay preflight, and `Core::CommandList` replay. It is a CPU-overhead probe, not a GPU benchmark or a
-production adoption gate. Texture-copy and clear record shapes need separately labelled future corpora; do not use
-this copy-buffer result as an aggregate all-opcode cost.
+reader decode, replay preflight, `Core::CommandList` replay, and the experimental direct-Vulkan `CopyBuffer`
+lowerer. It is a CPU-overhead probe, not a GPU benchmark or a production adoption gate. Texture-copy and clear
+record shapes need separately labelled future corpora; do not use this copy-buffer result as an aggregate all-opcode
+cost.
 
 From the repository root:
 
@@ -37,9 +38,21 @@ allocation/reallocation deltas during measured capture. It returns `77` when the
 Vulkan/profile environment skip; all other failed invariants return `1` after preserving the artifacts.
 
 `native_record` and `capture_record` are full-path comparative timings: both include native packet recording and its
-backend command-list creation. Replay timing excludes command-list creation/open/close but includes the replay API's
-internal preflight and lowering. Only the dedicated capture arena has an allocation-free gate; none of these CPU
-numbers measure GPU execution time.
+backend command-list creation. Both replay timings exclude command-list creation/open/close but include stream
+preflight and lowering. The direct-Vulkan timing also excludes its required graph-owned state setup, which the
+workflow performs and validates separately; the prototype emits only `vkCmdCopyBuffer` and never replaces compiler
+barriers, state seeds, or packet submission. Only the dedicated capture arena has an allocation-free gate; none of
+these CPU numbers measure GPU execution time.
+
+## Persistent-template decision
+
+Do not add persistent command-IR templates to runtime yet. The direct-Vulkan prototype is intentionally tooling-only,
+supports only `CopyBuffer`, and relies on the graph recorder to establish resource states before lowering. It neither
+eliminates capture/validation cost nor provides representative evidence for renderer passes with bindings, draws,
+dispatches, textures, or clears.
+
+Re-evaluate templates only after a representative workload shows an end-to-end benefit and the implementation has a
+safe invalidation contract for graph generation, resource IDs, pipeline IDs, descriptor state, and packet barriers.
 
 Run either layer's no-Vulkan verification with:
 

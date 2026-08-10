@@ -699,6 +699,52 @@ static void LowerOperation(
     }
 }
 
+// Direct Vulkan lowering is intentionally a prototype with a single opcode. Scan the complete selected packet
+// after graph-aware preflight and before issuing any native command so an unsupported later record cannot leave an
+// earlier copy in the command buffer.
+[[nodiscard]] static GpuCommandIrReplayResult ValidateDirectVulkanOpcodeSupport(
+    const BinaryByteView bytes,
+    const GpuSubmissionPacketId packet,
+    const GpuCommandIrStreamValidationResult& expectedStreamValidation
+)noexcept{
+    GpuCommandIrStreamReader reader(bytes);
+    if(reader.validation().failed()){
+        return ReplayFailure(
+            GpuCommandIrReplayError::StreamChangedDuringReplay,
+            reader.validation(),
+            reader.validation().recordIndex
+        );
+    }
+
+    u64 recordIndex = 0u;
+    GpuCommandIrBuiltinTaskRecord record;
+    for(;;){
+        const GpuCommandIrStreamReadStatus::Enum status = reader.next(record);
+        if(status == GpuCommandIrStreamReadStatus::End){
+            return GpuCommandIrReplayResult{
+                .streamValidation = reader.validation(),
+                .recordIndex = recordIndex,
+            };
+        }
+        if(status == GpuCommandIrStreamReadStatus::Error){
+            return ReplayFailure(
+                GpuCommandIrReplayError::StreamChangedDuringReplay,
+                reader.validation(),
+                reader.validation().recordIndex
+            );
+        }
+
+        if(record.packet == packet && record.opcode != GpuCommandIrOpcode::CopyBuffer){
+            return ReplayFailure(
+                GpuCommandIrReplayError::UnsupportedDirectVulkanOpcode,
+                expectedStreamValidation,
+                recordIndex
+            );
+        }
+        ++recordIndex;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1136,6 +1182,109 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
         }
 
         __hidden_gpu_command_ir::LowerOperation(record, graph, commandList);
+        ++recordIndex;
+    }
+}
+
+GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
+    const BinaryByteView bytes,
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    const GpuSubmissionPacketId packet,
+    CommandList& commandList
+)noexcept{
+    GpuCommandIrReplayResult result = PreflightGpuCommandIrPacket(bytes, graph, compiledGraph, packet);
+    if(!result.valid())
+        return result;
+
+    result = __hidden_gpu_command_ir::ValidateDirectVulkanOpcodeSupport(
+        bytes,
+        packet,
+        result.streamValidation
+    );
+    if(!result.valid())
+        return result;
+
+    const GpuSubmissionPacket& packetPlan = compiledGraph.packet(packet);
+    const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packetPlan.queue);
+    if(!queue){
+        return __hidden_gpu_command_ir::ReplayFailure(
+            GpuCommandIrReplayError::PacketQueueUnavailable,
+            result.streamValidation
+        );
+    }
+    if(!commandList.isRecording()){
+        return __hidden_gpu_command_ir::ReplayFailure(
+            GpuCommandIrReplayError::CommandListNotRecording,
+            result.streamValidation
+        );
+    }
+    if(commandList.isRenderPassActive()){
+        return __hidden_gpu_command_ir::ReplayFailure(
+            GpuCommandIrReplayError::CommandListRenderPassActive,
+            result.streamValidation
+        );
+    }
+    if(commandList.getDescription().queueType != queue->queueClass){
+        return __hidden_gpu_command_ir::ReplayFailure(
+            GpuCommandIrReplayError::CommandListQueueMismatch,
+            result.streamValidation
+        );
+    }
+
+    // The caller has already lowered the graph-owned state seed and packet barriers into commandList. This second
+    // reader walk deliberately bypasses CommandList::copyBuffer, so it can measure/directly exercise only Vulkan
+    // command emission without resurrecting automatic state tracking in the replay path.
+    GpuCommandIrStreamReader reader(bytes);
+    GpuCommandIrBuiltinTaskRecord record;
+    u64 recordIndex = 0u;
+    for(;;){
+        const GpuCommandIrStreamReadStatus::Enum status = reader.next(record);
+        if(status == GpuCommandIrStreamReadStatus::End){
+            return GpuCommandIrReplayResult{
+                .streamValidation = reader.validation(),
+                .recordIndex = recordIndex,
+            };
+        }
+        if(status == GpuCommandIrStreamReadStatus::Error){
+            return __hidden_gpu_command_ir::ReplayFailure(
+                GpuCommandIrReplayError::StreamChangedDuringReplay,
+                reader.validation(),
+                reader.validation().recordIndex
+            );
+        }
+
+        if(record.packet != packet){
+            ++recordIndex;
+            continue;
+        }
+
+        // Preflight above and the direct-opcode scan establish the normal contract. Repeat only the resolution
+        // checks needed to turn caller mutation into a diagnostic instead of dereferencing a stale graph ID.
+        if(
+            record.opcode != GpuCommandIrOpcode::CopyBuffer
+            || !graph.validResource(record.source)
+            || !graph.validResource(record.destination)
+        ){
+            return __hidden_gpu_command_ir::ReplayFailure(
+                GpuCommandIrReplayError::StreamChangedDuringReplay,
+                result.streamValidation,
+                recordIndex
+            );
+        }
+        if(!commandList.recordPreflightedCopyBufferDirectVulkan(
+            graph.bufferForResource(record.destination),
+            record.destinationOffsetBytes,
+            graph.bufferForResource(record.source),
+            record.sourceOffsetBytes,
+            record.dataSizeBytes
+        )){
+            return __hidden_gpu_command_ir::ReplayFailure(
+                GpuCommandIrReplayError::DirectVulkanLoweringFailed,
+                result.streamValidation,
+                recordIndex
+            );
+        }
         ++recordIndex;
     }
 }

@@ -2090,6 +2090,16 @@ public:
     void writeBuffer(Buffer* buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
     void clearBufferUInt(Buffer* buffer, u32 clearValue);
     void copyBuffer(Buffer* dest, u64 destOffsetBytes, Buffer* src, u64 srcOffsetBytes, u64 dataSizeBytes);
+    // Experimental command-IR hook. The caller has already graph-preflighted the operands and lowered the
+    // authoritative CopySource/CopyDest state transitions into this list. This emits only vkCmdCopyBuffer and
+    // retains the resources; it intentionally does not mutate CommandList state tracking or synthesize barriers.
+    [[nodiscard]] bool recordPreflightedCopyBufferDirectVulkan(
+        Buffer* dest,
+        u64 destOffsetBytes,
+        Buffer* src,
+        u64 srcOffsetBytes,
+        u64 dataSizeBytes
+    );
     void writeTexture(Texture* dest, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch = 0);
     void resolveTexture(Texture* dest, const TextureSubresourceSet& dstSubresources, Texture* src, const TextureSubresourceSet& srcSubresources);
 

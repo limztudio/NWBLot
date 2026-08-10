@@ -3,8 +3,9 @@
 
 One native process records the same built-in copy-buffer command set through the stable direct
 path and through command-IR capture, then measures reader decode, replay preflight,
-and Core::CommandList replay.  The runner treats the stream/replay invariants and
-allocation-free timed capture as correctness gates; the timing values are CPU-only
+Core::CommandList replay, and experimental direct-Vulkan CopyBuffer replay. The runner
+treats the stream/replay invariants and allocation-free timed capture as correctness gates;
+the timing values are CPU-only
 per-command overhead samples, not GPU-performance results.
 """
 
@@ -29,7 +30,14 @@ from typing import Any, Dict, List, Optional, Sequence
 
 SKIP_EXIT_CODE = 77
 RESULT_PREFIX = "NWB_COMMAND_IR_PROFILE_RESULT "
-TIMING_STAGES = ("native_record", "capture_record", "reader_decode", "preflight", "replay")
+TIMING_STAGES = (
+    "native_record",
+    "capture_record",
+    "reader_decode",
+    "preflight",
+    "replay",
+    "direct_vulkan_replay",
+)
 MAX_RECORDS = 65536
 MAX_SAMPLES = 64
 
@@ -170,6 +178,7 @@ def require_ok(args: argparse.Namespace, result: ProfileResult) -> Dict[str, Any
         "decoded_records": args.records,
         "preflight_records": args.records,
         "replayed_records": args.records,
+        "direct_vulkan_replayed_records": args.records,
         "logger_errors": 0,
         "capture_allocation_delta": 0,
         "capture_reallocation_delta": 0,
@@ -192,6 +201,8 @@ def require_ok(args: argparse.Namespace, result: ProfileResult) -> Dict[str, Any
         raise ProfileFailure("profile did not validate the command-IR stream")
     if payload.get("checksum_verified") is not True:
         raise ProfileFailure("profile did not verify replay output against the known source data")
+    if payload.get("direct_vulkan_checksum_verified") is not True:
+        raise ProfileFailure("profile did not verify direct-Vulkan replay output against the known source data")
 
     for stage in TIMING_STAGES:
         require_timing(payload, stage, args.samples)
@@ -213,6 +224,14 @@ def capture_increment_percent(payload: Dict[str, Any]) -> Optional[float]:
     return (capture - native) * 100.0 / native
 
 
+def direct_vulkan_replay_delta_percent(payload: Dict[str, Any]) -> Optional[float]:
+    command_list = float(payload["replay"]["median_ns_per_command"])
+    direct_vulkan = float(payload["direct_vulkan_replay"]["median_ns_per_command"])
+    if command_list <= 0.0:
+        return None
+    return (direct_vulkan - command_list) * 100.0 / command_list
+
+
 def markdown_report(report: Dict[str, Any]) -> str:
     status = report["status"]
     lines = [
@@ -221,7 +240,7 @@ def markdown_report(report: Dict[str, Any]) -> str:
         f"Status: **{status}**",
         "",
         "This is a CPU-only overhead probe for the copy-buffer opcode shape. It compares direct native recording with command-IR capture, "
-        "reader decode, replay preflight, and Core::CommandList replay in the same native process.",
+        "reader decode, replay preflight, Core::CommandList replay, and experimental direct-Vulkan replay in the same native process.",
         "",
     ]
     if report.get("skip_reason"):
@@ -249,8 +268,9 @@ def markdown_report(report: Dict[str, Any]) -> str:
             f"- Warm-up samples: `{payload['warmup']}`",
             f"- Measured samples: `{payload['samples']}`",
             f"- Stream bytes: `{payload['stream_bytes']}` (payload `{payload['payload_bytes']}`)",
-            f"- Decoded / preflight / replayed records: `{payload['decoded_records']}` / "
-            f"`{payload['preflight_records']}` / `{payload['replayed_records']}`",
+            f"- Decoded / preflight / Core replayed / direct replayed records: `{payload['decoded_records']}` / "
+            f"`{payload['preflight_records']}` / `{payload['replayed_records']}` / "
+            f"`{payload['direct_vulkan_replayed_records']}`",
             f"- Timed capture allocation / reallocation deltas: `{payload['capture_allocation_delta']}` / "
             f"`{payload['capture_reallocation_delta']}`",
             "",
@@ -265,19 +285,26 @@ def markdown_report(report: Dict[str, Any]) -> str:
             "reader_decode": "Reader decode",
             "preflight": "Replay preflight",
             "replay": "Core::CommandList replay",
+            "direct_vulkan_replay": "Direct Vulkan replay",
         }
         for stage in TIMING_STAGES:
             lines.append(f"| {labels[stage]} | {format_timing(payload[stage])} |")
         increment = report.get("metrics", {}).get("capture_encode_increment_percent")
         if increment is not None:
             lines += ["", f"Median capture encode increment over native recording: `{float(increment):.2f}%`."]
+        direct_delta = report.get("metrics", {}).get("direct_vulkan_replay_delta_percent")
+        if direct_delta is not None:
+            lines += [
+                f"Median direct-Vulkan replay delta relative to Core::CommandList replay: `{float(direct_delta):.2f}%`."
+            ]
         lines += [
             "",
             "All timed capture samples must remain allocation-free after the capture buffer is primed. "
             "This allocation gate applies only to the dedicated capture arena. Native/capture recording include "
-            "the recorder's command-list creation; replay excludes list create/open/close but includes its internal "
-            "preflight and lowering. These values do not measure GPU execution time or establish a runtime adoption "
-            "decision by themselves.",
+            "the recorder's command-list creation; both replay measurements exclude list create/open/close but include "
+            "their internal preflight and lowering. Direct-Vulkan replay also excludes the caller's graph-owned state "
+            "setup, which is verified separately. These values do not measure GPU execution time or establish a runtime "
+            "adoption decision by themselves.",
             "",
         ]
 
@@ -361,6 +388,7 @@ def run(args: argparse.Namespace) -> int:
             payload = require_ok(args, result)
             report["metrics"] = {
                 "capture_encode_increment_percent": capture_increment_percent(payload),
+                "direct_vulkan_replay_delta_percent": direct_vulkan_replay_delta_percent(payload),
             }
             report["status"] = "passed"
             return_code = 0
@@ -402,8 +430,11 @@ def run_self_test() -> int:
         "decoded_records": 4,
         "preflight_records": 4,
         "replayed_records": 4,
+        "direct_vulkan_replayed_records": 4,
         "stream_valid": True,
         "checksum_verified": True,
+        "direct_vulkan_observed_hash": 1234,
+        "direct_vulkan_checksum_verified": True,
         "logger_errors": 0,
         "capture_allocation_delta": 0,
         "capture_reallocation_delta": 0,
@@ -416,6 +447,7 @@ def run_self_test() -> int:
     result = ProfileResult(0, 0.1, payload, Path("command_ir_profile.log"))
     assert require_ok(args, result)["replayed_records"] == 4
     assert capture_increment_percent(payload) == 0.0
+    assert direct_vulkan_replay_delta_percent(payload) == 0.0
     command_args = SimpleNamespace(
         executable=Path("/nwb/command_ir_profile"),
         records=4,
@@ -429,7 +461,10 @@ def run_self_test() -> int:
         "status": "passed",
         "process": {"return_code": 0, "elapsed_seconds": 0.1, "log": "command_ir_profile.log"},
         "profile": payload,
-        "metrics": {"capture_encode_increment_percent": 0.0},
+        "metrics": {
+            "capture_encode_increment_percent": 0.0,
+            "direct_vulkan_replay_delta_percent": 0.0,
+        },
     }
     assert "CPU overhead per command" in markdown_report(report)
     print("command-IR harness self-test passed")

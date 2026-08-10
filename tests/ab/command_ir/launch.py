@@ -2,7 +2,8 @@
 """Build and run the Phase 11 command-IR overhead profile.
 
 The profile measures the stable native recording path alongside command-IR copy-buffer
-capture, validation-reader decode, preflight, and replay in one process. It writes a
+capture, validation-reader decode, preflight, Core::CommandList replay, and experimental
+direct-Vulkan replay in one process. It writes a
 timestamped evidence bundle and is intentionally a CPU-overhead probe rather than a
 GPU-performance benchmark.
 """

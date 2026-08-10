@@ -135,7 +135,7 @@ private:
 };
 
 // Queue assignment is a separate immutable compile result. Renderer integrations may use it for native-recording
-// selection only after their own legacy-parity checks; graph core never creates a command list or submits work.
+// selection; graph core never creates a command list or submits work.
 class GpuTaskGraphQueueAssignments final : NoCopy{
     friend class GpuTaskGraphCompiler;
 
@@ -179,7 +179,7 @@ public:
     )const;
 
     // This produces only a physical-queue decision. It never creates a command list or changes submission; the
-    // caller supplies the concrete topology discovered from its current device and owns any parity-gated use.
+    // caller supplies the concrete topology discovered from its current device.
     [[nodiscard]] bool assignQueues(
         const GpuTaskGraph& graph,
         const GpuTaskGraphAnalysis& analysis,

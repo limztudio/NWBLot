@@ -70,11 +70,7 @@ struct GpuTaskGraphExternalCompletionView{
 };
 
 struct GpuTaskGraphTelemetryOptions{
-    const GpuTaskDependencyEdge* legacyScheduleMismatches = nullptr;
-    usize legacyScheduleMismatchCount = 0u;
     const GpuTaskGraphQueueAssignments* queueAssignments = nullptr;
-    const GpuTaskId* legacyQueueMismatches = nullptr;
-    usize legacyQueueMismatchCount = 0u;
 };
 
 

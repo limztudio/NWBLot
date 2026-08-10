@@ -1137,15 +1137,9 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
     if(
         !analysis.validFor(*this)
         || m_tasks.empty()
-        || (options.legacyScheduleMismatchCount > 0u && !options.legacyScheduleMismatches)
-        || (options.legacyQueueMismatchCount > 0u && !options.legacyQueueMismatches)
         || (options.queueAssignments && !options.queueAssignments->validFor(*this))
     )
         return false;
-    for(usize mismatchIndex = 0u; mismatchIndex < options.legacyQueueMismatchCount; ++mismatchIndex){
-        if(!validTask(options.legacyQueueMismatches[mismatchIndex]))
-            return false;
-    }
     if(options.queueAssignments){
         for(usize taskIndex = 0u; taskIndex < m_tasks.size(); ++taskIndex){
             if(!options.queueAssignments->find(taskAt(taskIndex).id))
@@ -1192,12 +1186,6 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
             if(assignment->reason == GpuTaskQueueAssignmentReason::Fallback)
                 flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentFallback;
         }
-        for(usize mismatchIndex = 0u; mismatchIndex < options.legacyQueueMismatchCount; ++mismatchIndex){
-            if(options.legacyQueueMismatches[mismatchIndex] == task.id){
-                flags |= GpuTaskGraphTelemetryNodeFlag::LegacyQueueAssignmentMismatch;
-                break;
-            }
-        }
         taskNodes.push_back(builder.addPass(task.identity, task.markerLabel, flags));
     }
 
@@ -1221,13 +1209,6 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
             flags |= GpuTaskGraphTelemetryEdgeFlag::ExplicitDependency;
         if(analysis.hasInferredEdge(edge.producer, edge.consumer))
             flags |= GpuTaskGraphTelemetryEdgeFlag::InferredDependency;
-        for(usize mismatchIndex = 0u; mismatchIndex < options.legacyScheduleMismatchCount; ++mismatchIndex){
-            const GpuTaskDependencyEdge& mismatch = options.legacyScheduleMismatches[mismatchIndex];
-            if(mismatch.producer == edge.producer && mismatch.consumer == edge.consumer){
-                flags |= GpuTaskGraphTelemetryEdgeFlag::MissingLegacyScheduleDependency;
-                break;
-            }
-        }
         builder.addEdge(
             taskNodes[edge.producer.index],
             taskNodes[edge.consumer.index],

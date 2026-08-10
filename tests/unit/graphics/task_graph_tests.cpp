@@ -2161,7 +2161,7 @@ TEST(GpuTaskGraph, RejectsInvalidAndIncompatibleQueueTopologiesDeterministically
     EXPECT_EQ(firstAssignment->reason, secondAssignment->reason);
 }
 
-TEST(GpuTaskGraph, ExportsInferredEvidenceAndLegacyScheduleMismatches){
+TEST(GpuTaskGraph, ExportsInferredEvidenceAndQueueAssignments){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId resource = AddHazardDomain(
@@ -2205,12 +2205,6 @@ TEST(GpuTaskGraph, ExportsInferredEvidenceAndLegacyScheduleMismatches){
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
-    const Graphics::GpuTaskDependencyEdge mismatch{
-        .producer = writer,
-        .consumer = reader,
-        .resource = resource,
-        .hazard = Graphics::GpuTaskHazardType::ReadAfterWrite,
-    };
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     Telemetry::FrameGraphPendingNameEdges pendingEdges(testArena.arena);
@@ -2224,18 +2218,13 @@ TEST(GpuTaskGraph, ExportsInferredEvidenceAndLegacyScheduleMismatches){
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
     const Graphics::GpuTaskGraphTelemetryOptions telemetryOptions{
-        .legacyScheduleMismatches = &mismatch,
-        .legacyScheduleMismatchCount = 1u,
         .queueAssignments = &assignments,
-        .legacyQueueMismatches = &reader,
-        .legacyQueueMismatchCount = 1u,
     };
     ASSERT_TRUE(graph.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
 
     const u8 expectedFlags =
         Graphics::GpuTaskGraphTelemetryEdgeFlag::ExplicitDependency
         | Graphics::GpuTaskGraphTelemetryEdgeFlag::InferredDependency
-        | Graphics::GpuTaskGraphTelemetryEdgeFlag::MissingLegacyScheduleDependency
     ;
     bool foundDependency = false;
     for(const Telemetry::FrameGraphEdgeDesc& edge : edges){
@@ -2254,7 +2243,6 @@ TEST(GpuTaskGraph, ExportsInferredEvidenceAndLegacyScheduleMismatches){
     EXPECT_EQ(
         nodes[2u].flags,
         Graphics::GpuTaskGraphTelemetryNodeFlag::AssignedGraphicsQueue
-            | Graphics::GpuTaskGraphTelemetryNodeFlag::LegacyQueueAssignmentMismatch
     );
 }
 

@@ -120,20 +120,18 @@ namespace GpuTaskHazardType{
     };
 };
 
-// Dependency-edge flags are stored in the existing frame-graph telemetry payload. They keep Phase 1 evidence
-// observable without changing its wire format or the renderer's live scheduling behavior.
+// Dependency-edge flags are stored in the existing frame-graph telemetry payload without changing its wire format
+// or the renderer's live scheduling behavior.
 namespace GpuTaskGraphTelemetryEdgeFlag{
     enum Mask : u8{
         None = 0u,
         ExplicitDependency = 1u << 0u,
         InferredDependency = 1u << 1u,
-        MissingLegacyScheduleDependency = 1u << 2u,
     };
 };
 
-// Queue-assignment information reuses the existing frame-graph node flags during the observational migration.
-// Keeping it in the node payload avoids changing the telemetry wire schema while still making compiler decisions
-// and parity failures visible.
+// Queue-assignment information reuses the existing frame-graph node flags. Keeping it in the node payload avoids
+// changing the telemetry wire schema while still making compiler decisions visible.
 namespace GpuTaskGraphTelemetryNodeFlag{
     enum Mask : u8{
         None = 0u,
@@ -141,8 +139,6 @@ namespace GpuTaskGraphTelemetryNodeFlag{
         AssignedComputeQueue = 1u << 1u,
         AssignedDedicatedQueue = 1u << 2u,
         QueueAssignmentFallback = 1u << 3u,
-        LegacyQueueAssignmentMismatch = 1u << 4u,
-        // Preserve every existing telemetry wire-bit; Transfer occupies the first previously unused slot.
         AssignedTransferQueue = 1u << 5u,
     };
 };

@@ -368,8 +368,8 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketRange& range,
-    const GpuNativePacketRecordDesc* const recordDescs,
-    const usize recordDescCount,
+    const GpuNativePacketRecordDesc* const recordOverrides,
+    const usize recordOverrideCount,
     GpuRecordedGraph& outRecordedGraph,
     GpuSubmissionPacketId* const outFailedPacket
 )const{
@@ -378,21 +378,45 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
     if(
         !compiledGraph.validFor(graph)
         || !compiledGraph.validPacketRange(range)
-        || !recordDescs
-        || recordDescCount != range.packetCount
+        || (recordOverrideCount != 0u && !recordOverrides)
     )
         return false;
 
+    const usize rangeBegin = range.first.index;
+    const usize rangeEnd = rangeBegin + range.packetCount;
+    for(usize overrideIndex = 0u; overrideIndex < recordOverrideCount; ++overrideIndex){
+        const GpuNativePacketRecordDesc& overrideDesc = recordOverrides[overrideIndex];
+        if(
+            !compiledGraph.validPacket(overrideDesc.packet)
+            || overrideDesc.packet.index < rangeBegin
+            || overrideDesc.packet.index >= rangeEnd
+        )
+            return false;
+        for(usize previousOverrideIndex = 0u; previousOverrideIndex < overrideIndex; ++previousOverrideIndex){
+            if(recordOverrides[previousOverrideIndex].packet == overrideDesc.packet)
+                return false;
+        }
+    }
+
     // The compiler emits packet IDs in stable topological order, so native recording preserves the graph's
-    // internal state-seed chain without requiring renderer-side stage ladders. Callers can retain only an
-    // intentional late tail outside this range.
-    for(usize recordDescIndex = 0u; recordDescIndex < recordDescCount; ++recordDescIndex){
-        const usize packetIndex = static_cast<usize>(range.first.index) + recordDescIndex;
+    // internal state-seed chain without requiring renderer-side packet collectors. Callers supply only sparse
+    // external-state/serial-seed overrides and can retain an intentional late tail outside this range.
+    for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
         const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
-        if(recordDescs[recordDescIndex].packet != packet || !recordPacket(
+        GpuNativePacketRecordDesc defaultDesc{
+            .packet = packet,
+        };
+        const GpuNativePacketRecordDesc* recordDesc = &defaultDesc;
+        for(usize overrideIndex = 0u; overrideIndex < recordOverrideCount; ++overrideIndex){
+            if(recordOverrides[overrideIndex].packet == packet){
+                recordDesc = &recordOverrides[overrideIndex];
+                break;
+            }
+        }
+        if(!recordPacket(
             graph,
             compiledGraph,
-            recordDescs[recordDescIndex],
+            *recordDesc,
             outRecordedGraph
         )){
             if(outFailedPacket)

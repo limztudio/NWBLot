@@ -959,29 +959,47 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
-    const GpuNativePacketRecordDesc recordDescs[] = {
+    // The writer override proves that range recording may seed only selected packets; the reader receives the
+    // compiler-derived default descriptor.
+    const GpuNativePacketRecordDesc recordOverrides[] = {
         GpuNativePacketRecordDesc{ .packet = writerPacket },
-        GpuNativePacketRecordDesc{ .packet = readerPacket },
     };
     const GpuNativePacketRecorder recorder(device);
     ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        compiledGraph.packetRange(writerPacket, writerPacket),
-        recordDescs,
-        1u,
-        recordedGraph
-    ));
-    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        compiledGraph.packetRange(readerPacket, readerPacket),
-        recordDescs + 1u,
+        compiledGraph.allPacketRange(),
+        recordOverrides,
         1u,
         recordedGraph
     ));
     EXPECT_TRUE(writerRecorded);
     EXPECT_TRUE(readerRecorded);
+
+    GpuRecordedGraph rejectedOverrideGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecordDesc outsideRangeOverride[] = {
+        GpuNativePacketRecordDesc{ .packet = readerPacket },
+    };
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.packetRange(writerPacket, writerPacket),
+        outsideRangeOverride,
+        LengthOf(outsideRangeOverride),
+        rejectedOverrideGraph
+    ));
+    const GpuNativePacketRecordDesc duplicateOverrides[] = {
+        GpuNativePacketRecordDesc{ .packet = writerPacket },
+        GpuNativePacketRecordDesc{ .packet = writerPacket },
+    };
+    EXPECT_FALSE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        duplicateOverrides,
+        LengthOf(duplicateOverrides),
+        rejectedOverrideGraph
+    ));
 
     const GpuTaskGraphSubmitter submitter(device);
     NativePacketRangeAcceptanceObserver acceptanceObserver;
@@ -1306,20 +1324,14 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
-    const GpuNativePacketRecordDesc recordDescs[] = {
-        GpuNativePacketRecordDesc{ .packet = hardwarePacket },
-        GpuNativePacketRecordDesc{ .packet = avboitPrePacket },
-        GpuNativePacketRecordDesc{ .packet = lightingPacket },
-        GpuNativePacketRecordDesc{ .packet = compositePacket },
-    };
     const GpuNativePacketRecorder recorder(device);
     GpuSubmissionPacketId failedPacket;
     const bool allPacketsRecorded = recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         packetRange,
-        recordDescs,
-        LengthOf(recordDescs),
+        nullptr,
+        0u,
         recordedGraph,
         &failedPacket
     );
@@ -4942,24 +4954,13 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
-    const GpuNativePacketRecordDesc recordDescs[] = {
-        GpuNativePacketRecordDesc{ .packet = shadowPreparePacket },
-        GpuNativePacketRecordDesc{ .packet = graphicsPrefixPacket },
-        GpuNativePacketRecordDesc{ .packet = shadowVisibilityPacket },
-        GpuNativePacketRecordDesc{ .packet = causticsPacket },
-        GpuNativePacketRecordDesc{ .packet = surfelGiPacket },
-        GpuNativePacketRecordDesc{ .packet = lightingPacket },
-        GpuNativePacketRecordDesc{ .packet = compositePacket },
-        GpuNativePacketRecordDesc{ .packet = presentPacket },
-    };
-    EXPECT_EQ(recordDescs[1u].serialStateSeed, nullptr);
     const GpuNativePacketRecorder recorder(device);
     ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         packetRange,
-        recordDescs,
-        LengthOf(recordDescs),
+        nullptr,
+        0u,
         recordedGraph
     ));
     EXPECT_TRUE(shadowPrepareRecorded);

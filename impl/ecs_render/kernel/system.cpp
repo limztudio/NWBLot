@@ -1127,14 +1127,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // Record preparation and prefix together in compiler order. The compiler supplies every declared state seed;
     // there is no cross-graph serial snapshot or renderer-owned packet handoff.
     const Core::GpuNativePacketRecorder deferredRecorder(device);
-    const Core::GpuNativePacketRecordDesc shadowPreparePrefixRecordDescs[] = {
-        Core::GpuNativePacketRecordDesc{
-            .packet = shadowPreparePacket,
-        },
-        Core::GpuNativePacketRecordDesc{
-            .packet = graphicsPrefixPacket,
-        },
-    };
     const bool graphicsPrefixRecorded =
         m_deferredLightingTaskGraphValid
         && m_graphicsPrefixMeshViewSetupTask.valid()
@@ -1149,8 +1141,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph,
             shadowPrepareThroughPrefixPacketRange,
-            shadowPreparePrefixRecordDescs,
-            LengthOf(shadowPreparePrefixRecordDescs),
+            nullptr,
+            0u,
             m_deferredLightingRecordedGraph
         )
     ;
@@ -1293,7 +1285,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredCompositeStateSourceCount,
         graphicsPrefixFinalStateSeed
     );
-    Core::GpuNativePacketRecordDesc deferredRecordDescs[11] = {};
+    // Only the packets that import accepted external state need renderer-provided overrides. All remaining packets
+    // receive the compiler-derived default descriptor during range traversal.
+    Core::GpuNativePacketRecordDesc deferredRecordDescs[7] = {};
     usize deferredRecordDescCount = 0u;
     deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
         .packet = shadowVisibilityPacket,
@@ -1324,20 +1318,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         .externalStateSources = avboitPreStateSources,
         .externalStateSourceCount = LengthOf(avboitPreStateSources),
     };
-    if(avboitUsesAsyncCompute){
-        deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
-            .packet = avboitDepthWarpPacket,
-        };
-        deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
-            .packet = avboitExtinctionPacket,
-        };
-        deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
-            .packet = avboitIntegrationPacket,
-        };
-        deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
-            .packet = avboitAccumulationPacket,
-        };
-    }
     deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
         .packet = deferredLightingPacket,
         .externalStateSources = deferredLightingStateSources,
@@ -1347,9 +1327,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         .packet = deferredCompositePacket,
         .externalStateSources = deferredCompositeStateSources,
         .externalStateSourceCount = deferredCompositeStateSourceCount,
-    };
-    deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
-        .packet = deferredPresentPacket,
     };
     // The optional history tail and independent recovery tail record only after their runtime prerequisites exist.
     // Record the normal compile-order prefix now; both late packets join this recorded graph and transaction without
@@ -1408,7 +1385,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && deferredFrameRecoveryPacket.valid()
         && deferredFrameRecoveryQueue
         && effectsThroughPresentPacketRange.valid()
-        && deferredRecordDescCount == effectsThroughPresentPacketRange.packetCount
     ;
     if(deferredPacketsRecorded){
         deferredPacketsRecorded = deferredRecorder.recordPacketRangeInCompileOrder(
@@ -1552,17 +1528,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return false;
         }
 
-        const Core::GpuNativePacketRecordDesc recoveryRecordDescs[] = {
-            Core::GpuNativePacketRecordDesc{
-                .packet = deferredFrameRecoveryPacket,
-            },
-        };
         const bool recoveryRecorded = deferredRecorder.recordPacketRangeInCompileOrder(
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph,
             deferredFrameRecoveryPacketRange,
-            recoveryRecordDescs,
-            LengthOf(recoveryRecordDescs),
+            nullptr,
+            0u,
             m_deferredLightingRecordedGraph
         );
         if(!recoveryRecorded){

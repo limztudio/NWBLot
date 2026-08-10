@@ -127,14 +127,15 @@ public:
         const GpuNativePacketRecordDesc& desc,
         GpuRecordedGraph& outRecordedGraph
     )const;
-    // Records one compiler-derived non-empty contiguous range. Earlier producer packets needed by the range must
-    // already be recorded, which keeps deliberate late tails separate from the ordinary graph prefix.
+    // Records one compiler-derived non-empty contiguous range. `recordOverrides` is optional and sparse: packets
+    // without an override receive the ordinary graph-owned state seed. Earlier producer packets needed by the range
+    // must already be recorded, which keeps deliberate late tails separate from the ordinary graph prefix.
     [[nodiscard]] bool recordPacketRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketRange& range,
-        const GpuNativePacketRecordDesc* recordDescs,
-        usize recordDescCount,
+        const GpuNativePacketRecordDesc* recordOverrides,
+        usize recordOverrideCount,
         GpuRecordedGraph& outRecordedGraph,
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;

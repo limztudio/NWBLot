@@ -506,71 +506,6 @@ namespace __hidden_renderer_task_graph{
     };
 }
 
-// This is the first late-native-recording task. It is intentionally self-contained so the compiler may route it to
-// an optional dedicated Transfer transport, while retaining its Graphics/Compute fallback on other devices.
-struct LaggedLightingHistoryCopyTask{
-    struct Payload{
-        Core::TextureHandle sourceShadowVisibility;
-        Core::TextureHandle sourceCausticIrradiance;
-        Core::TextureHandle sourceSurfelIrradiance;
-        Core::TextureHandle destinationShadowVisibility;
-        Core::TextureHandle destinationCausticIrradiance;
-        Core::TextureHandle destinationSurfelIrradiance;
-        Core::QueueSubmissionToken* acceptedHistoryToken = nullptr;
-    };
-
-    [[nodiscard]] static bool record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    ){
-        static_cast<void>(context);
-        if(
-            !payload.sourceShadowVisibility
-            || !payload.sourceCausticIrradiance
-            || !payload.sourceSurfelIrradiance
-            || !payload.destinationShadowVisibility
-            || !payload.destinationCausticIrradiance
-            || !payload.destinationSurfelIrradiance
-        )
-            return false;
-
-        // Packet-boundary states are declared with the task and lowered by GpuNativePacketRecorder before this
-        // thunk runs.  The copy body keeps only the work intrinsic to this task.
-        for(u32 shadowSlot = 0u; shadowSlot < NWB_SCENE_SHADOW_SLOT_COUNT; ++shadowSlot){
-            Core::TextureSlice shadowSlice;
-            shadowSlice.setArraySlice(shadowSlot);
-            commandList.copyTexture(
-                payload.destinationShadowVisibility.get(),
-                shadowSlice,
-                payload.sourceShadowVisibility.get(),
-                shadowSlice
-            );
-        }
-        const Core::TextureSlice irradianceSlice;
-        commandList.copyTexture(
-            payload.destinationCausticIrradiance.get(),
-            irradianceSlice,
-            payload.sourceCausticIrradiance.get(),
-            irradianceSlice
-        );
-        commandList.copyTexture(
-            payload.destinationSurfelIrradiance.get(),
-            irradianceSlice,
-            payload.sourceSurfelIrradiance.get(),
-            irradianceSlice
-        );
-        return true;
-    }
-
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        if(payload.acceptedHistoryToken)
-            *payload.acceptedHistoryToken = token;
-    }
-
-};
-
-
 // The terminal graphics-prefix task normalizes the state exported to the following graph packets.
 struct PostGbufferNormalizeGraphTask{
     struct Payload{
@@ -3177,14 +3112,20 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     }
 
     if(capturesLaggedLightingHistory){
-        const Core::GpuTaskResourceUse historyCopyResourceUses[] = {
-            ReadUse(historyCopyShadowVisibility, Core::ResourceStates::CopySource),
-            ReadUse(historyCopyCausticIrradiance, Core::ResourceStates::CopySource),
-            ReadUse(historyCopySurfelIrradiance, Core::ResourceStates::CopySource),
-            WriteUse(historyCopyDestinationShadowVisibility, Core::ResourceStates::CopyDest),
-            WriteUse(historyCopyDestinationCausticIrradiance, Core::ResourceStates::CopyDest),
-            WriteUse(historyCopyDestinationSurfelIrradiance, Core::ResourceStates::CopyDest),
-        };
+        // The core built-in derives whole-resource CopySource/CopyDest declarations for these regions and retains
+        // the imports itself. The array slices stay explicit only in the native copy body.
+        Core::GpuCopyTextureTaskRegion historyCopyRegions[NWB_SCENE_SHADOW_SLOT_COUNT + 2u] = {};
+        for(u32 shadowSlot = 0u; shadowSlot < NWB_SCENE_SHADOW_SLOT_COUNT; ++shadowSlot){
+            Core::GpuCopyTextureTaskRegion& region = historyCopyRegions[shadowSlot];
+            region.source = historyCopyShadowVisibility;
+            region.destination = historyCopyDestinationShadowVisibility;
+            region.sourceSlice.setArraySlice(shadowSlot);
+            region.destinationSlice.setArraySlice(shadowSlot);
+        }
+        historyCopyRegions[NWB_SCENE_SHADOW_SLOT_COUNT].source = historyCopyCausticIrradiance;
+        historyCopyRegions[NWB_SCENE_SHADOW_SLOT_COUNT].destination = historyCopyDestinationCausticIrradiance;
+        historyCopyRegions[NWB_SCENE_SHADOW_SLOT_COUNT + 1u].source = historyCopySurfelIrradiance;
+        historyCopyRegions[NWB_SCENE_SHADOW_SLOT_COUNT + 1u].destination = historyCopyDestinationSurfelIrradiance;
         Core::GpuTaskSchedulingHint historyCopyScheduling;
         historyCopyScheduling.cost = Core::GpuTaskCostHint::Medium;
         historyCopyScheduling.forceSubmissionBoundary = true;
@@ -3197,18 +3138,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .setQueue(TransferQueueRequest())
             .setScheduling(historyCopyScheduling)
             .setDependencies(historyCopyDependencies, LengthOf(historyCopyDependencies))
-            .setResourceUses(historyCopyResourceUses, LengthOf(historyCopyResourceUses))
         ;
-        m_deferredLaggedLightingHistoryTask = m_deferredLightingTaskGraph.addTask<LaggedLightingHistoryCopyTask>(
+        m_deferredLaggedLightingHistoryTask = m_deferredLightingTaskGraph.addCopyTextureTask(
             historyCopyDesc,
-            LaggedLightingHistoryCopyTask::Payload{
-                .sourceShadowVisibility = deferredTargets.shadowVisibility,
-                .sourceCausticIrradiance = deferredTargets.causticIrradiance,
-                .sourceSurfelIrradiance = deferredTargets.surfelIrradiance,
-                .destinationShadowVisibility = captureHistory->shadowVisibility,
-                .destinationCausticIrradiance = captureHistory->causticIrradiance,
-                .destinationSurfelIrradiance = captureHistory->surfelIrradiance,
-                .acceptedHistoryToken = &m_laggedLightingHistorySubmissionToken,
+            Core::GpuCopyTextureTaskDesc{
+                .regions = historyCopyRegions,
+                .regionCount = LengthOf(historyCopyRegions),
+                .acceptedToken = &m_laggedLightingHistorySubmissionToken,
             }
         );
         if(!m_deferredLaggedLightingHistoryTask.valid()){

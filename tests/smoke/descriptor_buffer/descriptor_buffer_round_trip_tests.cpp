@@ -835,6 +835,166 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndCarrie
 }
 
 
+// Primitive copies belong to the graph as typed task payloads: it derives their resource-state declarations,
+// records direct native copies on the resolved physical queue, and publishes the accepted packet token only after
+// submission. On this host the same proof automatically exercises either a dedicated Transfer family or Graphics
+// fallback without a renderer-specific command thunk.
+TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesAcceptedToken){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const TextureDesc copyTextureDesc = TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Format::RGBA8_UNORM)
+        .setInUAV(true)
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+    ;
+    auto source = device.createTexture(copyTextureDesc);
+    auto destination = device.createTexture(copyTextureDesc);
+    ASSERT_NE(source.get(), nullptr);
+    ASSERT_NE(destination.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId sourceResource = graph.importTexture(
+        source,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/built_in_copy_source"))
+            .setMarkerLabel("Built-In Copy Source")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId destinationResource = graph.importTexture(
+        destination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/built_in_copy_destination"))
+            .setMarkerLabel("Built-In Copy Destination")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(sourceResource.valid());
+    ASSERT_TRUE(destinationResource.valid());
+
+    GpuTaskSchedulingHint copyScheduling;
+    copyScheduling.cost = GpuTaskCostHint::Medium;
+    copyScheduling.forceSubmissionBoundary = true;
+    copyScheduling.allowPacketMerge = false;
+    GpuTaskDesc copyTaskDesc;
+    copyTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/built_in_copy_texture"))
+        .setMarkerLabel("Built-In Copy Texture")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Transfer,
+            GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+        .setScheduling(copyScheduling)
+    ;
+    const GpuCopyTextureTaskRegion copyRegions[] = {
+        GpuCopyTextureTaskRegion{
+            .source = sourceResource,
+            .destination = destinationResource,
+        },
+    };
+    QueueSubmissionToken acceptedToken;
+    const GpuTaskId copyTask = graph.addCopyTextureTask(
+        copyTaskDesc,
+        GpuCopyTextureTaskDesc{
+            .regions = copyRegions,
+            .regionCount = LengthOf(copyRegions),
+            .acceptedToken = &acceptedToken,
+        }
+    );
+    ASSERT_TRUE(copyTask.valid());
+    ASSERT_TRUE(graph.taskAt(copyTask.index).hasPayload);
+    ASSERT_EQ(graph.taskAt(copyTask.index).resourceUseCount, 2u);
+
+    const u32 graphicsFamily = device.getQueueFamilyIndex(CommandQueue::Graphics);
+    const u32 transferFamily = device.getQueueFamilyIndex(CommandQueue::Transfer);
+    const bool dedicatedTransfer = device.getQueue(CommandQueue::Transfer)
+        && transferFamily != Limit<u32>::s_Max
+        && transferFamily != graphicsFamily
+    ;
+    GpuPhysicalQueueInfo queues[2u] = {
+        GpuPhysicalQueueInfo{
+            .id = GpuPhysicalQueueId{ 0u, 1u },
+            .queueClass = CommandQueue::Graphics,
+            .capabilities = static_cast<GpuQueueCapability::Mask>(
+                static_cast<u8>(GpuQueueCapability::Graphics)
+                | static_cast<u8>(GpuQueueCapability::Compute)
+                | static_cast<u8>(GpuQueueCapability::Transfer)
+            ),
+            .familyIndex = graphicsFamily,
+            .queueIndex = 0u,
+            .dedicated = false,
+        },
+    };
+    usize queueCount = 1u;
+    if(dedicatedTransfer){
+        queues[queueCount] = GpuPhysicalQueueInfo{
+            .id = GpuPhysicalQueueId{ 1u, 1u },
+            .queueClass = CommandQueue::Transfer,
+            .capabilities = GpuQueueCapability::Transfer,
+            .familyIndex = transferFamily,
+            .queueIndex = 0u,
+            .dedicated = true,
+        };
+        ++queueCount;
+    }
+    const GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = queueCount,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/built_in_copy_texture_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuTaskQueueAssignment* const assignment = assignments.find(copyTask);
+    ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(
+        assignment->queueClass,
+        dedicatedTransfer ? CommandQueue::Transfer : CommandQueue::Graphics
+    );
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(copyTask);
+    ASSERT_TRUE(packet.valid());
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    ASSERT_NE(finalState, nullptr);
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken packetToken = transaction.packetToken(packet);
+    ASSERT_TRUE(packetToken.valid());
+    EXPECT_TRUE(acceptedToken.valid());
+    EXPECT_EQ(acceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(acceptedToken.value, packetToken.value);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto buffer = device.createBuffer(

@@ -388,6 +388,47 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     EXPECT_FALSE(graph.validResource(resource));
 }
 
+TEST(GpuTaskGraph, CopyTextureTaskRequiresTypedTextureImports){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId source = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/built_in_copy_source"),
+        "Built-In Copy Source"
+    );
+    const Graphics::GpuGraphResourceId destination = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/built_in_copy_destination"),
+        "Built-In Copy Destination"
+    );
+    ASSERT_TRUE(source.valid());
+    ASSERT_TRUE(destination.valid());
+
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/built_in_copy"))
+        .setMarkerLabel("Built-In Copy")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+    const Graphics::GpuCopyTextureTaskRegion region{
+        .source = source,
+        .destination = destination,
+    };
+    EXPECT_FALSE(graph.addCopyTextureTask(
+        desc,
+        Graphics::GpuCopyTextureTaskDesc{
+            .regions = &region,
+            .regionCount = 1u,
+        }
+    ).valid());
+    EXPECT_EQ(graph.taskCount(), 0u);
+}
+
 TEST(GpuTaskGraph, RejectsStaleDependencyHandlesDuringAnalysis){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

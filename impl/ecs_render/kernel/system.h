@@ -9,7 +9,6 @@
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/shared/renderer_state.h>
 #include <impl/ecs_render/kernel/subsystems.h>
-#include <impl/ecs_render/kernel/task_graph_schedule.h>
 
 #include <core/ecs/system.h>
 #include <core/graphics/gpu_timing.h>
@@ -57,6 +56,16 @@ namespace ECSRenderDetail{
 #if defined(NWB_DEBUG)
     struct MaterialTypedInstanceRangeVector;
 #endif
+    // Immutable frame facts used while declaring the graph. Queue assignment remains a compiler result; this
+    // carries only the features and external-history availability that change which semantic tasks exist.
+    struct RendererFrameGraphFeatures{
+        bool dedicatedAsyncCompute = false;
+        bool frameLaggedAsyncLightingEnabled = false;
+        bool laggedLightingHistoryReady = false;
+        bool laggedLightingHistoryAccepted = false;
+        bool hasTransparentRenderers = false;
+        bool hardwareCaustics = false;
+    };
     struct ShadowPrepareGraphTask;
     struct MeshViewSetupGraphTask;
     struct SceneShadingSetupGraphTask;
@@ -159,14 +168,11 @@ private:
         const CsgFrameState& csgFrameState,
         bool hasOpaqueCsgFrameWork,
         f32 meshViewAspectRatio,
-        bool shadowVisibilityExpectedCompute,
-        bool surfelGiExpectedCompute,
         Core::GpuGraphResourceId albedo,
         Core::GpuGraphResourceId normal,
         Core::GpuGraphResourceId worldPosition,
         Core::GpuGraphResourceId depth,
         Core::GpuGraphResourceId opaqueColor,
-        Core::GpuGraphResourceId currentSurfelIrradiance,
         Core::GpuGraphResourceId sceneShading,
         Core::GpuGraphResourceId lights,
         Core::GpuGraphResourceId meshView,
@@ -195,7 +201,7 @@ private:
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] bool declareDeferredSoftwareCausticsTask(
-        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+        bool hardwareCaustics,
         DeferredFrameTargets& deferredTargets,
         Core::GpuGraphResourceId worldPosition,
         Core::GpuGraphResourceId depth,
@@ -223,7 +229,7 @@ private:
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     void buildDeferredLightingTaskGraph(
-        const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+        const ECSRenderDetail::RendererFrameGraphFeatures& features,
         DeferredFrameTargets& deferredTargets,
         const CsgFrameState& csgFrameState,
         bool clearAvboitTargets,
@@ -231,8 +237,6 @@ private:
         bool hasOpaqueCsgFrameWork,
         f32 meshViewAspectRatio,
         Core::Framebuffer* presentationFramebuffer,
-        bool shadowVisibilityExpectedCompute,
-        bool surfelGiExpectedCompute,
         Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
         Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,

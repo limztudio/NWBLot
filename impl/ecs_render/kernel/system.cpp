@@ -525,15 +525,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // History capture is graph-owned and remains available whenever the opt-in path has a distinct compute
     // transport. Its tail is optional: a failed tail build must leave the current frame's deferred path intact.
     const bool requestsLaggedLightingHistoryCapture = laggedAsyncLightingRequested;
-    // Software caustics are graph-owned. A distinct Compute family is the only route that may resolve to Compute;
-    // otherwise the compiler routes the same task through Graphics without a renderer fallback topology.
-    const bool shadowVisibilityExpectedCompute = dedicatedAsyncCompute;
-    const bool softwareCausticsExpectedCompute = dedicatedAsyncCompute && !hardwareShadowSupported;
-    const bool surfelGiExpectedCompute = dedicatedAsyncCompute;
     m_preparedShadowVisibilityReady = false;
     // Compile every independent graph before native recording. The graphics prefix records all five ordered tasks
     // natively from mesh-view setup through post-G-buffer normalization.
-    const ECSRenderDetail::GpuTaskGraphFrameScheduleInput taskGraphInput{
+    const ECSRenderDetail::RendererFrameGraphFeatures frameGraphFeatures{
         .dedicatedAsyncCompute = dedicatedAsyncCompute,
         .frameLaggedAsyncLightingEnabled = m_frameLaggedAsyncLightingEnabled,
         .laggedLightingHistoryReady = laggedLightingHistoryResourcesReady,
@@ -677,7 +672,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         deferredTargets.framebuffer->getFramebufferInfo()
     );
     buildDeferredLightingTaskGraph(
-        taskGraphInput,
+        frameGraphFeatures,
         deferredTargets,
         csgFrameState,
         clearAvboitTargets,
@@ -685,8 +680,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         hasOpaqueCsgFrameWork,
         meshViewAspectRatio,
         framebuffer,
-        shadowVisibilityExpectedCompute,
-        surfelGiExpectedCompute,
         frameTimingTransaction,
         asyncPrefixTiming,
         shadowPrepareTimingTicket,
@@ -709,7 +702,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     if(requestsLaggedLightingHistoryCapture && !m_deferredLightingTaskGraphValid){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred graph build with optional lagged lighting-history capture failed; retrying without the tail"));
         buildDeferredLightingTaskGraph(
-            taskGraphInput,
+            frameGraphFeatures,
             deferredTargets,
             csgFrameState,
             clearAvboitTargets,
@@ -717,8 +710,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             hasOpaqueCsgFrameWork,
             meshViewAspectRatio,
             framebuffer,
-            shadowVisibilityExpectedCompute,
-            surfelGiExpectedCompute,
             frameTimingTransaction,
             asyncPrefixTiming,
             shadowPrepareTimingTicket,
@@ -943,17 +934,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredShadowVisibilityTask.valid()
         || !shadowVisibilityPacket.valid()
         || !shadowVisibilityQueue
-        || shadowVisibilityRunsOnCompute != shadowVisibilityExpectedCompute
         || (!hardwareShadowSupported && (
             !m_deferredSoftwareCausticsTask.valid()
             || !softwareCausticsPacket.valid()
             || !softwareCausticsQueue
-            || softwareCausticsRunsOnCompute != softwareCausticsExpectedCompute
         ))
         || !m_deferredSurfelGiTask.valid()
         || !surfelGiPacket.valid()
         || !surfelGiQueue
-        || surfelGiRunsOnCompute != surfelGiExpectedCompute
         || (hardwareShadowSupported && (
             !m_deferredHardwareCausticsTask.valid()
             || !hardwareCausticsPacket.valid()

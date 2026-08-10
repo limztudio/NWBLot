@@ -65,8 +65,11 @@ struct SurfelGiGraphTask{
                 payload.graphics->getDevice(),
                 commandList
             );
-            payload.raytracingSystem->clearSurfelIrradiance(commandList, *payload.targets);
         }
+
+        // The task owns its no-op output initialization on every physical route. This keeps the graph declaration
+        // invariant under late queue assignment instead of relying on a Graphics-prefix clear chosen in advance.
+        payload.raytracingSystem->clearSurfelIrradiance(commandList, *payload.targets);
 
         if(!payload.raytracingSystem->renderSurfelGi(commandList, *payload.targets))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel GI render pass failed"));

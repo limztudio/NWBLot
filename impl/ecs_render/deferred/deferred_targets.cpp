@@ -991,8 +991,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
 
 void RendererDeferredSystem::clearDeferredTargets(
     Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const bool clearSurfelIrradiance
+    DeferredFrameTargets& targets
 ){
     NWB_ASSERT(targets.albedo);
     NWB_ASSERT(targets.normal);
@@ -1008,9 +1007,6 @@ void RendererDeferredSystem::clearDeferredTargets(
     commandList.clearTextureFloat(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
     commandList.clearTextureFloat(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_GBufferNormalClearColor);
     commandList.clearTextureFloat(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_GBufferWorldPositionClearColor);
-    if(clearSurfelIrradiance && targets.surfelIrradiance)
-        commandList.clearTextureFloat(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_SurfelIrradianceClearColor);
-
     commandList.clearTextureFloat(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
 
     commandList.clearDepthStencilTexture(

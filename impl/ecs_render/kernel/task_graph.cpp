@@ -74,6 +74,19 @@ struct FrameRecoveryGraphTask{
 };
 
 
+[[nodiscard]] static const Core::GpuPhysicalQueueInfo* QueueForTask(
+    const Core::GpuTaskRecordContext& context,
+    const Core::GpuTaskId* const task
+){
+    if(!task || !task->valid())
+        return nullptr;
+    const Core::GpuSubmissionPacketId packet = context.graph.packetForTask(*task);
+    if(!packet.valid())
+        return nullptr;
+    return context.graph.queueInfo(context.graph.packet(packet).queue);
+}
+
+
 // Shadow preparation owns the first Graphics packet in the shared deferred graph. Preflight has already selected
 // every dynamic trace resource, so recording only emits GPU work against graph-imported handles.
 struct ShadowPrepareGraphTask{
@@ -162,7 +175,7 @@ struct MeshViewSetupGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool* ready = nullptr;
         f32 meshViewAspectRatio = 1.f;
-        bool shadowVisibilityRunsOnCompute = false;
+        const Core::GpuTaskId* shadowVisibilityTask = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -170,20 +183,26 @@ struct MeshViewSetupGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        static_cast<void>(context);
+        const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = ECSRenderDetail::QueueForTask(
+            context,
+            payload.shadowVisibilityTask
+        );
         if(
             !payload.renderer
             || !payload.frameTimingTransaction
             || !payload.asyncPrefixTiming
             || !payload.timingTicket
             || !payload.ready
+            || !shadowVisibilityQueue
         )
             return false;
 
         RendererSystem& renderer = *payload.renderer;
+        const bool shadowVisibilityRunsOnCompute =
+            shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute;
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
         const bool recordsGraphicsFrameMarker =
-            !payload.shadowVisibilityRunsOnCompute && RendererGpuTimingScope::s_Frame.valid()
+            !shadowVisibilityRunsOnCompute && RendererGpuTimingScope::s_Frame.valid()
         ;
         if(recordsGraphicsFrameMarker)
             commandList.beginMarker(RendererGpuTimingScope::s_Frame.markerLabel);
@@ -193,7 +212,7 @@ struct MeshViewSetupGraphTask{
             renderer.m_graphics.getDevice(),
             commandList
         );
-        if(payload.shadowVisibilityRunsOnCompute){
+        if(shadowVisibilityRunsOnCompute){
             payload.asyncPrefixTiming->emplace(
                 renderer.m_graphics.gpuTiming(),
                 RendererGpuTimingScope::s_AsyncPrefix,
@@ -247,7 +266,6 @@ struct DeferredClearGraphTask{
         RendererSystem* renderer = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        bool clearSurfelIrradiance = false;
     };
 
     [[nodiscard]] static bool record(
@@ -262,8 +280,7 @@ struct DeferredClearGraphTask{
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
         payload.renderer->m_deferredSystem.clearDeferredTargets(
             commandList,
-            *payload.targets,
-            payload.clearSurfelIrradiance
+            *payload.targets
         );
         return true;
     }
@@ -489,7 +506,6 @@ namespace __hidden_renderer_task_graph{
     };
 }
 
-
 // This is the first late-native-recording task.  It is intentionally self-contained so the compiler may route it
 // through the existing Graphics or Compute transport today and a distinct Transfer queue in a later phase.
 struct LaggedLightingHistoryCopyTask{
@@ -562,7 +578,7 @@ struct PostGbufferNormalizeGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncPrefixTiming = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        bool shadowVisibilityRunsOnCompute = false;
+        const Core::GpuTaskId* shadowVisibilityTask = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -570,13 +586,20 @@ struct PostGbufferNormalizeGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        static_cast<void>(context);
-        if(!payload.raytracingSystem || !payload.targets || !payload.timingTicket)
+        const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = ECSRenderDetail::QueueForTask(
+            context,
+            payload.shadowVisibilityTask
+        );
+        if(!payload.raytracingSystem || !payload.targets || !payload.timingTicket || !shadowVisibilityQueue)
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
         payload.raytracingSystem->normalizePostGbufferPacketResources(commandList, *payload.targets);
-        if(payload.shadowVisibilityRunsOnCompute && payload.asyncPrefixTiming && *payload.asyncPrefixTiming){
+        if(
+            shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute
+            && payload.asyncPrefixTiming
+            && *payload.asyncPrefixTiming
+        ){
             (*payload.asyncPrefixTiming)->finishTiming(commandList);
             payload.asyncPrefixTiming->reset();
         }
@@ -759,7 +782,7 @@ struct DeferredPresentGraphTask{
         Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncFinalTiming = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        bool shadowVisibilityRunsOnCompute = false;
+        const Core::GpuTaskId* shadowVisibilityTask = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -767,7 +790,12 @@ struct DeferredPresentGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        static_cast<void>(context);
+        const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue = ECSRenderDetail::QueueForTask(
+            context,
+            payload.shadowVisibilityTask
+        );
+        const bool shadowVisibilityRunsOnCompute = shadowVisibilityQueue
+            && shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute;
         if(
             !payload.deferredSystem
             || !payload.graphics
@@ -775,12 +803,13 @@ struct DeferredPresentGraphTask{
             || !payload.presentationFramebuffer
             || !payload.frameTimingTransaction
             || !payload.timingTicket
-            || (payload.shadowVisibilityRunsOnCompute && !payload.asyncFinalTiming)
+            || !shadowVisibilityQueue
+            || (shadowVisibilityRunsOnCompute && !payload.asyncFinalTiming)
         )
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        if(payload.shadowVisibilityRunsOnCompute){
+        if(shadowVisibilityRunsOnCompute){
             payload.asyncFinalTiming->emplace(
                 payload.graphics->gpuTiming(),
                 RendererGpuTimingScope::s_AsyncFinal,
@@ -798,7 +827,7 @@ struct DeferredPresentGraphTask{
         const bool frameTimingEnded = presentRecorded
             && payload.frameTimingTransaction->recordEnd(commandList)
         ;
-        if(payload.shadowVisibilityRunsOnCompute && presentRecorded && payload.asyncFinalTiming->has_value()){
+        if(shadowVisibilityRunsOnCompute && presentRecorded && payload.asyncFinalTiming->has_value()){
             payload.asyncFinalTiming->value().finishTiming(commandList);
             payload.asyncFinalTiming->reset();
         }
@@ -1062,14 +1091,11 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     const CsgFrameState& csgFrameState,
     const bool hasOpaqueCsgFrameWork,
     const f32 meshViewAspectRatio,
-    const bool shadowVisibilityExpectedCompute,
-    const bool surfelGiExpectedCompute,
     const Core::GpuGraphResourceId albedo,
     const Core::GpuGraphResourceId normal,
     const Core::GpuGraphResourceId worldPosition,
     const Core::GpuGraphResourceId depth,
     const Core::GpuGraphResourceId opaqueColor,
-    const Core::GpuGraphResourceId currentSurfelIrradiance,
     const Core::GpuGraphResourceId sceneShading,
     const Core::GpuGraphResourceId lights,
     const Core::GpuGraphResourceId meshView,
@@ -1110,10 +1136,6 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         || (shadowTraceGeometryResourceCount != 0u && !shadowTraceGeometryResources)
     )
         return false;
-    const bool clearSurfelIrradiance = !surfelGiExpectedCompute && deferredTargets.surfelIrradiance != nullptr;
-    if(clearSurfelIrradiance && !currentSurfelIrradiance.valid())
-        return false;
-
     const Core::GpuTaskResourceUse meshViewSetupResourceUses[] = {
         WriteUse(meshView, Core::ResourceStates::ConstantBuffer),
     };
@@ -1139,7 +1161,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             .timingTicket = &timingTicket,
             .ready = &m_graphicsPrefixMeshViewSetupReady,
             .meshViewAspectRatio = meshViewAspectRatio,
-            .shadowVisibilityRunsOnCompute = shadowVisibilityExpectedCompute,
+            .shadowVisibilityTask = &m_deferredShadowVisibilityTask,
         }
     );
     if(!m_graphicsPrefixMeshViewSetupTask.valid()){
@@ -1182,7 +1204,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     {
         Core::Alloc::ScratchArena clearResourceScratch(RendererArenaScope::s_TaskGraphArena);
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> clearResourceUses{ clearResourceScratch };
-        clearResourceUses.reserve(6u);
+        clearResourceUses.reserve(5u);
         clearResourceUses.push_back(WriteTextureUse(
             albedo,
             ECSRenderDetail::s_FramebufferSubresources,
@@ -1208,14 +1230,6 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             ECSRenderDetail::s_FramebufferSubresources,
             Core::ResourceStates::CopyDest
         ));
-        if(clearSurfelIrradiance){
-            clearResourceUses.push_back(WriteTextureUse(
-                currentSurfelIrradiance,
-                ECSRenderDetail::s_FramebufferSubresources,
-                Core::ResourceStates::CopyDest
-            ));
-        }
-
         Core::GpuTaskSchedulingHint clearScheduling;
         clearScheduling.cost = Core::GpuTaskCostHint::Tiny;
         clearScheduling.forceSubmissionBoundary = false;
@@ -1236,7 +1250,6 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
                 .renderer = this,
                 .targets = &deferredTargets,
                 .timingTicket = &timingTicket,
-                .clearSurfelIrradiance = clearSurfelIrradiance,
             }
         );
     }
@@ -1323,7 +1336,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             .targets = &deferredTargets,
             .asyncPrefixTiming = &asyncPrefixTiming,
             .timingTicket = &timingTicket,
-            .shadowVisibilityRunsOnCompute = shadowVisibilityExpectedCompute,
+            .shadowVisibilityTask = &m_deferredShadowVisibilityTask,
         }
     );
     if(!m_graphicsPrefixTask.valid()){
@@ -1625,7 +1638,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
 
 
 bool RendererSystem::declareDeferredSoftwareCausticsTask(
-    const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+    const bool hardwareCaustics,
     DeferredFrameTargets& deferredTargets,
     const Core::GpuGraphResourceId worldPosition,
     const Core::GpuGraphResourceId depth,
@@ -1645,7 +1658,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     // This remains the direct successor of Shadow Visibility in the deferred graph. A distinct Compute family is
     // optional; on other devices the compiler routes the same packet through Graphics.
     if(
-        input.hardwareCaustics
+        hardwareCaustics
         || !m_deferredShadowVisibilityTask.valid()
         || !deferredTargets.valid()
         || !deferredTargets.bindless.valid()
@@ -2047,7 +2060,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
 
 
 void RendererSystem::buildDeferredLightingTaskGraph(
-    const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
+    const ECSRenderDetail::RendererFrameGraphFeatures& features,
     DeferredFrameTargets& deferredTargets,
     const CsgFrameState& csgFrameState,
     const bool clearAvboitTargets,
@@ -2055,8 +2068,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     const bool hasOpaqueCsgFrameWork,
     const f32 meshViewAspectRatio,
     Core::Framebuffer* const presentationFramebuffer,
-    const bool shadowVisibilityExpectedCompute,
-    const bool surfelGiExpectedCompute,
     Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
     Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
@@ -2112,26 +2123,32 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
     m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
 
-    const ECSRenderDetail::GpuTaskGraphFrameSchedule schedule(input);
-    const bool useLaggedLightingHistory = schedule.usesLaggedLightingHistory();
     const auto& device = graphics().getDevice();
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
     const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
-    const bool dedicatedAsyncCompute = input.dedicatedAsyncCompute
+    const bool dedicatedAsyncCompute = features.dedicatedAsyncCompute
         && computeFamilyIndex != Limit<u32>::s_Max
         && computeFamilyIndex != graphicsFamilyIndex
     ;
-    const bool splitAvboitStages = !useLaggedLightingHistory && schedule.usesAsyncAvboit() && dedicatedAsyncCompute;
+    const bool useLaggedLightingHistory = dedicatedAsyncCompute
+        && features.frameLaggedAsyncLightingEnabled
+        && features.laggedLightingHistoryReady
+        && features.laggedLightingHistoryAccepted
+    ;
+    const bool splitAvboitStages = !useLaggedLightingHistory
+        && dedicatedAsyncCompute
+        && features.hasTransparentRenderers
+    ;
     if(!splitAvboitStages){
         avboitDepthWarpTimingTicket.discard();
         avboitExtinctionTimingTicket.discard();
         avboitIntegrationTimingTicket.discard();
         avboitAccumulationTimingTicket.discard();
     }
-    const bool declaresHardwareCaustics = input.hardwareCaustics;
+    const bool declaresHardwareCaustics = features.hardwareCaustics;
     const bool capturesLaggedLightingHistory = includeLaggedLightingHistoryCapture
-        && schedule.capturesLaggedLightingHistory()
         && dedicatedAsyncCompute
+        && features.frameLaggedAsyncLightingEnabled
     ;
     const DeferredLaggedLightingHistoryResources* const history = useLaggedLightingHistory
         ? &deferredTargets.laggedLightingHistory
@@ -2148,7 +2165,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         || !m_deferredState.m_sceneShadingBuffer
         || !m_deferredState.m_lightBuffer
         || !presentationFramebuffer
-        || hasTransparentRenderers != input.hasTransparentRenderers
+        || hasTransparentRenderers != features.hasTransparentRenderers
         || (useLaggedLightingHistory && (!history || !history->valid()))
         || (capturesLaggedLightingHistory && (!captureHistory || !captureHistory->valid()))
     )
@@ -2476,14 +2493,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         csgFrameState,
         hasOpaqueCsgFrameWork,
         meshViewAspectRatio,
-        shadowVisibilityExpectedCompute,
-        surfelGiExpectedCompute,
         albedo,
         normal,
         worldPosition,
         depth,
         opaqueColor,
-        currentSurfelIrradiance,
         sceneShading,
         lights,
         meshView,
@@ -2534,7 +2548,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     ))
         return;
     if(!declaresHardwareCaustics && !declareDeferredSoftwareCausticsTask(
-        input,
+        declaresHardwareCaustics,
         deferredTargets,
         worldPosition,
         depth,
@@ -3081,7 +3095,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     };
     Core::GpuTaskSchedulingHint compositeScheduling;
     compositeScheduling.cost = Core::GpuTaskCostHint::Medium;
-    compositeScheduling.avoidQueueCrossing = schedule.usesLaggedLightingHistory();
+    compositeScheduling.avoidQueueCrossing = useLaggedLightingHistory;
     compositeScheduling.forceSubmissionBoundary = true;
     compositeScheduling.allowPacketMerge = false;
     const Core::GpuTaskId compositeDependencies[] = {
@@ -3150,7 +3164,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .frameTimingTransaction = &frameTimingTransaction,
             .asyncFinalTiming = &asyncFinalTiming,
             .timingTicket = &presentTimingTicket,
-            .shadowVisibilityRunsOnCompute = shadowVisibilityExpectedCompute,
+            .shadowVisibilityTask = &m_deferredShadowVisibilityTask,
         }
     );
     if(!m_deferredPresentTask.valid()){

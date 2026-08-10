@@ -107,10 +107,6 @@ struct GpuNativePacketRecordDesc{
     GpuSubmissionPacketId packet;
     const GpuExternalPacketStateSource* externalStateSources = nullptr;
     usize externalStateSourceCount = 0u;
-    // A serial predecessor on this packet's physical queue may provide its complete final snapshot as the native
-    // packet's base.  It deliberately remains unfiltered so resources not touched by this packet survive for later
-    // declaration-filtered consumers; independent producer branches must use externalStateSources instead.
-    const CommandListResourceStateHandoff* serialStateSeed = nullptr;
 };
 
 
@@ -153,7 +149,6 @@ namespace GpuPacketRuntimeState{
         Recorded,
         Accepted,
         Rejected,
-        Retired,
     };
 };
 

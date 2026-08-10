@@ -284,26 +284,6 @@ bool GpuNativePacketRecorder::recordPacket(
         initialStates
     ))
         return false;
-    if(desc.serialStateSeed && !desc.serialStateSeed->valid())
-        return false;
-
-    // Keep one ordered predecessor as the complete packet base.  The graph-built seed still supplies any declared
-    // internal or external branch result, so the merge follows the same base-plus-branches contract as ordinary
-    // packet seeding without discarding prep state that this packet does not itself use.
-    if(desc.serialStateSeed){
-        if(initialStates){
-            const CommandListResourceStateHandoff* const branches[] = { initialStates };
-            if(!outRecordedGraph.m_stateMergeScratch.buildFanIn(
-                *desc.serialStateSeed,
-                branches,
-                LengthOf(branches)
-            ))
-                return false;
-            initialStates = &outRecordedGraph.m_stateMergeScratch;
-        }
-        else
-            initialStates = desc.serialStateSeed;
-    }
 
     CommandListResourceStateHandoff* const packetStateSeed = outRecordedGraph.packetStateSeed(desc.packet);
     if(!packetStateSeed)
@@ -417,7 +397,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
 
     // The compiler emits packet IDs in stable topological order, so native recording preserves the graph's
     // internal state-seed chain without requiring renderer-side packet collectors. Callers supply only sparse
-    // external-state/serial-seed overrides and can retain an intentional late tail outside this range.
+    // external-state overrides and can retain an intentional late tail outside this range.
     for(usize packetIndex = rangeBegin; packetIndex < rangeEnd; ++packetIndex){
         const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
         GpuNativePacketRecordDesc defaultDesc{

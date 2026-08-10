@@ -117,13 +117,12 @@ inline constexpr u8 s_ValidQueueCapabilityMask =
 }
 
 [[nodiscard]] static bool IsValidQueueTopology(
-    const GpuTaskGraphQueueTopology& topology,
-    u16& outDeviceGeneration
+    const GpuTaskGraphQueueTopology& topology
 )noexcept{
-    outDeviceGeneration = 0u;
     if(!topology.queues || topology.queueCount == 0u)
         return false;
 
+    u16 deviceGeneration = 0u;
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
         const u8 capabilityMask = static_cast<u8>(queue.capabilities);
@@ -154,8 +153,8 @@ inline constexpr u8 s_ValidQueueCapabilityMask =
         }
 
         if(queueIndex == 0u)
-            outDeviceGeneration = queue.id.deviceGeneration;
-        else if(queue.id.deviceGeneration != outDeviceGeneration)
+            deviceGeneration = queue.id.deviceGeneration;
+        else if(queue.id.deviceGeneration != deviceGeneration)
             return false;
 
         for(usize previousIndex = 0u; previousIndex < queueIndex; ++previousIndex){
@@ -541,7 +540,6 @@ void GpuTaskGraphQueueAssignments::reset(){
     m_diagnostic = GpuTaskQueueAssignmentDiagnostic{};
     m_generation = 0u;
     m_taskCount = 0u;
-    m_deviceGeneration = 0u;
     m_valid = false;
 }
 
@@ -861,13 +859,11 @@ bool GpuTaskGraphCompiler::assignQueues(
     if(!analysis.validFor(graph))
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis);
 
-    u16 deviceGeneration = 0u;
-    if(!IsValidQueueTopology(topology, deviceGeneration))
+    if(!IsValidQueueTopology(topology))
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidQueueTopology);
 
     outAssignments.m_generation = graph.generation();
     outAssignments.m_taskCount = graph.taskCount();
-    outAssignments.m_deviceGeneration = deviceGeneration;
     outAssignments.m_assignments.reserve(graph.taskCount());
 
     for(const GpuTaskId taskID : analysis.topologicalOrder()){

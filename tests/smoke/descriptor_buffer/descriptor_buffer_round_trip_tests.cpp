@@ -460,7 +460,7 @@ struct NativeShadowPrepareTask{
 };
 
 
-TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndCarriesSerialFinalState){
+TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExportsFinalState){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto buffer = device.createBuffer(
         BufferDesc()
@@ -469,13 +469,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndCarrie
             .setInitialState(ResourceStates::Common)
     );
     ASSERT_NE(buffer.get(), nullptr);
-    auto serialOnlyBuffer = device.createBuffer(
-        BufferDesc()
-            .setByteSize(256u)
-            .setCanHaveRawViews(true)
-            .setInitialState(ResourceStates::Common)
-    );
-    ASSERT_NE(serialOnlyBuffer.get(), nullptr);
     auto texture = device.createTexture(
         TextureDesc()
             .setWidth(4u)
@@ -785,41 +778,16 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndCarrie
     ASSERT_NE(compiledGraph.findTask(gbufferTask), nullptr);
     ASSERT_NE(compiledGraph.findTask(normalizeTask), nullptr);
 
-    auto serialProducerCommandList = device.createCommandList();
-    ASSERT_NE(serialProducerCommandList.get(), nullptr);
-    CommandListResourceStateHandoff serialState(DescriptorBufferRoundTripTest::arena());
-    serialProducerCommandList->open();
-    serialProducerCommandList->setBufferState(buffer.get(), ResourceStates::CopyDest);
-    serialProducerCommandList->setBufferState(serialOnlyBuffer.get(), ResourceStates::CopyDest);
-    serialProducerCommandList->close(&serialState);
-    ASSERT_TRUE(serialState.valid());
-    ASSERT_TRUE(serialProducerCommandList->hasCommandBuffer());
-    CommandList* const serialProducerCommandLists[] = { serialProducerCommandList.get() };
-    bool serialProducerSubmitted = false;
-    EXPECT_GT(device.executeCommandLists(
-        serialProducerCommandLists,
-        LengthOf(serialProducerCommandLists),
-        CommandQueue::Graphics,
-        &serialProducerSubmitted
-    ), 0u);
-    ASSERT_TRUE(serialProducerSubmitted);
-
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
-    const GpuNativePacketRecordDesc recordDescs[] = {
-        GpuNativePacketRecordDesc{
-            .packet = packet,
-            .serialStateSeed = &serialState,
-        },
-    };
     const GpuNativePacketRecorder recorder(device);
     ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         packetRange,
-        recordDescs,
-        LengthOf(recordDescs),
+        nullptr,
+        0u,
         recordedGraph
     ));
     ASSERT_TRUE(nativeMeshViewSetupRecorded);
@@ -837,7 +805,6 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndCarrie
     ASSERT_NE(stateProbe.get(), nullptr);
     stateProbe->open(finalState);
     EXPECT_EQ(stateProbe->getBufferState(buffer.get()), ResourceStates::ConstantBuffer);
-    EXPECT_EQ(stateProbe->getBufferState(serialOnlyBuffer.get()), ResourceStates::CopyDest);
     EXPECT_EQ(stateProbe->getTextureSubresourceState(texture.get(), 0u, 0u), ResourceStates::ShaderResource);
     EXPECT_EQ(stateProbe->getTextureSubresourceState(additionalTexture.get(), 0u, 0u), ResourceStates::CopyDest);
     stateProbe->close();

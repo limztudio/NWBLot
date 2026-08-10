@@ -311,8 +311,8 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         .setHeight(targets.height)
         .setFormat(targets.causticIrradianceFormat)
         .setInUAV(true)
-        // Graphics production and async deferred lighting share this target concurrently.
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        // Graphics/async production and the graph-owned lagged-history transfer copy share this target concurrently.
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .setName("engine/caustic/irradiance")
     ;
     targets.causticIrradiance = graphics().createTexture(irradianceDesc);
@@ -329,6 +329,7 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         .setHeight(targets.height)
         .setFormat(targets.surfelIrradianceFormat)
         .setInUAV(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .setName("engine/gi/surfel_irradiance")
     ;
     targets.surfelIrradiance = graphics().createTexture(surfelIrradianceDesc);

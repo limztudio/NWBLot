@@ -97,7 +97,7 @@ struct WaveLaneCountMinMaxFeatureInfo{
 
 struct CommandListParameters{
     // Type of the queue that this command list is to be executed on.
-    // The dedicated Compute queue has a limited subset of methods available.
+    // Dedicated Compute and Transfer queues expose only the command subsets their Vulkan families support.
     CommandQueue::Enum queueType = CommandQueue::Graphics;
     // Logical lane selection is resolved by Device::createCommandList. Keep the resolved physical queue type in this
     // structure so existing command-list validation and upload lifetime tracking remain queue-based.
@@ -319,6 +319,9 @@ struct DeviceCreationParameters : public InstanceParameters{
     // Best-effort default lane. A dedicated compute-only family is used when present; otherwise AsyncCompute
     // resolves to Graphics without failing device creation or fabricating an alias queue.
     bool enableAsyncComputeLane = true;
+    // Best-effort optional transfer transport. Only a distinct transfer-only Vulkan family is exposed as a
+    // CommandQueue::Transfer; task-graph copy work otherwise falls back to the existing Compute/Graphics queues.
+    bool enableTransferQueue = true;
     i32 adapterIndex = -1;
     bool supportExplicitDisplayScaling = false;
     bool resizeWindowWithDisplayScale = false;

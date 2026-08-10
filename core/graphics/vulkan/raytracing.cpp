@@ -1524,6 +1524,9 @@ Object ShaderTable::getNativeHandle(ObjectType objectType){
 
 
 void CommandList::setRayTracingState(const RayTracingState& state){
+    if(!validateNonTransferCommand(NWB_TEXT("set ray-tracing state")))
+        return;
+
     endActiveRenderPass();
     commitBarriers();
     m_currentGraphicsState = {};
@@ -1647,6 +1650,8 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
 
 
 void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingGeometryDesc* pGeometries, usize numGeometries, RayTracingAccelStructBuildFlags::Mask buildFlags){
+    if(!validateNonTransferCommand(NWB_TEXT("build bottom-level acceleration structure")))
+        return;
     if(!accelStructResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure is null"));
         return;
@@ -1905,6 +1910,8 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
 }
 
 void CommandList::compactBottomLevelAccelStructs(){
+    if(!validateNonTransferCommand(NWB_TEXT("compact bottom-level acceleration structures")))
+        return;
     VkResult res = VK_SUCCESS;
 
     if(!m_context.extensions.KHR_acceleration_structure)
@@ -2049,6 +2056,8 @@ void CommandList::buildTopLevelAccelStructFromBuffer(
     usize numInstances,
     RayTracingAccelStructBuildFlags::Mask buildFlags
 ){
+    if(!validateNonTransferCommand(NWB_TEXT("build top-level acceleration structure from buffer")))
+        return;
     if(!accelStructResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is null"));
         return;
@@ -2097,6 +2106,8 @@ void CommandList::buildTopLevelAccelStructFromBuffer(
 }
 
 void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructResource, const RayTracingInstanceDesc* pInstances, usize numInstances, RayTracingAccelStructBuildFlags::Mask buildFlags){
+    if(!validateNonTransferCommand(NWB_TEXT("build top-level acceleration structure")))
+        return;
     if(!accelStructResource){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure is null"));
         return;
@@ -2194,6 +2205,8 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
 }
 
 void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicromapResource, const RayTracingOpacityMicromapDesc& ommDesc){
+    if(!validateNonTransferCommand(NWB_TEXT("build opacity micromap")))
+        return;
     if(!m_context.extensions.EXT_opacity_micromap)
         return;
 
@@ -2317,6 +2330,8 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
 }
 
 void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
+    if(!validateNonTransferCommand(NWB_TEXT("dispatch rays")))
+        return;
     if(!m_context.extensions.KHR_ray_tracing_pipeline)
         return;
 

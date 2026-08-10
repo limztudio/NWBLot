@@ -66,15 +66,19 @@ namespace CpuAccessMode{
     };
 };
 
-// Engine-level sharing intent for resources that may be read or written by both render lanes. This never exposes
-// Vulkan queue-family indices to callers. `GraphicsAndAsyncCompute` becomes concurrent Vulkan sharing only when the
-// device has resolved AsyncCompute to a distinct family; all other resources remain exclusive by default.
+// Engine-level sharing intent for resources that may be read or written by multiple physical transports. This never
+// exposes Vulkan queue-family indices to callers. A requested set becomes concurrent Vulkan sharing only for the
+// distinct physical families the device actually created; all other resources remain exclusive by default.
 namespace ResourceQueueSharing{
     enum Mask : u8{
         Exclusive = 0,
         Graphics = 1 << 0,
         AsyncCompute = 1 << 1,
+        Transfer = 1 << 2,
         GraphicsAndAsyncCompute = Graphics | AsyncCompute,
+        GraphicsAndTransfer = Graphics | Transfer,
+        AsyncComputeAndTransfer = AsyncCompute | Transfer,
+        GraphicsAsyncComputeAndTransfer = Graphics | AsyncCompute | Transfer,
     };
 
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)

@@ -450,6 +450,9 @@ void CommandList::endActiveRenderPass(){
 }
 
 void CommandList::setGraphicsState(const GraphicsState& state){
+    if(!validateNonTransferCommand(NWB_TEXT("set graphics state")))
+        return;
+
     setResourceStatesForGraphicsBuffers(state);
     commitBarriers();
 
@@ -554,6 +557,8 @@ void CommandList::setGraphicsState(const GraphicsState& state){
 }
 
 void CommandList::draw(const DrawArguments& args){
+    if(!validateNonTransferCommand(NWB_TEXT("draw")))
+        return;
     if(args.vertexCount == 0 || args.instanceCount == 0)
         return;
 #if defined(NWB_DEBUG)
@@ -568,6 +573,8 @@ void CommandList::draw(const DrawArguments& args){
 }
 
 void CommandList::drawIndexed(const DrawArguments& args){
+    if(!validateNonTransferCommand(NWB_TEXT("draw indexed")))
+        return;
     if(args.vertexCount == 0 || args.instanceCount == 0)
         return;
 #if defined(NWB_DEBUG)
@@ -611,6 +618,8 @@ void CommandList::drawIndexed(const DrawArguments& args){
 }
 
 void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
+    if(!validateNonTransferCommand(NWB_TEXT("draw indirect")))
+        return;
     Buffer* indirectBuffer = nullptr;
     if(!prepareDrawIndirect(
         offsetBytes,
@@ -628,6 +637,8 @@ void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
 }
 
 void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
+    if(!validateNonTransferCommand(NWB_TEXT("draw indexed indirect")))
+        return;
     Buffer* indirectBuffer = nullptr;
     if(!prepareDrawIndirect(
         offsetBytes,

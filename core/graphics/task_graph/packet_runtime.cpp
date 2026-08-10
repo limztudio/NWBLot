@@ -336,7 +336,7 @@ bool GpuNativePacketRecorder::recordPacket(
             break;
         }
         for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledTask->prologueBarrierCount; ++barrierIndex)
-            recorded = graph.applyCompiledBarrier(prologueBarriers[barrierIndex], *commandList);
+            recorded = graph.applyCompiledBarrier(compiledGraph, prologueBarriers[barrierIndex], *commandList);
         if(recorded)
             commandList->commitBarriers();
         commandList->beginMarker(taskView.markerLabel);
@@ -347,7 +347,7 @@ bool GpuNativePacketRecorder::recordPacket(
         if(compiledTask->epilogueBarrierCount > 0u && !epilogueBarriers)
             recorded = false;
         for(u32 barrierIndex = 0u; recorded && barrierIndex < compiledTask->epilogueBarrierCount; ++barrierIndex)
-            recorded = graph.applyCompiledBarrier(epilogueBarriers[barrierIndex], *commandList);
+            recorded = graph.applyCompiledBarrier(compiledGraph, epilogueBarriers[barrierIndex], *commandList);
         if(recorded)
             commandList->commitBarriers();
     }

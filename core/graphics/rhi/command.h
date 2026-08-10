@@ -23,6 +23,9 @@ namespace CommandQueue{
     enum Enum : u8{
         Graphics = 0,
         Compute,
+        // Optional physical copy transport. It exists only when Vulkan exposes a distinct dedicated
+        // transfer-only family; task-graph fallback continues to use Compute or Graphics otherwise.
+        Transfer,
 
         kCount
     };

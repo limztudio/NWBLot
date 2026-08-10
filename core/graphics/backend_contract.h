@@ -266,6 +266,10 @@ concept CommandListApi = requires(
     commandList.setTextureState(texture, subresources, ResourceStates::ShaderResource);
     commandList.setBufferState(buffer, ResourceStates::ShaderResource);
     commandList.setAccelStructState(accelStruct, ResourceStates::AccelStructRead);
+    commandList.releaseTextureOwnership(texture, subresources, CommandQueue::Compute);
+    commandList.releaseBufferOwnership(buffer, CommandQueue::Compute);
+    commandList.releaseTextureOwnership(texture, subresources, CommandQueue::Transfer);
+    commandList.releaseBufferOwnership(buffer, CommandQueue::Transfer);
     commandList.releaseTextureOwnership(texture, subresources, RenderLane::AsyncCompute);
     commandList.releaseBufferOwnership(buffer, RenderLane::AsyncCompute);
     commandList.setPermanentTextureState(texture, ResourceStates::ShaderResource);

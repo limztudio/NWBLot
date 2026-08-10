@@ -997,7 +997,9 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
         m_renderPassFramebuffer = nullptr;
     }
 
-    // Non-graphics queues use ALL_COMMANDS for generic shader visibility; preserve NONE for ignored ownership sides.
+    // Compute may use generic shader visibility, while a dedicated transfer family can synchronize only transfer
+    // accesses. Cross-queue semaphore waits make an unsupported producer scope available before this command list;
+    // lower that side to NONE instead of naming an illegal Graphics/Compute access on the transfer queue.
     VkDependencyInfo queueCompatibleDepInfo = depInfo;
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_StateHandoffArena);
     Vector<VkMemoryBarrier2, Alloc::ScratchArena> queueCompatibleMemoryBarriers{scratchArena};
@@ -1010,13 +1012,31 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
             | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT
             | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
         ;
-        const auto queueCompatibleStageMask = [](const VkPipelineStageFlags2 stageMask){
+        const auto queueCompatibleStageMask = [this](const VkPipelineStageFlags2 stageMask){
             return stageMask == VK_PIPELINE_STAGE_2_NONE
                 ? VK_PIPELINE_STAGE_2_NONE
-                : VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
+                : (
+                    m_desc.queueType == CommandQueue::Transfer
+                        ? VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT
+                        : VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT
+                )
             ;
         };
         const auto makeSourceScopeQueueCompatible = [&](VkPipelineStageFlags2& stageMask, VkAccessFlags2& accessMask){
+            if(m_desc.queueType == CommandQueue::Transfer){
+                constexpr VkAccessFlags2 s_TransferAccessMask =
+                    VK_ACCESS_2_TRANSFER_READ_BIT
+                    | VK_ACCESS_2_TRANSFER_WRITE_BIT
+                ;
+                if((accessMask & ~s_TransferAccessMask) != 0u){
+                    stageMask = VK_PIPELINE_STAGE_2_NONE;
+                    accessMask = 0u;
+                    return;
+                }
+                stageMask = queueCompatibleStageMask(stageMask);
+                return;
+            }
+
             // Imported Graphics attachments have no legal local Compute/Copy source scope.
             if((accessMask & s_GraphicsAttachmentAccessMask) != 0u){
                 stageMask = VK_PIPELINE_STAGE_2_NONE;
@@ -1025,12 +1045,26 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
             }
             stageMask = queueCompatibleStageMask(stageMask);
         };
+        const auto makeDestinationScopeQueueCompatible = [&](VkPipelineStageFlags2& stageMask, VkAccessFlags2& accessMask){
+            if(m_desc.queueType == CommandQueue::Transfer){
+                constexpr VkAccessFlags2 s_TransferAccessMask =
+                    VK_ACCESS_2_TRANSFER_READ_BIT
+                    | VK_ACCESS_2_TRANSFER_WRITE_BIT
+                ;
+                if((accessMask & ~s_TransferAccessMask) != 0u){
+                    stageMask = VK_PIPELINE_STAGE_2_NONE;
+                    accessMask = 0u;
+                    return;
+                }
+            }
+            stageMask = queueCompatibleStageMask(stageMask);
+        };
 
         queueCompatibleMemoryBarriers.reserve(depInfo.memoryBarrierCount);
         for(u32 index = 0u; index < depInfo.memoryBarrierCount; ++index){
             VkMemoryBarrier2 barrier = depInfo.pMemoryBarriers[index];
             makeSourceScopeQueueCompatible(barrier.srcStageMask, barrier.srcAccessMask);
-            barrier.dstStageMask = queueCompatibleStageMask(barrier.dstStageMask);
+            makeDestinationScopeQueueCompatible(barrier.dstStageMask, barrier.dstAccessMask);
             queueCompatibleMemoryBarriers.push_back(barrier);
         }
         queueCompatibleDepInfo.pMemoryBarriers = queueCompatibleMemoryBarriers.data();
@@ -1039,7 +1073,7 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
         for(u32 index = 0u; index < depInfo.imageMemoryBarrierCount; ++index){
             VkImageMemoryBarrier2 barrier = depInfo.pImageMemoryBarriers[index];
             makeSourceScopeQueueCompatible(barrier.srcStageMask, barrier.srcAccessMask);
-            barrier.dstStageMask = queueCompatibleStageMask(barrier.dstStageMask);
+            makeDestinationScopeQueueCompatible(barrier.dstStageMask, barrier.dstAccessMask);
             queueCompatibleImageBarriers.push_back(barrier);
         }
         queueCompatibleDepInfo.pImageMemoryBarriers = queueCompatibleImageBarriers.data();
@@ -1048,7 +1082,7 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
         for(u32 index = 0u; index < depInfo.bufferMemoryBarrierCount; ++index){
             VkBufferMemoryBarrier2 barrier = depInfo.pBufferMemoryBarriers[index];
             makeSourceScopeQueueCompatible(barrier.srcStageMask, barrier.srcAccessMask);
-            barrier.dstStageMask = queueCompatibleStageMask(barrier.dstStageMask);
+            makeDestinationScopeQueueCompatible(barrier.dstStageMask, barrier.dstAccessMask);
             queueCompatibleBufferBarriers.push_back(barrier);
         }
         queueCompatibleDepInfo.pBufferMemoryBarriers = queueCompatibleBufferBarriers.data();
@@ -1261,6 +1295,14 @@ void CommandList::releaseTextureOwnership(
     TextureSubresourceSet subresources,
     const RenderLane::Enum destinationLane
 ){
+    releaseTextureOwnership(textureResource, subresources, m_device.resolveRenderLane(destinationLane));
+}
+
+void CommandList::releaseTextureOwnership(
+    Texture* textureResource,
+    TextureSubresourceSet subresources,
+    const CommandQueue::Enum destinationQueue
+){
     if(!textureResource || !m_currentCmdBuf)
         return;
 
@@ -1280,7 +1322,6 @@ void CommandList::releaseTextureOwnership(
     if(!VulkanDetail::DebugValidateTextureSubresourceRange(resolvedSubresources, NWB_TEXT("release texture ownership")))
         return;
 
-    const CommandQueue::Enum destinationQueue = m_device.resolveRenderLane(destinationLane);
     if(!m_device.getQueue(destinationQueue)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release texture ownership to an unavailable destination queue"));
         return;
@@ -1321,6 +1362,10 @@ void CommandList::releaseTextureOwnership(
 }
 
 void CommandList::releaseBufferOwnership(Buffer* bufferResource, const RenderLane::Enum destinationLane){
+    releaseBufferOwnership(bufferResource, m_device.resolveRenderLane(destinationLane));
+}
+
+void CommandList::releaseBufferOwnership(Buffer* bufferResource, const CommandQueue::Enum destinationQueue){
     if(!bufferResource || !m_currentCmdBuf)
         return;
 
@@ -1336,7 +1381,6 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const RenderLan
         return;
     }
 
-    const CommandQueue::Enum destinationQueue = m_device.resolveRenderLane(destinationLane);
     if(!m_device.getQueue(destinationQueue)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release buffer ownership to an unavailable destination queue"));
         return;

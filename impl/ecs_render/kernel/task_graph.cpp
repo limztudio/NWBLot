@@ -506,8 +506,8 @@ namespace __hidden_renderer_task_graph{
     };
 }
 
-// This is the first late-native-recording task.  It is intentionally self-contained so the compiler may route it
-// through the existing Graphics or Compute transport today and a distinct Transfer queue in a later phase.
+// This is the first late-native-recording task. It is intentionally self-contained so the compiler may route it to
+// an optional dedicated Transfer transport, while retaining its Graphics/Compute fallback on other devices.
 struct LaggedLightingHistoryCopyTask{
     struct Payload{
         Core::TextureHandle sourceShadowVisibility;
@@ -2126,8 +2126,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     const auto& device = graphics().getDevice();
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
     const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
+    const u32 transferFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Transfer);
     const bool dedicatedAsyncCompute = computeFamilyIndex != Limit<u32>::s_Max
         && computeFamilyIndex != graphicsFamilyIndex
+    ;
+    const bool dedicatedTransfer = transferFamilyIndex != Limit<u32>::s_Max
+        && transferFamilyIndex != graphicsFamilyIndex
+        && transferFamilyIndex != computeFamilyIndex
     ;
     const bool useLaggedLightingHistory = dedicatedAsyncCompute
         && features.frameLaggedAsyncLightingEnabled
@@ -3269,7 +3274,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         static_cast<u8>(Core::GpuQueueCapability::Compute)
         | static_cast<u8>(Core::GpuQueueCapability::Transfer)
     );
-    const Core::GpuPhysicalQueueInfo queues[] = {
+    Core::GpuPhysicalQueueInfo queues[3u] = {
         Core::GpuPhysicalQueueInfo{
             .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Graphics,
@@ -3278,18 +3283,33 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .queueIndex = 0u,
             .dedicated = false,
         },
-        Core::GpuPhysicalQueueInfo{
+    };
+    usize queueCount = 1u;
+    if(dedicatedAsyncCompute){
+        queues[queueCount] = Core::GpuPhysicalQueueInfo{
             .id = Core::GpuPhysicalQueueId{ 1u, m_taskGraphDeviceGeneration },
             .queueClass = Core::CommandQueue::Compute,
             .capabilities = computeQueueCapabilities,
             .familyIndex = computeFamilyIndex,
             .queueIndex = 0u,
             .dedicated = true,
-        },
-    };
+        };
+        ++queueCount;
+    }
+    if(dedicatedTransfer){
+        queues[queueCount] = Core::GpuPhysicalQueueInfo{
+            .id = Core::GpuPhysicalQueueId{ 2u, m_taskGraphDeviceGeneration },
+            .queueClass = Core::CommandQueue::Transfer,
+            .capabilities = Core::GpuQueueCapability::Transfer,
+            .familyIndex = transferFamilyIndex,
+            .queueIndex = 0u,
+            .dedicated = true,
+        };
+        ++queueCount;
+    }
     const Core::GpuTaskGraphQueueTopology topology{
         .queues = queues,
-        .queueCount = dedicatedAsyncCompute ? LengthOf(queues) : 1u,
+        .queueCount = queueCount,
     };
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     const Core::GpuTaskGraphCompiler compiler;

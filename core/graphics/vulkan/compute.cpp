@@ -84,6 +84,9 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
 
 
 void CommandList::setComputeState(const ComputeState& state){
+    if(!validateNonTransferCommand(NWB_TEXT("set compute state")))
+        return;
+
     endActiveRenderPass();
     if(state.indirectParams)
         setBufferState(state.indirectParams, ResourceStates::IndirectArgument);
@@ -102,6 +105,8 @@ void CommandList::setComputeState(const ComputeState& state){
 }
 
 void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
+    if(!validateNonTransferCommand(NWB_TEXT("dispatch")))
+        return;
     if(groupsX == 0 || groupsY == 0 || groupsZ == 0)
         return;
 #if defined(NWB_DEBUG)
@@ -129,6 +134,8 @@ void CommandList::dispatch(u32 groupsX, u32 groupsY, u32 groupsZ){
 }
 
 void CommandList::dispatchIndirect(u32 offsetBytes){
+    if(!validateNonTransferCommand(NWB_TEXT("dispatch indirect")))
+        return;
 #if defined(NWB_DEBUG)
     if(!m_currentComputeState.pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to dispatch compute indirect: no compute pipeline is bound"));

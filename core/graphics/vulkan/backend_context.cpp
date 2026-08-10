@@ -850,11 +850,14 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
 
     m_graphicsQueueFamily = s_InvalidQueueFamilyIndex;
     m_computeQueueFamily = s_InvalidQueueFamilyIndex;
+    m_transferQueueFamily = s_InvalidQueueFamilyIndex;
     m_presentQueueFamily = s_InvalidQueueFamilyIndex;
 
     const bool requirePresentQueue = !m_deviceParams.headlessDevice;
     // Continue scanning for a dedicated async-compute family.
     const bool searchAsyncComputeQueue = m_deviceParams.enableAsyncComputeLane;
+    // Transfer fallback is resolved by the task graph. Only expose an independently useful transfer-only family.
+    const bool searchDedicatedTransferQueue = m_deviceParams.enableTransferQueue;
 
     for(i32 i = 0; i < static_cast<i32>(props.size()); ++i){
         const auto& queueFamily = props[i];
@@ -874,6 +877,16 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
                 && !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
             )
                 m_computeQueueFamily = i;
+        }
+
+        if(m_transferQueueFamily == s_InvalidQueueFamilyIndex){
+            if(
+                queueFamily.queueCount > 0
+                && (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT)
+                && !(queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+                && !(queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT)
+            )
+                m_transferQueueFamily = i;
         }
 
 #ifdef NWB_PLATFORM_WINDOWS
@@ -900,6 +913,7 @@ bool BackendContext::findQueueFamilies(VkPhysicalDevice physicalDevice){
             m_graphicsQueueFamily != s_InvalidQueueFamilyIndex
             && (!requirePresentQueue || m_presentQueueFamily != s_InvalidQueueFamilyIndex)
             && (!searchAsyncComputeQueue || m_computeQueueFamily != s_InvalidQueueFamilyIndex)
+            && (!searchDedicatedTransferQueue || m_transferQueueFamily != s_InvalidQueueFamilyIndex)
         )
             break;
     }
@@ -962,6 +976,7 @@ bool BackendContext::pickPhysicalDevice(){
         VkPhysicalDevice device = VK_NULL_HANDLE;
         i32 graphicsQueueFamily = s_InvalidQueueFamilyIndex;
         i32 computeQueueFamily = s_InvalidQueueFamilyIndex;
+        i32 transferQueueFamily = s_InvalidQueueFamilyIndex;
         i32 presentQueueFamily = s_InvalidQueueFamilyIndex;
     };
     auto captureCurrentSelection = [this](VkPhysicalDevice device){
@@ -969,6 +984,7 @@ bool BackendContext::pickPhysicalDevice(){
         selection.device = device;
         selection.graphicsQueueFamily = m_graphicsQueueFamily;
         selection.computeQueueFamily = m_computeQueueFamily;
+        selection.transferQueueFamily = m_transferQueueFamily;
         selection.presentQueueFamily = m_presentQueueFamily;
         return selection;
     };
@@ -976,6 +992,7 @@ bool BackendContext::pickPhysicalDevice(){
         m_vulkanPhysicalDevice = selection.device;
         m_graphicsQueueFamily = selection.graphicsQueueFamily;
         m_computeQueueFamily = selection.computeQueueFamily;
+        m_transferQueueFamily = selection.transferQueueFamily;
         m_presentQueueFamily = selection.presentQueueFamily;
     };
     DeviceSelection fallbackSelection;
@@ -1418,6 +1435,14 @@ bool BackendContext::createVulkanDevice(){
     ;
     if(createAsyncComputeQueue)
         uniqueQueueFamilies.insert(m_computeQueueFamily);
+    const bool createDedicatedTransferQueue =
+        m_deviceParams.enableTransferQueue
+        && m_transferQueueFamily != s_InvalidQueueFamilyIndex
+        && m_transferQueueFamily != m_graphicsQueueFamily
+        && m_transferQueueFamily != m_computeQueueFamily
+    ;
+    if(createDedicatedTransferQueue)
+        uniqueQueueFamilies.insert(m_transferQueueFamily);
 
     f32 priority = 1.f;
     Vector<VkDeviceQueueCreateInfo, Alloc::ScratchArena> queueDesc(uniqueQueueFamilies.size(), scratchArena);
@@ -1542,6 +1567,8 @@ bool BackendContext::createVulkanDevice(){
     vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_graphicsQueueFamily), s_GraphicsQueueIndex, &m_graphicsQueue);
     if(createAsyncComputeQueue)
         vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_computeQueueFamily), s_ComputeQueueIndex, &m_computeQueue);
+    if(createDedicatedTransferQueue)
+        vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_transferQueueFamily), s_TransferQueueIndex, &m_transferQueue);
     if(!m_deviceParams.headlessDevice)
         vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_presentQueueFamily), s_PresentQueueIndex, &m_presentQueue);
 
@@ -1570,6 +1597,11 @@ bool BackendContext::createVulkanDevice(){
             ss << " asyncCompute=" << m_computeQueueFamily;
         else
             ss << " asyncCompute=not-requested";
+
+        if(createDedicatedTransferQueue)
+            ss << " transfer=" << m_transferQueueFamily;
+        else
+            ss << " transfer=not-requested";
 
         ss << "\n    key features: dynamicRendering=" << VulkanDetail::BoolToString(m_dynamicRenderingSupported)
            << " synchronization2=" << VulkanDetail::BoolToString(m_synchronization2Supported)
@@ -1611,6 +1643,29 @@ bool BackendContext::createVulkanDevice(){
         , m_graphicsQueueFamily
         , m_computeQueueFamily
         , StringConvert(asyncComputeLaneReason)
+    );
+
+    m_transferQueueEnabled =
+        m_deviceParams.enableTransferQueue
+        && m_transferQueue != VK_NULL_HANDLE
+        && m_transferQueueFamily != s_InvalidQueueFamilyIndex
+        && m_transferQueueFamily != m_graphicsQueueFamily
+        && m_transferQueueFamily != m_computeQueueFamily
+    ;
+    const bool transferQueueEffective = m_transferQueueEnabled;
+    const char* const transferQueueReason = !m_deviceParams.enableTransferQueue
+        ? "disabled"
+        : transferQueueEffective
+            ? "dedicated transfer-only family selected"
+            : "no dedicated transfer-only family"
+    ;
+    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: transfer queue requested={} effective={} graphicsFamily={} computeFamily={} transferFamily={} ({})")
+        , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableTransferQueue))
+        , StringConvert(VulkanDetail::BoolToString(transferQueueEffective))
+        , m_graphicsQueueFamily
+        , m_computeQueueFamily
+        , m_transferQueueFamily
+        , StringConvert(transferQueueReason)
     );
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: created device '{}'"), m_rendererString);
@@ -2063,7 +2118,12 @@ bool BackendContext::createDevice(){
         deviceDesc.computeQueue = m_computeQueue;
         deviceDesc.computeQueueIndex = m_computeQueueFamily;
     }
+    if(m_transferQueueEnabled){
+        deviceDesc.transferQueue = m_transferQueue;
+        deviceDesc.transferQueueIndex = m_transferQueueFamily;
+    }
     deviceDesc.asyncComputeLaneEnabled = m_asyncComputeLaneEnabled;
+    deviceDesc.transferQueueEnabled = m_transferQueueEnabled;
     deviceDesc.instanceExtensions = vecInstanceExt.data();
     deviceDesc.numInstanceExtensions = vecInstanceExt.size();
     deviceDesc.deviceExtensions = vecDeviceExt.data();

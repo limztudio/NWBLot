@@ -18,6 +18,8 @@ NWB_VULKAN_BEGIN
 
 
 void CommandList::setPushConstants(const void* data, usize byteSize){
+    if(!validateNonTransferCommand(NWB_TEXT("set push constants")))
+        return;
     if(byteSize == 0)
         return;
 #if defined(NWB_DEBUG)
@@ -106,6 +108,8 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 
 
 void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& opDesc){
+    if(!validateNonTransferCommand(NWB_TEXT("execute cluster acceleration operation")))
+        return;
     if(!m_context.extensions.NV_cluster_acceleration_structure)
         return;
 
@@ -225,6 +229,8 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
 
 
 void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs){
+    if(!validateNonTransferCommand(NWB_TEXT("convert cooperative-vector matrices")))
+        return;
     if(!m_context.extensions.NV_cooperative_vector || !m_context.coopVecFeatures.cooperativeVector)
         return;
 

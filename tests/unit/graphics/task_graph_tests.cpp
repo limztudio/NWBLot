@@ -57,7 +57,8 @@ inline constexpr Name s_TaskGraphScratchArena("tests/graphics/task_graph_scratch
     Graphics::GpuTaskGraph& graph,
     const Name& identity,
     const AStringView label,
-    const Graphics::ResourceStates::Mask initialState = Graphics::ResourceStates::Common
+    const Graphics::ResourceStates::Mask initialState = Graphics::ResourceStates::Common,
+    const Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Exclusive
 ){
     Graphics::GpuGraphResourceDesc desc;
     desc
@@ -65,6 +66,7 @@ inline constexpr Name s_TaskGraphScratchArena("tests/graphics/task_graph_scratch
         .setMarkerLabel(label)
         .setType(Graphics::GpuGraphResourceType::Texture)
         .setInitialState(initialState)
+        .setQueueSharing(queueSharing)
     ;
     return graph.importResource(desc);
 }
@@ -177,6 +179,89 @@ inline constexpr Name s_TaskGraphScratchArena("tests/graphics/task_graph_scratch
         .familyIndex = 1u,
         .queueIndex = 0u,
         .dedicated = true,
+    };
+}
+
+[[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedTransferQueue(const u16 index = 2u){
+    return Graphics::GpuPhysicalQueueInfo{
+        .id = Graphics::GpuPhysicalQueueId{ index, 1u },
+        .queueClass = Graphics::CommandQueue::Transfer,
+        .capabilities = Graphics::GpuQueueCapability::Transfer,
+        .familyIndex = 2u,
+        .queueIndex = 0u,
+        .dedicated = true,
+    };
+}
+
+struct TransferOwnershipPair{
+    Graphics::GpuGraphResourceId texture;
+    Graphics::GpuTaskId producer;
+    Graphics::GpuTaskId consumer;
+};
+
+[[nodiscard]] TransferOwnershipPair AddTransferOwnershipPair(
+    Graphics::GpuTaskGraph& graph,
+    const Graphics::ResourceQueueSharing::Mask queueSharing
+){
+    const Graphics::GpuGraphResourceId texture = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/transfer_ownership_texture"),
+        "Transfer Ownership Texture",
+        Graphics::ResourceStates::Common,
+        queueSharing
+    );
+    if(!texture.valid())
+        return {};
+
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    const Graphics::GpuTaskResourceUse producerUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = texture,
+            .requiredState = Graphics::ResourceStates::CopySource,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Graphics::GpuTaskResourceUse consumerUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = texture,
+            .requiredState = Graphics::ResourceStates::CopySource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/task_graph/transfer_ownership_producer"))
+        .setMarkerLabel("Transfer Ownership Producer")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Graphics,
+            Graphics::GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(scheduling)
+        .setResourceUses(producerUses, LengthOf(producerUses))
+    ;
+    Graphics::GpuTaskDesc consumerDesc;
+    consumerDesc
+        .setIdentity(Name("tests/task_graph/transfer_ownership_consumer"))
+        .setMarkerLabel("Transfer Ownership Consumer")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+        .setScheduling(scheduling)
+        .setResourceUses(consumerUses, LengthOf(consumerUses))
+    ;
+
+    return TransferOwnershipPair{
+        .texture = texture,
+        .producer = graph.addTask(producerDesc),
+        .consumer = graph.addTask(consumerDesc),
     };
 }
 
@@ -935,6 +1020,18 @@ TEST(GpuTaskGraph, RejectsInvalidAndIncompatibleQueueTopologiesDeterministically
     EXPECT_EQ(assignments.diagnostic().task, task);
     EXPECT_EQ(assignments.diagnostic().requiredCapabilities, Graphics::GpuQueueCapability::Compute);
 
+    Graphics::GpuPhysicalQueueInfo invalidTransferQueue = DedicatedTransferQueue();
+    invalidTransferQueue.capabilities = Graphics::GpuQueueCapability::Compute;
+    const Graphics::GpuTaskGraphQueueTopology invalidTransferTopology{
+        .queues = &invalidTransferQueue,
+        .queueCount = 1u,
+    };
+    EXPECT_FALSE(Assign(graph, analysis, invalidTransferTopology, assignments));
+    EXPECT_EQ(
+        assignments.diagnostic().status,
+        Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidQueueTopology
+    );
+
     const Graphics::GpuPhysicalQueueInfo topologyA[] = { DedicatedComputeQueue(), GraphicsQueue() };
     const Graphics::GpuPhysicalQueueInfo topologyB[] = { GraphicsQueue(), DedicatedComputeQueue() };
     const Graphics::GpuTaskGraphQueueTopology firstTopology{
@@ -1692,25 +1789,38 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
     const Graphics::GpuCompiledTask* const compiledDefaultConcurrentCompute = compiledGraph.findTask(
         defaultConcurrentCompute
     );
+    const Graphics::GpuCompiledTask* const compiledExclusiveGraphics = compiledGraph.findTask(exclusiveGraphics);
     const Graphics::GpuCompiledTask* const compiledExclusiveCompute = compiledGraph.findTask(exclusiveCompute);
     ASSERT_NE(compiledConcurrentCompute, nullptr);
     ASSERT_NE(compiledDefaultConcurrentCompute, nullptr);
+    ASSERT_NE(compiledExclusiveGraphics, nullptr);
     ASSERT_NE(compiledExclusiveCompute, nullptr);
     EXPECT_EQ(compiledConcurrentCompute->prologueStateSeedCount, 0u);
     ASSERT_EQ(compiledDefaultConcurrentCompute->prologueStateSeedCount, 1u);
     ASSERT_EQ(compiledExclusiveCompute->prologueStateSeedCount, 1u);
     EXPECT_EQ(compiledConcurrentCompute->prologueBarrierCount, 0u);
     EXPECT_EQ(compiledDefaultConcurrentCompute->prologueBarrierCount, 0u);
-    EXPECT_EQ(compiledExclusiveCompute->prologueBarrierCount, 0u);
+    ASSERT_EQ(compiledExclusiveCompute->prologueBarrierCount, 1u);
+    ASSERT_EQ(compiledExclusiveGraphics->epilogueBarrierCount, 1u);
     const Graphics::GpuPacketStateSeed* const defaultConcurrentSeed = compiledGraph.taskPrologueStateSeeds(
         defaultConcurrentCompute
     );
     const Graphics::GpuPacketStateSeed* const exclusiveSeed = compiledGraph.taskPrologueStateSeeds(exclusiveCompute);
+    const Graphics::GpuCompiledBarrier* const exclusiveAcquire = compiledGraph.taskPrologueBarriers(exclusiveCompute);
+    const Graphics::GpuCompiledBarrier* const exclusiveRelease = compiledGraph.taskEpilogueBarriers(exclusiveGraphics);
     EXPECT_EQ(compiledGraph.taskPrologueStateSeeds(concurrentCompute), nullptr);
     ASSERT_NE(defaultConcurrentSeed, nullptr);
     ASSERT_NE(exclusiveSeed, nullptr);
+    ASSERT_NE(exclusiveAcquire, nullptr);
+    ASSERT_NE(exclusiveRelease, nullptr);
     EXPECT_EQ(defaultConcurrentSeed[0u].sourcePacket, defaultConcurrentGraphicsPacket);
     EXPECT_EQ(exclusiveSeed[0u].sourcePacket, exclusiveGraphicsPacket);
+    EXPECT_EQ(exclusiveAcquire[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire);
+    EXPECT_EQ(exclusiveAcquire[0u].sourceQueue, compiledExclusiveGraphics->queue);
+    EXPECT_EQ(exclusiveAcquire[0u].destinationQueue, compiledExclusiveCompute->queue);
+    EXPECT_EQ(exclusiveRelease[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipRelease);
+    EXPECT_EQ(exclusiveRelease[0u].sourceQueue, compiledExclusiveGraphics->queue);
+    EXPECT_EQ(exclusiveRelease[0u].destinationQueue, compiledExclusiveCompute->queue);
     EXPECT_EQ(compiledGraph.packet(concurrentComputePacket).dependencyCount, 0u);
     ASSERT_EQ(compiledGraph.packet(defaultConcurrentComputePacket).dependencyCount, 1u);
     EXPECT_EQ(
@@ -1765,6 +1875,131 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
         sameFamilyCompiledGraph.packetDependencies(sameFamilyComputePacket)[0u].producer,
         sameFamilyGraphicsPacket
     );
+}
+
+
+TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const TransferOwnershipPair pair = AddTransferOwnershipPair(graph, Graphics::ResourceQueueSharing::Exclusive);
+    ASSERT_TRUE(pair.texture.valid());
+    ASSERT_TRUE(pair.producer.valid());
+    ASSERT_TRUE(pair.consumer.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedTransferQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(pair.producer);
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(pair.consumer);
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledConsumer, nullptr);
+    const Graphics::GpuPhysicalQueueInfo* const consumerQueue = compiledGraph.queueInfo(compiledConsumer->queue);
+    ASSERT_NE(consumerQueue, nullptr);
+    EXPECT_EQ(consumerQueue->queueClass, Graphics::CommandQueue::Transfer);
+    ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
+    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
+    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
+
+    const Graphics::GpuCompiledBarrier* const release = compiledGraph.taskEpilogueBarriers(pair.producer);
+    const Graphics::GpuCompiledBarrier* const acquire = compiledGraph.taskPrologueBarriers(pair.consumer);
+    const Graphics::GpuPacketStateSeed* const stateSeed = compiledGraph.taskPrologueStateSeeds(pair.consumer);
+    ASSERT_NE(release, nullptr);
+    ASSERT_NE(acquire, nullptr);
+    ASSERT_NE(stateSeed, nullptr);
+    EXPECT_EQ(release[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipRelease);
+    EXPECT_EQ(release[0u].resource, pair.texture);
+    EXPECT_EQ(release[0u].before, Graphics::ResourceStates::CopySource);
+    EXPECT_EQ(release[0u].after, Graphics::ResourceStates::CopySource);
+    EXPECT_EQ(release[0u].sourceQueue, compiledProducer->queue);
+    EXPECT_EQ(release[0u].destinationQueue, compiledConsumer->queue);
+    EXPECT_EQ(acquire[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire);
+    EXPECT_EQ(acquire[0u].resource, pair.texture);
+    EXPECT_EQ(acquire[0u].sourceQueue, compiledProducer->queue);
+    EXPECT_EQ(acquire[0u].destinationQueue, compiledConsumer->queue);
+    EXPECT_EQ(stateSeed[0u].resource, pair.texture);
+    EXPECT_EQ(stateSeed[0u].sourcePacket, compiledProducer->packet);
+    ASSERT_EQ(compiledGraph.packet(compiledConsumer->packet).dependencyCount, 1u);
+    EXPECT_EQ(
+        compiledGraph.packetDependencies(compiledConsumer->packet)[0u].producer,
+        compiledProducer->packet
+    );
+}
+
+
+TEST(GpuTaskGraph, UsesDeclaredTripleQueueSharingForDedicatedTransfer){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const TransferOwnershipPair pair = AddTransferOwnershipPair(
+        graph,
+        Graphics::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer
+    );
+    ASSERT_TRUE(pair.texture.valid());
+    ASSERT_TRUE(pair.producer.valid());
+    ASSERT_TRUE(pair.consumer.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+        DedicatedTransferQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(pair.producer);
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(pair.consumer);
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledConsumer, nullptr);
+    EXPECT_EQ(compiledProducer->epilogueBarrierCount, 0u);
+    EXPECT_EQ(compiledConsumer->prologueBarrierCount, 0u);
+    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
+    const Graphics::GpuPacketStateSeed* const stateSeed = compiledGraph.taskPrologueStateSeeds(pair.consumer);
+    ASSERT_NE(stateSeed, nullptr);
+    EXPECT_EQ(stateSeed[0u].resource, pair.texture);
+    EXPECT_EQ(stateSeed[0u].sourcePacket, compiledProducer->packet);
+}
+
+
+TEST(GpuTaskGraph, RejectsDedicatedTransferUseOutsideConcurrentSharingContract){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const TransferOwnershipPair pair = AddTransferOwnershipPair(
+        graph,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    ASSERT_TRUE(pair.texture.valid());
+    ASSERT_TRUE(pair.producer.valid());
+    ASSERT_TRUE(pair.consumer.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+        DedicatedTransferQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    EXPECT_FALSE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    EXPECT_FALSE(compiledGraph.valid());
 }
 
 
@@ -3197,6 +3432,104 @@ TEST(GpuTaskGraph, CompilesTransferPreferenceToGraphicsFallbackWithoutARendererP
     const Graphics::GpuPhysicalQueueInfo* const packetQueue = compiledGraph.queueInfo(compiledGraph.packet(packet).queue);
     ASSERT_NE(packetQueue, nullptr);
     EXPECT_EQ(packetQueue->queueClass, Graphics::CommandQueue::Graphics);
+}
+
+TEST(GpuTaskGraph, CompilesEligibleTransferPreferenceToDedicatedTransferQueue){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/dedicated_transfer"))
+        .setMarkerLabel("Dedicated Transfer")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+        .setScheduling(scheduling)
+    ;
+    const Graphics::GpuTaskId copyTask = graph.addTask<PacketLifecycleTask>(
+        desc,
+        PacketLifecycleTask::Payload{}
+    );
+    ASSERT_TRUE(copyTask.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+        DedicatedTransferQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(copyTask);
+    ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Transfer);
+    EXPECT_TRUE(assignment->dedicated);
+    EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedTransfer);
+
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(copyTask);
+    ASSERT_TRUE(packet.valid());
+    const Graphics::GpuPhysicalQueueInfo* const packetQueue = compiledGraph.queueInfo(compiledGraph.packet(packet).queue);
+    ASSERT_NE(packetQueue, nullptr);
+    EXPECT_EQ(packetQueue->queueClass, Graphics::CommandQueue::Transfer);
+    EXPECT_EQ(packetQueue->capabilities, Graphics::GpuQueueCapability::Transfer);
+}
+
+
+TEST(GpuTaskGraph, RetainsTinyTransferTasksOnGraphics){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/tiny_transfer"))
+        .setMarkerLabel("Tiny Transfer")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+        .setScheduling(scheduling)
+    ;
+    const Graphics::GpuTaskId copyTask = graph.addTask<PacketLifecycleTask>(
+        desc,
+        PacketLifecycleTask::Payload{}
+    );
+    ASSERT_TRUE(copyTask.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedTransferQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(copyTask);
+    ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::Fallback);
 }
 
 

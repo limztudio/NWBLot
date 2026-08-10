@@ -41,6 +41,70 @@ inline constexpr u8 s_ValidQueueCapabilityMask =
     return queueClass < CommandQueue::kCount;
 }
 
+[[nodiscard]] static u8 QueueSharingBitForQueueClass(const CommandQueue::Enum queueClass)noexcept{
+    switch(queueClass){
+    case CommandQueue::Graphics:
+        return static_cast<u8>(ResourceQueueSharing::Graphics);
+    case CommandQueue::Compute:
+        return static_cast<u8>(ResourceQueueSharing::AsyncCompute);
+    case CommandQueue::Transfer:
+        return static_cast<u8>(ResourceQueueSharing::Transfer);
+    default:
+        return 0u;
+    }
+}
+
+[[nodiscard]] static bool ResourceSharingIncludesQueueClass(
+    const ResourceQueueSharing::Mask sharing,
+    const CommandQueue::Enum queueClass
+)noexcept{
+    const u8 queueBit = QueueSharingBitForQueueClass(queueClass);
+    return queueBit != 0u && (static_cast<u8>(sharing) & queueBit) != 0u;
+}
+
+// A sharing mask becomes Vulkan concurrent sharing only when it names at least two distinct families supplied by
+// this compile topology. A single requested family remains exclusive and may use ordinary ownership handoffs.
+[[nodiscard]] static bool ResourceUsesConcurrentQueueSharing(
+    const ResourceQueueSharing::Mask sharing,
+    const GpuTaskGraphQueueTopology& topology
+)noexcept{
+    if(sharing == ResourceQueueSharing::Exclusive)
+        return false;
+
+    usize familyCount = 0u;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
+        if(!ResourceSharingIncludesQueueClass(sharing, queue.queueClass))
+            continue;
+
+        bool familyAlreadyIncluded = false;
+        for(usize previousIndex = 0u; previousIndex < queueIndex; ++previousIndex){
+            const GpuPhysicalQueueInfo& previous = topology.queues[previousIndex];
+            familyAlreadyIncluded = ResourceSharingIncludesQueueClass(sharing, previous.queueClass)
+                && previous.familyIndex == queue.familyIndex
+            ;
+            if(familyAlreadyIncluded)
+                break;
+        }
+        if(!familyAlreadyIncluded && ++familyCount >= 2u)
+            return true;
+    }
+    return false;
+}
+
+[[nodiscard]] static bool ResourceSharesQueuePairConcurrently(
+    const ResourceQueueSharing::Mask sharing,
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueInfo& sourceQueue,
+    const GpuPhysicalQueueInfo& destinationQueue
+)noexcept{
+    return sourceQueue.familyIndex != destinationQueue.familyIndex
+        && ResourceUsesConcurrentQueueSharing(sharing, topology)
+        && ResourceSharingIncludesQueueClass(sharing, sourceQueue.queueClass)
+        && ResourceSharingIncludesQueueClass(sharing, destinationQueue.queueClass)
+    ;
+}
+
 [[nodiscard]] static bool IsBetterQueue(
     const GpuPhysicalQueueInfo& candidate,
     const GpuPhysicalQueueInfo* const current
@@ -66,6 +130,7 @@ inline constexpr u8 s_ValidQueueCapabilityMask =
         if(
             !queue.id.valid()
             || !IsKnownQueueClass(queue.queueClass)
+            || queue.familyIndex == Limit<u32>::s_Max
             || capabilityMask == 0u
             || (capabilityMask & ~s_ValidQueueCapabilityMask) != 0u
         )
@@ -78,6 +143,10 @@ inline constexpr u8 s_ValidQueueCapabilityMask =
             break;
         case CommandQueue::Compute:
             if(!HasCapabilities(queue.capabilities, GpuQueueCapability::Compute))
+                return false;
+            break;
+        case CommandQueue::Transfer:
+            if(!HasCapabilities(queue.capabilities, GpuQueueCapability::Transfer))
                 return false;
             break;
         default:
@@ -125,6 +194,12 @@ inline constexpr u8 s_ValidQueueCapabilityMask =
         && hint.overlapPreferred
         && !hint.avoidQueueCrossing
     ;
+}
+
+[[nodiscard]] static bool ShouldUseDedicatedTransfer(const GpuTaskSchedulingHint& hint)noexcept{
+    // Dedicated copies buy queue overlap only when their synchronization cost is plausibly amortized. Keep the
+    // same conservative threshold as Compute until per-packet timing feeds a richer queue score.
+    return ShouldUseDedicatedCompute(hint);
 }
 
 [[nodiscard]] static bool IsValidQueueRequest(const GpuQueueRequest& request)noexcept{
@@ -242,6 +317,11 @@ struct TrackedCompiledResourceState{
     GpuPhysicalQueueId queue;
 };
 
+struct PendingCompiledEpilogueBarrier{
+    GpuTaskId task;
+    GpuCompiledBarrier barrier;
+};
+
 [[nodiscard]] static GpuCompiledBarrierType::Enum TransitionBarrierType(
     const GpuGraphResourceType::Enum resourceType
 )noexcept{
@@ -271,6 +351,32 @@ struct TrackedCompiledResourceState{
     default:
         NWB_ASSERT(false);
         return GpuCompiledBarrierType::TextureUav;
+    }
+}
+
+[[nodiscard]] static GpuCompiledBarrierType::Enum OwnershipReleaseBarrierType(
+    const GpuGraphResourceType::Enum resourceType
+)noexcept{
+    switch(resourceType){
+    case GpuGraphResourceType::Texture:
+        return GpuCompiledBarrierType::TextureOwnershipRelease;
+    case GpuGraphResourceType::Buffer:
+        return GpuCompiledBarrierType::BufferOwnershipRelease;
+    default:
+        return GpuCompiledBarrierType::kCount;
+    }
+}
+
+[[nodiscard]] static GpuCompiledBarrierType::Enum OwnershipAcquireBarrierType(
+    const GpuGraphResourceType::Enum resourceType
+)noexcept{
+    switch(resourceType){
+    case GpuGraphResourceType::Texture:
+        return GpuCompiledBarrierType::TextureOwnershipAcquire;
+    case GpuGraphResourceType::Buffer:
+        return GpuCompiledBarrierType::BufferOwnershipAcquire;
+    default:
+        return GpuCompiledBarrierType::kCount;
     }
 }
 
@@ -776,6 +882,11 @@ bool GpuTaskGraphCompiler::assignQueues(
             task.queue.requiredCapabilities,
             CommandQueue::Compute
         );
+        const GpuPhysicalQueueInfo* const transferQueue = FindBestCompatibleQueue(
+            topology,
+            task.queue.requiredCapabilities,
+            CommandQueue::Transfer
+        );
         const GpuPhysicalQueueInfo* const fallbackQueue = FindBestCompatibleQueue(
             topology,
             task.queue.requiredCapabilities
@@ -827,17 +938,39 @@ bool GpuTaskGraphCompiler::assignQueues(
                 }
                 break;
             case GpuQueuePreference::Transfer:
-                // Transfer has no distinct CommandQueue class yet. Until that migration happens, a Transfer request
-                // can fall back only to an actually supplied Compute or Graphics queue that advertises Transfer.
-                if(!task.queue.allowFallback)
-                    break;
-                if(computeQueue && computeQueue->dedicated && ShouldUseDedicatedCompute(task.scheduling))
+                if(
+                    transferQueue
+                    && (
+                        !task.queue.compilerMayOverridePreference
+                        || (transferQueue->dedicated && ShouldUseDedicatedTransfer(task.scheduling))
+                    )
+                ){
+                    selectedQueue = transferQueue;
+                    reason = transferQueue->dedicated
+                        ? GpuTaskQueueAssignmentReason::DedicatedTransfer
+                        : GpuTaskQueueAssignmentReason::PreferredQueue
+                    ;
+                }
+                else if(task.queue.allowFallback && computeQueue && computeQueue->dedicated && ShouldUseDedicatedCompute(task.scheduling)){
                     selectedQueue = computeQueue;
-                else if(graphicsQueue)
+                    reason = GpuTaskQueueAssignmentReason::Fallback;
+                }
+                else if(task.queue.allowFallback && graphicsQueue){
                     selectedQueue = graphicsQueue;
-                else
+                    reason = GpuTaskQueueAssignmentReason::Fallback;
+                }
+                else if(transferQueue){
+                    selectedQueue = transferQueue;
+                    reason = GpuTaskQueueAssignmentReason::PreferredQueue;
+                }
+                else if(task.queue.allowFallback && computeQueue){
+                    selectedQueue = computeQueue;
+                    reason = GpuTaskQueueAssignmentReason::Fallback;
+                }
+                else if(task.queue.allowFallback){
                     selectedQueue = fallbackQueue;
-                reason = GpuTaskQueueAssignmentReason::Fallback;
+                    reason = GpuTaskQueueAssignmentReason::Fallback;
+                }
                 break;
             case GpuQueuePreference::Any:
                 // Keep the initial Any policy conservative and stable. Packet/frontier scoring arrives after this
@@ -898,6 +1031,7 @@ bool GpuTaskGraphCompiler::compile(
     outCompiledGraph.m_packetTasks.reserve(graph.taskCount());
     outCompiledGraph.m_prologueStateSeeds.reserve(graph.taskCount());
     outCompiledGraph.m_prologueBarriers.reserve(graph.taskCount());
+    outCompiledGraph.m_epilogueBarriers.reserve(graph.taskCount());
     outCompiledGraph.m_queueTopology.reserve(topology.queueCount);
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex)
         outCompiledGraph.m_queueTopology.push_back(topology.queues[queueIndex]);
@@ -963,12 +1097,13 @@ bool GpuTaskGraphCompiler::compile(
         });
     }
 
-    // Start with graph-planned packet state seeds, transitions, and UAV dependencies.  A state seed selects the
-    // actual final-state snapshot of a graph-internal producer; external and cross-frame inputs retain their
-    // transitional handoff until their producer joins the same graph.  Ownership release/acquire records remain a
-    // later extension because they need explicit cross-graph state sources as well as queue-family lowering.
+    // Start with graph-planned packet state seeds, transitions, UAV dependencies, and exclusive-family ownership
+    // releases. A state seed selects the actual final-state snapshot of a graph-internal producer, so it also carries
+    // the release destination into CommandList::open where the paired Vulkan acquire is emitted before the consumer.
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena> trackedResourceStates(scratchArena);
+    Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena> pendingEpilogueBarriers(scratchArena);
     trackedResourceStates.reserve(graph.taskCount());
+    pendingEpilogueBarriers.reserve(graph.taskCount());
     for(const GpuTaskId taskID : outAnalysis.topologicalOrder()){
         GpuCompiledTask* compiledTask = nullptr;
         for(GpuCompiledTask& candidate : outCompiledGraph.m_tasks){
@@ -983,6 +1118,11 @@ bool GpuTaskGraphCompiler::compile(
         }
 
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
+        const GpuPhysicalQueueInfo* const taskQueue = outCompiledGraph.queueInfo(compiledTask->queue);
+        if(!taskQueue){
+            outCompiledGraph.reset();
+            return false;
+        }
         compiledTask->prologueStateSeedOffset = static_cast<u32>(outCompiledGraph.m_prologueStateSeeds.size());
         compiledTask->prologueBarrierOffset = static_cast<u32>(outCompiledGraph.m_prologueBarriers.size());
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
@@ -990,6 +1130,16 @@ bool GpuTaskGraphCompiler::compile(
             const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
             if(resource.type == GpuGraphResourceType::HazardDomain || use.requiredState == ResourceStates::Unknown)
                 continue;
+            if(
+                (resource.type == GpuGraphResourceType::Texture || resource.type == GpuGraphResourceType::Buffer)
+                && ResourceUsesConcurrentQueueSharing(resource.queueSharing, topology)
+                && !ResourceSharingIncludesQueueClass(resource.queueSharing, taskQueue->queueClass)
+            ){
+                // A Vulkan-concurrent resource may only be used by the families named when it was created. Do not
+                // turn a missing Transfer bit into an illegal ownership handoff for a concurrent image/buffer.
+                outCompiledGraph.reset();
+                return false;
+            }
 
             // A task owns its internal resource ordering.  Only its first declared use becomes a packet-boundary
             // transition; later conflicting uses remain local CommandList work inside the task thunk.
@@ -1042,28 +1192,80 @@ bool GpuTaskGraphCompiler::compile(
                     const GpuPhysicalQueueInfo* const destinationQueue = outCompiledGraph.queueInfo(
                         compiledTask->queue
                     );
+                    if(!sourceQueue || !destinationQueue){
+                        outCompiledGraph.reset();
+                        return false;
+                    }
+                    if(
+                        sourceQueue->queueClass == destinationQueue->queueClass
+                        && sourceQueue->familyIndex != destinationQueue->familyIndex
+                    ){
+                        // CommandQueue names one resolved transport. Multiple same-class families need a richer
+                        // physical-owner token before they can participate in explicit ownership transfers.
+                        outCompiledGraph.reset();
+                        return false;
+                    }
+                    const bool differentQueueFamilies = sourceQueue->familyIndex != destinationQueue->familyIndex;
+                    const bool resourceUsesConcurrentSharing = ResourceUsesConcurrentQueueSharing(
+                        resource.queueSharing,
+                        topology
+                    );
+                    const bool concurrentQueuePair = ResourceSharesQueuePairConcurrently(
+                        resource.queueSharing,
+                        topology,
+                        *sourceQueue,
+                        *destinationQueue
+                    );
+                    if(differentQueueFamilies && resourceUsesConcurrentSharing && !concurrentQueuePair){
+                        // The resource was created concurrent for another family set. Vulkan cannot transfer
+                        // ownership to an omitted family, so fail compilation instead of recording invalid work.
+                        outCompiledGraph.reset();
+                        return false;
+                    }
+
+                    const bool requiresExclusiveOwnershipHandoff =
+                        !resourceUsesConcurrentSharing
+                        && sourceQueue->queueClass != destinationQueue->queueClass
+                    ;
+                    if(requiresExclusiveOwnershipHandoff){
+                        const GpuCompiledBarrierType::Enum releaseType = OwnershipReleaseBarrierType(resource.type);
+                        const GpuCompiledBarrierType::Enum acquireType = OwnershipAcquireBarrierType(resource.type);
+                        if(releaseType >= GpuCompiledBarrierType::kCount || acquireType >= GpuCompiledBarrierType::kCount){
+                            outCompiledGraph.reset();
+                            return false;
+                        }
+                        pendingEpilogueBarriers.push_back(PendingCompiledEpilogueBarrier{
+                            .task = previousState->task,
+                            .barrier = GpuCompiledBarrier{
+                                .type = releaseType,
+                                .resource = use.resource,
+                                .range = use.range,
+                                .before = before,
+                                .after = before,
+                                .sourceQueue = previousState->queue,
+                                .destinationQueue = compiledTask->queue,
+                            },
+                        });
+                        outCompiledGraph.m_prologueBarriers.push_back(GpuCompiledBarrier{
+                            .type = acquireType,
+                            .resource = use.resource,
+                            .range = use.range,
+                            .before = before,
+                            .after = before,
+                            .sourceQueue = previousState->queue,
+                            .destinationQueue = compiledTask->queue,
+                        });
+                    }
                     const bool readOnlySameState =
                         previousState->access == GpuTaskResourceAccess::Read
                         && use.access == GpuTaskResourceAccess::Read
                         && before == use.requiredState
                         && !needsUavDependency
                     ;
-                    const u8 requiredConcurrentSharing = static_cast<u8>(
-                        ResourceQueueSharing::GraphicsAndAsyncCompute
-                    );
-                    const bool concurrentGraphicsAndCompute =
-                        sourceQueue
-                        && destinationQueue
-                        && sourceQueue->queueClass != destinationQueue->queueClass
-                        && sourceQueue->familyIndex != destinationQueue->familyIndex
-                        && (
-                            static_cast<u8>(resource.queueSharing) & requiredConcurrentSharing
-                        ) == requiredConcurrentSharing
-                    ;
                     const bool mayOmitInternalStateSeed =
                         use.hasIndependentStateSource
                         && readOnlySameState
-                        && concurrentGraphicsAndCompute
+                        && concurrentQueuePair
                     ;
                     if(!mayOmitInternalStateSeed){
                         outCompiledGraph.m_prologueStateSeeds.push_back(GpuPacketStateSeed{
@@ -1102,6 +1304,19 @@ bool GpuTaskGraphCompiler::compile(
         ;
         compiledTask->prologueBarrierCount = static_cast<u32>(outCompiledGraph.m_prologueBarriers.size())
             - compiledTask->prologueBarrierOffset
+        ;
+    }
+
+    // Consumers are visited after their producer, so ownership releases are discovered late. Group them only after
+    // planning completes to keep every task's epilogue span contiguous in the immutable compiled graph.
+    for(GpuCompiledTask& compiledTask : outCompiledGraph.m_tasks){
+        compiledTask.epilogueBarrierOffset = static_cast<u32>(outCompiledGraph.m_epilogueBarriers.size());
+        for(const PendingCompiledEpilogueBarrier& pending : pendingEpilogueBarriers){
+            if(pending.task == compiledTask.task)
+                outCompiledGraph.m_epilogueBarriers.push_back(pending.barrier);
+        }
+        compiledTask.epilogueBarrierCount = static_cast<u32>(outCompiledGraph.m_epilogueBarriers.size())
+            - compiledTask.epilogueBarrierOffset
         ;
     }
 

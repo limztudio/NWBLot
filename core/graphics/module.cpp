@@ -423,6 +423,14 @@ bool Graphics::setAsyncComputeLaneEnabled(const bool enabled){
     return true;
 }
 
+bool Graphics::setTransferQueueEnabled(const bool enabled){
+    if(m_backend->getDevice())
+        return false;
+
+    m_deviceCreationParams.enableTransferQueue = enabled;
+    return true;
+}
+
 bool Graphics::setHDR10OutputEnabled(const bool enabled){
     if(m_backend->getDevice())
         return false;

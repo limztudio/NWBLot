@@ -124,6 +124,9 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
 
 
 void CommandList::setMeshletState(const MeshletState& state){
+    if(!validateNonTransferCommand(NWB_TEXT("set meshlet state")))
+        return;
+
     if(state.indirectParams)
         setBufferState(state.indirectParams, ResourceStates::IndirectArgument);
     commitBarriers();
@@ -147,6 +150,8 @@ void CommandList::setMeshletState(const MeshletState& state){
 }
 
 void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){
+    if(!validateNonTransferCommand(NWB_TEXT("dispatch mesh")))
+        return;
     if(groupsX == 0 || groupsY == 0 || groupsZ == 0)
         return;
 #if defined(NWB_DEBUG)

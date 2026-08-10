@@ -292,13 +292,27 @@ bool GpuTaskGraph::recordTask(
 }
 
 bool GpuTaskGraph::applyCompiledBarrier(
+    const GpuCompiledGraph& compiledGraph,
     const GpuCompiledBarrier& barrier,
     CommandList& commandList
 )const{
-    if(!validResource(barrier.resource) || barrier.type >= GpuCompiledBarrierType::kCount)
+    if(
+        !compiledGraph.validFor(*this)
+        || !validResource(barrier.resource)
+        || barrier.type >= GpuCompiledBarrierType::kCount
+    )
         return false;
 
     const GpuGraphResourceNode& resource = m_resources[barrier.resource.index];
+    const auto resolveOwnershipQueues = [&]{
+        const GpuPhysicalQueueInfo* const sourceQueue = compiledGraph.queueInfo(barrier.sourceQueue);
+        const GpuPhysicalQueueInfo* const destinationQueue = compiledGraph.queueInfo(barrier.destinationQueue);
+        return sourceQueue
+            && destinationQueue
+            && sourceQueue->queueClass < CommandQueue::kCount
+            && destinationQueue->queueClass < CommandQueue::kCount
+        ;
+    };
     switch(barrier.type){
     case GpuCompiledBarrierType::TextureTransition:
     case GpuCompiledBarrierType::TextureUav:
@@ -322,13 +336,47 @@ bool GpuTaskGraph::applyCompiledBarrier(
             return false;
         commandList.setAccelStructState(resource.accelStruct.get(), barrier.after);
         return true;
-    case GpuCompiledBarrierType::TextureOwnershipRelease:
+    case GpuCompiledBarrierType::TextureOwnershipRelease:{
+        const GpuPhysicalQueueInfo* const sourceQueue = compiledGraph.queueInfo(barrier.sourceQueue);
+        const GpuPhysicalQueueInfo* const destinationQueue = compiledGraph.queueInfo(barrier.destinationQueue);
+        if(
+            resource.type != GpuGraphResourceType::Texture
+            || !resource.texture
+            || !resolveOwnershipQueues()
+            || commandList.getDescription().queueType != sourceQueue->queueClass
+        )
+            return false;
+        commandList.releaseTextureOwnership(
+            resource.texture.get(),
+            barrier.range.textureSubresources,
+            destinationQueue->queueClass
+        );
+        return true;
+    }
+    case GpuCompiledBarrierType::BufferOwnershipRelease:{
+        const GpuPhysicalQueueInfo* const sourceQueue = compiledGraph.queueInfo(barrier.sourceQueue);
+        const GpuPhysicalQueueInfo* const destinationQueue = compiledGraph.queueInfo(barrier.destinationQueue);
+        if(
+            resource.type != GpuGraphResourceType::Buffer
+            || !resource.buffer
+            || !resolveOwnershipQueues()
+            || commandList.getDescription().queueType != sourceQueue->queueClass
+        )
+            return false;
+        commandList.releaseBufferOwnership(resource.buffer.get(), destinationQueue->queueClass);
+        return true;
+    }
     case GpuCompiledBarrierType::TextureOwnershipAcquire:
-    case GpuCompiledBarrierType::BufferOwnershipRelease:
-    case GpuCompiledBarrierType::BufferOwnershipAcquire:
-        // Ownership records require the packet state-seed and physical-queue release/acquire lowering added after
-        // this transition/UAV slice.  Reject them rather than silently omitting an exclusive-family transfer.
-        return false;
+    case GpuCompiledBarrierType::BufferOwnershipAcquire:{
+        const GpuPhysicalQueueInfo* const destinationQueue = compiledGraph.queueInfo(barrier.destinationQueue);
+        if(!resolveOwnershipQueues() || commandList.getDescription().queueType != destinationQueue->queueClass)
+            return false;
+
+        // CommandList::open imports the compiler-selected producer state seed before packet prologue lowering. That
+        // import emits the paired Vulkan acquire barrier with the exact exported layout, so this record is a checked
+        // graph-plan marker rather than a second native acquire.
+        return true;
+    }
     default:
         return false;
     }
@@ -404,6 +452,9 @@ bool GpuTaskGraph::appendFrameGraphTelemetry(
                 break;
             case CommandQueue::Compute:
                 flags |= GpuTaskGraphTelemetryNodeFlag::AssignedComputeQueue;
+                break;
+            case CommandQueue::Transfer:
+                flags |= GpuTaskGraphTelemetryNodeFlag::AssignedTransferQueue;
                 break;
             default:
                 return false;

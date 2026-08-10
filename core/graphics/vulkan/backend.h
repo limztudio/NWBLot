@@ -587,10 +587,12 @@ struct VulkanContext{
     VkPhysicalDeviceSubgroupProperties subgroupProperties{};
     DescriptorBufferManager* descriptorBufferManager = nullptr;
 
-    // Physical families used for Graphics/AsyncCompute resource sharing.
+    // Physical families used for Graphics/AsyncCompute/Transfer resource sharing.
     i32 graphicsQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 asyncComputeQueueFamilyIndex = s_InvalidQueueFamilyIndex;
+    i32 transferQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     bool asyncComputeLaneEnabled = false;
+    bool transferQueueEnabled = false;
 
     struct Extensions{
         bool KHR_synchronization2 = false;
@@ -641,40 +643,57 @@ struct VulkanContext{
 
 struct QueueFamilySharingInfo{
     VkSharingMode mode = VK_SHARING_MODE_EXCLUSIVE;
-    Array<u32, 2u> familyIndices = {};
+    Array<u32, 3u> familyIndices = {};
     u32 familyIndexCount = 0u;
 
     [[nodiscard]] const u32* data()const{ return familyIndexCount > 0u ? familyIndices.data() : nullptr; }
 };
-
-inline bool UsesConcurrentGraphicsAsyncComputeSharing(
-    const ResourceQueueSharing::Mask sharing,
-    const VulkanContext& context
-){
-    const u32 sharingBits = static_cast<u32>(sharing);
-    const u32 requiredBits = static_cast<u32>(ResourceQueueSharing::GraphicsAndAsyncCompute);
-    return
-        context.asyncComputeLaneEnabled
-        && context.graphicsQueueFamilyIndex != s_InvalidQueueFamilyIndex
-        && context.asyncComputeQueueFamilyIndex != s_InvalidQueueFamilyIndex
-        && context.graphicsQueueFamilyIndex != context.asyncComputeQueueFamilyIndex
-        && (sharingBits & requiredBits) == requiredBits
-    ;
-}
 
 inline QueueFamilySharingInfo ResolveQueueFamilySharing(
     const ResourceQueueSharing::Mask sharing,
     const VulkanContext& context
 ){
     QueueFamilySharingInfo result;
-    if(!UsesConcurrentGraphicsAsyncComputeSharing(sharing, context))
+    const u8 sharingBits = static_cast<u8>(sharing);
+    const auto appendFamily = [&result](const i32 familyIndex){
+        if(familyIndex == s_InvalidQueueFamilyIndex)
+            return;
+        for(u32 index = 0u; index < result.familyIndexCount; ++index){
+            if(result.familyIndices[index] == static_cast<u32>(familyIndex))
+                return;
+        }
+        NWB_ASSERT(result.familyIndexCount < result.familyIndices.size());
+        result.familyIndices[result.familyIndexCount] = static_cast<u32>(familyIndex);
+        ++result.familyIndexCount;
+    };
+
+    if(sharingBits & static_cast<u8>(ResourceQueueSharing::Graphics))
+        appendFamily(context.graphicsQueueFamilyIndex);
+    if(
+        (sharingBits & static_cast<u8>(ResourceQueueSharing::AsyncCompute))
+        && context.asyncComputeLaneEnabled
+    )
+        appendFamily(context.asyncComputeQueueFamilyIndex);
+    if(
+        (sharingBits & static_cast<u8>(ResourceQueueSharing::Transfer))
+        && context.transferQueueEnabled
+    )
+        appendFamily(context.transferQueueFamilyIndex);
+
+    if(result.familyIndexCount < 2u){
+        result.familyIndexCount = 0u;
         return result;
+    }
 
     result.mode = VK_SHARING_MODE_CONCURRENT;
-    result.familyIndices[0] = static_cast<u32>(context.graphicsQueueFamilyIndex);
-    result.familyIndices[1] = static_cast<u32>(context.asyncComputeQueueFamilyIndex);
-    result.familyIndexCount = 2u;
     return result;
+}
+
+inline bool UsesConcurrentQueueSharing(
+    const ResourceQueueSharing::Mask sharing,
+    const VulkanContext& context
+){
+    return ResolveQueueFamilySharing(sharing, context).mode == VK_SHARING_MODE_CONCURRENT;
 }
 
 
@@ -2032,7 +2051,10 @@ public:
     void setTextureState(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask stateBits);
     void setBufferState(Buffer* buffer, ResourceStates::Mask stateBits);
     void setAccelStructState(RayTracingAccelStruct* as, ResourceStates::Mask stateBits);
-    // Exports an exclusive resource to an ordered consumer lane.
+    // Exports an exclusive resource to an ordered physical consumer queue. RenderLane overloads preserve the
+    // deprecated lane-facing contract while graph lowering uses the resolved CommandQueue transport directly.
+    void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, CommandQueue::Enum destinationQueue);
+    void releaseBufferOwnership(Buffer* buffer, CommandQueue::Enum destinationQueue);
     void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, RenderLane::Enum destinationLane);
     void releaseBufferOwnership(Buffer* buffer, RenderLane::Enum destinationLane);
 
@@ -2134,6 +2156,7 @@ private:
     bool ensureGraphicsRenderPass(Framebuffer* framebuffer);
     void endActiveRenderPass();
     void executePipelineBarrier(const VkDependencyInfo& depInfo);
+    [[nodiscard]] bool validateNonTransferCommand(const tchar* operationName)const;
     bool validateIndirectBuffer(Buffer* buffer, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const;
     bool prepareDrawIndirect(u32 offsetBytes, u32 drawCount, u64 commandSizeBytes, const tchar* operationLabel, const tchar* commandName, VulkanDetail::IndirectDrawIndexMode::Enum indexMode, Buffer*& outIndirectBuffer)const;
     void clearColorTexture(Texture* textureResource, TextureSubresourceSet subresources, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
@@ -2349,7 +2372,7 @@ public:
     }
     [[nodiscard]] u32 getQueueFamilyIndex(CommandQueue::Enum queue)const;
     [[nodiscard]] bool usesConcurrentQueueSharing(ResourceQueueSharing::Mask sharing)const{
-        return UsesConcurrentGraphicsAsyncComputeSharing(sharing, m_context);
+        return UsesConcurrentQueueSharing(sharing, m_context);
     }
     bool waitForIdle();
     void runGarbageCollection();

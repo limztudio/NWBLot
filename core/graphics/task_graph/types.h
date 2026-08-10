@@ -41,8 +41,8 @@ namespace GpuQueuePreference{
 };
 
 // Queue preferences describe desired capability classes; this ID identifies one concrete queue in a particular
-// device lifetime. Phase 2 currently maps it to the existing Graphics/Compute transport pair, but it intentionally
-// leaves room for multiple queues of the same class and a later Transfer queue.
+// device lifetime. The current topology maps Graphics, optional dedicated Compute, and optional dedicated Transfer
+// transports while leaving room for multiple queues of one class later.
 struct GpuPhysicalQueueId{
     u16 index = Limit<u16>::s_Max;
     u16 deviceGeneration = 0u;
@@ -142,6 +142,8 @@ namespace GpuTaskGraphTelemetryNodeFlag{
         AssignedDedicatedQueue = 1u << 2u,
         QueueAssignmentFallback = 1u << 3u,
         LegacyQueueAssignmentMismatch = 1u << 4u,
+        // Preserve every existing telemetry wire-bit; Transfer occupies the first previously unused slot.
+        AssignedTransferQueue = 1u << 5u,
     };
 };
 
@@ -247,9 +249,9 @@ struct GpuTaskExternalDependencyEdge{
 };
 
 
-// A compiled barrier is a graph-level transition request.  It deliberately names only engine resources and
-// resource states; the packet recorder lowers it through CommandList so the task graph stays independent of raw
-// Vulkan barrier objects.
+// A compiled barrier is a graph-level transition or ownership request. It deliberately names only engine resources,
+// resource states, and resolved physical queues; the packet recorder lowers it through CommandList so the task graph
+// stays independent of raw Vulkan barrier objects.
 namespace GpuCompiledBarrierType{
     enum Enum : u8{
         TextureTransition,

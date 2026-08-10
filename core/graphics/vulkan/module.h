@@ -48,10 +48,14 @@ struct DeviceDesc{
     // 4-byte padding that an interleaved handle/index layout would otherwise introduce between each pair.
     VkQueue graphicsQueue = VK_NULL_HANDLE;
     VkQueue computeQueue = VK_NULL_HANDLE;
+    VkQueue transferQueue = VK_NULL_HANDLE;
     i32 graphicsQueueIndex = s_InvalidQueueFamilyIndex;
     i32 computeQueueIndex = s_InvalidQueueFamilyIndex;
+    i32 transferQueueIndex = s_InvalidQueueFamilyIndex;
     // True only when the renderer requested AsyncCompute and a distinct dedicated Compute family was created.
     bool asyncComputeLaneEnabled = false;
+    // True only when the renderer requested Transfer and a distinct dedicated transfer-only family was created.
+    bool transferQueueEnabled = false;
 
     GraphicsAllocator& allocator;
     Alloc::ThreadPool& threadPool;

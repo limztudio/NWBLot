@@ -984,6 +984,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             !m_deferredLaggedLightingHistoryTask.valid()
             || !deferredLaggedLightingHistoryPacket.valid()
             || !deferredLaggedLightingHistoryQueue
+            || (static_cast<u8>(deferredLaggedLightingHistoryQueue->capabilities)
+                & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
         ))
         || (laggedAsyncLightingSchedule && !m_deferredLightingHistoryCompletion.valid())
         || !deferredLightingPacket.valid()
@@ -2408,6 +2410,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !m_deferredLaggedLightingHistoryTask.valid()
             || !deferredLaggedLightingHistoryPacket.valid()
             || !deferredLaggedLightingHistoryQueue
+            || (static_cast<u8>(deferredLaggedLightingHistoryQueue->capabilities)
+                & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
             || !deferredLaggedLightingHistoryPacketRange.valid()
             || deferredLaggedLightingHistoryPacketRange.packetCount != 1u
         ){

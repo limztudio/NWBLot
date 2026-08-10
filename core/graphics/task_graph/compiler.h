@@ -46,6 +46,7 @@ namespace GpuTaskQueueAssignmentReason{
         RequiredGraphics,
         PreferredQueue,
         DedicatedCompute,
+        DedicatedTransfer,
         Fallback,
         ConservativeAny,
 

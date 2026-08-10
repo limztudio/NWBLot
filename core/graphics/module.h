@@ -105,6 +105,8 @@ public:
     bool setDebugRuntimeEnabled(bool enabled);
     // Must be configured before device creation. Unsupported adapters retain the Graphics-only path.
     bool setAsyncComputeLaneEnabled(bool enabled);
+    // Must be configured before device creation. Unsupported adapters retain the Graphics/Compute copy fallback.
+    bool setTransferQueueEnabled(bool enabled);
     // Requests HDR10/PQ presentation where the current display surface supports it. Unsupported surfaces
     // automatically retain the normal SDR swap chain. Must be configured before device creation.
     bool setHDR10OutputEnabled(bool enabled);

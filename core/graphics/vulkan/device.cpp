@@ -171,7 +171,9 @@ Device::Device(const DeviceDesc& desc)
     m_context.descriptorBufferManager = &m_descriptorBufferManager;
     m_context.graphicsQueueFamilyIndex = desc.graphicsQueueIndex;
     m_context.asyncComputeQueueFamilyIndex = desc.asyncComputeLaneEnabled ? desc.computeQueueIndex : s_InvalidQueueFamilyIndex;
+    m_context.transferQueueFamilyIndex = desc.transferQueueEnabled ? desc.transferQueueIndex : s_InvalidQueueFamilyIndex;
     m_context.asyncComputeLaneEnabled = desc.asyncComputeLaneEnabled;
+    m_context.transferQueueEnabled = desc.transferQueueEnabled;
 
     vkGetPhysicalDeviceProperties(m_context.physicalDevice, &m_context.physicalDeviceProperties);
     vkGetPhysicalDeviceMemoryProperties(m_context.physicalDevice, &m_context.memoryProperties);
@@ -493,6 +495,9 @@ Device::Device(const DeviceDesc& desc)
     }
     if(desc.computeQueue && desc.computeQueueIndex >= 0){
         m_queues[static_cast<u32>(CommandQueue::Compute)].emplace(m_context, *this, CommandQueue::Compute, desc.computeQueue, desc.computeQueueIndex);
+    }
+    if(desc.transferQueue && desc.transferQueueIndex >= 0){
+        m_queues[static_cast<u32>(CommandQueue::Transfer)].emplace(m_context, *this, CommandQueue::Transfer, desc.transferQueue, desc.transferQueueIndex);
     }
 }
 Device::~Device(){

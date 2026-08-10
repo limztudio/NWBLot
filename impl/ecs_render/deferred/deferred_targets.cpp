@@ -498,7 +498,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
         .setFormat(targets.shadowVisibilityFormat)
         .setInitialState(Core::ResourceStates::Common)
         .setKeepInitialState(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .setName("engine/temporal/lagged_shadow_visibility")
     ;
     history.shadowVisibility = graphics().createTexture(shadowHistoryDesc);
@@ -515,7 +515,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
         .setFormat(targets.causticIrradianceFormat)
         .setInitialState(Core::ResourceStates::Common)
         .setKeepInitialState(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .setName("engine/temporal/lagged_caustic_irradiance")
     ;
     history.causticIrradiance = graphics().createTexture(irradianceHistoryDesc);

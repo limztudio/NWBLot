@@ -173,6 +173,15 @@ void CommandList::retainStagingBuffer(Buffer& buffer){
     m_currentCmdBuf->m_referencedStagingBuffers.emplace_back(&buffer, BufferHandle::deleter_type(&m_context.objectArena));
 }
 
+bool CommandList::validateNonTransferCommand(const tchar* const operationName)const{
+    if(m_desc.queueType != CommandQueue::Transfer)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {} is invalid on a dedicated transfer command list"), operationName);
+    NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: graphics, compute, and ray-tracing commands are invalid on a dedicated transfer command list"));
+    return false;
+}
+
 bool CommandList::validateIndirectBuffer(Buffer* bufferResource, u64 offsetBytes, u64 commandSizeBytes, u32 commandCount, const tchar* commandName)const{
 #if defined(NWB_DEBUG)
     if(!VulkanDetail::DebugValidateNotNull(commandName, NWB_TEXT("no indirect buffer is bound"), bufferResource))

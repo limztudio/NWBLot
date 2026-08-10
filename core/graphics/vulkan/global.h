@@ -79,6 +79,7 @@ inline constexpr u32 s_NvidiaVendorId = 0x10DE; // PCI vendor ID for NVIDIA; gat
 inline constexpr i32 s_InvalidQueueFamilyIndex = -1;
 inline constexpr u32 s_GraphicsQueueIndex = 0;
 inline constexpr u32 s_ComputeQueueIndex = 0;
+inline constexpr u32 s_TransferQueueIndex = 0;
 inline constexpr u32 s_PresentQueueIndex = 0;
 inline constexpr u32 s_MaxMutableSwapChainFormats = 2;
 inline constexpr usize s_MaxRetryCountAcquireNextImage = 3;
@@ -106,7 +107,7 @@ inline constexpr usize s_GeometryGrainSize = 64;
 inline constexpr usize s_ParallelTlasInstanceThreshold = 1024;
 inline constexpr usize s_TlasInstanceGrainSize = 256;
 inline constexpr usize s_DeviceSetupScratchArenaBytes = 32u * 1024u;
-inline constexpr usize s_MaxVulkanQueueFamilyKinds = 3u;
+inline constexpr usize s_MaxVulkanQueueFamilyKinds = 4u;
 
 // Ray tracing helper defaults.
 inline constexpr u64 s_DefaultTopLevelASBufferSize = 1024 * 1024;

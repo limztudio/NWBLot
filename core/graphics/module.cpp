@@ -577,6 +577,14 @@ bool Graphics::setTransferQueueEnabled(const bool enabled){
     return true;
 }
 
+bool Graphics::setAdapterIndex(const i32 index){
+    if(index < -1 || m_backend->getDevice())
+        return false;
+
+    m_deviceCreationParams.adapterIndex = index;
+    return true;
+}
+
 bool Graphics::setHDR10OutputEnabled(const bool enabled){
     if(m_backend->getDevice())
         return false;
@@ -670,6 +678,10 @@ GraphicsBackend::Device& Graphics::getDevice()const noexcept{
 
 bool Graphics::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters){
     return m_backend->enumerateAdapters(outAdapters);
+}
+
+bool Graphics::getSelectedAdapterInfo(AdapterInfo& outAdapter)const{
+    return m_backend->getSelectedAdapterInfo(outAdapter);
 }
 
 void Graphics::addRenderPassToFront(IRenderPass& pass){

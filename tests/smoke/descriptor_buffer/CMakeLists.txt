@@ -21,3 +21,16 @@ target_link_libraries(nwb_descriptor_buffer_tests PRIVATE
     nwb_assets_graphics
     nwb_ecs_ui
 )
+
+# Manual target-hardware A/B probe for Phase 10 transfer-upload profiling.  It deliberately is not a CTest:
+# a useful result needs a genuinely dedicated Transfer family and an external bandwidth capture on the target GPU.
+nwb_declare_executable(nwb_transfer_upload_profile)
+target_sources(nwb_transfer_upload_profile PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/transfer_upload_profile.cpp"
+)
+target_link_libraries(nwb_transfer_upload_profile PRIVATE
+    nwb_graphics
+    nwb_perf
+    nwb_alloc
+    nwb_common
+)

@@ -117,6 +117,9 @@ public:
     bool setAsyncComputeLaneEnabled(bool enabled);
     // Must be configured before device creation. Unsupported adapters retain the Graphics/Compute copy fallback.
     bool setTransferQueueEnabled(bool enabled);
+    // Selects a Vulkan adapter enumeration index, or -1 for the backend default. Must be configured before device
+    // creation so target-hardware probes can reproduce a multi-adapter route on paired processes.
+    bool setAdapterIndex(i32 index);
     // Requests HDR10/PQ presentation where the current display surface supports it. Unsupported surfaces
     // automatically retain the normal SDR swap chain. Must be configured before device creation.
     bool setHDR10OutputEnabled(bool enabled);
@@ -139,6 +142,9 @@ public:
 public:
     [[nodiscard]] GraphicsBackend::Device& getDevice()const noexcept;
     [[nodiscard]] bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters);
+    // Returns identity from the physical device selected for the current logical device, rather than from a later
+    // adapter enumeration. Available only after successful device creation.
+    [[nodiscard]] bool getSelectedAdapterInfo(AdapterInfo& outAdapter)const;
     [[nodiscard]] bool queryFeatureSupport(Feature::Enum feature, void* featureInfo = nullptr, usize featureInfoSize = 0)const;
     // Resolves the GPU wave/subgroup size, or returns a conservative fallback (64) when the device cannot report it.
     // Use the returned value to size groupshared reductions and wave-intrinsic shader specializations.

@@ -35,6 +35,7 @@ concept BackendApi = requires(
     { constBackend.getRendererString() }->SameAs<const tchar*>;
 
     { backend.enumerateAdapters(adapters) }->SameAs<bool>;
+    { constBackend.getSelectedAdapterInfo(adapters[0]) }->SameAs<bool>;
     { backend.getCurrentBackBuffer() }->SameAs<Texture*>;
     { backend.getBackBuffer(u32{}) }->SameAs<Texture*>;
     { backend.getCurrentBackBufferIndex() }->SameAs<u32>;

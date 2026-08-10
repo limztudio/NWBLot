@@ -292,6 +292,30 @@ static u64 GetDeviceLocalMemoryBytes(VkPhysicalDevice physicalDevice){
     return bytes;
 }
 
+static void PopulateAdapterInfo(VkPhysicalDevice physicalDevice, AdapterInfo& outAdapter){
+    VkPhysicalDeviceProperties2 properties2 = {};
+    properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    VkPhysicalDeviceIDProperties idProperties = {};
+    idProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
+    properties2.pNext = &idProperties;
+    vkGetPhysicalDeviceProperties2(physicalDevice, &properties2);
+
+    const auto& properties = properties2.properties;
+    outAdapter.name = properties.deviceName;
+    outAdapter.vendorID = properties.vendorID;
+    outAdapter.deviceID = properties.deviceID;
+    outAdapter.dedicatedVideoMemory = GetDeviceLocalMemoryBytes(physicalDevice);
+
+    NWB_MEMCPY(outAdapter.uuid.data(), outAdapter.uuid.size(), idProperties.deviceUUID, outAdapter.uuid.size());
+    outAdapter.hasUUID = true;
+    outAdapter.luid = {};
+    outAdapter.hasLUID = false;
+    if(idProperties.deviceLUIDValid){
+        NWB_MEMCPY(outAdapter.luid.data(), outAdapter.luid.size(), idProperties.deviceLUID, outAdapter.luid.size());
+        outAdapter.hasLUID = true;
+    }
+}
+
 static u64 BytesToMiB(u64 bytes){
     return bytes / s_BytesPerMiB;
 }
@@ -2424,38 +2448,8 @@ bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters)
         outAdapters.emplace_back(m_arena);
 
     auto fillAdapterInfo = [&](usize i){
-        auto* physicalDevice = devices[i];
-        VkPhysicalDeviceProperties2 properties2 = {};
-        properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-        VkPhysicalDeviceIDProperties idProperties = {};
-        idProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES;
-        properties2.pNext = &idProperties;
-        vkGetPhysicalDeviceProperties2(physicalDevice, &properties2);
-
-        const auto& properties = properties2.properties;
-
         AdapterInfo adapterInfo(m_arena);
-        adapterInfo.name = properties.deviceName;
-        adapterInfo.vendorID = properties.vendorID;
-        adapterInfo.deviceID = properties.deviceID;
-        adapterInfo.dedicatedVideoMemory = 0;
-
-        NWB_MEMCPY(adapterInfo.uuid.data(), adapterInfo.uuid.size(), idProperties.deviceUUID, adapterInfo.uuid.size());
-        adapterInfo.hasUUID = true;
-
-        if(idProperties.deviceLUIDValid){
-            NWB_MEMCPY(adapterInfo.luid.data(), adapterInfo.luid.size(), idProperties.deviceLUID, adapterInfo.luid.size());
-            adapterInfo.hasLUID = true;
-        }
-
-        VkPhysicalDeviceMemoryProperties memoryProperties;
-        vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
-        for(uint32_t heapIndex = 0; heapIndex < memoryProperties.memoryHeapCount; ++heapIndex){
-            const VkMemoryHeap& heap = memoryProperties.memoryHeaps[heapIndex];
-            if(heap.flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
-                adapterInfo.dedicatedVideoMemory += heap.size;
-        }
-
+        VulkanDetail::PopulateAdapterInfo(devices[i], adapterInfo);
         outAdapters[i] = Move(adapterInfo);
     };
 
@@ -2466,6 +2460,14 @@ bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters)
             fillAdapterInfo(i);
     }
 
+    return true;
+}
+
+bool BackendContext::getSelectedAdapterInfo(AdapterInfo& outAdapter)const{
+    if(!m_rhiDevice || !m_vulkanPhysicalDevice)
+        return false;
+
+    VulkanDetail::PopulateAdapterInfo(m_vulkanPhysicalDevice, outAdapter);
     return true;
 }
 

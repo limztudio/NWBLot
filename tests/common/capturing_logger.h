@@ -66,6 +66,12 @@ public:
         }
         return false;
     }
+    // Standalone test tools normally retain errors for assertions.  Give target-hardware probes a way to preserve
+    // the underlying Vulkan/validation diagnostics in their captured process logs when they fail.
+    void emitErrorsToStderr()const{
+        for(const LogString& error : m_errors)
+            NWB_TCERR << error.c_str() << '\n';
+    }
 
 private:
     void record(const TStringView str, const Core::Common::LogType::Enum type){

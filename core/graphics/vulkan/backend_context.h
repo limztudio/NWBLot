@@ -129,6 +129,7 @@ public:
     [[nodiscard]] Device* getDevice()const{ return m_rhiDevice.get(); }
     [[nodiscard]] const tchar* getRendererString()const{ return m_rendererString.c_str(); }
     bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters);
+    [[nodiscard]] bool getSelectedAdapterInfo(AdapterInfo& outAdapter)const;
     [[nodiscard]] bool isValidationMessageIdIgnored(i32 messageId)const;
 
     [[nodiscard]] bool isInstanceExtensionEnabled(const char* extensionName)const{

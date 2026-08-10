@@ -797,7 +797,7 @@ bool RendererRayTracingSystem::initializeSurfelResources(Core::CommandList& comm
     return true;
 }
 
-bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& commandList, DeferredFrameTargets& targets){
+bool RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targets){
     if(!hasSurfelWork())
         return true;
 
@@ -823,12 +823,15 @@ bool RendererRayTracingSystem::prepareSurfelResources(Core::CommandList& command
         return false;
     }
 
-    // Dedicated async compute performs its own first-use initialization.
-    if(
-        !graphics().getDevice().isRenderLaneDedicated(Core::RenderLane::AsyncCompute)
-        && !initializeSurfelResources(commandList)
-    )
-        return false;
+    return true;
+}
+
+bool RendererRayTracingSystem::recordPreparedSurfelFrameConstants(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets
+){
+    if(!hasSurfelWork() || !rayTracingState().m_surfelConstants)
+        return true;
 
     // First frame traces every surfel; later frames use round-robin updates.
     const u32 updateDivisor = rayTracingState().m_surfelSeeded ? Max<u32>(NWB_SURFEL_UPDATE_DIVISOR, 1u) : 1u;

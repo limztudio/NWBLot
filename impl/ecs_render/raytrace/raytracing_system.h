@@ -34,24 +34,67 @@ namespace SoftShadowUpsampleFold{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace PreparedShadowTraceGeometryRole{
+    inline constexpr u8 HardwarePosition = 1u << 0u;
+    inline constexpr u8 HardwareIndex = 1u << 1u;
+    inline constexpr u8 HardwareAttribute = 1u << 2u;
+    inline constexpr u8 SoftwareNode = 1u << 3u;
+    inline constexpr u8 SoftwarePosition = 1u << 4u;
+    inline constexpr u8 SoftwareIndex = 1u << 5u;
+    inline constexpr u8 SoftwareAttribute = 1u << 6u;
+};
+
+struct PreparedShadowTraceGeometryBuffer{
+    Core::BufferHandle buffer;
+    Name identity;
+    Core::ResourceStates::Mask initialState = Core::ResourceStates::Common;
+    u8 roles = 0u;
+};
+
+using PreparedShadowTraceGeometryBufferVector = Vector<
+    PreparedShadowTraceGeometryBuffer,
+    Core::Alloc::GlobalArena
+>;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class RendererRayTracingSystem final : public RendererSystemSubsystemBase<RendererSystem>{
 public:
     explicit RendererRayTracingSystem(RendererSystem& renderer);
+    ~RendererRayTracingSystem();
 
 
 public:
     void logCapabilityOnce();
 
+    // Resource identity is frozen by the shared deferred graph.  Select/grow every trace resource before graph
+    // compilation, then let the graph-owned preparation packet issue only GPU work against that frozen set.
+    [[nodiscard]] bool preflightShadowVisibilityResources(DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] bool recordPreflightShadowVisibilityResources(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool& outBackendReady
+    );
+    [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept;
+    void discardPreflightShadowVisibilityResources()noexcept;
+    // These are retained handles for the current frozen trace plan. The graph imports each physical buffer once and
+    // uses the shared IDs for every packet that manually stages it.
+    [[nodiscard]] bool freezePreparedShadowTraceGeometryBuffers();
+    [[nodiscard]] const PreparedShadowTraceGeometryBufferVector& preparedShadowTraceGeometryBuffers()const noexcept;
+    void normalizePreparedShadowTraceGeometryBuffers(Core::CommandList& commandList)const;
+    void confirmPreparedShadowTraceGeometryNormalization()noexcept;
+    void invalidatePreparedShadowTraceGeometryBuffers()noexcept;
+
     [[nodiscard]] bool buildPendingMeshBlas(Core::CommandList& commandList);
     [[nodiscard]] bool buildPendingMeshSwBvh(Core::CommandList& commandList);
     [[nodiscard]] bool buildSceneTlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool buildSceneSwBvh(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool prepareCausticEmissionTargets(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
     void releaseCausticEmissionTargetHeapHandle();
     [[nodiscard]] bool createShadowVisibilityTarget(DeferredFrameTargets& targets);
     [[nodiscard]] bool createCausticTargets(DeferredFrameTargets& targets);
-    [[nodiscard]] bool prepareShadowVisibilityResources(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena, bool& outBackendReady);
-    // Upload shared material-context heap slots.
+    // Upload shared material-context heap slots after preflight has settled all backing-buffer capacities.
     [[nodiscard]] bool uploadRayTraceMaterialContextSlots(Core::CommandList& commandList);
     void releaseRayTraceMaterialContextHeapHandles();
     void releaseSwBvhScratchHeapHandles();
@@ -63,7 +106,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
-        bool prepared,
+        const bool* prepared,
         bool hardwareShadowSupported,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
@@ -77,7 +120,7 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
-        bool shadowVisibilityPrepared,
+        const bool* shadowVisibilityPrepared,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] bool renderGpuBvhCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
@@ -87,13 +130,12 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
-        bool shadowVisibilityPrepared,
+        const bool* shadowVisibilityPrepared,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] bool renderHwCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool hasHwCausticWork()const noexcept;
     [[nodiscard]] bool hasSurfelWork()const noexcept;
-    [[nodiscard]] bool prepareSurfelResources(Core::CommandList& commandList, DeferredFrameTargets& targets);
     // Clear ownership commits only after the producer packet accepts.
     void finalizeSurfelResourceInitialization();
     void discardSurfelResourceInitialization();
@@ -127,7 +169,27 @@ public:
 
 
 private:
+    [[nodiscard]] bool preparePendingMeshBlasResources();
+    [[nodiscard]] bool prepareSceneTlasResources(Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] bool prepareSceneSwBvhResources(Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] bool buildSceneTlasImpl(
+        Core::CommandList* commandList,
+        Core::Alloc::ScratchArena& scratchArena
+    );
+    [[nodiscard]] bool buildSceneSwBvhImpl(
+        Core::CommandList* commandList,
+        Core::Alloc::ScratchArena& scratchArena
+    );
+    [[nodiscard]] bool prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] bool recordCausticEmissionTargets(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] bool prepareCausticEmissionTargetsImpl(
+        Core::CommandList* commandList,
+        Core::Alloc::ScratchArena& scratchArena
+    );
+    [[nodiscard]] bool prepareSurfelResources(DeferredFrameTargets& targets);
+    [[nodiscard]] bool recordPreparedSurfelFrameConstants(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool initializeSurfelResources(Core::CommandList& commandList);
+    [[nodiscard]] bool prepareMeshBlasResources(MeshResources& meshResources);
     [[nodiscard]] bool buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources);
     // Runtime meshes prepare every frame; static meshes remain dirty until first build.
     [[nodiscard]] bool preparePendingMeshSwBvhResources();
@@ -206,6 +268,7 @@ private:
     [[nodiscard]] bool updateMeshSwBvh(Core::CommandList& commandList, MeshResources& meshResources);
     [[nodiscard]] bool ensureSceneBvhBuffers(u32 instanceCount);
     [[nodiscard]] bool ensureRayTraceMaterialContextSlotsBuffer();
+    [[nodiscard]] bool ensureRayTraceMaterialContextSlotsHeapHandle();
     [[nodiscard]] bool ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);
     [[nodiscard]] bool replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);
     // Stage shared software-BVH traversal inputs.
@@ -219,6 +282,19 @@ private:
     );
     [[nodiscard]] bool ensureShadowInstanceContextBuffer(usize instanceCount);
     [[nodiscard]] bool ensureShadowMaterialTypedBuffer(usize byteCount);
+
+private:
+    PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
+    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;
+    DeferredFrameTargets* m_shadowVisibilityPreparedTargets = nullptr;
+    bool m_shadowVisibilityResourcesPreflighted = false;
+    bool m_shadowVisibilityHardwareSupported = false;
+    // Recording may only touch allocations selected before the shared graph is compiled. These flags distinguish a
+    // usable frozen trace plan from a non-fatal preflight fallback that leaves the effect black for this frame.
+    bool m_shadowVisibilityTraceResourcesPreflighted = false;
+    bool m_shadowVisibilityHybridResourcesPreflighted = false;
+    bool m_shadowVisibilityBackendPipelinePreflighted = false;
+    bool m_shadowVisibilityHybridPipelinePreflighted = false;
 };
 
 

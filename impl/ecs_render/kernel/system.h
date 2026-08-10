@@ -145,12 +145,17 @@ private:
     void resetRejectedShadowVisibilityStateHandoffs()noexcept;
     void invalidateLaggedLightingHistorySubmission()noexcept;
     void resetLaggedLightingHistoryTracking()noexcept;
-    void buildShadowPrepareTaskGraph(
+    [[nodiscard]] bool declareDeferredShadowPrepareTask(
         DeferredFrameTargets& deferredTargets,
+        Core::GpuGraphResourceId currentBindlessSlots,
+        Core::GpuGraphResourceId materialContextSlots,
+        const Core::GpuGraphResourceId* shadowTraceGeometryResources,
+        usize shadowTraceGeometryResourceCount,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] bool declareDeferredGraphicsPrefixTasks(
         DeferredFrameTargets& deferredTargets,
+        Core::GpuTaskId shadowPrepareTask,
         const CsgFrameState& csgFrameState,
         bool hasOpaqueCsgFrameWork,
         f32 meshViewAspectRatio,
@@ -165,13 +170,16 @@ private:
         Core::GpuGraphResourceId sceneShading,
         Core::GpuGraphResourceId lights,
         Core::GpuGraphResourceId meshView,
+        Core::GpuGraphResourceId currentBindlessSlots,
+        Core::GpuGraphResourceId materialContextSlots,
+        const Core::GpuGraphResourceId* shadowTraceGeometryResources,
+        usize shadowTraceGeometryResourceCount,
         Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] bool declareDeferredShadowVisibilityTask(
         DeferredFrameTargets& deferredTargets,
-        bool shadowVisibilityPrepared,
         bool hardwareShadowSupported,
         Core::GpuGraphResourceId worldPosition,
         Core::GpuGraphResourceId normal,
@@ -181,13 +189,14 @@ private:
         Core::GpuGraphResourceId sceneShading,
         Core::GpuGraphResourceId lights,
         Core::GpuGraphResourceId materialContextSlots,
+        const Core::GpuGraphResourceId* softwareTraceGeometryResources,
+        usize softwareTraceGeometryResourceCount,
         Core::GpuTaskId prefixTask,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] bool declareDeferredSoftwareCausticsTask(
         const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
         DeferredFrameTargets& deferredTargets,
-        bool shadowVisibilityPrepared,
         Core::GpuGraphResourceId worldPosition,
         Core::GpuGraphResourceId depth,
         Core::GpuGraphResourceId causticIrradiance,
@@ -195,6 +204,8 @@ private:
         Core::GpuGraphResourceId sceneShading,
         Core::GpuGraphResourceId lights,
         Core::GpuGraphResourceId materialContextSlots,
+        const Core::GpuGraphResourceId* softwareTraceGeometryResources,
+        usize softwareTraceGeometryResourceCount,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] bool declareDeferredSurfelGiTask(
@@ -206,6 +217,8 @@ private:
         Core::GpuGraphResourceId sceneShading,
         Core::GpuGraphResourceId lights,
         Core::GpuGraphResourceId materialContextSlots,
+        const Core::GpuGraphResourceId* traceGeometryResources,
+        usize traceGeometryResourceCount,
         Core::GpuTaskId effectsTask,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
@@ -215,7 +228,6 @@ private:
         const CsgFrameState& csgFrameState,
         bool clearAvboitTargets,
         bool hasTransparentRenderers,
-        bool shadowVisibilityPrepared,
         bool hasOpaqueCsgFrameWork,
         f32 meshViewAspectRatio,
         Core::Framebuffer* presentationFramebuffer,
@@ -223,6 +235,7 @@ private:
         bool surfelGiExpectedCompute,
         Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
+        Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
         Core::GpuTimingSubmissionTicket& graphicsPrefixTimingTicket,
         Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
         Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
@@ -266,18 +279,8 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;
-    // Shadow preparation is a graph-owned Graphics packet. Its native final snapshot is the ordered serial base
-    // for the following graphics-prefix packet.
-    Core::GpuTaskGraph m_shadowPrepareTaskGraph;
-    Core::GpuTaskGraphAnalysis m_shadowPrepareTaskGraphAnalysis;
-    Core::GpuTaskGraphQueueAssignments m_shadowPrepareTaskGraphQueueAssignments;
-    Core::GpuCompiledGraph m_shadowPrepareCompiledGraph;
-    Core::GpuRecordedGraph m_shadowPrepareRecordedGraph;
-    Core::GpuGraphSubmissionTransaction m_shadowPrepareSubmissionTransaction;
-    Core::GpuTaskId m_shadowPrepareTask;
-    bool m_shadowPrepareTaskGraphValid = false;
     u16 m_taskGraphDeviceGeneration = 1u;
-    // The native Graphics prefix, Shadow Visibility, Software Caustics, Surfel GI, AVBOIT, Hardware Caustics,
+    // Shadow Preparation, the native Graphics prefix, Shadow Visibility, Software Caustics, Surfel GI, AVBOIT, Hardware Caustics,
     // Deferred Lighting, Composite, Present, optional lagged-history copy, and recovery share one packet graph. The
     // prefix's five command lists remain a temporary recording bridge inside its first Graphics packet.
     Core::GpuTaskGraph m_deferredLightingTaskGraph;
@@ -286,6 +289,7 @@ private:
     Core::GpuCompiledGraph m_deferredLightingCompiledGraph;
     Core::GpuRecordedGraph m_deferredLightingRecordedGraph;
     Core::GpuGraphSubmissionTransaction m_deferredLightingSubmissionTransaction;
+    Core::GpuTaskId m_deferredShadowPrepareTask;
     Core::GpuTaskId m_graphicsPrefixMeshViewSetupTask;
     Core::GpuTaskId m_graphicsPrefixSceneShadingSetupTask;
     Core::GpuTaskId m_graphicsPrefixDeferredClearTask;
@@ -341,6 +345,7 @@ private:
     Core::CommandListResourceStateHandoff m_surfelIrradianceReturnStateHandoff;
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;
+    bool m_preparedShadowVisibilityResourcesValid = false;
     bool m_preparedShadowVisibilityReady = false;
     bool m_frameLaggedAsyncLightingEnabled = false;
     LaggedLightingReport m_laggedLightingReport = LaggedLightingReport::Unreported;

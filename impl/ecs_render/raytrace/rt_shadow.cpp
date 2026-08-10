@@ -29,7 +29,7 @@ struct ShadowVisibilityGraphTask{
         Core::Graphics* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        bool prepared = false;
+        const bool* prepared = nullptr;
         bool hardwareShadowSupported = false;
     };
 
@@ -62,7 +62,7 @@ struct ShadowVisibilityGraphTask{
         }
 
         bool shadowVisibilityWritten = false;
-        if(payload.prepared && payload.hardwareShadowSupported){
+        if(payload.prepared && *payload.prepared && payload.hardwareShadowSupported){
             shadowVisibilityWritten = payload.raytracingSystem->renderShadowVisibility(commandList, *payload.targets);
             if(!shadowVisibilityWritten)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
@@ -74,7 +74,7 @@ struct ShadowVisibilityGraphTask{
                     NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow pass failed"));
             }
         }
-        else if(payload.prepared){
+        else if(payload.prepared && *payload.prepared){
             shadowVisibilityWritten = payload.raytracingSystem->renderGpuBvhShadowVisibility(
                 commandList,
                 *payload.targets
@@ -163,7 +163,14 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
 }
 
 bool RendererRayTracingSystem::uploadRayTraceMaterialContextSlots(Core::CommandList& commandList){
-    if(!ensureRayTraceMaterialContextSlotsBuffer())
+    // The shared graph has already imported this constant buffer and its UniformBuffer descriptor by the time its
+    // preparation packet records.  Do not recreate either one here: a recording-time replacement would invalidate
+    // the graph's frozen resource identity and slot indirection.
+    if(
+        !rayTracingState().m_rayTraceMaterialContextSlotsBuffer
+        || !rayTracingState().m_shadowMaterialContextSlotsHeapHandle.valid()
+        || rayTracingState().m_shadowMaterialContextSlotsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
+    )
         return false;
 
     RayTraceMaterialContextSlots slots;
@@ -196,13 +203,20 @@ bool RendererRayTracingSystem::uploadRayTraceMaterialContextSlots(Core::CommandL
     commandList.writeBuffer(slotsBuffer, &slots, sizeof(slots));
     commandList.setBufferState(slotsBuffer, Core::ResourceStates::ConstantBuffer);
     commandList.commitBarriers();
+    return true;
+}
+
+bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsHeapHandle(){
+    if(!ensureRayTraceMaterialContextSlotsBuffer())
+        return false;
+
     auto& device = graphics().getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(
         !heap.isInitialized()
         || !__hidden_raytracing_system::EnsureHeapBuffer(
             heap,
-            *slotsBuffer,
+            *rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get(),
             Core::GpuDescriptorClass::UniformBuffer,
             false,
             rayTracingState().m_shadowMaterialContextSlotsHeapHandle
@@ -566,7 +580,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
-    const bool prepared,
+    const bool* const prepared,
     const bool hardwareShadowSupported,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){

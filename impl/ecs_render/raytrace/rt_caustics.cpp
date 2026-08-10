@@ -35,7 +35,7 @@ struct SoftwareCausticsGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        bool shadowVisibilityPrepared = false;
+        const bool* shadowVisibilityPrepared = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -50,7 +50,7 @@ struct SoftwareCausticsGraphTask{
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
         // Retain black caustics whenever no software producer dispatches.
         payload.raytracingSystem->clearCausticTargets(commandList, *payload.targets);
-        if(payload.shadowVisibilityPrepared){
+        if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
             const bool causticsDispatched = payload.raytracingSystem->renderGpuBvhCaustics(
                 commandList,
                 *payload.targets
@@ -68,7 +68,7 @@ struct HardwareCausticsGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        bool shadowVisibilityPrepared = false;
+        const bool* shadowVisibilityPrepared = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -83,7 +83,7 @@ struct HardwareCausticsGraphTask{
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
         // Retain black caustics whenever no hardware producer dispatches.
         payload.raytracingSystem->clearCausticTargets(commandList, *payload.targets);
-        if(payload.shadowVisibilityPrepared){
+        if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
             const bool causticsDispatched = payload.raytracingSystem->renderHwCaustics(
                 commandList,
                 *payload.targets
@@ -112,7 +112,21 @@ struct CausticResolvePassResources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
+bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena){
+    return prepareCausticEmissionTargetsImpl(nullptr, scratchArena);
+}
+
+bool RendererRayTracingSystem::recordCausticEmissionTargets(
+    Core::CommandList& commandList,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    return prepareCausticEmissionTargetsImpl(&commandList, scratchArena);
+}
+
+bool RendererRayTracingSystem::prepareCausticEmissionTargetsImpl(
+    Core::CommandList* const commandList,
+    Core::Alloc::ScratchArena& scratchArena
+){
     // Photon emission targets are world bounds of refractive instances.
     rayTracingState().m_causticRefractiveInstanceCount = 0u;
 
@@ -193,15 +207,31 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargets(Core::CommandList& 
         return true;
     }
 
-    if(!ensureCausticEmissionTargetBuffer(targetCount))
-        return false;
+    if(!commandList){
+        if(!ensureCausticEmissionTargetBuffer(targetCount))
+            return false;
+    }
+    else if(
+        !rayTracingState().m_causticEmissionTargetBuffer
+        || rayTracingState().m_causticEmissionTargetCapacity < targetCount
+        || !rayTracingState().m_causticEmissionTargetHeapHandle.valid()
+    ){
+        // Capacity and descriptor registration are selected during preflight. A recording-time retry would replace
+        // an imported graph resource, so retain the safe no-caustic fallback instead.
+        rayTracingState().m_causticTargetBoundsMin = Float4(0.f, 0.f, 0.f, 0.f);
+        rayTracingState().m_causticTargetBoundsMax = Float4(0.f, 0.f, 0.f, 0.f);
+        rayTracingState().m_causticRefractiveInstanceCount = 0u;
+        return true;
+    }
 
-    Core::Buffer* targetBuffer = rayTracingState().m_causticEmissionTargetBuffer.get();
-    commandList.setBufferState(targetBuffer, Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(targetBuffer, targets.data(), targets.size() * sizeof(NwbCausticEmissionTargetGpu));
-    commandList.setBufferState(targetBuffer, Core::ResourceStates::ShaderResource);
-    commandList.commitBarriers();
+    if(commandList){
+        Core::Buffer* targetBuffer = rayTracingState().m_causticEmissionTargetBuffer.get();
+        commandList->setBufferState(targetBuffer, Core::ResourceStates::CopyDest);
+        commandList->commitBarriers();
+        commandList->writeBuffer(targetBuffer, targets.data(), targets.size() * sizeof(NwbCausticEmissionTargetGpu));
+        commandList->setBufferState(targetBuffer, Core::ResourceStates::ShaderResource);
+        commandList->commitBarriers();
+    }
 
     StoreFloat(combinedMin, &rayTracingState().m_causticTargetBoundsMin);
     StoreFloat(combinedMax, &rayTracingState().m_causticTargetBoundsMax);
@@ -627,7 +657,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSoftwareCausticsTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
-    const bool shadowVisibilityPrepared,
+    const bool* const shadowVisibilityPrepared,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     return graph.addTask<__hidden_caustics::SoftwareCausticsGraphTask>(
@@ -645,7 +675,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareHardwareCausticsTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
-    const bool shadowVisibilityPrepared,
+    const bool* const shadowVisibilityPrepared,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     return graph.addTask<__hidden_caustics::HardwareCausticsGraphTask>(

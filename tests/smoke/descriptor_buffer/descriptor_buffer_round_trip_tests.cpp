@@ -419,8 +419,8 @@ struct NativeShadowPrepareTask{
         static_cast<void>(context);
         if(!payload.bindlessSlots)
             return false;
-        commandList.setBufferState(payload.bindlessSlots, ResourceStates::CopyDest);
-        commandList.commitBarriers();
+        // The synthetic chain models an already-uploaded selector. Record its known final state so a later packet
+        // can import the native snapshot even though the compiler correctly plans no initial Common transition.
         commandList.setBufferState(payload.bindlessSlots, ResourceStates::ConstantBuffer);
         commandList.commitBarriers();
         const bool ready = commandList.getBufferState(payload.bindlessSlots) == ResourceStates::ConstantBuffer;
@@ -4319,11 +4319,10 @@ TEST_F(DescriptorBufferRoundTripTest, NormalizedStatePreludeFansInIndependentBra
 }
 
 
-// Models RendererSystem's graph-owned preparation and ordered graphics prefix: setup, deferred clear, opaque
-// production, and normalization establish the state consumed by later independently recorded producers, compute
-// lighting, composite, and present.
+// One compiled graph owns Shadow Prepare, the Graphics Prefix, every effect, and Present. Slots begin in the
+// already-uploaded ConstantBuffer state; graph-owned packet seeds carry that state through the prefix and effects
+// without any renderer-owned serial state snapshot.
 TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroughComputePresent){
-    auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto makeGbufferTarget = [&device](){
         return device.createTexture(
@@ -4335,26 +4334,6 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
                 .setInitialState(ResourceStates::Common)
         );
     };
-    const auto makeDepthTarget = [&device](){
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(4u)
-                .setHeight(4u)
-                .setFormat(Format::D32)
-                .setInRenderTarget(true)
-                .setInitialState(ResourceStates::Common)
-        );
-    };
-    const auto makePacketOutput = [&device](){
-        return device.createTexture(
-            TextureDesc()
-                .setWidth(4u)
-                .setHeight(4u)
-                .setFormat(Format::RGBA8_UNORM)
-                .setInUAV(true)
-                .setInitialState(ResourceStates::Common)
-        );
-    };
     const auto makeStorageTarget = [&device](){
         return device.createTexture(
             TextureDesc()
@@ -4363,7 +4342,6 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
                 .setFormat(Format::RGBA8_UNORM)
                 .setInUAV(true)
                 .setInitialState(ResourceStates::Common)
-                .setKeepInitialState(true)
         );
     };
     const auto makeSetupBuffer = [&device](){
@@ -4375,131 +4353,444 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
         );
     };
 
-    auto meshViewBuffer = makeSetupBuffer();
-    auto sceneShadingBuffer = makeSetupBuffer();
-    auto lightBuffer = makeSetupBuffer();
+    auto prefixBuffer = makeSetupBuffer();
     auto slotsBuffer = makeSetupBuffer();
-    auto albedo = makeGbufferTarget();
-    auto worldPosition = makeGbufferTarget();
-    auto normal = makeGbufferTarget();
-    auto depth = makeDepthTarget();
-    auto shadowVisibility = makePacketOutput();
-    auto causticIrradiance = makePacketOutput();
-    auto surfelIrradiance = makePacketOutput();
+    auto gbuffer = makeGbufferTarget();
+    auto shadowVisibility = makeStorageTarget();
+    auto causticIrradiance = makeStorageTarget();
+    auto surfelIrradiance = makeStorageTarget();
     auto opaqueColor = makeStorageTarget();
     auto compositeColor = makeStorageTarget();
-    auto avboitAccumColor = makeGbufferTarget();
-    auto avboitAccumExtinction = makeGbufferTarget();
-    ASSERT_NE(meshViewBuffer.get(), nullptr);
-    ASSERT_NE(sceneShadingBuffer.get(), nullptr);
-    ASSERT_NE(lightBuffer.get(), nullptr);
+    ASSERT_NE(prefixBuffer.get(), nullptr);
     ASSERT_NE(slotsBuffer.get(), nullptr);
-    ASSERT_NE(albedo.get(), nullptr);
-    ASSERT_NE(worldPosition.get(), nullptr);
-    ASSERT_NE(normal.get(), nullptr);
-    ASSERT_NE(depth.get(), nullptr);
+    ASSERT_NE(gbuffer.get(), nullptr);
     ASSERT_NE(shadowVisibility.get(), nullptr);
     ASSERT_NE(causticIrradiance.get(), nullptr);
     ASSERT_NE(surfelIrradiance.get(), nullptr);
     ASSERT_NE(opaqueColor.get(), nullptr);
     ASSERT_NE(compositeColor.get(), nullptr);
-    ASSERT_NE(avboitAccumColor.get(), nullptr);
-    ASSERT_NE(avboitAccumExtinction.get(), nullptr);
 
-    CommandListResourceStateHandoff meshViewSetupState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff sceneShadingSetupState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff deferredClearState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff gbufferState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff normalizedState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff shadowState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff causticsState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff surfelGiState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff avboitState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff deferredLightingBaseState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff shadowLightingState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff causticLightingState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff surfelLightingState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff avboitLightingState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff deferredLightingInputState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff deferredLightingState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff opaqueColorCompositeState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff avboitCompositeState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff deferredCompositeBaseState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff deferredCompositeInputState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff deferredCompositeState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff compositeColorPresentState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff deferredPresentBaseState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff deferredPresentInputState(DescriptorBufferRoundTripTest::arena());
-    CommandListResourceStateHandoff deferredPresentState(DescriptorBufferRoundTripTest::arena());
-    auto meshViewSetup = device.createCommandList();
-    auto sceneShadingSetup = device.createCommandList();
-    auto deferredClear = device.createCommandList();
-    auto gbuffer = device.createCommandList();
-    auto prelude = device.createCommandList();
-    auto shadow = device.createCommandList();
-    auto caustics = device.createCommandList();
-    auto surfelGi = device.createCommandList();
-    auto lighting = device.createCommandList();
-    auto avboit = device.createCommandList();
-    auto composite = device.createCommandList();
-    auto present = device.createCommandList();
-    ASSERT_NE(meshViewSetup.get(), nullptr);
-    ASSERT_NE(sceneShadingSetup.get(), nullptr);
-    ASSERT_NE(deferredClear.get(), nullptr);
-    ASSERT_NE(gbuffer.get(), nullptr);
-    ASSERT_NE(prelude.get(), nullptr);
-    ASSERT_NE(shadow.get(), nullptr);
-    ASSERT_NE(caustics.get(), nullptr);
-    ASSERT_NE(surfelGi.get(), nullptr);
-    ASSERT_NE(lighting.get(), nullptr);
-    ASSERT_NE(avboit.get(), nullptr);
-    ASSERT_NE(composite.get(), nullptr);
-    ASSERT_NE(present.get(), nullptr);
-
-    GpuTaskGraph shadowPrepareGraph(DescriptorBufferRoundTripTest::arena());
-    const GpuGraphResourceId shadowPrepareSlots = shadowPrepareGraph.importBuffer(
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importBuffer = [&graph](const auto& buffer, const Name& identity, const AStringView label){
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Buffer)
+        );
+    };
+    const auto importTexture = [&graph](const auto& texture, const Name& identity, const AStringView label){
+        return graph.importTexture(
+            texture,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Texture)
+        );
+    };
+    const GpuGraphResourceId prefixBufferResource = importBuffer(
+        prefixBuffer,
+        Name("tests/descriptor_buffer/shadow_chain_prefix_buffer"),
+        "Graphics Prefix Buffer"
+    );
+    const GpuGraphResourceId slotsResource = graph.importBuffer(
         slotsBuffer,
         GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/descriptor_buffer/shadow_prepare_slots"))
-            .setMarkerLabel("Shadow Prepare Slots")
+            .setIdentity(Name("tests/descriptor_buffer/shadow_chain_bindless_slots"))
+            .setMarkerLabel("Bindless Slots")
             .setType(GpuGraphResourceType::Buffer)
+            // This is the current uploaded layout, not the allocation-time Common state.
+            .setInitialState(ResourceStates::ConstantBuffer)
     );
-    ASSERT_TRUE(shadowPrepareSlots.valid());
+    const GpuGraphResourceId gbufferResource = importTexture(
+        gbuffer,
+        Name("tests/descriptor_buffer/shadow_chain_gbuffer"),
+        "G-Buffer"
+    );
+    const GpuGraphResourceId shadowVisibilityResource = importTexture(
+        shadowVisibility,
+        Name("tests/descriptor_buffer/shadow_chain_shadow_visibility"),
+        "Shadow Visibility"
+    );
+    const GpuGraphResourceId causticIrradianceResource = importTexture(
+        causticIrradiance,
+        Name("tests/descriptor_buffer/shadow_chain_caustic_irradiance"),
+        "Caustic Irradiance"
+    );
+    const GpuGraphResourceId surfelIrradianceResource = importTexture(
+        surfelIrradiance,
+        Name("tests/descriptor_buffer/shadow_chain_surfel_irradiance"),
+        "Surfel Irradiance"
+    );
+    const GpuGraphResourceId opaqueColorResource = importTexture(
+        opaqueColor,
+        Name("tests/descriptor_buffer/shadow_chain_opaque_color"),
+        "Opaque Color"
+    );
+    const GpuGraphResourceId compositeColorResource = importTexture(
+        compositeColor,
+        Name("tests/descriptor_buffer/shadow_chain_composite_color"),
+        "Composite Color"
+    );
+    ASSERT_TRUE(prefixBufferResource.valid());
+    ASSERT_TRUE(slotsResource.valid());
+    ASSERT_TRUE(gbufferResource.valid());
+    ASSERT_TRUE(shadowVisibilityResource.valid());
+    ASSERT_TRUE(causticIrradianceResource.valid());
+    ASSERT_TRUE(surfelIrradianceResource.valid());
+    ASSERT_TRUE(opaqueColorResource.valid());
+    ASSERT_TRUE(compositeColorResource.valid());
+
+    const GpuQueueRequest graphicsQueueRequest{
+        GpuQueueCapability::Graphics,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const GpuQueueRequest computeQueueRequest{
+        GpuQueueCapability::Compute,
+        GpuQueuePreference::Compute,
+        true,
+        true,
+    };
+    GpuTaskSchedulingHint packetScheduling;
+    packetScheduling.cost = GpuTaskCostHint::Large;
+    packetScheduling.forceSubmissionBoundary = true;
+    packetScheduling.allowPacketMerge = false;
+
+    const auto addProbeTask = [
+        &graph,
+        &packetScheduling
+    ](
+        const Name& identity,
+        const AStringView label,
+        const GpuQueueRequest& queue,
+        const GpuTaskId* const dependencies,
+        const usize dependencyCount,
+        const GpuTaskResourceUse* const resourceUses,
+        const usize resourceUseCount,
+        Buffer* const buffer,
+        const ResourceStates::Mask expectedBufferState,
+        Texture* const texture,
+        const ResourceStates::Mask expectedTextureState,
+        bool* const recorded
+    ){
+        GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(queue)
+            .setScheduling(packetScheduling)
+            .setDependencies(dependencies, dependencyCount)
+            .setResourceUses(resourceUses, resourceUseCount)
+        ;
+        return graph.addTask<NativePacketPrefixTask>(
+            desc,
+            NativePacketPrefixTask::Payload{
+                .buffer = buffer,
+                .expectedState = expectedBufferState,
+                .texture = texture,
+                .expectedTextureState = expectedTextureState,
+                .recorded = recorded,
+            }
+        );
+    };
+
     const GpuTaskResourceUse shadowPrepareUses[] = {
         GpuTaskResourceUse{
-            .resource = shadowPrepareSlots,
+            .resource = slotsResource,
             .range = {},
             .requiredState = ResourceStates::ConstantBuffer,
             .access = GpuTaskResourceAccess::ReadWrite,
         },
     };
-    GpuTaskSchedulingHint shadowPrepareScheduling;
-    shadowPrepareScheduling.cost = GpuTaskCostHint::Large;
-    shadowPrepareScheduling.forceSubmissionBoundary = true;
-    shadowPrepareScheduling.allowPacketMerge = false;
     GpuTaskDesc shadowPrepareDesc;
     shadowPrepareDesc
-        .setIdentity(Name("tests/descriptor_buffer/shadow_prepare"))
-        .setMarkerLabel("Shadow Preparation")
-        .setQueue(GpuQueueRequest{
-            GpuQueueCapability::Graphics,
-            GpuQueuePreference::Graphics,
-            false,
-            false,
-        })
-        .setScheduling(shadowPrepareScheduling)
+        .setIdentity(Name("tests/descriptor_buffer/shadow_chain_prepare"))
+        .setMarkerLabel("Shadow Prepare")
+        .setQueue(graphicsQueueRequest)
+        .setScheduling(packetScheduling)
         .setResourceUses(shadowPrepareUses, LengthOf(shadowPrepareUses))
     ;
-    bool nativeShadowPrepareRecorded = false;
-    const GpuTaskId shadowPrepareTask = shadowPrepareGraph.addTask<NativeShadowPrepareTask>(
+    bool shadowPrepareRecorded = false;
+    const GpuTaskId shadowPrepareTask = graph.addTask<NativeShadowPrepareTask>(
         shadowPrepareDesc,
         NativeShadowPrepareTask::Payload{
             .bindlessSlots = slotsBuffer.get(),
-            .recorded = &nativeShadowPrepareRecorded,
+            .recorded = &shadowPrepareRecorded,
         }
     );
     ASSERT_TRUE(shadowPrepareTask.valid());
-    const GpuPhysicalQueueInfo shadowPrepareQueue{
+
+    // Prefix receives the exact final slot snapshot from Shadow Prepare through its declared read, not through an
+    // opaque serial seed. Subsequent effects continue the same compiler-owned chain.
+    const GpuTaskResourceUse graphicsPrefixUses[] = {
+        GpuTaskResourceUse{
+            .resource = slotsResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = prefixBufferResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = gbufferResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    bool graphicsPrefixRecorded = false;
+    const GpuTaskId graphicsPrefixTask = addProbeTask(
+        Name("tests/descriptor_buffer/shadow_chain_graphics_prefix"),
+        "Graphics Prefix",
+        graphicsQueueRequest,
+        &shadowPrepareTask,
+        1u,
+        graphicsPrefixUses,
+        LengthOf(graphicsPrefixUses),
+        slotsBuffer.get(),
+        ResourceStates::ConstantBuffer,
+        gbuffer.get(),
+        ResourceStates::ShaderResource,
+        &graphicsPrefixRecorded
+    );
+    ASSERT_TRUE(graphicsPrefixTask.valid());
+
+    const GpuTaskResourceUse shadowVisibilityUses[] = {
+        GpuTaskResourceUse{
+            .resource = gbufferResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = slotsResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = shadowVisibilityResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    bool shadowVisibilityRecorded = false;
+    const GpuTaskId shadowVisibilityTask = addProbeTask(
+        Name("tests/descriptor_buffer/shadow_chain_shadow_visibility"),
+        "Shadow Visibility",
+        computeQueueRequest,
+        &graphicsPrefixTask,
+        1u,
+        shadowVisibilityUses,
+        LengthOf(shadowVisibilityUses),
+        slotsBuffer.get(),
+        ResourceStates::ConstantBuffer,
+        gbuffer.get(),
+        ResourceStates::ShaderResource,
+        &shadowVisibilityRecorded
+    );
+    ASSERT_TRUE(shadowVisibilityTask.valid());
+
+    const GpuTaskResourceUse causticsUses[] = {
+        GpuTaskResourceUse{
+            .resource = gbufferResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = slotsResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = causticIrradianceResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    bool causticsRecorded = false;
+    const GpuTaskId causticsTask = addProbeTask(
+        Name("tests/descriptor_buffer/shadow_chain_caustics"),
+        "Software Caustics",
+        computeQueueRequest,
+        &shadowVisibilityTask,
+        1u,
+        causticsUses,
+        LengthOf(causticsUses),
+        slotsBuffer.get(),
+        ResourceStates::ConstantBuffer,
+        gbuffer.get(),
+        ResourceStates::ShaderResource,
+        &causticsRecorded
+    );
+    ASSERT_TRUE(causticsTask.valid());
+
+    const GpuTaskResourceUse surfelGiUses[] = {
+        GpuTaskResourceUse{
+            .resource = gbufferResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = slotsResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = surfelIrradianceResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    bool surfelGiRecorded = false;
+    const GpuTaskId surfelGiTask = addProbeTask(
+        Name("tests/descriptor_buffer/shadow_chain_surfel_gi"),
+        "Surfel GI",
+        computeQueueRequest,
+        &causticsTask,
+        1u,
+        surfelGiUses,
+        LengthOf(surfelGiUses),
+        slotsBuffer.get(),
+        ResourceStates::ConstantBuffer,
+        gbuffer.get(),
+        ResourceStates::ShaderResource,
+        &surfelGiRecorded
+    );
+    ASSERT_TRUE(surfelGiTask.valid());
+
+    const GpuTaskResourceUse lightingUses[] = {
+        GpuTaskResourceUse{
+            .resource = shadowVisibilityResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = causticIrradianceResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = surfelIrradianceResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = slotsResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = opaqueColorResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    bool lightingRecorded = false;
+    const GpuTaskId lightingTask = addProbeTask(
+        Name("tests/descriptor_buffer/shadow_chain_lighting"),
+        "Deferred Lighting",
+        computeQueueRequest,
+        &surfelGiTask,
+        1u,
+        lightingUses,
+        LengthOf(lightingUses),
+        slotsBuffer.get(),
+        ResourceStates::ConstantBuffer,
+        shadowVisibility.get(),
+        ResourceStates::ShaderResource,
+        &lightingRecorded
+    );
+    ASSERT_TRUE(lightingTask.valid());
+
+    const GpuTaskResourceUse compositeUses[] = {
+        GpuTaskResourceUse{
+            .resource = opaqueColorResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = slotsResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = compositeColorResource,
+            .range = {},
+            .requiredState = ResourceStates::UnorderedAccess,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    bool compositeRecorded = false;
+    const GpuTaskId compositeTask = addProbeTask(
+        Name("tests/descriptor_buffer/shadow_chain_composite"),
+        "Deferred Composite",
+        computeQueueRequest,
+        &lightingTask,
+        1u,
+        compositeUses,
+        LengthOf(compositeUses),
+        slotsBuffer.get(),
+        ResourceStates::ConstantBuffer,
+        opaqueColor.get(),
+        ResourceStates::ShaderResource,
+        &compositeRecorded
+    );
+    ASSERT_TRUE(compositeTask.valid());
+
+    const GpuTaskResourceUse presentUses[] = {
+        GpuTaskResourceUse{
+            .resource = compositeColorResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = slotsResource,
+            .range = {},
+            .requiredState = ResourceStates::ConstantBuffer,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    bool presentRecorded = false;
+    const GpuTaskId presentTask = addProbeTask(
+        Name("tests/descriptor_buffer/shadow_chain_present"),
+        "Deferred Present",
+        graphicsQueueRequest,
+        &compositeTask,
+        1u,
+        presentUses,
+        LengthOf(presentUses),
+        slotsBuffer.get(),
+        ResourceStates::ConstantBuffer,
+        compositeColor.get(),
+        ResourceStates::ShaderResource,
+        &presentRecorded
+    );
+    ASSERT_TRUE(presentTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
         .id = GpuPhysicalQueueId{ 0u, 1u },
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
@@ -4507,336 +4798,207 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
             | static_cast<u8>(GpuQueueCapability::Compute)
             | static_cast<u8>(GpuQueueCapability::Transfer)
         ),
-        .familyIndex = 0u,
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
         .queueIndex = 0u,
         .dedicated = false,
     };
-    const GpuTaskGraphQueueTopology shadowPrepareTopology{
-        .queues = &shadowPrepareQueue,
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
         .queueCount = 1u,
     };
-    GpuTaskGraphAnalysis shadowPrepareAnalysis(DescriptorBufferRoundTripTest::arena());
-    GpuTaskGraphQueueAssignments shadowPrepareAssignments(DescriptorBufferRoundTripTest::arena());
-    GpuCompiledGraph shadowPrepareCompiledGraph(DescriptorBufferRoundTripTest::arena());
-    Alloc::ScratchArena shadowPrepareScratch(Name("tests/descriptor_buffer/shadow_prepare_scratch"));
-    const GpuTaskGraphCompiler shadowPrepareCompiler;
-    ASSERT_TRUE(shadowPrepareCompiler.compile(
-        shadowPrepareGraph,
-        shadowPrepareAnalysis,
-        shadowPrepareTopology,
-        shadowPrepareAssignments,
-        shadowPrepareCompiledGraph,
-        shadowPrepareScratch
-    ));
-    const GpuSubmissionPacketId shadowPreparePacket = shadowPrepareCompiledGraph.packetForTask(shadowPrepareTask);
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/shadow_chain_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+
+    ASSERT_TRUE(analysis.hasExplicitEdge(shadowPrepareTask, graphicsPrefixTask));
+    ASSERT_EQ(compiledGraph.packetCount(), 8u);
+    const GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepareTask);
+    const GpuSubmissionPacketId graphicsPrefixPacket = compiledGraph.packetForTask(graphicsPrefixTask);
+    const GpuSubmissionPacketId shadowVisibilityPacket = compiledGraph.packetForTask(shadowVisibilityTask);
+    const GpuSubmissionPacketId causticsPacket = compiledGraph.packetForTask(causticsTask);
+    const GpuSubmissionPacketId surfelGiPacket = compiledGraph.packetForTask(surfelGiTask);
+    const GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lightingTask);
+    const GpuSubmissionPacketId compositePacket = compiledGraph.packetForTask(compositeTask);
+    const GpuSubmissionPacketId presentPacket = compiledGraph.packetForTask(presentTask);
     ASSERT_TRUE(shadowPreparePacket.valid());
-    GpuRecordedGraph shadowPrepareRecordedGraph(DescriptorBufferRoundTripTest::arena());
-    GpuGraphSubmissionTransaction shadowPrepareTransaction(DescriptorBufferRoundTripTest::arena());
-    shadowPrepareTransaction.reset(shadowPrepareCompiledGraph);
-    const GpuNativePacketRecorder shadowPrepareRecorder(device);
-    ASSERT_TRUE(shadowPrepareRecorder.recordPacket(
-        shadowPrepareGraph,
-        shadowPrepareCompiledGraph,
-        GpuNativePacketRecordDesc{ .packet = shadowPreparePacket },
-        shadowPrepareRecordedGraph
-    ));
-    ASSERT_TRUE(nativeShadowPrepareRecorded);
-    const CommandListResourceStateHandoff* const shadowPrepareStateSeed =
-        shadowPrepareRecordedGraph.packetFinalStateSeed(shadowPreparePacket)
-    ;
-    ASSERT_NE(shadowPrepareStateSeed, nullptr);
-    const GpuTaskGraphSubmitter shadowPrepareSubmitter(device);
-    ASSERT_TRUE(shadowPrepareSubmitter.submitPacket(
-        shadowPrepareGraph,
-        shadowPrepareCompiledGraph,
-        shadowPrepareRecordedGraph,
-        shadowPreparePacket,
-        nullptr,
-        0u,
-        shadowPrepareTransaction,
-        shadowPrepareScratch
-    ));
-    ASSERT_TRUE(shadowPrepareTransaction.packetToken(shadowPreparePacket).valid());
+    ASSERT_TRUE(graphicsPrefixPacket.valid());
+    ASSERT_TRUE(shadowVisibilityPacket.valid());
+    ASSERT_TRUE(causticsPacket.valid());
+    ASSERT_TRUE(surfelGiPacket.valid());
+    ASSERT_TRUE(lightingPacket.valid());
+    ASSERT_TRUE(compositePacket.valid());
+    ASSERT_TRUE(presentPacket.valid());
+    EXPECT_EQ(compiledGraph.packetIdAt(0u), shadowPreparePacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(1u), graphicsPrefixPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(2u), shadowVisibilityPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(3u), causticsPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(4u), surfelGiPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(5u), lightingPacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(6u), compositePacket);
+    EXPECT_EQ(compiledGraph.packetIdAt(7u), presentPacket);
 
-    meshViewSetup->open(shadowPrepareStateSeed);
-    meshViewSetup->setBufferState(meshViewBuffer.get(), ResourceStates::CopyDest);
-    meshViewSetup->setBufferState(meshViewBuffer.get(), ResourceStates::ConstantBuffer);
-    meshViewSetup->close(&meshViewSetupState);
-    ASSERT_TRUE(meshViewSetupState.valid());
-    ASSERT_TRUE(meshViewSetup->hasCommandBuffer());
-
-    sceneShadingSetup->open(&meshViewSetupState);
-    sceneShadingSetup->setBufferState(sceneShadingBuffer.get(), ResourceStates::CopyDest);
-    sceneShadingSetup->setBufferState(sceneShadingBuffer.get(), ResourceStates::ConstantBuffer);
-    sceneShadingSetup->setBufferState(lightBuffer.get(), ResourceStates::CopyDest);
-    sceneShadingSetup->setBufferState(lightBuffer.get(), ResourceStates::ShaderResource);
-    sceneShadingSetup->close(&sceneShadingSetupState);
-    ASSERT_TRUE(sceneShadingSetupState.valid());
-    ASSERT_TRUE(sceneShadingSetup->hasCommandBuffer());
-
-    deferredClear->open(&sceneShadingSetupState);
-    deferredClear->setTextureState(albedo.get(), s_AllSubresources, ResourceStates::CopyDest);
-    deferredClear->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::CopyDest);
-    deferredClear->setTextureState(normal.get(), s_AllSubresources, ResourceStates::CopyDest);
-    deferredClear->setTextureState(depth.get(), s_AllSubresources, ResourceStates::CopyDest);
-    deferredClear->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::CopyDest);
-    deferredClear->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::CopyDest);
-    deferredClear->close(&deferredClearState);
-    ASSERT_TRUE(deferredClearState.valid());
-    ASSERT_TRUE(deferredClear->hasCommandBuffer());
-
-    gbuffer->open(&deferredClearState);
-    EXPECT_EQ(gbuffer->getBufferState(meshViewBuffer.get()), ResourceStates::ConstantBuffer);
-    EXPECT_EQ(gbuffer->getBufferState(sceneShadingBuffer.get()), ResourceStates::ConstantBuffer);
-    EXPECT_EQ(gbuffer->getBufferState(lightBuffer.get()), ResourceStates::ShaderResource);
-    EXPECT_EQ(gbuffer->getBufferState(slotsBuffer.get()), ResourceStates::ConstantBuffer);
-    EXPECT_EQ(gbuffer->getTextureSubresourceState(albedo.get(), 0u, 0u), ResourceStates::CopyDest);
-    EXPECT_EQ(gbuffer->getTextureSubresourceState(worldPosition.get(), 0u, 0u), ResourceStates::CopyDest);
-    EXPECT_EQ(gbuffer->getTextureSubresourceState(normal.get(), 0u, 0u), ResourceStates::CopyDest);
-    EXPECT_EQ(gbuffer->getTextureSubresourceState(depth.get(), 0u, 0u), ResourceStates::CopyDest);
-    EXPECT_EQ(gbuffer->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);
-    EXPECT_EQ(gbuffer->getTextureSubresourceState(surfelIrradiance.get(), 0u, 0u), ResourceStates::CopyDest);
-    gbuffer->setTextureState(albedo.get(), s_AllSubresources, ResourceStates::RenderTarget);
-    gbuffer->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::RenderTarget);
-    gbuffer->setTextureState(normal.get(), s_AllSubresources, ResourceStates::RenderTarget);
-    gbuffer->setTextureState(depth.get(), s_AllSubresources, ResourceStates::DepthWrite);
-    gbuffer->close(&gbufferState);
-    ASSERT_TRUE(gbufferState.valid());
-
-    prelude->open(&gbufferState);
-    prelude->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
-    prelude->setTextureState(normal.get(), s_AllSubresources, ResourceStates::ShaderResource);
-    prelude->setTextureState(depth.get(), s_AllSubresources, ResourceStates::ShaderResource);
-    prelude->close(&normalizedState);
-    ASSERT_TRUE(normalizedState.valid());
-
-    Latch recordingStarted(2);
-    bool shadowRecorded = false;
-    bool causticsRecorded = false;
-    bool surfelGiRecorded = false;
-    bool avboitRecorded = false;
-    const Graphics::JobHandle shadowJob = graphics.scheduleGraphicsJob([&](){
-        recordingStarted.count_down();
-        recordingStarted.wait();
-        shadow->open(&normalizedState);
-        shadow->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        shadow->setTextureState(normal.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        shadow->setTextureState(depth.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        shadow->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
-        shadow->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        shadow->close(&shadowState);
-        shadowRecorded = shadowState.valid() && shadow->hasCommandBuffer();
-    });
-    const Graphics::JobHandle causticsJob = graphics.scheduleGraphicsJob([&](){
-        recordingStarted.count_down();
-        recordingStarted.wait();
-        caustics->open(&normalizedState);
-        caustics->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        caustics->setTextureState(depth.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        caustics->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
-        caustics->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        caustics->close(&causticsState);
-        causticsRecorded = causticsState.valid() && caustics->hasCommandBuffer();
-    });
-    const Graphics::JobHandle surfelGiJob = graphics.scheduleGraphicsJob([&](){
-        surfelGi->open(&normalizedState);
-        surfelGi->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        surfelGi->setTextureState(normal.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        surfelGi->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
-        surfelGi->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        surfelGi->close(&surfelGiState);
-        surfelGiRecorded = surfelGiState.valid() && surfelGi->hasCommandBuffer();
-    });
-    const Graphics::JobHandle avboitJob = graphics.scheduleGraphicsJob([&](){
-        avboit->open(&normalizedState);
-        // Transparent CSG temporarily binds the opaque G-buffer, then AVBOIT's accumulation path leaves depth in
-        // a depth-read layout. Restore the shared inputs before deferred lighting consumes the four-way fan-in.
-        avboit->setTextureState(normal.get(), s_AllSubresources, ResourceStates::RenderTarget);
-        avboit->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::RenderTarget);
-        avboit->setTextureState(depth.get(), s_AllSubresources, ResourceStates::DepthRead);
-        avboit->setTextureState(albedo.get(), s_AllSubresources, ResourceStates::RenderTarget);
-        avboit->setTextureState(normal.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        avboit->setTextureState(worldPosition.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        avboit->setTextureState(depth.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        avboit->setTextureState(avboitAccumColor.get(), s_AllSubresources, ResourceStates::RenderTarget);
-        avboit->setTextureState(avboitAccumExtinction.get(), s_AllSubresources, ResourceStates::RenderTarget);
-        avboit->close(&avboitState);
-        avboitRecorded = avboitState.valid() && avboit->hasCommandBuffer();
-    });
-    ASSERT_TRUE(shadowJob.valid());
-    ASSERT_TRUE(causticsJob.valid());
-    ASSERT_TRUE(surfelGiJob.valid());
-    ASSERT_TRUE(avboitJob.valid());
-
-    graphics.waitJob(shadowJob);
-    graphics.waitJob(causticsJob);
-    graphics.waitJob(surfelGiJob);
-    graphics.waitJob(avboitJob);
-    ASSERT_TRUE(shadowRecorded);
-    ASSERT_TRUE(causticsRecorded);
-    ASSERT_TRUE(surfelGiRecorded);
-    ASSERT_TRUE(avboitRecorded);
-
-    Texture* const deferredLightingBaseTextures[] = {
-        albedo.get(),
-        normal.get(),
-        worldPosition.get(),
-        depth.get(),
-        opaqueColor.get(),
-    };
-    Buffer* const deferredLightingBaseBuffers[] = {
-        sceneShadingBuffer.get(),
-        lightBuffer.get(),
-        slotsBuffer.get(),
-    };
-    ASSERT_TRUE(deferredLightingBaseState.buildResourceSubset(
-        normalizedState,
-        deferredLightingBaseTextures,
-        LengthOf(deferredLightingBaseTextures),
-        deferredLightingBaseBuffers,
-        LengthOf(deferredLightingBaseBuffers)
-    ));
-    ASSERT_TRUE(shadowLightingState.buildTextureSubset(shadowState, shadowVisibility.get()));
-    ASSERT_TRUE(causticLightingState.buildTextureSubset(causticsState, causticIrradiance.get()));
-    ASSERT_TRUE(surfelLightingState.buildTextureSubset(surfelGiState, surfelIrradiance.get()));
-    Texture* const avboitLightingTextures[] = {
-        albedo.get(),
-        normal.get(),
-        worldPosition.get(),
-        depth.get(),
-    };
-    ASSERT_TRUE(avboitLightingState.buildResourceSubset(
-        avboitState,
-        avboitLightingTextures,
-        LengthOf(avboitLightingTextures),
-        nullptr,
-        0u
-    ));
-    const CommandListResourceStateHandoff* deferredLightingBranchStates[] = {
-        &shadowLightingState,
-        &causticLightingState,
-        &surfelLightingState,
-        &avboitLightingState,
-    };
-    ASSERT_TRUE(deferredLightingInputState.buildFanIn(
-        deferredLightingBaseState,
-        deferredLightingBranchStates,
-        LengthOf(deferredLightingBranchStates)
-    ));
-
-    bool lightingInputsCorrect = false;
-    bool lightingRecorded = false;
-    const Graphics::JobHandle lightingJob = graphics.scheduleGraphicsJob([&](){
-        lighting->open(&deferredLightingInputState);
-        lightingInputsCorrect =
-            lighting->getBufferState(sceneShadingBuffer.get()) == ResourceStates::ConstantBuffer
-            && lighting->getBufferState(lightBuffer.get()) == ResourceStates::ShaderResource
-            && lighting->getBufferState(slotsBuffer.get()) == ResourceStates::ConstantBuffer
+    const GpuCompiledTask* const compiledShadowPrepare = compiledGraph.findTask(shadowPrepareTask);
+    const GpuCompiledTask* const compiledPrefix = compiledGraph.findTask(graphicsPrefixTask);
+    ASSERT_NE(compiledShadowPrepare, nullptr);
+    ASSERT_NE(compiledPrefix, nullptr);
+    // slotsUploaded makes ConstantBuffer the authoritative imported state. Preparation must not add a stale
+    // Common -> ConstantBuffer graph barrier, but its actual native final snapshot still seeds Prefix.
+    EXPECT_EQ(graph.resourceAt(slotsResource.index).initialState, ResourceStates::ConstantBuffer);
+    EXPECT_EQ(compiledShadowPrepare->prologueBarrierCount, 0u);
+    ASSERT_GT(compiledPrefix->prologueStateSeedCount, 0u);
+    const GpuPacketStateSeed* const graphicsPrefixStateSeeds = compiledGraph.taskPrologueStateSeeds(
+        graphicsPrefixTask
+    );
+    ASSERT_NE(graphicsPrefixStateSeeds, nullptr);
+    bool graphicsPrefixImportsPreparedSlots = false;
+    for(usize index = 0u; index < compiledPrefix->prologueStateSeedCount; ++index){
+        graphicsPrefixImportsPreparedSlots = graphicsPrefixImportsPreparedSlots
+            || (
+                graphicsPrefixStateSeeds[index].resource == slotsResource
+                && graphicsPrefixStateSeeds[index].sourcePacket == shadowPreparePacket
+            )
         ;
-        lighting->setTextureState(shadowVisibility.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        lighting->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        lighting->setTextureState(surfelIrradiance.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        lighting->setTextureState(albedo.get(), s_AllSubresources, ResourceStates::ShaderResource);
-        lighting->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
-        lighting->close(&deferredLightingState);
-        lightingRecorded = deferredLightingState.valid() && lighting->hasCommandBuffer();
-    });
-    ASSERT_TRUE(lightingJob.valid());
+    }
+    EXPECT_TRUE(graphicsPrefixImportsPreparedSlots);
+    ASSERT_EQ(compiledGraph.packet(graphicsPrefixPacket).dependencyCount, 1u);
+    const GpuPacketDependency* const graphicsPrefixDependencies = compiledGraph.packetDependencies(
+        graphicsPrefixPacket
+    );
+    ASSERT_NE(graphicsPrefixDependencies, nullptr);
+    EXPECT_EQ(graphicsPrefixDependencies[0u].producer, shadowPreparePacket);
 
-    graphics.waitJob(lightingJob);
-    ASSERT_TRUE(lightingInputsCorrect);
-    ASSERT_TRUE(lightingRecorded);
+    const GpuCompiledTask* const compiledShadowVisibility = compiledGraph.findTask(shadowVisibilityTask);
+    ASSERT_NE(compiledShadowVisibility, nullptr);
+    ASSERT_GT(compiledShadowVisibility->prologueStateSeedCount, 0u);
+    const GpuPacketStateSeed* const shadowVisibilityStateSeeds = compiledGraph.taskPrologueStateSeeds(
+        shadowVisibilityTask
+    );
+    ASSERT_NE(shadowVisibilityStateSeeds, nullptr);
+    bool shadowVisibilityImportsPrefixSlots = false;
+    for(usize index = 0u; index < compiledShadowVisibility->prologueStateSeedCount; ++index){
+        shadowVisibilityImportsPrefixSlots = shadowVisibilityImportsPrefixSlots
+            || (
+                shadowVisibilityStateSeeds[index].resource == slotsResource
+                && shadowVisibilityStateSeeds[index].sourcePacket == graphicsPrefixPacket
+            )
+        ;
+    }
+    EXPECT_TRUE(shadowVisibilityImportsPrefixSlots);
+    ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 2u);
+    const GpuPacketDependency* const shadowVisibilityDependencies = compiledGraph.packetDependencies(
+        shadowVisibilityPacket
+    );
+    ASSERT_NE(shadowVisibilityDependencies, nullptr);
+    bool shadowVisibilityWaitsForPrepare = false;
+    bool shadowVisibilityWaitsForPrefix = false;
+    for(usize index = 0u; index < compiledGraph.packet(shadowVisibilityPacket).dependencyCount; ++index){
+        shadowVisibilityWaitsForPrepare = shadowVisibilityWaitsForPrepare
+            || shadowVisibilityDependencies[index].producer == shadowPreparePacket
+        ;
+        shadowVisibilityWaitsForPrefix = shadowVisibilityWaitsForPrefix
+            || shadowVisibilityDependencies[index].producer == graphicsPrefixPacket
+        ;
+    }
+    EXPECT_TRUE(shadowVisibilityWaitsForPrepare);
+    EXPECT_TRUE(shadowVisibilityWaitsForPrefix);
 
-    ASSERT_TRUE(opaqueColorCompositeState.buildTextureSubset(deferredLightingState, opaqueColor.get()));
-    Texture* const avboitCompositeTextures[] = {
-        avboitAccumColor.get(),
-        avboitAccumExtinction.get(),
+    const GpuCompiledTask* const compiledPresent = compiledGraph.findTask(presentTask);
+    ASSERT_NE(compiledPresent, nullptr);
+    ASSERT_GT(compiledPresent->prologueStateSeedCount, 0u);
+    const GpuPacketStateSeed* const presentStateSeeds = compiledGraph.taskPrologueStateSeeds(presentTask);
+    ASSERT_NE(presentStateSeeds, nullptr);
+    bool presentImportsCompositeState = false;
+    for(usize index = 0u; index < compiledPresent->prologueStateSeedCount; ++index){
+        presentImportsCompositeState = presentImportsCompositeState
+            || (
+                presentStateSeeds[index].resource == compositeColorResource
+                && presentStateSeeds[index].sourcePacket == compositePacket
+            )
+        ;
+    }
+    EXPECT_TRUE(presentImportsCompositeState);
+    ASSERT_EQ(compiledGraph.packet(presentPacket).dependencyCount, 2u);
+    const GpuPacketDependency* const presentDependencies = compiledGraph.packetDependencies(presentPacket);
+    ASSERT_NE(presentDependencies, nullptr);
+    bool presentWaitsForPrepare = false;
+    bool presentWaitsForComposite = false;
+    for(usize index = 0u; index < compiledGraph.packet(presentPacket).dependencyCount; ++index){
+        presentWaitsForPrepare = presentWaitsForPrepare
+            || presentDependencies[index].producer == shadowPreparePacket
+        ;
+        presentWaitsForComposite = presentWaitsForComposite
+            || presentDependencies[index].producer == compositePacket
+        ;
+    }
+    EXPECT_TRUE(presentWaitsForPrepare);
+    EXPECT_TRUE(presentWaitsForComposite);
+
+    const GpuSubmissionPacketRange packetRange = compiledGraph.allPacketRange();
+    ASSERT_TRUE(packetRange.valid());
+    ASSERT_EQ(packetRange.packetCount, compiledGraph.packetCount());
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecordDesc recordDescs[] = {
+        GpuNativePacketRecordDesc{ .packet = shadowPreparePacket },
+        GpuNativePacketRecordDesc{ .packet = graphicsPrefixPacket },
+        GpuNativePacketRecordDesc{ .packet = shadowVisibilityPacket },
+        GpuNativePacketRecordDesc{ .packet = causticsPacket },
+        GpuNativePacketRecordDesc{ .packet = surfelGiPacket },
+        GpuNativePacketRecordDesc{ .packet = lightingPacket },
+        GpuNativePacketRecordDesc{ .packet = compositePacket },
+        GpuNativePacketRecordDesc{ .packet = presentPacket },
     };
-    ASSERT_TRUE(avboitCompositeState.buildResourceSubset(
-        avboitState,
-        avboitCompositeTextures,
-        LengthOf(avboitCompositeTextures),
-        nullptr,
-        0u
+    EXPECT_EQ(recordDescs[1u].serialStateSeed, nullptr);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        packetRange,
+        recordDescs,
+        LengthOf(recordDescs),
+        recordedGraph
     ));
-    Buffer* const deferredCompositeBaseBuffers[] = {
-        slotsBuffer.get(),
-    };
-    ASSERT_TRUE(deferredCompositeBaseState.buildResourceSubset(
-        deferredLightingBaseState,
+    EXPECT_TRUE(shadowPrepareRecorded);
+    EXPECT_TRUE(graphicsPrefixRecorded);
+    EXPECT_TRUE(shadowVisibilityRecorded);
+    EXPECT_TRUE(causticsRecorded);
+    EXPECT_TRUE(surfelGiRecorded);
+    EXPECT_TRUE(lightingRecorded);
+    EXPECT_TRUE(compositeRecorded);
+    EXPECT_TRUE(presentRecorded);
+
+    const CommandListResourceStateHandoff* const presentFinalState = recordedGraph.packetFinalStateSeed(presentPacket);
+    ASSERT_NE(presentFinalState, nullptr);
+    auto stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(presentFinalState);
+    EXPECT_EQ(stateProbe->getBufferState(slotsBuffer.get()), ResourceStates::ConstantBuffer);
+    EXPECT_EQ(
+        stateProbe->getTextureSubresourceState(compositeColor.get(), 0u, 0u),
+        ResourceStates::ShaderResource
+    );
+    stateProbe->close();
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        packetRange,
         nullptr,
         0u,
-        deferredCompositeBaseBuffers,
-        LengthOf(deferredCompositeBaseBuffers)
-    ));
-    const CommandListResourceStateHandoff* deferredCompositeBranchStates[] = {
-        &opaqueColorCompositeState,
-        &avboitCompositeState,
-    };
-    ASSERT_TRUE(deferredCompositeInputState.buildFanIn(
-        deferredCompositeBaseState,
-        deferredCompositeBranchStates,
-        LengthOf(deferredCompositeBranchStates)
-    ));
-
-    composite->open(&deferredCompositeInputState);
-    EXPECT_EQ(composite->getBufferState(slotsBuffer.get()), ResourceStates::ConstantBuffer);
-    EXPECT_EQ(composite->getTextureSubresourceState(albedo.get(), 0u, 0u), ResourceStates::Unknown);
-    EXPECT_EQ(composite->getTextureSubresourceState(shadowVisibility.get(), 0u, 0u), ResourceStates::Unknown);
-    EXPECT_EQ(composite->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);
-    EXPECT_EQ(composite->getTextureSubresourceState(avboitAccumColor.get(), 0u, 0u), ResourceStates::RenderTarget);
-    EXPECT_EQ(composite->getTextureSubresourceState(avboitAccumExtinction.get(), 0u, 0u), ResourceStates::RenderTarget);
-    composite->setTextureState(opaqueColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
-    composite->setTextureState(avboitAccumColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
-    composite->setTextureState(avboitAccumExtinction.get(), s_AllSubresources, ResourceStates::ShaderResource);
-    composite->setTextureState(compositeColor.get(), s_AllSubresources, ResourceStates::UnorderedAccess);
-    composite->close(&deferredCompositeState);
-    ASSERT_TRUE(deferredCompositeState.valid());
-
-    ASSERT_TRUE(compositeColorPresentState.buildTextureSubset(deferredCompositeState, compositeColor.get()));
-    Buffer* const deferredPresentBaseBuffers[] = {
-        slotsBuffer.get(),
-    };
-    ASSERT_TRUE(deferredPresentBaseState.buildResourceSubset(
-        deferredCompositeBaseState,
         nullptr,
         0u,
-        deferredPresentBaseBuffers,
-        LengthOf(deferredPresentBaseBuffers)
+        transaction,
+        scratchArena
     ));
-    const CommandListResourceStateHandoff* deferredPresentBranchStates[] = { &compositeColorPresentState };
-    ASSERT_TRUE(deferredPresentInputState.buildFanIn(
-        deferredPresentBaseState,
-        deferredPresentBranchStates,
-        LengthOf(deferredPresentBranchStates)
-    ));
-
-    present->open(&deferredPresentInputState);
-    EXPECT_EQ(present->getBufferState(slotsBuffer.get()), ResourceStates::ConstantBuffer);
-    EXPECT_EQ(present->getTextureSubresourceState(compositeColor.get(), 0u, 0u), ResourceStates::Common);
-    // opaqueColor is deliberately absent from this handoff; its keepInitialState contract supplies Common locally.
-    EXPECT_EQ(present->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);
-    present->setTextureState(compositeColor.get(), s_AllSubresources, ResourceStates::ShaderResource);
-    present->close(&deferredPresentState);
-    ASSERT_TRUE(deferredPresentState.valid());
-
-    CommandList* commandLists[] = {
-        meshViewSetup.get(),
-        sceneShadingSetup.get(),
-        deferredClear.get(),
-        gbuffer.get(),
-        prelude.get(),
-        shadow.get(),
-        caustics.get(),
-        surfelGi.get(),
-        avboit.get(),
-        lighting.get(),
-        composite.get(),
-        present.get(),
-    };
-    bool submitted = false;
-    EXPECT_GT(device.executeCommandLists(commandLists, LengthOf(commandLists), CommandQueue::Graphics, &submitted), 0u);
-    EXPECT_TRUE(submitted);
+    EXPECT_TRUE(transaction.packetToken(shadowPreparePacket).valid());
+    EXPECT_TRUE(transaction.packetToken(graphicsPrefixPacket).valid());
+    EXPECT_TRUE(transaction.packetToken(presentPacket).valid());
     EXPECT_TRUE(device.waitForIdle());
 }
 

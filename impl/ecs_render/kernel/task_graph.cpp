@@ -74,8 +74,8 @@ struct FrameRecoveryGraphTask{
 };
 
 
-// Shadow preparation owns the one Graphics packet that uploads bindless indirection and builds the current trace
-// scene. Its exact final snapshot becomes the serial state base for the following graphics-prefix packet.
+// Shadow preparation owns the first Graphics packet in the shared deferred graph. Preflight has already selected
+// every dynamic trace resource, so recording only emits GPU work against graph-imported handles.
 struct ShadowPrepareGraphTask{
     struct Payload{
         RendererSystem* renderer = nullptr;
@@ -95,31 +95,44 @@ struct ShadowPrepareGraphTask{
 
         RendererSystem& renderer = *payload.renderer;
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
-
         renderer.m_preparedShadowVisibilityReady = false;
         const bool deferredBindlessResourcesUploaded = renderer.m_deferredSystem.uploadDeferredBindlessFrameResources(
             commandList,
             *payload.targets
         );
+        // An already-uploaded selector still crosses a packet boundary. Track its known ConstantBuffer state so
+        // the compiler-generated Prefix seed remains populated on every frame, not only after a fresh upload.
+        if(deferredBindlessResourcesUploaded){
+            commandList.setBufferState(
+                payload.targets->bindless.slotsBuffer.get(),
+                Core::ResourceStates::ConstantBuffer
+            );
+            commandList.commitBarriers();
+        }
         const bool shadowResourcesPrepared = deferredBindlessResourcesUploaded
-            && renderer.m_raytracingSystem.prepareShadowVisibilityResources(
+            && renderer.m_raytracingSystem.recordPreflightShadowVisibilityResources(
                 commandList,
                 *payload.targets,
-                scratchArena,
                 renderer.m_preparedShadowVisibilityReady
             )
         ;
         // Upload final slot indirection after all capacity growth settles.
-        return shadowResourcesPrepared
-            && renderer.m_raytracingSystem.uploadRayTraceMaterialContextSlots(commandList)
-        ;
+        if(
+            !shadowResourcesPrepared
+            || !renderer.m_raytracingSystem.uploadRayTraceMaterialContextSlots(commandList)
+        )
+            return false;
+
+        // BLAS/SW-BVH record paths leave their inputs in route-dependent states. Export one exact graph-visible
+        // boundary state for every retained selected buffer before the following Prefix packet is seeded.
+        renderer.m_raytracingSystem.normalizePreparedShadowTraceGeometryBuffers(commandList);
+        return true;
     }
 
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         static_cast<void>(token);
         if(payload.renderer)
-            payload.renderer->m_raytracingSystem.finalizeSurfelResourceInitialization();
+            payload.renderer->m_raytracingSystem.confirmPreparedShadowTraceGeometryNormalization();
     }
 
     static void discarded(Payload& payload){
@@ -129,15 +142,12 @@ struct ShadowPrepareGraphTask{
             return;
 
         RendererSystem& renderer = *payload.renderer;
-        // Failed preparation forces a safe cache rebuild; a previous key may name retired storage.
-        renderer.m_rayTracingState.m_tlasStaticSceneHashValid = false;
-        renderer.m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
-        renderer.m_rayTracingState.m_hwShadowMaterialContextHashValid = false;
-        renderer.m_rayTracingState.m_swShadowMaterialContextHashValid = false;
+        // Failed preparation keeps resource storage but invalidates the selected frame plan and every semantic cache.
         renderer.m_preparedShadowVisibilityReady = false;
+        renderer.m_preparedShadowVisibilityResourcesValid = false;
         if(payload.targets)
             payload.targets->bindless.slotsUploaded = payload.deferredBindlessSlotsWereUploaded;
-        renderer.m_raytracingSystem.discardSurfelResourceInitialization();
+        renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();
     }
 };
 
@@ -572,6 +582,12 @@ struct PostGbufferNormalizeGraphTask{
         }
         return true;
     }
+
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        static_cast<void>(token);
+        if(payload.raytracingSystem)
+            payload.raytracingSystem->confirmPreparedShadowTraceGeometryNormalization();
+    }
 };
 
 
@@ -899,56 +915,118 @@ struct DeferredPresentGraphTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererSystem::buildShadowPrepareTaskGraph(
+bool RendererSystem::declareDeferredShadowPrepareTask(
     DeferredFrameTargets& deferredTargets,
+    const Core::GpuGraphResourceId currentBindlessSlots,
+    const Core::GpuGraphResourceId materialContextSlots,
+    const Core::GpuGraphResourceId* const shadowTraceGeometryResources,
+    const usize shadowTraceGeometryResourceCount,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace __hidden_renderer_task_graph;
 
-    m_shadowPrepareTaskGraphValid = false;
-    m_shadowPrepareTask = {};
-    m_shadowPrepareTaskGraph.reset();
-    m_shadowPrepareTaskGraphAnalysis.reset();
-    m_shadowPrepareTaskGraphQueueAssignments.reset();
-    m_shadowPrepareCompiledGraph.reset();
-    m_shadowPrepareRecordedGraph.reset(m_shadowPrepareCompiledGraph);
-    m_shadowPrepareSubmissionTransaction.reset(m_shadowPrepareCompiledGraph);
-
-    if(!deferredTargets.valid() || !deferredTargets.bindless.valid())
-        return;
-
-    Core::GpuGraphResourceDesc bindlessSlotsDesc = BufferResourceDesc(
-        Name("render.shadow_prepare.bindless_slots"),
-        "Deferred Bindless Slots"
-    );
-    // The accepted upload leaves this selector in ConstantBuffer. A rejected graph task restores slotsUploaded,
-    // so this dynamic initial state is the actual serial Graphics state rather than the allocation-time default.
-    bindlessSlotsDesc.setInitialState(
-        deferredTargets.bindless.slotsUploaded
-            ? Core::ResourceStates::ConstantBuffer
-            : deferredTargets.bindless.slotsBuffer->getDescription().initialState
-    );
-    const Core::GpuGraphResourceId bindlessSlots = m_shadowPrepareTaskGraph.importBuffer(
-        deferredTargets.bindless.slotsBuffer,
-        bindlessSlotsDesc
-    );
-    const Core::GpuGraphResourceId preparationDomain = m_shadowPrepareTaskGraph.importHazardDomain(
-        HazardDomainDesc(
-            Name("render.shadow_prepare.dynamic_resources"),
-            "Dynamic Trace Preparation Resources"
-        )
-    );
-    if(!bindlessSlots.valid() || !preparationDomain.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shadow-preparation graph resources"));
-        return;
+    m_deferredShadowPrepareTask = {};
+    if(
+        !deferredTargets.valid()
+        || !deferredTargets.bindless.valid()
+        || !m_raytracingSystem.shadowVisibilityResourcesPreflighted()
+        || !currentBindlessSlots.valid()
+        || !materialContextSlots.valid()
+        || (shadowTraceGeometryResourceCount != 0u && !shadowTraceGeometryResources)
+    )
+        return false;
+    const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
+        return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
+    };
+    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
+    resourceUses.reserve(12u + shadowTraceGeometryResourceCount);
+    resourceUses.push_back(ReadWriteUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+    resourceUses.push_back(WriteUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
+    for(usize resourceIndex = 0u; resourceIndex < shadowTraceGeometryResourceCount; ++resourceIndex){
+        const Core::GpuGraphResourceId resource = shadowTraceGeometryResources[resourceIndex];
+        if(!resource.valid())
+            return false;
+        resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::ShaderResource));
     }
 
-    const Core::GpuTaskResourceUse resourceUses[] = {
-        // This final state is consumed by every following bindless reader. Additional trace buffers are allocated or
-        // replaced while the task records, so their exact final states are exported from the native packet snapshot.
-        ReadWriteUse(bindlessSlots, Core::ResourceStates::ConstantBuffer),
-        ReadWriteUse(preparationDomain, Core::ResourceStates::Common),
+    const auto appendOptionalWriteBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
+        if(!buffer)
+            return true;
+        const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
+        if(!resource.valid())
+            return false;
+        resourceUses.push_back(WriteUse(resource, state));
+        return true;
     };
+    bool resourcesImported =
+        appendOptionalWriteBuffer(
+            m_rayTracingState.m_sceneBvhNodeBuffer,
+            Name("render.shadow_visibility.scene_bvh_nodes"),
+            "Scene BVH Nodes",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalWriteBuffer(
+            m_rayTracingState.m_sceneInstanceBuffer,
+            Name("render.shadow_visibility.scene_instances"),
+            "Scene Instances",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalWriteBuffer(
+            m_rayTracingState.m_shadowInstanceMaterialBuffer,
+            Name("render.deferred_effects.instance_material"),
+            "Shadow Instance Materials",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalWriteBuffer(
+            m_rayTracingState.m_shadowMaterialTypedBuffer,
+            Name("render.deferred_effects.material_typed"),
+            "Shadow Typed Materials",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalWriteBuffer(
+            m_rayTracingState.m_shadowInstanceBuffer,
+            Name("render.deferred_effects.shadow_instances"),
+            "Shadow Instances",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalWriteBuffer(
+            m_rayTracingState.m_causticEmissionTargetBuffer,
+            graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
+                && graphics().queryFeatureSupport(Core::Feature::RayQuery)
+                ? Name("render.hardware_caustics.emission_targets")
+                : Name("render.software_caustics.emission_targets"),
+            "Caustic Emission Targets",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalWriteBuffer(
+            m_rayTracingState.m_surfelConstants,
+            Name("render.surfel_gi.constants"),
+            "Surfel Constants",
+            Core::ResourceStates::ConstantBuffer
+        )
+    ;
+    if(m_rayTracingState.m_tlas){
+        const Core::GpuGraphResourceId tlas = m_deferredLightingTaskGraph.importAccelStruct(
+            m_rayTracingState.m_tlas,
+            AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
+        );
+        const Core::GpuGraphResourceId tlasBacking = importBuffer(
+            m_rayTracingState.m_tlas->getBackingBufferHandle(),
+            Name("render.deferred_effects.tlas_backing"),
+            "Scene TLAS Backing"
+        );
+        resourcesImported = resourcesImported && tlas.valid() && tlasBacking.valid();
+        if(tlas.valid() && tlasBacking.valid()){
+            resourceUses.push_back(ReadWriteUse(tlas, Core::ResourceStates::AccelStructRead));
+            resourceUses.push_back(WriteUse(tlasBacking, Core::ResourceStates::AccelStructRead));
+        }
+    }
+    if(!resourcesImported){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted shadow-preparation resources"));
+        return false;
+    }
+
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
     scheduling.forceSubmissionBoundary = true;
@@ -959,9 +1037,9 @@ void RendererSystem::buildShadowPrepareTaskGraph(
         .setMarkerLabel("Shadow Preparation")
         .setQueue(GraphicsQueueRequest())
         .setScheduling(scheduling)
-        .setResourceUses(resourceUses, LengthOf(resourceUses))
+        .setResourceUses(resourceUses.data(), resourceUses.size())
     ;
-    m_shadowPrepareTask = m_shadowPrepareTaskGraph.addTask<ECSRenderDetail::ShadowPrepareGraphTask>(
+    m_deferredShadowPrepareTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::ShadowPrepareGraphTask>(
         desc,
         ECSRenderDetail::ShadowPrepareGraphTask::Payload{
             .renderer = this,
@@ -970,53 +1048,17 @@ void RendererSystem::buildShadowPrepareTaskGraph(
             .deferredBindlessSlotsWereUploaded = deferredTargets.bindless.slotsUploaded,
         }
     );
-    if(!m_shadowPrepareTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shadow-preparation task"));
-        return;
+    if(!m_deferredShadowPrepareTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation task"));
+        return false;
     }
-
-    const auto& device = graphics().getDevice();
-    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
-    const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
-        static_cast<u8>(Core::GpuQueueCapability::Graphics)
-        | static_cast<u8>(Core::GpuQueueCapability::Compute)
-        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
-    );
-    const Core::GpuPhysicalQueueInfo queues[] = {
-        Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
-            .queueClass = Core::CommandQueue::Graphics,
-            .capabilities = graphicsQueueCapabilities,
-            .familyIndex = graphicsFamilyIndex,
-            .queueIndex = 0u,
-            .dedicated = false,
-        },
-    };
-    const Core::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-    const Core::GpuTaskGraphCompiler compiler;
-    if(!compiler.compile(
-        m_shadowPrepareTaskGraph,
-        m_shadowPrepareTaskGraphAnalysis,
-        topology,
-        m_shadowPrepareTaskGraphQueueAssignments,
-        m_shadowPrepareCompiledGraph,
-        scratchArena
-    )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile shadow-preparation task graph"));
-        return;
-    }
-    m_shadowPrepareRecordedGraph.reset(m_shadowPrepareCompiledGraph);
-    m_shadowPrepareSubmissionTransaction.reset(m_shadowPrepareCompiledGraph);
-    m_shadowPrepareTaskGraphValid = true;
+    return true;
 }
 
 
 bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     DeferredFrameTargets& deferredTargets,
+    const Core::GpuTaskId shadowPrepareTask,
     const CsgFrameState& csgFrameState,
     const bool hasOpaqueCsgFrameWork,
     const f32 meshViewAspectRatio,
@@ -1031,6 +1073,10 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     const Core::GpuGraphResourceId sceneShading,
     const Core::GpuGraphResourceId lights,
     const Core::GpuGraphResourceId meshView,
+    const Core::GpuGraphResourceId currentBindlessSlots,
+    const Core::GpuGraphResourceId materialContextSlots,
+    const Core::GpuGraphResourceId* const shadowTraceGeometryResources,
+    const usize shadowTraceGeometryResourceCount,
     Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
     Core::GpuTimingSubmissionTicket& timingTicket
@@ -1047,6 +1093,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
     if(
         !deferredTargets.valid()
+        || !shadowPrepareTask.valid()
         || !m_drawState.m_meshViewBuffer
         || !m_deferredState.m_sceneShadingBuffer
         || !m_deferredState.m_lightBuffer
@@ -1058,6 +1105,9 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         || !sceneShading.valid()
         || !lights.valid()
         || !meshView.valid()
+        || !currentBindlessSlots.valid()
+        || !materialContextSlots.valid()
+        || (shadowTraceGeometryResourceCount != 0u && !shadowTraceGeometryResources)
     )
         return false;
     const bool clearSurfelIrradiance = !surfelGiExpectedCompute && deferredTargets.surfelIrradiance != nullptr;
@@ -1077,6 +1127,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         .setMarkerLabel("Mesh View Setup")
         .setQueue(GraphicsQueueRequest())
         .setScheduling(meshViewSetupScheduling)
+        .setDependencies(&shadowPrepareTask, 1u)
         .setResourceUses(meshViewSetupResourceUses, LengthOf(meshViewSetupResourceUses))
     ;
     m_graphicsPrefixMeshViewSetupTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::MeshViewSetupGraphTask>(
@@ -1232,12 +1283,25 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         return false;
     }
 
-    const Core::GpuTaskResourceUse normalizeResourceUses[] = {
-        ReadUse(meshView, Core::ResourceStates::ConstantBuffer),
-        ReadUse(normal, Core::ResourceStates::ShaderResource),
-        ReadUse(worldPosition, Core::ResourceStates::ShaderResource),
-        ReadUse(depth, Core::ResourceStates::ShaderResource),
-    };
+    Core::Alloc::ScratchArena normalizeScratchArena(RendererArenaScope::s_TaskGraphArena);
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> normalizeResourceUses{ normalizeScratchArena };
+    normalizeResourceUses.reserve(8u + shadowTraceGeometryResourceCount);
+    normalizeResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
+    normalizeResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
+    normalizeResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
+    normalizeResourceUses.push_back(ReadUse(depth, Core::ResourceStates::ShaderResource));
+    normalizeResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
+    normalizeResourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource));
+    normalizeResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+    normalizeResourceUses.push_back(ReadUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
+    for(usize resourceIndex = 0u; resourceIndex < shadowTraceGeometryResourceCount; ++resourceIndex){
+        const Core::GpuGraphResourceId resource = shadowTraceGeometryResources[resourceIndex];
+        if(!resource.valid())
+            return false;
+        // This task actually restores the state after G-buffer, so it owns an outgoing Prefix state seed instead of
+        // looking like an optional same-state reader.
+        normalizeResourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::ShaderResource));
+    }
     Core::GpuTaskSchedulingHint normalizeScheduling;
     normalizeScheduling.cost = Core::GpuTaskCostHint::Tiny;
     normalizeScheduling.forceSubmissionBoundary = false;
@@ -1250,7 +1314,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         .setQueue(GraphicsQueueRequest())
         .setScheduling(normalizeScheduling)
         .setDependencies(&m_graphicsPrefixGbufferTask, 1u)
-        .setResourceUses(normalizeResourceUses, LengthOf(normalizeResourceUses))
+        .setResourceUses(normalizeResourceUses.data(), normalizeResourceUses.size())
     ;
     m_graphicsPrefixTask = m_deferredLightingTaskGraph.addTask<PostGbufferNormalizeGraphTask>(
         normalizeDesc,
@@ -1272,7 +1336,6 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
 bool RendererSystem::declareDeferredShadowVisibilityTask(
     DeferredFrameTargets& deferredTargets,
-    const bool shadowVisibilityPrepared,
     const bool hardwareShadowSupported,
     const Core::GpuGraphResourceId worldPosition,
     const Core::GpuGraphResourceId normal,
@@ -1282,6 +1345,8 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     const Core::GpuGraphResourceId sceneShading,
     const Core::GpuGraphResourceId lights,
     const Core::GpuGraphResourceId materialContextSlots,
+    const Core::GpuGraphResourceId* const softwareTraceGeometryResources,
+    const usize softwareTraceGeometryResourceCount,
     const Core::GpuTaskId prefixTask,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
@@ -1299,6 +1364,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         || !sceneShading.valid()
         || !lights.valid()
         || !prefixTask.valid()
+        || (softwareTraceGeometryResourceCount != 0u && !softwareTraceGeometryResources)
     )
         return false;
 
@@ -1522,6 +1588,12 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
     resourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource));
     if(materialContextSlots.valid())
         resourceUses.push_back(ReadUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
+    for(usize resourceIndex = 0u; resourceIndex < softwareTraceGeometryResourceCount; ++resourceIndex){
+        const Core::GpuGraphResourceId resource = softwareTraceGeometryResources[resourceIndex];
+        if(!resource.valid())
+            return false;
+        resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+    }
 
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
@@ -1540,7 +1612,7 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
         m_deferredLightingTaskGraph,
         desc,
         deferredTargets,
-        shadowVisibilityPrepared,
+        &m_preparedShadowVisibilityReady,
         hardwareShadowSupported,
         timingTicket
     );
@@ -1555,7 +1627,6 @@ bool RendererSystem::declareDeferredShadowVisibilityTask(
 bool RendererSystem::declareDeferredSoftwareCausticsTask(
     const ECSRenderDetail::GpuTaskGraphFrameScheduleInput& input,
     DeferredFrameTargets& deferredTargets,
-    const bool shadowVisibilityPrepared,
     const Core::GpuGraphResourceId worldPosition,
     const Core::GpuGraphResourceId depth,
     const Core::GpuGraphResourceId causticIrradiance,
@@ -1563,6 +1634,8 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     const Core::GpuGraphResourceId sceneShading,
     const Core::GpuGraphResourceId lights,
     const Core::GpuGraphResourceId materialContextSlots,
+    const Core::GpuGraphResourceId* const softwareTraceGeometryResources,
+    const usize softwareTraceGeometryResourceCount,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace __hidden_renderer_task_graph;
@@ -1582,6 +1655,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         || !currentBindlessSlots.valid()
         || !sceneShading.valid()
         || !lights.valid()
+        || (softwareTraceGeometryResourceCount != 0u && !softwareTraceGeometryResources)
     )
         return false;
 
@@ -1632,7 +1706,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
-    resourceUses.reserve(20u);
+    resourceUses.reserve(25u + softwareTraceGeometryResourceCount);
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(depth, Core::ResourceStates::DepthRead));
     resourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -1665,6 +1739,36 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
             "Mesh View",
             Core::ResourceStates::ConstantBuffer
         )
+        && appendOptionalReadBuffer(
+            m_rayTracingState.m_sceneBvhNodeBuffer,
+            Name("render.shadow_visibility.scene_bvh_nodes"),
+            "Scene BVH Nodes",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalReadBuffer(
+            m_rayTracingState.m_sceneInstanceBuffer,
+            Name("render.shadow_visibility.scene_instances"),
+            "Scene Instances",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalReadBuffer(
+            m_rayTracingState.m_shadowInstanceMaterialBuffer,
+            Name("render.deferred_effects.instance_material"),
+            "Shadow Instance Materials",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalReadBuffer(
+            m_rayTracingState.m_shadowMaterialTypedBuffer,
+            Name("render.deferred_effects.material_typed"),
+            "Shadow Typed Materials",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalReadBuffer(
+            m_rayTracingState.m_shadowInstanceBuffer,
+            Name("render.deferred_effects.shadow_instances"),
+            "Shadow Instances",
+            Core::ResourceStates::ShaderResource
+        )
     ;
     if(!optionalResourcesImported){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a deferred software-caustics dynamic resource"));
@@ -1674,6 +1778,12 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     resourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource));
     if(materialContextSlots.valid())
         resourceUses.push_back(ReadUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
+    for(usize resourceIndex = 0u; resourceIndex < softwareTraceGeometryResourceCount; ++resourceIndex){
+        const Core::GpuGraphResourceId resource = softwareTraceGeometryResources[resourceIndex];
+        if(!resource.valid())
+            return false;
+        resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+    }
 
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
@@ -1693,7 +1803,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         m_deferredLightingTaskGraph,
         desc,
         deferredTargets,
-        shadowVisibilityPrepared,
+        &m_preparedShadowVisibilityReady,
         timingTicket
     );
     if(!m_deferredSoftwareCausticsTask.valid()){
@@ -1713,6 +1823,8 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     const Core::GpuGraphResourceId sceneShading,
     const Core::GpuGraphResourceId lights,
     const Core::GpuGraphResourceId materialContextSlots,
+    const Core::GpuGraphResourceId* const traceGeometryResources,
+    const usize traceGeometryResourceCount,
     const Core::GpuTaskId effectsTask,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
@@ -1729,8 +1841,11 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         || !sceneShading.valid()
         || !lights.valid()
         || !effectsTask.valid()
+        || (traceGeometryResourceCount != 0u && !traceGeometryResources)
     )
         return false;
+
+    const bool useHwTrace = m_rayTracingState.m_surfelUseHwTrace;
 
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
@@ -1753,7 +1868,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
-    resourceUses.reserve(20u);
+    resourceUses.reserve(28u + traceGeometryResourceCount);
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));
     resourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -1764,6 +1879,12 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     resourceUses.push_back(ReadUse(sceneGeometryDomain));
     if(materialContextSlots.valid())
         resourceUses.push_back(ReadUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
+    for(usize resourceIndex = 0u; resourceIndex < traceGeometryResourceCount; ++resourceIndex){
+        const Core::GpuGraphResourceId resource = traceGeometryResources[resourceIndex];
+        if(!resource.valid())
+            return false;
+        resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+    }
 
     const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
         if(!buffer)
@@ -1783,8 +1904,26 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         resourceUses.push_back(WriteUse(resource, state));
         return true;
     };
-    const bool optionalResourcesImported =
+    bool optionalResourcesImported =
         appendOptionalReadBuffer(
+            m_rayTracingState.m_shadowInstanceMaterialBuffer,
+            Name("render.deferred_effects.instance_material"),
+            "Shadow Instance Materials",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalReadBuffer(
+            m_rayTracingState.m_shadowMaterialTypedBuffer,
+            Name("render.deferred_effects.material_typed"),
+            "Shadow Typed Materials",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalReadBuffer(
+            m_rayTracingState.m_shadowInstanceBuffer,
+            Name("render.deferred_effects.shadow_instances"),
+            "Shadow Instances",
+            Core::ResourceStates::ShaderResource
+        )
+        && appendOptionalReadBuffer(
             m_rayTracingState.m_surfelConstants,
             Name("render.surfel_gi.constants"),
             "Surfel Constants",
@@ -1839,6 +1978,42 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             Core::ResourceStates::CopyDest
         )
     ;
+    if(optionalResourcesImported && !useHwTrace){
+        optionalResourcesImported =
+            appendOptionalReadBuffer(
+                m_rayTracingState.m_sceneBvhNodeBuffer,
+                Name("render.shadow_visibility.scene_bvh_nodes"),
+                "Scene BVH Nodes",
+                Core::ResourceStates::ShaderResource
+            )
+            && appendOptionalReadBuffer(
+                m_rayTracingState.m_sceneInstanceBuffer,
+                Name("render.shadow_visibility.scene_instances"),
+                "Scene Instances",
+                Core::ResourceStates::ShaderResource
+            )
+        ;
+    }
+    if(optionalResourcesImported && useHwTrace){
+        if(!m_rayTracingState.m_tlas)
+            optionalResourcesImported = false;
+        else{
+            const Core::GpuGraphResourceId tlas = m_deferredLightingTaskGraph.importAccelStruct(
+                m_rayTracingState.m_tlas,
+                AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
+            );
+            const Core::GpuGraphResourceId tlasBackingBuffer = importBuffer(
+                m_rayTracingState.m_tlas->getBackingBufferHandle(),
+                Name("render.deferred_effects.tlas_backing"),
+                "Scene TLAS Backing"
+            );
+            optionalResourcesImported = tlas.valid() && tlasBackingBuffer.valid();
+            if(optionalResourcesImported){
+                resourceUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
+                resourceUses.push_back(ReadUse(tlasBackingBuffer, Core::ResourceStates::AccelStructRead));
+            }
+        }
+    }
     if(!optionalResourcesImported){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a deferred surfel-GI dynamic resource domain"));
         return false;
@@ -1877,7 +2052,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     const CsgFrameState& csgFrameState,
     const bool clearAvboitTargets,
     const bool hasTransparentRenderers,
-    const bool shadowVisibilityPrepared,
     const bool hasOpaqueCsgFrameWork,
     const f32 meshViewAspectRatio,
     Core::Framebuffer* const presentationFramebuffer,
@@ -1885,6 +2059,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     const bool surfelGiExpectedCompute,
     Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
+    Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
     Core::GpuTimingSubmissionTicket& graphicsPrefixTimingTicket,
     Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
     Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
@@ -1904,6 +2079,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     using namespace __hidden_renderer_task_graph;
 
     m_deferredLightingTaskGraphValid = false;
+    m_deferredShadowPrepareTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearTask = {};
@@ -1978,12 +2154,67 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     )
         return;
 
+    // Preflight has already frozen the exact visible HW/SW mesh tables. Keep retained handles here rather than the
+    // raw descriptor-table pointers, import every physical buffer once, and fan the same IDs out to all packets.
+    // A fresh/replaced buffer starts from its creation state; a buffer normalized by an accepted earlier Prefix is
+    // explicitly imported as SRV so the first packet never claims a stale state.
+    if(!m_raytracingSystem.freezePreparedShadowTraceGeometryBuffers()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted shadow-trace geometry buffers"));
+        return;
+    }
+    const PreparedShadowTraceGeometryBufferVector& preparedTraceGeometry =
+        m_raytracingSystem.preparedShadowTraceGeometryBuffers()
+    ;
+    Core::Alloc::ScratchArena traceGeometryScratchArena(RendererArenaScope::s_TaskGraphArena);
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> traceGeometryResources{ traceGeometryScratchArena };
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hardwareTraceGeometryResources{ traceGeometryScratchArena };
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hardwareTraceAttributeResources{ traceGeometryScratchArena };
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareTraceGeometryResources{ traceGeometryScratchArena };
+    traceGeometryResources.reserve(preparedTraceGeometry.size());
+    hardwareTraceGeometryResources.reserve(preparedTraceGeometry.size());
+    hardwareTraceAttributeResources.reserve(preparedTraceGeometry.size());
+    softwareTraceGeometryResources.reserve(preparedTraceGeometry.size());
+
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
     };
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
+    const auto importCurrentBindlessSlots = [&](const Name& identity, const AStringView label){
+        Core::GpuGraphResourceDesc desc = BufferResourceDesc(identity, label);
+        desc.setInitialState(
+            deferredTargets.bindless.slotsUploaded
+                ? Core::ResourceStates::ConstantBuffer
+                : deferredTargets.bindless.slotsBuffer->getDescription().initialState
+        );
+        return m_deferredLightingTaskGraph.importBuffer(deferredTargets.bindless.slotsBuffer, desc);
+    };
+    for(const PreparedShadowTraceGeometryBuffer& preparedBuffer : preparedTraceGeometry){
+        Core::GpuGraphResourceDesc desc = BufferResourceDesc(preparedBuffer.identity, "Prepared Shadow Trace Geometry");
+        desc.setInitialState(preparedBuffer.initialState);
+        const Core::GpuGraphResourceId resource = m_deferredLightingTaskGraph.importBuffer(preparedBuffer.buffer, desc);
+        if(!resource.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted shadow-trace geometry buffer"));
+            return;
+        }
+        traceGeometryResources.push_back(resource);
+        if(preparedBuffer.roles & (
+            PreparedShadowTraceGeometryRole::HardwarePosition
+            | PreparedShadowTraceGeometryRole::HardwareIndex
+            | PreparedShadowTraceGeometryRole::HardwareAttribute
+        ))
+            hardwareTraceGeometryResources.push_back(resource);
+        if(preparedBuffer.roles & PreparedShadowTraceGeometryRole::HardwareAttribute)
+            hardwareTraceAttributeResources.push_back(resource);
+        if(preparedBuffer.roles & (
+            PreparedShadowTraceGeometryRole::SoftwareNode
+            | PreparedShadowTraceGeometryRole::SoftwarePosition
+            | PreparedShadowTraceGeometryRole::SoftwareIndex
+            | PreparedShadowTraceGeometryRole::SoftwareAttribute
+        ))
+            softwareTraceGeometryResources.push_back(resource);
+    }
     const Core::GpuGraphResourceId albedo = importTexture(
         deferredTargets.albedo,
         Name("render.deferred_lighting.albedo"),
@@ -2063,16 +2294,21 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         Name("render.deferred.mesh_view"),
         "Mesh View"
     );
-    const Core::GpuGraphResourceId bindlessSlots = importBuffer(
-        history ? history->slotsBuffer : deferredTargets.bindless.slotsBuffer,
-        Name("render.deferred_lighting.bindless_slots"),
-        history ? "Lagged Deferred Bindless Slots" : "Deferred Bindless Slots"
-    );
+    const Core::GpuGraphResourceId bindlessSlots = history
+        ? importBuffer(
+            history->slotsBuffer,
+            Name("render.deferred_lighting.bindless_slots"),
+            "Lagged Deferred Bindless Slots"
+        )
+        : importCurrentBindlessSlots(
+            Name("render.deferred_lighting.bindless_slots"),
+            "Deferred Bindless Slots"
+        )
+    ;
     const Core::GpuGraphResourceId currentBindlessSlots =
         !history || deferredTargets.bindless.slotsBuffer.get() == history->slotsBuffer.get()
             ? bindlessSlots
-            : importBuffer(
-                deferredTargets.bindless.slotsBuffer,
+            : importCurrentBindlessSlots(
                 Name("render.deferred_composite.bindless_slots"),
                 "Deferred Bindless Slots"
             )
@@ -2222,8 +2458,21 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         return;
     }
 
+    if(!declareDeferredShadowPrepareTask(
+        deferredTargets,
+        currentBindlessSlots,
+        materialContextSlots,
+        traceGeometryResources.data(),
+        traceGeometryResources.size(),
+        shadowPrepareTimingTicket
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation packet"));
+        return;
+    }
+
     if(!declareDeferredGraphicsPrefixTasks(
         deferredTargets,
+        m_deferredShadowPrepareTask,
         csgFrameState,
         hasOpaqueCsgFrameWork,
         meshViewAspectRatio,
@@ -2238,6 +2487,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         sceneShading,
         lights,
         meshView,
+        currentBindlessSlots,
+        materialContextSlots,
+        traceGeometryResources.data(),
+        traceGeometryResources.size(),
         frameTimingTransaction,
         asyncPrefixTiming,
         graphicsPrefixTimingTicket
@@ -2265,7 +2518,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     // Shadow/Software are declared first so their queue assignments are stable before Surf, AVBOIT, and Lighting.
     if(!declareDeferredShadowVisibilityTask(
         deferredTargets,
-        shadowVisibilityPrepared,
         declaresHardwareCaustics,
         worldPosition,
         normal,
@@ -2275,6 +2527,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         sceneShading,
         lights,
         materialContextSlots,
+        softwareTraceGeometryResources.data(),
+        softwareTraceGeometryResources.size(),
         m_graphicsPrefixTask,
         shadowVisibilityTimingTicket
     ))
@@ -2282,7 +2536,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     if(!declaresHardwareCaustics && !declareDeferredSoftwareCausticsTask(
         input,
         deferredTargets,
-        shadowVisibilityPrepared,
         worldPosition,
         depth,
         currentCausticIrradiance,
@@ -2290,6 +2543,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         sceneShading,
         lights,
         materialContextSlots,
+        softwareTraceGeometryResources.data(),
+        softwareTraceGeometryResources.size(),
         softwareCausticsTimingTicket
     ))
         return;
@@ -2308,6 +2563,16 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         sceneShading,
         lights,
         materialContextSlots,
+        (
+            m_rayTracingState.m_surfelUseHwTrace
+                ? hardwareTraceGeometryResources.data()
+                : softwareTraceGeometryResources.data()
+        ),
+        (
+            m_rayTracingState.m_surfelUseHwTrace
+                ? hardwareTraceGeometryResources.size()
+                : softwareTraceGeometryResources.size()
+        ),
         effectsTask,
         surfelGiTimingTicket
     ))
@@ -2353,7 +2618,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
 
         Core::Alloc::ScratchArena hardwareCausticsScratchArena(RendererArenaScope::s_TaskGraphArena);
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hardwareResourceUses{ hardwareCausticsScratchArena };
-        hardwareResourceUses.reserve(20u);
+        hardwareResourceUses.reserve(20u + hardwareTraceAttributeResources.size());
         hardwareResourceUses.push_back(ReadUse(
             worldPosition,
             Core::ResourceStates::ShaderResource,
@@ -2431,6 +2696,16 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 true
             ));
         }
+        // Hardware caustic closest-hit shaders directly heap-load the selected mesh attribute streams.  These are
+        // centrally imported retained handles, so declaring them here gives the compiler the Prefix -> Caustics
+        // SRV handoff instead of relying on the recorder's manual staging loop.
+        for(const Core::GpuGraphResourceId resource : hardwareTraceAttributeResources){
+            if(!resource.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid prepared hardware-caustics attribute resource"));
+                return;
+            }
+            hardwareResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+        }
         if(m_rayTracingState.m_tlas){
             const Core::GpuGraphResourceId tlas = m_deferredLightingTaskGraph.importAccelStruct(
                 m_rayTracingState.m_tlas,
@@ -2476,7 +2751,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             m_deferredLightingTaskGraph,
             hardwareDesc,
             deferredTargets,
-            shadowVisibilityPrepared,
+            &m_preparedShadowVisibilityReady,
             hardwareCausticsTimingTicket
         );
         if(!m_deferredHardwareCausticsTask.valid()){

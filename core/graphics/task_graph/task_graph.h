@@ -55,6 +55,14 @@ struct GpuTaskGraphResourceView{
     bool hasBackendResource = false;
 };
 
+struct GpuTaskGraphPipelineView{
+    GpuGraphPipelineId id;
+    Name identity = NAME_NONE;
+    AStringView markerLabel;
+    GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
+    bool hasBackendPipeline = false;
+};
+
 struct GpuTaskGraphExternalCompletionView{
     GpuExternalCompletionId id;
     Name identity = NAME_NONE;
@@ -106,6 +114,17 @@ private:
         TextureHandle texture;
         BufferHandle buffer;
         RayTracingAccelStructHandle accelStruct;
+    };
+
+    struct GpuGraphPipelineNode{
+        Name identity = NAME_NONE;
+        GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
+        u32 markerLabelOffset = 0u;
+        u32 markerLabelSize = 0u;
+        GraphicsPipelineHandle graphicsPipeline;
+        ComputePipelineHandle computePipeline;
+        MeshletPipelineHandle meshletPipeline;
+        RayTracingPipelineHandle rayTracingPipeline;
     };
 
     struct GpuExternalCompletionNode{
@@ -192,6 +211,25 @@ public:
         const GpuGraphResourceDesc& desc
     );
     [[nodiscard]] GpuGraphResourceId importHazardDomain(const GpuGraphResourceDesc& desc);
+    // Pipeline IDs are graph-local side-table entries.  Metadata-only entries support analysis/capture setup;
+    // typed imports retain a stable engine handle until native recording or later IR replay resolves it.
+    [[nodiscard]] GpuGraphPipelineId importPipeline(const GpuGraphPipelineDesc& desc);
+    [[nodiscard]] GpuGraphPipelineId importGraphicsPipeline(
+        const GraphicsPipelineHandle& pipeline,
+        const GpuGraphPipelineDesc& desc
+    );
+    [[nodiscard]] GpuGraphPipelineId importComputePipeline(
+        const ComputePipelineHandle& pipeline,
+        const GpuGraphPipelineDesc& desc
+    );
+    [[nodiscard]] GpuGraphPipelineId importMeshletPipeline(
+        const MeshletPipelineHandle& pipeline,
+        const GpuGraphPipelineDesc& desc
+    );
+    [[nodiscard]] GpuGraphPipelineId importRayTracingPipeline(
+        const RayTracingPipelineHandle& pipeline,
+        const GpuGraphPipelineDesc& desc
+    );
     [[nodiscard]] GpuExternalCompletionId importExternalCompletion(const GpuExternalCompletionDesc& desc);
 
     void reset();
@@ -199,15 +237,22 @@ public:
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
     [[nodiscard]] bool validTask(const GpuTaskId& id)const noexcept;
     [[nodiscard]] bool validResource(const GpuGraphResourceId& id)const noexcept;
+    [[nodiscard]] bool validPipeline(const GpuGraphPipelineId& id)const noexcept;
     [[nodiscard]] bool validExternalCompletion(const GpuExternalCompletionId& id)const noexcept;
     [[nodiscard]] usize taskCount()const noexcept{ return m_tasks.size(); }
     [[nodiscard]] usize resourceCount()const noexcept{ return m_resources.size(); }
+    [[nodiscard]] usize pipelineCount()const noexcept{ return m_pipelines.size(); }
     [[nodiscard]] usize externalCompletionCount()const noexcept{ return m_externalCompletions.size(); }
     [[nodiscard]] GpuTaskGraphTaskView taskAt(usize index)const;
     [[nodiscard]] GpuTaskGraphResourceView resourceAt(usize index)const;
+    [[nodiscard]] GpuTaskGraphPipelineView pipelineAt(usize index)const;
     [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const;
     [[nodiscard]] Texture* textureForResource(const GpuGraphResourceId& resource)const noexcept;
     [[nodiscard]] Buffer* bufferForResource(const GpuGraphResourceId& resource)const noexcept;
+    [[nodiscard]] GraphicsPipeline* graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
+    [[nodiscard]] ComputePipeline* computePipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
+    [[nodiscard]] MeshletPipeline* meshletPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
+    [[nodiscard]] RayTracingPipeline* rayTracingPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
     [[nodiscard]] bool recordTask(
         const GpuTaskId& task,
         CommandList& commandList,
@@ -264,6 +309,7 @@ private:
         GpuTaskPayloadDestroyThunk destroyPayload
     );
     [[nodiscard]] GpuGraphResourceId appendResource(const GpuGraphResourceDesc& desc);
+    [[nodiscard]] GpuGraphPipelineId appendPipeline(const GpuGraphPipelineDesc& desc);
     [[nodiscard]] GpuExternalCompletionId appendExternalCompletion(const GpuExternalCompletionDesc& desc);
     [[nodiscard]] bool appendMarkerLabel(AStringView text, u32& outOffset, u32& outSize);
     [[nodiscard]] AStringView markerLabel(u32 offset, u32 size)const;
@@ -277,6 +323,7 @@ private:
     GraphicsVector<GpuExternalCompletionId> m_externalDependencies;
     GraphicsVector<GpuTaskResourceUse> m_resourceUses;
     GraphicsVector<GpuGraphResourceNode> m_resources;
+    GraphicsVector<GpuGraphPipelineNode> m_pipelines;
     GraphicsVector<GpuExternalCompletionNode> m_externalCompletions;
     GraphicsBytes m_markerText;
     u64 m_generation = 0u;

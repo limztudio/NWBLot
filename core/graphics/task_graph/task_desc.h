@@ -67,6 +67,19 @@ struct GpuGraphResourceDesc{
     constexpr GpuGraphResourceDesc& setQueueSharing(const ResourceQueueSharing::Mask value){ queueSharing = value; return *this; }
 };
 
+// Pipeline metadata is graph-owned so optional command capture can refer to stable graph IDs instead of backend
+// pointers. Typed import overloads retain the matching engine pipeline handle; importPipeline is metadata-only for
+// analysis/tooling paths that do not record a native pipeline bind yet.
+struct GpuGraphPipelineDesc{
+    Name identity = NAME_NONE;
+    AStringView markerLabel;
+    GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
+
+    constexpr GpuGraphPipelineDesc& setIdentity(const Name& value){ identity = value; return *this; }
+    constexpr GpuGraphPipelineDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
+    constexpr GpuGraphPipelineDesc& setType(const GpuGraphPipelineType::Enum value){ type = value; return *this; }
+};
+
 // Phase 1 represents prior-frame and other out-of-graph completions as named metadata nodes. It deliberately does
 // not make QueueSubmissionToken authoritative until the physical-queue and device-generation contracts arrive.
 struct GpuExternalCompletionDesc{

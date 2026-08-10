@@ -278,6 +278,15 @@ struct ClearTextureTask{
         && resource.queueSharing == desc.queueSharing;
 }
 
+[[nodiscard]] static bool CompatiblePipelineMetadata(
+    const GpuTaskGraphPipelineView& pipeline,
+    const GpuGraphPipelineDesc& desc
+)noexcept{
+    // Identity and concrete pipeline kind define the graph-side table key.  Marker text is observational metadata,
+    // matching resource imports where a later compatible import reuses the original graph-owned label.
+    return pipeline.identity == desc.identity && pipeline.type == desc.type;
+}
+
 [[nodiscard]] static bool ClearTextureValueMatchesFormat(
     const TextureDesc& textureDesc,
     const GpuClearTextureTaskDesc& clearDesc
@@ -320,6 +329,7 @@ GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
     , m_externalDependencies(arena)
     , m_resourceUses(arena)
     , m_resources(arena)
+    , m_pipelines(arena)
     , m_externalCompletions(arena)
     , m_markerText(arena)
     , m_generation(__hidden_gpu_task_graph::AllocateGeneration())
@@ -742,6 +752,118 @@ GpuGraphResourceId GpuTaskGraph::importHazardDomain(const GpuGraphResourceDesc& 
     return importResource(desc);
 }
 
+GpuGraphPipelineId GpuTaskGraph::importPipeline(const GpuGraphPipelineDesc& desc){
+    if(!desc.identity || desc.markerLabel.empty() || desc.type >= GpuGraphPipelineType::kCount)
+        return {};
+
+    for(usize pipelineIndex = 0u; pipelineIndex < m_pipelines.size(); ++pipelineIndex){
+        const GpuTaskGraphPipelineView existing = pipelineAt(pipelineIndex);
+        if(existing.identity != desc.identity)
+            continue;
+        if(!__hidden_gpu_task_graph::CompatiblePipelineMetadata(existing, desc))
+            return {};
+        return GpuGraphPipelineId{ static_cast<u32>(pipelineIndex), m_generation };
+    }
+
+    return appendPipeline(desc);
+}
+
+GpuGraphPipelineId GpuTaskGraph::importGraphicsPipeline(
+    const GraphicsPipelineHandle& pipeline,
+    const GpuGraphPipelineDesc& desc
+){
+    if(!pipeline || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphPipelineType::Graphics)
+        return {};
+
+    for(usize pipelineIndex = 0u; pipelineIndex < m_pipelines.size(); ++pipelineIndex){
+        const GpuGraphPipelineNode& existing = m_pipelines[pipelineIndex];
+        if(existing.type == GpuGraphPipelineType::Graphics && existing.graphicsPipeline.get() == pipeline.get()){
+            if(!__hidden_gpu_task_graph::CompatiblePipelineMetadata(pipelineAt(pipelineIndex), desc))
+                return {};
+            return GpuGraphPipelineId{ static_cast<u32>(pipelineIndex), m_generation };
+        }
+        if(existing.identity == desc.identity)
+            return {};
+    }
+
+    const GpuGraphPipelineId id = appendPipeline(desc);
+    if(id.valid())
+        m_pipelines[id.index].graphicsPipeline = pipeline;
+    return id;
+}
+
+GpuGraphPipelineId GpuTaskGraph::importComputePipeline(
+    const ComputePipelineHandle& pipeline,
+    const GpuGraphPipelineDesc& desc
+){
+    if(!pipeline || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphPipelineType::Compute)
+        return {};
+
+    for(usize pipelineIndex = 0u; pipelineIndex < m_pipelines.size(); ++pipelineIndex){
+        const GpuGraphPipelineNode& existing = m_pipelines[pipelineIndex];
+        if(existing.type == GpuGraphPipelineType::Compute && existing.computePipeline.get() == pipeline.get()){
+            if(!__hidden_gpu_task_graph::CompatiblePipelineMetadata(pipelineAt(pipelineIndex), desc))
+                return {};
+            return GpuGraphPipelineId{ static_cast<u32>(pipelineIndex), m_generation };
+        }
+        if(existing.identity == desc.identity)
+            return {};
+    }
+
+    const GpuGraphPipelineId id = appendPipeline(desc);
+    if(id.valid())
+        m_pipelines[id.index].computePipeline = pipeline;
+    return id;
+}
+
+GpuGraphPipelineId GpuTaskGraph::importMeshletPipeline(
+    const MeshletPipelineHandle& pipeline,
+    const GpuGraphPipelineDesc& desc
+){
+    if(!pipeline || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphPipelineType::Meshlet)
+        return {};
+
+    for(usize pipelineIndex = 0u; pipelineIndex < m_pipelines.size(); ++pipelineIndex){
+        const GpuGraphPipelineNode& existing = m_pipelines[pipelineIndex];
+        if(existing.type == GpuGraphPipelineType::Meshlet && existing.meshletPipeline.get() == pipeline.get()){
+            if(!__hidden_gpu_task_graph::CompatiblePipelineMetadata(pipelineAt(pipelineIndex), desc))
+                return {};
+            return GpuGraphPipelineId{ static_cast<u32>(pipelineIndex), m_generation };
+        }
+        if(existing.identity == desc.identity)
+            return {};
+    }
+
+    const GpuGraphPipelineId id = appendPipeline(desc);
+    if(id.valid())
+        m_pipelines[id.index].meshletPipeline = pipeline;
+    return id;
+}
+
+GpuGraphPipelineId GpuTaskGraph::importRayTracingPipeline(
+    const RayTracingPipelineHandle& pipeline,
+    const GpuGraphPipelineDesc& desc
+){
+    if(!pipeline || !desc.identity || desc.markerLabel.empty() || desc.type != GpuGraphPipelineType::RayTracing)
+        return {};
+
+    for(usize pipelineIndex = 0u; pipelineIndex < m_pipelines.size(); ++pipelineIndex){
+        const GpuGraphPipelineNode& existing = m_pipelines[pipelineIndex];
+        if(existing.type == GpuGraphPipelineType::RayTracing && existing.rayTracingPipeline.get() == pipeline.get()){
+            if(!__hidden_gpu_task_graph::CompatiblePipelineMetadata(pipelineAt(pipelineIndex), desc))
+                return {};
+            return GpuGraphPipelineId{ static_cast<u32>(pipelineIndex), m_generation };
+        }
+        if(existing.identity == desc.identity)
+            return {};
+    }
+
+    const GpuGraphPipelineId id = appendPipeline(desc);
+    if(id.valid())
+        m_pipelines[id.index].rayTracingPipeline = pipeline;
+    return id;
+}
+
 GpuExternalCompletionId GpuTaskGraph::importExternalCompletion(const GpuExternalCompletionDesc& desc){
     if(!desc.identity || desc.markerLabel.empty())
         return {};
@@ -761,6 +883,7 @@ void GpuTaskGraph::reset(){
     m_externalDependencies.clear();
     m_resourceUses.clear();
     m_resources.clear();
+    m_pipelines.clear();
     m_externalCompletions.clear();
     m_markerText.clear();
     m_generation = __hidden_gpu_task_graph::AllocateGeneration();
@@ -772,6 +895,10 @@ bool GpuTaskGraph::validTask(const GpuTaskId& id)const noexcept{
 
 bool GpuTaskGraph::validResource(const GpuGraphResourceId& id)const noexcept{
     return id.valid() && id.generation == m_generation && id.index < m_resources.size();
+}
+
+bool GpuTaskGraph::validPipeline(const GpuGraphPipelineId& id)const noexcept{
+    return id.valid() && id.generation == m_generation && id.index < m_pipelines.size();
 }
 
 bool GpuTaskGraph::validExternalCompletion(const GpuExternalCompletionId& id)const noexcept{
@@ -813,6 +940,21 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
     };
 }
 
+GpuTaskGraphPipelineView GpuTaskGraph::pipelineAt(const usize index)const{
+    NWB_ASSERT(index < m_pipelines.size());
+    const GpuGraphPipelineNode& pipeline = m_pipelines[index];
+    return GpuTaskGraphPipelineView{
+        .id = GpuGraphPipelineId{ static_cast<u32>(index), m_generation },
+        .identity = pipeline.identity,
+        .markerLabel = markerLabel(pipeline.markerLabelOffset, pipeline.markerLabelSize),
+        .type = pipeline.type,
+        .hasBackendPipeline = pipeline.graphicsPipeline != nullptr
+            || pipeline.computePipeline != nullptr
+            || pipeline.meshletPipeline != nullptr
+            || pipeline.rayTracingPipeline != nullptr,
+    };
+}
+
 GpuTaskGraphExternalCompletionView GpuTaskGraph::externalCompletionAt(const usize index)const{
     NWB_ASSERT(index < m_externalCompletions.size());
     const GpuExternalCompletionNode& completion = m_externalCompletions[index];
@@ -835,6 +977,34 @@ Buffer* GpuTaskGraph::bufferForResource(const GpuGraphResourceId& resource)const
         return nullptr;
     const GpuGraphResourceNode& node = m_resources[resource.index];
     return node.type == GpuGraphResourceType::Buffer ? node.buffer.get() : nullptr;
+}
+
+GraphicsPipeline* GpuTaskGraph::graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept{
+    if(!validPipeline(pipeline))
+        return nullptr;
+    const GpuGraphPipelineNode& node = m_pipelines[pipeline.index];
+    return node.type == GpuGraphPipelineType::Graphics ? node.graphicsPipeline.get() : nullptr;
+}
+
+ComputePipeline* GpuTaskGraph::computePipelineFor(const GpuGraphPipelineId& pipeline)const noexcept{
+    if(!validPipeline(pipeline))
+        return nullptr;
+    const GpuGraphPipelineNode& node = m_pipelines[pipeline.index];
+    return node.type == GpuGraphPipelineType::Compute ? node.computePipeline.get() : nullptr;
+}
+
+MeshletPipeline* GpuTaskGraph::meshletPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept{
+    if(!validPipeline(pipeline))
+        return nullptr;
+    const GpuGraphPipelineNode& node = m_pipelines[pipeline.index];
+    return node.type == GpuGraphPipelineType::Meshlet ? node.meshletPipeline.get() : nullptr;
+}
+
+RayTracingPipeline* GpuTaskGraph::rayTracingPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept{
+    if(!validPipeline(pipeline))
+        return nullptr;
+    const GpuGraphPipelineNode& node = m_pipelines[pipeline.index];
+    return node.type == GpuGraphPipelineType::RayTracing ? node.rayTracingPipeline.get() : nullptr;
 }
 
 bool GpuTaskGraph::recordTask(
@@ -1154,6 +1324,31 @@ GpuGraphResourceId GpuTaskGraph::appendResource(const GpuGraphResourceDesc& desc
     const u32 index = static_cast<u32>(m_resources.size());
     m_resources.push_back(Move(resource));
     return GpuGraphResourceId{ index, m_generation };
+}
+
+GpuGraphPipelineId GpuTaskGraph::appendPipeline(const GpuGraphPipelineDesc& desc){
+    if(
+        !desc.identity
+        || desc.markerLabel.empty()
+        || desc.type >= GpuGraphPipelineType::kCount
+        || m_pipelines.size() >= Limit<u32>::s_Max
+    )
+        return {};
+
+    u32 markerLabelOffset = 0u;
+    u32 markerLabelSize = 0u;
+    if(!appendMarkerLabel(desc.markerLabel, markerLabelOffset, markerLabelSize))
+        return {};
+
+    GpuGraphPipelineNode pipeline;
+    pipeline.identity = desc.identity;
+    pipeline.type = desc.type;
+    pipeline.markerLabelOffset = markerLabelOffset;
+    pipeline.markerLabelSize = markerLabelSize;
+
+    const u32 index = static_cast<u32>(m_pipelines.size());
+    m_pipelines.push_back(Move(pipeline));
+    return GpuGraphPipelineId{ index, m_generation };
 }
 
 GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternalCompletionDesc& desc){

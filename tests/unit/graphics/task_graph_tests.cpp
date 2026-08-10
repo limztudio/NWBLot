@@ -90,6 +90,21 @@ inline constexpr Name s_TaskGraphScratchArena("tests/graphics/task_graph_scratch
     return graph.importResource(desc);
 }
 
+[[nodiscard]] Graphics::GpuGraphPipelineId AddPipelineMetadata(
+    Graphics::GpuTaskGraph& graph,
+    const Name& identity,
+    const AStringView label,
+    const Graphics::GpuGraphPipelineType::Enum type
+){
+    Graphics::GpuGraphPipelineDesc desc;
+    desc
+        .setIdentity(identity)
+        .setMarkerLabel(label)
+        .setType(type)
+    ;
+    return graph.importPipeline(desc);
+}
+
 [[nodiscard]] Graphics::GpuTaskId AddTask(
     Graphics::GpuTaskGraph& graph,
     const Name& identity,
@@ -405,6 +420,70 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     EXPECT_EQ(destructionCount, 1u);
     EXPECT_FALSE(graph.validTask(task));
     EXPECT_FALSE(graph.validResource(resource));
+}
+
+TEST(GpuTaskGraph, OwnsPipelineMetadataAndInvalidatesPipelineIdsOnReset){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+
+    Graphics::GpuGraphPipelineDesc invalidDesc;
+    invalidDesc
+        .setIdentity(Name("tests/task_graph/invalid_pipeline"))
+        .setMarkerLabel("Invalid Pipeline")
+    ;
+    EXPECT_FALSE(graph.importPipeline(invalidDesc).valid());
+    EXPECT_FALSE(graph.importComputePipeline(
+        Graphics::ComputePipelineHandle{},
+        Graphics::GpuGraphPipelineDesc{}
+            .setIdentity(Name("tests/task_graph/null_compute_pipeline"))
+            .setMarkerLabel("Null Compute Pipeline")
+            .setType(Graphics::GpuGraphPipelineType::Compute)
+    ).valid());
+
+    char markerLabel[] = "Deferred Lighting Pipeline";
+    Graphics::GpuGraphPipelineDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/deferred_lighting_pipeline"))
+        .setMarkerLabel(AStringView(markerLabel))
+        .setType(Graphics::GpuGraphPipelineType::Compute)
+    ;
+    const Graphics::GpuGraphPipelineId pipeline = graph.importPipeline(desc);
+    ASSERT_TRUE(pipeline.valid());
+    EXPECT_TRUE(graph.validPipeline(pipeline));
+    EXPECT_EQ(graph.pipelineCount(), 1u);
+    EXPECT_EQ(graph.importPipeline(desc), pipeline);
+
+    markerLabel[0] = 'X';
+    const Graphics::GpuTaskGraphPipelineView stored = graph.pipelineAt(pipeline.index);
+    EXPECT_EQ(stored.id, pipeline);
+    EXPECT_EQ(stored.identity, desc.identity);
+    EXPECT_EQ(stored.markerLabel, AStringView("Deferred Lighting Pipeline"));
+    EXPECT_EQ(stored.type, Graphics::GpuGraphPipelineType::Compute);
+    EXPECT_FALSE(stored.hasBackendPipeline);
+    EXPECT_EQ(graph.graphicsPipelineFor(pipeline), nullptr);
+    EXPECT_EQ(graph.computePipelineFor(pipeline), nullptr);
+    EXPECT_EQ(graph.meshletPipelineFor(pipeline), nullptr);
+    EXPECT_EQ(graph.rayTracingPipelineFor(pipeline), nullptr);
+
+    Graphics::GpuGraphPipelineDesc mismatchedType = desc;
+    mismatchedType.setType(Graphics::GpuGraphPipelineType::Graphics);
+    EXPECT_FALSE(graph.importPipeline(mismatchedType).valid());
+
+    graph.reset();
+    EXPECT_EQ(graph.pipelineCount(), 0u);
+    EXPECT_FALSE(graph.validPipeline(pipeline));
+    EXPECT_EQ(graph.computePipelineFor(pipeline), nullptr);
+
+    const Graphics::GpuGraphPipelineId replacement = AddPipelineMetadata(
+        graph,
+        Name("tests/task_graph/deferred_lighting_pipeline"),
+        "Replacement Pipeline",
+        Graphics::GpuGraphPipelineType::Compute
+    );
+    ASSERT_TRUE(replacement.valid());
+    EXPECT_EQ(replacement.index, 0u);
+    EXPECT_NE(replacement.generation, pipeline.generation);
+    EXPECT_NE(replacement, pipeline);
 }
 
 TEST(GpuTaskGraph, CopyTextureTaskRequiresTypedTextureImports){

@@ -3288,6 +3288,175 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedTransferQueueCopiesConcurrentBuff
 }
 
 
+// Setup uploads expose only a returned resource handle, so an automatic Transfer producer must publish readiness
+// onto Graphics before it returns. This deliberately submits the Graphics copy without an explicit wait token: queue
+// order behind the setup bridge is the compatibility contract that keeps legacy callers and graph imports safe.
+TEST_F(DescriptorBufferRoundTripTest, SetupBufferUsesDedicatedTransferAndBridgesGraphicsReadiness){
+    HeadlessGraphicsScope transferScope;
+    ASSERT_TRUE(transferScope.setTransferQueueEnabled(true));
+    if(!transferScope.initialize())
+        GTEST_SKIP() << "Setup upload Transfer route: no usable dedicated-transfer headless Vulkan device on this host.";
+
+    auto& graphics = transferScope.graphics();
+    auto& device = graphics.getDevice();
+    if(!device.getQueue(CommandQueue::Transfer))
+        GTEST_SKIP() << "Setup upload Transfer route: adapter has no dedicated transfer-only queue family.";
+
+    static constexpr usize s_UploadByteSize = 1024u * 1024u;
+    static constexpr usize s_UploadWordCount = s_UploadByteSize / sizeof(u32);
+    Vector<u32, Alloc::GlobalArena> uploadWords(transferScope.arena());
+    uploadWords.resize(s_UploadWordCount);
+    for(usize wordIndex = 0u; wordIndex < s_UploadWordCount; ++wordIndex)
+        uploadWords[wordIndex] = 0x9e3779b9u * static_cast<u32>(wordIndex) + 0x5a17c3e1u;
+
+    QueueSubmissionToken uploadToken;
+    Graphics::BufferSetupDesc setupDesc;
+    setupDesc.bufferDesc = BufferDesc()
+        .setByteSize(s_UploadByteSize)
+        .setInitialState(ResourceStates::Common)
+    ;
+    setupDesc.data = uploadWords.data();
+    setupDesc.dataSize = s_UploadByteSize;
+    setupDesc.acceptedToken = &uploadToken;
+    const BufferHandle source = graphics.setupBuffer(setupDesc);
+    ASSERT_NE(source.get(), nullptr);
+    ASSERT_TRUE(uploadToken.valid());
+    ASSERT_EQ(uploadToken.queue, CommandQueue::Transfer);
+    EXPECT_EQ(source->getDescription().queueSharing, ResourceQueueSharing::GraphicsAndTransfer);
+
+    const BufferDesc destinationDesc = BufferDesc()
+        .setByteSize(s_UploadByteSize)
+        .setInitialState(ResourceStates::Common)
+        .setCpuAccess(CpuAccessMode::Read)
+    ;
+    const BufferHandle destination = device.createBuffer(destinationDesc);
+    ASSERT_NE(destination.get(), nullptr);
+
+    auto graphicsCopy = device.createCommandList();
+    ASSERT_NE(graphicsCopy.get(), nullptr);
+    graphicsCopy->open();
+    graphicsCopy->copyBuffer(destination.get(), 0u, source.get(), 0u, s_UploadByteSize);
+    graphicsCopy->close();
+
+    CommandList* graphicsCopyLists[] = { graphicsCopy.get() };
+    const QueueSubmissionToken graphicsCopyToken = device.executeCommandLists(
+        graphicsCopyLists,
+        LengthOf(graphicsCopyLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(graphicsCopyToken.valid());
+    ASSERT_EQ(graphicsCopyToken.queue, CommandQueue::Graphics);
+    ASSERT_TRUE(device.waitForIdle());
+
+    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    ASSERT_NE(copiedWords, nullptr);
+    const usize sampledWords[] = { 0u, s_UploadWordCount / 2u, s_UploadWordCount - 1u };
+    for(const usize wordIndex : sampledWords)
+        EXPECT_EQ(copiedWords[wordIndex], uploadWords[wordIndex]);
+    device.unmapBuffer(destination.get());
+}
+
+
+// If no dedicated Transfer family exists, automatic sizeable setup uploads must still choose a real transport: a
+// dedicated Compute queue when one is available, otherwise the established Graphics path. The accepted token makes
+// this routing observable without exposing a backend-specific queue object through the public setup API.
+TEST_F(DescriptorBufferRoundTripTest, SetupBufferAutomaticallyFallsBackWithoutTransfer){
+    HeadlessGraphicsScope fallbackScope;
+    ASSERT_TRUE(fallbackScope.setTransferQueueEnabled(false));
+    if(!fallbackScope.initialize())
+        GTEST_SKIP() << "Setup upload fallback: no usable headless Vulkan device on this host.";
+
+    auto& graphics = fallbackScope.graphics();
+    auto& device = graphics.getDevice();
+    ASSERT_EQ(device.getQueue(CommandQueue::Transfer), nullptr);
+
+    static constexpr usize s_UploadByteSize = 1024u * 1024u;
+    Vector<u8, Alloc::GlobalArena> uploadBytes(fallbackScope.arena());
+    uploadBytes.resize(s_UploadByteSize);
+    for(usize byteIndex = 0u; byteIndex < s_UploadByteSize; ++byteIndex)
+        uploadBytes[byteIndex] = static_cast<u8>(byteIndex);
+
+    QueueSubmissionToken uploadToken;
+    Graphics::BufferSetupDesc setupDesc;
+    setupDesc.bufferDesc = BufferDesc()
+        .setByteSize(s_UploadByteSize)
+        .setInitialState(ResourceStates::Common)
+    ;
+    setupDesc.data = uploadBytes.data();
+    setupDesc.dataSize = s_UploadByteSize;
+    setupDesc.acceptedToken = &uploadToken;
+    const BufferHandle uploaded = graphics.setupBuffer(setupDesc);
+    ASSERT_NE(uploaded.get(), nullptr);
+    ASSERT_TRUE(uploadToken.valid());
+
+    const CommandQueue::Enum expectedQueue = device.getQueue(CommandQueue::Compute)
+        ? CommandQueue::Compute
+        : CommandQueue::Graphics
+    ;
+    EXPECT_EQ(uploadToken.queue, expectedQueue);
+    EXPECT_EQ(
+        uploaded->getDescription().queueSharing,
+        expectedQueue == CommandQueue::Compute
+            ? ResourceQueueSharing::GraphicsAndAsyncCompute
+            : ResourceQueueSharing::Exclusive
+    );
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// Exercise the texture path through the same automatic resolver. A one-mip 512x512 RGBA texture is deliberately
+// large enough to cross the automatic-transfer threshold; with Transfer disabled it must use Compute when present
+// or retain Graphics, while publishing the requested ShaderResource state before the setup call returns.
+TEST_F(DescriptorBufferRoundTripTest, SetupTextureAutomaticallyFallsBackWithoutTransfer){
+    HeadlessGraphicsScope fallbackScope;
+    ASSERT_TRUE(fallbackScope.setTransferQueueEnabled(false));
+    if(!fallbackScope.initialize())
+        GTEST_SKIP() << "Setup texture fallback: no usable headless Vulkan device on this host.";
+
+    auto& graphics = fallbackScope.graphics();
+    auto& device = graphics.getDevice();
+    ASSERT_EQ(device.getQueue(CommandQueue::Transfer), nullptr);
+
+    static constexpr u32 s_TextureWidth = 512u;
+    static constexpr u32 s_TextureHeight = 512u;
+    static constexpr usize s_UploadByteSize = static_cast<usize>(s_TextureWidth) * s_TextureHeight * 4u;
+    Vector<u8, Alloc::GlobalArena> uploadBytes(fallbackScope.arena());
+    uploadBytes.resize(s_UploadByteSize);
+    for(usize byteIndex = 0u; byteIndex < s_UploadByteSize; ++byteIndex)
+        uploadBytes[byteIndex] = static_cast<u8>(byteIndex * 17u);
+
+    QueueSubmissionToken uploadToken;
+    Graphics::TextureSetupDesc setupDesc;
+    setupDesc.textureDesc = TextureDesc()
+        .setWidth(s_TextureWidth)
+        .setHeight(s_TextureHeight)
+        .setFormat(Format::RGBA8_UNORM)
+        .setInitialState(ResourceStates::ShaderResource)
+    ;
+    setupDesc.data = uploadBytes.data();
+    setupDesc.uploadDataSize = s_UploadByteSize;
+    setupDesc.acceptedToken = &uploadToken;
+    const TextureHandle uploaded = graphics.setupTexture(setupDesc);
+    ASSERT_NE(uploaded.get(), nullptr);
+    ASSERT_TRUE(uploadToken.valid());
+
+    const CommandQueue::Enum expectedQueue = device.getQueue(CommandQueue::Compute)
+        ? CommandQueue::Compute
+        : CommandQueue::Graphics
+    ;
+    EXPECT_EQ(uploadToken.queue, expectedQueue);
+    EXPECT_EQ(
+        uploaded->getDescription().queueSharing,
+        expectedQueue == CommandQueue::Compute
+            ? ResourceQueueSharing::GraphicsAndAsyncCompute
+            : ResourceQueueSharing::Exclusive
+    );
+    EXPECT_EQ(uploaded->getDescription().initialState, ResourceStates::ShaderResource);
+    EXPECT_TRUE(device.waitForIdle());
+}
+
+
 // A dedicated compute family is optional in CI, but when one exists this is the phase-zero ownership proof:
 // exclusive storage moves Compute -> Graphics -> Compute with paired release/acquire barriers and submission-local
 // timeline tokens. No rendering job has moved yet; this specifically validates the resource-lifecycle round trip

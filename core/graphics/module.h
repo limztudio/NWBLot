@@ -31,7 +31,13 @@ public:
         const void* data = nullptr;
         usize dataSize = 0;
         u64 destOffsetBytes = 0;
-        CommandQueue::Enum queue = CommandQueue::Graphics;
+        // kCount selects the automatic setup-upload route: sizeable uploads prefer a real dedicated Transfer
+        // transport, then dedicated Compute, then Graphics. Supplying a concrete queue preserves an explicit
+        // caller preference; Transfer and Compute still fall back to an available physical transport.
+        CommandQueue::Enum queue = CommandQueue::kCount;
+        // Written only after the upload submission and every declared consumer-queue readiness bridge have been
+        // accepted. Async callers must keep this storage alive until their setup job completes.
+        QueueSubmissionToken* acceptedToken = nullptr;
     };
 
     struct TextureSetupDesc{
@@ -43,7 +49,10 @@ public:
         usize depthPitch = 0;
         u32 arraySlice = 0;
         u32 mipLevel = 0;
-        CommandQueue::Enum queue = CommandQueue::Graphics;
+        // See BufferSetupDesc::queue. Unknown texture final states retain the established Graphics route because
+        // an automatic cross-queue upload cannot safely publish an opaque layout/state contract.
+        CommandQueue::Enum queue = CommandQueue::kCount;
+        QueueSubmissionToken* acceptedToken = nullptr;
     };
 
     struct MeshSetupDesc{
@@ -55,7 +64,8 @@ public:
         Name indexBufferName;
         u32 vertexStride = 0;
         bool use32BitIndices = true;
-        CommandQueue::Enum queue = CommandQueue::Graphics;
+        // Forwarded to the constituent buffer setups. kCount enables the automatic upload transport policy.
+        CommandQueue::Enum queue = CommandQueue::kCount;
     };
 
     struct MeshResource{

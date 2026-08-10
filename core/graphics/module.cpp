@@ -26,6 +26,152 @@ namespace __hidden_graphics{
 
 using UploadBytes = Vector<u8, Alloc::GlobalArena>;
 constexpr u32 s_DefaultWaveLaneCount = 64u;
+// Before per-upload timing exists, retain small setup copies on Graphics. Large asset payloads are the first
+// Transfer migration target; callers that know a small upload benefits from a dedicated transport can still request
+// CommandQueue::Transfer explicitly.
+constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
+
+
+[[nodiscard]] static ResourceQueueSharing::Mask QueueSharingBitForQueue(const CommandQueue::Enum queue)noexcept{
+    switch(queue){
+    case CommandQueue::Graphics:
+        return ResourceQueueSharing::Graphics;
+    case CommandQueue::Compute:
+        return ResourceQueueSharing::AsyncCompute;
+    case CommandQueue::Transfer:
+        return ResourceQueueSharing::Transfer;
+    default:
+        return ResourceQueueSharing::Exclusive;
+    }
+}
+
+[[nodiscard]] static bool QueueSharingIncludesQueue(
+    const ResourceQueueSharing::Mask sharing,
+    const CommandQueue::Enum queue
+)noexcept{
+    const u8 queueBit = static_cast<u8>(QueueSharingBitForQueue(queue));
+    return queueBit != 0u && (static_cast<u8>(sharing) & queueBit) != 0u;
+}
+
+// The public setup descriptors predate physical Transfer transport. When an upload moves away from Graphics, retain
+// the descriptor's declared consumers and add the producer family. An otherwise-exclusive setup resource keeps its
+// established Graphics consumer contract, which lets the returned handle remain immediately usable by legacy code.
+[[nodiscard]] static ResourceQueueSharing::Mask ResolveSetupUploadQueueSharing(
+    const ResourceQueueSharing::Mask requestedSharing,
+    const CommandQueue::Enum uploadQueue
+)noexcept{
+    if(uploadQueue == CommandQueue::Graphics)
+        return requestedSharing;
+
+    const ResourceQueueSharing::Mask baseSharing = requestedSharing == ResourceQueueSharing::Exclusive
+        ? ResourceQueueSharing::Graphics
+        : requestedSharing
+    ;
+    return static_cast<ResourceQueueSharing::Mask>(
+        static_cast<u8>(baseSharing) | static_cast<u8>(QueueSharingBitForQueue(uploadQueue))
+    );
+}
+
+[[nodiscard]] static CommandQueue::Enum ResolveTransferPreferredQueue(GraphicsBackend::Device& device)noexcept{
+    if(device.getQueue(CommandQueue::Transfer))
+        return CommandQueue::Transfer;
+    if(device.getQueue(CommandQueue::Compute))
+        return CommandQueue::Compute;
+    return CommandQueue::Graphics;
+}
+
+[[nodiscard]] static CommandQueue::Enum ResolveSetupUploadQueue(
+    GraphicsBackend::Device& device,
+    const CommandQueue::Enum requestedQueue,
+    const usize uploadBytes,
+    const bool hasKnownFinalState
+)noexcept{
+    switch(requestedQueue){
+    case CommandQueue::kCount:
+        if(uploadBytes < s_TransferPreferredUploadMinimumBytes || !hasKnownFinalState)
+            return CommandQueue::Graphics;
+        return ResolveTransferPreferredQueue(device);
+    case CommandQueue::Transfer:
+        return hasKnownFinalState ? ResolveTransferPreferredQueue(device) : CommandQueue::Graphics;
+    case CommandQueue::Compute:
+        return hasKnownFinalState && device.getQueue(CommandQueue::Compute)
+            ? CommandQueue::Compute
+            : CommandQueue::Graphics
+        ;
+    case CommandQueue::Graphics:
+        return CommandQueue::Graphics;
+    default:
+        NWB_ASSERT_MSG(false, NWB_TEXT("Graphics: setup upload requested an invalid command queue"));
+        return CommandQueue::Graphics;
+    }
+}
+
+// A setup API returns only a resource handle, not an external-completion handle that every future graph import must
+// consume. Bridge an accepted upload onto every declared consumer queue before returning, so later submissions retain
+// the old same-queue readiness guarantee while the producer may use Transfer or Compute.
+[[nodiscard]] static bool BridgeSetupUploadToConsumerQueues(
+    GraphicsBackend::Device& device,
+    const QueueSubmissionToken& uploadToken,
+    const ResourceQueueSharing::Mask queueSharing
+){
+    if(!uploadToken.valid())
+        return false;
+
+    constexpr CommandQueue::Enum consumerQueues[] = {
+        CommandQueue::Graphics,
+        CommandQueue::Compute,
+        CommandQueue::Transfer,
+    };
+    for(const CommandQueue::Enum consumerQueue : consumerQueues){
+        if(
+            consumerQueue == uploadToken.queue
+            || !QueueSharingIncludesQueue(queueSharing, consumerQueue)
+            || !device.getQueue(consumerQueue)
+        )
+            continue;
+
+        QueueSubmissionDesc bridgeDesc;
+        bridgeDesc.setWaitTokens(&uploadToken, 1u);
+        const QueueSubmissionToken bridgeToken = device.executeCommandLists(
+            nullptr,
+            0u,
+            consumerQueue,
+            bridgeDesc
+        );
+        if(!bridgeToken.valid()){
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Graphics: failed to bridge setup upload readiness from queue {} to queue {}"),
+                static_cast<u32>(uploadToken.queue),
+                static_cast<u32>(consumerQueue)
+            );
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] static bool SubmitSetupUpload(
+    GraphicsBackend::Device& device,
+    CommandListHandle& commandList,
+    const CommandQueue::Enum uploadQueue,
+    const ResourceQueueSharing::Mask queueSharing,
+    QueueSubmissionToken& outUploadToken
+){
+    outUploadToken = {};
+    if(!commandList || !commandList->hasCommandBuffer())
+        return false;
+
+    CommandList* const commandLists[] = { commandList.get() };
+    outUploadToken = device.executeCommandLists(
+        commandLists,
+        LengthOf(commandLists),
+        uploadQueue,
+        QueueSubmissionDesc{}
+    );
+    return outUploadToken.valid()
+        && BridgeSetupUploadToConsumerQueues(device, outUploadToken, queueSharing)
+    ;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -911,20 +1057,33 @@ bool Graphics::animateRenderPresent(){
 
 BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
     auto& device = getDevice();
+    if(desc.acceptedToken)
+        *desc.acceptedToken = {};
     if(!__hidden_graphics::ValidateBufferSetupUpload(desc))
         return {};
 
-    BufferHandle buffer = device.createBuffer(desc.bufferDesc);
+    if(!desc.data || desc.dataSize == 0)
+        return device.createBuffer(desc.bufferDesc);
+
+    const CommandQueue::Enum uploadQueue = __hidden_graphics::ResolveSetupUploadQueue(
+        device,
+        desc.queue,
+        desc.dataSize,
+        desc.bufferDesc.initialState != ResourceStates::Unknown
+    );
+    BufferDesc uploadDesc = desc.bufferDesc;
+    uploadDesc.queueSharing = __hidden_graphics::ResolveSetupUploadQueueSharing(
+        uploadDesc.queueSharing,
+        uploadQueue
+    );
+    BufferHandle buffer = device.createBuffer(uploadDesc);
     if(!buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create setup buffer '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
         return {};
     }
 
-    if(!desc.data || desc.dataSize == 0)
-        return buffer;
-
     CommandListParameters cmdParams;
-    cmdParams.setQueueType(desc.queue);
+    cmdParams.setQueueType(uploadQueue);
     CommandListHandle commandList = device.createCommandList(cmdParams);
     if(!commandList){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create upload command list for buffer '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
@@ -932,30 +1091,62 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
     }
 
     commandList->open();
+    if(!commandList->hasCommandBuffer()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to open upload command list for buffer '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
+        return {};
+    }
     commandList->writeBuffer(buffer.get(), desc.data, desc.dataSize, desc.destOffsetBytes);
+    // Publish the resource's declared initial state before the cross-queue bridge. This is the state later command
+    // lists and graph imports already use as their exact seed, including BufferDesc's default Common state.
+    if(uploadDesc.initialState != ResourceStates::Unknown)
+        commandList->setBufferState(buffer.get(), uploadDesc.initialState);
     commandList->close();
-    CommandList* commandLists[] = { commandList.get() };
-    device.executeCommandLists(commandLists, 1, desc.queue);
+    QueueSubmissionToken uploadToken;
+    if(!__hidden_graphics::SubmitSetupUpload(
+        device,
+        commandList,
+        uploadQueue,
+        uploadDesc.queueSharing,
+        uploadToken
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit setup buffer upload '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
+        return {};
+    }
+    if(desc.acceptedToken)
+        *desc.acceptedToken = uploadToken;
 
     return buffer;
 }
 
 TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
     auto& device = getDevice();
+    if(desc.acceptedToken)
+        *desc.acceptedToken = {};
     if(!__hidden_graphics::ValidateTextureSetupUpload(desc))
         return {};
 
-    TextureHandle texture = device.createTexture(desc.textureDesc);
+    if(!desc.data || desc.uploadDataSize == 0)
+        return device.createTexture(desc.textureDesc);
+
+    const CommandQueue::Enum uploadQueue = __hidden_graphics::ResolveSetupUploadQueue(
+        device,
+        desc.queue,
+        desc.uploadDataSize,
+        desc.textureDesc.initialState != ResourceStates::Unknown
+    );
+    TextureDesc uploadDesc = desc.textureDesc;
+    uploadDesc.queueSharing = __hidden_graphics::ResolveSetupUploadQueueSharing(
+        uploadDesc.queueSharing,
+        uploadQueue
+    );
+    TextureHandle texture = device.createTexture(uploadDesc);
     if(!texture){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create setup texture '{}'"), StringConvert(desc.textureDesc.name.c_str()));
         return {};
     }
 
-    if(!desc.data || desc.uploadDataSize == 0)
-        return texture;
-
     CommandListParameters cmdParams;
-    cmdParams.setQueueType(desc.queue);
+    cmdParams.setQueueType(uploadQueue);
     CommandListHandle commandList = device.createCommandList(cmdParams);
     if(!commandList){
         NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to create upload command list for texture '{}'"), StringConvert(desc.textureDesc.name.c_str()));
@@ -963,10 +1154,34 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
     }
 
     commandList->open();
+    if(!commandList->hasCommandBuffer()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to open upload command list for texture '{}'"), StringConvert(desc.textureDesc.name.c_str()));
+        return {};
+    }
     commandList->writeTexture(texture.get(), desc.arraySlice, desc.mipLevel, desc.data, desc.rowPitch, desc.depthPitch);
+    // Texture setup publishes only the uploaded subresource. Other mips/slices retain their descriptor state and are
+    // intentionally not claimed by this primitive upload path.
+    if(uploadDesc.initialState != ResourceStates::Unknown){
+        commandList->setTextureState(
+            texture.get(),
+            TextureSubresourceSet(desc.mipLevel, 1u, desc.arraySlice, 1u),
+            uploadDesc.initialState
+        );
+    }
     commandList->close();
-    CommandList* commandLists[] = { commandList.get() };
-    device.executeCommandLists(commandLists, 1, desc.queue);
+    QueueSubmissionToken uploadToken;
+    if(!__hidden_graphics::SubmitSetupUpload(
+        device,
+        commandList,
+        uploadQueue,
+        uploadDesc.queueSharing,
+        uploadToken
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit setup texture upload '{}'"), StringConvert(desc.textureDesc.name.c_str()));
+        return {};
+    }
+    if(desc.acceptedToken)
+        *desc.acceptedToken = uploadToken;
 
     return texture;
 }

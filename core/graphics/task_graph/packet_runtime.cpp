@@ -434,6 +434,7 @@ void GpuGraphSubmissionTransaction::reset(const GpuCompiledGraph& compiledGraph)
     m_latestAcceptedQueueTokens.clear();
     m_generation = compiledGraph.generation();
     m_deviceGeneration = compiledGraph.deviceGeneration();
+    m_acceptedSubmissionCount = 0u;
     m_valid = compiledGraph.valid();
     if(!m_valid)
         return;
@@ -467,26 +468,37 @@ void GpuGraphSubmissionTransaction::acceptPacket(
 )noexcept{
     if(!validFor(compiledGraph) || !compiledGraph.validPacket(packetID) || !token.valid())
         return;
+    const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
+    const GpuPhysicalQueueInfo* const queueInfo = compiledGraph.queueInfo(packet.queue);
+    if(!queueInfo || queueInfo->queueClass >= CommandQueue::kCount)
+        return;
     GpuPacketRuntime& runtime = m_packets[packetID.index];
     if(runtime.state != GpuPacketRuntimeState::Recorded)
         return;
 
     runtime.state = GpuPacketRuntimeState::Accepted;
     runtime.token = token;
-    const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
     const GpuTaskId* const tasks = compiledGraph.packetTasks(packetID);
     for(u32 taskIndex = 0u; tasks && taskIndex < packet.taskCount; ++taskIndex)
         graph.acceptTask(tasks[taskIndex], token);
 
+    ++m_acceptedSubmissionCount;
+    if(m_acceptedSubmissionCount == 0u)
+        ++m_acceptedSubmissionCount;
+
     for(LatestAcceptedQueueToken& latest : m_latestAcceptedQueueTokens){
         if(latest.queue == packet.queue){
+            latest.queueClass = queueInfo->queueClass;
             latest.token = token;
+            latest.acceptanceOrdinal = m_acceptedSubmissionCount;
             return;
         }
     }
     m_latestAcceptedQueueTokens.push_back(LatestAcceptedQueueToken{
         .queue = packet.queue,
+        .queueClass = queueInfo->queueClass,
         .token = token,
+        .acceptanceOrdinal = m_acceptedSubmissionCount,
     });
 }
 
@@ -534,6 +546,25 @@ const QueueSubmissionToken* GpuGraphSubmissionTransaction::latestAcceptedToken(
             return &latest.token;
     }
     return nullptr;
+}
+
+const QueueSubmissionToken* GpuGraphSubmissionTransaction::latestAcceptedToken(
+    const CommandQueue::Enum queueClass
+)const noexcept{
+    if(queueClass >= CommandQueue::kCount)
+        return nullptr;
+
+    const LatestAcceptedQueueToken* result = nullptr;
+    for(const LatestAcceptedQueueToken& latest : m_latestAcceptedQueueTokens){
+        if(
+            latest.queueClass != queueClass
+            || !latest.token.valid()
+            || (result && result->acceptanceOrdinal >= latest.acceptanceOrdinal)
+        )
+            continue;
+        result = &latest;
+    }
+    return result ? &result->token : nullptr;
 }
 
 const GpuPacketRuntime* GpuGraphSubmissionTransaction::packetRuntime(

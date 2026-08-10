@@ -1294,6 +1294,9 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_EQ(acceptedToken.value, firstToken.value);
     ASSERT_NE(transaction.latestAcceptedToken(compiledGraph.packet(firstPacket).queue), nullptr);
     EXPECT_EQ(transaction.latestAcceptedToken(compiledGraph.packet(firstPacket).queue)->value, firstToken.value);
+    ASSERT_NE(transaction.latestAcceptedToken(Graphics::CommandQueue::Compute), nullptr);
+    EXPECT_EQ(transaction.latestAcceptedToken(Graphics::CommandQueue::Compute)->value, firstToken.value);
+    EXPECT_EQ(transaction.latestAcceptedToken(Graphics::CommandQueue::Graphics), nullptr);
 
     // A later packet may reject while the independent recovery tail remains Declared. The accepted producer stays
     // visible, then recovery can still accept before the normal blanket cleanup rejects any remaining packet.
@@ -1318,6 +1321,8 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_EQ(discardedCount, 1u);
     EXPECT_EQ(acceptedToken.queue, recoveryToken.queue);
     EXPECT_EQ(acceptedToken.value, recoveryToken.value);
+    ASSERT_NE(transaction.latestAcceptedToken(Graphics::CommandQueue::Graphics), nullptr);
+    EXPECT_EQ(transaction.latestAcceptedToken(Graphics::CommandQueue::Graphics)->value, recoveryToken.value);
 
     transaction.discardUnaccepted(graph, compiledGraph);
     EXPECT_EQ(acceptedCount, 2u);

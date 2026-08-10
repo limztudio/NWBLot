@@ -224,19 +224,25 @@ public:
 
     [[nodiscard]] QueueSubmissionToken packetToken(const GpuSubmissionPacketId& packet)const noexcept;
     [[nodiscard]] const QueueSubmissionToken* latestAcceptedToken(const GpuPhysicalQueueId& queue)const noexcept;
+    // Returns the most recently accepted token on a resolved transport class, so recovery tails use graph-owned
+    // acceptance order instead of mirroring renderer packet ladders.
+    [[nodiscard]] const QueueSubmissionToken* latestAcceptedToken(CommandQueue::Enum queueClass)const noexcept;
     [[nodiscard]] const GpuPacketRuntime* packetRuntime(const GpuSubmissionPacketId& packet)const noexcept;
 
 
 private:
     struct LatestAcceptedQueueToken{
         GpuPhysicalQueueId queue;
+        CommandQueue::Enum queueClass = CommandQueue::kCount;
         QueueSubmissionToken token;
+        u64 acceptanceOrdinal = 0u;
     };
 
     GraphicsVector<GpuPacketRuntime> m_packets;
     GraphicsVector<LatestAcceptedQueueToken> m_latestAcceptedQueueTokens;
     u64 m_generation = 0u;
     u16 m_deviceGeneration = 0u;
+    u64 m_acceptedSubmissionCount = 0u;
     bool m_valid = false;
 };
 

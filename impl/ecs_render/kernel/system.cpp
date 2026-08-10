@@ -1690,42 +1690,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         restoreAvboitCpuState();
     };
     const auto recoverPendingFrameSubmission = [&]() -> bool {
-        const Core::QueueSubmissionToken* asyncWaitToken = nullptr;
-        if(
-            shadowVisibilitySubmissionToken.valid()
-            && shadowVisibilitySubmissionToken.queue == Core::CommandQueue::Compute
-        )
-            asyncWaitToken = &shadowVisibilitySubmissionToken;
-        if(
-            softwareCausticsSubmissionToken.valid()
-            && softwareCausticsSubmissionToken.queue == Core::CommandQueue::Compute
-        )
-            asyncWaitToken = &softwareCausticsSubmissionToken;
-        if(
-            surfelGiSubmissionToken.valid()
-            && surfelGiSubmissionToken.queue == Core::CommandQueue::Compute
-        )
-            asyncWaitToken = &surfelGiSubmissionToken;
-        if(
-            avboitDepthWarpSubmissionToken.valid()
-            && avboitDepthWarpSubmissionToken.queue == Core::CommandQueue::Compute
-        )
-            asyncWaitToken = &avboitDepthWarpSubmissionToken;
-        if(
-            avboitIntegrationSubmissionToken.valid()
-            && avboitIntegrationSubmissionToken.queue == Core::CommandQueue::Compute
-        )
-            asyncWaitToken = &avboitIntegrationSubmissionToken;
-        if(
-            deferredLightingSubmissionToken.valid()
-            && deferredLightingSubmissionToken.queue == Core::CommandQueue::Compute
-        )
-            asyncWaitToken = &deferredLightingSubmissionToken;
-        if(
-            deferredCompositeSubmissionToken.valid()
-            && deferredCompositeSubmissionToken.queue == Core::CommandQueue::Compute
-        )
-            asyncWaitToken = &deferredCompositeSubmissionToken;
+        // The transaction retains actual accepted transport order, so recovery waits for the latest Compute packet
+        // without mirroring every optional renderer packet in a manual token ladder.
+        const Core::QueueSubmissionToken* const asyncWaitToken =
+            m_deferredLightingSubmissionTransaction.latestAcceptedToken(Core::CommandQueue::Compute);
         return (asyncWaitToken || frameTimingTransaction.needsRetirement())
             ? submitFrameRecoveryPacket(asyncWaitToken)
             : true

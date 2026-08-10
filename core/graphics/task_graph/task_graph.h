@@ -125,6 +125,11 @@ public:
     // provide a payload thunk through the templated overload below.
     [[nodiscard]] GpuTaskId addTask(const GpuTaskDesc& desc);
 
+    // Adds a graph-owned native buffer-copy task. The helper derives CopySource/CopyDest resource uses from its
+    // regions and retains the imported buffers through recording, so desc must declare Transfer capability and
+    // must not provide separate resource uses.
+    [[nodiscard]] GpuTaskId addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopyBufferTaskDesc& copyDesc);
+
     // Adds a graph-owned native texture-copy task. The helper derives CopySource/CopyDest resource uses from its
     // regions and retains the imported textures through recording, so desc must declare Transfer capability and
     // must not provide separate resource uses.

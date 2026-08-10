@@ -995,6 +995,267 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
 }
 
 
+// The buffer primitive follows the same late-recording/lifecycle contract as texture copies, while its exact
+// byte ranges are retained by the payload. The Graphics producer and consumer make a dedicated Transfer route
+// prove an exclusive Graphics -> Transfer -> Graphics ownership handoff; single-queue hosts exercise fallback.
+TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAcceptedToken){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    static constexpr u32 s_SourceWords[] = {
+        0x0347a2d1u,
+        0x89abcdefu,
+        0x5162f093u,
+        0xc0ffee42u,
+    };
+    const BufferDesc sourceDesc = BufferDesc()
+        .setByteSize(sizeof(s_SourceWords))
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::Exclusive)
+        .setCpuAccess(CpuAccessMode::Write)
+    ;
+    const BufferDesc destinationDesc = BufferDesc()
+        .setByteSize(sizeof(s_SourceWords))
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::Exclusive)
+        .setCpuAccess(CpuAccessMode::Read)
+    ;
+    auto source = device.createBuffer(sourceDesc);
+    auto destination = device.createBuffer(destinationDesc);
+    ASSERT_NE(source.get(), nullptr);
+    ASSERT_NE(destination.get(), nullptr);
+
+    u32* const sourceWords = static_cast<u32*>(device.mapBuffer(source.get(), CpuAccessMode::Write));
+    ASSERT_NE(sourceWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
+        sourceWords[wordIndex] = s_SourceWords[wordIndex];
+    device.unmapBuffer(source.get());
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId sourceResource = graph.importBuffer(
+        source,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/built_in_copy_buffer_source"))
+            .setMarkerLabel("Built-In Buffer Copy Source")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId destinationResource = graph.importBuffer(
+        destination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/built_in_copy_buffer_destination"))
+            .setMarkerLabel("Built-In Buffer Copy Destination")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    ASSERT_TRUE(sourceResource.valid());
+    ASSERT_TRUE(destinationResource.valid());
+
+    GpuTaskSchedulingHint copyScheduling;
+    copyScheduling.cost = GpuTaskCostHint::Medium;
+    copyScheduling.forceSubmissionBoundary = true;
+    copyScheduling.allowPacketMerge = false;
+    const GpuTaskResourceUse producerUses[] = {
+        GpuTaskResourceUse{
+            .resource = sourceResource,
+            .range = {},
+            .requiredState = ResourceStates::CopySource,
+            .access = GpuTaskResourceAccess::Write,
+        },
+    };
+    GpuTaskDesc producerTaskDesc;
+    producerTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/built_in_copy_buffer_producer"))
+        .setMarkerLabel("Built-In Buffer Producer")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(copyScheduling)
+        .setResourceUses(producerUses, LengthOf(producerUses))
+    ;
+    bool producerRecorded = false;
+    const GpuTaskId producerTask = graph.addTask<NativePacketPrefixTask>(
+        producerTaskDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = source.get(),
+            .expectedState = ResourceStates::CopySource,
+            .recorded = &producerRecorded,
+        }
+    );
+    ASSERT_TRUE(producerTask.valid());
+
+    GpuTaskDesc copyTaskDesc;
+    copyTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/built_in_copy_buffer"))
+        .setMarkerLabel("Built-In Buffer Copy")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Transfer,
+            GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+        .setScheduling(copyScheduling)
+        .setDependencies(&producerTask, 1u)
+    ;
+    const GpuCopyBufferTaskRegion copyRegions[] = {
+        GpuCopyBufferTaskRegion{
+            .source = sourceResource,
+            .destination = destinationResource,
+            .dataSizeBytes = sizeof(s_SourceWords),
+        },
+    };
+    QueueSubmissionToken acceptedToken;
+    const GpuTaskId copyTask = graph.addCopyBufferTask(
+        copyTaskDesc,
+        GpuCopyBufferTaskDesc{
+            .regions = copyRegions,
+            .regionCount = LengthOf(copyRegions),
+            .acceptedToken = &acceptedToken,
+        }
+    );
+    ASSERT_TRUE(copyTask.valid());
+    ASSERT_TRUE(graph.taskAt(copyTask.index).hasPayload);
+    ASSERT_EQ(graph.taskAt(copyTask.index).resourceUseCount, 2u);
+
+    const GpuTaskResourceUse consumerUses[] = {
+        GpuTaskResourceUse{
+            .resource = destinationResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+    };
+    GpuTaskDesc consumerTaskDesc;
+    consumerTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/built_in_copy_buffer_consumer"))
+        .setMarkerLabel("Built-In Buffer Consumer")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Graphics,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(copyScheduling)
+        .setDependencies(&copyTask, 1u)
+        .setResourceUses(consumerUses, LengthOf(consumerUses))
+    ;
+    bool consumerRecorded = false;
+    const GpuTaskId consumerTask = graph.addTask<NativePacketPrefixTask>(
+        consumerTaskDesc,
+        NativePacketPrefixTask::Payload{
+            .buffer = destination.get(),
+            .expectedState = ResourceStates::ShaderResource,
+            .recorded = &consumerRecorded,
+        }
+    );
+    ASSERT_TRUE(consumerTask.valid());
+
+    const u32 graphicsFamily = device.getQueueFamilyIndex(CommandQueue::Graphics);
+    const u32 transferFamily = device.getQueueFamilyIndex(CommandQueue::Transfer);
+    const bool dedicatedTransfer = device.getQueue(CommandQueue::Transfer)
+        && transferFamily != Limit<u32>::s_Max
+        && transferFamily != graphicsFamily
+    ;
+    GpuPhysicalQueueInfo queues[2u] = {
+        GpuPhysicalQueueInfo{
+            .id = GpuPhysicalQueueId{ 0u, 1u },
+            .queueClass = CommandQueue::Graphics,
+            .capabilities = static_cast<GpuQueueCapability::Mask>(
+                static_cast<u8>(GpuQueueCapability::Graphics)
+                | static_cast<u8>(GpuQueueCapability::Compute)
+                | static_cast<u8>(GpuQueueCapability::Transfer)
+            ),
+            .familyIndex = graphicsFamily,
+            .queueIndex = 0u,
+            .dedicated = false,
+        },
+    };
+    usize queueCount = 1u;
+    if(dedicatedTransfer){
+        queues[queueCount] = GpuPhysicalQueueInfo{
+            .id = GpuPhysicalQueueId{ 1u, 1u },
+            .queueClass = CommandQueue::Transfer,
+            .capabilities = GpuQueueCapability::Transfer,
+            .familyIndex = transferFamily,
+            .queueIndex = 0u,
+            .dedicated = true,
+        };
+        ++queueCount;
+    }
+    const GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = queueCount,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/built_in_copy_buffer_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuTaskQueueAssignment* const producerAssignment = assignments.find(producerTask);
+    const GpuTaskQueueAssignment* const assignment = assignments.find(copyTask);
+    const GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumerTask);
+    ASSERT_NE(producerAssignment, nullptr);
+    ASSERT_NE(assignment, nullptr);
+    ASSERT_NE(consumerAssignment, nullptr);
+    EXPECT_EQ(producerAssignment->queueClass, CommandQueue::Graphics);
+    EXPECT_EQ(
+        assignment->queueClass,
+        dedicatedTransfer ? CommandQueue::Transfer : CommandQueue::Graphics
+    );
+    EXPECT_EQ(consumerAssignment->queueClass, CommandQueue::Graphics);
+    const GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producerTask);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(copyTask);
+    const GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumerTask);
+    ASSERT_TRUE(producerPacket.valid());
+    ASSERT_TRUE(packet.valid());
+    ASSERT_TRUE(consumerPacket.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 3u);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    ASSERT_NE(finalState, nullptr);
+    EXPECT_TRUE(producerRecorded);
+    EXPECT_TRUE(consumerRecorded);
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken packetToken = transaction.packetToken(packet);
+    ASSERT_TRUE(packetToken.valid());
+    EXPECT_TRUE(acceptedToken.valid());
+    EXPECT_EQ(acceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(acceptedToken.value, packetToken.value);
+    ASSERT_TRUE(device.waitForIdle());
+
+    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    ASSERT_NE(copiedWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
+        EXPECT_EQ(copiedWords[wordIndex], s_SourceWords[wordIndex]);
+    device.unmapBuffer(destination.get());
+}
+
+
 TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto buffer = device.createBuffer(

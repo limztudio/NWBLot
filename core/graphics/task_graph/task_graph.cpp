@@ -84,6 +84,53 @@ struct CopyTextureTask{
     }
 };
 
+struct CopyBufferTask{
+    struct Copy{
+        BufferHandle source;
+        u64 sourceOffsetBytes = 0u;
+        BufferHandle destination;
+        u64 destinationOffsetBytes = 0u;
+        u64 dataSizeBytes = 0u;
+    };
+
+    struct Payload{
+        explicit Payload(GraphicsArena& arena)
+            : copies(arena)
+        {}
+
+        GraphicsVector<Copy> copies;
+        QueueSubmissionToken* acceptedToken = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(payload.copies.empty())
+            return false;
+
+        for(const Copy& copy : payload.copies){
+            if(!copy.source || !copy.destination || copy.dataSizeBytes == 0u)
+                return false;
+            commandList.copyBuffer(
+                copy.destination.get(),
+                copy.destinationOffsetBytes,
+                copy.source.get(),
+                copy.sourceOffsetBytes,
+                copy.dataSizeBytes
+            );
+        }
+        return true;
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(payload.acceptedToken)
+            *payload.acceptedToken = token;
+    }
+};
+
 [[nodiscard]] static bool CompatibleResourceMetadata(
     const GpuTaskGraphResourceView& resource,
     const GpuGraphResourceDesc& desc
@@ -126,6 +173,101 @@ GpuTaskGraph::~GpuTaskGraph(){
 
 GpuTaskId GpuTaskGraph::addTask(const GpuTaskDesc& desc){
     return appendTask(desc, nullptr, nullptr, nullptr, nullptr, nullptr);
+}
+
+GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopyBufferTaskDesc& copyDesc){
+    if(
+        desc.resourceUses
+        || desc.resourceUseCount != 0u
+        || !copyDesc.regions
+        || copyDesc.regionCount == 0u
+        || copyDesc.regionCount > Limit<u32>::s_Max
+        || copyDesc.regionCount > Limit<usize>::s_Max / 2u
+        || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
+    )
+        return {};
+
+    using CopyTask = __hidden_gpu_task_graph::CopyBufferTask;
+    CopyTask::Payload* const payload = NewArenaObject<CopyTask::Payload>(m_arena, m_arena);
+    if(!payload)
+        return {};
+    payload->copies.reserve(copyDesc.regionCount);
+    payload->acceptedToken = copyDesc.acceptedToken;
+
+    GraphicsVector<GpuTaskResourceUse> resourceUses(m_arena);
+    resourceUses.reserve(copyDesc.regionCount * 2u);
+    const auto appendResourceUse = [&](const GpuGraphResourceId resource, const ResourceStates::Mask state, const GpuTaskResourceAccess::Enum access){
+        for(const GpuTaskResourceUse& existing : resourceUses){
+            if(existing.resource != resource)
+                continue;
+            // A primitive copy cannot safely read and write the same imported buffer inside one task. Keep that
+            // sequencing explicit in separate tasks instead of silently weakening its graph declarations.
+            return existing.requiredState == state && existing.access == access;
+        }
+        // Buffer ownership and recorded-state handoffs are still whole-buffer. Keep the graph declaration equally
+        // conservative even though the native payload validates and records an exact byte range.
+        resourceUses.push_back(GpuTaskResourceUse{
+            .resource = resource,
+            .range = {},
+            .requiredState = state,
+            .access = access,
+        });
+        return true;
+    };
+    const auto validCopyRange = [](const BufferDesc& bufferDesc, const u64 offsetBytes, const u64 dataSizeBytes){
+        return dataSizeBytes != 0u
+            && offsetBytes <= bufferDesc.byteSize
+            && dataSizeBytes <= bufferDesc.byteSize - offsetBytes
+        ;
+    };
+
+    bool valid = true;
+    for(usize regionIndex = 0u; regionIndex < copyDesc.regionCount && valid; ++regionIndex){
+        const GpuCopyBufferTaskRegion& region = copyDesc.regions[regionIndex];
+        if(!validResource(region.source) || !validResource(region.destination)){
+            valid = false;
+            break;
+        }
+        const GpuGraphResourceNode& sourceResource = m_resources[region.source.index];
+        const GpuGraphResourceNode& destinationResource = m_resources[region.destination.index];
+        valid = region.source != region.destination
+            && sourceResource.type == GpuGraphResourceType::Buffer
+            && destinationResource.type == GpuGraphResourceType::Buffer
+            && sourceResource.buffer
+            && destinationResource.buffer
+            && validCopyRange(sourceResource.buffer->getDescription(), region.sourceOffsetBytes, region.dataSizeBytes)
+            && validCopyRange(destinationResource.buffer->getDescription(), region.destinationOffsetBytes, region.dataSizeBytes)
+            && appendResourceUse(region.source, ResourceStates::CopySource, GpuTaskResourceAccess::Read)
+            && appendResourceUse(region.destination, ResourceStates::CopyDest, GpuTaskResourceAccess::Write)
+        ;
+        if(valid){
+            payload->copies.push_back(CopyTask::Copy{
+                .source = sourceResource.buffer,
+                .sourceOffsetBytes = region.sourceOffsetBytes,
+                .destination = destinationResource.buffer,
+                .destinationOffsetBytes = region.destinationOffsetBytes,
+                .dataSizeBytes = region.dataSizeBytes,
+            });
+        }
+    }
+    if(!valid){
+        DestroyArenaObject(m_arena, payload);
+        return {};
+    }
+
+    GpuTaskDesc resolvedDesc = desc;
+    resolvedDesc.setResourceUses(resourceUses.data(), resourceUses.size());
+    const GpuTaskId task = appendTask(
+        resolvedDesc,
+        payload,
+        &RecordPayload<CopyTask>,
+        &AcceptPayload<CopyTask>,
+        nullptr,
+        &DestroyPayload<CopyTask::Payload>
+    );
+    if(!task.valid())
+        DestroyArenaObject(m_arena, payload);
+    return task;
 }
 
 GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCopyTextureTaskDesc& copyDesc){

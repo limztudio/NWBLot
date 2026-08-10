@@ -106,9 +106,24 @@ struct GpuTaskDesc{
     }
 };
 
-// A primitive native copy remains a task-level operation: it is scheduled, packetized, and synchronized by the
-// graph, but records directly to the selected CommandList without introducing a general command IR. The helper
-// owns the resource-use declarations for every region, so callers must leave GpuTaskDesc::resourceUses empty.
+// Primitive native copies remain task-level operations: they are scheduled, packetized, and synchronized by the
+// graph, but record directly to the selected CommandList without introducing a general command IR. The helpers
+// own the resource-use declarations for every region, so callers must leave GpuTaskDesc::resourceUses empty.
+struct GpuCopyBufferTaskRegion{
+    GpuGraphResourceId source;
+    u64 sourceOffsetBytes = 0u;
+    GpuGraphResourceId destination;
+    u64 destinationOffsetBytes = 0u;
+    u64 dataSizeBytes = 0u;
+};
+
+struct GpuCopyBufferTaskDesc{
+    const GpuCopyBufferTaskRegion* regions = nullptr;
+    usize regionCount = 0u;
+    // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
+    QueueSubmissionToken* acceptedToken = nullptr;
+};
+
 struct GpuCopyTextureTaskRegion{
     GpuGraphResourceId source;
     TextureSlice sourceSlice;

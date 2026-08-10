@@ -71,6 +71,24 @@ inline constexpr Name s_TaskGraphScratchArena("tests/graphics/task_graph_scratch
     return graph.importResource(desc);
 }
 
+[[nodiscard]] Graphics::GpuGraphResourceId AddBufferMetadata(
+    Graphics::GpuTaskGraph& graph,
+    const Name& identity,
+    const AStringView label,
+    const Graphics::ResourceStates::Mask initialState = Graphics::ResourceStates::Common,
+    const Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Exclusive
+){
+    Graphics::GpuGraphResourceDesc desc;
+    desc
+        .setIdentity(identity)
+        .setMarkerLabel(label)
+        .setType(Graphics::GpuGraphResourceType::Buffer)
+        .setInitialState(initialState)
+        .setQueueSharing(queueSharing)
+    ;
+    return graph.importResource(desc);
+}
+
 [[nodiscard]] Graphics::GpuTaskId AddTask(
     Graphics::GpuTaskGraph& graph,
     const Name& identity,
@@ -422,6 +440,48 @@ TEST(GpuTaskGraph, CopyTextureTaskRequiresTypedTextureImports){
     EXPECT_FALSE(graph.addCopyTextureTask(
         desc,
         Graphics::GpuCopyTextureTaskDesc{
+            .regions = &region,
+            .regionCount = 1u,
+        }
+    ).valid());
+    EXPECT_EQ(graph.taskCount(), 0u);
+}
+
+TEST(GpuTaskGraph, CopyBufferTaskRequiresTypedBufferImports){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId source = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/built_in_buffer_copy_source"),
+        "Built-In Buffer Copy Source"
+    );
+    const Graphics::GpuGraphResourceId destination = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/built_in_buffer_copy_destination"),
+        "Built-In Buffer Copy Destination"
+    );
+    ASSERT_TRUE(source.valid());
+    ASSERT_TRUE(destination.valid());
+
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/task_graph/built_in_buffer_copy"))
+        .setMarkerLabel("Built-In Buffer Copy")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+    const Graphics::GpuCopyBufferTaskRegion region{
+        .source = source,
+        .destination = destination,
+        .dataSizeBytes = sizeof(u32),
+    };
+    EXPECT_FALSE(graph.addCopyBufferTask(
+        desc,
+        Graphics::GpuCopyBufferTaskDesc{
             .regions = &region,
             .regionCount = 1u,
         }

@@ -1254,6 +1254,24 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     ASSERT_TRUE(recoveryPacket.valid());
     EXPECT_NE(firstPacket, secondPacket);
     EXPECT_NE(recoveryPacket, secondPacket);
+    const Graphics::GpuSubmissionPacketRange firstTwoPacketRange = compiledGraph.packetRange(
+        firstPacket,
+        secondPacket
+    );
+    ASSERT_TRUE(firstTwoPacketRange.valid());
+    EXPECT_TRUE(compiledGraph.validPacketRange(firstTwoPacketRange));
+    EXPECT_EQ(firstTwoPacketRange.first, firstPacket);
+    EXPECT_EQ(firstTwoPacketRange.packetCount, 2u);
+    const Graphics::GpuSubmissionPacketRange fullPacketRange = compiledGraph.allPacketRange();
+    ASSERT_TRUE(fullPacketRange.valid());
+    EXPECT_TRUE(compiledGraph.validPacketRange(fullPacketRange));
+    EXPECT_EQ(fullPacketRange.first, firstPacket);
+    EXPECT_EQ(fullPacketRange.packetCount, compiledGraph.packetCount());
+    EXPECT_FALSE(compiledGraph.packetRange(secondPacket, firstPacket).valid());
+    EXPECT_FALSE(compiledGraph.validPacketRange(Graphics::GpuSubmissionPacketRange{
+        .first = firstPacket,
+        .packetCount = compiledGraph.packetCount() + 1u,
+    }));
     const auto& secondPacketPlan = compiledGraph.packet(secondPacket);
     ASSERT_EQ(secondPacketPlan.taskCount, 1u);
     ASSERT_EQ(secondPacketPlan.dependencyCount, 1u);

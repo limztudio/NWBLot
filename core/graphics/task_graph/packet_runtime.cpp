@@ -380,7 +380,7 @@ bool GpuNativePacketRecorder::recordPacketsInCompileOrder(
     return recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        0u,
+        compiledGraph.allPacketRange(),
         recordDescs,
         recordDescCount,
         outRecordedGraph,
@@ -392,7 +392,7 @@ bool GpuNativePacketRecorder::recordPacketsInCompileOrder(
 bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
-    const usize firstPacketIndex,
+    const GpuSubmissionPacketRange& range,
     const GpuNativePacketRecordDesc* const recordDescs,
     const usize recordDescCount,
     GpuRecordedGraph& outRecordedGraph,
@@ -402,10 +402,9 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
         *outFailedPacket = {};
     if(
         !compiledGraph.validFor(graph)
+        || !compiledGraph.validPacketRange(range)
         || !recordDescs
-        || recordDescCount == 0u
-        || firstPacketIndex >= compiledGraph.packetCount()
-        || recordDescCount > compiledGraph.packetCount() - firstPacketIndex
+        || recordDescCount != range.packetCount
     )
         return false;
 
@@ -413,7 +412,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
     // internal state-seed chain without requiring renderer-side stage ladders. Callers can retain only an
     // intentional late tail outside this range.
     for(usize recordDescIndex = 0u; recordDescIndex < recordDescCount; ++recordDescIndex){
-        const usize packetIndex = firstPacketIndex + recordDescIndex;
+        const usize packetIndex = static_cast<usize>(range.first.index) + recordDescIndex;
         const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
         if(recordDescs[recordDescIndex].packet != packet || !recordPacket(
             graph,
@@ -663,8 +662,7 @@ bool GpuTaskGraphSubmitter::submitPacketsInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
-        0u,
-        compiledGraph.packetCount(),
+        compiledGraph.allPacketRange(),
         externalCompletionTokens,
         externalCompletionTokenCount,
         timingTickets,
@@ -681,8 +679,7 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,
-    const usize firstPacketIndex,
-    const usize packetCount,
+    const GpuSubmissionPacketRange& range,
     const GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
     const usize externalCompletionTokenCount,
     const GpuTaskGraphPacketTimingTicket* const timingTickets,
@@ -698,9 +695,7 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
         !compiledGraph.validFor(graph)
         || !recordedGraph.validFor(compiledGraph)
         || !transaction.validFor(compiledGraph)
-        || packetCount == 0u
-        || firstPacketIndex >= compiledGraph.packetCount()
-        || packetCount > compiledGraph.packetCount() - firstPacketIndex
+        || !compiledGraph.validPacketRange(range)
         || (externalCompletionTokenCount != 0u && !externalCompletionTokens)
         || (timingTicketCount != 0u && !timingTickets)
         || (acceptedCallback && !acceptedCallback->invoke)
@@ -721,8 +716,8 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
         if(
             !ticket.timingTicket
             || !compiledGraph.validPacket(ticket.packet)
-            || ticket.packet.index < firstPacketIndex
-            || ticket.packet.index >= firstPacketIndex + packetCount
+            || ticket.packet.index < range.first.index
+            || static_cast<usize>(ticket.packet.index) >= static_cast<usize>(range.first.index) + range.packetCount
         )
             return false;
         for(usize previousIndex = 0u; previousIndex < ticketIndex; ++previousIndex){
@@ -734,7 +729,11 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
     // Packet IDs follow the compiler's topological task order. submitPacket resolves each internal producer from
     // transaction state, while every external completion remains a range-wide binding rather than a renderer-side
     // per-stage submission argument.
-    for(usize packetIndex = firstPacketIndex; packetIndex < firstPacketIndex + packetCount; ++packetIndex){
+    for(
+        usize packetIndex = range.first.index;
+        packetIndex < static_cast<usize>(range.first.index) + range.packetCount;
+        ++packetIndex
+    ){
         const GpuSubmissionPacketId packet = compiledGraph.packetIdAt(packetIndex);
         GpuTimingSubmissionTicket* timingTicket = nullptr;
         for(usize ticketIndex = 0u; ticketIndex < timingTicketCount; ++ticketIndex){

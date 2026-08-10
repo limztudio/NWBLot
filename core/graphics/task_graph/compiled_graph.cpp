@@ -62,10 +62,36 @@ bool GpuCompiledGraph::validPacket(const GpuSubmissionPacketId& packetID)const n
     return packetID.valid() && packetID.generation == m_generation && packetID.index < m_packets.size();
 }
 
+bool GpuCompiledGraph::validPacketRange(const GpuSubmissionPacketRange& range)const noexcept{
+    return range.valid()
+        && validPacket(range.first)
+        && range.packetCount <= m_packets.size() - range.first.index
+    ;
+}
+
 GpuSubmissionPacketId GpuCompiledGraph::packetIdAt(const usize index)const noexcept{
     return index < m_packets.size()
         ? GpuSubmissionPacketId{ static_cast<u32>(index), m_generation }
         : GpuSubmissionPacketId{}
+    ;
+}
+
+GpuSubmissionPacketRange GpuCompiledGraph::packetRange(
+    const GpuSubmissionPacketId& first,
+    const GpuSubmissionPacketId& last
+)const noexcept{
+    if(!validPacket(first) || !validPacket(last) || last.index < first.index)
+        return {};
+    return GpuSubmissionPacketRange{
+        .first = first,
+        .packetCount = static_cast<usize>(last.index) - static_cast<usize>(first.index) + 1u,
+    };
+}
+
+GpuSubmissionPacketRange GpuCompiledGraph::allPacketRange()const noexcept{
+    return m_packets.empty()
+        ? GpuSubmissionPacketRange{}
+        : packetRange(packetIdAt(0u), packetIdAt(m_packets.size() - 1u))
     ;
 }
 

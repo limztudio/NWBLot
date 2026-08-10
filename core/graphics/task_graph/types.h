@@ -201,6 +201,15 @@ inline constexpr bool operator!=(const GpuSubmissionPacketId& lhs, const GpuSubm
     return !(lhs == rhs);
 }
 
+// A compiler-derived contiguous span of native packets.  Consumers obtain ranges from GpuCompiledGraph instead of
+// mirroring its topological indices in renderer scheduling code.
+struct GpuSubmissionPacketRange{
+    GpuSubmissionPacketId first;
+    usize packetCount = 0u;
+
+    [[nodiscard]] constexpr bool valid()const{ return first.valid() && packetCount != 0u; }
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

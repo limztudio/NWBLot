@@ -127,12 +127,12 @@ public:
         const GpuNativePacketRecordDesc& desc,
         GpuRecordedGraph& outRecordedGraph
     )const;
-    // Records one non-empty contiguous compiler-order range. Earlier producer packets needed by the range must
+    // Records one compiler-derived non-empty contiguous range. Earlier producer packets needed by the range must
     // already be recorded, which keeps deliberate late tails separate from the ordinary graph prefix.
     [[nodiscard]] bool recordPacketRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
-        usize firstPacketIndex,
+        const GpuSubmissionPacketRange& range,
         const GpuNativePacketRecordDesc* recordDescs,
         usize recordDescCount,
         GpuRecordedGraph& outRecordedGraph,
@@ -260,15 +260,14 @@ public:
         Alloc::ScratchArena& scratchArena,
         GpuTimingSubmissionTicket* timingTicket = nullptr
     )const;
-    // Submits one non-empty contiguous compiler-order range. Dependencies outside the range must already be
+    // Submits one compiler-derived non-empty contiguous range. Dependencies outside the range must already be
     // accepted in the transaction; this preserves graph-owned waits while allowing intentional late tails. An
     // accepted callback may stop the range after retaining its packet for recovery or finalization.
     [[nodiscard]] bool submitPacketRangeInCompileOrder(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuRecordedGraph& recordedGraph,
-        usize firstPacketIndex,
-        usize packetCount,
+        const GpuSubmissionPacketRange& range,
         const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
         usize externalCompletionTokenCount,
         const GpuTaskGraphPacketTimingTicket* timingTickets,

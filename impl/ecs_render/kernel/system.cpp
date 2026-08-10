@@ -463,6 +463,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
         !m_shadowPrepareTaskGraphValid
         || !m_shadowPrepareTask.valid()
         || !shadowPreparePacket.valid()
+        || m_shadowPrepareCompiledGraph.packetCount() != 1u
         || !shadowPrepareQueue
         || shadowPrepareQueue->queueClass != Core::CommandQueue::Graphics
     ){
@@ -477,12 +478,16 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
         shadowPreparePacket
     ](){
         const Core::GpuNativePacketRecorder recorder(m_graphics.getDevice());
-        shadowPrepareRecorded = recorder.recordPacket(
-            m_shadowPrepareTaskGraph,
-            m_shadowPrepareCompiledGraph,
+        const Core::GpuNativePacketRecordDesc recordDescs[] = {
             Core::GpuNativePacketRecordDesc{
                 .packet = shadowPreparePacket,
             },
+        };
+        shadowPrepareRecorded = recorder.recordPacketsInCompileOrder(
+            m_shadowPrepareTaskGraph,
+            m_shadowPrepareCompiledGraph,
+            recordDescs,
+            LengthOf(recordDescs),
             m_shadowPrepareRecordedGraph
         );
     });
@@ -507,16 +512,22 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
 
     Core::Alloc::ScratchArena submissionScratch(RendererArenaScope::s_TaskGraphArena);
     const Core::GpuTaskGraphSubmitter submitter(device);
-    if(!submitter.submitPacket(
+    const Core::GpuTaskGraphPacketTimingTicket timingTickets[] = {
+        Core::GpuTaskGraphPacketTimingTicket{
+            .packet = shadowPreparePacket,
+            .timingTicket = &shadowPrepareTimingTicket,
+        },
+    };
+    if(!submitter.submitPacketsInCompileOrder(
         m_shadowPrepareTaskGraph,
         m_shadowPrepareCompiledGraph,
         m_shadowPrepareRecordedGraph,
-        shadowPreparePacket,
         nullptr,
         0u,
+        timingTickets,
+        LengthOf(timingTickets),
         m_shadowPrepareSubmissionTransaction,
-        submissionScratch,
-        &shadowPrepareTimingTicket
+        submissionScratch
     )){
         discardShadowPrepare();
         return false;
@@ -975,28 +986,45 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         : nullptr
     ;
     const bool surfelGiRunsOnCompute = surfelGiQueue && surfelGiQueue->queueClass == Core::CommandQueue::Compute;
-    const usize graphicsPrefixPacketIndex = 0u;
-    const usize deferredShadowVisibilityPacketIndex = graphicsPrefixPacketIndex + 1u;
-    const usize deferredSoftwareCausticsPacketCount = hardwareShadowSupported ? 0u : 1u;
-    const usize deferredSoftwareCausticsPacketIndex = deferredShadowVisibilityPacketIndex + 1u;
-    const usize deferredSurfelGiPacketIndex = deferredSoftwareCausticsPacketIndex + deferredSoftwareCausticsPacketCount;
-    const usize deferredHardwarePacketCount = hardwareShadowSupported ? 1u : 0u;
-    const usize deferredHardwareCausticsPacketIndex = deferredSurfelGiPacketIndex + 1u;
-    const usize deferredAvboitPacketCount = avboitUsesAsyncCompute ? 5u : 1u;
-    const usize deferredAvboitPrePacketIndex = deferredHardwareCausticsPacketIndex + deferredHardwarePacketCount;
-    const usize deferredAvboitDepthWarpPacketIndex = deferredAvboitPrePacketIndex + 1u;
-    const usize deferredAvboitExtinctionPacketIndex = deferredAvboitDepthWarpPacketIndex + 1u;
-    const usize deferredAvboitIntegrationPacketIndex = deferredAvboitExtinctionPacketIndex + 1u;
-    const usize deferredAvboitAccumulationPacketIndex = deferredAvboitIntegrationPacketIndex + 1u;
-    const usize deferredLightingPacketIndex = deferredAvboitPrePacketIndex + deferredAvboitPacketCount;
-    const usize deferredCompositePacketIndex = deferredLightingPacketIndex + 1u;
-    const usize deferredPresentPacketIndex = deferredCompositePacketIndex + 1u;
-    const usize deferredInitialPacketCount = deferredPresentPacketIndex + 1u;
-    const usize deferredLaggedLightingHistoryPacketIndex = deferredInitialPacketCount;
-    const usize deferredFrameRecoveryPacketIndex = deferredLaggedLightingHistoryPacketIndex
-        + (captureLaggedLightingHistory ? 1u : 0u)
+    // Keep every recording and submission span derived from compiled packet handles. The renderer names semantic
+    // endpoints only; raw compiler-order indices remain inside the task-graph runtime.
+    const Core::GpuSubmissionPacketRange graphicsPrefixPacketRange =
+        m_deferredLightingCompiledGraph.packetRange(graphicsPrefixPacket, graphicsPrefixPacket);
+    const Core::GpuSubmissionPacketRange shadowEffectsPacketRange = m_deferredLightingCompiledGraph.packetRange(
+        shadowVisibilityPacket,
+        hardwareShadowSupported ? shadowVisibilityPacket : softwareCausticsPacket
+    );
+    const Core::GpuSubmissionPacketRange surfelGiPacketRange =
+        m_deferredLightingCompiledGraph.packetRange(surfelGiPacket, surfelGiPacket);
+    const Core::GpuSubmissionPacketRange hardwareCausticsPacketRange =
+        m_deferredLightingCompiledGraph.packetRange(hardwareCausticsPacket, hardwareCausticsPacket);
+    const Core::GpuSubmissionPacketRange avboitPacketRange = m_deferredLightingCompiledGraph.packetRange(
+        avboitPrePacket,
+        avboitUsesAsyncCompute ? avboitAccumulationPacket : avboitPrePacket
+    );
+    const Core::GpuSubmissionPacketRange deferredLightingCompositePacketRange =
+        m_deferredLightingCompiledGraph.packetRange(deferredLightingPacket, deferredCompositePacket);
+    const Core::GpuSubmissionPacketRange deferredPresentPacketRange =
+        m_deferredLightingCompiledGraph.packetRange(deferredPresentPacket, deferredPresentPacket);
+    const Core::GpuSubmissionPacketRange deferredLaggedLightingHistoryPacketRange =
+        m_deferredLightingCompiledGraph.packetRange(
+            deferredLaggedLightingHistoryPacket,
+            deferredLaggedLightingHistoryPacket
+        )
     ;
-    const usize deferredPacketCount = deferredFrameRecoveryPacketIndex + 1u;
+    const Core::GpuSubmissionPacketRange deferredFrameRecoveryPacketRange =
+        m_deferredLightingCompiledGraph.packetRange(deferredFrameRecoveryPacket, deferredFrameRecoveryPacket);
+    const Core::GpuSubmissionPacketRange effectsThroughPresentPacketRange =
+        m_deferredLightingCompiledGraph.packetRange(shadowVisibilityPacket, deferredPresentPacket);
+    const Core::GpuSubmissionPacketRange deferredNormalPacketRange =
+        m_deferredLightingCompiledGraph.packetRange(graphicsPrefixPacket, deferredPresentPacket);
+    const Core::GpuSubmissionPacketRange deferredTailPacketRange = m_deferredLightingCompiledGraph.packetRange(
+        captureLaggedLightingHistory ? deferredLaggedLightingHistoryPacket : deferredFrameRecoveryPacket,
+        deferredFrameRecoveryPacket
+    );
+    const Core::GpuSubmissionPacketRange deferredFullPacketRange =
+        m_deferredLightingCompiledGraph.packetRange(graphicsPrefixPacket, deferredFrameRecoveryPacket);
+    const usize expectedAvboitPacketCount = avboitUsesAsyncCompute ? 5u : 1u;
     if(
         !m_deferredLightingTaskGraphValid
         || !m_graphicsPrefixMeshViewSetupTask.valid()
@@ -1064,36 +1092,42 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !deferredCompositePacket.valid()
         || !deferredPresentPacket.valid()
         || !deferredFrameRecoveryPacket.valid()
-        || m_deferredLightingCompiledGraph.packetCount() != deferredPacketCount
         || !deferredLightingQueue
         || !deferredCompositeQueue
         || !deferredPresentQueue
         || !deferredFrameRecoveryQueue
-        || m_deferredLightingCompiledGraph.packetIdAt(graphicsPrefixPacketIndex) != graphicsPrefixPacket
-        || m_deferredLightingCompiledGraph.packetIdAt(deferredShadowVisibilityPacketIndex) != shadowVisibilityPacket
-        || (!hardwareShadowSupported && (
-            m_deferredLightingCompiledGraph.packetIdAt(deferredSoftwareCausticsPacketIndex) != softwareCausticsPacket
-        ))
-        || m_deferredLightingCompiledGraph.packetIdAt(deferredSurfelGiPacketIndex) != surfelGiPacket
+        || !graphicsPrefixPacketRange.valid()
+        || graphicsPrefixPacketRange.packetCount != 1u
+        || !shadowEffectsPacketRange.valid()
+        || shadowEffectsPacketRange.packetCount != (hardwareShadowSupported ? 1u : 2u)
+        || !surfelGiPacketRange.valid()
+        || surfelGiPacketRange.packetCount != 1u
         || (hardwareShadowSupported && (
-            m_deferredLightingCompiledGraph.packetIdAt(deferredHardwareCausticsPacketIndex) != hardwareCausticsPacket
+            !hardwareCausticsPacketRange.valid()
+            || hardwareCausticsPacketRange.packetCount != 1u
         ))
-        || m_deferredLightingCompiledGraph.packetIdAt(deferredAvboitPrePacketIndex) != avboitPrePacket
-        || (avboitUsesAsyncCompute && (
-            m_deferredLightingCompiledGraph.packetIdAt(deferredAvboitDepthWarpPacketIndex) != avboitDepthWarpPacket
-            || m_deferredLightingCompiledGraph.packetIdAt(deferredAvboitExtinctionPacketIndex) != avboitExtinctionPacket
-            || m_deferredLightingCompiledGraph.packetIdAt(deferredAvboitIntegrationPacketIndex) != avboitIntegrationPacket
-            || m_deferredLightingCompiledGraph.packetIdAt(deferredAvboitAccumulationPacketIndex) != avboitAccumulationPacket
-        ))
-        || m_deferredLightingCompiledGraph.packetIdAt(deferredLightingPacketIndex) != deferredLightingPacket
-        || m_deferredLightingCompiledGraph.packetIdAt(deferredCompositePacketIndex) != deferredCompositePacket
-        || m_deferredLightingCompiledGraph.packetIdAt(deferredPresentPacketIndex) != deferredPresentPacket
+        || !avboitPacketRange.valid()
+        || avboitPacketRange.packetCount != expectedAvboitPacketCount
+        || !deferredLightingCompositePacketRange.valid()
+        || deferredLightingCompositePacketRange.packetCount != 2u
+        || !deferredPresentPacketRange.valid()
+        || deferredPresentPacketRange.packetCount != 1u
         || (captureLaggedLightingHistory && (
-            m_deferredLightingCompiledGraph.packetIdAt(deferredLaggedLightingHistoryPacketIndex)
-                != deferredLaggedLightingHistoryPacket
+            !deferredLaggedLightingHistoryPacketRange.valid()
+            || deferredLaggedLightingHistoryPacketRange.packetCount != 1u
         ))
-        || m_deferredLightingCompiledGraph.packetIdAt(deferredFrameRecoveryPacketIndex)
-            != deferredFrameRecoveryPacket
+        || !deferredFrameRecoveryPacketRange.valid()
+        || deferredFrameRecoveryPacketRange.packetCount != 1u
+        || !effectsThroughPresentPacketRange.valid()
+        || !deferredNormalPacketRange.valid()
+        || deferredNormalPacketRange.packetCount
+            != graphicsPrefixPacketRange.packetCount + effectsThroughPresentPacketRange.packetCount
+        || !deferredTailPacketRange.valid()
+        || deferredTailPacketRange.packetCount != (captureLaggedLightingHistory ? 2u : 1u)
+        || !deferredFullPacketRange.valid()
+        || deferredFullPacketRange.packetCount != m_deferredLightingCompiledGraph.packetCount()
+        || deferredFullPacketRange.packetCount
+            != deferredNormalPacketRange.packetCount + deferredTailPacketRange.packetCount
         || (laggedAsyncLightingSchedule && deferredLightingQueue->queueClass != Core::CommandQueue::Compute)
         || (laggedAsyncLightingSchedule && deferredCompositeQueue->queueClass != Core::CommandQueue::Graphics)
         || deferredPresentQueue->queueClass != Core::CommandQueue::Graphics
@@ -1187,6 +1221,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // This never crosses a graph or a submission transaction: all consumers still receive compiler-owned packet
     // dependencies, while the filtered source gives their command lists the established common prefix state.
     const Core::GpuNativePacketRecorder deferredRecorder(device);
+    const Core::GpuNativePacketRecordDesc graphicsPrefixRecordDescs[] = {
+        Core::GpuNativePacketRecordDesc{
+            .packet = graphicsPrefixPacket,
+            .serialStateSeed = shadowPrepareStateSeed,
+        },
+    };
     const bool graphicsPrefixRecorded =
         m_deferredLightingTaskGraphValid
         && m_graphicsPrefixMeshViewSetupTask.valid()
@@ -1195,13 +1235,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_graphicsPrefixGbufferTask.valid()
         && m_graphicsPrefixTask.valid()
         && graphicsPrefixPacket.valid()
-        && deferredRecorder.recordPacket(
+        && deferredRecorder.recordPacketRangeInCompileOrder(
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph,
-            Core::GpuNativePacketRecordDesc{
-                .packet = graphicsPrefixPacket,
-                .serialStateSeed = shadowPrepareStateSeed,
-            },
+            graphicsPrefixPacketRange,
+            graphicsPrefixRecordDescs,
+            LengthOf(graphicsPrefixRecordDescs),
             m_deferredLightingRecordedGraph
         )
     ;
@@ -1454,39 +1493,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && deferredPresentPacket.valid()
         && deferredFrameRecoveryPacket.valid()
         && deferredFrameRecoveryQueue
-        && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
-        && deferredRecordDescCount == deferredInitialPacketCount - 1u
-        && m_deferredLightingCompiledGraph.packetIdAt(graphicsPrefixPacketIndex) == graphicsPrefixPacket
-        && m_deferredLightingCompiledGraph.packetIdAt(deferredShadowVisibilityPacketIndex) == shadowVisibilityPacket
-        && (hardwareShadowSupported || (
-            m_deferredLightingCompiledGraph.packetIdAt(deferredSoftwareCausticsPacketIndex) == softwareCausticsPacket
-        ))
-        && m_deferredLightingCompiledGraph.packetIdAt(deferredSurfelGiPacketIndex) == surfelGiPacket
-        && (!hardwareShadowSupported || (
-            m_deferredLightingCompiledGraph.packetIdAt(deferredHardwareCausticsPacketIndex) == hardwareCausticsPacket
-        ))
-        && m_deferredLightingCompiledGraph.packetIdAt(deferredAvboitPrePacketIndex) == avboitPrePacket
-        && (!avboitUsesAsyncCompute || (
-            m_deferredLightingCompiledGraph.packetIdAt(deferredAvboitDepthWarpPacketIndex) == avboitDepthWarpPacket
-            && m_deferredLightingCompiledGraph.packetIdAt(deferredAvboitExtinctionPacketIndex) == avboitExtinctionPacket
-            && m_deferredLightingCompiledGraph.packetIdAt(deferredAvboitIntegrationPacketIndex) == avboitIntegrationPacket
-            && m_deferredLightingCompiledGraph.packetIdAt(deferredAvboitAccumulationPacketIndex) == avboitAccumulationPacket
-        ))
-        && m_deferredLightingCompiledGraph.packetIdAt(deferredLightingPacketIndex) == deferredLightingPacket
-        && m_deferredLightingCompiledGraph.packetIdAt(deferredCompositePacketIndex) == deferredCompositePacket
-        && m_deferredLightingCompiledGraph.packetIdAt(deferredPresentPacketIndex) == deferredPresentPacket
-        && (!captureLaggedLightingHistory || (
-            m_deferredLightingCompiledGraph.packetIdAt(deferredLaggedLightingHistoryPacketIndex)
-                == deferredLaggedLightingHistoryPacket
-        ))
-        && m_deferredLightingCompiledGraph.packetIdAt(deferredFrameRecoveryPacketIndex)
-            == deferredFrameRecoveryPacket
+        && effectsThroughPresentPacketRange.valid()
+        && deferredRecordDescCount == effectsThroughPresentPacketRange.packetCount
     ;
     if(deferredPacketsRecorded){
         deferredPacketsRecorded = deferredRecorder.recordPacketRangeInCompileOrder(
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph,
-            graphicsPrefixPacketIndex + 1u,
+            effectsThroughPresentPacketRange,
             deferredRecordDescs,
             deferredRecordDescCount,
             m_deferredLightingRecordedGraph
@@ -1609,6 +1623,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !m_deferredFrameRecoveryTask.valid()
             || !m_deferredFrameRecoveryCompletion.valid()
             || !deferredFrameRecoveryPacket.valid()
+            || !deferredFrameRecoveryPacketRange.valid()
             || !deferredFrameRecoveryQueue
             || deferredFrameRecoveryQueue->queueClass != Core::CommandQueue::Graphics
             || !recoveryPredecessorToken.valid()
@@ -1618,12 +1633,17 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return false;
         }
 
-        const bool recoveryRecorded = deferredRecorder.recordPacket(
-            m_deferredLightingTaskGraph,
-            m_deferredLightingCompiledGraph,
+        const Core::GpuNativePacketRecordDesc recoveryRecordDescs[] = {
             Core::GpuNativePacketRecordDesc{
                 .packet = deferredFrameRecoveryPacket,
             },
+        };
+        const bool recoveryRecorded = deferredRecorder.recordPacketRangeInCompileOrder(
+            m_deferredLightingTaskGraph,
+            m_deferredLightingCompiledGraph,
+            deferredFrameRecoveryPacketRange,
+            recoveryRecordDescs,
+            LengthOf(recoveryRecordDescs),
             m_deferredLightingRecordedGraph
         );
         if(!recoveryRecorded){
@@ -1638,13 +1658,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         };
         Core::Alloc::ScratchArena recoveryScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter submitter(device);
-        const bool recoveryAccepted = submitter.submitPacket(
+        const bool recoveryAccepted = submitter.submitPacketRangeInCompileOrder(
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph,
             m_deferredLightingRecordedGraph,
-            deferredFrameRecoveryPacket,
+            deferredFrameRecoveryPacketRange,
             &recoveryCompletionToken,
             1u,
+            nullptr,
+            0u,
             m_deferredLightingSubmissionTransaction,
             recoveryScratchArena
         );
@@ -1750,12 +1772,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 .timingTicket = &avboitAccumulationTimingTicket,
             },
         };
-        const usize avboitPacketCount = avboitUsesAsyncCompute ? LengthOf(avboitTimingTickets) : 1u;
+        const usize avboitTimingTicketCount = avboitUsesAsyncCompute ? LengthOf(avboitTimingTickets) : 1u;
         const bool avboitPacketsAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredAvboitPreTask.valid()
             && avboitPrePacket.valid()
-            && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
+            && avboitPacketRange.valid()
+            && avboitPacketRange.packetCount == avboitTimingTicketCount
             && (!avboitUsesAsyncCompute || (
                 m_deferredAvboitDepthWarpTask.valid()
                 && m_deferredAvboitExtinctionTask.valid()
@@ -1770,12 +1793,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
-                deferredAvboitPrePacketIndex,
-                avboitPacketCount,
+                avboitPacketRange,
                 nullptr,
                 0u,
                 avboitTimingTickets,
-                avboitPacketCount,
+                avboitTimingTicketCount,
                 m_deferredLightingSubmissionTransaction,
                 deferredScratchArena
             )
@@ -1904,13 +1926,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && (!laggedAsyncLightingSchedule || m_deferredLightingHistoryCompletion.valid())
             && deferredLightingPacket.valid()
             && deferredCompositePacket.valid()
-            && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
+            && deferredLightingCompositePacketRange.valid()
+            && deferredLightingCompositePacketRange.packetCount == LengthOf(deferredLightingCompositeTimingTickets)
             && deferredSubmitter.submitPacketRangeInCompileOrder(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
-                deferredLightingPacketIndex,
-                LengthOf(deferredLightingCompositeTimingTickets),
+                deferredLightingCompositePacketRange,
                 deferredLightingCompletionTokens,
                 deferredLightingCompletionCount,
                 deferredLightingCompositeTimingTickets,
@@ -1964,12 +1986,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && surfelGiSubmissionToken.valid()
             && deferredCompositeSubmissionToken.valid()
             && deferredPresentPacket.valid()
+            && deferredPresentPacketRange.valid()
+            && deferredPresentPacketRange.packetCount == LengthOf(deferredPresentTimingTickets)
             && deferredPresentSubmitter.submitPacketRangeInCompileOrder(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
-                deferredPresentPacketIndex,
-                LengthOf(deferredPresentTimingTickets),
+                deferredPresentPacketRange,
                 nullptr,
                 0u,
                 deferredPresentTimingTickets,
@@ -2096,13 +2119,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredSurfelGiTask.valid()
             && effectsSubmissionToken.valid()
             && surfelGiPacket.valid()
-            && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
+            && surfelGiPacketRange.valid()
+            && surfelGiPacketRange.packetCount == LengthOf(surfelGiTimingTickets)
             && surfelGiSubmitter.submitPacketRangeInCompileOrder(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
-                deferredSurfelGiPacketIndex,
-                LengthOf(surfelGiTimingTickets),
+                surfelGiPacketRange,
                 nullptr,
                 0u,
                 surfelGiTimingTickets,
@@ -2154,12 +2177,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_graphicsPrefixGbufferTask.valid()
             && m_graphicsPrefixTask.valid()
             && graphicsPrefixPacket.valid()
+            && graphicsPrefixPacketRange.valid()
+            && graphicsPrefixPacketRange.packetCount == LengthOf(graphicsPrefixTimingTickets)
             && graphicsPrefixSubmitter.submitPacketRangeInCompileOrder(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
-                graphicsPrefixPacketIndex,
-                LengthOf(graphicsPrefixTimingTickets),
+                graphicsPrefixPacketRange,
                 nullptr,
                 0u,
                 graphicsPrefixTimingTickets,
@@ -2189,12 +2213,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 .timingTicket = &softwareCausticsTimingTicket,
             },
         };
-        const usize shadowEffectsPacketCount = hardwareShadowSupported ? 1u : LengthOf(shadowEffectsTimingTickets);
+        const usize shadowEffectsTimingTicketCount = hardwareShadowSupported
+            ? 1u
+            : LengthOf(shadowEffectsTimingTickets)
+        ;
         const bool shadowEffectsSubmitted =
             m_deferredLightingTaskGraphValid
             && m_deferredShadowVisibilityTask.valid()
             && shadowVisibilityPacket.valid()
-            && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
+            && shadowEffectsPacketRange.valid()
+            && shadowEffectsPacketRange.packetCount == shadowEffectsTimingTicketCount
             && (hardwareShadowSupported || (
                 m_deferredSoftwareCausticsTask.valid()
                 && softwareCausticsPacket.valid()
@@ -2203,12 +2231,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
-                deferredShadowVisibilityPacketIndex,
-                shadowEffectsPacketCount,
+                shadowEffectsPacketRange,
                 nullptr,
                 0u,
                 shadowEffectsTimingTickets,
-                shadowEffectsPacketCount,
+                shadowEffectsTimingTicketCount,
                 m_deferredLightingSubmissionTransaction,
                 shadowEffectsScratchArena
             )
@@ -2377,13 +2404,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 && m_deferredHardwareCausticsTask.valid()
                 && (!laggedAsyncLightingSchedule || m_deferredLightingHistoryCompletion.valid())
                 && hardwareCausticsPacket.valid()
-                && m_deferredLightingCompiledGraph.packetCount() == deferredPacketCount
+                && hardwareCausticsPacketRange.valid()
+                && hardwareCausticsPacketRange.packetCount == LengthOf(hardwareCausticsTimingTickets)
                 && hardwareCausticsSubmitter.submitPacketRangeInCompileOrder(
                     m_deferredLightingTaskGraph,
                     m_deferredLightingCompiledGraph,
                     m_deferredLightingRecordedGraph,
-                    deferredHardwareCausticsPacketIndex,
-                    LengthOf(hardwareCausticsTimingTickets),
+                    hardwareCausticsPacketRange,
                     hardwareCausticsCompletionTokens,
                     hardwareCausticsCompletionCount,
                     hardwareCausticsTimingTickets,
@@ -2527,9 +2554,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !m_deferredLaggedLightingHistoryTask.valid()
             || !deferredLaggedLightingHistoryPacket.valid()
             || !deferredLaggedLightingHistoryQueue
-            || m_deferredLightingCompiledGraph.packetCount() != deferredPacketCount
-            || m_deferredLightingCompiledGraph.packetIdAt(deferredLaggedLightingHistoryPacketIndex)
-                != deferredLaggedLightingHistoryPacket
+            || !deferredLaggedLightingHistoryPacketRange.valid()
+            || deferredLaggedLightingHistoryPacketRange.packetCount != 1u
         ){
             if(m_deferredLightingTaskGraphValid){
                 m_deferredLightingSubmissionTransaction.discardUnaccepted(
@@ -2542,15 +2568,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         else{
             Core::GpuNativePacketRecorder recorder(device);
-            const Core::GpuNativePacketRecordDesc recordDesc{
-                .packet = deferredLaggedLightingHistoryPacket,
-                .externalStateSources = historyCopyStateSources,
-                .externalStateSourceCount = historyCopyStateSourceCount,
+            const Core::GpuNativePacketRecordDesc recordDescs[] = {
+                Core::GpuNativePacketRecordDesc{
+                    .packet = deferredLaggedLightingHistoryPacket,
+                    .externalStateSources = historyCopyStateSources,
+                    .externalStateSourceCount = historyCopyStateSourceCount,
+                },
             };
-            const bool historyCopyRecorded = recorder.recordPacket(
+            const bool historyCopyRecorded = recorder.recordPacketRangeInCompileOrder(
                     m_deferredLightingTaskGraph,
                     m_deferredLightingCompiledGraph,
-                    recordDesc,
+                    deferredLaggedLightingHistoryPacketRange,
+                    recordDescs,
+                    LengthOf(recordDescs),
                     m_deferredLightingRecordedGraph
                 )
             ;
@@ -2573,8 +2603,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     m_deferredLightingTaskGraph,
                     m_deferredLightingCompiledGraph,
                     m_deferredLightingRecordedGraph,
-                    deferredLaggedLightingHistoryPacketIndex,
-                    1u,
+                    deferredLaggedLightingHistoryPacketRange,
                     nullptr,
                     0u,
                     nullptr,

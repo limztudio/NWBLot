@@ -962,7 +962,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        0u,
+        compiledGraph.packetRange(writerPacket, writerPacket),
         recordDescs,
         1u,
         recordedGraph
@@ -970,7 +970,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
-        1u,
+        compiledGraph.packetRange(readerPacket, readerPacket),
         recordDescs + 1u,
         1u,
         recordedGraph
@@ -990,8 +990,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
         graph,
         compiledGraph,
         recordedGraph,
-        0u,
-        1u,
+        compiledGraph.packetRange(writerPacket, writerPacket),
         nullptr,
         0u,
         nullptr,
@@ -1011,8 +1010,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
         graph,
         compiledGraph,
         recordedGraph,
-        1u,
-        1u,
+        compiledGraph.packetRange(readerPacket, readerPacket),
         nullptr,
         0u,
         nullptr,

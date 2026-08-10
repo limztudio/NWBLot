@@ -138,18 +138,6 @@ public:
         GpuRecordedGraph& outRecordedGraph,
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
-    // Records every compiler packet in its stable dependency order.  This is the native path for a graph whose
-    // complete packet chain is known before submission; callers retain recordPacket for intentional partial work.
-    [[nodiscard]] bool recordPacketsInCompileOrder(
-        const GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuNativePacketRecordDesc* recordDescs,
-        usize recordDescCount,
-        GpuRecordedGraph& outRecordedGraph,
-        GpuSubmissionPacketId* outFailedPacket = nullptr
-    )const;
-
-
 private:
     Device& m_device;
 };
@@ -283,22 +271,6 @@ public:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr
     )const;
-    // Submits every compiler packet in its stable dependency order.  Internal packet dependencies are resolved
-    // from the shared transaction; external bindings and timing tickets are supplied once for the whole graph.
-    [[nodiscard]] bool submitPacketsInCompileOrder(
-        GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuRecordedGraph& recordedGraph,
-        const GpuTaskGraphExternalCompletionToken* externalCompletionTokens,
-        usize externalCompletionTokenCount,
-        const GpuTaskGraphPacketTimingTicket* timingTickets,
-        usize timingTicketCount,
-        GpuGraphSubmissionTransaction& transaction,
-        Alloc::ScratchArena& scratchArena,
-        GpuSubmissionPacketId* outFailedPacket = nullptr
-    )const;
-
-
 private:
     Device& m_device;
 };

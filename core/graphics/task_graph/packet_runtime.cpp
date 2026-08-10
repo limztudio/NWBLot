@@ -364,31 +364,6 @@ bool GpuNativePacketRecorder::recordPacket(
 }
 
 
-bool GpuNativePacketRecorder::recordPacketsInCompileOrder(
-    const GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuNativePacketRecordDesc* const recordDescs,
-    const usize recordDescCount,
-    GpuRecordedGraph& outRecordedGraph,
-    GpuSubmissionPacketId* const outFailedPacket
-)const{
-    if(outFailedPacket)
-        *outFailedPacket = {};
-    if(recordDescCount != compiledGraph.packetCount())
-        return false;
-
-    return recordPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        compiledGraph.allPacketRange(),
-        recordDescs,
-        recordDescCount,
-        outRecordedGraph,
-        outFailedPacket
-    );
-}
-
-
 bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
@@ -672,37 +647,6 @@ bool GpuTaskGraphSubmitter::submitPacket(
 
     transaction.acceptPacket(graph, compiledGraph, packetID, token);
     return true;
-}
-
-
-bool GpuTaskGraphSubmitter::submitPacketsInCompileOrder(
-    GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuRecordedGraph& recordedGraph,
-    const GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
-    const usize externalCompletionTokenCount,
-    const GpuTaskGraphPacketTimingTicket* const timingTickets,
-    const usize timingTicketCount,
-    GpuGraphSubmissionTransaction& transaction,
-    Alloc::ScratchArena& scratchArena,
-    GpuSubmissionPacketId* const outFailedPacket
-)const{
-    if(outFailedPacket)
-        *outFailedPacket = {};
-    return submitPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        recordedGraph,
-        compiledGraph.allPacketRange(),
-        externalCompletionTokens,
-        externalCompletionTokenCount,
-        timingTickets,
-        timingTicketCount,
-        transaction,
-        scratchArena,
-        outFailedPacket,
-        nullptr
-    );
 }
 
 

@@ -435,6 +435,9 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId shadowPreparePacket = m_shadowPrepareCompiledGraph.packetForTask(
         m_shadowPrepareTask
     );
+    const Core::GpuSubmissionPacketRange shadowPreparePacketRange =
+        m_shadowPrepareCompiledGraph.allPacketRange()
+    ;
     const Core::GpuPhysicalQueueInfo* const shadowPrepareQueue = shadowPreparePacket.valid()
         ? m_shadowPrepareCompiledGraph.queueInfo(m_shadowPrepareCompiledGraph.packet(shadowPreparePacket).queue)
         : nullptr
@@ -463,7 +466,8 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
         !m_shadowPrepareTaskGraphValid
         || !m_shadowPrepareTask.valid()
         || !shadowPreparePacket.valid()
-        || m_shadowPrepareCompiledGraph.packetCount() != 1u
+        || !shadowPreparePacketRange.valid()
+        || shadowPreparePacketRange.packetCount != 1u
         || !shadowPrepareQueue
         || shadowPrepareQueue->queueClass != Core::CommandQueue::Graphics
     ){
@@ -475,7 +479,8 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     const Core::Graphics::JobHandle shadowPrepareJob = m_graphics.scheduleGraphicsJob([
         this,
         &shadowPrepareRecorded,
-        shadowPreparePacket
+        shadowPreparePacket,
+        shadowPreparePacketRange
     ](){
         const Core::GpuNativePacketRecorder recorder(m_graphics.getDevice());
         const Core::GpuNativePacketRecordDesc recordDescs[] = {
@@ -483,9 +488,10 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
                 .packet = shadowPreparePacket,
             },
         };
-        shadowPrepareRecorded = recorder.recordPacketsInCompileOrder(
+        shadowPrepareRecorded = recorder.recordPacketRangeInCompileOrder(
             m_shadowPrepareTaskGraph,
             m_shadowPrepareCompiledGraph,
+            shadowPreparePacketRange,
             recordDescs,
             LengthOf(recordDescs),
             m_shadowPrepareRecordedGraph
@@ -518,10 +524,11 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
             .timingTicket = &shadowPrepareTimingTicket,
         },
     };
-    if(!submitter.submitPacketsInCompileOrder(
+    if(!submitter.submitPacketRangeInCompileOrder(
         m_shadowPrepareTaskGraph,
         m_shadowPrepareCompiledGraph,
         m_shadowPrepareRecordedGraph,
+        shadowPreparePacketRange,
         nullptr,
         0u,
         timingTickets,

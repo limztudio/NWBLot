@@ -730,7 +730,10 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndCarrie
     ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
     ASSERT_EQ(compiledGraph.packetCount(), 1u);
     const GpuSubmissionPacketId packet = compiledGraph.packetForTask(normalizeTask);
+    const GpuSubmissionPacketRange packetRange = compiledGraph.allPacketRange();
     ASSERT_TRUE(packet.valid());
+    ASSERT_TRUE(packetRange.valid());
+    ASSERT_EQ(packetRange.packetCount, 1u);
     EXPECT_EQ(packet, compiledGraph.packetForTask(meshViewSetupTask));
     EXPECT_EQ(packet, compiledGraph.packetForTask(sceneSetupTask));
     EXPECT_EQ(packet, compiledGraph.packetForTask(clearTask));
@@ -782,9 +785,10 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndCarrie
         },
     };
     const GpuNativePacketRecorder recorder(device);
-    ASSERT_TRUE(recorder.recordPacketsInCompileOrder(
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
+        packetRange,
         recordDescs,
         LengthOf(recordDescs),
         recordedGraph
@@ -810,10 +814,11 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndCarrie
     stateProbe->close();
 
     const GpuTaskGraphSubmitter submitter(device);
-    ASSERT_TRUE(submitter.submitPacketsInCompileOrder(
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         recordedGraph,
+        packetRange,
         nullptr,
         0u,
         nullptr,
@@ -1267,6 +1272,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
     EXPECT_EQ(compositeAssignment->reason, GpuTaskQueueAssignmentReason::Fallback);
 
     ASSERT_EQ(compiledGraph.packetCount(), 4u);
+    const GpuSubmissionPacketRange packetRange = compiledGraph.allPacketRange();
+    ASSERT_TRUE(packetRange.valid());
+    ASSERT_EQ(packetRange.packetCount, compiledGraph.packetCount());
     const GpuSubmissionPacketId hardwarePacket = compiledGraph.packetForTask(hardwareTask);
     const GpuSubmissionPacketId avboitPrePacket = compiledGraph.packetForTask(avboitPreTask);
     const GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lightingTask);
@@ -1306,9 +1314,10 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
     };
     const GpuNativePacketRecorder recorder(device);
     GpuSubmissionPacketId failedPacket;
-    const bool allPacketsRecorded = recorder.recordPacketsInCompileOrder(
+    const bool allPacketsRecorded = recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
+        packetRange,
         recordDescs,
         LengthOf(recordDescs),
         recordedGraph,

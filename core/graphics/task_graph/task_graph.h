@@ -135,6 +135,14 @@ public:
     // must not provide separate resource uses.
     [[nodiscard]] GpuTaskId addCopyTextureTask(const GpuTaskDesc& desc, const GpuCopyTextureTaskDesc& copyDesc);
 
+    // Adds a graph-owned native uint-buffer clear. The helper retains the imported buffer and derives its CopyDest
+    // write declaration, so desc must declare Transfer capability and must not provide separate resource uses.
+    [[nodiscard]] GpuTaskId addClearBufferTask(const GpuTaskDesc& desc, const GpuClearBufferTaskDesc& clearDesc);
+
+    // Adds a graph-owned native texture clear. The helper retains the imported texture and derives its CopyDest
+    // write declaration, so desc must declare Transfer capability and must not provide separate resource uses.
+    [[nodiscard]] GpuTaskId addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc);
+
     template<typename TaskT>
     [[nodiscard]] GpuTaskId addTask(const GpuTaskDesc& desc, typename TaskT::Payload&& payload){
         using Payload = typename TaskT::Payload;

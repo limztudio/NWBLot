@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include <core/graphics/capture/command_ir.h>
 #include <core/graphics/task_graph/compiler.h>
 #include <core/graphics/task_graph/packet_runtime.h>
 #include <core/telemetry/frame_graph_contributor.h>
@@ -487,6 +488,72 @@ TEST(GpuTaskGraph, CopyBufferTaskRequiresTypedBufferImports){
         }
     ).valid());
     EXPECT_EQ(graph.taskCount(), 0u);
+}
+
+TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphGeneration){
+    TestArena testArena;
+    Graphics::GpuCommandIrCapture capture(testArena.arena);
+    const Graphics::GpuTaskId task{ 4u, 17u };
+    const Graphics::GpuSubmissionPacketId packet{ 2u, 17u };
+    const Graphics::GpuPhysicalQueueId queue{ 1u, 3u };
+    const Graphics::GpuGraphResourceId source{ 5u, 17u };
+    const Graphics::GpuGraphResourceId destination{ 6u, 17u };
+
+    ASSERT_TRUE(capture.captureCopyBuffer(
+        task,
+        packet,
+        queue,
+        source,
+        16u,
+        destination,
+        32u,
+        64u
+    ));
+    Graphics::GpuClearTextureTaskDesc clearTexture;
+    clearTexture.destination = destination;
+    clearTexture.subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
+    clearTexture.valueType = Graphics::GpuClearTextureTaskValueType::Float;
+    clearTexture.floatValue = Graphics::Color(0.25f, 0.5f, 0.75f, 1.f);
+    ASSERT_TRUE(capture.captureClearTexture(task, packet, queue, destination, clearTexture));
+
+    ASSERT_EQ(capture.recordCount(), 2u);
+    EXPECT_EQ(capture.graphGeneration(), task.generation);
+    const Graphics::GpuCommandIrBuiltinTaskRecord* const copyRecord = capture.recordAt(0u);
+    ASSERT_NE(copyRecord, nullptr);
+    EXPECT_EQ(copyRecord->opcode, Graphics::GpuCommandIrOpcode::CopyBuffer);
+    EXPECT_EQ(copyRecord->task, task);
+    EXPECT_EQ(copyRecord->packet, packet);
+    EXPECT_EQ(copyRecord->queue, queue);
+    EXPECT_EQ(copyRecord->source, source);
+    EXPECT_EQ(copyRecord->destination, destination);
+    EXPECT_EQ(copyRecord->sourceOffsetBytes, 16u);
+    EXPECT_EQ(copyRecord->destinationOffsetBytes, 32u);
+    EXPECT_EQ(copyRecord->dataSizeBytes, 64u);
+
+    const Graphics::GpuCommandIrBuiltinTaskRecord* const clearRecord = capture.recordAt(1u);
+    ASSERT_NE(clearRecord, nullptr);
+    EXPECT_EQ(clearRecord->opcode, Graphics::GpuCommandIrOpcode::ClearTexture);
+    EXPECT_EQ(clearRecord->destination, destination);
+    EXPECT_EQ(clearRecord->destinationSubresources, clearTexture.subresources);
+    EXPECT_EQ(clearRecord->clearTextureValueType, clearTexture.valueType);
+    EXPECT_EQ(clearRecord->floatClearValue, clearTexture.floatValue);
+
+    const Graphics::GpuTaskId anotherGraphTask{ task.index, task.generation + 1u };
+    const Graphics::GpuSubmissionPacketId anotherGraphPacket{ packet.index, packet.generation + 1u };
+    const Graphics::GpuGraphResourceId anotherGraphResource{ destination.index, destination.generation + 1u };
+    EXPECT_FALSE(capture.captureClearBuffer(
+        anotherGraphTask,
+        anotherGraphPacket,
+        queue,
+        anotherGraphResource,
+        0xdecafbadU
+    ));
+    EXPECT_EQ(capture.recordCount(), 2u);
+
+    capture.reset();
+    EXPECT_EQ(capture.recordCount(), 0u);
+    EXPECT_EQ(capture.graphGeneration(), 0u);
+    EXPECT_EQ(capture.recordAt(0u), nullptr);
 }
 
 TEST(GpuTaskGraph, RejectsStaleDependencyHandlesDuringAnalysis){

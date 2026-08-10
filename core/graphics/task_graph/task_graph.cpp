@@ -6,6 +6,7 @@
 
 #include "compiler.h"
 
+#include <core/graphics/capture/command_ir.h>
 #include <core/graphics/backend_selection.h>
 #include <core/telemetry/frame_graph_contributor.h>
 
@@ -41,8 +42,10 @@ static Atomic<u64> s_NextGeneration{ 1u };
 // compiler-owned through the helper-generated task uses below.
 struct CopyTextureTask{
     struct Copy{
+        GpuGraphResourceId sourceResource;
         TextureHandle source;
         TextureSlice sourceSlice;
+        GpuGraphResourceId destinationResource;
         TextureHandle destination;
         TextureSlice destinationSlice;
     };
@@ -68,6 +71,19 @@ struct CopyTextureTask{
         for(const Copy& copy : payload.copies){
             if(!copy.source || !copy.destination)
                 return false;
+            if(
+                context.commandIrCapture
+                && !context.commandIrCapture->captureCopyTexture(
+                    context.task,
+                    context.packet,
+                    context.queue,
+                    copy.sourceResource,
+                    copy.sourceSlice,
+                    copy.destinationResource,
+                    copy.destinationSlice
+                )
+            )
+                return false;
             commandList.copyTexture(
                 copy.destination.get(),
                 copy.destinationSlice,
@@ -86,8 +102,10 @@ struct CopyTextureTask{
 
 struct CopyBufferTask{
     struct Copy{
+        GpuGraphResourceId sourceResource;
         BufferHandle source;
         u64 sourceOffsetBytes = 0u;
+        GpuGraphResourceId destinationResource;
         BufferHandle destination;
         u64 destinationOffsetBytes = 0u;
         u64 dataSizeBytes = 0u;
@@ -114,6 +132,20 @@ struct CopyBufferTask{
         for(const Copy& copy : payload.copies){
             if(!copy.source || !copy.destination || copy.dataSizeBytes == 0u)
                 return false;
+            if(
+                context.commandIrCapture
+                && !context.commandIrCapture->captureCopyBuffer(
+                    context.task,
+                    context.packet,
+                    context.queue,
+                    copy.sourceResource,
+                    copy.sourceOffsetBytes,
+                    copy.destinationResource,
+                    copy.destinationOffsetBytes,
+                    copy.dataSizeBytes
+                )
+            )
+                return false;
             commandList.copyBuffer(
                 copy.destination.get(),
                 copy.destinationOffsetBytes,
@@ -131,6 +163,111 @@ struct CopyBufferTask{
     }
 };
 
+struct ClearBufferTask{
+    struct Payload{
+        GpuGraphResourceId destinationResource;
+        BufferHandle destination;
+        u32 clearValue = 0u;
+        QueueSubmissionToken* acceptedToken = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        if(!payload.destination)
+            return false;
+        if(
+            context.commandIrCapture
+            && !context.commandIrCapture->captureClearBuffer(
+                context.task,
+                context.packet,
+                context.queue,
+                payload.destinationResource,
+                payload.clearValue
+            )
+        )
+            return false;
+        commandList.clearBufferUInt(payload.destination.get(), payload.clearValue);
+        return true;
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(payload.acceptedToken)
+            *payload.acceptedToken = token;
+    }
+};
+
+struct ClearTextureTask{
+    struct Payload{
+        GpuGraphResourceId destinationResource;
+        TextureHandle destination;
+        GpuClearTextureTaskDesc clearDesc;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        if(!payload.destination || payload.clearDesc.valueType >= GpuClearTextureTaskValueType::kCount)
+            return false;
+        if(
+            context.commandIrCapture
+            && !context.commandIrCapture->captureClearTexture(
+                context.task,
+                context.packet,
+                context.queue,
+                payload.destinationResource,
+                payload.clearDesc
+            )
+        )
+            return false;
+
+        switch(payload.clearDesc.valueType){
+        case GpuClearTextureTaskValueType::Float:
+            commandList.clearTextureFloat(
+                payload.destination.get(),
+                payload.clearDesc.subresources,
+                payload.clearDesc.floatValue
+            );
+            return true;
+        case GpuClearTextureTaskValueType::UInt:
+            commandList.clearTextureUInt(
+                payload.destination.get(),
+                payload.clearDesc.subresources,
+                payload.clearDesc.uintValue
+            );
+            return true;
+        case GpuClearTextureTaskValueType::Int:
+            commandList.clearTextureInt(
+                payload.destination.get(),
+                payload.clearDesc.subresources,
+                payload.clearDesc.intValue
+            );
+            return true;
+        case GpuClearTextureTaskValueType::DepthStencil:
+            commandList.clearDepthStencilTexture(
+                payload.destination.get(),
+                payload.clearDesc.subresources,
+                payload.clearDesc.clearDepth,
+                payload.clearDesc.depthValue,
+                payload.clearDesc.clearStencil,
+                payload.clearDesc.stencilValue
+            );
+            return true;
+        default:
+            return false;
+        }
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(payload.clearDesc.acceptedToken)
+            *payload.clearDesc.acceptedToken = token;
+    }
+};
+
 [[nodiscard]] static bool CompatibleResourceMetadata(
     const GpuTaskGraphResourceView& resource,
     const GpuGraphResourceDesc& desc
@@ -139,6 +276,31 @@ struct CopyBufferTask{
         && resource.type == desc.type
         && resource.initialState == desc.initialState
         && resource.queueSharing == desc.queueSharing;
+}
+
+[[nodiscard]] static bool ClearTextureValueMatchesFormat(
+    const TextureDesc& textureDesc,
+    const GpuClearTextureTaskDesc& clearDesc
+)noexcept{
+    const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
+    const bool depthStencilFormat = formatInfo.hasDepth || formatInfo.hasStencil;
+    switch(clearDesc.valueType){
+    case GpuClearTextureTaskValueType::Float:
+        return !depthStencilFormat
+            && (formatInfo.kind == FormatKind::Normalized || formatInfo.kind == FormatKind::Float)
+        ;
+    case GpuClearTextureTaskValueType::UInt:
+        return !depthStencilFormat && formatInfo.kind == FormatKind::Integer && !formatInfo.isSigned;
+    case GpuClearTextureTaskValueType::Int:
+        return !depthStencilFormat && formatInfo.kind == FormatKind::Integer && formatInfo.isSigned;
+    case GpuClearTextureTaskValueType::DepthStencil:
+        return depthStencilFormat
+            && (!clearDesc.clearDepth || formatInfo.hasDepth)
+            && (!clearDesc.clearStencil || formatInfo.hasStencil)
+        ;
+    default:
+        return false;
+    }
 }
 
 
@@ -242,8 +404,10 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
         ;
         if(valid){
             payload->copies.push_back(CopyTask::Copy{
+                .sourceResource = region.source,
                 .source = sourceResource.buffer,
                 .sourceOffsetBytes = region.sourceOffsetBytes,
+                .destinationResource = region.destination,
                 .destination = destinationResource.buffer,
                 .destinationOffsetBytes = region.destinationOffsetBytes,
                 .dataSizeBytes = region.dataSizeBytes,
@@ -327,8 +491,10 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
         ;
         if(valid){
             payload->copies.push_back(CopyTask::Copy{
+                .sourceResource = region.source,
                 .source = sourceResource.texture,
                 .sourceSlice = region.sourceSlice,
+                .destinationResource = region.destination,
                 .destination = destinationResource.texture,
                 .destinationSlice = region.destinationSlice,
             });
@@ -348,6 +514,124 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
         &AcceptPayload<CopyTask>,
         nullptr,
         &DestroyPayload<CopyTask::Payload>
+    );
+    if(!task.valid())
+        DestroyArenaObject(m_arena, payload);
+    return task;
+}
+
+GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuClearBufferTaskDesc& clearDesc){
+    if(
+        desc.resourceUses
+        || desc.resourceUseCount != 0u
+        || !validResource(clearDesc.destination)
+        || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
+    )
+        return {};
+
+    const GpuGraphResourceNode& destinationResource = m_resources[clearDesc.destination.index];
+    if(
+        destinationResource.type != GpuGraphResourceType::Buffer
+        || !destinationResource.buffer
+        || destinationResource.buffer->getDescription().byteSize == 0u
+        || (destinationResource.buffer->getDescription().byteSize & (sizeof(u32) - 1u)) != 0u
+    )
+        return {};
+
+    using ClearTask = __hidden_gpu_task_graph::ClearBufferTask;
+    ClearTask::Payload* const payload = NewArenaObject<ClearTask::Payload>(m_arena);
+    if(!payload)
+        return {};
+    payload->destinationResource = clearDesc.destination;
+    payload->destination = destinationResource.buffer;
+    payload->clearValue = clearDesc.clearValue;
+    payload->acceptedToken = clearDesc.acceptedToken;
+
+    const GpuTaskResourceUse resourceUse{
+        .resource = clearDesc.destination,
+        .range = {},
+        .requiredState = ResourceStates::CopyDest,
+        .access = GpuTaskResourceAccess::Write,
+    };
+    GpuTaskDesc resolvedDesc = desc;
+    resolvedDesc.setResourceUses(&resourceUse, 1u);
+    const GpuTaskId task = appendTask(
+        resolvedDesc,
+        payload,
+        &RecordPayload<ClearTask>,
+        &AcceptPayload<ClearTask>,
+        nullptr,
+        &DestroyPayload<ClearTask::Payload>
+    );
+    if(!task.valid())
+        DestroyArenaObject(m_arena, payload);
+    return task;
+}
+
+GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc){
+    if(
+        desc.resourceUses
+        || desc.resourceUseCount != 0u
+        || !validResource(clearDesc.destination)
+        || clearDesc.valueType >= GpuClearTextureTaskValueType::kCount
+        || (
+            clearDesc.valueType == GpuClearTextureTaskValueType::DepthStencil
+            && !clearDesc.clearDepth
+            && !clearDesc.clearStencil
+        )
+        || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
+    )
+        return {};
+
+    const GpuGraphResourceNode& destinationResource = m_resources[clearDesc.destination.index];
+    if(
+        destinationResource.type != GpuGraphResourceType::Texture
+        || !destinationResource.texture
+        // vkCmdClear*Image cannot operate on multisampled images outside a render pass. This primitive helper has no
+        // framebuffer/render-pass lowering, so preserve its transfer-only contract by rejecting MSAA up front.
+        || destinationResource.texture->getDescription().sampleCount != 1u
+    )
+        return {};
+    if(!__hidden_gpu_task_graph::ClearTextureValueMatchesFormat(
+        destinationResource.texture->getDescription(),
+        clearDesc
+    ))
+        return {};
+    const TextureSubresourceSet resolvedSubresources = clearDesc.subresources.resolve(
+        destinationResource.texture->getDescription(),
+        TextureSubresourceMipResolve::Range
+    );
+    if(resolvedSubresources.numMipLevels == 0u || resolvedSubresources.numArraySlices == 0u)
+        return {};
+
+    using ClearTask = __hidden_gpu_task_graph::ClearTextureTask;
+    ClearTask::Payload* const payload = NewArenaObject<ClearTask::Payload>(m_arena);
+    if(!payload)
+        return {};
+    payload->destinationResource = clearDesc.destination;
+    payload->destination = destinationResource.texture;
+    payload->clearDesc = clearDesc;
+    // Capture and native lowering retain the same exact graph-declared range rather than an all-subresources alias
+    // that would need the original TextureDesc to resolve during a later validation/replay phase.
+    payload->clearDesc.subresources = resolvedSubresources;
+
+    const GpuTaskResourceUse resourceUse{
+        .resource = clearDesc.destination,
+        .range = GpuTaskResourceRange{
+            .textureSubresources = resolvedSubresources,
+        },
+        .requiredState = ResourceStates::CopyDest,
+        .access = GpuTaskResourceAccess::Write,
+    };
+    GpuTaskDesc resolvedDesc = desc;
+    resolvedDesc.setResourceUses(&resourceUse, 1u);
+    const GpuTaskId task = appendTask(
+        resolvedDesc,
+        payload,
+        &RecordPayload<ClearTask>,
+        &AcceptPayload<ClearTask>,
+        nullptr,
+        &DestroyPayload<ClearTask::Payload>
     );
     if(!task.valid())
         DestroyArenaObject(m_arena, payload);

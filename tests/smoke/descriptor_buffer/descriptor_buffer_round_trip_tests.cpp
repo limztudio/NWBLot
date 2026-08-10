@@ -26,6 +26,7 @@
 #include <core/alloc/job.h>
 #include <core/graphics/module.h>
 #include <core/graphics/api.h>
+#include <core/graphics/capture/command_ir.h>
 #include <core/graphics/task_graph/compiler.h>
 #include <core/graphics/task_graph/packet_runtime.h>
 #include <core/perf/timing.h>
@@ -287,6 +288,28 @@ struct NativePacketPrefixTask{
     static void accepted(Payload& payload, const QueueSubmissionToken& token){
         if(payload.acceptedToken)
             *payload.acceptedToken = token;
+    }
+};
+
+
+// A mutable success gate lets the packet recorder prove that an optional capture rolls back an incomplete packet
+// before a retry. It intentionally records no native work beyond the task marker.
+struct NativePacketCaptureRetryTask{
+    struct Payload{
+        const bool* shouldRecord = nullptr;
+        bool* attempted = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(commandList);
+        static_cast<void>(context);
+        if(payload.attempted)
+            *payload.attempted = true;
+        return payload.shouldRecord && *payload.shouldRecord;
     }
 };
 
@@ -961,6 +984,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
+    GpuCommandIrCapture commandIrCapture(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
     ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
@@ -968,8 +992,23 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
         compiledGraph.allPacketRange(),
         nullptr,
         0u,
-        recordedGraph
+        recordedGraph,
+        nullptr,
+        &commandIrCapture
     ));
+    ASSERT_EQ(commandIrCapture.recordCount(), 1u);
+    const GpuCommandIrBuiltinTaskRecord* const copyCapture = commandIrCapture.recordAt(0u);
+    ASSERT_NE(copyCapture, nullptr);
+    EXPECT_EQ(copyCapture->opcode, GpuCommandIrOpcode::CopyTexture);
+    EXPECT_EQ(copyCapture->task, copyTask);
+    EXPECT_EQ(copyCapture->packet, packet);
+    EXPECT_EQ(copyCapture->queue, compiledGraph.packet(packet).queue);
+    EXPECT_EQ(copyCapture->source, sourceResource);
+    EXPECT_EQ(copyCapture->destination, destinationResource);
+    EXPECT_EQ(copyCapture->sourceSlice.mipLevel, copyRegions[0u].sourceSlice.mipLevel);
+    EXPECT_EQ(copyCapture->sourceSlice.arraySlice, copyRegions[0u].sourceSlice.arraySlice);
+    EXPECT_EQ(copyCapture->destinationSlice.mipLevel, copyRegions[0u].destinationSlice.mipLevel);
+    EXPECT_EQ(copyCapture->destinationSlice.arraySlice, copyRegions[0u].destinationSlice.arraySlice);
     const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
     ASSERT_NE(finalState, nullptr);
 
@@ -1262,6 +1301,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
+    GpuCommandIrCapture commandIrCapture(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
     ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
         graph,
@@ -1269,8 +1309,24 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
         compiledGraph.allPacketRange(),
         nullptr,
         0u,
-        recordedGraph
+        recordedGraph,
+        nullptr,
+        &commandIrCapture
     ));
+    ASSERT_EQ(commandIrCapture.recordCount(), LengthOf(copyRegions));
+    for(usize regionIndex = 0u; regionIndex < LengthOf(copyRegions); ++regionIndex){
+        const GpuCommandIrBuiltinTaskRecord* const copyCapture = commandIrCapture.recordAt(regionIndex);
+        ASSERT_NE(copyCapture, nullptr);
+        EXPECT_EQ(copyCapture->opcode, GpuCommandIrOpcode::CopyBuffer);
+        EXPECT_EQ(copyCapture->task, copyTask);
+        EXPECT_EQ(copyCapture->packet, packet);
+        EXPECT_EQ(copyCapture->queue, compiledGraph.packet(packet).queue);
+        EXPECT_EQ(copyCapture->source, copyRegions[regionIndex].source);
+        EXPECT_EQ(copyCapture->destination, copyRegions[regionIndex].destination);
+        EXPECT_EQ(copyCapture->sourceOffsetBytes, copyRegions[regionIndex].sourceOffsetBytes);
+        EXPECT_EQ(copyCapture->destinationOffsetBytes, copyRegions[regionIndex].destinationOffsetBytes);
+        EXPECT_EQ(copyCapture->dataSizeBytes, copyRegions[regionIndex].dataSizeBytes);
+    }
     const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
     ASSERT_NE(finalState, nullptr);
     EXPECT_TRUE(producerRecorded);
@@ -1308,6 +1364,450 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SecondSourceWords); ++wordIndex)
         EXPECT_EQ(secondCopiedWords[wordIndex], s_SecondSourceWords[wordIndex]);
     device.unmapBuffer(secondDestination.get());
+}
+
+
+// Clear helpers are deliberately graph-native primitives: their CopyDest declarations remain authoritative while an
+// explicitly supplied Phase 11 capture receives compact resource-ID records. The normal recorder call sites pass
+// no capture object and continue directly to native command lists.
+TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    const BufferDesc clearBufferDesc = BufferDesc()
+        .setByteSize(sizeof(u32) * 4u)
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+        .setCpuAccess(CpuAccessMode::Read)
+    ;
+    auto buffer = device.createBuffer(clearBufferDesc);
+    ASSERT_NE(buffer.get(), nullptr);
+
+    const TextureDesc clearTextureDesc = TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Format::RGBA8_UINT)
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+    ;
+    auto texture = device.createTexture(clearTextureDesc);
+    ASSERT_NE(texture.get(), nullptr);
+
+    const TextureDesc clearDepthTextureDesc = TextureDesc()
+        .setWidth(4u)
+        .setHeight(4u)
+        .setFormat(Format::D24S8)
+        .setInRenderTarget(true)
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+    ;
+    auto depthTexture = device.createTexture(clearDepthTextureDesc);
+    ASSERT_NE(depthTexture.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId bufferResource = graph.importBuffer(
+        buffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/built_in_clear_buffer"))
+            .setMarkerLabel("Built-In Clear Buffer")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId textureResource = graph.importTexture(
+        texture,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/built_in_clear_texture"))
+            .setMarkerLabel("Built-In Clear Texture")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    const GpuGraphResourceId depthTextureResource = graph.importTexture(
+        depthTexture,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/built_in_clear_depth_texture"))
+            .setMarkerLabel("Built-In Clear Depth Texture")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(bufferResource.valid());
+    ASSERT_TRUE(textureResource.valid());
+    ASSERT_TRUE(depthTextureResource.valid());
+
+    GpuTaskSchedulingHint clearScheduling;
+    clearScheduling.cost = GpuTaskCostHint::Small;
+    clearScheduling.forceSubmissionBoundary = true;
+    clearScheduling.allowPacketMerge = false;
+    const GpuQueueRequest transferQueue{
+        GpuQueueCapability::Transfer,
+        GpuQueuePreference::Transfer,
+        true,
+        true,
+    };
+    GpuTaskDesc clearBufferTaskDesc;
+    clearBufferTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/built_in_clear_buffer_task"))
+        .setMarkerLabel("Built-In Clear Buffer Task")
+        .setQueue(transferQueue)
+        .setScheduling(clearScheduling)
+    ;
+    GpuTaskDesc clearTextureTaskDesc;
+    clearTextureTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/built_in_clear_texture_task"))
+        .setMarkerLabel("Built-In Clear Texture Task")
+        .setQueue(transferQueue)
+        .setScheduling(clearScheduling)
+    ;
+    GpuTaskDesc clearDepthTextureTaskDesc;
+    clearDepthTextureTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/built_in_clear_depth_texture_task"))
+        .setMarkerLabel("Built-In Clear Depth Texture Task")
+        .setQueue(transferQueue)
+        .setScheduling(clearScheduling)
+    ;
+    QueueSubmissionToken clearBufferAcceptedToken;
+    QueueSubmissionToken clearTextureAcceptedToken;
+    QueueSubmissionToken clearDepthTextureAcceptedToken;
+    const GpuTaskId clearBufferTask = graph.addClearBufferTask(
+        clearBufferTaskDesc,
+        GpuClearBufferTaskDesc{
+            .destination = bufferResource,
+            .clearValue = 0xdecafbadU,
+            .acceptedToken = &clearBufferAcceptedToken,
+        }
+    );
+    const GpuTaskId clearTextureTask = graph.addClearTextureTask(
+        clearTextureTaskDesc,
+        GpuClearTextureTaskDesc{
+            .destination = textureResource,
+            .subresources = TextureSubresourceSet(0u, 1u, 0u, 1u),
+            .valueType = GpuClearTextureTaskValueType::UInt,
+            .uintValue = UIntColor(0x10203040u, 0x50607080u, 0x90a0b0c0u, 0xd0e0f000u),
+            .acceptedToken = &clearTextureAcceptedToken,
+        }
+    );
+    const GpuTaskId clearDepthTextureTask = graph.addClearTextureTask(
+        clearDepthTextureTaskDesc,
+        GpuClearTextureTaskDesc{
+            .destination = depthTextureResource,
+            .subresources = TextureSubresourceSet(0u, 1u, 0u, 1u),
+            .valueType = GpuClearTextureTaskValueType::DepthStencil,
+            .depthValue = 0.25f,
+            .stencilValue = 0x7fu,
+            .clearDepth = true,
+            .clearStencil = true,
+            .acceptedToken = &clearDepthTextureAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(clearBufferTask.valid());
+    ASSERT_TRUE(clearTextureTask.valid());
+    ASSERT_TRUE(clearDepthTextureTask.valid());
+    ASSERT_EQ(graph.taskAt(clearBufferTask.index).resourceUseCount, 1u);
+    ASSERT_EQ(graph.taskAt(clearTextureTask.index).resourceUseCount, 1u);
+    ASSERT_EQ(graph.taskAt(clearDepthTextureTask.index).resourceUseCount, 1u);
+    EXPECT_EQ(
+        graph.taskAt(clearBufferTask.index).resourceUses[0u].requiredState,
+        ResourceStates::CopyDest
+    );
+    EXPECT_EQ(
+        graph.taskAt(clearTextureTask.index).resourceUses[0u].requiredState,
+        ResourceStates::CopyDest
+    );
+    EXPECT_EQ(
+        graph.taskAt(clearDepthTextureTask.index).resourceUses[0u].requiredState,
+        ResourceStates::CopyDest
+    );
+    // Typed task creation rejects value types that native Vulkan clear commands cannot lower for the target image.
+    EXPECT_FALSE(graph.addClearTextureTask(
+        clearTextureTaskDesc,
+        GpuClearTextureTaskDesc{
+            .destination = textureResource,
+            .valueType = GpuClearTextureTaskValueType::Float,
+        }
+    ).valid());
+    EXPECT_FALSE(graph.addClearTextureTask(
+        clearTextureTaskDesc,
+        GpuClearTextureTaskDesc{
+            .destination = depthTextureResource,
+            .valueType = GpuClearTextureTaskValueType::UInt,
+        }
+    ).valid());
+
+    const u32 graphicsFamily = device.getQueueFamilyIndex(CommandQueue::Graphics);
+    const u32 transferFamily = device.getQueueFamilyIndex(CommandQueue::Transfer);
+    const bool dedicatedTransfer = device.getQueue(CommandQueue::Transfer)
+        && transferFamily != Limit<u32>::s_Max
+        && transferFamily != graphicsFamily
+    ;
+    GpuPhysicalQueueInfo queues[2u] = {
+        GpuPhysicalQueueInfo{
+            .id = GpuPhysicalQueueId{ 0u, 1u },
+            .queueClass = CommandQueue::Graphics,
+            .capabilities = static_cast<GpuQueueCapability::Mask>(
+                static_cast<u8>(GpuQueueCapability::Graphics)
+                | static_cast<u8>(GpuQueueCapability::Compute)
+                | static_cast<u8>(GpuQueueCapability::Transfer)
+            ),
+            .familyIndex = graphicsFamily,
+            .queueIndex = 0u,
+            .dedicated = false,
+        },
+    };
+    usize queueCount = 1u;
+    if(dedicatedTransfer){
+        queues[queueCount] = GpuPhysicalQueueInfo{
+            .id = GpuPhysicalQueueId{ 1u, 1u },
+            .queueClass = CommandQueue::Transfer,
+            .capabilities = GpuQueueCapability::Transfer,
+            .familyIndex = transferFamily,
+            .queueIndex = 0u,
+            .dedicated = true,
+        };
+        ++queueCount;
+    }
+    const GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = queueCount,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/built_in_clear_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuSubmissionPacketId clearBufferPacket = compiledGraph.packetForTask(clearBufferTask);
+    const GpuSubmissionPacketId clearTexturePacket = compiledGraph.packetForTask(clearTextureTask);
+    const GpuSubmissionPacketId clearDepthTexturePacket = compiledGraph.packetForTask(clearDepthTextureTask);
+    ASSERT_TRUE(clearBufferPacket.valid());
+    ASSERT_TRUE(clearTexturePacket.valid());
+    ASSERT_TRUE(clearDepthTexturePacket.valid());
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    GpuCommandIrCapture commandIrCapture(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        nullptr,
+        &commandIrCapture
+    ));
+    ASSERT_EQ(commandIrCapture.recordCount(), 3u);
+    const GpuCommandIrBuiltinTaskRecord* const bufferCapture = commandIrCapture.recordAt(0u);
+    const GpuCommandIrBuiltinTaskRecord* const textureCapture = commandIrCapture.recordAt(1u);
+    const GpuCommandIrBuiltinTaskRecord* const depthTextureCapture = commandIrCapture.recordAt(2u);
+    ASSERT_NE(bufferCapture, nullptr);
+    ASSERT_NE(textureCapture, nullptr);
+    ASSERT_NE(depthTextureCapture, nullptr);
+    EXPECT_EQ(bufferCapture->opcode, GpuCommandIrOpcode::ClearBuffer);
+    EXPECT_EQ(bufferCapture->task, clearBufferTask);
+    EXPECT_EQ(bufferCapture->packet, clearBufferPacket);
+    EXPECT_EQ(bufferCapture->destination, bufferResource);
+    EXPECT_EQ(bufferCapture->uintClearValue, UIntColor(0xdecafbadU));
+    EXPECT_EQ(textureCapture->opcode, GpuCommandIrOpcode::ClearTexture);
+    EXPECT_EQ(textureCapture->task, clearTextureTask);
+    EXPECT_EQ(textureCapture->packet, clearTexturePacket);
+    EXPECT_EQ(textureCapture->destination, textureResource);
+    EXPECT_EQ(textureCapture->clearTextureValueType, GpuClearTextureTaskValueType::UInt);
+    EXPECT_EQ(textureCapture->uintClearValue, UIntColor(0x10203040u, 0x50607080u, 0x90a0b0c0u, 0xd0e0f000u));
+    EXPECT_EQ(depthTextureCapture->opcode, GpuCommandIrOpcode::ClearTexture);
+    EXPECT_EQ(depthTextureCapture->task, clearDepthTextureTask);
+    EXPECT_EQ(depthTextureCapture->packet, clearDepthTexturePacket);
+    EXPECT_EQ(depthTextureCapture->destination, depthTextureResource);
+    EXPECT_EQ(depthTextureCapture->clearTextureValueType, GpuClearTextureTaskValueType::DepthStencil);
+    EXPECT_EQ(depthTextureCapture->depthClearValue, 0.25f);
+    EXPECT_EQ(depthTextureCapture->stencilClearValue, 0x7fu);
+    EXPECT_TRUE(depthTextureCapture->clearDepth);
+    EXPECT_TRUE(depthTextureCapture->clearStencil);
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(clearBufferAcceptedToken.valid());
+    EXPECT_TRUE(clearTextureAcceptedToken.valid());
+    EXPECT_TRUE(clearDepthTextureAcceptedToken.valid());
+    ASSERT_TRUE(device.waitForIdle());
+
+    const u32* const clearedWords = static_cast<const u32*>(device.mapBuffer(buffer.get(), CpuAccessMode::Read));
+    ASSERT_NE(clearedWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < 4u; ++wordIndex)
+        EXPECT_EQ(clearedWords[wordIndex], 0xdecafbadU);
+    device.unmapBuffer(buffer.get());
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, CommandIrCaptureRollsBackARejectedPacketBeforeRetry){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto buffer = device.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(u32))
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+    );
+    ASSERT_NE(buffer.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId bufferResource = graph.importBuffer(
+        buffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/command_ir_rollback_buffer"))
+            .setMarkerLabel("Command IR Rollback Buffer")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    ASSERT_TRUE(bufferResource.valid());
+
+    const GpuQueueRequest transferQueue{
+        GpuQueueCapability::Transfer,
+        GpuQueuePreference::Transfer,
+        true,
+        true,
+    };
+    GpuTaskDesc clearDesc;
+    clearDesc
+        .setIdentity(Name("tests/descriptor_buffer/command_ir_rollback_clear"))
+        .setMarkerLabel("Command IR Rollback Clear")
+        .setQueue(transferQueue)
+    ;
+    const GpuTaskId clearTask = graph.addClearBufferTask(
+        clearDesc,
+        GpuClearBufferTaskDesc{
+            .destination = bufferResource,
+            .clearValue = 0x8badf00dU,
+        }
+    );
+    ASSERT_TRUE(clearTask.valid());
+
+    bool shouldRecord = false;
+    bool retryTaskAttempted = false;
+    GpuTaskSchedulingHint retryScheduling;
+    retryScheduling.mergeWithPrevious = true;
+    GpuTaskDesc retryDesc;
+    retryDesc
+        .setIdentity(Name("tests/descriptor_buffer/command_ir_rollback_retry"))
+        .setMarkerLabel("Command IR Rollback Retry")
+        .setQueue(transferQueue)
+        .setScheduling(retryScheduling)
+        .setDependencies(&clearTask, 1u)
+    ;
+    const GpuTaskId retryTask = graph.addTask<NativePacketCaptureRetryTask>(
+        retryDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &retryTaskAttempted,
+        }
+    );
+    ASSERT_TRUE(retryTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/command_ir_rollback_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(clearTask);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(retryTask), packet);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuCommandIrCapture commandIrCapture(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    EXPECT_FALSE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = packet },
+        recordedGraph,
+        &commandIrCapture
+    ));
+    EXPECT_TRUE(retryTaskAttempted);
+    EXPECT_EQ(commandIrCapture.recordCount(), 0u);
+    EXPECT_EQ(recordedGraph.find(packet), nullptr);
+
+    shouldRecord = true;
+    retryTaskAttempted = false;
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = packet },
+        recordedGraph,
+        &commandIrCapture
+    ));
+    EXPECT_TRUE(retryTaskAttempted);
+    ASSERT_EQ(commandIrCapture.recordCount(), 1u);
+    const GpuCommandIrBuiltinTaskRecord* const captureRecord = commandIrCapture.recordAt(0u);
+    ASSERT_NE(captureRecord, nullptr);
+    EXPECT_EQ(captureRecord->opcode, GpuCommandIrOpcode::ClearBuffer);
+    EXPECT_EQ(captureRecord->task, clearTask);
+    EXPECT_EQ(captureRecord->packet, packet);
+    EXPECT_EQ(captureRecord->destination, bufferResource);
+
+    // A non-empty capture belongs to this graph generation. Reject it before recording an unrelated packet that
+    // contains no primitive command, rather than making old records appear to be a trace for the new graph.
+    GpuTaskGraph foreignGraph(DescriptorBufferRoundTripTest::arena());
+    bool foreignTaskAttempted = false;
+    GpuTaskDesc foreignTaskDesc;
+    foreignTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/command_ir_foreign_graph"))
+        .setMarkerLabel("Command IR Foreign Graph")
+        .setQueue(transferQueue)
+    ;
+    const GpuTaskId foreignTask = foreignGraph.addTask<NativePacketCaptureRetryTask>(
+        foreignTaskDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &foreignTaskAttempted,
+        }
+    );
+    ASSERT_TRUE(foreignTask.valid());
+    GpuTaskGraphAnalysis foreignAnalysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments foreignAssignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph foreignCompiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena foreignScratchArena(Name("tests/descriptor_buffer/command_ir_foreign_scratch"));
+    ASSERT_TRUE(compiler.compile(
+        foreignGraph,
+        foreignAnalysis,
+        topology,
+        foreignAssignments,
+        foreignCompiledGraph,
+        foreignScratchArena
+    ));
+    const GpuSubmissionPacketId foreignPacket = foreignCompiledGraph.packetForTask(foreignTask);
+    ASSERT_TRUE(foreignPacket.valid());
+    GpuRecordedGraph foreignRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    EXPECT_FALSE(recorder.recordPacket(
+        foreignGraph,
+        foreignCompiledGraph,
+        GpuNativePacketRecordDesc{ .packet = foreignPacket },
+        foreignRecordedGraph,
+        &commandIrCapture
+    ));
+    EXPECT_FALSE(foreignTaskAttempted);
+    EXPECT_EQ(commandIrCapture.recordCount(), 1u);
 }
 
 

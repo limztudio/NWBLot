@@ -22,6 +22,7 @@ NWB_CORE_BEGIN
 
 class GpuTimingSubmissionTicket;
 class GpuTaskGraph;
+class GpuCommandIrCapture;
 struct GpuExternalPacketStateSource;
 
 
@@ -125,7 +126,8 @@ public:
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecordDesc& desc,
-        GpuRecordedGraph& outRecordedGraph
+        GpuRecordedGraph& outRecordedGraph,
+        GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
     // Records one compiler-derived non-empty contiguous range. `recordOverrides` is optional and sparse: packets
     // without an override receive the ordinary graph-owned state seed. Earlier producer packets needed by the range
@@ -137,7 +139,8 @@ public:
         const GpuNativePacketRecordDesc* recordOverrides,
         usize recordOverrideCount,
         GpuRecordedGraph& outRecordedGraph,
-        GpuSubmissionPacketId* outFailedPacket = nullptr
+        GpuSubmissionPacketId* outFailedPacket = nullptr,
+        GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
 private:
     Device& m_device;

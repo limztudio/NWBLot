@@ -7,6 +7,7 @@
 #include "task_graph.h"
 
 #include <core/graphics/backend_selection.h>
+#include <core/graphics/capture/command_ir.h>
 #include <core/graphics/gpu_timing.h>
 
 
@@ -255,9 +256,18 @@ bool GpuNativePacketRecorder::recordPacket(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecordDesc& desc,
-    GpuRecordedGraph& outRecordedGraph
+    GpuRecordedGraph& outRecordedGraph,
+    GpuCommandIrCapture* const commandIrCapture
 )const{
     if(!compiledGraph.validFor(graph) || !compiledGraph.validPacket(desc.packet))
+        return false;
+    // A capture is one graph-generation artifact. Reject a stale non-empty capture before opening a packet that
+    // happens not to contain a primitive command; otherwise old records could be mistaken for this packet's trace.
+    if(
+        commandIrCapture
+        && commandIrCapture->recordCount() != 0u
+        && commandIrCapture->graphGeneration() != compiledGraph.generation()
+    )
         return false;
     if(!outRecordedGraph.validFor(compiledGraph))
         outRecordedGraph.reset(compiledGraph);
@@ -305,6 +315,8 @@ bool GpuNativePacketRecorder::recordPacket(
     if(!queue || queue->queueClass >= CommandQueue::kCount)
         return false;
 
+    const usize captureRecordCount = commandIrCapture ? commandIrCapture->recordCount() : 0u;
+
     CommandListParameters parameters;
     parameters.setQueueType(queue->queueClass);
     CommandListHandle commandList = m_device.createCommandList(parameters);
@@ -329,6 +341,7 @@ bool GpuNativePacketRecorder::recordPacket(
             .task = task,
             .packet = desc.packet,
             .queue = packet.queue,
+            .commandIrCapture = commandIrCapture,
         };
         const GpuCompiledBarrier* const prologueBarriers = compiledGraph.taskPrologueBarriers(task);
         if(compiledTask->prologueBarrierCount > 0u && !prologueBarriers){
@@ -352,8 +365,11 @@ bool GpuNativePacketRecorder::recordPacket(
             commandList->commitBarriers();
     }
     commandList->close(packetStateSeed);
-    if(!recorded || !commandList->hasCommandBuffer())
+    if(!recorded || !commandList->hasCommandBuffer()){
+        if(commandIrCapture)
+            commandIrCapture->rollback(captureRecordCount);
         return false;
+    }
     GpuRecordedPacket recordedPacket;
     recordedPacket.packet = desc.packet;
     recordedPacket.commandLists[0u] = commandList.get();
@@ -371,7 +387,8 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
     const GpuNativePacketRecordDesc* const recordOverrides,
     const usize recordOverrideCount,
     GpuRecordedGraph& outRecordedGraph,
-    GpuSubmissionPacketId* const outFailedPacket
+    GpuSubmissionPacketId* const outFailedPacket,
+    GpuCommandIrCapture* const commandIrCapture
 )const{
     if(outFailedPacket)
         *outFailedPacket = {};
@@ -417,7 +434,8 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
             graph,
             compiledGraph,
             *recordDesc,
-            outRecordedGraph
+            outRecordedGraph,
+            commandIrCapture
         )){
             if(outFailedPacket)
                 *outFailedPacket = packet;

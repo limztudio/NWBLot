@@ -19,6 +19,7 @@ NWB_CORE_BEGIN
 
 class GpuTaskGraph;
 class GpuTaskGraphCompiler;
+class GpuCommandIrCapture;
 
 
 // Tasks describe semantic work. Packets are compiler-generated native-recording and submission units; a packet
@@ -118,6 +119,8 @@ struct GpuTaskRecordContext{
     GpuTaskId task;
     GpuSubmissionPacketId packet;
     GpuPhysicalQueueId queue;
+    // Optional Phase 11 tooling sink. Null keeps direct native task recording on the ordinary runtime path.
+    GpuCommandIrCapture* commandIrCapture = nullptr;
 };
 
 

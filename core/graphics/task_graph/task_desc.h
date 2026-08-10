@@ -139,6 +139,42 @@ struct GpuCopyTextureTaskDesc{
 };
 
 
+// Primitive clear helpers have the same graph-owned scheduling and lifecycle as copies, while retaining the
+// selected native clear variant in their compact payload. They always write CopyDest state for the target resource.
+struct GpuClearBufferTaskDesc{
+    GpuGraphResourceId destination;
+    u32 clearValue = 0u;
+    // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
+    QueueSubmissionToken* acceptedToken = nullptr;
+};
+
+namespace GpuClearTextureTaskValueType{
+    enum Enum : u8{
+        Float,
+        UInt,
+        Int,
+        DepthStencil,
+
+        kCount,
+    };
+};
+
+struct GpuClearTextureTaskDesc{
+    GpuGraphResourceId destination;
+    TextureSubresourceSet subresources = s_AllSubresources;
+    GpuClearTextureTaskValueType::Enum valueType = GpuClearTextureTaskValueType::UInt;
+    Color floatValue;
+    UIntColor uintValue;
+    IntColor intValue;
+    f32 depthValue = 1.f;
+    u8 stencilValue = 0u;
+    bool clearDepth = false;
+    bool clearStencil = false;
+    // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
+    QueueSubmissionToken* acceptedToken = nullptr;
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

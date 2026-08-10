@@ -9,6 +9,7 @@ nwb_declare_static_library(nwb_graphics)
 target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/backend_contract.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/api.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/pipeline_helpers.cpp"
@@ -44,6 +45,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/backend_contract.h"
     "${CMAKE_CURRENT_LIST_DIR}/backend_selection.h"
     "${CMAKE_CURRENT_LIST_DIR}/api.h"
+    "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir.h"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_nodes.h"

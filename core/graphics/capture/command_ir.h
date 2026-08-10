@@ -16,6 +16,10 @@
 NWB_CORE_BEGIN
 
 
+class GpuTaskGraph;
+class GpuCompiledGraph;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -303,6 +307,73 @@ private:
 
 // Fully walks a stream with the syntax-only reader and returns either success or its first malformed location.
 [[nodiscard]] GpuCommandIrStreamValidationResult ValidateGpuCommandIrStream(BinaryByteView bytes)noexcept;
+
+
+// Replay remains opt-in tooling. A v1 stream contains only primitive task bodies, not packet state seeds,
+// compiler barriers, ownership transfers, markers, or submission dependencies. It may therefore be lowered only
+// into a caller-owned fresh packet body after the graph recorder has established the required state.
+namespace GpuCommandIrReplayError{
+    enum Enum : u8{
+        None,
+        InvalidStream,
+        InvalidCompiledGraph,
+        InvalidPacket,
+        PacketQueueUnavailable,
+        MissingTransferCapability,
+        GraphGenerationMismatch,
+        RecordPacketMismatch,
+        RecordQueueMismatch,
+        InvalidTask,
+        CompiledTaskMismatch,
+        TaskOrderMismatch,
+        InvalidResource,
+        ResourceUseMismatch,
+        ResourceTypeMismatch,
+        MissingBackendResource,
+        InvalidBufferCopy,
+        InvalidTextureCopy,
+        InvalidBufferClear,
+        InvalidTextureClear,
+        CommandListNotRecording,
+        CommandListRenderPassActive,
+        CommandListQueueMismatch,
+        StreamChangedDuringReplay,
+    };
+};
+
+struct GpuCommandIrReplayResult{
+    GpuCommandIrReplayError::Enum error = GpuCommandIrReplayError::None;
+    // Syntax failures preserve the reader's exact byte diagnostic. Semantic failures identify the decoded record
+    // that failed graph-aware preflight and use Limit<u64>::s_Max when no record was reached.
+    GpuCommandIrStreamValidationResult streamValidation;
+    u64 recordIndex = Limit<u64>::s_Max;
+
+    [[nodiscard]] constexpr bool valid()const noexcept{
+        return error == GpuCommandIrReplayError::None;
+    }
+};
+
+// Validates the commands selected by `packet` from a compiler-owned capture without touching a native command
+// list. The complete stream is syntax-validated first, then records for other packets are ignored so a normal
+// multi-packet capture can be replayed one packet at a time.
+[[nodiscard]] GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
+    BinaryByteView bytes,
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    GpuSubmissionPacketId packet
+)noexcept;
+
+// Re-runs complete preflight before lowering only `packet`'s commands. The command list must be open, have the
+// packet's resolved queue class, and have no active render pass. The bytes and graph must remain unchanged for the
+// duration of the call, and resources must belong to that command list's device. This does not apply graph state
+// seeds or barriers and does not submit work; callers retain the surrounding packet-recording contract.
+[[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
+    BinaryByteView bytes,
+    const GpuTaskGraph& graph,
+    const GpuCompiledGraph& compiledGraph,
+    GpuSubmissionPacketId packet,
+    CommandList& commandList
+)noexcept;
 
 
 class GpuCommandIrCapture final : NoCopy{

@@ -1355,6 +1355,145 @@ TEST(GpuCommandIrStreamReader, RejectsMalformedRecordsWithoutPublishingPartialOu
     }, Graphics::GpuCommandIrStreamValidationError::TruncatedRecord);
 }
 
+TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeLowering){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId source = AddBufferMetadata(
+        graph,
+        Name("tests/command_ir_replay/source"),
+        "Replay Source"
+    );
+    const Graphics::GpuGraphResourceId destination = AddBufferMetadata(
+        graph,
+        Name("tests/command_ir_replay/destination"),
+        "Replay Destination"
+    );
+    ASSERT_TRUE(source.valid());
+    ASSERT_TRUE(destination.valid());
+
+    const Graphics::GpuTaskResourceUse uses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = source,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopySource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = destination,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("tests/command_ir_replay/copy"))
+        .setMarkerLabel("Replay Copy")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+        .setResourceUses(uses, LengthOf(uses))
+    ;
+    const Graphics::GpuTaskId task = graph.addTask(desc);
+    ASSERT_TRUE(task.valid());
+    const Graphics::GpuTaskId secondDependencies[] = { task };
+    Graphics::GpuTaskDesc secondDesc = desc;
+    secondDesc
+        .setIdentity(Name("tests/command_ir_replay/copy_second"))
+        .setMarkerLabel("Replay Copy Second")
+        .setDependencies(secondDependencies, LengthOf(secondDependencies))
+    ;
+    const Graphics::GpuTaskId secondTask = graph.addTask(secondDesc);
+    ASSERT_TRUE(secondTask.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuSubmissionPacketId packet = compiledGraph.packetForTask(task);
+    const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(secondTask);
+    ASSERT_TRUE(packet.valid());
+    ASSERT_TRUE(secondPacket.valid());
+    ASSERT_NE(secondPacket, packet);
+    const Graphics::GpuPhysicalQueueId queue = compiledGraph.packet(packet).queue;
+    ASSERT_EQ(compiledGraph.packet(secondPacket).queue, queue);
+
+    Graphics::GpuCommandIrCapture capture(testArena.arena);
+    ASSERT_TRUE(capture.captureCopyBuffer(task, packet, queue, source, 0u, destination, 0u, 4u));
+    ASSERT_TRUE(capture.captureCopyBuffer(secondTask, secondPacket, queue, source, 0u, destination, 0u, 4u));
+    ASSERT_EQ(capture.recordCount(), 2u);
+    const Graphics::GpuCommandIrReplayResult validContext = Graphics::PreflightGpuCommandIrPacket(
+        capture.commandBytes(),
+        graph,
+        compiledGraph,
+        packet
+    );
+    // Metadata-only imports cannot be lowered, but preflight has already established the stream, graph,
+    // packet, queue, task order, resource kinds, and declared CopySource/CopyDest uses before that boundary.
+    EXPECT_EQ(validContext.error, Graphics::GpuCommandIrReplayError::MissingBackendResource);
+    EXPECT_TRUE(validContext.streamValidation.valid());
+    EXPECT_EQ(validContext.recordIndex, 0u);
+
+    // A normal capture concatenates packet bodies. Selecting the second packet must skip the first record rather
+    // than rejecting the full frame artifact before its requested packet is reached.
+    const Graphics::GpuCommandIrReplayResult secondPacketContext = Graphics::PreflightGpuCommandIrPacket(
+        capture.commandBytes(),
+        graph,
+        compiledGraph,
+        secondPacket
+    );
+    EXPECT_EQ(secondPacketContext.error, Graphics::GpuCommandIrReplayError::MissingBackendResource);
+    EXPECT_TRUE(secondPacketContext.streamValidation.valid());
+    EXPECT_EQ(secondPacketContext.recordIndex, 1u);
+
+    const Graphics::GpuCommandIrReplayResult invalidPacket = Graphics::PreflightGpuCommandIrPacket(
+        capture.commandBytes(),
+        graph,
+        compiledGraph,
+        Graphics::GpuSubmissionPacketId{ Limit<u32>::s_Max - 1u, packet.generation }
+    );
+    EXPECT_EQ(invalidPacket.error, Graphics::GpuCommandIrReplayError::InvalidPacket);
+    EXPECT_TRUE(invalidPacket.streamValidation.valid());
+
+    Graphics::GpuCommandIrCapture wrongQueueCapture(testArena.arena);
+    ASSERT_TRUE(wrongQueueCapture.captureCopyBuffer(
+        task,
+        packet,
+        Graphics::GpuPhysicalQueueId{ static_cast<u16>(queue.index + 1u), queue.deviceGeneration },
+        source,
+        0u,
+        destination,
+        0u,
+        4u
+    ));
+    const Graphics::GpuCommandIrReplayResult wrongQueue = Graphics::PreflightGpuCommandIrPacket(
+        wrongQueueCapture.commandBytes(),
+        graph,
+        compiledGraph,
+        packet
+    );
+    EXPECT_EQ(wrongQueue.error, Graphics::GpuCommandIrReplayError::RecordQueueMismatch);
+    EXPECT_TRUE(wrongQueue.streamValidation.valid());
+    EXPECT_EQ(wrongQueue.recordIndex, 0u);
+
+    const Graphics::GpuCommandIrReplayResult malformed = Graphics::PreflightGpuCommandIrPacket(
+        BinaryByteView{},
+        graph,
+        compiledGraph,
+        packet
+    );
+    EXPECT_EQ(malformed.error, Graphics::GpuCommandIrReplayError::InvalidStream);
+    EXPECT_EQ(malformed.streamValidation.error, Graphics::GpuCommandIrStreamValidationError::TruncatedStreamHeader);
+}
+
 TEST(GpuTaskGraph, RejectsStaleDependencyHandlesDuringAnalysis){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

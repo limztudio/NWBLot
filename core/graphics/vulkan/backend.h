@@ -2042,6 +2042,10 @@ public:
     void close(CommandListResourceStateHandoff* finalStates = nullptr);
     // False when no submit-ready command buffer is owned.
     [[nodiscard]] bool hasCommandBuffer()const{ return m_currentCmdBuf != nullptr; }
+    // `hasCommandBuffer` remains true after close so queues can submit it. Tooling that emits commands must use
+    // this predicate instead of treating ownership as an active recording scope.
+    [[nodiscard]] bool isRecording()const noexcept{ return m_isRecording; }
+    [[nodiscard]] bool isRenderPassActive()const noexcept{ return m_renderPassActive; }
     void clearState();
     void endRenderPass();
 
@@ -2190,6 +2194,7 @@ private:
     TrackedCommandBufferPtr m_currentCmdBuf;
     StateTracker m_stateTracker;
     bool m_enableAutomaticBarriers = true;
+    bool m_isRecording = false;
     bool m_renderPassActive = false;
     bool m_descriptorBuffersBound = false;
     Framebuffer* m_renderPassFramebuffer = nullptr;

@@ -53,6 +53,7 @@ void CommandList::discardUnsubmittedUploadChunks(){
 void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     discardUnsubmittedUploadChunks();
     m_currentCmdBuf.reset();
+    m_isRecording = false;
     m_descriptorBuffersBound = false;
 
     if(initialStates && !initialStates->valid()){
@@ -89,6 +90,8 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
         return;
     }
 
+    m_isRecording = true;
+
     m_stateTracker.reset();
     m_textureOwnershipReleaseDestinations.clear();
     m_bufferOwnershipReleaseDestinations.clear();
@@ -97,6 +100,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Cannot open command list from an incompatible cross-queue resource-state handoff"));
         discardUnsubmittedUploadChunks();
         m_currentCmdBuf.reset();
+        m_isRecording = false;
         clearState();
     }
 }
@@ -105,7 +109,8 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
     if(finalStates)
         finalStates->reset();
 
-    if(!m_currentCmdBuf){
+    if(!m_currentCmdBuf || !m_isRecording){
+        m_isRecording = false;
         clearState();
         return;
     }
@@ -129,6 +134,7 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
     appendPendingOwnershipReleaseBarriers();
 
     const VkResult res = vkEndCommandBuffer(m_currentCmdBuf->m_cmdBuf);
+    m_isRecording = false;
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to end command buffer recording: {}"), ResultToString(res));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to end command buffer recording"));

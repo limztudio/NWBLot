@@ -1367,6 +1367,290 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
 }
 
 
+// The optional IR lowerer selects one packet from a full primitive capture only after graph-aware preflight. A
+// malformed later command in that packet must leave the earlier valid copy unrecorded; the success pass then proves
+// the same POD record lowers through the ordinary Core::CommandList API rather than a Vulkan-side bypass.
+TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersCopyBuffer){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    static constexpr u32 s_SourceWords[] = {
+        0x7143a9d2u,
+        0xcafebabeu,
+        0x0badf00du,
+        0xdecafbadU,
+    };
+    static constexpr u32 s_Sentinel = 0xa5a55a5au;
+    const BufferDesc sourceDesc = BufferDesc()
+        .setByteSize(sizeof(s_SourceWords))
+        .setInitialState(ResourceStates::Common)
+        .setCpuAccess(CpuAccessMode::Write)
+    ;
+    const BufferDesc destinationDesc = BufferDesc()
+        .setByteSize(sizeof(s_SourceWords))
+        .setInitialState(ResourceStates::Common)
+        .setCpuAccess(CpuAccessMode::Read)
+    ;
+    auto source = device.createBuffer(sourceDesc);
+    auto destination = device.createBuffer(destinationDesc);
+    auto secondDestination = device.createBuffer(destinationDesc);
+    ASSERT_NE(source.get(), nullptr);
+    ASSERT_NE(destination.get(), nullptr);
+    ASSERT_NE(secondDestination.get(), nullptr);
+    u32* const sourceWords = static_cast<u32*>(device.mapBuffer(source.get(), CpuAccessMode::Write));
+    ASSERT_NE(sourceWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
+        sourceWords[wordIndex] = s_SourceWords[wordIndex];
+    device.unmapBuffer(source.get());
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId sourceResource = graph.importBuffer(
+        source,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/command_ir_replay_source"))
+            .setMarkerLabel("Command IR Replay Source")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId destinationResource = graph.importBuffer(
+        destination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/command_ir_replay_destination"))
+            .setMarkerLabel("Command IR Replay Destination")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId secondDestinationResource = graph.importBuffer(
+        secondDestination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/command_ir_replay_second_destination"))
+            .setMarkerLabel("Command IR Replay Second Destination")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    ASSERT_TRUE(sourceResource.valid());
+    ASSERT_TRUE(destinationResource.valid());
+    ASSERT_TRUE(secondDestinationResource.valid());
+
+    GpuTaskDesc copyDesc;
+    copyDesc
+        .setIdentity(Name("tests/descriptor_buffer/command_ir_replay_copy"))
+        .setMarkerLabel("Command IR Replay Copy")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Transfer,
+            GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+    ;
+    const GpuCopyBufferTaskRegion copyRegion{
+        .source = sourceResource,
+        .destination = destinationResource,
+        .dataSizeBytes = sizeof(s_SourceWords),
+    };
+    const GpuTaskId copyTask = graph.addCopyBufferTask(
+        copyDesc,
+        GpuCopyBufferTaskDesc{
+            .regions = &copyRegion,
+            .regionCount = 1u,
+        }
+    );
+    ASSERT_TRUE(copyTask.valid());
+    const GpuTaskId secondDependencies[] = { copyTask };
+    GpuTaskDesc secondCopyDesc = copyDesc;
+    secondCopyDesc
+        .setIdentity(Name("tests/descriptor_buffer/command_ir_replay_copy_second"))
+        .setMarkerLabel("Command IR Replay Copy Second")
+        .setDependencies(secondDependencies, LengthOf(secondDependencies))
+    ;
+    const GpuCopyBufferTaskRegion secondCopyRegion{
+        .source = sourceResource,
+        .destination = secondDestinationResource,
+        .dataSizeBytes = sizeof(s_SourceWords),
+    };
+    const GpuTaskId secondCopyTask = graph.addCopyBufferTask(
+        secondCopyDesc,
+        GpuCopyBufferTaskDesc{
+            .regions = &secondCopyRegion,
+            .regionCount = 1u,
+        }
+    );
+    ASSERT_TRUE(secondCopyTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/command_ir_replay_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(copyTask);
+    const GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(secondCopyTask);
+    ASSERT_TRUE(packet.valid());
+    ASSERT_TRUE(secondPacket.valid());
+    ASSERT_NE(secondPacket, packet);
+    ASSERT_EQ(compiledGraph.packet(packet).queue, queue.id);
+    ASSERT_EQ(compiledGraph.packet(secondPacket).queue, queue.id);
+
+    auto clearDestination = device.createCommandList();
+    ASSERT_NE(clearDestination.get(), nullptr);
+    clearDestination->open();
+    clearDestination->clearBufferUInt(destination.get(), s_Sentinel);
+    clearDestination->clearBufferUInt(secondDestination.get(), s_Sentinel);
+    clearDestination->close();
+    ASSERT_TRUE(clearDestination->hasCommandBuffer());
+    CommandList* const clearCommandLists[] = { clearDestination.get() };
+    bool clearSubmitted = false;
+    EXPECT_GT(device.executeCommandLists(
+        clearCommandLists,
+        LengthOf(clearCommandLists),
+        CommandQueue::Graphics,
+        &clearSubmitted
+    ), 0u);
+    ASSERT_TRUE(clearSubmitted);
+    ASSERT_TRUE(device.waitForIdle());
+
+    GpuCommandIrCapture malformedCapture(DescriptorBufferRoundTripTest::arena());
+    ASSERT_TRUE(malformedCapture.captureCopyBuffer(
+        copyTask,
+        packet,
+        queue.id,
+        sourceResource,
+        0u,
+        destinationResource,
+        0u,
+        sizeof(s_SourceWords)
+    ));
+    ASSERT_TRUE(malformedCapture.captureCopyBuffer(
+        copyTask,
+        packet,
+        queue.id,
+        sourceResource,
+        0u,
+        destinationResource,
+        sizeof(s_SourceWords) - sizeof(u32),
+        sizeof(s_SourceWords)
+    ));
+    auto rejectedReplay = device.createCommandList();
+    ASSERT_NE(rejectedReplay.get(), nullptr);
+    rejectedReplay->open();
+    ASSERT_TRUE(rejectedReplay->isRecording());
+    const GpuCommandIrReplayResult rejectedResult = ReplayGpuCommandIrPacket(
+        malformedCapture.commandBytes(),
+        graph,
+        compiledGraph,
+        packet,
+        *rejectedReplay
+    );
+    EXPECT_EQ(rejectedResult.error, GpuCommandIrReplayError::InvalidBufferCopy);
+    EXPECT_EQ(rejectedResult.recordIndex, 1u);
+    EXPECT_TRUE(rejectedResult.streamValidation.valid());
+    rejectedReplay->close();
+    EXPECT_FALSE(rejectedReplay->isRecording());
+    CommandList* const rejectedCommandLists[] = { rejectedReplay.get() };
+    bool rejectedSubmitted = false;
+    EXPECT_GT(device.executeCommandLists(
+        rejectedCommandLists,
+        LengthOf(rejectedCommandLists),
+        CommandQueue::Graphics,
+        &rejectedSubmitted
+    ), 0u);
+    ASSERT_TRUE(rejectedSubmitted);
+    ASSERT_TRUE(device.waitForIdle());
+    const u32* const untouchedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    ASSERT_NE(untouchedWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
+        EXPECT_EQ(untouchedWords[wordIndex], s_Sentinel);
+    device.unmapBuffer(destination.get());
+
+    // The normal recorder produces one capture artifact for its complete packet range. Replay must select this
+    // first packet from the two-packet stream, never emit the second packet's body, and retain all ordinary packet
+    // state/barrier ownership in the graph recorder.
+    GpuRecordedGraph capturedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuCommandIrCapture capture(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        capturedGraph,
+        nullptr,
+        &capture
+    ));
+    ASSERT_EQ(capture.recordCount(), 2u);
+    const GpuCommandIrBuiltinTaskRecord* const firstCapture = capture.recordAt(0u);
+    const GpuCommandIrBuiltinTaskRecord* const secondCapture = capture.recordAt(1u);
+    ASSERT_NE(firstCapture, nullptr);
+    ASSERT_NE(secondCapture, nullptr);
+    EXPECT_EQ(firstCapture->task, copyTask);
+    EXPECT_EQ(firstCapture->packet, packet);
+    EXPECT_EQ(secondCapture->task, secondCopyTask);
+    EXPECT_EQ(secondCapture->packet, secondPacket);
+    auto unopenedReplay = device.createCommandList();
+    ASSERT_NE(unopenedReplay.get(), nullptr);
+    const GpuCommandIrReplayResult unopenedResult = ReplayGpuCommandIrPacket(
+        capture.commandBytes(),
+        graph,
+        compiledGraph,
+        packet,
+        *unopenedReplay
+    );
+    EXPECT_EQ(unopenedResult.error, GpuCommandIrReplayError::CommandListNotRecording);
+    EXPECT_TRUE(unopenedResult.streamValidation.valid());
+
+    auto replay = device.createCommandList();
+    ASSERT_NE(replay.get(), nullptr);
+    replay->open();
+    ASSERT_TRUE(replay->isRecording());
+    const GpuCommandIrReplayResult replayResult = ReplayGpuCommandIrPacket(
+        capture.commandBytes(),
+        graph,
+        compiledGraph,
+        packet,
+        *replay
+    );
+    EXPECT_TRUE(replayResult.valid());
+    EXPECT_TRUE(replayResult.streamValidation.valid());
+    replay->close();
+    EXPECT_FALSE(replay->isRecording());
+    CommandList* const replayCommandLists[] = { replay.get() };
+    bool replaySubmitted = false;
+    EXPECT_GT(device.executeCommandLists(
+        replayCommandLists,
+        LengthOf(replayCommandLists),
+        CommandQueue::Graphics,
+        &replaySubmitted
+    ), 0u);
+    ASSERT_TRUE(replaySubmitted);
+    ASSERT_TRUE(device.waitForIdle());
+
+    const u32* const replayedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    ASSERT_NE(replayedWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
+        EXPECT_EQ(replayedWords[wordIndex], s_SourceWords[wordIndex]);
+    device.unmapBuffer(destination.get());
+    const u32* const untouchedSecondWords = static_cast<const u32*>(
+        device.mapBuffer(secondDestination.get(), CpuAccessMode::Read)
+    );
+    ASSERT_NE(untouchedSecondWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
+        EXPECT_EQ(untouchedSecondWords[wordIndex], s_Sentinel);
+    device.unmapBuffer(secondDestination.get());
+}
+
+
 // Clear helpers are deliberately graph-native primitives: their CopyDest declarations remain authoritative while an
 // explicitly supplied Phase 11 capture receives compact resource-ID records. The normal recorder call sites pass
 // no capture object and continue directly to native command lists.

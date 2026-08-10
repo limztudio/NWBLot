@@ -580,7 +580,6 @@ struct RtCausticState{
 
 
 struct RtSurfelGiState{
-    u64 m_surfelCountReadbackPendingSubmissionID = 0u;
 
     // Device-lifetime, heap-only one-bounce surfel GI stays outside resizable frame targets.
     Core::BindingLayoutHandle m_surfelSpawnBindingLayout;
@@ -623,7 +622,7 @@ struct RtSurfelGiState{
     // Previous-frame field prevents read/write feedback during tracing.
     Core::BufferHandle m_surfelPoolSnapshotBuffer;
     Core::BufferHandle m_surfelCellHeadSnapshotBuffer;
-    // Async-safe counter readback.
+    // Async-safe counter readback. The graph-owned copy task publishes this only after its packet accepts.
     Core::BufferHandle m_surfelCounterReadback;
     // Uploaded each rendered frame.
     Core::BufferHandle m_surfelConstants;
@@ -648,7 +647,6 @@ struct RtSurfelGiState{
 
     bool m_surfelTraceHwPipelineFailed = false;
     bool m_surfelUseHwTrace = false;
-    bool m_surfelCountReadbackPending = false;
     bool m_surfelTraceBuildArgsPipelineFailed = false;
     bool m_surfelUpsamplePipelineFailed = false;
     bool m_surfelResolvePipelineFailed = false;
@@ -657,8 +655,7 @@ struct RtSurfelGiState{
     bool m_surfelAgeFreePipelineFailed = false;
     bool m_surfelSpawnPipelineFailed = false;
     bool m_surfelEnabled = false;
-    Core::CommandQueue::Enum m_surfelCountReadbackPendingSubmissionQueue = Core::CommandQueue::kCount;
-    bool m_surfelCountReadbackPendingSubmissionUnconfirmed = false;
+    Core::QueueSubmissionToken m_surfelCountReadbackSubmissionToken;
     // First trace uses all surfels; later traces use the update divisor.
     bool m_surfelSeeded = false;
     // Retries graph-owned resource clears after a rejected packet.

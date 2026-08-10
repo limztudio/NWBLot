@@ -163,6 +163,9 @@ public:
     [[nodiscard]] bool ensureSurfelResolvePipeline();
     [[nodiscard]] bool ensureSurfelUpsamplePipeline();
     [[nodiscard]] bool ensureSurfelTraceBuildArgsPipeline();
+    // The graph schedules the small diagnostic copy as a late Transfer-preferred tail and publishes its token.
+    [[nodiscard]] bool shouldCaptureSurfelCountReadback()const noexcept;
+    void markSurfelCountReadbackScheduled()noexcept;
     [[nodiscard]] bool hybridTransparentShadowReady()const noexcept;
     [[nodiscard]] bool softTransparentShadowReady()const noexcept;
     // Commit soft-shadow history only after ordered submission accepts.
@@ -170,7 +173,6 @@ public:
     void discardSoftShadowTemporalHistory();
     // Bind shadow readback to its accepted submission token.
     void confirmShadowVisibilitySubmission(const Core::QueueSubmissionToken& submissionToken);
-    void confirmSurfelGiSubmission(const Core::QueueSubmissionToken& submissionToken);
 
 
 private:

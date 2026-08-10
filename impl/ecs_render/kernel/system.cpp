@@ -51,6 +51,7 @@ RendererSystem::RendererSystem(
     , m_causticIrradianceLightingStateHandoff(arena)
     , m_causticIrradianceReturnStateHandoff(arena)
     , m_surfelGiComputePersistentStateHandoff(arena)
+    , m_surfelGiCounterPersistentStateHandoff(arena)
     , m_surfelIrradianceReturnStateHandoff(arena)
     , m_shaderSystem(*this)
     , m_meshSystem(*this)
@@ -128,6 +129,7 @@ void RendererSystem::resetTargetGenerationStateHandoffs()noexcept{
     m_causticIrradianceLightingStateHandoff.reset();
     m_causticIrradianceReturnStateHandoff.reset();
     m_surfelGiComputePersistentStateHandoff.reset();
+    m_surfelGiCounterPersistentStateHandoff.reset();
     m_surfelIrradianceReturnStateHandoff.reset();
 }
 
@@ -217,6 +219,7 @@ void RendererSystem::invalidateResources(){
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiTask = {};
+    m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitPreTask = {};
     m_deferredAvboitDepthWarpTask = {};
@@ -228,6 +231,7 @@ void RendererSystem::invalidateResources(){
     m_deferredPresentTask = {};
     m_deferredLaggedLightingHistoryTask = {};
     m_deferredFrameRecoveryTask = {};
+    m_deferredSurfelGiCounterReadbackCompletion = {};
     m_deferredLightingHistoryCompletion = {};
     m_deferredFrameRecoveryCompletion = {};
     m_deferredFrameRecoveryArmed = false;
@@ -447,6 +451,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiTask = {};
+    m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitPreTask = {};
     m_deferredAvboitDepthWarpTask = {};
@@ -458,6 +463,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredPresentTask = {};
     m_deferredLaggedLightingHistoryTask = {};
     m_deferredFrameRecoveryTask = {};
+    m_deferredSurfelGiCounterReadbackCompletion = {};
     m_deferredLightingHistoryCompletion = {};
     m_deferredFrameRecoveryCompletion = {};
     m_deferredFrameRecoveryArmed = false;
@@ -551,7 +557,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // Preserve CPU mirrors so rejected recordings can be retried exactly.
     struct PostGbufferPacketCpuState{
         u64 swShadowEdgeStatsPendingSubmissionID = 0u;
-        u64 surfelCountReadbackPendingSubmissionID = 0u;
+        Core::QueueSubmissionToken surfelCountReadbackSubmissionToken;
 
         u32 softShadowFrameIndex = 0u;
         u32 swShadowEdgeStatsTick = 0u;
@@ -572,14 +578,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         bool hwCausticDispatchLogged = false;
         bool causticEmissionGateLogged = false;
         bool surfelSeeded = false;
-        bool surfelCountReadbackPending = false;
-        bool surfelCountReadbackPendingSubmissionUnconfirmed = false;
         Core::CommandQueue::Enum swShadowEdgeStatsPendingSubmissionQueue = Core::CommandQueue::kCount;
-        Core::CommandQueue::Enum surfelCountReadbackPendingSubmissionQueue = Core::CommandQueue::kCount;
     };
     const PostGbufferPacketCpuState postGbufferPacketCpuState{
         m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionID,
-        m_rayTracingState.m_surfelCountReadbackPendingSubmissionID,
+        m_rayTracingState.m_surfelCountReadbackSubmissionToken,
         m_rayTracingState.m_softShadowFrameIndex,
         m_rayTracingState.m_swShadowEdgeStatsTick,
         m_rayTracingState.m_swShadowEdgeStatsPendingTick,
@@ -598,10 +601,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_rayTracingState.m_hwCausticDispatchLogged,
         m_rayTracingState.m_causticEmissionGateLogged,
         m_rayTracingState.m_surfelSeeded,
-        m_rayTracingState.m_surfelCountReadbackPending,
-        m_rayTracingState.m_surfelCountReadbackPendingSubmissionUnconfirmed,
         m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionQueue,
-        m_rayTracingState.m_surfelCountReadbackPendingSubmissionQueue,
     };
     const auto restorePrefixCpuState = [&](){
         // Rejected G-buffer recording invalidates CPU upload mirrors.
@@ -633,11 +633,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const auto restoreSurfelGiCpuState = [&](){
         m_rayTracingState.m_surfelFrameIndex = postGbufferPacketCpuState.surfelFrameIndex;
         m_rayTracingState.m_surfelSeeded = postGbufferPacketCpuState.surfelSeeded;
-        m_rayTracingState.m_surfelCountReadbackPending = postGbufferPacketCpuState.surfelCountReadbackPending;
         m_rayTracingState.m_surfelCountReadbackFrame = postGbufferPacketCpuState.surfelCountReadbackFrame;
-        m_rayTracingState.m_surfelCountReadbackPendingSubmissionID = postGbufferPacketCpuState.surfelCountReadbackPendingSubmissionID;
-        m_rayTracingState.m_surfelCountReadbackPendingSubmissionQueue = postGbufferPacketCpuState.surfelCountReadbackPendingSubmissionQueue;
-        m_rayTracingState.m_surfelCountReadbackPendingSubmissionUnconfirmed = postGbufferPacketCpuState.surfelCountReadbackPendingSubmissionUnconfirmed;
+        m_rayTracingState.m_surfelCountReadbackSubmissionToken = postGbufferPacketCpuState.surfelCountReadbackSubmissionToken;
     };
     const auto restoreAvboitCpuState = [&](){
         m_avboitState.m_targetsNeedClear = postGbufferPacketCpuState.avboitTargetsNeedClear;
@@ -654,6 +651,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         restoreShadowCpuState();
         restorePostGbufferEffectsCpuState();
     };
+    // The current graph must retain this token even if Surfel GI consumes the completed diagnostic while recording.
+    const Core::QueueSubmissionToken surfelCounterReadbackCompletionToken =
+        m_rayTracingState.m_surfelCountReadbackSubmissionToken
+    ;
 
     // The graph-owned prefix packet retains the established timing scope across mesh-view setup,
     // scene-shading setup, deferred clear, G-buffer, and normalization.
@@ -839,6 +840,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId surfelGiPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredSurfelGiTask
     );
+    const Core::GpuSubmissionPacketId surfelGiCounterReadbackPacket =
+        m_deferredLightingCompiledGraph.packetForTask(m_deferredSurfelGiCounterReadbackTask);
     const Core::GpuSubmissionPacketId deferredLightingPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredLightingTask
     );
@@ -900,6 +903,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         )
         : nullptr
     ;
+    const Core::GpuPhysicalQueueInfo* const surfelGiCounterReadbackQueue = surfelGiCounterReadbackPacket.valid()
+        ? m_deferredLightingCompiledGraph.queueInfo(
+            m_deferredLightingCompiledGraph.packet(surfelGiCounterReadbackPacket).queue
+        )
+        : nullptr
+    ;
     const bool surfelGiRunsOnCompute = surfelGiQueue && surfelGiQueue->queueClass == Core::CommandQueue::Compute;
     // Keep every recording and submission span derived from compiled packet handles. The renderer names semantic
     // endpoints only; raw compiler-order indices remain inside the task-graph runtime.
@@ -939,19 +948,32 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             deferredLaggedLightingHistoryPacket
         )
     ;
+    const Core::GpuSubmissionPacketRange surfelGiCounterReadbackPacketRange =
+        m_deferredLightingCompiledGraph.packetRange(
+            surfelGiCounterReadbackPacket,
+            surfelGiCounterReadbackPacket
+        );
     const Core::GpuSubmissionPacketRange deferredFrameRecoveryPacketRange =
         m_deferredLightingCompiledGraph.packetRange(deferredFrameRecoveryPacket, deferredFrameRecoveryPacket);
     const Core::GpuSubmissionPacketRange effectsThroughPresentPacketRange =
         m_deferredLightingCompiledGraph.packetRange(shadowVisibilityPacket, deferredPresentPacket);
     const Core::GpuSubmissionPacketRange deferredNormalPacketRange =
         m_deferredLightingCompiledGraph.packetRange(shadowPreparePacket, deferredPresentPacket);
+    const Core::GpuSubmissionPacketId deferredTailFirstPacket = m_deferredSurfelGiCounterReadbackTask.valid()
+        ? surfelGiCounterReadbackPacket
+        : (captureLaggedLightingHistory ? deferredLaggedLightingHistoryPacket : deferredFrameRecoveryPacket)
+    ;
     const Core::GpuSubmissionPacketRange deferredTailPacketRange = m_deferredLightingCompiledGraph.packetRange(
-        captureLaggedLightingHistory ? deferredLaggedLightingHistoryPacket : deferredFrameRecoveryPacket,
+        deferredTailFirstPacket,
         deferredFrameRecoveryPacket
     );
     const Core::GpuSubmissionPacketRange deferredFullPacketRange =
         m_deferredLightingCompiledGraph.packetRange(shadowPreparePacket, deferredFrameRecoveryPacket);
     const usize expectedAvboitPacketCount = avboitUsesAsyncCompute ? 5u : 1u;
+    const usize expectedDeferredTailPacketCount = 1u
+        + (m_deferredSurfelGiCounterReadbackTask.valid() ? 1u : 0u)
+        + (captureLaggedLightingHistory ? 1u : 0u)
+    ;
     if(
         !m_deferredLightingTaskGraphValid
         || !m_deferredShadowPrepareTask.valid()
@@ -984,6 +1006,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !surfelGiSnapshotCopyPacket.valid()
             || !surfelGiSnapshotCopyQueue
             || (static_cast<u8>(surfelGiSnapshotCopyQueue->capabilities)
+                & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
+        ))
+        || (m_deferredSurfelGiCounterReadbackTask.valid() && (
+            !surfelGiCounterReadbackPacket.valid()
+            || !surfelGiCounterReadbackQueue
+            || (static_cast<u8>(surfelGiCounterReadbackQueue->capabilities)
                 & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
         ))
         || (hardwareShadowSupported && (
@@ -1019,6 +1047,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredPresentTask.valid()
         || !m_deferredFrameRecoveryTask.valid()
         || !m_deferredFrameRecoveryCompletion.valid()
+        || (m_deferredSurfelGiCounterReadbackCompletion.valid()
+            && !surfelCounterReadbackCompletionToken.valid())
         || (captureLaggedLightingHistory && (
             !m_deferredLaggedLightingHistoryTask.valid()
             || !deferredLaggedLightingHistoryPacket.valid()
@@ -1055,6 +1085,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || deferredLightingCompositePacketRange.packetCount != 2u
         || !deferredPresentPacketRange.valid()
         || deferredPresentPacketRange.packetCount != 1u
+        || (m_deferredSurfelGiCounterReadbackTask.valid() && (
+            !surfelGiCounterReadbackPacketRange.valid()
+            || surfelGiCounterReadbackPacketRange.packetCount != 1u
+        ))
         || (captureLaggedLightingHistory && (
             !deferredLaggedLightingHistoryPacketRange.valid()
             || deferredLaggedLightingHistoryPacketRange.packetCount != 1u
@@ -1066,7 +1100,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || deferredNormalPacketRange.packetCount
             != shadowPrepareThroughPrefixPacketRange.packetCount + effectsThroughPresentPacketRange.packetCount
         || !deferredTailPacketRange.valid()
-        || deferredTailPacketRange.packetCount != (captureLaggedLightingHistory ? 2u : 1u)
+        || deferredTailPacketRange.packetCount != expectedDeferredTailPacketCount
         || !deferredFullPacketRange.valid()
         || deferredFullPacketRange.packetCount != m_deferredLightingCompiledGraph.packetCount()
         || deferredFullPacketRange.packetCount
@@ -1264,7 +1298,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // Shadow Visibility, optional Software Caustics, and each Surfel-GI packet record after Prefix in compiler
     // order. The snapshot packet needs the same persistent source as the final compute task, while compiler
     // prologue seeds replace only the regions produced by an in-graph initialization or copy packet.
-    Core::GpuExternalPacketStateSource surfelGiStateSources[3] = {};
+    Core::GpuExternalPacketStateSource surfelGiStateSources[4] = {};
     usize surfelGiStateSourceCount = 0u;
     bool surfelGiStateSourcesReady = appendDeclaredStateSource(
         surfelGiStateSources,
@@ -1279,6 +1313,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 LengthOf(surfelGiStateSources),
                 surfelGiStateSourceCount,
                 &m_surfelGiComputePersistentStateHandoff
+            )
+        ;
+    }
+    if(m_surfelGiCounterPersistentStateHandoff.valid()){
+        surfelGiStateSourcesReady = surfelGiStateSourcesReady
+            && appendDeclaredStateSource(
+                surfelGiStateSources,
+                LengthOf(surfelGiStateSources),
+                surfelGiStateSourceCount,
+                &m_surfelGiCounterPersistentStateHandoff
             )
         ;
     }
@@ -1955,6 +1999,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const auto submitDeferredSurfelGi = [&]() -> bool {
         Core::Alloc::ScratchArena surfelGiScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter surfelGiSubmitter(device);
+        Core::GpuTaskGraphExternalCompletionToken surfelGiCompletionTokens[1] = {};
+        usize surfelGiCompletionTokenCount = 0u;
+        if(m_deferredSurfelGiCounterReadbackCompletion.valid()){
+            surfelGiCompletionTokens[surfelGiCompletionTokenCount++] = {
+                .completion = m_deferredSurfelGiCounterReadbackCompletion,
+                .token = surfelCounterReadbackCompletionToken,
+            };
+        }
         struct SurfelGiAcceptanceContext{
             RendererSystem* renderer = nullptr;
             DeferredFrameTargets* targets = nullptr;
@@ -1994,6 +2046,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 *context->finalState,
                 targets.surfelIrradiance.get()
             );
+            Core::Buffer* const surfelGiCounterBuffers[] = {
+                renderer.m_rayTracingState.m_surfelCounterBuffer.get(),
+            };
+            context->stateReady = context->stateReady
+                && renderer.m_surfelGiCounterPersistentStateHandoff.buildResourceSubset(
+                    *context->finalState,
+                    nullptr,
+                    0u,
+                    surfelGiCounterBuffers,
+                    LengthOf(surfelGiCounterBuffers)
+                )
+            ;
             if(!context->stateReady || !context->runsOnCompute)
                 return context->stateReady;
 
@@ -2003,12 +2067,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             Core::Buffer* const surfelGiComputeScratchBuffers[] = {
                 renderer.m_rayTracingState.m_surfelPoolBuffer.get(),
                 renderer.m_rayTracingState.m_surfelCellHeadBuffer.get(),
-                renderer.m_rayTracingState.m_surfelCounterBuffer.get(),
                 renderer.m_rayTracingState.m_surfelTraceIndirectArgsBuffer.get(),
                 renderer.m_rayTracingState.m_surfelFreeListBuffer.get(),
                 renderer.m_rayTracingState.m_surfelPoolSnapshotBuffer.get(),
                 renderer.m_rayTracingState.m_surfelCellHeadSnapshotBuffer.get(),
-                renderer.m_rayTracingState.m_surfelCounterReadback.get(),
             };
             context->stateReady = renderer.m_surfelGiComputePersistentStateHandoff.buildResourceSubset(
                 *context->finalState,
@@ -2032,6 +2094,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const bool surfelGiAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredSurfelGiTask.valid()
+            && (!m_deferredSurfelGiCounterReadbackCompletion.valid()
+                || surfelCounterReadbackCompletionToken.valid())
             && surfelGiPacket.valid()
             && (!m_deferredSurfelGiSnapshotCopyTask.valid() || (
                 m_deferredSurfelGiPreparationTask.valid()
@@ -2045,8 +2109,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
                 surfelGiPacketRange,
-                nullptr,
-                0u,
+                surfelGiCompletionTokens,
+                surfelGiCompletionTokenCount,
                 surfelGiTimingTickets,
                 LengthOf(surfelGiTimingTickets),
                 m_deferredLightingSubmissionTransaction,
@@ -2427,6 +2491,102 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
         if(!submitAvboitLightingAndComposite() || !submitDeferredPresent())
             return;
+    }
+
+    if(m_deferredSurfelGiCounterReadbackTask.valid()){
+        // The readback has no normal-frame consumer, so record it only after Present. Its Counter source imports the
+        // compiler-retained Surfel-GI packet state through the declared dependency; recording needs no manual state
+        // seed or synthetic queue wait, while the resulting tail state is retained for the next frame.
+        const bool readbackTailAvailable =
+            finalPresentationSubmissionToken.valid()
+            && m_deferredLightingTaskGraphValid
+            && surfelGiCounterReadbackPacket.valid()
+            && surfelGiCounterReadbackQueue
+            && (static_cast<u8>(surfelGiCounterReadbackQueue->capabilities)
+                & static_cast<u8>(Core::GpuQueueCapability::Transfer)) != 0u
+            && surfelGiCounterReadbackPacketRange.valid()
+            && surfelGiCounterReadbackPacketRange.packetCount == 1u
+        ;
+        if(!readbackTailAvailable){
+            m_deferredLightingSubmissionTransaction.rejectPacket(
+                m_deferredLightingTaskGraph,
+                m_deferredLightingCompiledGraph,
+                surfelGiCounterReadbackPacket
+            );
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback tail was unavailable"));
+        }
+        else{
+            Core::GpuNativePacketRecorder recorder(device);
+            const bool readbackRecorded = recorder.recordPacketRangeInCompileOrder(
+                m_deferredLightingTaskGraph,
+                m_deferredLightingCompiledGraph,
+                surfelGiCounterReadbackPacketRange,
+                nullptr,
+                0u,
+                m_deferredLightingRecordedGraph
+            );
+            const Core::CommandListResourceStateHandoff* const readbackFinalStateSeed = readbackRecorded
+                ? m_deferredLightingRecordedGraph.packetFinalStateSeed(surfelGiCounterReadbackPacket)
+                : nullptr
+            ;
+            Core::CommandListResourceStateHandoff readbackCounterFinalState(m_arena);
+            Core::Buffer* const readbackCounterBuffers[] = {
+                m_rayTracingState.m_surfelCounterBuffer.get(),
+            };
+            const bool readbackFinalStateReady = readbackFinalStateSeed
+                && readbackCounterFinalState.buildResourceSubset(
+                    *readbackFinalStateSeed,
+                    nullptr,
+                    0u,
+                    readbackCounterBuffers,
+                    LengthOf(readbackCounterBuffers)
+                )
+            ;
+            if(!readbackRecorded || !readbackFinalStateReady){
+                m_deferredLightingSubmissionTransaction.rejectPacket(
+                    m_deferredLightingTaskGraph,
+                    m_deferredLightingCompiledGraph,
+                    surfelGiCounterReadbackPacket
+                );
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to retain late deferred surfel counter-readback state"));
+            }
+            else{
+                Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
+                const Core::GpuTaskGraphSubmitter submitter(device);
+                const bool readbackAccepted = submitter.submitPacketRangeInCompileOrder(
+                    m_deferredLightingTaskGraph,
+                    m_deferredLightingCompiledGraph,
+                    m_deferredLightingRecordedGraph,
+                    surfelGiCounterReadbackPacketRange,
+                    nullptr,
+                    0u,
+                    nullptr,
+                    0u,
+                    m_deferredLightingSubmissionTransaction,
+                    scratchArena
+                );
+                const Core::QueueSubmissionToken readbackSubmissionToken = readbackAccepted
+                    ? m_deferredLightingSubmissionTransaction.packetToken(surfelGiCounterReadbackPacket)
+                    : Core::QueueSubmissionToken{}
+                ;
+                if(!readbackSubmissionToken.valid()){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred surfel counter-readback submission was rejected"));
+                }
+                else{
+                    if(!m_surfelGiCounterPersistentStateHandoff.copyFrom(readbackCounterFinalState)){
+                        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: accepted surfel counter-readback tail lost its retained state"));
+                        failFrameRenderRecovery();
+                        return;
+                    }
+                    // addCopyBufferTask publishes only on accepted submission, keeping CPU polling tied to the
+                    // selected physical transport rather than the preceding Surfel-GI packet.
+                    NWB_ASSERT(
+                        m_rayTracingState.m_surfelCountReadbackSubmissionToken.queue == readbackSubmissionToken.queue
+                        && m_rayTracingState.m_surfelCountReadbackSubmissionToken.value == readbackSubmissionToken.value
+                    );
+                }
+            }
+        }
     }
 
     if(requestsLaggedLightingHistoryCapture && !captureLaggedLightingHistory){

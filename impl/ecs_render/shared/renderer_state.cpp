@@ -392,10 +392,7 @@ void RendererRayTracingState::invalidateResources(){
     m_surfelHashCellCount = NWB_SURFEL_HASH_CELL_COUNT;
     m_surfelFrameIndex = 0u;
     m_surfelCountReadbackFrame = 0u;
-    m_surfelCountReadbackPending = false;
-    m_surfelCountReadbackPendingSubmissionID = 0u;
-    m_surfelCountReadbackPendingSubmissionQueue = Core::CommandQueue::kCount;
-    m_surfelCountReadbackPendingSubmissionUnconfirmed = false;
+    m_surfelCountReadbackSubmissionToken = {};
     m_surfelSeeded = false;
     m_surfelResourcesNeedClear = false;
     m_surfelResourcesClearPending = false;

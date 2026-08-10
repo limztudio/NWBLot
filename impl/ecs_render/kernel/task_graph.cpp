@@ -1774,6 +1774,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     const Core::GpuGraphResourceId* const traceGeometryResources,
     const usize traceGeometryResourceCount,
     const Core::GpuTaskId effectsTask,
+    const Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace __hidden_renderer_task_graph;
@@ -1781,6 +1782,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiTask = {};
+    m_deferredSurfelGiCounterReadbackTask = {};
     if(
         !deferredTargets.valid()
         || !deferredTargets.bindless.valid()
@@ -1944,12 +1946,6 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             Core::ResourceStates::ShaderResource,
             &surfelCellHeadSnapshot
         )
-        && appendOptionalWriteBuffer(
-            m_rayTracingState.m_surfelCounterReadback,
-            Name("render.surfel_gi.counter_readback"),
-            "Surfel Counter Readback",
-            Core::ResourceStates::CopyDest
-        )
     ;
     if(optionalResourcesImported && !useHwTrace){
         optionalResourcesImported =
@@ -1996,6 +1992,10 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     scheduling.cost = Core::GpuTaskCostHint::Large;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
+    const Core::GpuExternalCompletionId* const surfelGiExternalDependencies =
+        surfelCounterReadbackCompletion.valid() ? &surfelCounterReadbackCompletion : nullptr
+    ;
+    const usize surfelGiExternalDependencyCount = surfelCounterReadbackCompletion.valid() ? 1u : 0u;
 
     // A fresh persistent field must clear before the snapshot reads it. Once initialized, the two fixed regions
     // become one Transfer-preferred graph task; compiler declarations own CopySource/CopyDest transitions and any
@@ -2032,6 +2032,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
                 .setQueue(ComputeQueueRequest())
                 .setScheduling(initializationScheduling)
                 .setDependencies(&surfelGiDependency, 1u)
+                .setExternalDependencies(surfelGiExternalDependencies, surfelGiExternalDependencyCount)
                 .setResourceUses(initializationResourceUses, LengthOf(initializationResourceUses))
             ;
             m_deferredSurfelGiPreparationTask = m_raytracingSystem.declareSurfelResourceInitializationTask(
@@ -2088,6 +2089,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         .setQueue(ComputeQueueRequest())
         .setScheduling(scheduling)
         .setDependencies(&surfelGiDependency, 1u)
+        .setExternalDependencies(surfelGiExternalDependencies, surfelGiExternalDependencyCount)
         .setResourceUses(resourceUses.data(), resourceUses.size())
     ;
     m_deferredSurfelGiTask = m_raytracingSystem.declareSurfelGiTask(
@@ -2101,6 +2103,68 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         return false;
     }
     return true;
+}
+
+
+void RendererSystem::declareDeferredSurfelCountReadbackTask(){
+    using namespace __hidden_renderer_task_graph;
+
+    m_deferredSurfelGiCounterReadbackTask = {};
+    if(
+        !m_deferredSurfelGiTask.valid()
+        || !m_raytracingSystem.shouldCaptureSurfelCountReadback()
+    )
+        return;
+
+    const Core::GpuGraphResourceId counter = m_deferredLightingTaskGraph.importBuffer(
+        m_rayTracingState.m_surfelCounterBuffer,
+        BufferResourceDesc(Name("render.surfel_gi.counter"), "Surfel Counter")
+    );
+    const Core::GpuGraphResourceId readback = m_deferredLightingTaskGraph.importBuffer(
+        m_rayTracingState.m_surfelCounterReadback,
+        BufferResourceDesc(Name("render.surfel_gi.counter_readback"), "Surfel Counter Readback")
+    );
+    if(!counter.valid() || !readback.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import surfel counter-readback graph resources"));
+        return;
+    }
+
+    const Core::GpuCopyBufferTaskRegion regions[] = {
+        Core::GpuCopyBufferTaskRegion{
+            .source = counter,
+            .destination = readback,
+            .dataSizeBytes = static_cast<u64>(sizeof(u32)) * NWB_SURFEL_COUNTER_SIZE,
+        },
+    };
+    Core::GpuTaskSchedulingHint scheduling;
+    // This infrequent diagnostic is independent of the deferred suffix. Treat it as a small copy so a dedicated
+    // Transfer transport can absorb it after Present, while Compute/Graphics remain valid fallbacks.
+    scheduling.cost = Core::GpuTaskCostHint::Small;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    const Core::GpuTaskId dependencies[] = { m_deferredSurfelGiTask };
+    Core::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("render.surfel_gi.counter_readback"))
+        .setMarkerLabel("Surfel Counter Readback")
+        .setQueue(TransferQueueRequest())
+        .setScheduling(scheduling)
+        .setDependencies(dependencies, LengthOf(dependencies))
+    ;
+    m_deferredSurfelGiCounterReadbackTask = m_deferredLightingTaskGraph.addCopyBufferTask(
+        desc,
+        Core::GpuCopyBufferTaskDesc{
+            .regions = regions,
+            .regionCount = LengthOf(regions),
+            .acceptedToken = &m_rayTracingState.m_surfelCountReadbackSubmissionToken,
+        }
+    );
+    if(!m_deferredSurfelGiCounterReadbackTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel counter-readback task"));
+        return;
+    }
+    // The token stays invalid until native submission accepts; this timestamp is only read when it publishes.
+    m_raytracingSystem.markSurfelCountReadbackScheduled();
 }
 
 
@@ -2146,6 +2210,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiTask = {};
+    m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitPreTask = {};
     m_deferredAvboitDepthWarpTask = {};
@@ -2157,6 +2222,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredPresentTask = {};
     m_deferredLaggedLightingHistoryTask = {};
     m_deferredFrameRecoveryTask = {};
+    m_deferredSurfelGiCounterReadbackCompletion = {};
     m_deferredLightingHistoryCompletion = {};
     m_deferredFrameRecoveryCompletion = {};
     m_graphicsPrefixMeshViewSetupReady = false;
@@ -2579,6 +2645,24 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         }
     }
 
+    if(
+        m_raytracingSystem.hasSurfelWork()
+        && m_rayTracingState.m_surfelCountReadbackSubmissionToken.valid()
+    ){
+        Core::GpuExternalCompletionDesc surfelCounterReadbackCompletionDesc;
+        surfelCounterReadbackCompletionDesc
+            .setIdentity(Name("render.surfel_gi.counter_readback_complete"))
+            .setMarkerLabel("Surfel Counter Readback Complete")
+        ;
+        m_deferredSurfelGiCounterReadbackCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
+            surfelCounterReadbackCompletionDesc
+        );
+        if(!m_deferredSurfelGiCounterReadbackCompletion.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import surfel counter-readback completion"));
+            return;
+        }
+    }
+
     // Effects start from the accepted graphics-prefix packet and remain compiler-owned through the deferred suffix.
     // Shadow/Software are declared first so their queue assignments are stable before Surf, AVBOIT, and Lighting.
     if(!declareDeferredShadowVisibilityTask(
@@ -2639,6 +2723,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
                 : softwareTraceGeometryResources.size()
         ),
         effectsTask,
+        m_deferredSurfelGiCounterReadbackCompletion,
         surfelGiTimingTicket
     ))
         return;
@@ -3222,6 +3307,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-present graph task"));
         return;
     }
+
+    // Keep this diagnostic after the normal Present path in declaration order. Its only dependency is Surfel GI,
+    // so it remains a late independent Transfer-preferred tail and does not delay lighting or presentation.
+    declareDeferredSurfelCountReadbackTask();
 
     if(capturesLaggedLightingHistory){
         // The core built-in derives whole-resource CopySource/CopyDest declarations for these regions and retains

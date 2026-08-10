@@ -81,11 +81,6 @@ struct SurfelGiGraphTask{
         return true;
     }
 
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        if(!payload.raytracingSystem)
-            return;
-        payload.raytracingSystem->confirmSurfelGiSubmission(token);
-    }
 };
 
 
@@ -489,6 +484,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         desc
             .setByteSize(static_cast<u64>(sizeof(u32)) * NWB_SURFEL_COUNTER_SIZE)
             .setCpuAccess(Core::CpuAccessMode::Read)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
             .setDebugName(Name("surfel_counter_readback"))
             .enableAutomaticStateTracking(Core::ResourceStates::CopyDest)
         ;
@@ -794,6 +790,19 @@ void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
 
 bool RendererRayTracingSystem::hasSurfelWork()const noexcept{
     return rayTracingState().m_surfelEnabled;
+}
+
+bool RendererRayTracingSystem::shouldCaptureSurfelCountReadback()const noexcept{
+    return hasSurfelWork()
+        && rayTracingState().m_surfelCounterBuffer
+        && rayTracingState().m_surfelCounterReadback
+        && !rayTracingState().m_surfelCountReadbackSubmissionToken.valid()
+        && (rayTracingState().m_surfelFrameIndex % s_SurfelCountLogInterval) == 0u
+    ;
+}
+
+void RendererRayTracingSystem::markSurfelCountReadbackScheduled()noexcept{
+    rayTracingState().m_surfelCountReadbackFrame = rayTracingState().m_surfelFrameIndex;
 }
 
 bool RendererRayTracingSystem::needsSurfelResourceInitialization()const noexcept{
@@ -1197,26 +1206,18 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     commandList.commitBarriers();
 
-    // Map completed diagnostics or schedule the next asynchronous snapshot.
+    // The graph-owned late copy publishes its token only after Transfer/Compute/Graphics accepts. This pass only
+    // consumes completed diagnostics; resource-state transitions and native copy recording live in that graph task.
     {
         const u32 frameIndex = rayTracingState().m_surfelFrameIndex;
-        Core::Buffer* counter = rayTracingState().m_surfelCounterBuffer.get();
         Core::Buffer* readback = rayTracingState().m_surfelCounterReadback.get();
-        const bool submissionConfirmed = !rayTracingState().m_surfelCountReadbackPendingSubmissionUnconfirmed;
+        const Core::QueueSubmissionToken submissionToken = rayTracingState().m_surfelCountReadbackSubmissionToken;
         const bool submissionComplete =
-            submissionConfirmed
-            && (
-                rayTracingState().m_surfelCountReadbackPendingSubmissionID == 0u
-                || (
-                    rayTracingState().m_surfelCountReadbackPendingSubmissionQueue != Core::CommandQueue::kCount
-                    && graphics().getDevice().queueGetCompletedInstance(
-                        rayTracingState().m_surfelCountReadbackPendingSubmissionQueue
-                    ) >= rayTracingState().m_surfelCountReadbackPendingSubmissionID
-                )
-            )
+            submissionToken.valid()
+            && graphics().getDevice().queueGetCompletedInstance(submissionToken.queue) >= submissionToken.value
         ;
         if(
-            rayTracingState().m_surfelCountReadbackPending
+            submissionToken.valid()
             && (frameIndex - rayTracingState().m_surfelCountReadbackFrame) >= s_SurfelCountLogDelay
             && submissionComplete
         ){
@@ -1232,20 +1233,7 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
                     , static_cast<u64>(rayTracingState().m_surfelPoolCapacity)
                 );
             }
-            rayTracingState().m_surfelCountReadbackPending = false;
-            rayTracingState().m_surfelCountReadbackPendingSubmissionID = 0u;
-            rayTracingState().m_surfelCountReadbackPendingSubmissionQueue = Core::CommandQueue::kCount;
-            rayTracingState().m_surfelCountReadbackPendingSubmissionUnconfirmed = false;
-        }
-        else if(!rayTracingState().m_surfelCountReadbackPending && (frameIndex % s_SurfelCountLogInterval) == 0u){
-            commandList.setBufferState(counter, Core::ResourceStates::CopySource);
-            commandList.commitBarriers();
-            commandList.copyBuffer(readback, 0u, counter, 0u, static_cast<u64>(sizeof(u32)) * NWB_SURFEL_COUNTER_SIZE);
-            rayTracingState().m_surfelCountReadbackPending = true;
-            rayTracingState().m_surfelCountReadbackFrame = frameIndex;
-            rayTracingState().m_surfelCountReadbackPendingSubmissionID = 0u;
-            rayTracingState().m_surfelCountReadbackPendingSubmissionQueue = Core::CommandQueue::kCount;
-            rayTracingState().m_surfelCountReadbackPendingSubmissionUnconfirmed = true;
+            rayTracingState().m_surfelCountReadbackSubmissionToken = {};
         }
     }
 

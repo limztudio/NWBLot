@@ -225,8 +225,10 @@ private:
         const Core::GpuGraphResourceId* traceGeometryResources,
         usize traceGeometryResourceCount,
         Core::GpuTaskId effectsTask,
+        Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
+    void declareDeferredSurfelCountReadbackTask();
     void buildDeferredLightingTaskGraph(
         const ECSRenderDetail::RendererFrameGraphFeatures& features,
         DeferredFrameTargets& deferredTargets,
@@ -304,6 +306,8 @@ private:
     Core::GpuTaskId m_deferredSurfelGiPreparationTask;
     Core::GpuTaskId m_deferredSurfelGiSnapshotCopyTask;
     Core::GpuTaskId m_deferredSurfelGiTask;
+    // A rare diagnostic tail: it depends on GI but records/submits after Present on Transfer when available.
+    Core::GpuTaskId m_deferredSurfelGiCounterReadbackTask;
     Core::GpuTaskId m_deferredHardwareCausticsTask;
     Core::GpuTaskId m_deferredAvboitPreTask;
     Core::GpuTaskId m_deferredAvboitDepthWarpTask;
@@ -317,6 +321,8 @@ private:
     // Recovery stays unrecorded until a later packet rejects. It uses a generic accepted-producer completion so the
     // Graphics tail can join the latest AsyncCompute/Transfer work, or the Prefix Graphics submission when none did.
     Core::GpuTaskId m_deferredFrameRecoveryTask;
+    // Imported only while the preceding frame's diagnostic Transfer readback remains in flight.
+    Core::GpuExternalCompletionId m_deferredSurfelGiCounterReadbackCompletion;
     Core::GpuExternalCompletionId m_deferredLightingHistoryCompletion;
     Core::GpuExternalCompletionId m_deferredFrameRecoveryCompletion;
     bool m_graphicsPrefixMeshViewSetupReady = false;
@@ -348,6 +354,8 @@ private:
     // AsyncCompute; the resolved full-resolution irradiance is either consumed there or snapshotted for optional
     // frame-lagged Graphics lighting.
     Core::CommandListResourceStateHandoff m_surfelGiComputePersistentStateHandoff;
+    // The counter can continue into a late Transfer readback, so retain that exact tail state separately.
+    Core::CommandListResourceStateHandoff m_surfelGiCounterPersistentStateHandoff;
     Core::CommandListResourceStateHandoff m_surfelIrradianceReturnStateHandoff;
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;

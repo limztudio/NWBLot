@@ -37,20 +37,6 @@ void RendererRayTracingSystem::confirmShadowVisibilitySubmission(const Core::Que
     rayTracingState().m_swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
 }
 
-void RendererRayTracingSystem::confirmSurfelGiSubmission(const Core::QueueSubmissionToken& submissionToken){
-    if(
-        !rayTracingState().m_surfelCountReadbackPending
-        || !rayTracingState().m_surfelCountReadbackPendingSubmissionUnconfirmed
-        || !submissionToken.valid()
-    )
-        return;
-
-    rayTracingState().m_surfelCountReadbackPendingSubmissionID = submissionToken.value;
-    rayTracingState().m_surfelCountReadbackPendingSubmissionQueue = submissionToken.queue;
-    rayTracingState().m_surfelCountReadbackPendingSubmissionUnconfirmed = false;
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

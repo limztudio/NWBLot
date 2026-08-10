@@ -225,6 +225,86 @@ struct GpuCommandIrBuiltinTaskRecord{
 };
 
 
+// The reader validates only the self-contained v1 wire contract. Graph/resource topology, resource ranges and
+// backend command legality require a later context-aware validation/replay phase.
+namespace GpuCommandIrStreamReadStatus{
+    enum Enum : u8{
+        Record,
+        End,
+        Error,
+    };
+};
+
+namespace GpuCommandIrStreamValidationError{
+    enum Enum : u8{
+        None,
+        NullData,
+        TruncatedStreamHeader,
+        InvalidMagic,
+        UnsupportedVersion,
+        InvalidHeaderReserved,
+        PayloadSizeMismatch,
+        InvalidGraphGeneration,
+        InvalidRecordCount,
+        TruncatedRecord,
+        InvalidRecordSize,
+        UnsupportedOpcode,
+        InvalidRecord,
+        TrailingPayload,
+    };
+};
+
+struct GpuCommandIrStreamValidationResult{
+    GpuCommandIrStreamValidationError::Enum error = GpuCommandIrStreamValidationError::None;
+    usize byteOffset = 0u;
+    u64 recordIndex = Limit<u64>::s_Max;
+    bool complete = false;
+
+    [[nodiscard]] constexpr bool valid()const noexcept{
+        return complete && error == GpuCommandIrStreamValidationError::None;
+    }
+    [[nodiscard]] constexpr bool failed()const noexcept{
+        return error != GpuCommandIrStreamValidationError::None;
+    }
+};
+
+// A non-owning sequential reader for the POD stream. Its backing bytes must stay alive and unchanged while it is
+// used. `next` publishes its output and advances only after an entire record passes v1 syntax validation; `End` is
+// the only successful terminal state.
+class GpuCommandIrStreamReader final : NoCopy{
+public:
+    explicit GpuCommandIrStreamReader(BinaryByteView bytes)noexcept;
+
+
+public:
+    [[nodiscard]] GpuCommandIrStreamReadStatus::Enum next(GpuCommandIrBuiltinTaskRecord& outRecord)noexcept;
+    [[nodiscard]] const GpuCommandIrStreamValidationResult& validation()const noexcept{ return m_validation; }
+    [[nodiscard]] u64 graphGeneration()const noexcept{ return m_graphGeneration; }
+    [[nodiscard]] u64 recordCount()const noexcept{ return m_recordCount; }
+
+
+private:
+    void fail(
+        GpuCommandIrStreamValidationError::Enum error,
+        usize byteOffset,
+        u64 recordIndex
+    )noexcept;
+
+
+private:
+    BinaryByteView m_bytes;
+    GpuCommandIrStreamValidationResult m_validation;
+    usize m_cursor = 0u;
+    usize m_payloadEnd = 0u;
+    u64 m_graphGeneration = 0u;
+    u64 m_recordCount = 0u;
+    u64 m_nextRecordIndex = 0u;
+};
+
+// Fully walks a stream with the syntax-only reader and returns either success or its first malformed location.
+[[nodiscard]] GpuCommandIrStreamValidationResult ValidateGpuCommandIrStream(BinaryByteView bytes)noexcept;
+
+
 class GpuCommandIrCapture final : NoCopy{
 public:
     explicit GpuCommandIrCapture(GraphicsArena& arena)

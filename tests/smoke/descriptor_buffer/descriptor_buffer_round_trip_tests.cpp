@@ -94,6 +94,10 @@ public:
         return m_graphics.setAsyncComputeLaneEnabled(enabled);
     }
 
+    [[nodiscard]] bool setTransferQueueEnabled(const bool enabled){
+        return m_graphics.setTransferQueueEnabled(enabled);
+    }
+
     [[nodiscard]] Graphics& graphics(){ return m_graphics; }
     [[nodiscard]] Alloc::GlobalArena& arena(){ return m_objectArena; }
     [[nodiscard]] Perf::TimingRecorder& gpuTimingSink(){ return m_gpuTiming; }
@@ -2700,6 +2704,111 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputeLaneRoutesToGraphicsWhenNotEna
     EXPECT_TRUE(token.valid());
     EXPECT_EQ(token.queue, CommandQueue::Graphics);
     EXPECT_TRUE(device.waitForIdle());
+}
+
+
+// A transfer-only family is optional, but when available it must be a real physical transport: Graphics uploads a
+// shared buffer, Transfer copies it, and Graphics imports the result again through timeline waits. The buffers use
+// concurrent Graphics/Transfer sharing, so this validates the new family set without manufacturing ownership aliases.
+TEST_F(DescriptorBufferRoundTripTest, DedicatedTransferQueueCopiesConcurrentBufferRoundTrip){
+    HeadlessGraphicsScope transferScope;
+    ASSERT_TRUE(transferScope.setTransferQueueEnabled(true));
+    if(!transferScope.initialize())
+        GTEST_SKIP() << "Transfer queue: no usable dedicated-transfer headless Vulkan device on this host.";
+
+    auto& device = transferScope.graphics().getDevice();
+    if(!device.getQueue(CommandQueue::Transfer))
+        GTEST_SKIP() << "Transfer queue: adapter has no dedicated transfer-only queue family.";
+
+    EXPECT_TRUE(device.usesConcurrentQueueSharing(ResourceQueueSharing::GraphicsAndTransfer));
+
+    static constexpr u32 s_CopyWords[] = {
+        0x0347a2d1u,
+        0x89abcdefu,
+        0x5162f093u,
+        0xc0ffee42u,
+    };
+    const BufferDesc sourceDesc = BufferDesc()
+        .setByteSize(sizeof(s_CopyWords))
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+    ;
+    const BufferDesc destinationDesc = BufferDesc()
+        .setByteSize(sizeof(s_CopyWords))
+        .setInitialState(ResourceStates::Common)
+        .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+        .setCpuAccess(CpuAccessMode::Read)
+    ;
+    auto source = device.createBuffer(sourceDesc);
+    auto destination = device.createBuffer(destinationDesc);
+    ASSERT_NE(source.get(), nullptr);
+    ASSERT_NE(destination.get(), nullptr);
+
+    CommandListResourceStateHandoff graphicsToTransfer(transferScope.arena());
+    auto graphicsProducer = device.createCommandList();
+    ASSERT_NE(graphicsProducer.get(), nullptr);
+    graphicsProducer->open();
+    graphicsProducer->writeBuffer(source.get(), s_CopyWords, sizeof(s_CopyWords));
+    graphicsProducer->setBufferState(source.get(), ResourceStates::CopySource);
+    graphicsProducer->close(&graphicsToTransfer);
+    ASSERT_TRUE(graphicsToTransfer.valid());
+
+    CommandList* graphicsProducerLists[] = { graphicsProducer.get() };
+    const QueueSubmissionToken graphicsProducerToken = device.executeCommandLists(
+        graphicsProducerLists,
+        LengthOf(graphicsProducerLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(graphicsProducerToken.valid());
+    ASSERT_EQ(graphicsProducerToken.queue, CommandQueue::Graphics);
+
+    CommandListParameters transferParams;
+    transferParams.setQueueType(CommandQueue::Transfer);
+    CommandListResourceStateHandoff transferToGraphics(transferScope.arena());
+    auto transferCopy = device.createCommandList(transferParams);
+    ASSERT_NE(transferCopy.get(), nullptr);
+    transferCopy->open(&graphicsToTransfer);
+    EXPECT_EQ(transferCopy->getBufferState(source.get()), ResourceStates::CopySource);
+    transferCopy->copyBuffer(destination.get(), 0u, source.get(), 0u, sizeof(s_CopyWords));
+    transferCopy->close(&transferToGraphics);
+    ASSERT_TRUE(transferToGraphics.valid());
+
+    const QueueSubmissionToken transferWaits[] = { graphicsProducerToken };
+    CommandList* transferCopyLists[] = { transferCopy.get() };
+    const QueueSubmissionToken transferToken = device.executeCommandLists(
+        transferCopyLists,
+        LengthOf(transferCopyLists),
+        CommandQueue::Transfer,
+        QueueSubmissionDesc().setWaitTokens(transferWaits, LengthOf(transferWaits))
+    );
+    ASSERT_TRUE(transferToken.valid());
+    ASSERT_EQ(transferToken.queue, CommandQueue::Transfer);
+
+    auto graphicsConsumer = device.createCommandList();
+    ASSERT_NE(graphicsConsumer.get(), nullptr);
+    graphicsConsumer->open(&transferToGraphics);
+    EXPECT_EQ(graphicsConsumer->getBufferState(destination.get()), ResourceStates::CopyDest);
+    graphicsConsumer->setBufferState(destination.get(), ResourceStates::ShaderResource);
+    graphicsConsumer->close();
+
+    const QueueSubmissionToken graphicsConsumerWaits[] = { transferToken };
+    CommandList* graphicsConsumerLists[] = { graphicsConsumer.get() };
+    const QueueSubmissionToken graphicsConsumerToken = device.executeCommandLists(
+        graphicsConsumerLists,
+        LengthOf(graphicsConsumerLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc().setWaitTokens(graphicsConsumerWaits, LengthOf(graphicsConsumerWaits))
+    );
+    ASSERT_TRUE(graphicsConsumerToken.valid());
+    ASSERT_EQ(graphicsConsumerToken.queue, CommandQueue::Graphics);
+    ASSERT_TRUE(device.waitForIdle());
+
+    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    ASSERT_NE(copiedWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_CopyWords); ++wordIndex)
+        EXPECT_EQ(copiedWords[wordIndex], s_CopyWords[wordIndex]);
+    device.unmapBuffer(destination.get());
 }
 
 

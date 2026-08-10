@@ -1568,7 +1568,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    Core::QueueSubmissionToken prefixSubmissionToken;
     Core::QueueSubmissionToken shadowVisibilitySubmissionToken;
     Core::QueueSubmissionToken hardwareCausticsSubmissionToken;
     Core::QueueSubmissionToken softwareCausticsSubmissionToken;
@@ -1583,7 +1582,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::QueueSubmissionToken deferredCompositeSubmissionToken;
     const auto submitFrameRecoveryPacket = [&](const Core::QueueSubmissionToken* const asyncWaitToken) -> bool {
         // Retire the accepted frame scope after a rejected packet and join the latest accepted non-Graphics producer.
-        // The Prefix Graphics token is the durable fallback completion; same-queue waits collapse to queue ordering.
+        // The transaction provides the durable Graphics fallback as well, so recovery owns no renderer-side
+        // predecessor token ladder. Same-queue waits collapse to queue ordering.
         if(device.isDeviceLost()){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery packet skipped because the graphics device is lost"));
             m_deferredFrameRecoveryArmed = false;
@@ -1592,9 +1592,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return false;
         }
         NWB_ASSERT(!asyncWaitToken || asyncWaitToken->valid());
-        const Core::QueueSubmissionToken& recoveryPredecessorToken = asyncWaitToken
-            ? *asyncWaitToken
-            : prefixSubmissionToken
+        const Core::QueueSubmissionToken* const graphicsFallbackToken =
+            m_deferredLightingSubmissionTransaction.latestAcceptedToken(Core::CommandQueue::Graphics)
+        ;
+        const Core::QueueSubmissionToken* const recoveryPredecessorToken = asyncWaitToken
+            ? asyncWaitToken
+            : graphicsFallbackToken
         ;
         const bool retireTiming = frameTimingTransaction.needsRetirement();
         if(retireTiming)
@@ -1626,7 +1629,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !deferredFrameRecoveryPacketRange.valid()
             || !deferredFrameRecoveryQueue
             || deferredFrameRecoveryQueue->queueClass != Core::CommandQueue::Graphics
-            || !recoveryPredecessorToken.valid()
+            || !recoveryPredecessorToken
         ){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred frame recovery packet was unavailable"));
             discardFrameRecovery();
@@ -1654,7 +1657,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
 
         const Core::GpuTaskGraphExternalCompletionToken recoveryCompletionToken{
             .completion = m_deferredFrameRecoveryCompletion,
-            .token = recoveryPredecessorToken,
+            .token = *recoveryPredecessorToken,
         };
         Core::Alloc::ScratchArena recoveryScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter submitter(device);
@@ -1878,16 +1881,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const bool deferredLightingCompositeAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredShadowVisibilityTask.valid()
-            && shadowVisibilitySubmissionToken.valid()
             && (hardwareShadowSupported || (
                 m_deferredSoftwareCausticsTask.valid()
-                && softwareCausticsSubmissionToken.valid()
             ))
             && m_deferredSurfelGiTask.valid()
-            && surfelGiSubmissionToken.valid()
             && (!hardwareShadowSupported || (
                 m_deferredHardwareCausticsTask.valid()
-                && hardwareCausticsSubmissionToken.valid()
             ))
             && m_deferredLightingTask.valid()
             && m_deferredCompositeTask.valid()
@@ -1951,8 +1950,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingTaskGraphValid
             && m_deferredPresentTask.valid()
             && m_deferredSurfelGiTask.valid()
-            && surfelGiSubmissionToken.valid()
-            && deferredCompositeSubmissionToken.valid()
+            && m_deferredCompositeTask.valid()
             && deferredPresentPacket.valid()
             && deferredPresentPacketRange.valid()
             && deferredPresentPacketRange.packetCount == LengthOf(deferredPresentTimingTickets)
@@ -2002,10 +2000,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     };
 
     const auto submitDeferredSurfelGi = [&]() -> bool {
-        const Core::QueueSubmissionToken& effectsSubmissionToken = hardwareShadowSupported
-            ? shadowVisibilitySubmissionToken
-            : softwareCausticsSubmissionToken
-        ;
         Core::Alloc::ScratchArena surfelGiScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter surfelGiSubmitter(device);
         struct SurfelGiAcceptanceContext{
@@ -2085,7 +2079,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const bool surfelGiAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredSurfelGiTask.valid()
-            && effectsSubmissionToken.valid()
             && surfelGiPacket.valid()
             && surfelGiPacketRange.valid()
             && surfelGiPacketRange.packetCount == LengthOf(surfelGiTimingTickets)
@@ -2160,11 +2153,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 graphicsPrefixScratchArena
             )
         ;
-        prefixSubmissionToken = graphicsPrefixAccepted
-            ? m_deferredLightingSubmissionTransaction.packetToken(graphicsPrefixPacket)
-            : Core::QueueSubmissionToken{}
-        ;
-        if(!prefixSubmissionToken.valid()){
+        if(
+            !graphicsPrefixAccepted
+            || !m_deferredLightingSubmissionTransaction.packetToken(graphicsPrefixPacket).valid()
+        ){
             discardRenderPackets();
             return;
         }

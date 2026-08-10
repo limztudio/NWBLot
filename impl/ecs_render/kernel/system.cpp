@@ -493,7 +493,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame render recovery failed; rendering is suspended until resources are recreated"));
         return;
     }
-    const bool dedicatedAsyncCompute = device.isRenderLaneDedicated(Core::RenderLane::AsyncCompute);
+    // Renderer scheduling queries the physical transport exposed to the graph, not the legacy unresolved lane.
+    // A Compute entry exists only when Vulkan created an enabled, distinct async-compute queue for this device.
+    const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
+    const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
+    const bool dedicatedAsyncCompute = computeFamilyIndex != Limit<u32>::s_Max
+        && computeFamilyIndex != graphicsFamilyIndex
+    ;
     const bool laggedAsyncLightingRequested = m_frameLaggedAsyncLightingEnabled && dedicatedAsyncCompute;
     const bool laggedLightingHistoryResourcesReady = deferredTargets.laggedLightingHistory.valid();
     if(laggedAsyncLightingRequested && !laggedLightingHistoryResourcesReady){

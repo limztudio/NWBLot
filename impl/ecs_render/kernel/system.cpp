@@ -2307,7 +2307,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 discardTimingTickets();
                 restoreUnacceptedShadowEffectsCpuState();
                 m_raytracingSystem.finalizeSoftShadowTemporalHistory(deferredTargets);
-                static_cast<void>(recovered);
+                if(!recovered)
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to recover an accepted deferred packet before abandoning shadow-compute state"));
                 // Missing compute scratch leaves no safe layout restoration.
                 failFrameRenderRecovery();
                 return;

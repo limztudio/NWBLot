@@ -23,10 +23,6 @@
 #include <impl/assets/graphics/bindless/runtime_abi.h>
 #include <tests/common/capturing_logger.h>
 
-#include <cstdlib>
-#include <cstring>
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -144,7 +140,7 @@ struct Result{
         return false;
 
     char* end = nullptr;
-    const unsigned long long parsed = std::strtoull(value, &end, 10);
+    const unsigned long long parsed = strtoull(value, &end, 10);
     if(end == value || *end != '\0' || parsed > static_cast<unsigned long long>(Limit<usize>::s_Max))
         return false;
 
@@ -166,7 +162,7 @@ struct Result{
         return false;
 
     char* end = nullptr;
-    const long long parsed = std::strtoll(value, &end, 10);
+    const long long parsed = strtoll(value, &end, 10);
     if(end == value || *end != '\0' || parsed < -1 || parsed > static_cast<long long>(Limit<i32>::s_Max))
         return false;
 
@@ -177,57 +173,57 @@ struct Result{
 [[nodiscard]] static bool ParseArguments(const int argc, char** argv, Arguments& outArguments){
     for(int index = 1; index < argc; ++index){
         const char* const argument = argv[index];
-        if(std::strcmp(argument, "--route") == 0){
+        if(NWB_STRCMP(argument, "--route") == 0){
             if(++index >= argc)
                 return false;
             const char* const value = argv[index];
-            if(std::strcmp(value, "graphics") == 0)
+            if(NWB_STRCMP(value, "graphics") == 0)
                 outArguments.route = Route::Graphics;
-            else if(std::strcmp(value, "automatic") == 0)
+            else if(NWB_STRCMP(value, "automatic") == 0)
                 outArguments.route = Route::Automatic;
             else
                 return false;
         }
-        else if(std::strcmp(argument, "--resource") == 0){
+        else if(NWB_STRCMP(argument, "--resource") == 0){
             if(++index >= argc)
                 return false;
             const char* const value = argv[index];
-            if(std::strcmp(value, "buffer") == 0)
+            if(NWB_STRCMP(value, "buffer") == 0)
                 outArguments.resourceKind = ResourceKind::Buffer;
-            else if(std::strcmp(value, "texture") == 0)
+            else if(NWB_STRCMP(value, "texture") == 0)
                 outArguments.resourceKind = ResourceKind::Texture;
             else
                 return false;
         }
-        else if(std::strcmp(argument, "--adapter-index") == 0){
+        else if(NWB_STRCMP(argument, "--adapter-index") == 0){
             if(++index >= argc || !ParseAdapterIndex(argv[index], outArguments.adapterIndex))
                 return false;
         }
-        else if(std::strcmp(argument, "--upload-mib") == 0){
+        else if(NWB_STRCMP(argument, "--upload-mib") == 0){
             if(++index >= argc || !ParseUnsigned(argv[index], outArguments.uploadMiB))
                 return false;
         }
-        else if(std::strcmp(argument, "--iterations") == 0){
+        else if(NWB_STRCMP(argument, "--iterations") == 0){
             if(++index >= argc || !ParseUnsigned(argv[index], outArguments.iterations))
                 return false;
         }
-        else if(std::strcmp(argument, "--in-flight") == 0){
+        else if(NWB_STRCMP(argument, "--in-flight") == 0){
             if(++index >= argc || !ParseUnsigned(argv[index], outArguments.inFlightIterations))
                 return false;
         }
-        else if(std::strcmp(argument, "--contention-mib") == 0){
+        else if(NWB_STRCMP(argument, "--contention-mib") == 0){
             if(++index >= argc || !ParseUnsigned(argv[index], outArguments.contentionMiB))
                 return false;
         }
-        else if(std::strcmp(argument, "--contention-copies") == 0){
+        else if(NWB_STRCMP(argument, "--contention-copies") == 0){
             if(++index >= argc || !ParseUnsigned(argv[index], outArguments.contentionCopies))
                 return false;
         }
-        else if(std::strcmp(argument, "--gpu-validation") == 0)
+        else if(NWB_STRCMP(argument, "--gpu-validation") == 0)
             outArguments.gpuValidation = true;
-        else if(std::strcmp(argument, "--no-gpu-validation") == 0)
+        else if(NWB_STRCMP(argument, "--no-gpu-validation") == 0)
             outArguments.gpuValidation = false;
-        else if(std::strcmp(argument, "--help") == 0 || std::strcmp(argument, "-h") == 0){
+        else if(NWB_STRCMP(argument, "--help") == 0 || NWB_STRCMP(argument, "-h") == 0){
             NWB_COUT
                 << "Usage: transfer_upload_profile [--route graphics|automatic] [--resource buffer|texture] "
                 << "[--adapter-index N] [--upload-mib N] [--iterations N] [--in-flight N] "

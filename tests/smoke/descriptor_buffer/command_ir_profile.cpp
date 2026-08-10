@@ -27,12 +27,6 @@
 #include <impl/assets/graphics/bindless/runtime_abi.h>
 #include <tests/common/capturing_logger.h>
 
-#include <cstdlib>
-#include <cstring>
-#include <iomanip>
-#include <limits>
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -57,6 +51,7 @@ inline constexpr u32 s_DefaultWarmupCount = 3u;
 inline constexpr u32 s_DefaultSampleCount = 11u;
 inline constexpr u32 s_MaxRecordCount = 65536u;
 inline constexpr u32 s_MaxSampleCount = 64u;
+inline constexpr int s_F64DecimalRoundTripPrecision = 17;
 
 
 struct Arguments{
@@ -127,7 +122,7 @@ struct Result{
         return false;
 
     char* end = nullptr;
-    const unsigned long long parsed = std::strtoull(value, &end, 10);
+    const unsigned long long parsed = strtoull(value, &end, 10);
     if(end == value || *end != '\0' || parsed > static_cast<unsigned long long>(Limit<u32>::s_Max))
         return false;
 
@@ -140,7 +135,7 @@ struct Result{
         return false;
 
     char* end = nullptr;
-    const long long parsed = std::strtoll(value, &end, 10);
+    const long long parsed = strtoll(value, &end, 10);
     if(end == value || *end != '\0' || parsed < 0 || parsed > static_cast<long long>(Limit<i32>::s_Max))
         return false;
 
@@ -151,27 +146,27 @@ struct Result{
 [[nodiscard]] static bool ParseArguments(const int argc, char** argv, Arguments& outArguments){
     for(int index = 1; index < argc; ++index){
         const char* const argument = argv[index];
-        if(std::strcmp(argument, "--adapter-index") == 0){
+        if(NWB_STRCMP(argument, "--adapter-index") == 0){
             if(++index >= argc || !ParseAdapterIndex(argv[index], outArguments.adapterIndex))
                 return false;
         }
-        else if(std::strcmp(argument, "--records") == 0){
+        else if(NWB_STRCMP(argument, "--records") == 0){
             if(++index >= argc || !ParseUnsigned(argv[index], outArguments.recordCount))
                 return false;
         }
-        else if(std::strcmp(argument, "--warmup") == 0){
+        else if(NWB_STRCMP(argument, "--warmup") == 0){
             if(++index >= argc || !ParseUnsigned(argv[index], outArguments.warmupCount))
                 return false;
         }
-        else if(std::strcmp(argument, "--samples") == 0){
+        else if(NWB_STRCMP(argument, "--samples") == 0){
             if(++index >= argc || !ParseUnsigned(argv[index], outArguments.sampleCount))
                 return false;
         }
-        else if(std::strcmp(argument, "--gpu-validation") == 0)
+        else if(NWB_STRCMP(argument, "--gpu-validation") == 0)
             outArguments.gpuValidation = true;
-        else if(std::strcmp(argument, "--no-gpu-validation") == 0)
+        else if(NWB_STRCMP(argument, "--no-gpu-validation") == 0)
             outArguments.gpuValidation = false;
-        else if(std::strcmp(argument, "--help") == 0 || std::strcmp(argument, "-h") == 0){
+        else if(NWB_STRCMP(argument, "--help") == 0 || NWB_STRCMP(argument, "-h") == 0){
             NWB_COUT
                 << "Usage: command_ir_profile [--adapter-index N] [--records N] [--warmup N] [--samples N] "
                 << "[--gpu-validation|--no-gpu-validation]\n"
@@ -775,7 +770,7 @@ static void EmitTimingSamples(const TimingSamples& samples){
     const TimingSummary summary = Summarize(samples);
     // The runner recomputes aggregate values from these samples, so retain enough precision for a lossless f64
     // round trip (including an even-sized median that averages two samples).
-    NWB_COUT << std::setprecision(std::numeric_limits<f64>::max_digits10);
+    NWB_COUT.precision(s_F64DecimalRoundTripPrecision);
     NWB_COUT << "{\"samples_ns_per_command\":[";
     for(u32 index = 0u; index < samples.count; ++index){
         if(index != 0u)

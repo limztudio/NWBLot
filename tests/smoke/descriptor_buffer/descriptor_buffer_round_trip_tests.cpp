@@ -409,8 +409,10 @@ struct NativeFrameRecoveryPacketTask{
             && payload.retiresTiming
             && *payload.armed
             && *payload.retiresTiming
-        )
-            static_cast<void>(payload.transaction->confirmEndSubmission(false));
+        ){
+            if(!payload.transaction->confirmEndSubmission(false))
+                payload.transaction->discard();
+        }
         if(payload.armed)
             *payload.armed = false;
         if(payload.retiresTiming)

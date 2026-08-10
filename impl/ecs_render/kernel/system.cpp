@@ -214,6 +214,8 @@ void RendererSystem::invalidateResources(){
     m_deferredShadowPrepareTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
+    m_deferredSurfelGiPreparationTask = {};
+    m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiTask = {};
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitPreTask = {};
@@ -442,6 +444,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredLightingTaskGraphValid = false;
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
+    m_deferredSurfelGiPreparationTask = {};
+    m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiTask = {};
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitPreTask = {};
@@ -826,6 +830,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId hardwareCausticsPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredHardwareCausticsTask
     );
+    const Core::GpuSubmissionPacketId surfelGiPreparationPacket = m_deferredLightingCompiledGraph.packetForTask(
+        m_deferredSurfelGiPreparationTask
+    );
+    const Core::GpuSubmissionPacketId surfelGiSnapshotCopyPacket = m_deferredLightingCompiledGraph.packetForTask(
+        m_deferredSurfelGiSnapshotCopyTask
+    );
     const Core::GpuSubmissionPacketId surfelGiPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredSurfelGiTask
     );
@@ -878,6 +888,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? m_deferredLightingCompiledGraph.queueInfo(m_deferredLightingCompiledGraph.packet(surfelGiPacket).queue)
         : nullptr
     ;
+    const Core::GpuPhysicalQueueInfo* const surfelGiPreparationQueue = surfelGiPreparationPacket.valid()
+        ? m_deferredLightingCompiledGraph.queueInfo(
+            m_deferredLightingCompiledGraph.packet(surfelGiPreparationPacket).queue
+        )
+        : nullptr
+    ;
+    const Core::GpuPhysicalQueueInfo* const surfelGiSnapshotCopyQueue = surfelGiSnapshotCopyPacket.valid()
+        ? m_deferredLightingCompiledGraph.queueInfo(
+            m_deferredLightingCompiledGraph.packet(surfelGiSnapshotCopyPacket).queue
+        )
+        : nullptr
+    ;
     const bool surfelGiRunsOnCompute = surfelGiQueue && surfelGiQueue->queueClass == Core::CommandQueue::Compute;
     // Keep every recording and submission span derived from compiled packet handles. The renderer names semantic
     // endpoints only; raw compiler-order indices remain inside the task-graph runtime.
@@ -891,8 +913,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         shadowVisibilityPacket,
         hardwareShadowSupported ? shadowVisibilityPacket : softwareCausticsPacket
     );
+    const Core::GpuSubmissionPacketId surfelGiFirstPacket = surfelGiPreparationPacket.valid()
+        ? surfelGiPreparationPacket
+        : surfelGiPacket
+    ;
     const Core::GpuSubmissionPacketRange surfelGiPacketRange =
-        m_deferredLightingCompiledGraph.packetRange(surfelGiPacket, surfelGiPacket);
+        m_deferredLightingCompiledGraph.packetRange(surfelGiFirstPacket, surfelGiPacket);
+    const usize expectedSurfelGiPacketCount = m_deferredSurfelGiSnapshotCopyTask.valid()
+        ? (surfelGiPreparationPacket == surfelGiSnapshotCopyPacket ? 2u : 3u)
+        : 1u
+    ;
     const Core::GpuSubmissionPacketRange hardwareCausticsPacketRange =
         m_deferredLightingCompiledGraph.packetRange(hardwareCausticsPacket, hardwareCausticsPacket);
     const Core::GpuSubmissionPacketRange avboitPacketRange = m_deferredLightingCompiledGraph.packetRange(
@@ -947,6 +977,15 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredSurfelGiTask.valid()
         || !surfelGiPacket.valid()
         || !surfelGiQueue
+        || (m_deferredSurfelGiSnapshotCopyTask.valid() && (
+            !m_deferredSurfelGiPreparationTask.valid()
+            || !surfelGiPreparationPacket.valid()
+            || !surfelGiPreparationQueue
+            || !surfelGiSnapshotCopyPacket.valid()
+            || !surfelGiSnapshotCopyQueue
+            || (static_cast<u8>(surfelGiSnapshotCopyQueue->capabilities)
+                & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
+        ))
         || (hardwareShadowSupported && (
             !m_deferredHardwareCausticsTask.valid()
             || !hardwareCausticsPacket.valid()
@@ -1005,7 +1044,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !shadowEffectsPacketRange.valid()
         || shadowEffectsPacketRange.packetCount != (hardwareShadowSupported ? 1u : 2u)
         || !surfelGiPacketRange.valid()
-        || surfelGiPacketRange.packetCount != 1u
+        || surfelGiPacketRange.packetCount != expectedSurfelGiPacketCount
         || (hardwareShadowSupported && (
             !hardwareCausticsPacketRange.valid()
             || hardwareCausticsPacketRange.packetCount != 1u
@@ -1222,7 +1261,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
 
-    // Shadow Visibility, optional Software Caustics, and Surfel GI record after Prefix in compiler order.
+    // Shadow Visibility, optional Software Caustics, and each Surfel-GI packet record after Prefix in compiler
+    // order. The snapshot packet needs the same persistent source as the final compute task, while compiler
+    // prologue seeds replace only the regions produced by an in-graph initialization or copy packet.
     Core::GpuExternalPacketStateSource surfelGiStateSources[3] = {};
     usize surfelGiStateSourceCount = 0u;
     bool surfelGiStateSourcesReady = appendDeclaredStateSource(
@@ -1289,7 +1330,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     );
     // Only the packets that import accepted external state need renderer-provided overrides. All remaining packets
     // receive the compiler-derived default descriptor during range traversal.
-    Core::GpuNativePacketRecordDesc deferredRecordDescs[7] = {};
+    Core::GpuNativePacketRecordDesc deferredRecordDescs[8] = {};
     usize deferredRecordDescCount = 0u;
     deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
         .packet = shadowVisibilityPacket,
@@ -1301,6 +1342,24 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             .packet = softwareCausticsPacket,
             .externalStateSources = softwareCausticsStateSources,
             .externalStateSourceCount = softwareCausticsStateSourceCount,
+        };
+    }
+    if(surfelGiPreparationPacket.valid() && surfelGiPreparationPacket != surfelGiPacket){
+        deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
+            .packet = surfelGiPreparationPacket,
+            .externalStateSources = surfelGiStateSources,
+            .externalStateSourceCount = surfelGiStateSourceCount,
+        };
+    }
+    if(
+        surfelGiSnapshotCopyPacket.valid()
+        && surfelGiSnapshotCopyPacket != surfelGiPreparationPacket
+        && surfelGiSnapshotCopyPacket != surfelGiPacket
+    ){
+        deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
+            .packet = surfelGiSnapshotCopyPacket,
+            .externalStateSources = surfelGiStateSources,
+            .externalStateSourceCount = surfelGiStateSourceCount,
         };
     }
     deferredRecordDescs[deferredRecordDescCount++] = Core::GpuNativePacketRecordDesc{
@@ -1355,6 +1414,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ))
         && m_deferredSurfelGiTask.valid()
         && surfelGiPacket.valid()
+        && (!m_deferredSurfelGiSnapshotCopyTask.valid() || (
+            m_deferredSurfelGiPreparationTask.valid()
+            && surfelGiPreparationPacket.valid()
+            && surfelGiSnapshotCopyPacket.valid()
+        ))
         && (!hardwareShadowSupported || (
             m_deferredHardwareCausticsTask.valid()
             && hardwareCausticsPacket.valid()
@@ -1969,8 +2033,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingTaskGraphValid
             && m_deferredSurfelGiTask.valid()
             && surfelGiPacket.valid()
+            && (!m_deferredSurfelGiSnapshotCopyTask.valid() || (
+                m_deferredSurfelGiPreparationTask.valid()
+                && surfelGiPreparationPacket.valid()
+                && surfelGiSnapshotCopyPacket.valid()
+            ))
             && surfelGiPacketRange.valid()
-            && surfelGiPacketRange.packetCount == LengthOf(surfelGiTimingTickets)
+            && surfelGiPacketRange.packetCount == expectedSurfelGiPacketCount
             && surfelGiSubmitter.submitPacketRangeInCompileOrder(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,

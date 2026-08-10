@@ -995,9 +995,9 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
 }
 
 
-// The buffer primitive follows the same late-recording/lifecycle contract as texture copies, while its exact
-// byte ranges are retained by the payload. The Graphics producer and consumer make a dedicated Transfer route
-// prove an exclusive Graphics -> Transfer -> Graphics ownership handoff; single-queue hosts exercise fallback.
+// The buffer primitive follows the same late-recording/lifecycle contract as texture copies, while its two exact
+// regions are retained by the payload. The Graphics producer and consumer make a dedicated Transfer route prove
+// an exclusive Graphics -> Transfer -> Graphics ownership handoff; single-queue hosts exercise fallback.
 TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAcceptedToken){
     auto& device = DescriptorBufferRoundTripTest::device();
     static constexpr u32 s_SourceWords[] = {
@@ -1005,6 +1005,12 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
         0x89abcdefu,
         0x5162f093u,
         0xc0ffee42u,
+    };
+    static constexpr u32 s_SecondSourceWords[] = {
+        0x41f0a7c3u,
+        0xdeadc0deu,
+        0x0badf00du,
+        0x76543210u,
     };
     const BufferDesc sourceDesc = BufferDesc()
         .setByteSize(sizeof(s_SourceWords))
@@ -1019,15 +1025,24 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
         .setCpuAccess(CpuAccessMode::Read)
     ;
     auto source = device.createBuffer(sourceDesc);
+    auto secondSource = device.createBuffer(sourceDesc);
     auto destination = device.createBuffer(destinationDesc);
+    auto secondDestination = device.createBuffer(destinationDesc);
     ASSERT_NE(source.get(), nullptr);
+    ASSERT_NE(secondSource.get(), nullptr);
     ASSERT_NE(destination.get(), nullptr);
+    ASSERT_NE(secondDestination.get(), nullptr);
 
     u32* const sourceWords = static_cast<u32*>(device.mapBuffer(source.get(), CpuAccessMode::Write));
     ASSERT_NE(sourceWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
         sourceWords[wordIndex] = s_SourceWords[wordIndex];
     device.unmapBuffer(source.get());
+    u32* const secondSourceWords = static_cast<u32*>(device.mapBuffer(secondSource.get(), CpuAccessMode::Write));
+    ASSERT_NE(secondSourceWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_SecondSourceWords); ++wordIndex)
+        secondSourceWords[wordIndex] = s_SecondSourceWords[wordIndex];
+    device.unmapBuffer(secondSource.get());
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId sourceResource = graph.importBuffer(
@@ -1044,8 +1059,24 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
             .setMarkerLabel("Built-In Buffer Copy Destination")
             .setType(GpuGraphResourceType::Buffer)
     );
+    const GpuGraphResourceId secondSourceResource = graph.importBuffer(
+        secondSource,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/built_in_copy_buffer_second_source"))
+            .setMarkerLabel("Built-In Buffer Copy Second Source")
+            .setType(GpuGraphResourceType::Buffer)
+    );
+    const GpuGraphResourceId secondDestinationResource = graph.importBuffer(
+        secondDestination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/built_in_copy_buffer_second_destination"))
+            .setMarkerLabel("Built-In Buffer Copy Second Destination")
+            .setType(GpuGraphResourceType::Buffer)
+    );
     ASSERT_TRUE(sourceResource.valid());
     ASSERT_TRUE(destinationResource.valid());
+    ASSERT_TRUE(secondSourceResource.valid());
+    ASSERT_TRUE(secondDestinationResource.valid());
 
     GpuTaskSchedulingHint copyScheduling;
     copyScheduling.cost = GpuTaskCostHint::Medium;
@@ -1054,6 +1085,12 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
     const GpuTaskResourceUse producerUses[] = {
         GpuTaskResourceUse{
             .resource = sourceResource,
+            .range = {},
+            .requiredState = ResourceStates::CopySource,
+            .access = GpuTaskResourceAccess::Write,
+        },
+        GpuTaskResourceUse{
+            .resource = secondSourceResource,
             .range = {},
             .requiredState = ResourceStates::CopySource,
             .access = GpuTaskResourceAccess::Write,
@@ -1102,6 +1139,11 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
             .destination = destinationResource,
             .dataSizeBytes = sizeof(s_SourceWords),
         },
+        GpuCopyBufferTaskRegion{
+            .source = secondSourceResource,
+            .destination = secondDestinationResource,
+            .dataSizeBytes = sizeof(s_SecondSourceWords),
+        },
     };
     QueueSubmissionToken acceptedToken;
     const GpuTaskId copyTask = graph.addCopyBufferTask(
@@ -1114,11 +1156,17 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
     );
     ASSERT_TRUE(copyTask.valid());
     ASSERT_TRUE(graph.taskAt(copyTask.index).hasPayload);
-    ASSERT_EQ(graph.taskAt(copyTask.index).resourceUseCount, 2u);
+    ASSERT_EQ(graph.taskAt(copyTask.index).resourceUseCount, 4u);
 
     const GpuTaskResourceUse consumerUses[] = {
         GpuTaskResourceUse{
             .resource = destinationResource,
+            .range = {},
+            .requiredState = ResourceStates::ShaderResource,
+            .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = secondDestinationResource,
             .range = {},
             .requiredState = ResourceStates::ShaderResource,
             .access = GpuTaskResourceAccess::Read,
@@ -1253,6 +1301,13 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
         EXPECT_EQ(copiedWords[wordIndex], s_SourceWords[wordIndex]);
     device.unmapBuffer(destination.get());
+    const u32* const secondCopiedWords = static_cast<const u32*>(
+        device.mapBuffer(secondDestination.get(), CpuAccessMode::Read)
+    );
+    ASSERT_NE(secondCopiedWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_SecondSourceWords); ++wordIndex)
+        EXPECT_EQ(secondCopiedWords[wordIndex], s_SecondSourceWords[wordIndex]);
+    device.unmapBuffer(secondDestination.get());
 }
 
 

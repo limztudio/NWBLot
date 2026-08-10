@@ -1778,6 +1778,8 @@ bool RendererSystem::declareDeferredSurfelGiTask(
 ){
     using namespace __hidden_renderer_task_graph;
 
+    m_deferredSurfelGiPreparationTask = {};
+    m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiTask = {};
     if(
         !deferredTargets.valid()
@@ -1794,6 +1796,7 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         return false;
 
     const bool useHwTrace = m_rayTracingState.m_surfelUseHwTrace;
+    const bool hasSurfelWork = m_raytracingSystem.hasSurfelWork();
 
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
@@ -1834,24 +1837,40 @@ bool RendererSystem::declareDeferredSurfelGiTask(
         resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
 
-    const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
-        if(!buffer)
+    const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state, Core::GpuGraphResourceId* const outResource = nullptr){
+        if(!buffer){
+            if(outResource)
+                *outResource = {};
             return true;
+        }
         const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
         if(!resource.valid())
             return false;
+        if(outResource)
+            *outResource = resource;
         resourceUses.push_back(ReadUse(resource, state));
         return true;
     };
-    const auto appendOptionalWriteBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
-        if(!buffer)
+    const auto appendOptionalWriteBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state, Core::GpuGraphResourceId* const outResource = nullptr){
+        if(!buffer){
+            if(outResource)
+                *outResource = {};
             return true;
+        }
         const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
         if(!resource.valid())
             return false;
+        if(outResource)
+            *outResource = resource;
         resourceUses.push_back(WriteUse(resource, state));
         return true;
     };
+    Core::GpuGraphResourceId surfelPool;
+    Core::GpuGraphResourceId surfelCellHead;
+    Core::GpuGraphResourceId surfelCounter;
+    Core::GpuGraphResourceId surfelFreeList;
+    Core::GpuGraphResourceId surfelPoolSnapshot;
+    Core::GpuGraphResourceId surfelCellHeadSnapshot;
     bool optionalResourcesImported =
         appendOptionalReadBuffer(
             m_rayTracingState.m_shadowInstanceMaterialBuffer,
@@ -1881,19 +1900,22 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             m_rayTracingState.m_surfelPoolBuffer,
             Name("render.surfel_gi.pool"),
             "Surfel Pool",
-            Core::ResourceStates::UnorderedAccess
+            Core::ResourceStates::UnorderedAccess,
+            &surfelPool
         )
         && appendOptionalWriteBuffer(
             m_rayTracingState.m_surfelCellHeadBuffer,
             Name("render.surfel_gi.cell_heads"),
             "Surfel Cell Heads",
-            Core::ResourceStates::UnorderedAccess
+            Core::ResourceStates::UnorderedAccess,
+            &surfelCellHead
         )
         && appendOptionalWriteBuffer(
             m_rayTracingState.m_surfelCounterBuffer,
             Name("render.surfel_gi.counter"),
             "Surfel Counter",
-            Core::ResourceStates::UnorderedAccess
+            Core::ResourceStates::UnorderedAccess,
+            &surfelCounter
         )
         && appendOptionalWriteBuffer(
             m_rayTracingState.m_surfelTraceIndirectArgsBuffer,
@@ -1905,19 +1927,22 @@ bool RendererSystem::declareDeferredSurfelGiTask(
             m_rayTracingState.m_surfelFreeListBuffer,
             Name("render.surfel_gi.free_list"),
             "Surfel Free List",
-            Core::ResourceStates::UnorderedAccess
+            Core::ResourceStates::UnorderedAccess,
+            &surfelFreeList
         )
-        && appendOptionalWriteBuffer(
+        && appendOptionalReadBuffer(
             m_rayTracingState.m_surfelPoolSnapshotBuffer,
             Name("render.surfel_gi.pool_snapshot"),
             "Surfel Pool Snapshot",
-            Core::ResourceStates::UnorderedAccess
+            Core::ResourceStates::ShaderResource,
+            &surfelPoolSnapshot
         )
-        && appendOptionalWriteBuffer(
+        && appendOptionalReadBuffer(
             m_rayTracingState.m_surfelCellHeadSnapshotBuffer,
             Name("render.surfel_gi.cell_head_snapshot"),
             "Surfel Cell Head Snapshot",
-            Core::ResourceStates::UnorderedAccess
+            Core::ResourceStates::ShaderResource,
+            &surfelCellHeadSnapshot
         )
         && appendOptionalWriteBuffer(
             m_rayTracingState.m_surfelCounterReadback,
@@ -1971,13 +1996,98 @@ bool RendererSystem::declareDeferredSurfelGiTask(
     scheduling.cost = Core::GpuTaskCostHint::Large;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
+
+    // A fresh persistent field must clear before the snapshot reads it. Once initialized, the two fixed regions
+    // become one Transfer-preferred graph task; compiler declarations own CopySource/CopyDest transitions and any
+    // Compute/Transfer/Graphics handoff.
+    Core::GpuTaskId surfelGiDependency = effectsTask;
+    if(hasSurfelWork){
+        if(
+            !surfelPool.valid()
+            || !surfelCellHead.valid()
+            || !surfelCounter.valid()
+            || !surfelFreeList.valid()
+            || !surfelPoolSnapshot.valid()
+            || !surfelCellHeadSnapshot.valid()
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel-GI snapshot resources were unavailable during graph declaration"));
+            return false;
+        }
+
+        if(m_raytracingSystem.needsSurfelResourceInitialization()){
+            const Core::GpuTaskResourceUse initializationResourceUses[] = {
+                WriteUse(surfelPool, Core::ResourceStates::CopyDest),
+                WriteUse(surfelCellHead, Core::ResourceStates::CopyDest),
+                WriteUse(surfelCounter, Core::ResourceStates::CopyDest),
+                WriteUse(surfelFreeList, Core::ResourceStates::CopyDest),
+            };
+            Core::GpuTaskSchedulingHint initializationScheduling;
+            initializationScheduling.cost = Core::GpuTaskCostHint::Medium;
+            initializationScheduling.forceSubmissionBoundary = true;
+            initializationScheduling.allowPacketMerge = false;
+            Core::GpuTaskDesc initializationDesc;
+            initializationDesc
+                .setIdentity(Name("render.surfel_gi.initialize"))
+                .setMarkerLabel("Surfel GI Initialize")
+                .setQueue(ComputeQueueRequest())
+                .setScheduling(initializationScheduling)
+                .setDependencies(&surfelGiDependency, 1u)
+                .setResourceUses(initializationResourceUses, LengthOf(initializationResourceUses))
+            ;
+            m_deferredSurfelGiPreparationTask = m_raytracingSystem.declareSurfelResourceInitializationTask(
+                m_deferredLightingTaskGraph,
+                initializationDesc
+            );
+            if(!m_deferredSurfelGiPreparationTask.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI initialization task"));
+                return false;
+            }
+            surfelGiDependency = m_deferredSurfelGiPreparationTask;
+        }
+
+        const Core::GpuCopyBufferTaskRegion snapshotRegions[] = {
+            Core::GpuCopyBufferTaskRegion{
+                .source = surfelPool,
+                .destination = surfelPoolSnapshot,
+                .dataSizeBytes = m_rayTracingState.m_surfelPoolBuffer->getDescription().byteSize,
+            },
+            Core::GpuCopyBufferTaskRegion{
+                .source = surfelCellHead,
+                .destination = surfelCellHeadSnapshot,
+                .dataSizeBytes = m_rayTracingState.m_surfelCellHeadBuffer->getDescription().byteSize,
+            },
+        };
+        Core::GpuTaskDesc snapshotDesc;
+        snapshotDesc
+            .setIdentity(Name("render.surfel_gi.snapshot_copy"))
+            .setMarkerLabel("Surfel GI Snapshot Copy")
+            .setQueue(TransferQueueRequest())
+            .setScheduling(scheduling)
+            .setDependencies(&surfelGiDependency, 1u)
+        ;
+        m_deferredSurfelGiSnapshotCopyTask = m_deferredLightingTaskGraph.addCopyBufferTask(
+            snapshotDesc,
+            Core::GpuCopyBufferTaskDesc{
+                .regions = snapshotRegions,
+                .regionCount = LengthOf(snapshotRegions),
+            }
+        );
+        if(!m_deferredSurfelGiSnapshotCopyTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI snapshot-copy task"));
+            return false;
+        }
+        if(!m_deferredSurfelGiPreparationTask.valid())
+            m_deferredSurfelGiPreparationTask = m_deferredSurfelGiSnapshotCopyTask;
+        surfelGiDependency = m_deferredSurfelGiSnapshotCopyTask;
+    }
+
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.surfel_gi"))
         .setMarkerLabel("Surfel GI")
         .setQueue(ComputeQueueRequest())
         .setScheduling(scheduling)
-        .setDependencies(&effectsTask, 1u)
+        .setDependencies(&surfelGiDependency, 1u)
         .setResourceUses(resourceUses.data(), resourceUses.size())
     ;
     m_deferredSurfelGiTask = m_raytracingSystem.declareSurfelGiTask(
@@ -2033,6 +2143,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_graphicsPrefixTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
+    m_deferredSurfelGiPreparationTask = {};
+    m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiTask = {};
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitPreTask = {};

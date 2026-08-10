@@ -300,6 +300,9 @@ private:
     Core::GpuTaskId m_graphicsPrefixTask;
     Core::GpuTaskId m_deferredShadowVisibilityTask;
     Core::GpuTaskId m_deferredSoftwareCausticsTask;
+    // Optional initialize/copy prefix for Surfel GI. The final GI task remains the semantic effects endpoint.
+    Core::GpuTaskId m_deferredSurfelGiPreparationTask;
+    Core::GpuTaskId m_deferredSurfelGiSnapshotCopyTask;
     Core::GpuTaskId m_deferredSurfelGiTask;
     Core::GpuTaskId m_deferredHardwareCausticsTask;
     Core::GpuTaskId m_deferredAvboitPreTask;

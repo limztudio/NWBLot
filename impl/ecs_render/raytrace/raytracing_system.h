@@ -136,6 +136,11 @@ public:
     [[nodiscard]] bool renderHwCaustics(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool hasHwCausticWork()const noexcept;
     [[nodiscard]] bool hasSurfelWork()const noexcept;
+    [[nodiscard]] bool needsSurfelResourceInitialization()const noexcept;
+    [[nodiscard]] Core::GpuTaskId declareSurfelResourceInitializationTask(
+        Core::GpuTaskGraph& graph,
+        const Core::GpuTaskDesc& desc
+    );
     // Clear ownership commits only after the producer packet accepts.
     void finalizeSurfelResourceInitialization();
     void discardSurfelResourceInitialization();
@@ -169,6 +174,8 @@ public:
 
 
 private:
+    struct SurfelGiInitializationGraphTask;
+
     [[nodiscard]] bool preparePendingMeshBlasResources();
     [[nodiscard]] bool prepareSceneTlasResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool prepareSceneSwBvhResources(Core::Alloc::ScratchArena& scratchArena);

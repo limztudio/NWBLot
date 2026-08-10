@@ -661,7 +661,7 @@ struct RtSurfelGiState{
     bool m_surfelCountReadbackPendingSubmissionUnconfirmed = false;
     // First trace uses all surfels; later traces use the update divisor.
     bool m_surfelSeeded = false;
-    // Retries resource clears after a rejected packet.
+    // Retries graph-owned resource clears after a rejected packet.
     bool m_surfelResourcesNeedClear = false;
     bool m_surfelResourcesClearPending = false;
 };

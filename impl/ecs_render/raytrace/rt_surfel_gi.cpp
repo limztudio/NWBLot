@@ -85,16 +85,38 @@ struct SurfelGiGraphTask{
         if(!payload.raytracingSystem)
             return;
         payload.raytracingSystem->confirmSurfelGiSubmission(token);
-        payload.raytracingSystem->finalizeSurfelResourceInitialization();
+    }
+};
+
+
+};
+
+
+struct RendererRayTracingSystem::SurfelGiInitializationGraphTask{
+    struct Payload{
+        RendererRayTracingSystem* raytracingSystem = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        return payload.raytracingSystem
+            && payload.raytracingSystem->initializeSurfelResources(commandList);
     }
 
     static void discarded(Payload& payload){
         if(payload.raytracingSystem)
             payload.raytracingSystem->discardSurfelResourceInitialization();
     }
-};
 
-
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        static_cast<void>(token);
+        if(payload.raytracingSystem)
+            payload.raytracingSystem->finalizeSurfelResourceInitialization();
+    }
 };
 
 
@@ -341,6 +363,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
             .setByteSize(static_cast<u64>(NWB_SURFEL_RECORD_SIZE) * poolCapacity)
             .setStructStride(NWB_SURFEL_RECORD_SIZE)
             .setCanHaveUAVs(true)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
             .setDebugName(Name("surfel_pool"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
@@ -360,6 +383,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
             .setByteSize(static_cast<u64>(sizeof(u32)) * cellCount)
             .setStructStride(sizeof(u32))
             .setCanHaveUAVs(true)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
             .setDebugName(Name("surfel_cell_head"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
@@ -431,6 +455,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
             .setByteSize(static_cast<u64>(NWB_SURFEL_RECORD_SIZE) * poolCapacity)
             .setStructStride(NWB_SURFEL_RECORD_SIZE)
             .setCanHaveUAVs(false)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
             .setDebugName(Name("surfel_pool_snapshot"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
@@ -448,6 +473,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
             .setByteSize(static_cast<u64>(sizeof(u32)) * cellCount)
             .setStructStride(sizeof(u32))
             .setCanHaveUAVs(false)
+            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
             .setDebugName(Name("surfel_cell_head_snapshot"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
@@ -770,6 +796,10 @@ bool RendererRayTracingSystem::hasSurfelWork()const noexcept{
     return rayTracingState().m_surfelEnabled;
 }
 
+bool RendererRayTracingSystem::needsSurfelResourceInitialization()const noexcept{
+    return hasSurfelWork() && rayTracingState().m_surfelResourcesNeedClear;
+}
+
 bool RendererRayTracingSystem::initializeSurfelResources(Core::CommandList& commandList){
     if(!rayTracingState().m_surfelResourcesNeedClear)
         return true;
@@ -781,7 +811,8 @@ bool RendererRayTracingSystem::initializeSurfelResources(Core::CommandList& comm
     if(!pool || !cellHead || !counter || !freeList)
         return false;
 
-    // Initialize the persistent field on its first producer queue.
+    // The graph lowers the CopyDest transitions. Keep the clear body confined to this setup task so the following
+    // Transfer snapshot consumes a compiler-owned final CopyDest state.
     commandList.setBufferState(pool, Core::ResourceStates::CopyDest);
     commandList.setBufferState(cellHead, Core::ResourceStates::CopyDest);
     commandList.setBufferState(counter, Core::ResourceStates::CopyDest);
@@ -791,11 +822,6 @@ bool RendererRayTracingSystem::initializeSurfelResources(Core::CommandList& comm
     commandList.clearBufferUInt(cellHead, NWB_SURFEL_CELL_INVALID);
     commandList.clearBufferUInt(counter, 0u);
     commandList.clearBufferUInt(freeList, 0u);   // contents cosmetic; counter FREE_TOP=0 is what marks it empty
-    commandList.setBufferState(pool, Core::ResourceStates::UnorderedAccess);
-    commandList.setBufferState(cellHead, Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(counter, Core::ResourceStates::UnorderedAccess);
-    commandList.setBufferState(freeList, Core::ResourceStates::UnorderedAccess);
-    commandList.commitBarriers();
     rayTracingState().m_surfelResourcesClearPending = true;
     return true;
 }
@@ -909,6 +935,19 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
 }
 
 
+Core::GpuTaskId RendererRayTracingSystem::declareSurfelResourceInitializationTask(
+    Core::GpuTaskGraph& graph,
+    const Core::GpuTaskDesc& desc
+){
+    return graph.addTask<SurfelGiInitializationGraphTask>(
+        desc,
+        SurfelGiInitializationGraphTask::Payload{
+            .raytracingSystem = this,
+        }
+    );
+}
+
+
 bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, DeferredFrameTargets& targets){
     if(!hasSurfelWork())
         return true;
@@ -958,9 +997,6 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         return false;
     }
 
-    if(!initializeSurfelResources(commandList))
-        return false;
-
     const u32 poolCapacity = rayTracingState().m_surfelPoolCapacity;
 
     SurfelHeapPushConstants surfelPush;
@@ -974,25 +1010,6 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
     surfelPush.traceIndirectArgsHeapSlot = rayTracingState().m_surfelTraceIndirectArgsHeapHandle.slot();
     surfelPush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
     surfelPush.materialContextSlotsHeapSlot = rayTracingState().m_surfelMaterialContextSlotsHeapHandle.slot();
-
-    // Snapshot pool and heads together before mutating the live field.
-    {
-        const u32 cellCount = rayTracingState().m_surfelHashCellCount;
-        Core::Buffer* pool = rayTracingState().m_surfelPoolBuffer.get();
-        Core::Buffer* cellHead = rayTracingState().m_surfelCellHeadBuffer.get();
-        Core::Buffer* poolSnapshot = rayTracingState().m_surfelPoolSnapshotBuffer.get();
-        Core::Buffer* cellHeadSnapshot = rayTracingState().m_surfelCellHeadSnapshotBuffer.get();
-        commandList.setBufferState(pool, Core::ResourceStates::CopySource);
-        commandList.setBufferState(cellHead, Core::ResourceStates::CopySource);
-        commandList.setBufferState(poolSnapshot, Core::ResourceStates::CopyDest);
-        commandList.setBufferState(cellHeadSnapshot, Core::ResourceStates::CopyDest);
-        commandList.commitBarriers();
-        commandList.copyBuffer(poolSnapshot, 0u, pool, 0u, static_cast<u64>(NWB_SURFEL_RECORD_SIZE) * poolCapacity);
-        commandList.copyBuffer(cellHeadSnapshot, 0u, cellHead, 0u, static_cast<u64>(sizeof(u32)) * cellCount);
-        commandList.setBufferState(poolSnapshot, Core::ResourceStates::ShaderResource);
-        commandList.setBufferState(cellHeadSnapshot, Core::ResourceStates::ShaderResource);
-        commandList.commitBarriers();
-    }
 
     // Order every in-place field update, including prior-frame spawn writes.
     commandList.setEnableUavBarriersForBuffer(rayTracingState().m_surfelPoolBuffer.get(), true);

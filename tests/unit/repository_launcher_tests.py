@@ -112,6 +112,7 @@ class LauncherPlatformTests(unittest.TestCase):
                 root / "tests" / "ab" / "launch.py",
                 root / "tests" / "ab" / "async_shadow_m4" / "launch.py",
                 root / "tests" / "ab" / "bindless_parity" / "launch.py",
+                root / "tests" / "ab" / "command_ir" / "launch.py",
                 root / "tests" / "ab" / "frame_lagged_async_lighting" / "launch.py",
                 root / "tests" / "ab" / "frame_lagged_async_lighting" / "run.py",
                 root / "tests" / "ab" / "frame_lagged_async_lighting" / "helper.py",
@@ -129,6 +130,7 @@ class LauncherPlatformTests(unittest.TestCase):
             {
                 "async-shadow-m4": Path("tests/ab/async_shadow_m4/launch.py"),
                 "bindless-parity": Path("tests/ab/bindless_parity/launch.py"),
+                "command-ir": Path("tests/ab/command_ir/launch.py"),
                 "frame-lagged-async-lighting": Path("tests/ab/frame_lagged_async_lighting/launch.py"),
                 "transfer-queue": Path("tests/ab/transfer_queue/launch.py"),
                 "smoke": Path("tests/smoke/launch.py"),
@@ -141,6 +143,7 @@ class LauncherPlatformTests(unittest.TestCase):
             {
                 "async-shadow-m4": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
                 "bindless-parity": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
+                "command-ir": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
                 "frame-lagged-async-lighting": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
                 "transfer-queue": (Path("tests/launch.py"), Path("tests/ab/launch.py")),
                 "smoke": (Path("tests/launch.py"),),
@@ -174,6 +177,7 @@ class LauncherPlatformTests(unittest.TestCase):
                 root / "tests" / "ab" / "launch.py",
                 root / "tests" / "ab" / "async_shadow_m4" / "launch.py",
                 root / "tests" / "ab" / "bindless_parity" / "launch.py",
+                root / "tests" / "ab" / "command_ir" / "launch.py",
                 root / "tests" / "ab" / "frame_lagged_async_lighting" / "launch.py",
                 root / "tests" / "ab" / "transfer_queue" / "launch.py",
                 root / "tests" / "smoke" / "launch.py",
@@ -197,6 +201,7 @@ class LauncherPlatformTests(unittest.TestCase):
             {
                 "async-shadow-m4": Path("tests/ab/async_shadow_m4/launch.py"),
                 "bindless-parity": Path("tests/ab/bindless_parity/launch.py"),
+                "command-ir": Path("tests/ab/command_ir/launch.py"),
                 "frame-lagged-async-lighting": Path("tests/ab/frame_lagged_async_lighting/launch.py"),
                 "transfer-queue": Path("tests/ab/transfer_queue/launch.py"),
             },

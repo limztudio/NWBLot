@@ -34,3 +34,16 @@ target_link_libraries(nwb_transfer_upload_profile PRIVATE
     nwb_alloc
     nwb_common
 )
+
+# Phase 11 optional-command-IR CPU profiling. This remains a manually launched target so capture/decode/replay
+# overhead is reported separately from the native renderer path.
+nwb_declare_executable(nwb_command_ir_profile)
+target_sources(nwb_command_ir_profile PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/command_ir_profile.cpp"
+)
+target_link_libraries(nwb_command_ir_profile PRIVATE
+    nwb_graphics
+    nwb_perf
+    nwb_alloc
+    nwb_common
+)

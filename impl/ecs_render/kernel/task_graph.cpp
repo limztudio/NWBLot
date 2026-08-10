@@ -2126,8 +2126,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     const auto& device = graphics().getDevice();
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
     const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
-    const bool dedicatedAsyncCompute = features.dedicatedAsyncCompute
-        && computeFamilyIndex != Limit<u32>::s_Max
+    const bool dedicatedAsyncCompute = computeFamilyIndex != Limit<u32>::s_Max
         && computeFamilyIndex != graphicsFamilyIndex
     ;
     const bool useLaggedLightingHistory = dedicatedAsyncCompute

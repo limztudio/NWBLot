@@ -59,7 +59,6 @@ namespace ECSRenderDetail{
     // Immutable frame facts used while declaring the graph. Queue assignment remains a compiler result; this
     // carries only the features and external-history availability that change which semantic tasks exist.
     struct RendererFrameGraphFeatures{
-        bool dedicatedAsyncCompute = false;
         bool frameLaggedAsyncLightingEnabled = false;
         bool laggedLightingHistoryReady = false;
         bool laggedLightingHistoryAccepted = false;

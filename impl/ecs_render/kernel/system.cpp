@@ -529,7 +529,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // Compile every independent graph before native recording. The graphics prefix records all five ordered tasks
     // natively from mesh-view setup through post-G-buffer normalization.
     const ECSRenderDetail::RendererFrameGraphFeatures frameGraphFeatures{
-        .dedicatedAsyncCompute = dedicatedAsyncCompute,
         .frameLaggedAsyncLightingEnabled = m_frameLaggedAsyncLightingEnabled,
         .laggedLightingHistoryReady = laggedLightingHistoryResourcesReady,
         .laggedLightingHistoryAccepted = m_laggedLightingHistorySubmissionToken.valid(),

@@ -96,6 +96,7 @@ struct ShadowPrepareGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool deferredBindlessSlotsWereUploaded = false;
         bool currentBindlessSlotsGraphOwned = false;
+        bool rayTraceMaterialContextSlotsGraphOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -130,10 +131,14 @@ struct ShadowPrepareGraphTask{
                 renderer.m_preparedShadowVisibilityReady
             )
         ;
-        // Upload final slot indirection after all capacity growth settles.
+        // The graph-owned material-context selector was snapshotted after preflight settled every backing handle.
+        // Compatibility callers retain the direct write after native preparation recording.
         if(
             !shadowResourcesPrepared
-            || !renderer.m_raytracingSystem.uploadRayTraceMaterialContextSlots(commandList)
+            || (
+                !payload.rayTraceMaterialContextSlotsGraphOwned
+                && !renderer.m_raytracingSystem.uploadRayTraceMaterialContextSlots(commandList)
+            )
         )
             return false;
 
@@ -1336,6 +1341,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
 
     m_deferredShadowPrepareTask = {};
     m_deferredBindlessSlotsUploadTask = {};
+    m_rayTraceMaterialContextSlotsUploadTask = {};
     if(
         !deferredTargets.valid()
         || !deferredTargets.bindless.valid()
@@ -1385,16 +1391,68 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         }
     }
 
+    // All trace backing buffers and their heap entries are finalized by preflight. Retain the resolved descriptor
+    // slots now, before the graph is compiled, so recording never rereads mutable heap handles.
+    RayTraceMaterialContextSlots rayTraceMaterialContextSlots;
+    if(!m_raytracingSystem.snapshotRayTraceMaterialContextSlots(rayTraceMaterialContextSlots)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot ray-trace material-context selector"));
+        return false;
+    }
+    const Core::GpuUploadBlobId rayTraceMaterialContextSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
+        &rayTraceMaterialContextSlots,
+        sizeof(rayTraceMaterialContextSlots),
+        alignof(RayTraceMaterialContextSlots)
+    );
+    if(!rayTraceMaterialContextSlotsBlob.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain ray-trace material-context selector upload data"));
+        return false;
+    }
+
+    const Core::GpuTaskId* const materialContextUploadDependencies = currentBindlessSlotsGraphOwned
+        ? &m_deferredBindlessSlotsUploadTask
+        : nullptr
+    ;
+    const usize materialContextUploadDependencyCount = currentBindlessSlotsGraphOwned ? 1u : 0u;
+    Core::GpuTaskSchedulingHint materialContextUploadScheduling;
+    materialContextUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
+    materialContextUploadScheduling.forceSubmissionBoundary = false;
+    materialContextUploadScheduling.allowPacketMerge = true;
+    materialContextUploadScheduling.mergeWithPrevious = currentBindlessSlotsGraphOwned;
+    Core::GpuTaskDesc materialContextUploadDesc;
+    materialContextUploadDesc
+        .setIdentity(Name("render.raytrace.material_context_slots_upload"))
+        .setMarkerLabel("Ray-Trace Material Context Slots Upload")
+        .setQueue(GraphicsUploadQueueRequest())
+        .setScheduling(materialContextUploadScheduling)
+        .setDependencies(materialContextUploadDependencies, materialContextUploadDependencyCount)
+    ;
+    m_rayTraceMaterialContextSlotsUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+        materialContextUploadDesc,
+        Core::GpuUploadBufferTaskDesc{
+            .source = rayTraceMaterialContextSlotsBlob,
+            .destination = materialContextSlots,
+            // Automatic-state selector buffers publish Common. Shadow Preparation owns the following
+            // ConstantBuffer transition and becomes the cross-queue producer for later trace consumers.
+            .finalState = Core::ResourceStates::Common,
+        }
+    );
+    if(!m_rayTraceMaterialContextSlotsUploadTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare ray-trace material-context selector upload"));
+        return false;
+    }
+
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     resourceUses.reserve(12u + shadowTraceGeometryResourceCount);
-    // Shadow Preparation owns the selector's post-transition packet boundary. This deliberately supersedes the
-    // preceding immutable upload as the graph producer: later Compute readers must wait on this first Graphics
-    // packet, rather than forcing FrontierSafe packetization to split the upload away from its accepting consumer.
+    // Shadow Preparation owns both selectors' post-transition packet boundary. This deliberately supersedes the
+    // preceding immutable uploads as the graph producers: later Compute readers wait on this first Graphics packet,
+    // rather than forcing FrontierSafe packetization to split either upload away from its accepting consumer.
     resourceUses.push_back(ReadWriteUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+    // Retain Shadow Preparation as the graph producer for this selector. Its direct compatibility path writes the
+    // same bytes natively; on the graph path this WAW handoff retires the immutable upload before later Compute reads.
     resourceUses.push_back(WriteUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
     for(usize resourceIndex = 0u; resourceIndex < shadowTraceGeometryResourceCount; ++resourceIndex){
         const Core::GpuGraphResourceId resource = shadowTraceGeometryResources[resourceIndex];
@@ -1482,14 +1540,11 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
 
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
-    scheduling.forceSubmissionBoundary = !currentBindlessSlotsGraphOwned;
-    scheduling.allowPacketMerge = currentBindlessSlotsGraphOwned;
-    scheduling.mergeWithPrevious = currentBindlessSlotsGraphOwned;
-    const Core::GpuTaskId* const dependencies = currentBindlessSlotsGraphOwned
-        ? &m_deferredBindlessSlotsUploadTask
-        : nullptr
-    ;
-    const usize dependencyCount = currentBindlessSlotsGraphOwned ? 1u : 0u;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    const Core::GpuTaskId* const dependencies = &m_rayTraceMaterialContextSlotsUploadTask;
+    constexpr usize dependencyCount = 1u;
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.shadow_prepare"))
@@ -1507,6 +1562,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .timingTicket = &timingTicket,
             .deferredBindlessSlotsWereUploaded = deferredTargets.bindless.slotsUploaded,
             .currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned,
+            .rayTraceMaterialContextSlotsGraphOwned = true,
         }
     );
     if(!m_deferredShadowPrepareTask.valid()){
@@ -3158,6 +3214,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
 
     m_deferredLightingTaskGraphValid = false;
     m_deferredBindlessSlotsUploadTask = {};
+    m_rayTraceMaterialContextSlotsUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};

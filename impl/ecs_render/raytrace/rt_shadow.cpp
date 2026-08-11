@@ -162,10 +162,10 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
     return true;
 }
 
-bool RendererRayTracingSystem::uploadRayTraceMaterialContextSlots(Core::CommandList& commandList){
+bool RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(RayTraceMaterialContextSlots& outSlots){
     // The shared graph has already imported this constant buffer and its UniformBuffer descriptor by the time its
-    // preparation packet records.  Do not recreate either one here: a recording-time replacement would invalidate
-    // the graph's frozen resource identity and slot indirection.
+    // preparation packet records. Do not recreate either one here: a recording-time replacement would invalidate
+    // the graph's frozen resource identity and the immutable selector snapshot it retains.
     if(
         !rayTracingState().m_rayTraceMaterialContextSlotsBuffer
         || !rayTracingState().m_shadowMaterialContextSlotsHeapHandle.valid()
@@ -196,6 +196,15 @@ bool RendererRayTracingSystem::uploadRayTraceMaterialContextSlots(Core::CommandL
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
         return false;
     }
+
+    outSlots = slots;
+    return true;
+}
+
+bool RendererRayTracingSystem::uploadRayTraceMaterialContextSlots(Core::CommandList& commandList){
+    RayTraceMaterialContextSlots slots;
+    if(!snapshotRayTraceMaterialContextSlots(slots))
+        return false;
 
     Core::Buffer* const slotsBuffer = rayTracingState().m_rayTraceMaterialContextSlotsBuffer.get();
     commandList.setBufferState(slotsBuffer, Core::ResourceStates::CopyDest);

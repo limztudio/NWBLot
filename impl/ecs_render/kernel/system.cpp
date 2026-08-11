@@ -205,6 +205,7 @@ void RendererSystem::invalidateResources(){
     m_raytracingSystem.discardPreflightShadowVisibilityResources();
     m_raytracingSystem.invalidatePreparedShadowTraceGeometryBuffers();
     m_deferredBindlessSlotsUploadTask = {};
+    m_rayTraceMaterialContextSlotsUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
@@ -450,6 +451,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredBindlessSlotsUploadTask = {};
+    m_rayTraceMaterialContextSlotsUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -806,6 +808,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             shadowPreparePacket.valid()
             && deferredBindlessSlotsUploadPacket.valid()
             && deferredBindlessSlotsUploadPacket == shadowPreparePacket
+        )
+    ;
+    const Core::GpuSubmissionPacketId rayTraceMaterialContextSlotsUploadPacket =
+        m_rayTraceMaterialContextSlotsUploadTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_rayTraceMaterialContextSlotsUploadTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    // This selector is consumed by later Compute trace tasks, but the prefix submission range starts at Shadow
+    // Preparation. Keep the immutable upload in that exact first packet so Shadow Preparation becomes the handoff.
+    const bool rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket =
+        !m_rayTraceMaterialContextSlotsUploadTask.valid()
+        || (
+            shadowPreparePacket.valid()
+            && rayTraceMaterialContextSlotsUploadPacket.valid()
+            && rayTraceMaterialContextSlotsUploadPacket == shadowPreparePacket
         )
     ;
     const Core::GpuSubmissionPacketId graphicsPrefixPacket = m_deferredLightingCompiledGraph.packetForTask(
@@ -1188,6 +1205,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredShadowPrepareTask.valid()
         || !shadowPreparePacket.valid()
         || !deferredBindlessSlotsUploadMergedIntoShadowPreparePacket
+        || !rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket
         || !shadowPrepareQueue
         || shadowPrepareQueue->queueClass != Core::CommandQueue::Graphics
         || !m_graphicsPrefixMeshViewSetupTask.valid()
@@ -2520,6 +2538,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_graphicsPrefixGbufferTask.valid()
             && m_graphicsPrefixTask.valid()
             && shadowPreparePacket.valid()
+            && deferredBindlessSlotsUploadMergedIntoShadowPreparePacket
+            && rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket
             && graphicsPrefixPacket.valid()
             && graphicsPrefixWorkPacketRange.valid()
             && shadowPrepareThroughPrefixPacketRange.valid()

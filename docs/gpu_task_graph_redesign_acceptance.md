@@ -11,7 +11,7 @@ graph-owned deferred mesh-view, scene-light, and scene-shading frame updates, an
 uploads, graph-owned runtime-skinning joint-palette uploads, graph-owned opaque material draw-stream uploads, and
 graph-owned opaque CSG receiver/cutter/context/interval streams, graph-owned transparent CSG interval-producer
 streams, and graph-owned transparent AVBOIT occupancy, extinction, and accumulation material/CSG streams,
-and graph-owned current and lagged deferred bindless-selector uploads,
+and graph-owned current and lagged deferred bindless-selector and ray-trace material-context selector uploads,
 2026-08-12.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
@@ -64,6 +64,13 @@ can receive an unconditional final sign-off.
   selector still publishes `Common`, then Lighting owns the `ConstantBuffer` transition and its existing external
   prior-history completion wait. The existing Lighting acceptance callback alone commits the history residency bit,
   so rejected packets retry the same graph-owned upload without a stale CPU-side commit.
+- Ray-trace material-context selector slots are resolved only after Shadow Visibility preflight has frozen every
+  backing buffer and descriptor slot. The immutable 32-byte payload is retained as a graph blob and uploaded to
+  `Common` immediately before, and merged into, Shadow Preparation. Shadow Preparation retains the logical
+  `ConstantBuffer` write handoff so later Compute trace consumers wait on the accepted first Graphics packet rather
+  than an upload frontier. This per-frame selector has no residency bit: packet rejection discards the preflight
+  plan and the next graph build resolves and retains a fresh payload. The native direct writer remains only for
+  non-graph compatibility callers.
 - The opaque G-buffer now freezes its material draw ordering and CSG CPU frame payload during graph declaration.
   Its instance and typed-material bytes are retained as immutable graph blobs and uploaded through Graphics-routed
   built-in buffer tasks after deferred clear. The tasks publish the buffers' automatic `Common` close boundary; the
@@ -138,6 +145,7 @@ can receive an unconditional final sign-off.
 | Graph-owned transparent AVBOIT accumulation-stream follow-up: FrontierSafe task-graph topology, ECS graphics, descriptor smoke, transparent multi, plus static/skinned transparent CSG captures | 10/10 passed; phase-local accumulation uploads merge with the final native consumer without adding a sixth async packet, while Graphics-only and transparent CSG captures remain correct |
 | Graph-owned current deferred bindless-selector follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and opaque CSG capture | passed; the immutable selector upload merges into Shadow Preparation's first Graphics packet, hands off `Common` to `ConstantBuffer` there, and remains correct through later Compute and full deferred rendering |
 | Graph-owned lagged deferred bindless-selector follow-up: FrontierSafe graph unit and descriptor-buffer smoke | passed; the immutable history-selector upload is pinned to and merged into Deferred Lighting's existing Compute packet, retains the external history completion wait, and hands off `Common` to `ConstantBuffer` without extending the Lighting-to-Composite range |
+| Graph-owned ray-trace material-context selector follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and opaque CSG capture | passed; a post-preflight immutable selector blob merges into Shadow Preparation, publishes `Common`, and is logically handed off there to the later Compute trace consumers |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -164,8 +172,9 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    mesh-view, scene-light, scene-shading, runtime skinning joint-palette, and opaque material instance/typed updates
    now use the graph-owned primitive path. The transparent AVBOIT interval producer, occupancy, extinction, and
    accumulation phases now freeze and publish their own per-write-point material/CSG streams, preserving the shared
-   interval sample state across the low-resolution raster passes. Current and lagged deferred bindless selectors are
-   acceptance-safe graph uploads; skinning compute dispatch/its selector update and other specialized
+   interval sample state across the low-resolution raster passes. Current and lagged deferred bindless selectors and
+   the ray-trace material-context selector are acceptance-safe graph uploads; skinning compute dispatch/its selector
+   update and other specialized
    descriptor/resource updates still retain direct native recording or submission. The graph
    therefore does not yet authoritatively own all frame work and state retirement.
 

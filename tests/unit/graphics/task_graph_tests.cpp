@@ -4854,6 +4854,11 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
         "Current Bindless Slots",
         Graphics::ResourceStates::Common
     );
+    const Graphics::GpuGraphResourceId historyBindlessSlots = importBuffer(
+        Name("tests/task_graph/lagged_history_bindless_slots"),
+        "Lagged History Bindless Slots",
+        Graphics::ResourceStates::Common
+    );
     const Graphics::GpuGraphResourceId historyIrradiance = importTexture(
         Name("tests/task_graph/lagged_history_irradiance"),
         "Lagged Irradiance",
@@ -4886,6 +4891,7 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     );
     ASSERT_TRUE(sharedPrefixRead.valid());
     ASSERT_TRUE(currentBindlessSlots.valid());
+    ASSERT_TRUE(historyBindlessSlots.valid());
     ASSERT_TRUE(historyIrradiance.valid());
     ASSERT_TRUE(currentIrradiance.valid());
     ASSERT_TRUE(opaqueColor.valid());
@@ -4915,6 +4921,12 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
         Graphics::GpuQueuePreference::Compute,
         true,
         true,
+    };
+    const Graphics::GpuQueueRequest computeUploadRequest{
+        Graphics::GpuQueueCapability::Transfer,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
     };
     const Graphics::GpuQueueRequest transferRequest{
         Graphics::GpuQueueCapability::Transfer,
@@ -5065,6 +5077,30 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     const Graphics::GpuTaskId avboitPre = graph.addTask(avboitPreDesc);
     ASSERT_TRUE(avboitPre.valid());
 
+    const Graphics::GpuTaskResourceUse laggedHistorySlotsUploadUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = historyBindlessSlots,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Common,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskSchedulingHint laggedHistorySlotsUploadScheduling;
+    laggedHistorySlotsUploadScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    laggedHistorySlotsUploadScheduling.forceSubmissionBoundary = false;
+    laggedHistorySlotsUploadScheduling.allowPacketMerge = true;
+    Graphics::GpuTaskDesc laggedHistorySlotsUploadDesc;
+    laggedHistorySlotsUploadDesc
+        .setIdentity(Name("tests/task_graph/lagged_history_bindless_slots_upload"))
+        .setMarkerLabel("Lagged Lighting Bindless Slots Upload")
+        .setQueue(computeUploadRequest)
+        .setScheduling(laggedHistorySlotsUploadScheduling)
+        .setDependencies(&prefix, 1u)
+        .setResourceUses(laggedHistorySlotsUploadUses, LengthOf(laggedHistorySlotsUploadUses))
+    ;
+    const Graphics::GpuTaskId laggedHistorySlotsUpload = graph.addTask(laggedHistorySlotsUploadDesc);
+    ASSERT_TRUE(laggedHistorySlotsUpload.valid());
+
     const Graphics::GpuTaskResourceUse lightingUses[] = {
         Graphics::GpuTaskResourceUse{
             .resource = sharedPrefixRead,
@@ -5080,19 +5116,34 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
             .access = Graphics::GpuTaskResourceAccess::Read,
         },
         Graphics::GpuTaskResourceUse{
+            .resource = historyBindlessSlots,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
             .resource = opaqueColor,
             .range = {},
             .requiredState = Graphics::ResourceStates::UnorderedAccess,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
     };
+    Graphics::GpuTaskSchedulingHint lightingScheduling;
+    lightingScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    lightingScheduling.forceSubmissionBoundary = false;
+    lightingScheduling.allowPacketMerge = true;
+    lightingScheduling.mergeWithPrevious = true;
+    const Graphics::GpuTaskId lightingDependencies[] = {
+        prefix,
+        laggedHistorySlotsUpload,
+    };
     Graphics::GpuTaskDesc lightingDesc;
     lightingDesc
         .setIdentity(Name("tests/task_graph/lagged_deferred_lighting"))
         .setMarkerLabel("Deferred Lighting")
         .setQueue(computeRequest)
-        .setScheduling(scheduling)
-        .setDependencies(&prefix, 1u)
+        .setScheduling(lightingScheduling)
+        .setDependencies(lightingDependencies, LengthOf(lightingDependencies))
         .setExternalDependencies(&historyCompletion, 1u)
         .setResourceUses(lightingUses, LengthOf(lightingUses))
     ;
@@ -5203,7 +5254,9 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
 
     const Graphics::GpuTaskQueueAssignment* const shadowPrepareAssignment = assignments.find(shadowPrepare);
     const Graphics::GpuTaskQueueAssignment* const prefixAssignment = assignments.find(prefix);
@@ -5211,6 +5264,7 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     const Graphics::GpuTaskQueueAssignment* const surfelGiAssignment = assignments.find(surfelGi);
     const Graphics::GpuTaskQueueAssignment* const hardwareAssignment = assignments.find(hardware);
     const Graphics::GpuTaskQueueAssignment* const avboitPreAssignment = assignments.find(avboitPre);
+    const Graphics::GpuTaskQueueAssignment* const laggedHistorySlotsUploadAssignment = assignments.find(laggedHistorySlotsUpload);
     const Graphics::GpuTaskQueueAssignment* const lightingAssignment = assignments.find(lighting);
     const Graphics::GpuTaskQueueAssignment* const compositeAssignment = assignments.find(composite);
     const Graphics::GpuTaskQueueAssignment* const presentAssignment = assignments.find(present);
@@ -5221,6 +5275,7 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     ASSERT_NE(surfelGiAssignment, nullptr);
     ASSERT_NE(hardwareAssignment, nullptr);
     ASSERT_NE(avboitPreAssignment, nullptr);
+    ASSERT_NE(laggedHistorySlotsUploadAssignment, nullptr);
     ASSERT_NE(lightingAssignment, nullptr);
     ASSERT_NE(compositeAssignment, nullptr);
     ASSERT_NE(presentAssignment, nullptr);
@@ -5231,6 +5286,7 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     EXPECT_EQ(surfelGiAssignment->queueClass, Graphics::CommandQueue::Compute);
     EXPECT_EQ(hardwareAssignment->queueClass, Graphics::CommandQueue::Graphics);
     EXPECT_EQ(avboitPreAssignment->queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(laggedHistorySlotsUploadAssignment->queueClass, Graphics::CommandQueue::Compute);
     EXPECT_EQ(lightingAssignment->queueClass, Graphics::CommandQueue::Compute);
     EXPECT_EQ(lightingAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute);
     EXPECT_EQ(compositeAssignment->queueClass, Graphics::CommandQueue::Graphics);
@@ -5242,6 +5298,7 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     const Graphics::GpuSubmissionPacketId surfelGiPacket = compiledGraph.packetForTask(surfelGi);
     const Graphics::GpuSubmissionPacketId hardwarePacket = compiledGraph.packetForTask(hardware);
     const Graphics::GpuSubmissionPacketId avboitPrePacket = compiledGraph.packetForTask(avboitPre);
+    const Graphics::GpuSubmissionPacketId laggedHistorySlotsUploadPacket = compiledGraph.packetForTask(laggedHistorySlotsUpload);
     const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
     const Graphics::GpuSubmissionPacketId compositePacket = compiledGraph.packetForTask(composite);
     const Graphics::GpuSubmissionPacketId presentPacket = compiledGraph.packetForTask(present);
@@ -5252,6 +5309,7 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     ASSERT_TRUE(surfelGiPacket.valid());
     ASSERT_TRUE(hardwarePacket.valid());
     ASSERT_TRUE(avboitPrePacket.valid());
+    ASSERT_TRUE(laggedHistorySlotsUploadPacket.valid());
     ASSERT_TRUE(lightingPacket.valid());
     ASSERT_TRUE(compositePacket.valid());
     ASSERT_TRUE(presentPacket.valid());
@@ -5267,6 +5325,8 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     EXPECT_EQ(compiledGraph.packetIdAt(7u), compositePacket);
     EXPECT_EQ(compiledGraph.packetIdAt(8u), presentPacket);
     EXPECT_EQ(compiledGraph.packetIdAt(9u), historyCopyPacket);
+    EXPECT_EQ(laggedHistorySlotsUploadPacket, lightingPacket);
+    EXPECT_EQ(compiledGraph.packet(lightingPacket).taskCount, 2u);
     const Graphics::GpuCompiledTask* const compiledShadowPrepare = compiledGraph.findTask(shadowPrepare);
     const Graphics::GpuCompiledTask* const compiledPrefix = compiledGraph.findTask(prefix);
     ASSERT_NE(compiledShadowPrepare, nullptr);
@@ -5291,6 +5351,19 @@ TEST(GpuTaskGraph, RoutesLaggedLightingAlongsideAvboit){
     EXPECT_EQ(FindEdge(analysis, surfelGi, lighting), nullptr);
     const Graphics::GpuCompiledTask* const compiledLighting = compiledGraph.findTask(lighting);
     ASSERT_NE(compiledLighting, nullptr);
+    bool lightingTransitionsLaggedHistorySlots = false;
+    const Graphics::GpuCompiledBarrier* const lightingBarriers = compiledGraph.taskPrologueBarriers(lighting);
+    for(usize index = 0u; index < compiledLighting->prologueBarrierCount; ++index){
+        lightingTransitionsLaggedHistorySlots = lightingTransitionsLaggedHistorySlots
+            || (
+                lightingBarriers[index].type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && lightingBarriers[index].resource == historyBindlessSlots
+                && lightingBarriers[index].before == Graphics::ResourceStates::Common
+                && lightingBarriers[index].after == Graphics::ResourceStates::ConstantBuffer
+            )
+        ;
+    }
+    EXPECT_TRUE(lightingTransitionsLaggedHistorySlots);
     ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 1u);
     const Graphics::GpuPacketDependency* const lightingPacketDependencies = compiledGraph.packetDependencies(lightingPacket);
     ASSERT_NE(lightingPacketDependencies, nullptr);

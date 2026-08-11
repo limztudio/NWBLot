@@ -752,6 +752,17 @@ namespace __hidden_renderer_task_graph{
     };
 }
 
+// The lagged-history selector must share Deferred Lighting's dedicated Compute packet. Its built-in upload needs
+// Transfer capability, which the Vulkan Compute transport also advertises, but may not be rerouted for its tiny cost.
+[[nodiscard]] static Core::GpuQueueRequest ComputeUploadQueueRequest(){
+    return Core::GpuQueueRequest{
+        Core::GpuQueueCapability::Transfer,
+        Core::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+}
+
 [[nodiscard]] static Core::GpuQueueRequest TransferQueueRequest(){
     return Core::GpuQueueRequest{
         Core::GpuQueueCapability::Transfer,
@@ -3147,6 +3158,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
 
     m_deferredLightingTaskGraphValid = false;
     m_deferredBindlessSlotsUploadTask = {};
+    m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -5318,17 +5330,69 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         avboitFinalTask,
     };
     const Core::GpuTaskId laggedLightingDependencies[] = { m_graphicsPrefixTask };
+    const bool laggedBindlessSlotsGraphOwned = useLaggedLightingHistory && !history->slotsUploaded;
+    if(laggedBindlessSlotsGraphOwned){
+        const Core::GpuUploadBlobId laggedBindlessSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
+            &history->slots,
+            sizeof(history->slots),
+            alignof(DeferredBindlessResourceSlots)
+        );
+        if(!laggedBindlessSlotsBlob.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain lagged lighting-history selector upload data"));
+            return;
+        }
+
+        Core::GpuTaskSchedulingHint uploadScheduling;
+        uploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
+        uploadScheduling.forceSubmissionBoundary = false;
+        uploadScheduling.allowPacketMerge = true;
+        Core::GpuTaskDesc uploadDesc;
+        uploadDesc
+            .setIdentity(Name("render.lagged_lighting.bindless_slots_upload"))
+            .setMarkerLabel("Lagged Lighting Bindless Slots Upload")
+            .setQueue(ComputeUploadQueueRequest())
+            .setScheduling(uploadScheduling)
+            .setDependencies(laggedLightingDependencies, LengthOf(laggedLightingDependencies))
+        ;
+        m_deferredLaggedLightingHistorySlotsUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+            uploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = laggedBindlessSlotsBlob,
+                .destination = bindlessSlots,
+                // Automatic-state selector buffers publish Common; Deferred Lighting owns the following
+                // ConstantBuffer transition in this same externally gated packet.
+                .finalState = Core::ResourceStates::Common,
+            }
+        );
+        if(!m_deferredLaggedLightingHistorySlotsUploadTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare lagged lighting-history selector upload"));
+            return;
+        }
+    }
+    const Core::GpuTaskId laggedLightingWithSelectorDependencies[] = {
+        m_graphicsPrefixTask,
+        m_deferredLaggedLightingHistorySlotsUploadTask,
+    };
     const Core::GpuTaskId* const lightingDependencies = declaresHardwareCaustics
         ? (useLaggedLightingHistory ? laggedLightingDependencies : hardwareLightingDependencies)
         : (useLaggedLightingHistory ? laggedLightingDependencies : softwareLightingDependencies)
     ;
-    const usize lightingDependencyCount = useLaggedLightingHistory
-        ? LengthOf(laggedLightingDependencies)
-        : LengthOf(hardwareLightingDependencies)
+    const Core::GpuTaskId* const resolvedLightingDependencies = laggedBindlessSlotsGraphOwned
+        ? laggedLightingWithSelectorDependencies
+        : lightingDependencies
+    ;
+    const usize lightingDependencyCount = laggedBindlessSlotsGraphOwned
+        ? LengthOf(laggedLightingWithSelectorDependencies)
+        : (useLaggedLightingHistory
+            ? LengthOf(laggedLightingDependencies)
+            : LengthOf(hardwareLightingDependencies))
     ;
     // Active lagged Lighting receives these shared read-only states directly from the accepted prefix source. This
     // lets it avoid importing the recorded snapshots from Hardware Caustics and AVBOIT Pre while it reads history.
     const bool laggedReadsHaveIndependentStateSources = useLaggedLightingHistory;
+    const bool laggedBindlessSlotsHaveIndependentStateSource =
+        laggedReadsHaveIndependentStateSources && !laggedBindlessSlotsGraphOwned
+    ;
     const Core::GpuTaskResourceUse resourceUses[] = {
         ReadTextureUse(
             albedo,
@@ -5366,21 +5430,22 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         ReadUse(
             bindlessSlots,
             Core::ResourceStates::ConstantBuffer,
-            laggedReadsHaveIndependentStateSources
+            laggedBindlessSlotsHaveIndependentStateSource
         ),
         WriteTextureUse(opaqueColor, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
     };
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
-    scheduling.forceSubmissionBoundary = true;
-    scheduling.allowPacketMerge = false;
+    scheduling.forceSubmissionBoundary = !laggedBindlessSlotsGraphOwned;
+    scheduling.allowPacketMerge = laggedBindlessSlotsGraphOwned;
+    scheduling.mergeWithPrevious = laggedBindlessSlotsGraphOwned;
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.deferred_lighting"))
         .setMarkerLabel("Deferred Lighting")
         .setQueue(ComputeQueueRequest())
         .setScheduling(scheduling)
-        .setDependencies(lightingDependencies, lightingDependencyCount)
+        .setDependencies(resolvedLightingDependencies, lightingDependencyCount)
         .setExternalDependencies(lightingExternalDependencies, lightingExternalDependencyCount)
         .setResourceUses(resourceUses, LengthOf(resourceUses))
     ;
@@ -5390,6 +5455,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         deferredTargets,
         useLaggedLightingHistory,
         currentBindlessSlotsGraphOwned,
+        laggedBindlessSlotsGraphOwned,
         lightingTimingTicket
     );
     if(!m_deferredLightingTask.valid()){

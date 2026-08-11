@@ -318,6 +318,9 @@ private:
     // Optional immutable target-generation selector upload. It must merge into Shadow Preparation's first
     // Graphics packet so its acceptance commits the CPU residency bit atomically with the first consumer.
     Core::GpuTaskId m_deferredBindlessSlotsUploadTask;
+    // Optional lagged-history selector upload. It must merge into Deferred Lighting's packet, which already owns
+    // both history acceptance and the external completion wait for the prior-frame images.
+    Core::GpuTaskId m_deferredLaggedLightingHistorySlotsUploadTask;
     Core::GpuTaskId m_deferredShadowPrepareTask;
     Core::GpuTaskId m_graphicsPrefixMeshViewSetupTask;
     Core::GpuTaskId m_graphicsPrefixSceneShadingSetupTask;

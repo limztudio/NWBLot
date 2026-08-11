@@ -205,6 +205,7 @@ void RendererSystem::invalidateResources(){
     m_raytracingSystem.discardPreflightShadowVisibilityResources();
     m_raytracingSystem.invalidatePreparedShadowTraceGeometryBuffers();
     m_deferredBindlessSlotsUploadTask = {};
+    m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -449,6 +450,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredBindlessSlotsUploadTask = {};
+    m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearTask = {};
@@ -1009,6 +1011,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId deferredLightingPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredLightingTask
     );
+    const Core::GpuSubmissionPacketId laggedLightingHistorySlotsUploadPacket =
+        m_deferredLaggedLightingHistorySlotsUploadTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredLaggedLightingHistorySlotsUploadTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    // Deferred Lighting's submission range starts at the Lighting packet. A fresh history-selector upload must
+    // compile into that exact packet, or it would be recorded but omitted from its external wait and acceptance.
+    const bool laggedLightingHistorySlotsUploadMergedIntoLightingPacket =
+        !m_deferredLaggedLightingHistorySlotsUploadTask.valid()
+        || (
+            deferredLightingPacket.valid()
+            && laggedLightingHistorySlotsUploadPacket.valid()
+            && laggedLightingHistorySlotsUploadPacket == deferredLightingPacket
+        )
+    ;
     const Core::GpuSubmissionPacketId deferredCompositePacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredCompositeTask
     );
@@ -1271,6 +1288,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ))
         || (laggedAsyncLightingSchedule && !m_deferredLightingHistoryCompletion.valid())
         || !deferredLightingPacket.valid()
+        || !laggedLightingHistorySlotsUploadMergedIntoLightingPacket
         || !deferredCompositePacket.valid()
         || !deferredPresentPacket.valid()
         || (m_deferredPresentationOverlayRequired && !deferredPresentationOverlayPacket.valid())
@@ -2134,6 +2152,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredLightingTask.valid()
             && m_deferredCompositeTask.valid()
             && (!laggedAsyncLightingSchedule || m_deferredLightingHistoryCompletion.valid())
+            && laggedLightingHistorySlotsUploadMergedIntoLightingPacket
             && deferredLightingPacket.valid()
             && deferredCompositePacket.valid()
             && deferredLightingCompositePacketRange.valid()

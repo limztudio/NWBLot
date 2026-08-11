@@ -62,13 +62,15 @@ public:
         DeferredFrameTargets& targets,
         bool useLaggedLightingHistory,
         bool currentBindlessSlotsGraphOwned,
+        bool laggedBindlessSlotsGraphOwned,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] bool renderDeferredLighting(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool useLaggedLightingHistory = false,
-        bool currentBindlessSlotsGraphOwned = false
+        bool currentBindlessSlotsGraphOwned = false,
+        bool laggedBindlessSlotsGraphOwned = false
     );
     [[nodiscard]] bool createDeferredFrameTargets(u32 width, u32 height);
     [[nodiscard]] bool createDeferredCompositeResources();

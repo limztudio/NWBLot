@@ -37,6 +37,7 @@ struct DeferredLightingGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool useLaggedLightingHistory = false;
         bool currentBindlessSlotsGraphOwned = false;
+        bool laggedBindlessSlotsGraphOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -53,7 +54,8 @@ struct DeferredLightingGraphTask{
             commandList,
             *payload.targets,
             payload.useLaggedLightingHistory,
-            payload.currentBindlessSlotsGraphOwned
+            payload.currentBindlessSlotsGraphOwned,
+            payload.laggedBindlessSlotsGraphOwned
         );
     }
 };
@@ -176,6 +178,7 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredLightingTask(
     DeferredFrameTargets& targets,
     const bool useLaggedLightingHistory,
     const bool currentBindlessSlotsGraphOwned,
+    const bool laggedBindlessSlotsGraphOwned,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     return graph.addTask<__hidden_deferred_lighting::DeferredLightingGraphTask>(
@@ -186,6 +189,7 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredLightingTask(
             .timingTicket = &timingTicket,
             .useLaggedLightingHistory = useLaggedLightingHistory,
             .currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned,
+            .laggedBindlessSlotsGraphOwned = laggedBindlessSlotsGraphOwned,
         }
     );
 }
@@ -357,13 +361,18 @@ bool RendererDeferredSystem::renderDeferredLighting(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const bool useLaggedLightingHistory,
-    const bool currentBindlessSlotsGraphOwned
+    const bool currentBindlessSlotsGraphOwned,
+    const bool laggedBindlessSlotsGraphOwned
 ){
     NWB_ASSERT(deferredState().m_lightingPipeline);
 
     if(!currentBindlessSlotsGraphOwned && !uploadDeferredBindlessFrameResources(commandList, targets))
         return false;
-    if(useLaggedLightingHistory && !uploadLaggedLightingHistoryResources(commandList, targets))
+    if(
+        useLaggedLightingHistory
+        && !laggedBindlessSlotsGraphOwned
+        && !uploadLaggedLightingHistoryResources(commandList, targets)
+    )
         return false;
 
     const DeferredLaggedLightingHistoryResources* const laggedHistory = useLaggedLightingHistory

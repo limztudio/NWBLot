@@ -37,7 +37,8 @@ public:
     // Such a frame deliberately skips declaration instead of manufacturing an empty presentation packet.
     [[nodiscard]] virtual bool hasTaskGraphPresentationWork()const = 0;
     // `previousTask` is the scene-output endpoint and `backbuffer` is its graph-owned presentation hazard domain.
-    // The returned task must be a Graphics-capable write to that same domain.
+    // The returned task must be Graphics-capable and ordered after that endpoint. A task that writes the backbuffer
+    // must declare the same domain; an upload-only contributor may instead return a terminal completion packet.
     [[nodiscard]] virtual GpuTaskId declareTaskGraphPresentation(
         GpuTaskGraph& graph,
         Framebuffer* framebuffer,

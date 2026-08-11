@@ -4,7 +4,8 @@
 
 **Reviewed baseline:** `c62605d9` (`Fix acceptance policy regressions`), 2026-08-11.
 
-**Follow-up implementation:** physical queue identity and stale-device completion validation, 2026-08-11.
+**Follow-up implementation:** physical queue identity, frontier-safe deferred scheduling, graph-bound presentation,
+and graph-owned per-frame ImGui uploads, 2026-08-11.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
 semantic dependencies, compile-time queue selection, packet construction, and inter-task barrier planning; native
@@ -24,6 +25,9 @@ can receive an unconditional final sign-off.
   facade is not used to restore renderer scheduling.
 - Large setup uploads have an automatic Transfer-preferred route with Graphics/Compute fallback. The external
   dedicated-Transfer performance proof is explicitly deferred by the user for this closeout.
+- In the shared deferred path, ImGui vertex/index payloads and requested font/texture updates are retained as
+  immutable graph blobs, lowered through the built-in upload tasks, and made dependencies of the terminal overlay
+  or upload-completion packet. Small deltas stay on Graphics; amortizable updates prefer Transfer.
 
 ## Verification performed
 
@@ -40,6 +44,8 @@ can receive an unconditional final sign-off.
 | Physical queue identity follow-up: graph unit binary | 37/37 passed |
 | Physical queue identity follow-up: descriptor-buffer smoke binary | 68 passed; 9 expected skips because this host has no dedicated Compute-only or Transfer-only family |
 | Retired-device submission token | verified: graph bindings reject a stale generation, and Vulkan rejects it at the native submission boundary |
+| Graph-owned ImGui setup-upload follow-up: `graphics_task_graph_tests` | 42/42 passed, including small Graphics-retained and large Transfer-preferred terminal upload routing |
+| Graph-owned ImGui setup-upload follow-up: `descriptor_buffer_tests` | 71 passed; 9 expected skips because this host has no dedicated Compute-only or Transfer-only family |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -58,8 +64,11 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    same-class selection/transport API exists yet.
 
 2. **Complete graph ownership.** Renderer code still builds packet ranges, controls recording/submission, and holds
-   legacy state-handoff data. Setup uploads, asset uploads, skinning, and UI also retain direct native recording or
-   submission paths. The graph therefore does not yet authoritatively own all frame work and state retirement.
+   legacy state-handoff data. The shared deferred path now owns per-frame ImGui draw/font/texture uploads; its
+   direct path remains only as a compatibility fallback for worlds without a graph-owning renderer or a rejected
+   graph attempt. Generic setup/asset uploads, skinning, and some renderer resource-update paths still retain direct
+   native recording or submission. The graph therefore does not yet authoritatively own all frame work and state
+   retirement.
 
 3. **Packet scheduling and recording completion.** Current merging is limited to compatible immediate
    predecessors. Frontier splitting/scoring, graph-level parallel packet recording, and per-worker graph command

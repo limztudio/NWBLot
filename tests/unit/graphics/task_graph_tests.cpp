@@ -2738,6 +2738,230 @@ TEST(GpuTaskGraph, KeepsPresentationOverlayInDistinctTerminalGraphicsPacket){
     EXPECT_EQ(compiledGraph.packetDependencies(overlayPacket)[0].producer, sceneOutputPacket);
 }
 
+TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId backbuffer = AddHazardDomain(
+        graph,
+        Name("tests/task_graph/setup_upload_backbuffer"),
+        "Setup Upload Back Buffer"
+    );
+    const Graphics::GpuGraphResourceId vertices = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/setup_upload_vertices"),
+        "Setup Upload Vertices"
+    );
+    const Graphics::GpuGraphResourceId indices = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/setup_upload_indices"),
+        "Setup Upload Indices"
+    );
+    const Graphics::GpuGraphResourceId fontTexture = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/setup_upload_font"),
+        "Setup Upload Font",
+        Graphics::ResourceStates::ShaderResource
+    );
+    ASSERT_TRUE(backbuffer.valid());
+    ASSERT_TRUE(vertices.valid());
+    ASSERT_TRUE(indices.valid());
+    ASSERT_TRUE(fontTexture.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest uploadRequest{
+        Graphics::GpuQueueCapability::Transfer,
+        Graphics::GpuQueuePreference::Transfer,
+        true,
+        true,
+    };
+    Graphics::GpuTaskSchedulingHint graphicsScheduling;
+    graphicsScheduling.cost = Graphics::GpuTaskCostHint::Small;
+    graphicsScheduling.avoidQueueCrossing = true;
+    graphicsScheduling.forceSubmissionBoundary = true;
+    graphicsScheduling.allowPacketMerge = false;
+    Graphics::GpuTaskSchedulingHint smallUploadScheduling;
+    smallUploadScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    smallUploadScheduling.avoidQueueCrossing = true;
+    smallUploadScheduling.forceSubmissionBoundary = true;
+    smallUploadScheduling.allowPacketMerge = false;
+    Graphics::GpuTaskSchedulingHint largeUploadScheduling;
+    largeUploadScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    largeUploadScheduling.overlapPreferred = true;
+    largeUploadScheduling.forceSubmissionBoundary = true;
+    largeUploadScheduling.allowPacketMerge = false;
+
+    const Graphics::GpuTaskResourceUse sceneUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = backbuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Present,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc sceneDesc;
+    sceneDesc
+        .setIdentity(Name("tests/task_graph/setup_upload_scene"))
+        .setMarkerLabel("Setup Upload Scene")
+        .setQueue(graphicsRequest)
+        .setScheduling(graphicsScheduling)
+        .setResourceUses(sceneUses, LengthOf(sceneUses))
+    ;
+    const Graphics::GpuTaskId scene = graph.addTask(sceneDesc);
+    ASSERT_TRUE(scene.valid());
+
+    const Graphics::GpuTaskId sceneDependencies[] = { scene };
+    const Graphics::GpuTaskResourceUse vertexUploadUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = vertices,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Common,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc vertexUploadDesc;
+    vertexUploadDesc
+        .setIdentity(Name("tests/task_graph/setup_upload_vertices_task"))
+        .setMarkerLabel("Setup Upload Vertices")
+        .setQueue(uploadRequest)
+        .setScheduling(smallUploadScheduling)
+        .setDependencies(sceneDependencies, LengthOf(sceneDependencies))
+        .setResourceUses(vertexUploadUses, LengthOf(vertexUploadUses))
+    ;
+    const Graphics::GpuTaskId vertexUpload = graph.addTask(vertexUploadDesc);
+    ASSERT_TRUE(vertexUpload.valid());
+
+    const Graphics::GpuTaskResourceUse indexUploadUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = indices,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Common,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc indexUploadDesc;
+    indexUploadDesc
+        .setIdentity(Name("tests/task_graph/setup_upload_indices_task"))
+        .setMarkerLabel("Setup Upload Indices")
+        .setQueue(uploadRequest)
+        .setScheduling(smallUploadScheduling)
+        .setDependencies(sceneDependencies, LengthOf(sceneDependencies))
+        .setResourceUses(indexUploadUses, LengthOf(indexUploadUses))
+    ;
+    const Graphics::GpuTaskId indexUpload = graph.addTask(indexUploadDesc);
+    ASSERT_TRUE(indexUpload.valid());
+
+    const Graphics::GpuTaskResourceUse fontUploadUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = fontTexture,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc fontUploadDesc;
+    fontUploadDesc
+        .setIdentity(Name("tests/task_graph/setup_upload_font_task"))
+        .setMarkerLabel("Setup Upload Font")
+        .setQueue(uploadRequest)
+        .setScheduling(largeUploadScheduling)
+        .setDependencies(sceneDependencies, LengthOf(sceneDependencies))
+        .setResourceUses(fontUploadUses, LengthOf(fontUploadUses))
+    ;
+    const Graphics::GpuTaskId fontUpload = graph.addTask(fontUploadDesc);
+    ASSERT_TRUE(fontUpload.valid());
+
+    const Graphics::GpuTaskId overlayDependencies[] = {
+        scene,
+        vertexUpload,
+        indexUpload,
+        fontUpload,
+    };
+    const Graphics::GpuTaskResourceUse overlayUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = backbuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Present,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = vertices,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::VertexBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = indices,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::IndexBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = fontTexture,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskDesc overlayDesc;
+    overlayDesc
+        .setIdentity(Name("tests/task_graph/setup_upload_overlay"))
+        .setMarkerLabel("Setup Upload Overlay")
+        .setQueue(graphicsRequest)
+        .setScheduling(graphicsScheduling)
+        .setDependencies(overlayDependencies, LengthOf(overlayDependencies))
+        .setResourceUses(overlayUses, LengthOf(overlayUses))
+    ;
+    const Graphics::GpuTaskId overlay = graph.addTask(overlayDesc);
+    ASSERT_TRUE(overlay.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedTransferQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphCompileOptions options;
+    options.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
+
+    const Graphics::GpuSubmissionPacketId scenePacket = compiledGraph.packetForTask(scene);
+    const Graphics::GpuSubmissionPacketId vertexPacket = compiledGraph.packetForTask(vertexUpload);
+    const Graphics::GpuSubmissionPacketId indexPacket = compiledGraph.packetForTask(indexUpload);
+    const Graphics::GpuSubmissionPacketId fontPacket = compiledGraph.packetForTask(fontUpload);
+    const Graphics::GpuSubmissionPacketId overlayPacket = compiledGraph.packetForTask(overlay);
+    ASSERT_TRUE(scenePacket.valid());
+    ASSERT_TRUE(vertexPacket.valid());
+    ASSERT_TRUE(indexPacket.valid());
+    ASSERT_TRUE(fontPacket.valid());
+    ASSERT_TRUE(overlayPacket.valid());
+    EXPECT_EQ(compiledGraph.packet(scenePacket).queue, queues[0].id);
+    // Tiny vertex/index deltas avoid a queue crossing, but an amortizable texture upload follows Transfer first.
+    EXPECT_EQ(compiledGraph.packet(vertexPacket).queue, queues[0].id);
+    EXPECT_EQ(compiledGraph.packet(indexPacket).queue, queues[0].id);
+    EXPECT_EQ(compiledGraph.packet(fontPacket).queue, queues[1].id);
+    EXPECT_EQ(compiledGraph.packet(overlayPacket).queue, queues[0].id);
+    EXPECT_GT(vertexPacket.index, scenePacket.index);
+    EXPECT_GT(indexPacket.index, scenePacket.index);
+    EXPECT_GT(fontPacket.index, scenePacket.index);
+    EXPECT_GT(overlayPacket.index, vertexPacket.index);
+    EXPECT_GT(overlayPacket.index, indexPacket.index);
+    EXPECT_GT(overlayPacket.index, fontPacket.index);
+    const Graphics::GpuSubmissionPacketRange presentationRange = compiledGraph.packetRange(scenePacket, overlayPacket);
+    ASSERT_TRUE(presentationRange.valid());
+    EXPECT_EQ(presentationRange.packetCount, 5u);
+}
+
+
 TEST(GpuTaskGraph, MergesExplicitCompatibleSuccessorIntoOnePacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

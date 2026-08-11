@@ -6,6 +6,7 @@
 
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/module.h>
+#include <core/graphics/task_graph/task_graph.h>
 #include <global/text_utils.h>
 #include <impl/assets/graphics/imgui/binding_slots.h>
 #include <core/common/log.h>
@@ -33,6 +34,7 @@ static constexpr usize s_TextureNameBufferBytes = 64u;
 static constexpr usize s_RgbaPixelBytes = 4u;
 static constexpr usize s_RgbaAlphaByteOffset = 3u;
 static constexpr u8 s_OpaqueAlpha = 255u;
+static constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
 static constexpr Name s_FallbackTextureName("ecs_ui/imgui_texture");
 static constexpr AStringView s_TextureNamePrefix("ecs_ui/imgui_texture_");
 
@@ -95,6 +97,38 @@ static bool BuildUploadPixels(ImTextureData& textureData, ByteVector& scratch, c
     outPixels = scratch.data();
     outRowPitch = rowPitch;
     return true;
+}
+
+[[nodiscard]] static Core::GpuQueueRequest UploadQueueRequest(){
+    return Core::GpuQueueRequest{
+        Core::GpuQueueCapability::Transfer,
+        Core::GpuQueuePreference::Transfer,
+        true,
+        true,
+    };
+}
+
+[[nodiscard]] static Core::GpuTaskSchedulingHint UploadScheduling(const usize byteCount){
+    const bool preferDedicatedTransport = byteCount >= s_TransferPreferredUploadMinimumBytes;
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = preferDedicatedTransport ? Core::GpuTaskCostHint::Medium : Core::GpuTaskCostHint::Tiny;
+    scheduling.overlapPreferred = preferDedicatedTransport;
+    scheduling.avoidQueueCrossing = !preferDedicatedTransport;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    return scheduling;
+}
+
+[[nodiscard]] static Core::GpuGraphResourceDesc TextureResourceDesc(const Core::TextureDesc& textureDesc){
+    Core::GpuGraphResourceDesc desc;
+    desc
+        .setIdentity(textureDesc.name)
+        .setMarkerLabel("ImGui Texture")
+        .setType(Core::GpuGraphResourceType::Texture)
+        .setInitialState(textureDesc.initialState)
+        .setQueueSharing(textureDesc.queueSharing)
+    ;
+    return desc;
 }
 
 
@@ -196,6 +230,9 @@ void UiSystem::releaseDescriptorHeapResources(){
 
 
 bool UiSystem::processTextureRequests(Core::CommandList& commandList, ImDrawData& drawData){
+    if(!prepareTextureRequests(drawData))
+        return false;
+
     m_textureUploadBatch.reset();
 #if defined(IMGUI_HAS_TEXTURES)
     if(!drawData.Textures)
@@ -209,14 +246,11 @@ bool UiSystem::processTextureRequests(Core::CommandList& commandList, ImDrawData
         switch(textureData->Status){
         case ImTextureStatus_WantCreate:
         case ImTextureStatus_WantUpdates:
-            if(!createOrRefreshTexture(commandList, *textureData))
+            if(!recordTextureUpload(commandList, *textureData))
                 return false;
             m_textureUploadBatch.add(*textureData);
             break;
         case ImTextureStatus_WantDestroy:
-            destroyTexture(*textureData);
-            textureData->SetStatus(ImTextureStatus_Destroyed);
-            break;
         case ImTextureStatus_OK:
         case ImTextureStatus_Destroyed:
         default:
@@ -230,12 +264,48 @@ bool UiSystem::processTextureRequests(Core::CommandList& commandList, ImDrawData
     return true;
 }
 
-bool UiSystem::createOrRefreshTexture(Core::CommandList& commandList, ImTextureData& textureData){
+bool UiSystem::prepareTextureRequests(ImDrawData& drawData){
+#if defined(IMGUI_HAS_TEXTURES)
+    if(!drawData.Textures)
+        return true;
+
+    for(i32 i = 0; i < drawData.Textures->Size; ++i){
+        ImTextureData* const textureData = drawData.Textures->Data[i];
+        if(!textureData)
+            continue;
+
+        switch(textureData->Status){
+        case ImTextureStatus_WantCreate:
+        case ImTextureStatus_WantUpdates:
+            if(!createOrRefreshTexture(*textureData))
+                return false;
+            break;
+        case ImTextureStatus_WantDestroy:
+            destroyTexture(*textureData);
+            textureData->SetStatus(ImTextureStatus_Destroyed);
+            break;
+        case ImTextureStatus_OK:
+        case ImTextureStatus_Destroyed:
+        default:
+            break;
+        }
+    }
+#else
+    static_cast<void>(drawData);
+#endif
+    return true;
+}
+
+bool UiSystem::createOrRefreshTexture(ImTextureData& textureData){
     UiTextureResource* resource = static_cast<UiTextureResource*>(textureData.BackendUserData);
     const void* uploadPixels = nullptr;
     usize uploadRowPitch = 0u;
+    // Validate the caller data before allocating a replacement.  The graph path rebuilds this transient conversion
+    // when it snapshots immutable upload bytes; the legacy path uses the same helper immediately before recording.
     if(!__hidden_ui::BuildUploadPixels(textureData, m_textureUploadScratch, uploadPixels, uploadRowPitch))
         return false;
+    static_cast<void>(uploadPixels);
+    static_cast<void>(uploadRowPitch);
 
     const u32 textureWidth = static_cast<u32>(textureData.Width);
     const u32 textureHeight = static_cast<u32>(textureData.Height);
@@ -278,7 +348,127 @@ bool UiSystem::createOrRefreshTexture(Core::CommandList& commandList, ImTextureD
         textureData.SetTexID(__hidden_ui::TextureIdFromResource(resource));
     }
 
+    return true;
+}
+
+bool UiSystem::recordTextureUpload(Core::CommandList& commandList, ImTextureData& textureData){
+    UiTextureResource* resource = static_cast<UiTextureResource*>(textureData.BackendUserData);
+    if(!resource || !resource->texture)
+        return false;
+
+    const void* uploadPixels = nullptr;
+    usize uploadRowPitch = 0u;
+    if(!__hidden_ui::BuildUploadPixels(textureData, m_textureUploadScratch, uploadPixels, uploadRowPitch))
+        return false;
+
     commandList.writeTexture(resource->texture.get(), 0u, 0u, uploadPixels, uploadRowPitch);
+    return true;
+}
+
+Core::GpuGraphResourceId UiSystem::importTaskGraphTexture(
+    Core::GpuTaskGraph& graph,
+    UiTextureResource& resource
+){
+    if(!resource.texture)
+        return {};
+    if(
+        resource.taskGraphGeneration == graph.generation()
+        && graph.validResource(resource.taskGraphResource)
+    )
+        return resource.taskGraphResource;
+
+    const Core::GpuGraphResourceId imported = graph.importTexture(
+        resource.texture,
+        __hidden_ui::TextureResourceDesc(resource.texture->getDescription())
+    );
+    if(imported.valid()){
+        resource.taskGraphResource = imported;
+        resource.taskGraphGeneration = graph.generation();
+    }
+    return imported;
+}
+
+bool UiSystem::declareTaskGraphTextureUploads(
+    Core::GpuTaskGraph& graph,
+    ImDrawData& drawData,
+    const Core::GpuTaskId previousTask,
+    Vector<Core::GpuTaskId, Core::Alloc::ScratchArena>& outTasks,
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& outResources
+){
+    m_textureUploadBatch.reset();
+    if(!previousTask.valid())
+        return false;
+#if defined(IMGUI_HAS_TEXTURES)
+    if(!drawData.Textures)
+        return true;
+
+    const Core::GpuTaskId dependencies[] = { previousTask };
+    for(i32 i = 0; i < drawData.Textures->Size; ++i){
+        ImTextureData* const textureData = drawData.Textures->Data[i];
+        if(
+            !textureData
+            || (
+                textureData->Status != ImTextureStatus_WantCreate
+                && textureData->Status != ImTextureStatus_WantUpdates
+            )
+        )
+            continue;
+
+        UiTextureResource* const resource = static_cast<UiTextureResource*>(textureData->BackendUserData);
+        const Core::GpuGraphResourceId destination = resource ? importTaskGraphTexture(graph, *resource) : Core::GpuGraphResourceId{};
+        const void* uploadPixels = nullptr;
+        usize uploadRowPitch = 0u;
+        if(
+            !destination.valid()
+            || !resource
+            || !resource->texture
+            || !__hidden_ui::BuildUploadPixels(*textureData, m_textureUploadScratch, uploadPixels, uploadRowPitch)
+        ){
+            m_textureUploadBatch.reset();
+            return false;
+        }
+
+        const usize uploadByteCount = static_cast<usize>(textureData->Height) * uploadRowPitch;
+        const Core::GpuUploadBlobId blob = graph.copyUploadData(uploadPixels, uploadByteCount, alignof(u32));
+        if(!blob.valid()){
+            m_textureUploadBatch.reset();
+            return false;
+        }
+
+        Core::GpuTaskDesc desc;
+        desc
+            .setIdentity(Name("ui.imgui_texture_upload"))
+            .setMarkerLabel("ImGui Texture Upload")
+            .setQueue(__hidden_ui::UploadQueueRequest())
+            .setScheduling(__hidden_ui::UploadScheduling(uploadByteCount))
+            .setDependencies(dependencies, LengthOf(dependencies))
+        ;
+        const Core::GpuTaskId task = graph.addUploadTextureTask(
+            desc,
+            Core::GpuUploadTextureTaskDesc{
+                .source = blob,
+                .destination = destination,
+                .arraySlice = 0u,
+                .mipLevel = 0u,
+                .rowPitch = uploadRowPitch,
+                .depthPitch = 0u,
+                .finalState = Core::ResourceStates::ShaderResource,
+            }
+        );
+        if(!task.valid()){
+            m_textureUploadBatch.reset();
+            return false;
+        }
+        m_textureUploadBatch.add(*textureData);
+        outTasks.push_back(task);
+        outResources.push_back(destination);
+    }
+#else
+    static_cast<void>(graph);
+    static_cast<void>(drawData);
+    static_cast<void>(outTasks);
+    static_cast<void>(outResources);
+#endif
     return true;
 }
 

@@ -1079,7 +1079,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         + (m_deferredSurfelGiCounterReadbackTask.valid() ? 1u : 0u)
         + (captureLaggedLightingHistory ? 1u : 0u)
     ;
-    const usize expectedTerminalPresentationPacketCount = m_deferredPresentationOverlayRequired ? 2u : 1u;
+    // A presentation contributor may declare graph-owned setup uploads between Deferred Present and its terminal
+    // Graphics overlay.  The renderer still requires the scene Present endpoint and (when requested) one final
+    // overlay packet, while the compiler owns the exact number and routing of the intervening uploads.
+    const usize minimumTerminalPresentationPacketCount = m_deferredPresentationOverlayRequired ? 2u : 1u;
     const auto discardGraphicsPrefixTimingTickets = [&graphicsPrefixOwnedTimingTickets](){
         for(Core::GpuTimingSubmissionTicket* const timingTicket : graphicsPrefixOwnedTimingTickets)
             timingTicket->discard();
@@ -1208,7 +1211,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !deferredPresentPacketRange.valid()
         || deferredPresentPacketRange.packetCount != 1u
         || !terminalPresentationPacketRange.valid()
-        || terminalPresentationPacketRange.packetCount != expectedTerminalPresentationPacketCount
+        || terminalPresentationPacketRange.packetCount < minimumTerminalPresentationPacketCount
         || (m_deferredSurfelGiCounterReadbackTask.valid() && (
             !surfelGiCounterReadbackPacketRange.valid()
             || surfelGiCounterReadbackPacketRange.packetCount != 1u

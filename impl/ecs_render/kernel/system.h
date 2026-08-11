@@ -338,6 +338,9 @@ private:
     Core::GpuTaskId m_deferredAvboitExtinctionStreamTask;
     Core::GpuTaskId m_deferredAvboitExtinctionTask;
     Core::GpuTaskId m_deferredAvboitIntegrationTask;
+    // The accumulation phase owns another immutable stream after integration. It must remain in the final
+    // accumulation packet so a rejected/retried recording cannot publish only its upload prefix.
+    Core::GpuTaskId m_deferredAvboitAccumulationStreamTask;
     Core::GpuTaskId m_deferredAvboitAccumulationTask;
     Core::GpuTaskId m_deferredLightingTask;
     Core::GpuTaskId m_deferredCompositeTask;

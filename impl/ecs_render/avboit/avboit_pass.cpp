@@ -543,7 +543,11 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
 void RendererAvboitSystem::renderAvboitAccumulatePass(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const CsgFrameState& csgFrameState
+    const CsgFrameState& csgFrameState,
+    const MaterialPassDrawItemPartitions* const preparedAccumulationDrawItems,
+    const CsgFrameGpuData* const preparedAccumulationCsgFrameData,
+    const usize preparedAccumulationInstanceCount,
+    const usize preparedAccumulationMaterialTypedByteCount
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -551,14 +555,32 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     // The graph records the integrated volume and work-buffer reads as packet-boundary state; this thunk owns only
     // the native raster pass and its explicit final cross-graph transition below.
 
-    m_renderer.materialSystem().renderMaterialPass(
-        commandList,
-        avboitTargets.accumulationFramebuffer.get(),
-        MaterialPipelinePass::AvboitAccumulate,
-        true,
-        csgFrameState,
-        &avboitTargets
-    );
+    if(preparedAccumulationDrawItems || preparedAccumulationCsgFrameData){
+        NWB_ASSERT(preparedAccumulationDrawItems);
+        NWB_ASSERT(preparedAccumulationCsgFrameData);
+        if(preparedAccumulationDrawItems && preparedAccumulationCsgFrameData){
+            m_renderer.materialSystem().renderPreparedMaterialPass(
+                commandList,
+                avboitTargets.accumulationFramebuffer.get(),
+                MaterialPipelinePass::AvboitAccumulate,
+                &avboitTargets,
+                *preparedAccumulationDrawItems,
+                *preparedAccumulationCsgFrameData,
+                preparedAccumulationInstanceCount,
+                preparedAccumulationMaterialTypedByteCount
+            );
+        }
+    }
+    else{
+        m_renderer.materialSystem().renderMaterialPass(
+            commandList,
+            avboitTargets.accumulationFramebuffer.get(),
+            MaterialPipelinePass::AvboitAccumulate,
+            true,
+            csgFrameState,
+            &avboitTargets
+        );
+    }
     commandList.endRenderPass();
 
     // Deferred composite is a Compute pass. Return the two accumulation attachments and the read-only depth input
@@ -580,7 +602,7 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     );
 }
 
-void RendererAvboitSystem::renderAvboitPostOccupancyPasses(
+void RendererAvboitSystem::renderAvboitPostOccupancyPreAccumulationPasses(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const CsgFrameState& csgFrameState,
@@ -605,6 +627,26 @@ void RendererAvboitSystem::renderAvboitPostOccupancyPasses(
         preparedExtinctionMaterialTypedByteCount
     );
     dispatchAvboitIntegration(commandList, avboitTargets);
+}
+
+void RendererAvboitSystem::renderAvboitPostOccupancyPasses(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const CsgFrameState& csgFrameState,
+    const MaterialPassDrawItemPartitions* const preparedExtinctionDrawItems,
+    const CsgFrameGpuData* const preparedExtinctionCsgFrameData,
+    const usize preparedExtinctionInstanceCount,
+    const usize preparedExtinctionMaterialTypedByteCount
+){
+    renderAvboitPostOccupancyPreAccumulationPasses(
+        commandList,
+        targets,
+        csgFrameState,
+        preparedExtinctionDrawItems,
+        preparedExtinctionCsgFrameData,
+        preparedExtinctionInstanceCount,
+        preparedExtinctionMaterialTypedByteCount
+    );
     renderAvboitAccumulatePass(commandList, targets, csgFrameState);
 }
 

@@ -3699,6 +3699,490 @@ TEST(GpuTaskGraph, MergesExtinctionUploadChainIntoAsyncAvboitPacket){
 }
 
 
+TEST(GpuTaskGraph, MergesAccumulationUploadChainIntoAsyncAvboitPacket){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId avboitWorking = AddTextureMetadata(
+        graph,
+        Name("tests/task_graph/accumulation_upload_working"),
+        "AVBOIT Accumulation Working",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId materialInstances = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/accumulation_upload_instances"),
+        "AVBOIT Accumulation Material Instances",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId materialTyped = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/accumulation_upload_typed"),
+        "AVBOIT Accumulation Material Typed",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId csgReceiverRanges = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/accumulation_upload_receiver_ranges"),
+        "AVBOIT Accumulation CSG Receiver Ranges",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId csgCutters = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/accumulation_upload_cutters"),
+        "AVBOIT Accumulation CSG Cutters",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId csgClipContext = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/accumulation_upload_clip_context"),
+        "AVBOIT Accumulation CSG Clip Context",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    // The interval producer owns this input. Accumulation consumes but must not re-upload it.
+    const Graphics::GpuGraphResourceId csgIntervalSampleState = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/accumulation_interval_sample_state"),
+        "AVBOIT CSG Interval Sample State",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    ASSERT_TRUE(avboitWorking.valid());
+    ASSERT_TRUE(materialInstances.valid());
+    ASSERT_TRUE(materialTyped.valid());
+    ASSERT_TRUE(csgReceiverRanges.valid());
+    ASSERT_TRUE(csgCutters.valid());
+    ASSERT_TRUE(csgClipContext.valid());
+    ASSERT_TRUE(csgIntervalSampleState.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint boundaryScheduling;
+    boundaryScheduling.forceSubmissionBoundary = true;
+    boundaryScheduling.allowPacketMerge = false;
+    Graphics::GpuTaskSchedulingHint mergeScheduling;
+    mergeScheduling.allowPacketMerge = true;
+    mergeScheduling.mergeWithPrevious = true;
+
+    const Graphics::GpuTaskResourceUse workingReadWrite[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = avboitWorking,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    Graphics::GpuTaskDesc preDesc;
+    preDesc
+        .setIdentity(Name("tests/task_graph/accumulation_upload_pre"))
+        .setMarkerLabel("AVBOIT Pre")
+        .setQueue(graphicsRequest)
+        .setScheduling(boundaryScheduling)
+        .setResourceUses(workingReadWrite, LengthOf(workingReadWrite))
+    ;
+    const Graphics::GpuTaskId pre = graph.addTask(preDesc);
+    ASSERT_TRUE(pre.valid());
+
+    const Graphics::GpuTaskId preDependency[] = { pre };
+    Graphics::GpuTaskDesc depthWarpDesc;
+    depthWarpDesc
+        .setIdentity(Name("tests/task_graph/accumulation_upload_depth_warp"))
+        .setMarkerLabel("AVBOIT Depth Warp")
+        .setQueue(computeRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(preDependency, LengthOf(preDependency))
+        .setResourceUses(workingReadWrite, LengthOf(workingReadWrite))
+    ;
+    const Graphics::GpuTaskId depthWarp = graph.addTask(depthWarpDesc);
+    ASSERT_TRUE(depthWarp.valid());
+
+    const Graphics::GpuTaskId depthWarpDependency[] = { depthWarp };
+    Graphics::GpuTaskDesc extinctionDesc;
+    extinctionDesc
+        .setIdentity(Name("tests/task_graph/accumulation_upload_extinction"))
+        .setMarkerLabel("AVBOIT Extinction")
+        .setQueue(graphicsRequest)
+        .setScheduling(mergeScheduling)
+        .setDependencies(depthWarpDependency, LengthOf(depthWarpDependency))
+        .setResourceUses(workingReadWrite, LengthOf(workingReadWrite))
+    ;
+    const Graphics::GpuTaskId extinction = graph.addTask(extinctionDesc);
+    ASSERT_TRUE(extinction.valid());
+
+    const Graphics::GpuTaskId extinctionDependency[] = { extinction };
+    Graphics::GpuTaskDesc integrationDesc;
+    integrationDesc
+        .setIdentity(Name("tests/task_graph/accumulation_upload_integration"))
+        .setMarkerLabel("AVBOIT Integration")
+        .setQueue(computeRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(extinctionDependency, LengthOf(extinctionDependency))
+        .setResourceUses(workingReadWrite, LengthOf(workingReadWrite))
+    ;
+    const Graphics::GpuTaskId integration = graph.addTask(integrationDesc);
+    ASSERT_TRUE(integration.valid());
+
+    const auto addAccumulationUpload = [&](
+        const Name& identity,
+        const AStringView label,
+        const Graphics::GpuGraphResourceId resource,
+        const Graphics::GpuTaskId dependency
+    ){
+        const Graphics::GpuTaskResourceUse uploadUse[] = {
+            Graphics::GpuTaskResourceUse{
+                .resource = resource,
+                .range = {},
+                .requiredState = Graphics::ResourceStates::CopyDest,
+                .access = Graphics::GpuTaskResourceAccess::Write,
+            },
+        };
+        Graphics::GpuTaskDesc uploadDesc;
+        uploadDesc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(graphicsRequest)
+            .setScheduling(mergeScheduling)
+            .setDependencies(&dependency, 1u)
+            .setResourceUses(uploadUse, LengthOf(uploadUse))
+        ;
+        return graph.addTask(uploadDesc);
+    };
+
+    const Graphics::GpuTaskId instanceUpload = addAccumulationUpload(
+        Name("tests/task_graph/accumulation_upload_instances"),
+        "AVBOIT Accumulation Material Instances Upload",
+        materialInstances,
+        integration
+    );
+    ASSERT_TRUE(instanceUpload.valid());
+    const Graphics::GpuTaskId typedUpload = addAccumulationUpload(
+        Name("tests/task_graph/accumulation_upload_typed"),
+        "AVBOIT Accumulation Material Typed Upload",
+        materialTyped,
+        instanceUpload
+    );
+    ASSERT_TRUE(typedUpload.valid());
+    const Graphics::GpuTaskId receiverRangesUpload = addAccumulationUpload(
+        Name("tests/task_graph/accumulation_upload_receiver_ranges"),
+        "AVBOIT Accumulation CSG Receiver Ranges Upload",
+        csgReceiverRanges,
+        typedUpload
+    );
+    ASSERT_TRUE(receiverRangesUpload.valid());
+    const Graphics::GpuTaskId cuttersUpload = addAccumulationUpload(
+        Name("tests/task_graph/accumulation_upload_cutters"),
+        "AVBOIT Accumulation CSG Cutters Upload",
+        csgCutters,
+        receiverRangesUpload
+    );
+    ASSERT_TRUE(cuttersUpload.valid());
+    const Graphics::GpuTaskId clipContextUpload = addAccumulationUpload(
+        Name("tests/task_graph/accumulation_upload_clip_context"),
+        "AVBOIT Accumulation CSG Clip Context Slots Upload",
+        csgClipContext,
+        cuttersUpload
+    );
+    ASSERT_TRUE(clipContextUpload.valid());
+
+    const Graphics::GpuTaskResourceUse accumulationUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = avboitWorking,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = materialInstances,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = materialTyped,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = csgReceiverRanges,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = csgCutters,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = csgClipContext,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = csgIntervalSampleState,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    const Graphics::GpuTaskId clipContextUploadDependency[] = { clipContextUpload };
+    Graphics::GpuTaskDesc accumulationDesc;
+    accumulationDesc
+        .setIdentity(Name("tests/task_graph/accumulation_upload_native"))
+        .setMarkerLabel("AVBOIT Accumulation")
+        .setQueue(graphicsRequest)
+        .setScheduling(mergeScheduling)
+        .setDependencies(clipContextUploadDependency, LengthOf(clipContextUploadDependency))
+        .setResourceUses(accumulationUses, LengthOf(accumulationUses))
+    ;
+    const Graphics::GpuTaskId accumulation = graph.addTask(accumulationDesc);
+    ASSERT_TRUE(accumulation.valid());
+
+    // The final consumer owns the outgoing Graphics -> Compute edge so FrontierSafe can still merge the uploads.
+    const Graphics::GpuTaskId accumulationDependency[] = { accumulation };
+    Graphics::GpuTaskDesc compositeDesc;
+    compositeDesc
+        .setIdentity(Name("tests/task_graph/accumulation_upload_composite"))
+        .setMarkerLabel("Deferred Composite")
+        .setQueue(computeRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(accumulationDependency, LengthOf(accumulationDependency))
+        .setResourceUses(workingReadWrite, LengthOf(workingReadWrite))
+    ;
+    const Graphics::GpuTaskId composite = graph.addTask(compositeDesc);
+    ASSERT_TRUE(composite.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    ASSERT_EQ(compiledGraph.packetCount(), 6u);
+
+    const Graphics::GpuSubmissionPacketId prePacket = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId depthWarpPacket = compiledGraph.packetForTask(depthWarp);
+    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledGraph.packetForTask(extinction);
+    const Graphics::GpuSubmissionPacketId integrationPacket = compiledGraph.packetForTask(integration);
+    const Graphics::GpuSubmissionPacketId instanceUploadPacket = compiledGraph.packetForTask(instanceUpload);
+    const Graphics::GpuSubmissionPacketId typedUploadPacket = compiledGraph.packetForTask(typedUpload);
+    const Graphics::GpuSubmissionPacketId receiverRangesUploadPacket = compiledGraph.packetForTask(receiverRangesUpload);
+    const Graphics::GpuSubmissionPacketId cuttersUploadPacket = compiledGraph.packetForTask(cuttersUpload);
+    const Graphics::GpuSubmissionPacketId clipContextUploadPacket = compiledGraph.packetForTask(clipContextUpload);
+    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledGraph.packetForTask(accumulation);
+    const Graphics::GpuSubmissionPacketId compositePacket = compiledGraph.packetForTask(composite);
+    ASSERT_TRUE(prePacket.valid());
+    ASSERT_TRUE(depthWarpPacket.valid());
+    ASSERT_TRUE(extinctionPacket.valid());
+    ASSERT_TRUE(integrationPacket.valid());
+    ASSERT_TRUE(instanceUploadPacket.valid());
+    ASSERT_TRUE(typedUploadPacket.valid());
+    ASSERT_TRUE(receiverRangesUploadPacket.valid());
+    ASSERT_TRUE(cuttersUploadPacket.valid());
+    ASSERT_TRUE(clipContextUploadPacket.valid());
+    ASSERT_TRUE(accumulationPacket.valid());
+    ASSERT_TRUE(compositePacket.valid());
+    EXPECT_NE(prePacket, depthWarpPacket);
+    EXPECT_NE(depthWarpPacket, extinctionPacket);
+    EXPECT_NE(extinctionPacket, integrationPacket);
+    EXPECT_NE(integrationPacket, accumulationPacket);
+    EXPECT_EQ(instanceUploadPacket, accumulationPacket);
+    EXPECT_EQ(typedUploadPacket, accumulationPacket);
+    EXPECT_EQ(receiverRangesUploadPacket, accumulationPacket);
+    EXPECT_EQ(cuttersUploadPacket, accumulationPacket);
+    EXPECT_EQ(clipContextUploadPacket, accumulationPacket);
+    EXPECT_EQ(compiledGraph.packet(accumulationPacket).taskCount, 6u);
+    ASSERT_EQ(compiledGraph.packet(compositePacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(compositePacket)[0u].producer, accumulationPacket);
+
+    const Graphics::GpuSubmissionPacketRange avboitRange = compiledGraph.packetRange(prePacket, accumulationPacket);
+    ASSERT_TRUE(avboitRange.valid());
+    EXPECT_EQ(avboitRange.packetCount, 5u);
+}
+
+
+TEST(GpuTaskGraph, MergesAccumulationTailIntoGraphicsAvboitPacket){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId materialInstances = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/graphics_accumulation_instances"),
+        "AVBOIT Graphics Accumulation Material Instances"
+    );
+    ASSERT_TRUE(materialInstances.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint firstScheduling;
+    firstScheduling.allowPacketMerge = true;
+    Graphics::GpuTaskSchedulingHint mergeScheduling;
+    mergeScheduling.allowPacketMerge = true;
+    mergeScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskSchedulingHint boundaryScheduling;
+    boundaryScheduling.forceSubmissionBoundary = true;
+    boundaryScheduling.allowPacketMerge = false;
+
+    Graphics::GpuTaskDesc preDesc;
+    preDesc
+        .setIdentity(Name("tests/task_graph/graphics_accumulation_pre"))
+        .setMarkerLabel("AVBOIT Pre")
+        .setQueue(graphicsRequest)
+        .setScheduling(firstScheduling)
+    ;
+    const Graphics::GpuTaskId pre = graph.addTask(preDesc);
+    ASSERT_TRUE(pre.valid());
+
+    const auto addMergedGraphicsTask = [&](const Name& identity, const AStringView label, const Graphics::GpuTaskId dependency){
+        Graphics::GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(graphicsRequest)
+            .setScheduling(mergeScheduling)
+            .setDependencies(&dependency, 1u)
+        ;
+        return graph.addTask(desc);
+    };
+
+    const Graphics::GpuTaskId occupancy = addMergedGraphicsTask(
+        Name("tests/task_graph/graphics_accumulation_occupancy"),
+        "AVBOIT Occupancy",
+        pre
+    );
+    ASSERT_TRUE(occupancy.valid());
+    const Graphics::GpuTaskId extinction = addMergedGraphicsTask(
+        Name("tests/task_graph/graphics_accumulation_extinction"),
+        "AVBOIT Extinction",
+        occupancy
+    );
+    ASSERT_TRUE(extinction.valid());
+
+    const Graphics::GpuTaskResourceUse uploadUse[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = materialInstances,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::CopyDest,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc uploadDesc;
+    uploadDesc
+        .setIdentity(Name("tests/task_graph/graphics_accumulation_instances_upload"))
+        .setMarkerLabel("AVBOIT Accumulation Material Instances Upload")
+        .setQueue(graphicsRequest)
+        .setScheduling(mergeScheduling)
+        .setDependencies(&extinction, 1u)
+        .setResourceUses(uploadUse, LengthOf(uploadUse))
+    ;
+    const Graphics::GpuTaskId instanceUpload = graph.addTask(uploadDesc);
+    ASSERT_TRUE(instanceUpload.valid());
+
+    const Graphics::GpuTaskResourceUse accumulationUse[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = materialInstances,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+    };
+    Graphics::GpuTaskDesc accumulationDesc;
+    accumulationDesc
+        .setIdentity(Name("tests/task_graph/graphics_accumulation_native"))
+        .setMarkerLabel("AVBOIT Accumulation")
+        .setQueue(graphicsRequest)
+        .setScheduling(mergeScheduling)
+        .setDependencies(&instanceUpload, 1u)
+        .setResourceUses(accumulationUse, LengthOf(accumulationUse))
+    ;
+    const Graphics::GpuTaskId accumulation = graph.addTask(accumulationDesc);
+    ASSERT_TRUE(accumulation.valid());
+
+    const Graphics::GpuTaskId accumulationDependency[] = { accumulation };
+    Graphics::GpuTaskDesc lightingDesc;
+    lightingDesc
+        .setIdentity(Name("tests/task_graph/graphics_accumulation_lighting"))
+        .setMarkerLabel("Deferred Lighting")
+        .setQueue(computeRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(accumulationDependency, LengthOf(accumulationDependency))
+    ;
+    const Graphics::GpuTaskId lighting = graph.addTask(lightingDesc);
+    ASSERT_TRUE(lighting.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+
+    const Graphics::GpuSubmissionPacketId prePacket = compiledGraph.packetForTask(pre);
+    const Graphics::GpuSubmissionPacketId occupancyPacket = compiledGraph.packetForTask(occupancy);
+    const Graphics::GpuSubmissionPacketId extinctionPacket = compiledGraph.packetForTask(extinction);
+    const Graphics::GpuSubmissionPacketId uploadPacket = compiledGraph.packetForTask(instanceUpload);
+    const Graphics::GpuSubmissionPacketId accumulationPacket = compiledGraph.packetForTask(accumulation);
+    const Graphics::GpuSubmissionPacketId lightingPacket = compiledGraph.packetForTask(lighting);
+    ASSERT_TRUE(prePacket.valid());
+    ASSERT_TRUE(occupancyPacket.valid());
+    ASSERT_TRUE(extinctionPacket.valid());
+    ASSERT_TRUE(uploadPacket.valid());
+    ASSERT_TRUE(accumulationPacket.valid());
+    ASSERT_TRUE(lightingPacket.valid());
+    EXPECT_EQ(occupancyPacket, prePacket);
+    EXPECT_EQ(extinctionPacket, prePacket);
+    EXPECT_EQ(uploadPacket, prePacket);
+    EXPECT_EQ(accumulationPacket, prePacket);
+    EXPECT_NE(lightingPacket, prePacket);
+    ASSERT_EQ(compiledGraph.packet(lightingPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(lightingPacket)[0u].producer, accumulationPacket);
+}
+
+
 TEST(GpuTaskGraph, PlansPacketBoundaryTransitionsAndUavDependencies){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

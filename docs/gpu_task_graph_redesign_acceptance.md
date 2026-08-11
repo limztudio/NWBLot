@@ -10,7 +10,7 @@ routing, actual-device stale packet-recording recreation coverage, and graph-own
 graph-owned deferred mesh-view, scene-light, and scene-shading frame updates, and graph-owned decoded texture-asset
 uploads, graph-owned runtime-skinning joint-palette uploads, graph-owned opaque material draw-stream uploads, and
 graph-owned opaque CSG receiver/cutter/context/interval streams, graph-owned transparent CSG interval-producer
-streams, and graph-owned transparent AVBOIT occupancy and extinction material/CSG streams,
+streams, and graph-owned transparent AVBOIT occupancy, extinction, and accumulation material/CSG streams,
 2026-08-11.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
@@ -71,8 +71,12 @@ can receive an unconditional final sign-off.
   for CSG draws, receiver/cutter/clip-context data; it intentionally reads rather than rewrites the interval
   sample state. On Graphics-only frames its upload chain and native post-occupancy tail merge into the same
   AVBOIT-pre packet; on the split route they merge into the existing Graphics extinction packet after depth warp.
-  Runtime checks require each phase stream to share its native consumer's accepted packet, preserving the one/five
-  packet contract. Direct helpers remain only for transparent AVBOIT accumulation material/CSG updates.
+  The final accumulation phase freezes its own material instance/typed payload and, for CSG draws,
+  receiver/cutter/clip-context payload after integration; it also retains the interval producer's full-resolution
+  sample state as a read-only input. Its serial Graphics upload chain and prepared consumer merge into the terminal
+  Graphics AVBOIT packet—after integration on the split route and after the Graphics-only post-extinction tail on
+  the normal route. Runtime checks require every phase stream to share its native consumer's accepted packet and
+  keep the AVBOIT range at one or five packets. Direct helpers remain only for non-graph compatibility callers.
 - The compiler derives stable packet recording-frontier depths from packet dependencies. The native recorder may
   record an explicitly opted-in frontier concurrently with isolated per-packet state scratch and native command
   buffers; submission, timing, and failure reporting remain in stable compiler order. Command-IR capture and
@@ -119,6 +123,7 @@ can receive an unconditional final sign-off.
 | Graph-owned transparent CSG interval-producer follow-up: ECS graphics unit plus static and skinned transparent CSG early/mid/late captures | 7/7 passed; the frozen receiver-surface payload is uploaded before AVBOIT-pre while the existing one/five-packet AVBOIT contract and visible transparent CSG cuts remain intact |
 | Graph-owned transparent AVBOIT occupancy-stream follow-up: ECS graphics, task-graph, descriptor smoke, transparent multi, plus static/skinned transparent CSG captures | 10/10 passed; interval generation, phase-local occupancy uploads, and prepared occupancy remain in one accepted AVBOIT-pre Graphics packet while the visible transparent and CSG cases stay correct |
 | Graph-owned transparent AVBOIT extinction-stream follow-up: FrontierSafe task-graph topology, ECS graphics, descriptor smoke, transparent multi, plus static/skinned transparent CSG captures | 10/10 passed; phase-local extinction uploads merge with native extinction without adding a sixth async packet, while Graphics-only and CSG captures remain correct |
+| Graph-owned transparent AVBOIT accumulation-stream follow-up: FrontierSafe task-graph topology, ECS graphics, descriptor smoke, transparent multi, plus static/skinned transparent CSG captures | 10/10 passed; phase-local accumulation uploads merge with the final native consumer without adding a sixth async packet, while Graphics-only and transparent CSG captures remain correct |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -143,12 +148,11 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    direct path remains only as a compatibility fallback for worlds without a graph-owning renderer or a rejected
    graph attempt. Public buffer/texture setup uploads, decoded texture-asset uploads, and the shared deferred
    mesh-view, scene-light, scene-shading, runtime skinning joint-palette, and opaque material instance/typed updates
-   now use the graph-owned primitive path. The transparent AVBOIT interval producer, occupancy phase, and
-   extinction phase now freeze and publish their own per-write-point material/CSG streams, preserving the shared
-   interval sample state across the low-resolution raster passes. Skinning compute dispatch/its selector update,
-   transparent AVBOIT accumulation material streams and their phase-specific CSG updates, and other specialized
-   descriptor/resource updates still retain direct native recording or submission. The graph therefore does not yet
-   authoritatively own all frame work and state retirement.
+   now use the graph-owned primitive path. The transparent AVBOIT interval producer, occupancy, extinction, and
+   accumulation phases now freeze and publish their own per-write-point material/CSG streams, preserving the shared
+   interval sample state across the low-resolution raster passes. Skinning compute dispatch/its selector update and
+   other specialized descriptor/resource updates still retain direct native recording or submission. The graph
+   therefore does not yet authoritatively own all frame work and state retirement.
 
 3. **Packet scheduling and recording completion (partially addressed).** Current merging is limited to compatible
    immediate predecessors. The compiler-derived native ready-frontier recorder is implemented for explicit opt-in
@@ -172,5 +176,5 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
 
 Do not relabel this result as final architectural completion without either implementing the five areas above or
 explicitly waiving them in a revised, version-controlled acceptance scope. The next implementation work should
-finish the remaining graph-owned asset/resource-update paths (notably the transparent AVBOIT accumulation phase
-and its CSG updates), specialized descriptor/resource updates, and recovery proof.
+finish the remaining graph-owned asset/resource-update paths, specialized descriptor/resource updates, and recovery
+proof.

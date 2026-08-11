@@ -62,6 +62,17 @@ public:
         usize preparedExtinctionInstanceCount = 0u,
         usize preparedExtinctionMaterialTypedByteCount = 0u
     );
+    // Records the depth-warp, extinction, and integration slices only. The graph uses this boundary to publish
+    // the phase-local immutable accumulation stream after integration and before the final raster pass.
+    void renderAvboitPostOccupancyPreAccumulationPasses(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        const CsgFrameState& csgFrameState,
+        const MaterialPassDrawItemPartitions* preparedExtinctionDrawItems = nullptr,
+        const CsgFrameGpuData* preparedExtinctionCsgFrameData = nullptr,
+        usize preparedExtinctionInstanceCount = 0u,
+        usize preparedExtinctionMaterialTypedByteCount = 0u
+    );
     // AVBOIT alternates raster and compute work. The Graphics-routed plan calls the three slices consecutively,
     // while the dedicated AsyncCompute schedule brackets the two compute dispatches with Graphics submissions.
     void renderAvboitPreDepthWarpPasses(
@@ -82,7 +93,15 @@ public:
         usize preparedExtinctionInstanceCount = 0u,
         usize preparedExtinctionMaterialTypedByteCount = 0u
     );
-    void renderAvboitAccumulatePass(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
+    void renderAvboitAccumulatePass(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        const CsgFrameState& csgFrameState,
+        const MaterialPassDrawItemPartitions* preparedAccumulationDrawItems = nullptr,
+        const CsgFrameGpuData* preparedAccumulationCsgFrameData = nullptr,
+        usize preparedAccumulationInstanceCount = 0u,
+        usize preparedAccumulationMaterialTypedByteCount = 0u
+    );
     void renderAvboitPasses(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,

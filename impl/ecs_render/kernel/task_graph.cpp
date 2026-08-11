@@ -1038,7 +1038,7 @@ struct AvboitExtinctionGraphTask{
                 );
             }
             else{
-                payload.avboitSystem->renderAvboitPostOccupancyPasses(
+                payload.avboitSystem->renderAvboitPostOccupancyPreAccumulationPasses(
                     commandList,
                     *payload.targets,
                     *payload.csgFrameState,
@@ -1049,8 +1049,6 @@ struct AvboitExtinctionGraphTask{
                 );
             }
         }
-        if(!payload.splitStages)
-            RestoreAvboitGbufferInputs(commandList, *payload.targets);
         return true;
     }
 };
@@ -1085,6 +1083,14 @@ struct AvboitAccumulationGraphTask{
         DeferredFrameTargets* targets = nullptr;
         const CsgFrameState* csgFrameState = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        ECSRenderDetail::TransparentMaterialPassGraphSnapshot accumulationSnapshot;
+        bool accumulationPhasePrepared = false;
+        bool hasTransparentRenderers = false;
+        bool splitStages = false;
+
+        explicit Payload(Core::Alloc::GlobalArena& arena)
+            : accumulationSnapshot(arena)
+        {}
     };
 
     [[nodiscard]] static bool record(
@@ -1097,7 +1103,35 @@ struct AvboitAccumulationGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        payload.avboitSystem->renderAvboitAccumulatePass(commandList, *payload.targets, *payload.csgFrameState);
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+        MaterialPassDrawItemPartitions accumulationDrawItems{ scratchArena };
+        CsgFrameGpuData accumulationCsgFrameData{ scratchArena };
+        const MaterialPassDrawItemPartitions* preparedAccumulationDrawItems = nullptr;
+        const CsgFrameGpuData* preparedAccumulationCsgFrameData = nullptr;
+        usize preparedAccumulationInstanceCount = 0u;
+        usize preparedAccumulationMaterialTypedByteCount = 0u;
+        if(payload.hasTransparentRenderers && (!payload.accumulationPhasePrepared || !payload.accumulationSnapshot.captured))
+            return false;
+        if(payload.accumulationPhasePrepared && payload.accumulationSnapshot.captured){
+            payload.accumulationSnapshot.materialize(accumulationDrawItems, accumulationCsgFrameData);
+            preparedAccumulationDrawItems = &accumulationDrawItems;
+            preparedAccumulationCsgFrameData = &accumulationCsgFrameData;
+            preparedAccumulationInstanceCount = payload.accumulationSnapshot.instanceCount;
+            preparedAccumulationMaterialTypedByteCount = payload.accumulationSnapshot.materialTypedByteCount;
+        }
+        if(payload.hasTransparentRenderers){
+            payload.avboitSystem->renderAvboitAccumulatePass(
+                commandList,
+                *payload.targets,
+                *payload.csgFrameState,
+                preparedAccumulationDrawItems,
+                preparedAccumulationCsgFrameData,
+                preparedAccumulationInstanceCount,
+                preparedAccumulationMaterialTypedByteCount
+            );
+        }
+        if(!payload.splitStages)
+            RestoreAvboitGbufferInputs(commandList, *payload.targets);
         return true;
     }
 };
@@ -3074,6 +3108,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredAvboitExtinctionStreamTask = {};
     m_deferredAvboitExtinctionTask = {};
     m_deferredAvboitIntegrationTask = {};
+    m_deferredAvboitAccumulationStreamTask = {};
     m_deferredAvboitAccumulationTask = {};
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
@@ -4470,11 +4505,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         return;
     }
 
-    Core::GpuTaskSchedulingHint avboitGraphicsScheduling;
-    avboitGraphicsScheduling.cost = Core::GpuTaskCostHint::Large;
-    avboitGraphicsScheduling.forceSubmissionBoundary = true;
-    avboitGraphicsScheduling.allowPacketMerge = false;
-
     Core::GpuTaskSchedulingHint avboitComputeScheduling;
     avboitComputeScheduling.cost = Core::GpuTaskCostHint::Medium;
     avboitComputeScheduling.forceSubmissionBoundary = true;
@@ -4787,14 +4817,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         extinctionResourceUses.push_back(ReadWriteUse(avboitExtinctionOverflow, Core::ResourceStates::UnorderedAccess));
     }
     else{
-        // This tail owns depth warp, extinction, integration, and accumulation on the one Graphics AVBOIT packet.
+        // This tail owns depth warp, extinction, and integration on the one Graphics AVBOIT packet. The following
+        // accumulation task owns its separately frozen raster stream and render-target transition.
         extinctionResourceUses.push_back(ReadUse(albedo));
         extinctionResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource, true));
         extinctionResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
         extinctionResourceUses.push_back(ReadUse(depth));
         extinctionResourceUses.push_back(ReadWriteUse(avboitLowRaster, Core::ResourceStates::RenderTarget));
-        extinctionResourceUses.push_back(ReadWriteUse(avboitAccumColor, Core::ResourceStates::RenderTarget));
-        extinctionResourceUses.push_back(ReadWriteUse(avboitAccumExtinction, Core::ResourceStates::RenderTarget));
         extinctionResourceUses.push_back(ReadWriteUse(avboitTransmittance, Core::ResourceStates::UnorderedAccess));
         extinctionResourceUses.push_back(ReadWriteUse(avboitCoverage, Core::ResourceStates::UnorderedAccess));
         extinctionResourceUses.push_back(ReadWriteUse(avboitDepthWarp, Core::ResourceStates::UnorderedAccess));
@@ -4874,45 +4903,334 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             return;
         }
 
-        const Core::GpuTaskResourceUse accumulationResourceUses[] = {
-            ReadUse(depth),
-            ReadUse(avboitTransmittance),
-            ReadUse(avboitDepthWarp),
-            ReadUse(avboitControl),
-            ReadWriteUse(avboitAccumColor, Core::ResourceStates::RenderTarget),
-            ReadWriteUse(avboitAccumExtinction, Core::ResourceStates::RenderTarget),
-            ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
-            ReadUse(avboitMaterialDomain),
-            ReadUse(avboitCsgDomain),
-        };
-        const Core::GpuTaskId integrationDependency[] = { m_deferredAvboitIntegrationTask };
-        Core::GpuTaskDesc accumulationDesc;
-        accumulationDesc
-            .setIdentity(Name("render.avboit.accumulation"))
-            .setMarkerLabel("AVBOIT Accumulation")
-            .setQueue(GraphicsQueueRequest())
-            .setScheduling(avboitGraphicsScheduling)
-            .setDependencies(integrationDependency, LengthOf(integrationDependency))
-            .setResourceUses(accumulationResourceUses, LengthOf(accumulationResourceUses))
-        ;
-        m_deferredAvboitAccumulationTask = m_deferredLightingTaskGraph.addTask<AvboitAccumulationGraphTask>(
-            accumulationDesc,
-            AvboitAccumulationGraphTask::Payload{
-                .avboitSystem = &m_avboitSystem,
-                .targets = &deferredTargets,
-                .csgFrameState = &csgFrameState,
-                .timingTicket = &avboitAccumulationTimingTicket,
-            }
+    }
+
+    // Accumulation is another independent write point for the shared material/CSG buffers. Freeze and publish its
+    // bytes after integration, rather than letting native recording re-gather mutable scene state after extinction.
+    AvboitAccumulationGraphTask::Payload avboitAccumulationPayload{ m_arena };
+    avboitAccumulationPayload.avboitSystem = &m_avboitSystem;
+    avboitAccumulationPayload.targets = &deferredTargets;
+    avboitAccumulationPayload.csgFrameState = &csgFrameState;
+    avboitAccumulationPayload.timingTicket = splitAvboitStages
+        ? &avboitAccumulationTimingTicket
+        : &avboitPreTimingTicket
+    ;
+    avboitAccumulationPayload.hasTransparentRenderers = hasTransparentRenderers;
+    avboitAccumulationPayload.splitStages = splitAvboitStages;
+
+    Core::GpuTaskId accumulationUploadTask = splitAvboitStages
+        ? m_deferredAvboitIntegrationTask
+        : m_deferredAvboitExtinctionTask
+    ;
+    bool accumulationStreamsUploaded = false;
+    bool accumulationCsgStreamsUploaded = false;
+    {
+        Core::Alloc::ScratchArena accumulationUploadScratch(RendererArenaScope::s_TaskGraphArena);
+        MaterialPassDrawItemPartitions accumulationDrawItems{ accumulationUploadScratch };
+        InstanceGpuDataVector accumulationInstanceData{ accumulationUploadScratch };
+        CsgFrameGpuData accumulationCsgFrameData{ accumulationUploadScratch };
+#if defined(NWB_DEBUG)
+        ECSRenderDetail::MaterialTypedInstanceRangeVector accumulationMaterialTypedRanges{ accumulationUploadScratch };
+#endif
+        MaterialTypedByteDataVector accumulationMaterialTypedBytes{ accumulationUploadScratch };
+        m_materialSystem.gatherMaterialPassDrawItems(
+            deferredTargets.avboit.accumulationFramebuffer.get(),
+            MaterialPipelinePass::AvboitAccumulate,
+            true,
+            csgFrameState,
+            accumulationDrawItems,
+            accumulationInstanceData,
+            accumulationCsgFrameData,
+#if defined(NWB_DEBUG)
+            accumulationMaterialTypedRanges,
+#endif
+            accumulationMaterialTypedBytes,
+            RendererResourceLookupMode::PreparedOnly
         );
-        if(!m_deferredAvboitAccumulationTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT accumulation graph task"));
-            return;
+
+        const bool accumulationHasCsgDrawItems = !accumulationDrawItems.csg.empty();
+        if(!accumulationDrawItems.empty()){
+            if(
+                !materialInstances.valid()
+                || !materialTyped.valid()
+                || !m_materialSystem.materialPassDrawBuffersReady(
+                    accumulationInstanceData,
+                    accumulationMaterialTypedBytes
+                )
+                || !m_materialSystem.materialPassDrawResourcesReady(accumulationDrawItems.regular)
+                || (accumulationHasCsgDrawItems && (
+                    !accumulationCsgFrameData.hasWork()
+                    || !csgReceiverRanges.valid()
+                    || !csgCutters.valid()
+                    || !csgClipContextSlots.valid()
+                    || !csgIntervalSampleState.valid()
+                    || !m_csgSystem.csgFrameBuffersReady(accumulationCsgFrameData)
+                    || !m_materialSystem.materialPassDrawResourcesReady(accumulationDrawItems.csg)
+                ))
+            ){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT accumulation resources were unavailable during graph declaration"));
+                return;
+            }
+
+            m_materialSystem.prepareMaterialPassInstanceUploadData(accumulationInstanceData);
+#if defined(NWB_DEBUG)
+            if(
+                accumulationInstanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
+                || accumulationCsgFrameData.receiverRanges.size() > Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData)
+                || accumulationCsgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
+            ){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: AVBOIT accumulation upload size overflows graph blob capacity"));
+                return;
+            }
+            NWB_ASSERT(accumulationInstanceData.size() == accumulationMaterialTypedRanges.size());
+            ECSRenderDetail::AssertMaterialTypedUploadRanges(
+                accumulationMaterialTypedRanges,
+                accumulationMaterialTypedBytes
+            );
+#endif
+
+            const Core::GpuUploadBlobId accumulationInstanceBlob = m_deferredLightingTaskGraph.copyUploadData(
+                accumulationInstanceData.data(),
+                accumulationInstanceData.size() * sizeof(InstanceGpuData),
+                alignof(InstanceGpuData)
+            );
+            const Core::GpuUploadBlobId accumulationMaterialTypedBlob = m_deferredLightingTaskGraph.copyUploadData(
+                accumulationMaterialTypedBytes.data(),
+                accumulationMaterialTypedBytes.size(),
+                alignof(u32)
+            );
+            if(!accumulationInstanceBlob.valid() || !accumulationMaterialTypedBlob.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT accumulation material upload data"));
+                return;
+            }
+
+            Core::GpuTaskSchedulingHint accumulationUploadScheduling;
+            accumulationUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
+            accumulationUploadScheduling.forceSubmissionBoundary = false;
+            accumulationUploadScheduling.allowPacketMerge = true;
+            accumulationUploadScheduling.mergeWithPrevious = true;
+
+            Core::GpuTaskDesc accumulationInstanceUploadDesc;
+            accumulationInstanceUploadDesc
+                .setIdentity(Name("render.avboit.accumulation.material_instances_upload"))
+                .setMarkerLabel("AVBOIT Accumulation Material Instances Upload")
+                .setQueue(GraphicsUploadQueueRequest())
+                .setScheduling(accumulationUploadScheduling)
+                .setDependencies(&accumulationUploadTask, 1u)
+            ;
+            accumulationUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+                accumulationInstanceUploadDesc,
+                Core::GpuUploadBufferTaskDesc{
+                    .source = accumulationInstanceBlob,
+                    .destination = materialInstances,
+                    .finalState = Core::ResourceStates::Common,
+                }
+            );
+            if(!accumulationUploadTask.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation material instance upload"));
+                return;
+            }
+
+            Core::GpuTaskDesc accumulationMaterialTypedUploadDesc;
+            accumulationMaterialTypedUploadDesc
+                .setIdentity(Name("render.avboit.accumulation.material_typed_upload"))
+                .setMarkerLabel("AVBOIT Accumulation Material Typed Upload")
+                .setQueue(GraphicsUploadQueueRequest())
+                .setScheduling(accumulationUploadScheduling)
+                .setDependencies(&accumulationUploadTask, 1u)
+            ;
+            accumulationUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+                accumulationMaterialTypedUploadDesc,
+                Core::GpuUploadBufferTaskDesc{
+                    .source = accumulationMaterialTypedBlob,
+                    .destination = materialTyped,
+                    .finalState = Core::ResourceStates::Common,
+                }
+            );
+            if(!accumulationUploadTask.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation material typed upload"));
+                return;
+            }
+
+            if(accumulationHasCsgDrawItems){
+                CsgClipContextSlots accumulationCsgClipContextSlotData;
+                if(!m_csgSystem.prepareCsgClipContextSlotData(
+                    accumulationCsgFrameData,
+                    accumulationCsgClipContextSlotData
+                )){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot AVBOIT accumulation CSG context data"));
+                    return;
+                }
+                const Core::GpuUploadBlobId accumulationCsgReceiverRangesBlob = m_deferredLightingTaskGraph.copyUploadData(
+                    accumulationCsgFrameData.receiverRanges.data(),
+                    accumulationCsgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData),
+                    alignof(CsgReceiverRangeGpuData)
+                );
+                const Core::GpuUploadBlobId accumulationCsgCuttersBlob = m_deferredLightingTaskGraph.copyUploadData(
+                    accumulationCsgFrameData.cutters.data(),
+                    accumulationCsgFrameData.cutters.size() * sizeof(CsgCutterGpuData),
+                    alignof(CsgCutterGpuData)
+                );
+                const Core::GpuUploadBlobId accumulationCsgClipContextSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
+                    &accumulationCsgClipContextSlotData,
+                    sizeof(accumulationCsgClipContextSlotData),
+                    alignof(CsgClipContextSlots)
+                );
+                if(
+                    !accumulationCsgReceiverRangesBlob.valid()
+                    || !accumulationCsgCuttersBlob.valid()
+                    || !accumulationCsgClipContextSlotsBlob.valid()
+                ){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT accumulation CSG upload data"));
+                    return;
+                }
+
+                Core::GpuTaskDesc accumulationCsgReceiverRangesUploadDesc;
+                accumulationCsgReceiverRangesUploadDesc
+                    .setIdentity(Name("render.avboit.accumulation.csg_receiver_ranges_upload"))
+                    .setMarkerLabel("AVBOIT Accumulation CSG Receiver Ranges Upload")
+                    .setQueue(GraphicsUploadQueueRequest())
+                    .setScheduling(accumulationUploadScheduling)
+                    .setDependencies(&accumulationUploadTask, 1u)
+                ;
+                accumulationUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+                    accumulationCsgReceiverRangesUploadDesc,
+                    Core::GpuUploadBufferTaskDesc{
+                        .source = accumulationCsgReceiverRangesBlob,
+                        .destination = csgReceiverRanges,
+                        .finalState = Core::ResourceStates::Common,
+                    }
+                );
+                if(!accumulationUploadTask.valid()){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation CSG receiver-range upload"));
+                    return;
+                }
+
+                Core::GpuTaskDesc accumulationCsgCuttersUploadDesc;
+                accumulationCsgCuttersUploadDesc
+                    .setIdentity(Name("render.avboit.accumulation.csg_cutters_upload"))
+                    .setMarkerLabel("AVBOIT Accumulation CSG Cutters Upload")
+                    .setQueue(GraphicsUploadQueueRequest())
+                    .setScheduling(accumulationUploadScheduling)
+                    .setDependencies(&accumulationUploadTask, 1u)
+                ;
+                accumulationUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+                    accumulationCsgCuttersUploadDesc,
+                    Core::GpuUploadBufferTaskDesc{
+                        .source = accumulationCsgCuttersBlob,
+                        .destination = csgCutters,
+                        .finalState = Core::ResourceStates::Common,
+                    }
+                );
+                if(!accumulationUploadTask.valid()){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation CSG cutter upload"));
+                    return;
+                }
+
+                Core::GpuTaskDesc accumulationCsgClipContextSlotsUploadDesc;
+                accumulationCsgClipContextSlotsUploadDesc
+                    .setIdentity(Name("render.avboit.accumulation.csg_clip_context_slots_upload"))
+                    .setMarkerLabel("AVBOIT Accumulation CSG Clip Context Slots Upload")
+                    .setQueue(GraphicsUploadQueueRequest())
+                    .setScheduling(accumulationUploadScheduling)
+                    .setDependencies(&accumulationUploadTask, 1u)
+                ;
+                accumulationUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+                    accumulationCsgClipContextSlotsUploadDesc,
+                    Core::GpuUploadBufferTaskDesc{
+                        .source = accumulationCsgClipContextSlotsBlob,
+                        .destination = csgClipContextSlots,
+                        .finalState = Core::ResourceStates::Common,
+                    }
+                );
+                if(!accumulationUploadTask.valid()){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation CSG clip-context upload"));
+                    return;
+                }
+                accumulationCsgStreamsUploaded = true;
+            }
+
+            avboitAccumulationPayload.accumulationSnapshot.capture(
+                accumulationDrawItems,
+                accumulationCsgFrameData,
+                accumulationInstanceData.size(),
+                accumulationMaterialTypedBytes.size()
+            );
+            avboitAccumulationPayload.accumulationPhasePrepared = true;
+            accumulationStreamsUploaded = true;
+        }
+        else{
+            // An empty captured phase is still authoritative: recording must not re-gather mutable renderer state.
+            avboitAccumulationPayload.accumulationSnapshot.capture(
+                accumulationDrawItems,
+                accumulationCsgFrameData,
+                accumulationInstanceData.size(),
+                accumulationMaterialTypedBytes.size()
+            );
+            avboitAccumulationPayload.accumulationPhasePrepared = true;
         }
     }
+
+    Core::Alloc::ScratchArena accumulationResourceScratch(RendererArenaScope::s_TaskGraphArena);
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationResourceUses{ accumulationResourceScratch };
+    accumulationResourceUses.reserve((splitAvboitStages ? 9u : 12u) + (accumulationStreamsUploaded ? 7u : 0u));
+    if(!splitAvboitStages){
+        // Normal Graphics recording restores these native G-buffer inputs after the final accumulation raster pass.
+        accumulationResourceUses.push_back(ReadUse(albedo));
+        accumulationResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource, true));
+        accumulationResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
     }
-    const Core::GpuTaskId avboitFinalTask = splitAvboitStages
+    accumulationResourceUses.push_back(ReadUse(depth));
+    accumulationResourceUses.push_back(ReadUse(avboitTransmittance));
+    accumulationResourceUses.push_back(ReadUse(avboitDepthWarp));
+    accumulationResourceUses.push_back(ReadUse(avboitControl));
+    accumulationResourceUses.push_back(ReadWriteUse(avboitAccumColor, Core::ResourceStates::RenderTarget));
+    accumulationResourceUses.push_back(ReadWriteUse(avboitAccumExtinction, Core::ResourceStates::RenderTarget));
+    if(accumulationStreamsUploaded){
+        accumulationResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
+        accumulationResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
+        accumulationResourceUses.push_back(ReadUse(materialTyped, Core::ResourceStates::ShaderResource));
+        if(accumulationCsgStreamsUploaded){
+            accumulationResourceUses.push_back(ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource));
+            accumulationResourceUses.push_back(ReadUse(csgCutters, Core::ResourceStates::ShaderResource));
+            accumulationResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
+            // This remains the full-resolution interval producer's state; accumulation only samples it.
+            accumulationResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
+        }
+    }
+    accumulationResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+    accumulationResourceUses.push_back(ReadUse(avboitMaterialDomain));
+    accumulationResourceUses.push_back(ReadUse(avboitCsgDomain));
+
+    Core::GpuTaskSchedulingHint avboitAccumulationScheduling;
+    avboitAccumulationScheduling.cost = Core::GpuTaskCostHint::Large;
+    avboitAccumulationScheduling.forceSubmissionBoundary = false;
+    avboitAccumulationScheduling.allowPacketMerge = true;
+    avboitAccumulationScheduling.mergeWithPrevious = true;
+    Core::GpuTaskDesc accumulationDesc;
+    accumulationDesc
+        .setIdentity(Name("render.avboit.accumulation"))
+        .setMarkerLabel("AVBOIT Accumulation")
+        .setQueue(GraphicsQueueRequest())
+        .setScheduling(avboitAccumulationScheduling)
+        .setDependencies(&accumulationUploadTask, 1u)
+        .setResourceUses(accumulationResourceUses.data(), accumulationResourceUses.size())
+    ;
+    m_deferredAvboitAccumulationTask = m_deferredLightingTaskGraph.addTask<AvboitAccumulationGraphTask>(
+        accumulationDesc,
+        Move(avboitAccumulationPayload)
+    );
+    if(!m_deferredAvboitAccumulationTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT accumulation graph task"));
+        return;
+    }
+    if(accumulationStreamsUploaded)
+        m_deferredAvboitAccumulationStreamTask = accumulationUploadTask;
+
+    }
+    const Core::GpuTaskId avboitFinalTask = hasTransparentRenderers
         ? m_deferredAvboitAccumulationTask
-        : (hasTransparentRenderers ? m_deferredAvboitExtinctionTask : m_deferredAvboitOccupancyTask)
+        : m_deferredAvboitOccupancyTask
     ;
 
     const Core::GpuExternalCompletionId laggedLightingExternalDependencies[] = {

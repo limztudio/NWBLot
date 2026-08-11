@@ -2242,6 +2242,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredAvboitAccumulationTask = {};
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
+    m_deferredPresentationOverlayTask = {};
     m_deferredPresentTask = {};
     m_deferredLaggedLightingHistoryTask = {};
     m_deferredFrameRecoveryTask = {};
@@ -2251,6 +2252,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_graphicsPrefixSceneShadingSetupReady = false;
     m_deferredFrameRecoveryArmed = false;
     m_deferredFrameRecoveryRetiresTiming = false;
+    m_deferredPresentationOverlayRequired = false;
     m_deferredLightingTaskGraph.reset();
     m_deferredLightingTaskGraphAnalysis.reset();
     m_deferredLightingTaskGraphQueueAssignments.reset();
@@ -3329,6 +3331,26 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     if(!m_deferredPresentTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-present graph task"));
         return;
+    }
+
+    // UI/overlay work must be declared before the independent diagnostic and history-copy tails. Its explicit
+    // dependency on Deferred Present therefore gives the shared graph the real final Graphics packet instead of
+    // leaving Graphics::render() to submit a later untracked backbuffer write.
+    m_deferredPresentationOverlayRequired =
+        m_preparedTaskGraphPresentationContributor
+        && m_preparedTaskGraphPresentationContributor->hasTaskGraphPresentationWork()
+    ;
+    if(m_deferredPresentationOverlayRequired){
+        m_deferredPresentationOverlayTask = m_preparedTaskGraphPresentationContributor->declareTaskGraphPresentation(
+            m_deferredLightingTaskGraph,
+            presentationFramebuffer,
+            backbuffer,
+            m_deferredPresentTask
+        );
+        if(!m_deferredPresentationOverlayTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: presentation contributor did not declare its final graph task"));
+            return;
+        }
     }
 
     // Keep this diagnostic after the normal Present path in declaration order. Its only dependency is Surfel GI,

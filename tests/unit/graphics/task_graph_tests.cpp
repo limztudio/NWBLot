@@ -2640,6 +2640,104 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
 }
 
 
+TEST(GpuTaskGraph, KeepsPresentationOverlayInDistinctTerminalGraphicsPacket){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId backbuffer = AddHazardDomain(
+        graph,
+        Name("tests/task_graph/presentation_backbuffer"),
+        "Presentation Back Buffer"
+    );
+    ASSERT_TRUE(backbuffer.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    scheduling.overlapPreferred = false;
+    scheduling.avoidQueueCrossing = true;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    const Graphics::GpuTaskResourceUse backbufferWrite[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = backbuffer,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Present,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+
+    Graphics::GpuTaskDesc sceneOutputDesc;
+    sceneOutputDesc
+        .setIdentity(Name("tests/task_graph/scene_output"))
+        .setMarkerLabel("Scene Output")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+        .setResourceUses(backbufferWrite, LengthOf(backbufferWrite))
+    ;
+    const Graphics::GpuTaskId sceneOutput = graph.addTask(sceneOutputDesc);
+    ASSERT_TRUE(sceneOutput.valid());
+
+    Graphics::GpuTaskDesc overlayDesc;
+    overlayDesc
+        .setIdentity(Name("tests/task_graph/presentation_overlay"))
+        .setMarkerLabel("Presentation Overlay")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+        .setDependencies(&sceneOutput, 1u)
+        .setResourceUses(backbufferWrite, LengthOf(backbufferWrite))
+    ;
+    const Graphics::GpuTaskId overlay = graph.addTask(overlayDesc);
+    ASSERT_TRUE(overlay.valid());
+
+    // A diagnostic/history tail need not depend on the backbuffer, but declaration order keeps it outside the
+    // terminal presentation span. This lets the renderer signal presentation from the overlay packet while later
+    // graph-owned maintenance work continues independently.
+    Graphics::GpuTaskDesc lateTailDesc;
+    lateTailDesc
+        .setIdentity(Name("tests/task_graph/presentation_late_tail"))
+        .setMarkerLabel("Presentation Late Tail")
+        .setQueue(graphicsRequest)
+        .setScheduling(scheduling)
+    ;
+    const Graphics::GpuTaskId lateTail = graph.addTask(lateTailDesc);
+    ASSERT_TRUE(lateTail.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuSubmissionPacketId sceneOutputPacket = compiledGraph.packetForTask(sceneOutput);
+    const Graphics::GpuSubmissionPacketId overlayPacket = compiledGraph.packetForTask(overlay);
+    const Graphics::GpuSubmissionPacketId lateTailPacket = compiledGraph.packetForTask(lateTail);
+    ASSERT_TRUE(sceneOutputPacket.valid());
+    ASSERT_TRUE(overlayPacket.valid());
+    ASSERT_TRUE(lateTailPacket.valid());
+    EXPECT_NE(sceneOutputPacket, overlayPacket);
+    EXPECT_GT(lateTailPacket.index, overlayPacket.index);
+    EXPECT_EQ(compiledGraph.packet(overlayPacket).queue, queues[0].id);
+    const Graphics::GpuSubmissionPacketRange presentationRange = compiledGraph.packetRange(
+        sceneOutputPacket,
+        overlayPacket
+    );
+    ASSERT_TRUE(presentationRange.valid());
+    EXPECT_EQ(presentationRange.packetCount, 2u);
+    const auto& overlayPlan = compiledGraph.packet(overlayPacket);
+    ASSERT_EQ(overlayPlan.taskCount, 1u);
+    ASSERT_EQ(overlayPlan.dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(overlayPacket)[0].producer, sceneOutputPacket);
+}
+
 TEST(GpuTaskGraph, MergesExplicitCompatibleSuccessorIntoOnePacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

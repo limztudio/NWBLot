@@ -228,6 +228,7 @@ void RendererSystem::invalidateResources(){
     m_deferredAvboitAccumulationTask = {};
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
+    m_deferredPresentationOverlayTask = {};
     m_deferredPresentTask = {};
     m_deferredLaggedLightingHistoryTask = {};
     m_deferredFrameRecoveryTask = {};
@@ -235,6 +236,8 @@ void RendererSystem::invalidateResources(){
     m_deferredLightingHistoryCompletion = {};
     m_deferredFrameRecoveryArmed = false;
     m_deferredFrameRecoveryRetiresTiming = false;
+    m_preparedTaskGraphPresentationContributor = nullptr;
+    m_deferredPresentationOverlayRequired = false;
     m_deferredLightingTaskGraph.reset();
     m_deferredLightingTaskGraphAnalysis.reset();
     m_deferredLightingTaskGraphQueueAssignments.reset();
@@ -347,6 +350,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     m_preparedShadowVisibilityResourcesValid = false;
     m_preparedShadowVisibilityReady = false;
     m_preparedHasTransparentRenderers = false;
+    m_preparedTaskGraphPresentationContributor = nullptr;
 
     if(!framebuffer)
         return false;
@@ -429,6 +433,13 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
     }
     m_preparedShadowVisibilityResourcesValid = true;
 
+    if(Core::IGpuTaskGraphPresentationContributor* const contributor = m_graphics.taskGraphPresentationContributor()){
+        if(contributor->prepareTaskGraphPresentation(framebuffer))
+            m_preparedTaskGraphPresentationContributor = contributor;
+        else
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: presentation contributor preparation failed; rendering scene output without its overlay"));
+    }
+
     return true;
 }
 
@@ -455,6 +466,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredAvboitAccumulationTask = {};
     m_deferredLightingTask = {};
     m_deferredCompositeTask = {};
+    m_deferredPresentationOverlayTask = {};
     m_deferredPresentTask = {};
     m_deferredLaggedLightingHistoryTask = {};
     m_deferredFrameRecoveryTask = {};
@@ -462,6 +474,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredLightingHistoryCompletion = {};
     m_deferredFrameRecoveryArmed = false;
     m_deferredFrameRecoveryRetiresTiming = false;
+    m_deferredPresentationOverlayRequired = false;
     m_deferredLightingTaskGraph.reset();
     m_deferredLightingTaskGraphAnalysis.reset();
     m_deferredLightingTaskGraphQueueAssignments.reset();
@@ -927,6 +940,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId deferredPresentPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredPresentTask
     );
+    const Core::GpuSubmissionPacketId deferredPresentationOverlayPacket =
+        m_deferredLightingCompiledGraph.packetForTask(m_deferredPresentationOverlayTask);
+    const Core::GpuSubmissionPacketId terminalPresentationPacket = deferredPresentationOverlayPacket.valid()
+        ? deferredPresentationOverlayPacket
+        : deferredPresentPacket
+    ;
     const Core::GpuSubmissionPacketId deferredLaggedLightingHistoryPacket =
         m_deferredLightingCompiledGraph.packetForTask(m_deferredLaggedLightingHistoryTask);
     const Core::GpuSubmissionPacketId deferredFrameRecoveryPacket =
@@ -941,6 +960,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     ;
     const Core::GpuPhysicalQueueInfo* const deferredPresentQueue = deferredPresentPacket.valid()
         ? m_deferredLightingCompiledGraph.queueInfo(m_deferredLightingCompiledGraph.packet(deferredPresentPacket).queue)
+        : nullptr
+    ;
+    const Core::GpuPhysicalQueueInfo* const terminalPresentationQueue = terminalPresentationPacket.valid()
+        ? m_deferredLightingCompiledGraph.queueInfo(
+            m_deferredLightingCompiledGraph.packet(terminalPresentationPacket).queue
+        )
         : nullptr
     ;
     const Core::GpuPhysicalQueueInfo* const deferredLaggedLightingHistoryQueue =
@@ -1020,6 +1045,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.packetRange(deferredLightingPacket, deferredCompositePacket);
     const Core::GpuSubmissionPacketRange deferredPresentPacketRange =
         m_deferredLightingCompiledGraph.packetRange(deferredPresentPacket, deferredPresentPacket);
+    const Core::GpuSubmissionPacketRange terminalPresentationPacketRange =
+        m_deferredLightingCompiledGraph.packetRange(deferredPresentPacket, terminalPresentationPacket);
     const Core::GpuSubmissionPacketRange deferredLaggedLightingHistoryPacketRange =
         m_deferredLightingCompiledGraph.packetRange(
             deferredLaggedLightingHistoryPacket,
@@ -1033,10 +1060,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         );
     const Core::GpuSubmissionPacketRange deferredFrameRecoveryPacketRange =
         m_deferredLightingCompiledGraph.packetRange(deferredFrameRecoveryPacket, deferredFrameRecoveryPacket);
-    const Core::GpuSubmissionPacketRange effectsThroughPresentPacketRange =
-        m_deferredLightingCompiledGraph.packetRange(shadowVisibilityPacket, deferredPresentPacket);
+    const Core::GpuSubmissionPacketRange effectsThroughPresentationPacketRange =
+        m_deferredLightingCompiledGraph.packetRange(shadowVisibilityPacket, terminalPresentationPacket);
     const Core::GpuSubmissionPacketRange deferredNormalPacketRange =
-        m_deferredLightingCompiledGraph.packetRange(shadowPreparePacket, deferredPresentPacket);
+        m_deferredLightingCompiledGraph.packetRange(shadowPreparePacket, terminalPresentationPacket);
     const Core::GpuSubmissionPacketId deferredTailFirstPacket = m_deferredSurfelGiCounterReadbackTask.valid()
         ? surfelGiCounterReadbackPacket
         : (captureLaggedLightingHistory ? deferredLaggedLightingHistoryPacket : deferredFrameRecoveryPacket)
@@ -1052,6 +1079,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         + (m_deferredSurfelGiCounterReadbackTask.valid() ? 1u : 0u)
         + (captureLaggedLightingHistory ? 1u : 0u)
     ;
+    const usize expectedTerminalPresentationPacketCount = m_deferredPresentationOverlayRequired ? 2u : 1u;
     const auto discardGraphicsPrefixTimingTickets = [&graphicsPrefixOwnedTimingTickets](){
         for(Core::GpuTimingSubmissionTicket* const timingTicket : graphicsPrefixOwnedTimingTickets)
             timingTicket->discard();
@@ -1133,6 +1161,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredLightingTask.valid()
         || !m_deferredCompositeTask.valid()
         || !m_deferredPresentTask.valid()
+        || (m_deferredPresentationOverlayRequired != m_deferredPresentationOverlayTask.valid())
         || !m_deferredFrameRecoveryTask.valid()
         || (m_deferredSurfelGiCounterReadbackCompletion.valid()
             && !surfelCounterReadbackCompletionToken.valid())
@@ -1147,10 +1176,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !deferredLightingPacket.valid()
         || !deferredCompositePacket.valid()
         || !deferredPresentPacket.valid()
+        || (m_deferredPresentationOverlayRequired && !deferredPresentationOverlayPacket.valid())
+        || !terminalPresentationPacket.valid()
         || !deferredFrameRecoveryPacket.valid()
         || !deferredLightingQueue
         || !deferredCompositeQueue
         || !deferredPresentQueue
+        || !terminalPresentationQueue
         || !deferredFrameRecoveryQueue
         || !shadowPreparePacketRange.valid()
         || shadowPreparePacketRange.packetCount != 1u
@@ -1175,6 +1207,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || deferredLightingCompositePacketRange.packetCount != 2u
         || !deferredPresentPacketRange.valid()
         || deferredPresentPacketRange.packetCount != 1u
+        || !terminalPresentationPacketRange.valid()
+        || terminalPresentationPacketRange.packetCount != expectedTerminalPresentationPacketCount
         || (m_deferredSurfelGiCounterReadbackTask.valid() && (
             !surfelGiCounterReadbackPacketRange.valid()
             || surfelGiCounterReadbackPacketRange.packetCount != 1u
@@ -1185,10 +1219,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ))
         || !deferredFrameRecoveryPacketRange.valid()
         || deferredFrameRecoveryPacketRange.packetCount != 1u
-        || !effectsThroughPresentPacketRange.valid()
+        || !effectsThroughPresentationPacketRange.valid()
         || !deferredNormalPacketRange.valid()
         || deferredNormalPacketRange.packetCount
-            != shadowPrepareThroughPrefixPacketRange.packetCount + effectsThroughPresentPacketRange.packetCount
+            != shadowPrepareThroughPrefixPacketRange.packetCount + effectsThroughPresentationPacketRange.packetCount
         || !deferredTailPacketRange.valid()
         || deferredTailPacketRange.packetCount != expectedDeferredTailPacketCount
         || !deferredFullPacketRange.valid()
@@ -1198,6 +1232,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || (laggedAsyncLightingSchedule && deferredLightingQueue->queueClass != Core::CommandQueue::Compute)
         || (laggedAsyncLightingSchedule && deferredCompositeQueue->queueClass != Core::CommandQueue::Graphics)
         || deferredPresentQueue->queueClass != Core::CommandQueue::Graphics
+        || terminalPresentationQueue->queueClass != Core::CommandQueue::Graphics
         || deferredFrameRecoveryQueue->queueClass != Core::CommandQueue::Graphics
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned prefix/effects/deferred packet chain was unavailable"));
@@ -1572,6 +1607,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredLightingTask.valid()
         && m_deferredCompositeTask.valid()
         && m_deferredPresentTask.valid()
+        && (!m_deferredPresentationOverlayRequired || (
+            m_deferredPresentationOverlayTask.valid()
+            && deferredPresentationOverlayPacket.valid()
+        ))
         && m_deferredFrameRecoveryTask.valid()
         && (!captureLaggedLightingHistory || (
             m_deferredLaggedLightingHistoryTask.valid()
@@ -1581,15 +1620,16 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && deferredLightingPacket.valid()
         && deferredCompositePacket.valid()
         && deferredPresentPacket.valid()
+        && terminalPresentationPacket.valid()
         && deferredFrameRecoveryPacket.valid()
         && deferredFrameRecoveryQueue
-        && effectsThroughPresentPacketRange.valid()
+        && effectsThroughPresentationPacketRange.valid()
     ;
     if(deferredPacketsRecorded){
         deferredPacketsRecorded = deferredRecorder.recordPacketRangeInCompileOrder(
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph,
-            effectsThroughPresentPacketRange,
+            effectsThroughPresentationPacketRange,
             deferredRecordDescs,
             deferredRecordDescCount,
             m_deferredLightingRecordedGraph
@@ -2016,19 +2056,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 .timingTicket = &deferredPresentTimingTicket,
             },
         };
-        const bool deferredPresentAccepted =
+        const bool deferredPresentationAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredPresentTask.valid()
             && m_deferredSurfelGiTask.valid()
             && m_deferredCompositeTask.valid()
+            && (!m_deferredPresentationOverlayRequired || m_deferredPresentationOverlayTask.valid())
             && deferredPresentPacket.valid()
-            && deferredPresentPacketRange.valid()
-            && deferredPresentPacketRange.packetCount == LengthOf(deferredPresentTimingTickets)
+            && terminalPresentationPacket.valid()
+            && terminalPresentationPacketRange.valid()
+            && terminalPresentationPacketRange.packetCount >= LengthOf(deferredPresentTimingTickets)
             && deferredPresentSubmitter.submitPacketRangeInCompileOrder(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
                 m_deferredLightingRecordedGraph,
-                deferredPresentPacketRange,
+                terminalPresentationPacketRange,
                 nullptr,
                 0u,
                 deferredPresentTimingTickets,
@@ -2037,14 +2079,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 presentScratchArena
             )
         ;
-        finalPresentationSubmissionToken = deferredPresentAccepted
-            ? m_deferredLightingSubmissionTransaction.packetToken(deferredPresentPacket)
+        finalPresentationSubmissionToken = deferredPresentationAccepted
+            ? m_deferredLightingSubmissionTransaction.packetToken(terminalPresentationPacket)
             : Core::QueueSubmissionToken{}
         ;
         if(!finalPresentationSubmissionToken.valid()){
             const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred present submission was rejected"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred presentation submission was rejected"));
             if(!recovered)
                 failFrameRenderRecovery();
             return false;

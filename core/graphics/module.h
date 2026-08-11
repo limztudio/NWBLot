@@ -20,6 +20,9 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class IGpuTaskGraphPresentationContributor;
+
+
 class Graphics{
 private:
     using Backend = GraphicsBackend::Backend;
@@ -158,6 +161,19 @@ public:
     void addRenderPassToBack(IRenderPass& pass);
     void removeRenderPass(IRenderPass& pass);
 
+    // Optional overlays register here instead of coupling a renderer directly to their module. The active
+    // contributor may append one final Graphics packet to a renderer-owned task graph before presentation.
+    void setTaskGraphPresentationContributor(IGpuTaskGraphPresentationContributor* contributor)noexcept{
+        m_taskGraphPresentationContributor = contributor;
+    }
+    void clearTaskGraphPresentationContributor(const IGpuTaskGraphPresentationContributor& contributor)noexcept{
+        if(m_taskGraphPresentationContributor == &contributor)
+            m_taskGraphPresentationContributor = nullptr;
+    }
+    [[nodiscard]] IGpuTaskGraphPresentationContributor* taskGraphPresentationContributor()const noexcept{
+        return m_taskGraphPresentationContributor;
+    }
+
     [[nodiscard]] const tchar* getRendererString()const;
     // Compatibility query: the renderer is Vulkan-only and this always returns GraphicsAPI::VULKAN.
     [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const;
@@ -253,6 +269,8 @@ private:
     bool m_frameSubmissionSuspended = false;
 
     List<IRenderPass*, Alloc::GlobalArena> m_renderPasses;
+    // Non-owning: the contributing system unregisters before its lifetime ends.
+    IGpuTaskGraphPresentationContributor* m_taskGraphPresentationContributor = nullptr;
     Timer m_previousFrameTimestamp = {};
     f32 m_dpiScaleFactorX = 1.f;
     f32 m_dpiScaleFactorY = 1.f;

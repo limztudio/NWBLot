@@ -13,6 +13,7 @@
 #include <core/ecs/system.h>
 #include <core/graphics/api.h>
 #include <core/graphics/render_pass.h>
+#include <core/graphics/task_graph/presentation_contributor.h>
 #include <core/input/module.h>
 
 #include <imgui.h>
@@ -45,7 +46,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class UiSystem final : public Core::ECS::ISystem, public Core::IRenderPass, public Core::IInputEventHandler{
+class UiSystem final
+    : public Core::ECS::ISystem
+    , public Core::IRenderPass
+    , public Core::IInputEventHandler
+    , public Core::IGpuTaskGraphPresentationContributor
+{
 public:
     using ShaderPathResolveCallback = Function<bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)>;
 
@@ -68,6 +74,17 @@ public:
     virtual void render(Core::Framebuffer* framebuffer)override;
     virtual void backBufferResizing()override;
 
+    // The renderer asks this optional contributor to turn the finished ImGui draw list into its terminal graph
+    // packet. Direct IRenderPass rendering remains available for worlds without a graph-owning renderer.
+    virtual bool prepareTaskGraphPresentation(Core::Framebuffer* framebuffer)override;
+    [[nodiscard]] virtual bool hasTaskGraphPresentationWork()const override;
+    [[nodiscard]] virtual Core::GpuTaskId declareTaskGraphPresentation(
+        Core::GpuTaskGraph& graph,
+        Core::Framebuffer* framebuffer,
+        Core::GpuGraphResourceId backbuffer,
+        Core::GpuTaskId previousTask
+    )override;
+
 public:
     virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
     virtual bool keyboardCharInput(u32 unicode, i32 mods)override;
@@ -81,6 +98,8 @@ public:
     [[nodiscard]] bool wantsTextInput()const noexcept{ return m_wantsTextInput; }
 
 private:
+    struct TaskGraphRenderTask;
+
     struct UiTextureResource{
         Core::TextureHandle texture;
         // Every dynamically-created ImGui texture (including the font atlas) has one persistent sampled-image
@@ -107,6 +126,9 @@ private:
     void setCurrentContext()const;
     void beginFrame(f32 delta);
     void finishFrame();
+    [[nodiscard]] bool prepareFrameResources(Core::Framebuffer* framebuffer);
+    [[nodiscard]] bool recordTaskGraphPresentation(Core::CommandList& commandList, Core::Framebuffer* framebuffer);
+    void confirmTaskGraphPresentationSubmission()noexcept;
     [[nodiscard]] bool ensureFrameCommandLists();
     [[nodiscard]] bool ensureRenderResources(Core::Framebuffer* framebuffer);
     [[nodiscard]] bool ensureShadersLoaded();
@@ -157,6 +179,11 @@ private:
     bool m_inputRegistered = false;
     bool m_frameStarted = false;
     bool m_frameFinished = false;
+    // These frame-local flags suppress the legacy direct UI submission after the renderer has claimed this frame's
+    // draw list for a terminal shared-graph packet. They reset only when ImGui begins the next frame.
+    bool m_taskGraphPresentationPrepared = false;
+    bool m_taskGraphPresentationHasWork = false;
+    bool m_taskGraphPresentationClaimed = false;
     bool m_wantsKeyboardCapture = false;
     bool m_wantsMouseCapture = false;
     bool m_wantsTextInput = false;

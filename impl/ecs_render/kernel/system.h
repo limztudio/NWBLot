@@ -15,6 +15,7 @@
 #include <core/graphics/render_pass.h>
 #include <core/graphics/task_graph/compiler.h>
 #include <core/graphics/task_graph/packet_runtime.h>
+#include <core/graphics/task_graph/presentation_contributor.h>
 #include <core/telemetry/frame_graph_contributor.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets_material/asset.h>
@@ -328,6 +329,9 @@ private:
     Core::GpuTaskId m_deferredAvboitAccumulationTask;
     Core::GpuTaskId m_deferredLightingTask;
     Core::GpuTaskId m_deferredCompositeTask;
+    // Optional final overlay appended by a registered presentation contributor. The deferred scene output remains
+    // separately named because lagged-history copies may begin from it while the overlay finishes on Graphics.
+    Core::GpuTaskId m_deferredPresentationOverlayTask;
     Core::GpuTaskId m_deferredPresentTask;
     Core::GpuTaskId m_deferredLaggedLightingHistoryTask;
     // Recovery stays unrecorded until a later packet rejects. Its graph-owned submission join waits for every latest
@@ -341,6 +345,8 @@ private:
     bool m_deferredFrameRecoveryArmed = false;
     bool m_deferredFrameRecoveryRetiresTiming = false;
     bool m_deferredLightingTaskGraphValid = false;
+    Core::IGpuTaskGraphPresentationContributor* m_preparedTaskGraphPresentationContributor = nullptr;
+    bool m_deferredPresentationOverlayRequired = false;
 
 private:
     RendererMeshState m_meshState;

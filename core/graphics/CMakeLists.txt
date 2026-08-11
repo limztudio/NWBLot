@@ -56,6 +56,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiled_graph.h"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/compiler.h"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/packet_runtime.h"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph/presentation_contributor.h"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_desc.h"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/task_graph.h"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph/types.h"

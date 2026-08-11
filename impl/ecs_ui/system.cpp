@@ -7,6 +7,7 @@
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/module.h>
+#include <core/graphics/task_graph/task_graph.h>
 #include <impl/assets/graphics/imgui/binding_slots.h>
 #include <core/common/log.h>
 
@@ -95,6 +96,32 @@ static bool HasTextureRequests(const ImDrawData& drawData){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct UiSystem::TaskGraphRenderTask{
+    struct Payload{
+        UiSystem* ui = nullptr;
+        Core::Framebuffer* framebuffer = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        return payload.ui && payload.ui->recordTaskGraphPresentation(commandList, payload.framebuffer);
+    }
+
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        static_cast<void>(token);
+        if(payload.ui)
+            payload.ui->confirmTaskGraphPresentationSubmission();
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 UiSystem::UiSystem(
     Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
@@ -138,9 +165,12 @@ UiSystem::UiSystem(
 
     m_input.addHandlerToBack(*this);
     m_inputRegistered = true;
+    m_graphics.setTaskGraphPresentationContributor(this);
 }
 
 UiSystem::~UiSystem(){
+    m_graphics.clearTaskGraphPresentationContributor(*this);
+
     if(m_inputRegistered){
         m_input.removeHandler(*this);
         m_inputRegistered = false;
@@ -184,6 +214,10 @@ void UiSystem::beginFrame(const f32 delta){
 
     if(m_frameStarted && !m_frameFinished)
         finishFrame();
+
+    m_taskGraphPresentationPrepared = false;
+    m_taskGraphPresentationHasWork = false;
+    m_taskGraphPresentationClaimed = false;
 
     m_deltaSeconds = IsFinite(delta) && delta > 0.0f ? delta : __hidden_ui::s_FallbackDeltaSeconds;
 
@@ -270,6 +304,9 @@ void UiSystem::invalidateResources(){
     m_indexBufferCapacity = 0u;
     m_frameStarted = false;
     m_frameFinished = false;
+    m_taskGraphPresentationPrepared = false;
+    m_taskGraphPresentationHasWork = false;
+    m_taskGraphPresentationClaimed = false;
 }
 
 bool UiSystem::ensureFrameCommandLists(){
@@ -295,6 +332,12 @@ bool UiSystem::ensureFrameCommandLists(){
 }
 
 bool UiSystem::prepareResources(Core::Framebuffer* framebuffer){
+    if(m_taskGraphPresentationPrepared)
+        return true;
+    return prepareFrameResources(framebuffer);
+}
+
+bool UiSystem::prepareFrameResources(Core::Framebuffer* framebuffer){
     if(!framebuffer)
         return false;
 
@@ -359,8 +402,119 @@ bool UiSystem::prepareResources(Core::Framebuffer* framebuffer){
     return true;
 }
 
+bool UiSystem::prepareTaskGraphPresentation(Core::Framebuffer* framebuffer){
+    if(m_taskGraphPresentationPrepared)
+        return true;
+    if(!prepareFrameResources(framebuffer))
+        return false;
+
+    setCurrentContext();
+    ImDrawData* const drawData = ImGui::GetDrawData();
+    m_taskGraphPresentationHasWork =
+        m_frameFinished
+        && drawData
+        && drawData->TotalVtxCount > 0
+        && drawData->TotalIdxCount > 0
+        && m_pipeline
+    ;
+    m_taskGraphPresentationPrepared = true;
+    return true;
+}
+
+bool UiSystem::hasTaskGraphPresentationWork()const{
+    return m_taskGraphPresentationPrepared && m_taskGraphPresentationHasWork;
+}
+
+Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
+    Core::GpuTaskGraph& graph,
+    Core::Framebuffer* const framebuffer,
+    const Core::GpuGraphResourceId backbuffer,
+    const Core::GpuTaskId previousTask
+){
+    if(
+        !m_taskGraphPresentationPrepared
+        || !m_taskGraphPresentationHasWork
+        || m_taskGraphPresentationClaimed
+        || !framebuffer
+        || !backbuffer.valid()
+        || !previousTask.valid()
+    )
+        return {};
+
+    const Core::GpuTaskResourceUse resourceUses[] = {
+        Core::GpuTaskResourceUse{
+            .resource = backbuffer,
+            .range = {},
+            // The swap-chain texture restores its keep-initial-state Present layout when this command list closes.
+            // The graph hazard domain carries the authoritative ordering with the deferred scene-output packet.
+            .requiredState = Core::ResourceStates::Present,
+            .access = Core::GpuTaskResourceAccess::Write,
+        },
+    };
+    const Core::GpuTaskId dependencies[] = { previousTask };
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Small;
+    scheduling.overlapPreferred = false;
+    scheduling.avoidQueueCrossing = true;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    Core::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("ui.imgui_overlay"))
+        .setMarkerLabel("ImGui Overlay")
+        .setQueue(Core::GpuQueueRequest{
+            Core::GpuQueueCapability::Graphics,
+            Core::GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(scheduling)
+        .setDependencies(dependencies, LengthOf(dependencies))
+        .setResourceUses(resourceUses, LengthOf(resourceUses))
+    ;
+    const Core::GpuTaskId task = graph.addTask<TaskGraphRenderTask>(
+        desc,
+        TaskGraphRenderTask::Payload{
+            .ui = this,
+            .framebuffer = framebuffer,
+        }
+    );
+    if(task.valid())
+        m_taskGraphPresentationClaimed = true;
+    return task;
+}
+
+bool UiSystem::recordTaskGraphPresentation(Core::CommandList& commandList, Core::Framebuffer* const framebuffer){
+    if(!framebuffer || !m_taskGraphPresentationClaimed)
+        return false;
+
+    setCurrentContext();
+    if(!m_frameFinished || !m_pipeline)
+        return false;
+
+    ImDrawData* const drawData = ImGui::GetDrawData();
+    if(!drawData || drawData->TotalVtxCount <= 0 || drawData->TotalIdxCount <= 0)
+        return false;
+
+    const bool recorded = uploadDrawBuffers(commandList, *drawData);
+    if(recorded)
+        renderDrawData(commandList, framebuffer, *drawData);
+    commandList.endRenderPass();
+    return recorded;
+}
+
+void UiSystem::confirmTaskGraphPresentationSubmission()noexcept{
+    m_frameStarted = false;
+    m_frameFinished = false;
+}
+
 void UiSystem::render(Core::Framebuffer* framebuffer){
     if(!framebuffer)
+        return;
+
+    // The renderer accepted this frame's final UI packet already. A second direct submission here would be later
+    // than the graph's Present endpoint and could race the presentation semaphore on the next integration step.
+    if(m_taskGraphPresentationClaimed)
         return;
 
     setCurrentContext();
@@ -407,6 +561,8 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
         device.executeCommandLists(commandLists, 1);
         m_frameStarted = false;
         m_frameFinished = false;
+        m_taskGraphPresentationPrepared = false;
+        m_taskGraphPresentationHasWork = false;
     }
 }
 
@@ -414,6 +570,9 @@ void UiSystem::backBufferResizing(){
     m_prepareCommandList.reset();
     m_renderCommandList.reset();
     m_pipeline.reset();
+    m_taskGraphPresentationPrepared = false;
+    m_taskGraphPresentationHasWork = false;
+    m_taskGraphPresentationClaimed = false;
 }
 
 bool UiSystem::uploadDrawBuffers(Core::CommandList& commandList, ImDrawData& drawData){

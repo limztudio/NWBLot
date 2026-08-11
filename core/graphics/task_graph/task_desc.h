@@ -55,6 +55,10 @@ struct GpuTaskSchedulingHint{
     // worker concurrently with other opt-in packets from the same compiler-derived ready frontier, so it must not
     // mutate shared CPU state or rely on thread-affine APIs. Submission remains in compiler order.
     bool allowParallelRecording = false;
+    // Opts this task into deterministic load balancing across physical queues that share the selected queue class
+    // and Vulkan family. The default retains the current one-transport-per-class behavior; callers that opt in
+    // accept explicit timeline waits when a producer and consumer land on different queues in that family.
+    bool allowSameClassQueueRouting = false;
 };
 
 // A resource may be metadata-only during the shadow-graph phase, or may retain an imported engine handle through

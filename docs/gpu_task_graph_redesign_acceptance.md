@@ -5,7 +5,8 @@
 **Reviewed baseline:** `c62605d9` (`Fix acceptance policy regressions`), 2026-08-11.
 
 **Follow-up implementation:** physical queue identity, frontier-safe deferred scheduling, graph-bound presentation,
-graph-owned per-frame ImGui uploads, and opt-in ready-frontier native recording, 2026-08-11.
+graph-owned per-frame ImGui uploads, opt-in ready-frontier native recording, and opt-in same-class physical Graphics
+routing, 2026-08-11.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
 semantic dependencies, compile-time queue selection, packet construction, and inter-task barrier planning; native
@@ -32,6 +33,14 @@ can receive an unconditional final sign-off.
   record an explicitly opted-in frontier concurrently with isolated per-packet state scratch and native command
   buffers; submission, timing, and failure reporting remain in stable compiler order. Command-IR capture and
   legacy external-state overrides deliberately retain serial recording.
+- A Vulkan device may opt into one auxiliary Graphics `VkQueue` from the selected Graphics family. The Device
+  registry assigns it a distinct physical-queue identity; only graph tasks that explicitly allow same-class routing
+  may use it. The compiler uses deterministic current-cost balancing within that family, broad
+  `CommandQueue::Graphics` callers remain on the primary queue, and a same-family handoff uses the graph packet's
+  timeline dependency without emitting a queue-family ownership transfer.
+- Recorded graph and submission-transaction state is generation-bound. Recompiling after graph reset invalidates
+  stale recording state until it is reset for the new compiled graph, releasing the old packet-owned command-list
+  handles before recording can resume.
 
 ## Verification performed
 
@@ -53,6 +62,8 @@ can receive an unconditional final sign-off.
 | Ready-frontier recording follow-up: graph-unit binary | 43/43 passed, including deterministic compiler-derived frontier depth |
 | Ready-frontier recording follow-up: descriptor-buffer smoke binary | 72 passed; 9 expected skips because this host has no dedicated Compute-only or Transfer-only family; two independent immutable uploads recorded through a worker frontier and submitted in compiler order |
 | Ready-frontier recording follow-up: `nwb_ecs_ui` and `nwb_ecs_render` | passed |
+| Same-class Graphics routing follow-up: graph-unit binary | 45/45 passed, including deterministic opt-in balancing, same-family state planning, duplicate native queue rejection, and stale recording/transaction recreation |
+| Same-class Graphics routing follow-up: descriptor-buffer smoke binary | 72 passed; 10 expected skips. The added real-Vulkan route skipped because this adapter exposes only one Graphics queue; the existing 9 skips lack dedicated Compute-only or Transfer-only families |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -66,9 +77,11 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
 1. **End-to-end physical queue identity (partially addressed).** Vulkan now assigns every accepted
    `QueueSubmissionToken` a concrete queue index and device generation. Graph recording, packet acceptance, and
    imported completion bindings require that identity; the renderer and native smoke topologies obtain it from the
-   Device; and a token from a retired device is rejected at the native submission boundary. The runtime still exposes
-   only one concrete queue per `CommandQueue` class, state handoffs remain class-oriented, and no multi-queue
-   same-class selection/transport API exists yet.
+   Device; and a token from a retired device is rejected at the native submission boundary. An opt-in second
+   Graphics queue from the same Vulkan family is now registered, explicitly selected graph packets route to it
+   deterministically, and same-family state handoffs use exact physical timeline waits without a spurious ownership
+   barrier. There is still no policy for same-class queues from different families, dynamic queue scaling, or target
+   scene performance evidence for the new route.
 
 2. **Complete graph ownership.** Renderer code still builds packet ranges, controls recording/submission, and holds
    legacy state-handoff data. The shared deferred path now owns per-frame ImGui draw/font/texture uploads; its
@@ -83,10 +96,11 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    command-IR capture, and legacy external-state overrides retain serial recording. Frontier splitting/scoring and
    reusable per-worker graph command-arena leases are still not implemented.
 
-4. **Generic recovery and invalidation proof.** The accepted-token transaction is sound for the exercised paths, and
-   stale imported completion tokens now have graph and native-submission rejection coverage. Recovery is still not
-   proven to join every possible Transfer queue route, and there is no complete stale compiled-graph/command-arena
-   recreation lease test.
+4. **Generic recovery and invalidation proof.** The accepted-token transaction is sound for the exercised paths,
+   stale imported completion tokens have graph and native-submission rejection coverage, and recording/transaction
+   state is now invalidated and recreated across a compiled-graph generation change. Recovery is still not proven to
+   join every possible Transfer queue route, and there is no complete stale compiled-graph/command-arena lease test
+   across actual device recreation.
 
 5. **Final parity and performance evidence.** There is no immutable current baseline, legacy-to-graph pixel parity
    corpus, complete bindless-domain audit, or target-scene critical-path comparison. Dedicated-Transfer ownership/
@@ -96,6 +110,6 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
 ## Required decision for a strict closeout
 
 Do not relabel this result as final architectural completion without either implementing the five areas above or
-explicitly waiving them in a revised, version-controlled acceptance scope. The next implementation work should focus
-on same-class multi-queue routing and stale graph/command-arena recreation coverage, then complete the remaining
+explicitly waiving them in a revised, version-controlled acceptance scope. The next implementation work should
+complete stale graph/command-arena lease recreation across actual device recovery, then finish the remaining
 graph-owned setup/resource-update paths and recovery proof.

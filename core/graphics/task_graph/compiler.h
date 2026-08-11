@@ -49,6 +49,7 @@ namespace GpuTaskQueueAssignmentReason{
         DedicatedTransfer,
         Fallback,
         ConservativeAny,
+        SameClassRouting,
 
         kCount,
     };

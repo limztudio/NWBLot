@@ -228,6 +228,9 @@ private:
 
     VkDevice m_vulkanDevice = VK_NULL_HANDLE;
     VkQueue m_graphicsQueue = VK_NULL_HANDLE;
+    // Optional second VkQueue from the primary Graphics family. It is exposed only through the physical registry;
+    // legacy CommandQueue::Graphics callers continue to use m_graphicsQueue.
+    VkQueue m_secondaryGraphicsQueue = VK_NULL_HANDLE;
     VkQueue m_computeQueue = VK_NULL_HANDLE;
     VkQueue m_transferQueue = VK_NULL_HANDLE;
     VkQueue m_presentQueue = VK_NULL_HANDLE;
@@ -270,6 +273,7 @@ private:
     bool m_rayTracingInvocationReorderExtFeatureEnabled = false;
     bool m_cooperativeVectorFeatureEnabled = false;
     bool m_cooperativeVectorTrainingFeatureEnabled = false;
+    bool m_sameClassGraphicsQueueEnabled = false;
     bool m_asyncComputeLaneEnabled = false;
     bool m_transferQueueEnabled = false;
     bool m_meshTaskShaderSupported = false;

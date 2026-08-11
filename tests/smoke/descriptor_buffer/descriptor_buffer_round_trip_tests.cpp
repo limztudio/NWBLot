@@ -99,6 +99,10 @@ public:
         return m_graphics.setTransferQueueEnabled(enabled);
     }
 
+    [[nodiscard]] bool setSameClassMultiQueueEnabled(const bool enabled){
+        return m_graphics.setSameClassMultiQueueEnabled(enabled);
+    }
+
     [[nodiscard]] Graphics& graphics(){ return m_graphics; }
     [[nodiscard]] Alloc::GlobalArena& arena(){ return m_objectArena; }
     [[nodiscard]] Perf::TimingRecorder& gpuTimingSink(){ return m_gpuTiming; }
@@ -291,6 +295,205 @@ TEST_F(DescriptorBufferRoundTripTest, NativePhysicalQueueRegistryDrivesExactSubm
     ASSERT_TRUE(token.valid());
     EXPECT_TRUE(token.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
     EXPECT_EQ(token.queue, CommandQueue::Graphics);
+}
+
+
+// A physical-queue ID is more precise than its broad CommandQueue class. When a Graphics family exposes a second
+// queue, explicitly opted-in graph work may cross between them; Vulkan requires a timeline wait but no queue-family
+// ownership transfer. Exercise the complete compiler -> recorder -> submitter path on a real Device.
+TEST_F(DescriptorBufferRoundTripTest, SameClassGraphicsQueuesRouteGraphPacketsAndStateHandoffs){
+    HeadlessGraphicsScope multiQueueScope;
+    ASSERT_TRUE(multiQueueScope.setSameClassMultiQueueEnabled(true));
+    if(!multiQueueScope.initialize())
+        GTEST_SKIP() << "Same-class queue routing: no usable headless Vulkan device on this host.";
+
+    auto& device = multiQueueScope.graphics().getDevice();
+    if(!device.getDescriptorBufferManager().isEnabled())
+        GTEST_SKIP() << "Same-class queue routing: VK_EXT_descriptor_buffer is unavailable on this device.";
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    const GpuPhysicalQueueInfo* secondaryGraphicsQueue = nullptr;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+        if(
+            candidate.queueClass == CommandQueue::Graphics
+            && candidate.id != primaryGraphicsQueue
+            && candidate.familyIndex == device.getQueueFamilyIndex(primaryGraphicsQueue)
+        ){
+            secondaryGraphicsQueue = &candidate;
+            break;
+        }
+    }
+    if(!secondaryGraphicsQueue){
+        GTEST_SKIP() << "Same-class queue routing: adapter exposes only one Graphics queue.";
+    }
+
+    static constexpr u32 s_SourceWords[] = {
+        0x1e35a7c9u,
+        0x73b4d2f0u,
+        0x0badbeefu,
+        0x9e3779b9u,
+    };
+    auto source = device.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(s_SourceWords))
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::Exclusive)
+    );
+    auto destination = device.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(s_SourceWords))
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::Exclusive)
+            .setCpuAccess(CpuAccessMode::Read)
+    );
+    ASSERT_NE(source.get(), nullptr);
+    ASSERT_NE(destination.get(), nullptr);
+
+    GpuTaskGraph graph(multiQueueScope.arena());
+    const GpuGraphResourceId sourceResource = graph.importBuffer(
+        source,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/same_class_source"))
+            .setMarkerLabel("Same Class Source")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+    );
+    const GpuGraphResourceId destinationResource = graph.importBuffer(
+        destination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/same_class_destination"))
+            .setMarkerLabel("Same Class Destination")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+    );
+    const GpuUploadBlobId sourceBlob = graph.copyUploadData(s_SourceWords, sizeof(s_SourceWords), alignof(u32));
+    ASSERT_TRUE(sourceResource.valid());
+    ASSERT_TRUE(destinationResource.valid());
+    ASSERT_TRUE(sourceBlob.valid());
+
+    GpuQueueRequest graphicsTransferRequest;
+    graphicsTransferRequest.requiredCapabilities = GpuQueueCapability::Transfer;
+    graphicsTransferRequest.preferredQueue = GpuQueuePreference::Graphics;
+    graphicsTransferRequest.allowFallback = false;
+    graphicsTransferRequest.compilerMayOverridePreference = false;
+
+    GpuTaskSchedulingHint uploadScheduling;
+    uploadScheduling.cost = GpuTaskCostHint::Large;
+    uploadScheduling.forceSubmissionBoundary = true;
+    uploadScheduling.allowPacketMerge = false;
+    uploadScheduling.allowSameClassQueueRouting = true;
+    GpuTaskDesc uploadDesc;
+    uploadDesc
+        .setIdentity(Name("tests/descriptor_buffer/same_class_upload"))
+        .setMarkerLabel("Same Class Upload")
+        .setQueue(graphicsTransferRequest)
+        .setScheduling(uploadScheduling)
+    ;
+    QueueSubmissionToken uploadToken;
+    const GpuTaskId uploadTask = graph.addUploadBufferTask(
+        uploadDesc,
+        GpuUploadBufferTaskDesc{
+            .source = sourceBlob,
+            .destination = sourceResource,
+            .finalState = ResourceStates::CopySource,
+            .acceptedToken = &uploadToken,
+        }
+    );
+    ASSERT_TRUE(uploadTask.valid());
+
+    GpuTaskSchedulingHint copyScheduling;
+    copyScheduling.cost = GpuTaskCostHint::Medium;
+    copyScheduling.forceSubmissionBoundary = true;
+    copyScheduling.allowPacketMerge = false;
+    copyScheduling.allowSameClassQueueRouting = true;
+    const GpuCopyBufferTaskRegion copyRegion{
+        .source = sourceResource,
+        .sourceOffsetBytes = 0u,
+        .destination = destinationResource,
+        .destinationOffsetBytes = 0u,
+        .dataSizeBytes = sizeof(s_SourceWords),
+    };
+    GpuTaskDesc copyDesc;
+    copyDesc
+        .setIdentity(Name("tests/descriptor_buffer/same_class_copy"))
+        .setMarkerLabel("Same Class Copy")
+        .setQueue(graphicsTransferRequest)
+        .setScheduling(copyScheduling)
+    ;
+    QueueSubmissionToken copyToken;
+    const GpuTaskId copyTask = graph.addCopyBufferTask(
+        copyDesc,
+        GpuCopyBufferTaskDesc{
+            .regions = &copyRegion,
+            .regionCount = 1u,
+            .acceptedToken = &copyToken,
+        }
+    );
+    ASSERT_TRUE(copyTask.valid());
+
+    GpuTaskGraphAnalysis analysis(multiQueueScope.arena());
+    GpuTaskGraphQueueAssignments assignments(multiQueueScope.arena());
+    GpuCompiledGraph compiledGraph(multiQueueScope.arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/same_class_queue_routing_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+
+    const GpuTaskQueueAssignment* const uploadAssignment = assignments.find(uploadTask);
+    const GpuTaskQueueAssignment* const copyAssignment = assignments.find(copyTask);
+    ASSERT_NE(uploadAssignment, nullptr);
+    ASSERT_NE(copyAssignment, nullptr);
+    EXPECT_EQ(uploadAssignment->queue, primaryGraphicsQueue);
+    EXPECT_EQ(copyAssignment->queue, secondaryGraphicsQueue->id);
+    EXPECT_EQ(copyAssignment->reason, GpuTaskQueueAssignmentReason::SameClassRouting);
+    const GpuSubmissionPacketId uploadPacket = compiledGraph.packetForTask(uploadTask);
+    const GpuSubmissionPacketId copyPacket = compiledGraph.packetForTask(copyTask);
+    ASSERT_TRUE(uploadPacket.valid());
+    ASSERT_TRUE(copyPacket.valid());
+    ASSERT_EQ(compiledGraph.packet(copyPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(copyPacket)[0u].producer, uploadPacket);
+
+    GpuRecordedGraph recordedGraph(multiQueueScope.arena());
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+    ASSERT_NE(recordedGraph.packetFinalStateSeed(uploadPacket), nullptr);
+    ASSERT_NE(recordedGraph.packetFinalStateSeed(copyPacket), nullptr);
+
+    GpuGraphSubmissionTransaction transaction(multiQueueScope.arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    ASSERT_TRUE(uploadToken.matchesPhysicalQueue(primaryGraphicsQueue.index, primaryGraphicsQueue.deviceGeneration));
+    ASSERT_TRUE(copyToken.matchesPhysicalQueue(
+        secondaryGraphicsQueue->id.index,
+        secondaryGraphicsQueue->id.deviceGeneration
+    ));
+    ASSERT_TRUE(device.waitForIdle());
+
+    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    ASSERT_NE(copiedWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
+        EXPECT_EQ(copiedWords[wordIndex], s_SourceWords[wordIndex]);
+    device.unmapBuffer(destination.get());
 }
 
 

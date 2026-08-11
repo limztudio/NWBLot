@@ -78,6 +78,7 @@ inline constexpr u32 s_NvidiaVendorId = 0x10DE; // PCI vendor ID for NVIDIA; gat
 // Local sentinel used until a compatible queue family is selected.
 inline constexpr i32 s_InvalidQueueFamilyIndex = -1;
 inline constexpr u32 s_GraphicsQueueIndex = 0;
+inline constexpr u32 s_SecondaryGraphicsQueueIndex = s_GraphicsQueueIndex + 1u;
 inline constexpr u32 s_ComputeQueueIndex = 0;
 inline constexpr u32 s_TransferQueueIndex = 0;
 inline constexpr u32 s_PresentQueueIndex = 0;

@@ -2126,6 +2126,159 @@ TEST(GpuTaskGraph, RetainsTinyAndNonOverlappingComputeTasksOnGraphics){
     EXPECT_EQ(strictAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute);
 }
 
+TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/same_class_buffer"),
+        "Same Class Buffer"
+    );
+    ASSERT_TRUE(buffer.valid());
+
+    Graphics::GpuQueueRequest graphicsRequest;
+    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+    graphicsRequest.allowFallback = false;
+    graphicsRequest.compilerMayOverridePreference = false;
+
+    Graphics::GpuTaskSchedulingHint producerScheduling;
+    producerScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    producerScheduling.allowSameClassQueueRouting = true;
+    const Graphics::GpuTaskResourceUse producerUse{
+        .resource = buffer,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::CopyDest,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    Graphics::GpuTaskDesc producerDesc;
+    producerDesc
+        .setIdentity(Name("tests/task_graph/same_class_producer"))
+        .setMarkerLabel("Same Class Producer")
+        .setQueue(graphicsRequest)
+        .setScheduling(producerScheduling)
+        .setResourceUses(&producerUse, 1u)
+    ;
+    const Graphics::GpuTaskId producer = graph.addTask(producerDesc);
+    ASSERT_TRUE(producer.valid());
+
+    Graphics::GpuTaskSchedulingHint consumerScheduling;
+    consumerScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    consumerScheduling.allowSameClassQueueRouting = true;
+    const Graphics::GpuTaskId consumerDependencies[] = { producer };
+    const Graphics::GpuTaskResourceUse consumerUse{
+        .resource = buffer,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::CopySource,
+        .access = Graphics::GpuTaskResourceAccess::Read,
+    };
+    Graphics::GpuTaskDesc consumerDesc;
+    consumerDesc
+        .setIdentity(Name("tests/task_graph/same_class_consumer"))
+        .setMarkerLabel("Same Class Consumer")
+        .setQueue(graphicsRequest)
+        .setScheduling(consumerScheduling)
+        .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
+        .setResourceUses(&consumerUse, 1u)
+    ;
+    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
+    ASSERT_TRUE(consumer.valid());
+
+    Graphics::GpuPhysicalQueueInfo secondaryGraphicsQueue = GraphicsQueue(1u);
+    secondaryGraphicsQueue.queueIndex = 1u;
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        secondaryGraphicsQueue,
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
+    const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
+    ASSERT_NE(producerAssignment, nullptr);
+    ASSERT_NE(consumerAssignment, nullptr);
+    EXPECT_EQ(producerAssignment->queue, queues[0u].id);
+    EXPECT_EQ(consumerAssignment->queue, queues[1u].id);
+    EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::SameClassRouting);
+
+    const Graphics::GpuSubmissionPacketId producerPacket = compiledGraph.packetForTask(producer);
+    const Graphics::GpuSubmissionPacketId consumerPacket = compiledGraph.packetForTask(consumer);
+    const Graphics::GpuCompiledTask* const compiledProducer = compiledGraph.findTask(producer);
+    const Graphics::GpuCompiledTask* const compiledConsumer = compiledGraph.findTask(consumer);
+    ASSERT_TRUE(producerPacket.valid());
+    ASSERT_TRUE(consumerPacket.valid());
+    ASSERT_NE(compiledProducer, nullptr);
+    ASSERT_NE(compiledConsumer, nullptr);
+    EXPECT_NE(compiledGraph.packet(producerPacket).queue, compiledGraph.packet(consumerPacket).queue);
+    ASSERT_EQ(compiledGraph.packet(consumerPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(consumerPacket)[0u].producer, producerPacket);
+    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
+    EXPECT_EQ(compiledProducer->epilogueBarrierCount, 0u);
+    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
+    EXPECT_EQ(
+        compiledGraph.taskPrologueBarriers(consumer)[0u].type,
+        Graphics::GpuCompiledBarrierType::BufferTransition
+    );
+}
+
+TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+
+    const Graphics::GpuTaskId firstTask = AddTask(
+        graph,
+        Name("tests/task_graph/recreate_recording_first"),
+        "Recreate Recording First"
+    );
+    ASSERT_TRUE(firstTask.valid());
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(firstTask);
+    ASSERT_TRUE(firstPacket.valid());
+
+    Graphics::GpuRecordedGraph recordedGraph(testArena.arena);
+    Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
+    recordedGraph.reset(compiledGraph);
+    transaction.reset(compiledGraph);
+    ASSERT_TRUE(recordedGraph.validFor(compiledGraph));
+    ASSERT_TRUE(transaction.validFor(compiledGraph));
+    const u64 firstCompiledGeneration = compiledGraph.generation();
+
+    graph.reset();
+    const Graphics::GpuTaskId secondTask = AddTask(
+        graph,
+        Name("tests/task_graph/recreate_recording_second"),
+        "Recreate Recording Second"
+    );
+    ASSERT_TRUE(secondTask.valid());
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    ASSERT_NE(compiledGraph.generation(), firstCompiledGeneration);
+    EXPECT_FALSE(recordedGraph.validFor(compiledGraph));
+    EXPECT_FALSE(transaction.validFor(compiledGraph));
+
+    // reset() releases old packet-owned command-list handles and reconstructs the serial/per-packet recording
+    // scratch for the new immutable graph generation before a future command arena can be leased again.
+    recordedGraph.reset(compiledGraph);
+    transaction.reset(compiledGraph);
+    EXPECT_TRUE(recordedGraph.validFor(compiledGraph));
+    EXPECT_TRUE(transaction.validFor(compiledGraph));
+    EXPECT_EQ(transaction.packetRuntime(firstPacket), nullptr);
+    EXPECT_NE(transaction.packetRuntime(compiledGraph.packetForTask(secondTask)), nullptr);
+}
+
 TEST(GpuTaskGraph, RejectsInvalidAndIncompatibleQueueTopologiesDeterministically){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -2171,6 +2324,23 @@ TEST(GpuTaskGraph, RejectsInvalidAndIncompatibleQueueTopologiesDeterministically
         .queueCount = 1u,
     };
     EXPECT_FALSE(Assign(graph, analysis, invalidTransferTopology, assignments));
+    EXPECT_EQ(
+        assignments.diagnostic().status,
+        Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidQueueTopology
+    );
+
+    Graphics::GpuPhysicalQueueInfo duplicateNativeQueue = GraphicsQueue(3u);
+    // Different graph IDs must not alias the same Vulkan family/index transport.
+    duplicateNativeQueue.queueIndex = GraphicsQueue().queueIndex;
+    const Graphics::GpuPhysicalQueueInfo duplicateNativeQueues[] = {
+        GraphicsQueue(),
+        duplicateNativeQueue,
+    };
+    const Graphics::GpuTaskGraphQueueTopology duplicateNativeTopology{
+        .queues = duplicateNativeQueues,
+        .queueCount = LengthOf(duplicateNativeQueues),
+    };
+    EXPECT_FALSE(Assign(graph, analysis, duplicateNativeTopology, assignments));
     EXPECT_EQ(
         assignments.diagnostic().status,
         Graphics::GpuTaskGraphQueueAssignmentStatus::InvalidQueueTopology
@@ -3632,10 +3802,11 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
     ASSERT_EQ(compiledGraph.packet(exclusiveComputePacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(exclusiveComputePacket)[0u].producer, exclusiveGraphicsPacket);
 
-    // The combined sharing mask becomes Vulkan-concurrent only when the queues have distinct families. A pair of
-    // logical queues in one family still uses exclusive ownership in the backend, so it must retain the handoff.
+    // The combined sharing mask becomes Vulkan-concurrent only when the queues have distinct families. Two real
+    // VkQueues in one family still use exclusive ownership in the backend, so they must retain the handoff.
     Graphics::GpuPhysicalQueueInfo sameFamilyComputeQueue = DedicatedComputeQueue();
     sameFamilyComputeQueue.familyIndex = GraphicsQueue().familyIndex;
+    sameFamilyComputeQueue.queueIndex = 1u;
     const Graphics::GpuPhysicalQueueInfo sameFamilyQueues[] = {
         GraphicsQueue(),
         sameFamilyComputeQueue,

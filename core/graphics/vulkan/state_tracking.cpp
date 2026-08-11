@@ -662,21 +662,37 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             return false;
         }
 
+        const u32 sourceQueueFamily = ownerQueue.valid()
+            ? m_device.getQueueFamilyIndex(ownerQueue)
+            : VK_QUEUE_FAMILY_IGNORED
+        ;
+        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_desc.physicalQueue);
+        if(ownerQueue.valid() && (sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff references an unavailable queue family"));
+            return false;
+        }
+
         if(!releaseDestinationQueue.valid()){
-            if(ownerQueue.valid() && ownerQueue != m_desc.physicalQueue){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff changes queue without a release/acquire transfer"));
+            // Vulkan ownership belongs to a queue family, not one VkQueue. A state handoff from another physical
+            // queue in this family is valid once its timeline token is waited; reject only a true family crossing
+            // that omitted the compiler-planned release/acquire pair.
+            if(ownerQueue.valid() && sourceQueueFamily != destinationQueueFamily){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff changes queue family without a release/acquire transfer"));
                 return false;
             }
             return true;
         }
 
-        if(!ownerQueue.valid() || releaseDestinationQueue != m_desc.physicalQueue){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff is not imported by its declared destination queue"));
+        const u32 releaseDestinationFamily = m_device.getQueueFamilyIndex(releaseDestinationQueue);
+        if(
+            !ownerQueue.valid()
+            || releaseDestinationFamily == VK_QUEUE_FAMILY_IGNORED
+            || releaseDestinationFamily != destinationQueueFamily
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff is not imported by its declared destination family"));
             return false;
         }
 
-        const u32 sourceQueueFamily = m_device.getQueueFamilyIndex(ownerQueue);
-        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_desc.physicalQueue);
         if(sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff references an unavailable queue family"));
             return false;
@@ -717,21 +733,36 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
             return false;
         }
 
+        const u32 sourceQueueFamily = ownerQueue.valid()
+            ? m_device.getQueueFamilyIndex(ownerQueue)
+            : VK_QUEUE_FAMILY_IGNORED
+        ;
+        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_desc.physicalQueue);
+        if(ownerQueue.valid() && (sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff references an unavailable queue family"));
+            return false;
+        }
+
         if(!releaseDestinationQueue.valid()){
-            if(ownerQueue.valid() && ownerQueue != m_desc.physicalQueue){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff changes queue without a release/acquire transfer"));
+            // See the texture path above: one family may contain several physical queues, so a timeline wait is
+            // sufficient for this state handoff and no queue-family ownership transfer is required.
+            if(ownerQueue.valid() && sourceQueueFamily != destinationQueueFamily){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff changes queue family without a release/acquire transfer"));
                 return false;
             }
             return true;
         }
 
-        if(!ownerQueue.valid() || releaseDestinationQueue != m_desc.physicalQueue){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff is not imported by its declared destination queue"));
+        const u32 releaseDestinationFamily = m_device.getQueueFamilyIndex(releaseDestinationQueue);
+        if(
+            !ownerQueue.valid()
+            || releaseDestinationFamily == VK_QUEUE_FAMILY_IGNORED
+            || releaseDestinationFamily != destinationQueueFamily
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff is not imported by its declared destination family"));
             return false;
         }
 
-        const u32 sourceQueueFamily = m_device.getQueueFamilyIndex(ownerQueue);
-        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_desc.physicalQueue);
         if(sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff references an unavailable queue family"));
             return false;

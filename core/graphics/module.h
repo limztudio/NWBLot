@@ -120,6 +120,9 @@ public:
     bool setAsyncComputeLaneEnabled(bool enabled);
     // Must be configured before device creation. Unsupported adapters retain the Graphics/Compute copy fallback.
     bool setTransferQueueEnabled(bool enabled);
+    // Must be configured before device creation. It exposes one auxiliary Graphics queue only to graph tasks that
+    // explicitly opt into same-class physical routing; unsupported adapters retain one Graphics transport.
+    bool setSameClassMultiQueueEnabled(bool enabled);
     // Selects a Vulkan adapter enumeration index, or -1 for the backend default. Must be configured before device
     // creation so target-hardware probes can reproduce a multi-adapter route on paired processes.
     bool setAdapterIndex(i32 index);

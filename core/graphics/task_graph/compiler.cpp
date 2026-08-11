@@ -158,7 +158,14 @@ inline constexpr u8 s_ValidQueueCapabilityMask =
             return false;
 
         for(usize previousIndex = 0u; previousIndex < queueIndex; ++previousIndex){
-            if(topology.queues[previousIndex].id == queue.id)
+            const GpuPhysicalQueueInfo& previous = topology.queues[previousIndex];
+            if(
+                previous.id == queue.id
+                // Queue IDs are graph-facing handles, but one family/index pair must still name exactly one native
+                // transport. Otherwise same-class routing could manufacture distinct packet identities for the same
+                // VkQueue and incorrectly turn ordinary queue order into a timeline edge.
+                || (previous.familyIndex == queue.familyIndex && previous.queueIndex == queue.queueIndex)
+            )
                 return false;
         }
     }
@@ -208,6 +215,60 @@ inline constexpr u8 s_ValidQueueCapabilityMask =
 
 [[nodiscard]] static bool IsValidSchedulingHint(const GpuTaskSchedulingHint& hint)noexcept{
     return hint.cost < GpuTaskCostHint::kCount;
+}
+
+[[nodiscard]] static u64 QueueCostWeight(const GpuTaskCostHint::Enum cost)noexcept{
+    switch(cost){
+    case GpuTaskCostHint::Tiny: return 1u;
+    case GpuTaskCostHint::Small: return 2u;
+    case GpuTaskCostHint::Medium: return 4u;
+    case GpuTaskCostHint::Large: return 8u;
+    default: return 0u;
+    }
+}
+
+// Physical queues in one Vulkan family can exchange work through a timeline semaphore without a queue-family
+// ownership transfer. Keep routing inside the selected base family's class: a future topology may expose the same
+// broad class from another family, but that needs a deliberate cross-family policy rather than an implicit balance.
+[[nodiscard]] static const GpuPhysicalQueueInfo* FindLeastLoadedSameClassQueue(
+    const GpuTaskGraph& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueInfo& baseQueue,
+    const GpuQueueCapability::Mask requiredCapabilities
+)noexcept{
+    const GpuPhysicalQueueInfo* result = nullptr;
+    u64 resultLoad = Limit<u64>::s_Max;
+    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+        const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
+        if(
+            candidate.queueClass != baseQueue.queueClass
+            || candidate.familyIndex != baseQueue.familyIndex
+            || !HasCapabilities(candidate.capabilities, requiredCapabilities)
+        )
+            continue;
+
+        u64 load = 0u;
+        for(const GpuTaskId assignedTask : analysis.topologicalOrder()){
+            const GpuTaskQueueAssignment* assignment = nullptr;
+            for(const GpuTaskQueueAssignment& existingAssignment : assignments){
+                if(existingAssignment.task == assignedTask){
+                    assignment = &existingAssignment;
+                    break;
+                }
+            }
+            if(!assignment || assignment->queue != candidate.id)
+                continue;
+            const u64 cost = QueueCostWeight(graph.taskAt(assignedTask.index).scheduling.cost);
+            load = load > Limit<u64>::s_Max - cost ? Limit<u64>::s_Max : load + cost;
+        }
+        if(!result || load < resultLoad || (load == resultLoad && IsBetterQueue(candidate, result))){
+            result = &candidate;
+            resultLoad = load;
+        }
+    }
+    return result;
 }
 
 [[nodiscard]] static bool IsReadAccess(const GpuTaskResourceAccess::Enum access)noexcept{
@@ -986,6 +1047,25 @@ bool GpuTaskGraphCompiler::assignQueues(
                 task.queue.requiredCapabilities
             );
         }
+
+        const GpuPhysicalQueueInfo* const initiallySelectedQueue = selectedQueue;
+        if(
+            task.scheduling.allowSameClassQueueRouting
+            && task.scheduling.overlapPreferred
+            && !task.scheduling.avoidQueueCrossing
+        ){
+            if(const GpuPhysicalQueueInfo* const balancedQueue = FindLeastLoadedSameClassQueue(
+                graph,
+                analysis,
+                outAssignments.m_assignments,
+                topology,
+                *selectedQueue,
+                task.queue.requiredCapabilities
+            ))
+                selectedQueue = balancedQueue;
+        }
+        if(selectedQueue != initiallySelectedQueue)
+            reason = GpuTaskQueueAssignmentReason::SameClassRouting;
 
         outAssignments.m_assignments.push_back(GpuTaskQueueAssignment{
             .task = task.id,

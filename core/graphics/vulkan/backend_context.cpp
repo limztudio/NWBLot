@@ -1587,6 +1587,25 @@ bool BackendContext::createVulkanDevice(){
         && requestedOptionalFeatures.rayTracingLinearSweptSpheres.linearSweptSpheres == VK_TRUE
     ;
 
+    // The optional same-class route uses a second VkQueue from the already selected Graphics family. Query the
+    // family count here, after physical-device selection and before vkCreateDevice, so no unsupported queue index
+    // is ever placed in the immutable Device registry.
+    uint32_t physicalQueueFamilyCount = 0u;
+    vkGetPhysicalDeviceQueueFamilyProperties(m_vulkanPhysicalDevice, &physicalQueueFamilyCount, nullptr);
+    Vector<VkQueueFamilyProperties, Alloc::ScratchArena> physicalQueueFamilies(physicalQueueFamilyCount, scratchArena);
+    vkGetPhysicalDeviceQueueFamilyProperties(
+        m_vulkanPhysicalDevice,
+        &physicalQueueFamilyCount,
+        physicalQueueFamilies.data()
+    );
+    const bool createSecondaryGraphicsQueue =
+        m_deviceParams.enableSameClassMultiQueue
+        && m_graphicsQueueFamily != s_InvalidQueueFamilyIndex
+        && static_cast<usize>(m_graphicsQueueFamily) < physicalQueueFamilies.size()
+        && physicalQueueFamilies[static_cast<usize>(m_graphicsQueueFamily)].queueCount
+            > s_SecondaryGraphicsQueueIndex
+    ;
+
     HashSet<i32, Hasher<i32>, EqualTo<i32>, Alloc::ScratchArena> uniqueQueueFamilies(0, Hasher<i32>(), EqualTo<i32>(), scratchArena);
     uniqueQueueFamilies.reserve(s_MaxVulkanQueueFamilyKinds);
     uniqueQueueFamilies.insert(m_graphicsQueueFamily);
@@ -1608,15 +1627,15 @@ bool BackendContext::createVulkanDevice(){
     if(createDedicatedTransferQueue)
         uniqueQueueFamilies.insert(m_transferQueueFamily);
 
-    f32 priority = 1.f;
+    const f32 queuePriorities[] = { 1.f, 1.f };
     Vector<VkDeviceQueueCreateInfo, Alloc::ScratchArena> queueDesc(uniqueQueueFamilies.size(), scratchArena);
     usize queueIndex = 0u;
     for(i32 queueFamily : uniqueQueueFamilies){
         VkDeviceQueueCreateInfo queueInfo = {};
         queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queueInfo.queueFamilyIndex = static_cast<u32>(queueFamily);
-        queueInfo.queueCount = 1;
-        queueInfo.pQueuePriorities = &priority;
+        queueInfo.queueCount = createSecondaryGraphicsQueue && queueFamily == m_graphicsQueueFamily ? 2u : 1u;
+        queueInfo.pQueuePriorities = queuePriorities;
         queueDesc[queueIndex] = queueInfo;
         ++queueIndex;
     }
@@ -1728,7 +1747,18 @@ bool BackendContext::createVulkanDevice(){
 
     volkLoadDevice(m_vulkanDevice);
 
+    m_secondaryGraphicsQueue = VK_NULL_HANDLE;
+    m_sameClassGraphicsQueueEnabled = false;
     vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_graphicsQueueFamily), s_GraphicsQueueIndex, &m_graphicsQueue);
+    if(createSecondaryGraphicsQueue){
+        vkGetDeviceQueue(
+            m_vulkanDevice,
+            static_cast<uint32_t>(m_graphicsQueueFamily),
+            s_SecondaryGraphicsQueueIndex,
+            &m_secondaryGraphicsQueue
+        );
+        m_sameClassGraphicsQueueEnabled = m_secondaryGraphicsQueue != VK_NULL_HANDLE;
+    }
     if(createAsyncComputeQueue)
         vkGetDeviceQueue(m_vulkanDevice, static_cast<uint32_t>(m_computeQueueFamily), s_ComputeQueueIndex, &m_computeQueue);
     if(createDedicatedTransferQueue)
@@ -1787,6 +1817,19 @@ bool BackendContext::createVulkanDevice(){
         ;
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(ss.str()));
     }
+
+    const char* const sameClassGraphicsQueueReason = !m_deviceParams.enableSameClassMultiQueue
+        ? "disabled"
+        : m_sameClassGraphicsQueueEnabled
+            ? "second queue from the Graphics family selected"
+            : "Graphics family exposes no second queue"
+    ;
+    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: same-class graphics queue requested={} effective={} graphicsFamily={} ({})")
+        , StringConvert(VulkanDetail::BoolToString(m_deviceParams.enableSameClassMultiQueue))
+        , StringConvert(VulkanDetail::BoolToString(m_sameClassGraphicsQueueEnabled))
+        , m_graphicsQueueFamily
+        , StringConvert(sameClassGraphicsQueueReason)
+    );
 
     m_asyncComputeLaneEnabled =
         m_deviceParams.enableAsyncComputeLane
@@ -2306,7 +2349,7 @@ bool BackendContext::createDevice(){
         static_cast<u8>(GpuQueueCapability::Compute)
         | static_cast<u8>(GpuQueueCapability::Transfer)
     );
-    VulkanPhysicalQueueDesc physicalQueues[3u] = {
+    VulkanPhysicalQueueDesc physicalQueues[4u] = {
         VulkanPhysicalQueueDesc{
             .queue = m_graphicsQueue,
             .queueClass = CommandQueue::Graphics,
@@ -2318,6 +2361,18 @@ bool BackendContext::createDevice(){
         },
     };
     usize physicalQueueCount = 1u;
+    if(m_sameClassGraphicsQueueEnabled){
+        physicalQueues[physicalQueueCount] = VulkanPhysicalQueueDesc{
+            .queue = m_secondaryGraphicsQueue,
+            .queueClass = CommandQueue::Graphics,
+            .capabilities = graphicsQueueCapabilities,
+            .familyIndex = static_cast<u32>(m_graphicsQueueFamily),
+            .queueIndex = s_SecondaryGraphicsQueueIndex,
+            .dedicated = false,
+            .primaryForClass = false,
+        };
+        ++physicalQueueCount;
+    }
     if(m_asyncComputeLaneEnabled){
         physicalQueues[physicalQueueCount] = VulkanPhysicalQueueDesc{
             .queue = m_computeQueue,

@@ -574,6 +574,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         u32 hwCausticFrameIndex = 0u;
         u32 surfelFrameIndex = 0u;
         u32 surfelCountReadbackFrame = 0u;
+        u32 shadowSlotCount = 0u;
+        u32 softShadowSlotMask = 0u;
+        u32 causticLightCount = 0u;
 
         bool avboitTargetsNeedClear = true;
         bool deferredBindlessSlotsUploaded = false;
@@ -598,6 +601,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_rayTracingState.m_hwCausticFrameIndex,
         m_rayTracingState.m_surfelFrameIndex,
         m_rayTracingState.m_surfelCountReadbackFrame,
+        m_rayTracingState.m_shadowSlotCount,
+        m_rayTracingState.m_softShadowSlotMask,
+        m_rayTracingState.m_causticLightCount,
         m_avboitState.m_targetsNeedClear,
         deferredTargets.bindless.slotsUploaded,
         m_rayTracingState.m_swShadowEdgeStatsPending,
@@ -820,7 +826,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         }
     }
     // GpuTimingMeasure is deliberately submission-local. Skip this optional long-lived scope when the compiler
-    // exposes a frontier between its endpoints; every packet still has its own submission ticket below.
+    // exposes a frontier between its endpoints. Immutable built-in uploads may add untimed packets between these
+    // semantic anchors; their enclosing Graphics submission remains graph-owned and deterministic.
     asyncPrefixTimingSpansOnePacket = graphicsPrefixTimingBindingsValid
         && graphicsPrefixMeshViewSetupPacket == graphicsPrefixPacket
     ;
@@ -1190,7 +1197,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !shadowPreparePacketRange.valid()
         || shadowPreparePacketRange.packetCount != 1u
         || !graphicsPrefixWorkPacketRange.valid()
-        || graphicsPrefixWorkPacketRange.packetCount != graphicsPrefixUniquePacketCount
+        || graphicsPrefixWorkPacketRange.packetCount < graphicsPrefixUniquePacketCount
         || !graphicsPrefixPacketRange.valid()
         || graphicsPrefixPacketRange.packetCount != 1u
         || !shadowPrepareThroughPrefixPacketRange.valid()
@@ -1253,6 +1260,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         shadowVisibilityTimingTicket.discard();
         shadowPrepareTimingTicket.discard();
         discardGraphicsPrefixTimingTickets();
+        // Immutable scene-light preparation happens during graph declaration so it can be copied into graph-owned
+        // blobs. No packet has been accepted on this early path; restore its CPU-only classification exactly.
+        m_rayTracingState.m_shadowSlotCount = postGbufferPacketCpuState.shadowSlotCount;
+        m_rayTracingState.m_softShadowSlotMask = postGbufferPacketCpuState.softShadowSlotMask;
+        m_rayTracingState.m_causticLightCount = postGbufferPacketCpuState.causticLightCount;
+        m_rayTracingState.m_causticEmissionGateLogged = postGbufferPacketCpuState.causticEmissionGateLogged;
         return;
     }
     const bool deferredLightingRunsOnCompute = deferredLightingQueue->queueClass == Core::CommandQueue::Compute;
@@ -2298,7 +2311,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     };
 
     // Preparation and the compiler-derived graphics-prefix chain start the shared transaction. A frontier-safe
-    // prefix may contain several Graphics packets; every actual packet receives exactly one timing ticket.
+    // prefix may include additional built-in immutable-upload packets; timing remains attached to the semantic
+    // packet anchors while the graph submits every packet in compiler order.
     {
         Core::Alloc::ScratchArena shadowPreparePrefixScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter shadowPreparePrefixSubmitter(device);
@@ -2377,7 +2391,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && shadowPrepareThroughPrefixPacketRange.valid()
             && shadowPreparePrefixTimingTicketsValid
             && shadowPreparePrefixTimingTicketCount == 1u + graphicsPrefixUniquePacketCount
-            && shadowPrepareThroughPrefixPacketRange.packetCount == shadowPreparePrefixTimingTicketCount
+            && shadowPrepareThroughPrefixPacketRange.packetCount >= shadowPreparePrefixTimingTicketCount
             && shadowPreparePrefixSubmitter.submitPacketRangeInCompileOrder(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,

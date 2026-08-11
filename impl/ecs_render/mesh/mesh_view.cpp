@@ -40,14 +40,32 @@ bool RendererMeshSystem::createMeshViewBuffer(){
     return true;
 }
 
-bool RendererMeshSystem::updateMeshViewBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){
+bool RendererMeshSystem::prepareMeshViewBufferUpload(
+    const f32 fallbackAspectRatio,
+    ECSRenderDetail::MeshViewGpuData& outViewState,
+    bool& outUploadRequired
+)const{
     NWB_ASSERT(drawState().m_meshViewBuffer);
 
-    const ECSRenderDetail::MeshViewGpuData viewState = ECSRenderDetail::ResolveMeshViewState(world(), fallbackAspectRatio);
-    if(
+    outViewState = ECSRenderDetail::ResolveMeshViewState(world(), fallbackAspectRatio);
+    outUploadRequired = !(
         drawState().m_meshViewGpuDataValid
-        && NWB_MEMCMP(drawState().m_meshViewGpuData, &viewState, sizeof(viewState)) == 0
-    )
+        && NWB_MEMCMP(drawState().m_meshViewGpuData, &outViewState, sizeof(outViewState)) == 0
+    );
+    return true;
+}
+
+void RendererMeshSystem::confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState){
+    NWB_MEMCPY(drawState().m_meshViewGpuData, sizeof(drawState().m_meshViewGpuData), &viewState, sizeof(viewState));
+    drawState().m_meshViewGpuDataValid = true;
+}
+
+bool RendererMeshSystem::updateMeshViewBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){
+    ECSRenderDetail::MeshViewGpuData viewState;
+    bool uploadRequired = false;
+    if(!prepareMeshViewBufferUpload(fallbackAspectRatio, viewState, uploadRequired))
+        return false;
+    if(!uploadRequired)
         return true;
 
     commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::CopyDest);
@@ -55,8 +73,7 @@ bool RendererMeshSystem::updateMeshViewBuffer(Core::CommandList& commandList, co
     commandList.writeBuffer(drawState().m_meshViewBuffer.get(), &viewState, sizeof(viewState));
     commandList.setBufferState(drawState().m_meshViewBuffer.get(), Core::ResourceStates::ConstantBuffer);
     commandList.commitBarriers();
-    NWB_MEMCPY(drawState().m_meshViewGpuData, sizeof(drawState().m_meshViewGpuData), &viewState, sizeof(viewState));
-    drawState().m_meshViewGpuDataValid = true;
+    confirmMeshViewBufferUpload(viewState);
     return true;
 }
 

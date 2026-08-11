@@ -186,15 +186,27 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredLightingTask(
     );
 }
 
-bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){
+bool RendererDeferredSystem::prepareSceneShadingBufferUploads(
+    const f32 fallbackAspectRatio,
+    ECSRenderDetail::SceneLightGpuData* const outLightData,
+    const usize lightDataCapacity,
+    u32& outLightCount,
+    bool& outLightUploadRequired,
+    ECSRenderDetail::SceneShadingGpuData& outSceneShadingState,
+    bool& outSceneShadingUploadRequired
+){
     NWB_ASSERT(deferredState().m_sceneShadingBuffer);
     NWB_ASSERT(deferredState().m_lightBuffer);
+    outLightCount = 0u;
+    outLightUploadRequired = false;
+    outSceneShadingUploadRequired = false;
+    if(!outLightData || lightDataCapacity < NWB_SCENE_MAX_LIGHTS)
+        return false;
 
-    ECSRenderDetail::SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS];
     f32 causticLightImportance[NWB_SCENE_MAX_LIGHTS];
     const u32 lightCount = ECSRenderDetail::ResolveSceneLights(
         world(),
-        lightData,
+        outLightData,
         causticLightImportance,
         NWB_SCENE_MAX_LIGHTS
     );
@@ -204,7 +216,7 @@ bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& command
     // frame by prepareCausticEmissionTargets into the ray-tracing state).
     const u32 refractiveInstanceCount = rayTracingState().m_causticRefractiveInstanceCount;
     const u32 causticLightCount = ECSRenderDetail::ResolveCausticLights(
-        lightData,
+        outLightData,
         causticLightImportance,
         lightCount,
         refractiveInstanceCount
@@ -220,7 +232,7 @@ bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& command
     // ranks by importance, not type), so this is a scattered bitmask, not a contiguous range.
     u32 softShadowSlotMask = 0u;
     for(u32 i = 0u; i < lightCount; ++i){
-        const f32 slot = lightData[i].params.z;
+        const f32 slot = outLightData[i].params.z;
         if(slot >= 0.f){
             const u32 slotIndex = static_cast<u32>(slot);
             if(slotIndex < NWB_SCENE_SHADOW_SLOT_COUNT)
@@ -228,50 +240,112 @@ bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& command
         }
     }
     rayTracingState().m_softShadowSlotMask = softShadowSlotMask;
-    logCausticClassificationOnce(lightData, lightCount, causticLightCount, refractiveInstanceCount);
+    logCausticClassificationOnce(outLightData, lightCount, causticLightCount, refractiveInstanceCount);
 
     const usize lightByteCount = static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData);
     NWB_ASSERT(lightByteCount <= sizeof(deferredState().m_lightGpuData));
     const bool lightDataUnchanged =
         deferredState().m_lightGpuDataValid
         && deferredState().m_lightGpuDataCount == lightCount
-        && NWB_MEMCMP(deferredState().m_lightGpuData, lightData, lightByteCount) == 0
+        && NWB_MEMCMP(deferredState().m_lightGpuData, outLightData, lightByteCount) == 0
     ;
-    if(!lightDataUnchanged){
-        commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::CopyDest);
-        commandList.commitBarriers();
-        commandList.writeBuffer(deferredState().m_lightBuffer.get(), lightData, lightByteCount);
-        commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
-        commandList.commitBarriers();
-        NWB_MEMCPY(
-            deferredState().m_lightGpuData,
-            sizeof(deferredState().m_lightGpuData),
-            lightData,
-            lightByteCount
-        );
+    // A zero-light scene has no copyable payload. The graph still transitions the buffer for a later SRV use,
+    // while acceptance records the empty CPU mirror below.
+    outLightUploadRequired = !lightDataUnchanged && lightByteCount != 0u;
+    outLightCount = lightCount;
+
+    outSceneShadingState = ECSRenderDetail::ResolveSceneShadingState(world(), fallbackAspectRatio, lightCount);
+    outSceneShadingUploadRequired = !(
+        deferredState().m_sceneShadingGpuDataValid
+        && NWB_MEMCMP(
+            deferredState().m_sceneShadingGpuData,
+            &outSceneShadingState,
+            sizeof(outSceneShadingState)
+        ) == 0
+    );
+    return true;
+}
+
+void RendererDeferredSystem::confirmSceneShadingBufferUploads(
+    const ECSRenderDetail::SceneLightGpuData* const lightData,
+    const u32 lightCount,
+    const bool lightUploadRequired,
+    const ECSRenderDetail::SceneShadingGpuData& sceneShadingState,
+    const bool sceneShadingUploadRequired
+){
+    const usize lightByteCount = static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData);
+    // A zero-light frame has no blob to upload, but it must still commit its empty CPU mirror once its dependent
+    // prefix packet accepts. Otherwise a transition from a nonempty list would be treated as changed forever.
+    if(lightUploadRequired || lightCount == 0u){
+        NWB_ASSERT(lightData || lightByteCount == 0u);
+        if(lightByteCount != 0u){
+            NWB_MEMCPY(
+                deferredState().m_lightGpuData,
+                sizeof(deferredState().m_lightGpuData),
+                lightData,
+                lightByteCount
+            );
+        }
         deferredState().m_lightGpuDataCount = lightCount;
         deferredState().m_lightGpuDataValid = true;
     }
+    if(sceneShadingUploadRequired){
+        NWB_MEMCPY(
+            deferredState().m_sceneShadingGpuData,
+            sizeof(deferredState().m_sceneShadingGpuData),
+            &sceneShadingState,
+            sizeof(sceneShadingState)
+        );
+        deferredState().m_sceneShadingGpuDataValid = true;
+    }
+}
 
-    const ECSRenderDetail::SceneShadingGpuData sceneShadingState = ECSRenderDetail::ResolveSceneShadingState(world(), fallbackAspectRatio, lightCount);
-    if(
-        deferredState().m_sceneShadingGpuDataValid
-        && NWB_MEMCMP(deferredState().m_sceneShadingGpuData, &sceneShadingState, sizeof(sceneShadingState)) == 0
-    )
-        return true;
+bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& commandList, const f32 fallbackAspectRatio){
+    ECSRenderDetail::SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS];
+    ECSRenderDetail::SceneShadingGpuData sceneShadingState;
+    u32 lightCount = 0u;
+    bool lightUploadRequired = false;
+    bool sceneShadingUploadRequired = false;
+    if(!prepareSceneShadingBufferUploads(
+        fallbackAspectRatio,
+        lightData,
+        LengthOf(lightData),
+        lightCount,
+        lightUploadRequired,
+        sceneShadingState,
+        sceneShadingUploadRequired
+    ))
+        return false;
 
-    commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(deferredState().m_sceneShadingBuffer.get(), &sceneShadingState, sizeof(sceneShadingState));
-    commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-    commandList.commitBarriers();
-    NWB_MEMCPY(
-        deferredState().m_sceneShadingGpuData,
-        sizeof(deferredState().m_sceneShadingGpuData),
-        &sceneShadingState,
-        sizeof(sceneShadingState)
+    if(lightUploadRequired){
+        commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::CopyDest);
+        commandList.commitBarriers();
+        commandList.writeBuffer(
+            deferredState().m_lightBuffer.get(),
+            lightData,
+            static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData)
+        );
+        commandList.setBufferState(deferredState().m_lightBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.commitBarriers();
+    }
+    if(sceneShadingUploadRequired){
+        commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::CopyDest);
+        commandList.commitBarriers();
+        commandList.writeBuffer(
+            deferredState().m_sceneShadingBuffer.get(),
+            &sceneShadingState,
+            sizeof(sceneShadingState)
+        );
+        commandList.setBufferState(deferredState().m_sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+        commandList.commitBarriers();
+    }
+    confirmSceneShadingBufferUploads(
+        lightData,
+        lightCount,
+        lightUploadRequired,
+        sceneShadingState,
+        sceneShadingUploadRequired
     );
-    deferredState().m_sceneShadingGpuDataValid = true;
     return true;
 }
 

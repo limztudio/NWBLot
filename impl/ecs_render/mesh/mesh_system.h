@@ -19,6 +19,7 @@ NWB_IMPL_BEGIN
 
 namespace ECSRenderDetail{
     struct MeshFrameHeapSlots;
+    struct MeshViewGpuData;
 };
 
 
@@ -36,6 +37,15 @@ public:
     [[nodiscard]] bool findRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
     void pruneRuntimeMeshResources();
     [[nodiscard]] bool createMeshViewBuffer();
+    // Resolves the immutable per-frame view payload before graph declaration.  The caller publishes it through a
+    // graph-owned upload task, then confirms the CPU mirror only after that packet accepts.
+    [[nodiscard]] bool prepareMeshViewBufferUpload(
+        f32 fallbackAspectRatio,
+        ECSRenderDetail::MeshViewGpuData& outViewState,
+        bool& outUploadRequired
+    )const;
+    void confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState);
+    // Retained only for compatibility render paths that do not have a graph-owning renderer.
     [[nodiscard]] bool updateMeshViewBuffer(Core::CommandList& commandList, f32 fallbackAspectRatio);
     [[nodiscard]] bool createMeshFrameHeapHandles();
     [[nodiscard]] bool meshFrameHeapHandlesReady()const;

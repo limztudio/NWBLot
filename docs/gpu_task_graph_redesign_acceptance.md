@@ -7,6 +7,7 @@
 **Follow-up implementation:** physical queue identity, frontier-safe deferred scheduling, graph-bound presentation,
 graph-owned per-frame ImGui uploads, opt-in ready-frontier native recording, and opt-in same-class physical Graphics
 routing, actual-device stale packet-recording recreation coverage, and graph-owned public setup uploads,
+graph-owned deferred mesh-view, scene-light, and scene-shading frame updates,
 2026-08-11.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
@@ -35,6 +36,11 @@ can receive an unconditional final sign-off.
 - In the shared deferred path, ImGui vertex/index payloads and requested font/texture updates are retained as
   immutable graph blobs, lowered through the built-in upload tasks, and made dependencies of the terminal overlay
   or upload-completion packet. Small deltas stay on Graphics; amortizable updates prefer Transfer.
+- The shared deferred graphics prefix resolves changed mesh-view, scene-light, and scene-shading data before graph
+  compilation. Each payload is retained as an immutable graph blob, uploaded through a Graphics-routed built-in
+  buffer task, and committed to its CPU mirror only when the matching packet is accepted. These automatic-state
+  buffers return to `Common` at packet close; their first declared consumer owns the transition to
+  `ConstantBuffer` or `ShaderResource`.
 - The compiler derives stable packet recording-frontier depths from packet dependencies. The native recorder may
   record an explicitly opted-in frontier concurrently with isolated per-packet state scratch and native command
   buffers; submission, timing, and failure reporting remain in stable compiler order. Command-IR capture and
@@ -72,6 +78,8 @@ can receive an unconditional final sign-off.
 | Same-class Graphics routing follow-up: descriptor-buffer smoke binary | 72 passed; 10 expected skips. The added real-Vulkan route skipped because this adapter exposes only one Graphics queue; the existing 9 skips lack dedicated Compute-only or Transfer-only families |
 | Actual device-recreation graph-packet follow-up: descriptor-buffer smoke binary | 73 passed; 10 expected skips. A real headless Graphics instance releases its recorded packets/transaction before teardown, recreates its device, then recompiles, records, and submits only on the replacement generation |
 | Graph-owned public setup-upload follow-up: descriptor-buffer smoke binary | 73 passed; 10 expected skips. Normal buffer and texture setup routes compile, record, and submit through one graph packet while preserving queue selection, graph-visible final states, and Graphics readiness; the dedicated-Transfer probe is hardware-skipped on this adapter |
+| Graph-owned deferred-frame upload follow-up: `nwb_ecs_graphics_tests`, `nwb_graphics_task_graph_tests`, and `nwb_descriptor_buffer_tests` | 3/3 passed |
+| Graph-owned deferred-frame upload follow-up: rebuilt `nwb_testbed` window capture | passed; a real X11/Vulkan deferred frame completed with the graph-owned mesh-view, scene-light, and scene-shading uploads |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -94,9 +102,10 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
 2. **Complete graph ownership.** Renderer code still builds packet ranges, controls recording/submission, and holds
    legacy state-handoff data. The shared deferred path now owns per-frame ImGui draw/font/texture uploads; its
    direct path remains only as a compatibility fallback for worlds without a graph-owning renderer or a rejected
-   graph attempt. Public buffer/texture setup uploads now use the graph-owned primitive path, but generic asset
-   decoding uploads, skinning, and some renderer resource-update paths still retain direct native recording or
-   submission. The graph therefore does not yet authoritatively own all frame work and state retirement.
+   graph attempt. Public buffer/texture setup uploads and the shared deferred mesh-view, scene-light, and
+   scene-shading frame updates now use the graph-owned primitive path, but generic asset decoding uploads, skinning,
+   draw-time material/CSG streams, and specialized descriptor/resource updates still retain direct native recording
+   or submission. The graph therefore does not yet authoritatively own all frame work and state retirement.
 
 3. **Packet scheduling and recording completion (partially addressed).** Current merging is limited to compatible
    immediate predecessors. The compiler-derived native ready-frontier recorder is implemented for explicit opt-in
@@ -120,4 +129,5 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
 
 Do not relabel this result as final architectural completion without either implementing the five areas above or
 explicitly waiving them in a revised, version-controlled acceptance scope. The next implementation work should
-finish the remaining graph-owned asset/resource-update paths and recovery proof.
+finish the remaining graph-owned asset/resource-update paths (notably asset decoding, skinning, and draw-time
+material/CSG streams) and recovery proof.

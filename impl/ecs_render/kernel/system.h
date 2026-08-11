@@ -79,6 +79,7 @@ namespace ECSRenderDetail{
     };
     struct ShadowPrepareGraphTask;
     struct MeshViewSetupGraphTask;
+    struct MeshViewUploadCommitGraphTask;
     struct SceneShadingSetupGraphTask;
     struct DeferredClearGraphTask;
     struct GbufferGraphTask;
@@ -97,6 +98,7 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend class RendererRayTracingSystem;
     friend struct ECSRenderDetail::ShadowPrepareGraphTask;
     friend struct ECSRenderDetail::MeshViewSetupGraphTask;
+    friend struct ECSRenderDetail::MeshViewUploadCommitGraphTask;
     friend struct ECSRenderDetail::SceneShadingSetupGraphTask;
     friend struct ECSRenderDetail::DeferredClearGraphTask;
     friend struct ECSRenderDetail::GbufferGraphTask;

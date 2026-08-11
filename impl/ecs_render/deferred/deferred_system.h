@@ -21,6 +21,7 @@ NWB_IMPL_BEGIN
 
 
 namespace ECSRenderDetail{
+    struct SceneShadingGpuData;
     struct SceneLightGpuData;
 };
 
@@ -33,6 +34,25 @@ public:
     explicit RendererDeferredSystem(RendererSystem& renderer);
 
 public:
+    // Resolves immutable per-frame data before graph declaration. The shared renderer publishes changed payloads
+    // through built-in graph uploads and confirms these CPU mirrors only after the packet accepts.
+    [[nodiscard]] bool prepareSceneShadingBufferUploads(
+        f32 fallbackAspectRatio,
+        ECSRenderDetail::SceneLightGpuData* outLightData,
+        usize lightDataCapacity,
+        u32& outLightCount,
+        bool& outLightUploadRequired,
+        ECSRenderDetail::SceneShadingGpuData& outSceneShadingState,
+        bool& outSceneShadingUploadRequired
+    );
+    void confirmSceneShadingBufferUploads(
+        const ECSRenderDetail::SceneLightGpuData* lightData,
+        u32 lightCount,
+        bool lightUploadRequired,
+        const ECSRenderDetail::SceneShadingGpuData& sceneShadingState,
+        bool sceneShadingUploadRequired
+    );
+    // Retained only for compatibility render paths that do not have a graph-owning renderer.
     [[nodiscard]] bool updateSceneShadingBuffer(Core::CommandList& commandList, f32 fallbackAspectRatio);
     [[nodiscard]] bool createDeferredLightingResources();
     [[nodiscard]] bool createDeferredLightingPipeline();

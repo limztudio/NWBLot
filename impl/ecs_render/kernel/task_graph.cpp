@@ -165,8 +165,8 @@ struct ShadowPrepareGraphTask{
 };
 
 
-// Mesh-view setup is the first native graphics-prefix task.  Its dynamic upload barriers remain intrinsic to the
-// upload, while the graph owns packet routing and the declared final ConstantBuffer state.
+// Mesh-view setup is the first native graphics-prefix task. The immutable data upload immediately following this
+// preamble is a built-in graph task; this payload retains only frame-timing ownership.
 struct MeshViewSetupGraphTask{
     struct Payload{
         RendererSystem* renderer = nullptr;
@@ -174,8 +174,6 @@ struct MeshViewSetupGraphTask{
         Optional<Core::GpuTimingMeasure>* asyncPrefixTiming = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const bool* asyncPrefixTimingSpansOnePacket = nullptr;
-        bool* ready = nullptr;
-        f32 meshViewAspectRatio = 1.f;
         const Core::GpuTaskId* shadowVisibilityTask = nullptr;
     };
 
@@ -195,7 +193,6 @@ struct MeshViewSetupGraphTask{
             || !payload.timingTicket
             || !*payload.timingTicket
             || !payload.asyncPrefixTimingSpansOnePacket
-            || !payload.ready
             || !shadowVisibilityQueue
         )
             return false;
@@ -225,7 +222,6 @@ struct MeshViewSetupGraphTask{
             payload.asyncPrefixTiming->value().finishMarker();
         }
 
-        *payload.ready = renderer.m_meshSystem.updateMeshViewBuffer(commandList, payload.meshViewAspectRatio);
         if(recordsGraphicsFrameMarker)
             commandList.endMarker();
         return frameTimingStarted;
@@ -233,14 +229,14 @@ struct MeshViewSetupGraphTask{
 };
 
 
-// Scene-shading setup follows mesh-view setup. It retains dynamic upload barriers internally while graph
-// declarations establish the final states consumed by later prefix work.
-struct SceneShadingSetupGraphTask{
+// The CPU mirror is updated only after the built-in upload packet accepts. This keeps a rejected recording from
+// suppressing the retry's immutable blob declaration.
+struct MeshViewUploadCommitGraphTask{
     struct Payload{
         RendererSystem* renderer = nullptr;
-        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
+        ECSRenderDetail::MeshViewGpuData viewState;
+        bool uploadRequired = false;
         bool* ready = nullptr;
-        f32 meshViewAspectRatio = 1.f;
     };
 
     [[nodiscard]] static bool record(
@@ -248,16 +244,72 @@ struct SceneShadingSetupGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
+        static_cast<void>(commandList);
+        static_cast<void>(context);
+        if(!payload.renderer || !payload.ready)
+            return false;
+        *payload.ready = true;
+        return true;
+    }
+
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        static_cast<void>(token);
+        if(payload.renderer && payload.uploadRequired)
+            payload.renderer->m_meshSystem.confirmMeshViewBufferUpload(payload.viewState);
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.ready)
+            *payload.ready = false;
+    }
+};
+
+
+// Scene-shading setup follows the frame-data uploads. Its native body is now only the semantic/timing endpoint;
+// the graph owns each resource write and publishes its declared final state.
+struct SceneShadingSetupGraphTask{
+    struct Payload{
+        RendererSystem* renderer = nullptr;
+        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
+        bool* ready = nullptr;
+        ECSRenderDetail::SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS] = {};
+        ECSRenderDetail::SceneShadingGpuData sceneShadingState;
+        u32 lightCount = 0u;
+        bool lightUploadRequired = false;
+        bool sceneShadingUploadRequired = false;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(commandList);
         static_cast<void>(context);
         if(!payload.renderer || !payload.timingTicket || !*payload.timingTicket || !payload.ready)
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
-        *payload.ready = payload.renderer->m_deferredSystem.updateSceneShadingBuffer(
-            commandList,
-            payload.meshViewAspectRatio
-        );
+        *payload.ready = true;
         return true;
+    }
+
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        static_cast<void>(token);
+        if(!payload.renderer)
+            return;
+        payload.renderer->m_deferredSystem.confirmSceneShadingBufferUploads(
+            payload.lightData,
+            payload.lightCount,
+            payload.lightUploadRequired,
+            payload.sceneShadingState,
+            payload.sceneShadingUploadRequired
+        );
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.ready)
+            *payload.ready = false;
     }
 };
 
@@ -486,6 +538,18 @@ namespace __hidden_renderer_task_graph{
 [[nodiscard]] static Core::GpuQueueRequest GraphicsQueueRequest(){
     return Core::GpuQueueRequest{
         Core::GpuQueueCapability::Graphics,
+        Core::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+}
+
+// Built-in uploads require Transfer capability, while these small frame updates must stay on the Graphics packet
+// that consumes them. Vulkan's Graphics transport advertises Transfer capability, so the compiler retains that
+// physical route without introducing an asynchronous ownership handoff.
+[[nodiscard]] static Core::GpuQueueRequest GraphicsUploadQueueRequest(){
+    return Core::GpuQueueRequest{
+        Core::GpuQueueCapability::Transfer,
         Core::GpuQueuePreference::Graphics,
         false,
         false,
@@ -1092,9 +1156,34 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     const auto timingTicketSlot = [timingTickets](const PrefixTimingSlot slot){
         return &timingTickets[static_cast<usize>(slot)];
     };
-    const Core::GpuTaskResourceUse meshViewSetupResourceUses[] = {
-        WriteUse(meshView, Core::ResourceStates::ConstantBuffer),
-    };
+
+    ECSRenderDetail::MeshViewGpuData meshViewState;
+    bool meshViewUploadRequired = false;
+    ECSRenderDetail::SceneLightGpuData sceneLightData[NWB_SCENE_MAX_LIGHTS] = {};
+    ECSRenderDetail::SceneShadingGpuData sceneShadingState;
+    u32 sceneLightCount = 0u;
+    bool sceneLightUploadRequired = false;
+    bool sceneShadingUploadRequired = false;
+    if(
+        !m_meshSystem.prepareMeshViewBufferUpload(
+            meshViewAspectRatio,
+            meshViewState,
+            meshViewUploadRequired
+        )
+        || !m_deferredSystem.prepareSceneShadingBufferUploads(
+            meshViewAspectRatio,
+            sceneLightData,
+            LengthOf(sceneLightData),
+            sceneLightCount,
+            sceneLightUploadRequired,
+            sceneShadingState,
+            sceneShadingUploadRequired
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not prepare immutable graphics-prefix upload data"));
+        return false;
+    }
+
     Core::GpuTaskSchedulingHint meshViewSetupScheduling;
     meshViewSetupScheduling.cost = Core::GpuTaskCostHint::Medium;
     meshViewSetupScheduling.forceSubmissionBoundary = false;
@@ -1106,7 +1195,6 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         .setQueue(GraphicsQueueRequest())
         .setScheduling(meshViewSetupScheduling)
         .setDependencies(&shadowPrepareTask, 1u)
-        .setResourceUses(meshViewSetupResourceUses, LengthOf(meshViewSetupResourceUses))
     ;
     m_graphicsPrefixMeshViewSetupTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::MeshViewSetupGraphTask>(
         meshViewSetupDesc,
@@ -1116,8 +1204,6 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             .asyncPrefixTiming = &asyncPrefixTiming,
             .timingTicket = timingTicketSlot(PrefixTimingSlot::MeshViewSetup),
             .asyncPrefixTimingSpansOnePacket = asyncPrefixTimingSpansOnePacket,
-            .ready = &m_graphicsPrefixMeshViewSetupReady,
-            .meshViewAspectRatio = meshViewAspectRatio,
             .shadowVisibilityTask = &m_deferredShadowVisibilityTask,
         }
     );
@@ -1126,10 +1212,138 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         return false;
     }
 
-    const Core::GpuTaskResourceUse sceneShadingSetupResourceUses[] = {
-        WriteUse(sceneShading, Core::ResourceStates::ConstantBuffer),
-        WriteUse(lights, Core::ResourceStates::ShaderResource),
-    };
+    Core::GpuTaskSchedulingHint immutableUploadScheduling;
+    immutableUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
+    immutableUploadScheduling.forceSubmissionBoundary = false;
+    immutableUploadScheduling.allowPacketMerge = true;
+    immutableUploadScheduling.mergeWithPrevious = true;
+
+    Core::GpuTaskId meshViewUploadTask = m_graphicsPrefixMeshViewSetupTask;
+    if(meshViewUploadRequired){
+        const Core::GpuUploadBlobId meshViewBlob = m_deferredLightingTaskGraph.copyUploadData(
+            &meshViewState,
+            sizeof(meshViewState),
+            alignof(ECSRenderDetail::MeshViewGpuData)
+        );
+        Core::GpuTaskDesc meshViewUploadDesc;
+        meshViewUploadDesc
+            .setIdentity(Name("render.graphics_prefix.mesh_view_upload"))
+            .setMarkerLabel("Mesh View Upload")
+            .setQueue(GraphicsUploadQueueRequest())
+            .setScheduling(immutableUploadScheduling)
+            .setDependencies(&m_graphicsPrefixMeshViewSetupTask, 1u)
+        ;
+        meshViewUploadTask = meshViewBlob.valid()
+            ? m_deferredLightingTaskGraph.addUploadBufferTask(
+                meshViewUploadDesc,
+                Core::GpuUploadBufferTaskDesc{
+                    .source = meshViewBlob,
+                    .destination = meshView,
+                    // The backing buffer deliberately restores Common when a native packet closes.  Declare that
+                    // exact graph-visible boundary here; the G-buffer consumer below owns the Common ->
+                    // ConstantBuffer transition.
+                    .finalState = Core::ResourceStates::Common,
+                }
+            )
+            : Core::GpuTaskId{}
+        ;
+        if(!meshViewUploadTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned mesh-view upload"));
+            return false;
+        }
+    }
+
+    Core::GpuTaskSchedulingHint meshViewCommitScheduling = immutableUploadScheduling;
+    Core::GpuTaskDesc meshViewCommitDesc;
+    meshViewCommitDesc
+        .setIdentity(Name("render.graphics_prefix.mesh_view_upload_commit"))
+        .setMarkerLabel("Mesh View Upload Commit")
+        .setQueue(GraphicsQueueRequest())
+        .setScheduling(meshViewCommitScheduling)
+        .setDependencies(&meshViewUploadTask, 1u)
+    ;
+    const Core::GpuTaskId meshViewCommitTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::MeshViewUploadCommitGraphTask>(
+        meshViewCommitDesc,
+        ECSRenderDetail::MeshViewUploadCommitGraphTask::Payload{
+            .renderer = this,
+            .viewState = meshViewState,
+            .uploadRequired = meshViewUploadRequired,
+            .ready = &m_graphicsPrefixMeshViewSetupReady,
+        }
+    );
+    if(!meshViewCommitTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare mesh-view upload commit"));
+        return false;
+    }
+
+    Core::GpuTaskId sceneUploadTask = meshViewCommitTask;
+    if(sceneLightUploadRequired){
+        const usize sceneLightByteCount = static_cast<usize>(sceneLightCount) * sizeof(sceneLightData[0u]);
+        const Core::GpuUploadBlobId sceneLightBlob = m_deferredLightingTaskGraph.copyUploadData(
+            sceneLightData,
+            sceneLightByteCount,
+            alignof(ECSRenderDetail::SceneLightGpuData)
+        );
+        Core::GpuTaskDesc sceneLightUploadDesc;
+        sceneLightUploadDesc
+            .setIdentity(Name("render.graphics_prefix.scene_lights_upload"))
+            .setMarkerLabel("Scene Lights Upload")
+            .setQueue(GraphicsUploadQueueRequest())
+            .setScheduling(immutableUploadScheduling)
+            .setDependencies(&sceneUploadTask, 1u)
+        ;
+        sceneUploadTask = sceneLightBlob.valid()
+            ? m_deferredLightingTaskGraph.addUploadBufferTask(
+                sceneLightUploadDesc,
+                Core::GpuUploadBufferTaskDesc{
+                    .source = sceneLightBlob,
+                    .destination = lights,
+                    // These shared frame buffers retain Common between native packets.  The first declared reader
+                    // owns the transition to ShaderResource.
+                    .finalState = Core::ResourceStates::Common,
+                }
+            )
+            : Core::GpuTaskId{}
+        ;
+        if(!sceneUploadTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned scene-light upload"));
+            return false;
+        }
+    }
+
+    if(sceneShadingUploadRequired){
+        const Core::GpuUploadBlobId sceneShadingBlob = m_deferredLightingTaskGraph.copyUploadData(
+            &sceneShadingState,
+            sizeof(sceneShadingState),
+            alignof(ECSRenderDetail::SceneShadingGpuData)
+        );
+        Core::GpuTaskDesc sceneShadingUploadDesc;
+        sceneShadingUploadDesc
+            .setIdentity(Name("render.graphics_prefix.scene_shading_upload"))
+            .setMarkerLabel("Scene Shading Upload")
+            .setQueue(GraphicsUploadQueueRequest())
+            .setScheduling(immutableUploadScheduling)
+            .setDependencies(&sceneUploadTask, 1u)
+        ;
+        sceneUploadTask = sceneShadingBlob.valid()
+            ? m_deferredLightingTaskGraph.addUploadBufferTask(
+                sceneShadingUploadDesc,
+                Core::GpuUploadBufferTaskDesc{
+                    .source = sceneShadingBlob,
+                    .destination = sceneShading,
+                    // See the light upload above: preserve the resource's automatic Common boundary and let the
+                    // first declared reader lower its ConstantBuffer transition.
+                    .finalState = Core::ResourceStates::Common,
+                }
+            )
+            : Core::GpuTaskId{}
+        ;
+        if(!sceneUploadTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned scene-shading upload"));
+            return false;
+        }
+    }
+
     Core::GpuTaskSchedulingHint sceneShadingSetupScheduling;
     sceneShadingSetupScheduling.cost = Core::GpuTaskCostHint::Tiny;
     sceneShadingSetupScheduling.forceSubmissionBoundary = false;
@@ -1141,17 +1355,25 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         .setMarkerLabel("Scene Shading Setup")
         .setQueue(GraphicsQueueRequest())
         .setScheduling(sceneShadingSetupScheduling)
-        .setDependencies(&m_graphicsPrefixMeshViewSetupTask, 1u)
-        .setResourceUses(sceneShadingSetupResourceUses, LengthOf(sceneShadingSetupResourceUses))
+        .setDependencies(&sceneUploadTask, 1u)
     ;
+    ECSRenderDetail::SceneShadingSetupGraphTask::Payload sceneShadingSetupPayload;
+    sceneShadingSetupPayload.renderer = this;
+    sceneShadingSetupPayload.timingTicket = timingTicketSlot(PrefixTimingSlot::SceneShadingSetup);
+    sceneShadingSetupPayload.ready = &m_graphicsPrefixSceneShadingSetupReady;
+    NWB_MEMCPY(
+        sceneShadingSetupPayload.lightData,
+        sizeof(sceneShadingSetupPayload.lightData),
+        sceneLightData,
+        sizeof(sceneLightData)
+    );
+    sceneShadingSetupPayload.sceneShadingState = sceneShadingState;
+    sceneShadingSetupPayload.lightCount = sceneLightCount;
+    sceneShadingSetupPayload.lightUploadRequired = sceneLightUploadRequired;
+    sceneShadingSetupPayload.sceneShadingUploadRequired = sceneShadingUploadRequired;
     m_graphicsPrefixSceneShadingSetupTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::SceneShadingSetupGraphTask>(
         sceneShadingSetupDesc,
-        ECSRenderDetail::SceneShadingSetupGraphTask::Payload{
-            .renderer = this,
-            .timingTicket = timingTicketSlot(PrefixTimingSlot::SceneShadingSetup),
-            .ready = &m_graphicsPrefixSceneShadingSetupReady,
-            .meshViewAspectRatio = meshViewAspectRatio,
-        }
+        Move(sceneShadingSetupPayload)
     );
     if(!m_graphicsPrefixSceneShadingSetupTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare scene-shading setup task"));

@@ -28,6 +28,7 @@ RendererRayTracingSystem::RendererRayTracingSystem(RendererSystem& renderer)
     , m_preparedSceneBvhInstanceBytes(arena())
     , m_preparedSceneTlasInstances(arena())
     , m_preparedSceneTlasBlases(arena())
+    , m_preparedMeshBlasBuilds(arena())
 {}
 
 RendererRayTracingSystem::~RendererRayTracingSystem() = default;
@@ -850,6 +851,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     clearPreparedShadowMaterialContext();
     clearPreparedSceneBvh();
     clearPreparedSceneTlasBuild();
+    clearPreparedMeshBlasBuilds();
     m_shadowVisibilityPreparedTargets = nullptr;
     m_shadowVisibilityResourcesPreflighted = false;
     m_shadowVisibilityHardwareSupported = false;
@@ -901,6 +903,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     clearPreparedShadowMaterialContext();
     clearPreparedSceneBvh();
     clearPreparedSceneTlasBuild();
+    clearPreparedMeshBlasBuilds();
     // Surfel GI is a per-frame consumer of the scene selected below. Never let an empty or rejected preflight reuse
     // the preceding frame's backend selection and dispatch against stale trace inputs.
     rayTracingState().m_hybridTransparentShadowReady = false;
@@ -938,6 +941,15 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
             m_shadowVisibilityPreparedTargets = &targets;
             m_shadowVisibilityResourcesPreflighted = true;
             return true;
+        }
+        // Freeze the same opaque-HW BLAS operations that the old record-time loop would execute. A capture miss
+        // deliberately falls back as one unit with the frozen TLAS rather than mixing snapshot and live traversal.
+        if(
+            !rayTracingState().m_sceneHasTransparentOccluder
+            && !capturePreparedMeshBlasBuilds()
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze opaque hardware BLAS build plan"));
+            clearPreparedSceneTlasBuild();
         }
         m_shadowVisibilityTraceResourcesPreflighted = true;
 
@@ -1153,7 +1165,8 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     const bool surfelFrameConstantsGraphOwned,
     const bool shadowMaterialContextBatchGraphOwned,
     const bool sceneBvhBatchGraphOwned,
-    const bool sceneTlasBuildGraphOwned
+    const bool sceneTlasBuildGraphOwned,
+    const bool meshBlasBuildsGraphOwned
 ){
     outBackendReady = false;
     if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
@@ -1169,8 +1182,12 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
         return true;
 
     if(m_shadowVisibilityHardwareSupported){
-        if(!buildPendingMeshBlas(commandList)){
-            if(sceneTlasBuildGraphOwned)
+        const bool meshBlasReady = meshBlasBuildsGraphOwned
+            ? recordPreparedMeshBlasBuilds(commandList)
+            : buildPendingMeshBlas(commandList)
+        ;
+        if(!meshBlasReady){
+            if(sceneTlasBuildGraphOwned || meshBlasBuildsGraphOwned)
                 return false;
             return true;
         }

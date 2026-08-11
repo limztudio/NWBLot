@@ -400,10 +400,10 @@ private:
     // consumes the visibility result on the same Compute lane, so the result snapshot remains Compute-local.
     Core::CommandListResourceStateHandoff m_shadowComputePersistentStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityReturnStateHandoff;
-    // The native TLAS build writes backing storage inside Shadow Preparation. Retain only the accepted backing
-    // generation so the next frame's first graph packet seeds its real AccelStructRead state.
+    // Native TLAS and BLAS builds write backing storage inside Shadow Preparation. Retain only accepted live
+    // generations so the next frame's first graph packet seeds their real AccelStructRead states.
     Core::CommandListResourceStateHandoff m_shadowPreparePersistentStateHandoff;
-    Core::BufferHandle m_shadowPreparePersistentStateBacking;
+    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_shadowPreparePersistentStateBackings;
     // Software caustics retain their temporal scratch on the dedicated Compute lane. Hardware dispatch-rays caustics
     // use the Graphics hardware-caustics packet; normal deferred lighting consumes either resolved irradiance on Compute, while
     // the optional lagged path snapshots it for the next Graphics lighting packet.

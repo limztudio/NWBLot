@@ -278,6 +278,124 @@ template<typename RayTracingState>
     );
 }
 
+[[nodiscard]] bool ResolvePreparedMeshBlasBuild(
+    const MeshResources& meshResources,
+    PreparedMeshBlasBuild& outBuild
+){
+    outBuild = {};
+    if(
+        !meshResources.meshName
+        || !meshResources.positionBuffer
+        || !meshResources.triangleIndexBuffer
+        || !meshResources.blas
+        || !meshResources.blas->getBackingBufferHandle()
+    )
+        return false;
+
+    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getDescription();
+    if(positionDesc.structStride == 0u || meshResources.meshletPrimitiveIndexCount == 0u)
+        return false;
+
+    const bool firstBuild = meshResources.blasBuildPending;
+    const bool performRefit =
+        meshResources.runtimeMesh
+        && !firstBuild
+        && meshResources.blasRefitsSinceRebuild
+            < adaptiveRefitsBeforeRebuild(meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount)
+    ;
+    outBuild.meshName = meshResources.meshName;
+    outBuild.positionBuffer = meshResources.positionBuffer;
+    outBuild.triangleIndexBuffer = meshResources.triangleIndexBuffer;
+    outBuild.blas = meshResources.blas;
+    outBuild.blasBackingBuffer = meshResources.blas->getBackingBufferHandle();
+    outBuild.runtimeMeshVersion = meshResources.runtimeMeshVersion;
+    outBuild.positionByteSize = positionDesc.byteSize;
+    outBuild.vertexStride = static_cast<u32>(positionDesc.structStride);
+    outBuild.vertexCount = static_cast<u32>(positionDesc.byteSize / positionDesc.structStride);
+    outBuild.indexCount = meshResources.meshletPrimitiveIndexCount;
+    outBuild.refitsBeforeBuild = meshResources.blasRefitsSinceRebuild;
+    outBuild.refitsAfterBuild = performRefit ? (meshResources.blasRefitsSinceRebuild + 1u) : 0u;
+    outBuild.runtimeMesh = meshResources.runtimeMesh;
+    outBuild.firstBuild = firstBuild;
+    outBuild.performRefit = performRefit;
+    return true;
+}
+
+[[nodiscard]] bool MatchesPreparedMeshBlasBuild(
+    const MeshResources& meshResources,
+    const PreparedMeshBlasBuild& build
+){
+    if(
+        meshResources.meshName != build.meshName
+        || meshResources.runtimeMesh != build.runtimeMesh
+        || meshResources.runtimeMeshVersion != build.runtimeMeshVersion
+        || meshResources.positionBuffer.get() != build.positionBuffer.get()
+        || meshResources.triangleIndexBuffer.get() != build.triangleIndexBuffer.get()
+        || meshResources.blas.get() != build.blas.get()
+        || !meshResources.blas
+        || meshResources.blas->getBackingBufferHandle().get() != build.blasBackingBuffer.get()
+        || meshResources.meshletPrimitiveIndexCount != build.indexCount
+        || meshResources.blasBuildPending != build.firstBuild
+        || meshResources.blasRefitsSinceRebuild != build.refitsBeforeBuild
+    )
+        return false;
+
+    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getDescription();
+    return
+        positionDesc.structStride == build.vertexStride
+        && positionDesc.byteSize == build.positionByteSize
+        && build.vertexStride != 0u
+        && build.vertexCount == positionDesc.byteSize / build.vertexStride
+    ;
+}
+
+[[nodiscard]] bool RecordPreparedMeshBlasBuild(
+    Core::CommandList& commandList,
+    const PreparedMeshBlasBuild& build
+){
+    if(
+        !build.positionBuffer
+        || !build.triangleIndexBuffer
+        || !build.blas
+        || !build.blasBackingBuffer
+        || build.vertexStride == 0u
+        || build.vertexCount == 0u
+        || build.indexCount == 0u
+        || build.blas->getBackingBufferHandle().get() != build.blasBackingBuffer.get()
+    )
+        return false;
+
+    Core::RayTracingGeometryTriangles triangles;
+    triangles
+        .setVertexBuffer(build.positionBuffer.get())
+        .setVertexFormat(Core::Format::RGB32_FLOAT)
+        .setVertexStride(build.vertexStride)
+        .setVertexCount(build.vertexCount)
+        .setIndexBuffer(build.triangleIndexBuffer.get())
+        .setIndexFormat(Core::Format::R32_UINT)
+        .setIndexCount(build.indexCount)
+    ;
+    Core::RayTracingGeometryDesc geometry;
+    geometry
+        .setTriangles(triangles)
+        .setFlags(Core::RayTracingGeometryFlags::NoDuplicateAnyHitInvocation)
+    ;
+    Core::RayTracingAccelStructBuildFlags::Mask buildFlags = Core::RayTracingAccelStructBuildFlags::PreferFastTrace;
+    if(build.runtimeMesh)
+        buildFlags |= Core::RayTracingAccelStructBuildFlags::AllowUpdate;
+    if(build.performRefit)
+        buildFlags |= Core::RayTracingAccelStructBuildFlags::PerformUpdate;
+
+    commandList.setBufferState(build.positionBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
+    commandList.setBufferState(build.triangleIndexBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
+    commandList.setAccelStructState(build.blas.get(), Core::ResourceStates::AccelStructWrite);
+    commandList.commitBarriers();
+    commandList.buildBottomLevelAccelStruct(build.blas.get(), &geometry, 1u, buildFlags);
+    commandList.setAccelStructState(build.blas.get(), Core::ResourceStates::AccelStructRead);
+    commandList.commitBarriers();
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -334,6 +452,109 @@ bool RendererRayTracingSystem::preparePendingMeshBlasResources(){
         }
     }
     return allResourcesReady;
+}
+
+void RendererRayTracingSystem::clearPreparedMeshBlasBuilds()noexcept{
+    m_preparedMeshBlasBuilds.clear();
+    m_preparedMeshBlasBuildsReady = false;
+}
+
+bool RendererRayTracingSystem::capturePreparedMeshBlasBuilds(){
+    clearPreparedMeshBlasBuilds();
+    if(!graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
+        return false;
+
+    auto& meshes = meshState().m_meshes;
+    for(auto it = meshes.begin(); it != meshes.end(); ++it){
+        const MeshResources& meshResources = it.value();
+        // Runtime geometry refits every hardware frame; static geometry enters only when the preflight marked it
+        // dirty. This deliberately includes off-screen meshes, matching the established native traversal.
+        if(!meshResources.runtimeMesh && !meshResources.blasBuildPending)
+            continue;
+
+        PreparedMeshBlasBuild build;
+        if(!__hidden_rt_swbvh::ResolvePreparedMeshBlasBuild(meshResources, build)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze BLAS build for mesh '{}'")
+                , StringConvert(meshResources.meshName.c_str())
+            );
+            clearPreparedMeshBlasBuilds();
+            return false;
+        }
+        m_preparedMeshBlasBuilds.push_back(Move(build));
+    }
+    m_preparedMeshBlasBuildsReady = !m_preparedMeshBlasBuilds.empty();
+    return true;
+}
+
+bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(Core::CommandList& commandList){
+    if(!m_preparedMeshBlasBuildsReady || m_preparedMeshBlasBuilds.empty())
+        return false;
+
+    auto& meshes = meshState().m_meshes;
+    for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
+        const auto found = meshes.find(build.meshName);
+        if(
+            found == meshes.end()
+            || !__hidden_rt_swbvh::MatchesPreparedMeshBlasBuild(found.value(), build)
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build no longer matches mesh '{}'")
+                , StringConvert(build.meshName.c_str())
+            );
+            return false;
+        }
+    }
+    for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
+        if(!__hidden_rt_swbvh::RecordPreparedMeshBlasBuild(commandList, build)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen BLAS build for mesh '{}'")
+                , StringConvert(build.meshName.c_str())
+            );
+            return false;
+        }
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::preparedMeshBlasBuildsReady()const noexcept{
+    return m_preparedMeshBlasBuildsReady;
+}
+
+const PreparedMeshBlasBuildVector& RendererRayTracingSystem::preparedMeshBlasBuilds()const noexcept{
+    return m_preparedMeshBlasBuilds;
+}
+
+void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds()noexcept{
+    if(!m_preparedMeshBlasBuildsReady)
+        return;
+
+    bool allPlansCurrent = true;
+    auto& meshes = meshState().m_meshes;
+    for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
+        const auto found = meshes.find(build.meshName);
+        if(
+            found == meshes.end()
+            || !__hidden_rt_swbvh::MatchesPreparedMeshBlasBuild(found.value(), build)
+        ){
+            allPlansCurrent = false;
+            continue;
+        }
+
+        MeshResources& meshResources = found.value();
+        meshResources.blasBuildPending = false;
+        meshResources.blasRefitsSinceRebuild = build.refitsAfterBuild;
+        if(build.firstBuild){
+            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)")
+                , StringConvert(build.meshName.c_str())
+                , build.runtimeMesh
+                , static_cast<u64>(build.vertexCount)
+                , static_cast<u64>(build.indexCount)
+            );
+        }
+    }
+    // An unexpected replacement after recording is not rolled into the accepted mesh cache. Force a future TLAS
+    // rebuild rather than retaining a static-scene hash that may describe the retired generation.
+    if(!allPlansCurrent)
+        rayTracingState().m_tlasStaticSceneHashValid = false;
+    clearPreparedMeshBlasBuilds();
 }
 
 bool RendererRayTracingSystem::buildPendingMeshSwBvh(Core::CommandList& commandList){
@@ -1374,66 +1595,20 @@ bool RendererRayTracingSystem::prepareMeshBlasResources(MeshResources& meshResou
 }
 
 bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, MeshResources& meshResources){
-    if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer)
+    PreparedMeshBlasBuild build;
+    if(
+        !__hidden_rt_swbvh::ResolvePreparedMeshBlasBuild(meshResources, build)
+        || !__hidden_rt_swbvh::RecordPreparedMeshBlasBuild(commandList, build)
+    )
         return false;
 
-    const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getDescription();
-    if(positionDesc.structStride == 0u || meshResources.meshletPrimitiveIndexCount == 0u)
-        return false;
-
-    // Storage selection is preflight-only.  Recording may build or refit a selected BLAS, never create one.
-    if(!meshResources.blas)
-        return false;
-    const bool firstBuild = meshResources.blasBuildPending;
-
-    const u32 vertexStride = static_cast<u32>(positionDesc.structStride);
-    const u32 vertexCount = static_cast<u32>(positionDesc.byteSize / positionDesc.structStride);
-    Core::RayTracingGeometryTriangles triangles;
-    triangles
-        .setVertexBuffer(meshResources.positionBuffer.get())
-        .setVertexFormat(Core::Format::RGB32_FLOAT)
-        .setVertexStride(vertexStride)
-        .setVertexCount(vertexCount)
-        .setIndexBuffer(meshResources.triangleIndexBuffer.get())
-        .setIndexFormat(Core::Format::R32_UINT)
-        .setIndexCount(meshResources.meshletPrimitiveIndexCount)
-    ;
-    Core::RayTracingGeometryDesc geometry;
-    geometry
-        .setTriangles(triangles)
-        .setFlags(Core::RayTracingGeometryFlags::NoDuplicateAnyHitInvocation)
-    ;
-    Core::RayTracingAccelStructBuildFlags::Mask buildFlags = Core::RayTracingAccelStructBuildFlags::PreferFastTrace;
-    if(meshResources.runtimeMesh)
-        buildFlags |= Core::RayTracingAccelStructBuildFlags::AllowUpdate;
-
-    const bool performRefit =
-        meshResources.runtimeMesh
-        && !firstBuild
-        && meshResources.blasRefitsSinceRebuild < adaptiveRefitsBeforeRebuild(meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount)
-    ;
-    if(performRefit)
-        buildFlags |= Core::RayTracingAccelStructBuildFlags::PerformUpdate;
-
-    commandList.setBufferState(meshResources.positionBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
-    commandList.setBufferState(meshResources.triangleIndexBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
-    commandList.setAccelStructState(meshResources.blas.get(), Core::ResourceStates::AccelStructWrite);
-    commandList.commitBarriers();
-
-    commandList.buildBottomLevelAccelStruct(meshResources.blas.get(), &geometry, 1u, buildFlags);
-    // TLAS build and later RayQuery consume this BLAS in later graph packets. Publish the build write before the
-    // preparation packet signals its Graphics frontier rather than leaving a raw build-write state behind.
-    commandList.setAccelStructState(meshResources.blas.get(), Core::ResourceStates::AccelStructRead);
-    commandList.commitBarriers();
-
-    meshResources.blasRefitsSinceRebuild = performRefit ? (meshResources.blasRefitsSinceRebuild + 1u) : 0u;
-
-    if(firstBuild){
+    meshResources.blasRefitsSinceRebuild = build.refitsAfterBuild;
+    if(build.firstBuild){
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)")
             , StringConvert(meshResources.meshName.c_str())
             , meshResources.runtimeMesh
-            , static_cast<u64>(vertexCount)
-            , static_cast<u64>(meshResources.meshletPrimitiveIndexCount)
+            , static_cast<u64>(build.vertexCount)
+            , static_cast<u64>(build.indexCount)
         );
     }
     return true;

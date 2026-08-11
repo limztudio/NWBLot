@@ -102,6 +102,7 @@ struct ShadowPrepareGraphTask{
         bool shadowMaterialContextBatchGraphOwned = false;
         bool sceneBvhBatchGraphOwned = false;
         bool sceneTlasBuildGraphOwned = false;
+        bool meshBlasBuildsGraphOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -138,7 +139,8 @@ struct ShadowPrepareGraphTask{
                 payload.surfelFrameConstantsGraphOwned,
                 payload.shadowMaterialContextBatchGraphOwned,
                 payload.sceneBvhBatchGraphOwned,
-                payload.sceneTlasBuildGraphOwned
+                payload.sceneTlasBuildGraphOwned,
+                payload.meshBlasBuildsGraphOwned
             )
         ;
         // The graph-owned material-context selector was snapshotted after preflight settled every backing handle.
@@ -168,8 +170,6 @@ struct ShadowPrepareGraphTask{
             payload.renderer->m_raytracingSystem.confirmPreparedShadowMaterialContextUploads();
         if(payload.renderer && payload.sceneBvhBatchGraphOwned)
             payload.renderer->m_raytracingSystem.confirmPreparedSceneBvhUploads();
-        if(payload.renderer && payload.sceneTlasBuildGraphOwned)
-            payload.renderer->m_raytracingSystem.confirmPreparedSceneTlasBuild();
     }
 
     static void discarded(Payload& payload){
@@ -1823,10 +1823,20 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build has no imported acceleration structure"));
         return false;
     }
+    const bool meshBlasBuildsGraphOwned = m_raytracingSystem.preparedMeshBlasBuildsReady();
+    const PreparedMeshBlasBuildVector& preparedMeshBlasBuilds = m_raytracingSystem.preparedMeshBlasBuilds();
+    if(meshBlasBuildsGraphOwned && preparedMeshBlasBuilds.empty()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build plan has no operations"));
+        return false;
+    }
+    if(meshBlasBuildsGraphOwned && !m_rayTracingState.m_tlas){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build plan has no scene TLAS"));
+        return false;
+    }
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
-    resourceUses.reserve(19u + shadowTraceGeometryResourceCount);
+    resourceUses.reserve(19u + shadowTraceGeometryResourceCount + meshState().m_meshes.size() * 2u);
     // Shadow Preparation owns each preflight input's post-transition packet boundary. This deliberately supersedes
     // preceding immutable uploads as graph producers, so later Compute readers wait on this first Graphics packet
     // rather than forcing FrontierSafe packetization to split an upload away from its accepting consumer.
@@ -1874,6 +1884,39 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             resourceUses.push_back(WriteUse(tlasBacking, Core::ResourceStates::AccelStructRead));
         }
     }
+    for(auto meshIt = meshState().m_meshes.begin(); meshIt != meshState().m_meshes.end(); ++meshIt){
+        const MeshResources& mesh = meshIt.value();
+        if(!mesh.blas)
+            continue;
+
+        const Name blasIdentity = DeriveName(mesh.meshName, AStringView(":blas"));
+        const Name backingIdentity = DeriveName(mesh.meshName, AStringView(":blas_backing"));
+        const Core::GpuGraphResourceId blas = m_deferredLightingTaskGraph.importAccelStruct(
+            mesh.blas,
+            AccelStructResourceDesc(blasIdentity, "Mesh BLAS")
+        );
+        const Core::GpuGraphResourceId backing = importBuffer(
+            mesh.blas->getBackingBufferHandle(),
+            backingIdentity,
+            "Mesh BLAS Backing"
+        );
+        resourcesImported = resourcesImported && blas.valid() && backing.valid();
+        if(blas.valid() && backing.valid()){
+            const bool nativeBuildsBlas = mesh.runtimeMesh || mesh.blasBuildPending;
+            if(nativeBuildsBlas){
+                // Direct hybrid compatibility and frozen opaque plans both record the native write/read sequence
+                // here. Keep the backing imported so an accepted prior AccelStructRead state seeds that transition.
+                resourceUses.push_back(ReadWriteUse(blas, Core::ResourceStates::AccelStructRead));
+                resourceUses.push_back(WriteUse(backing, Core::ResourceStates::AccelStructRead));
+            }
+            else{
+                // State-only import: a later rejected preparation can re-pend this static BLAS, and its next build
+                // must seed the true accepted AccelStructRead backing state instead of BufferDesc::initialState.
+                resourceUses.push_back(ReadUse(blas, Core::ResourceStates::AccelStructRead));
+                resourceUses.push_back(ReadUse(backing, Core::ResourceStates::AccelStructRead));
+            }
+        }
+    }
     if(!resourcesImported){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted shadow-preparation resources"));
         return false;
@@ -1909,6 +1952,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .shadowMaterialContextBatchGraphOwned = shadowMaterialContextBatchGraphOwned,
             .sceneBvhBatchGraphOwned = sceneBvhBatchGraphOwned,
             .sceneTlasBuildGraphOwned = sceneTlasBuildGraphOwned,
+            .meshBlasBuildsGraphOwned = meshBlasBuildsGraphOwned,
         }
     );
     if(!m_deferredShadowPrepareTask.valid()){

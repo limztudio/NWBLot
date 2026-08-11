@@ -13,7 +13,7 @@ graph-owned opaque CSG receiver/cutter/context/interval streams, graph-owned tra
 streams, and graph-owned transparent AVBOIT occupancy, extinction, and accumulation material/CSG streams,
 and graph-owned current and lagged deferred bindless-selector, ray-trace material-context selector, caustic
 emission-target, surfel-frame constant, shadow material-context batch, software scene-BVH pair uploads, and opaque
-hardware TLAS build transactions,
+hardware TLAS and BLAS build transactions,
 2026-08-12.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
@@ -108,6 +108,12 @@ can receive an unconditional final sign-off.
   packet, explicitly transitions acceleration structures from build-write to read, and commits its static cache and
   cross-frame backing-state seed only after that packet accepts. Hybrid transparent hardware-to-software frames
   retain their native fallback until both paths can share one frozen scene plan.
+- Opaque hardware BLAS builds and refits now freeze the selected static or runtime mesh operation with its exact
+  position/index buffers, BLAS, backing generation, and rebuild/refit decision. The plan records before the frozen
+  TLAS in the same Shadow Preparation packet, and every live BLAS backing participates in the accepted cross-frame
+  state seed, including hybrid compatibility frames that still use the native build path. Pending-build and refit
+  counters commit only after that retained state handoff accepts; transparent hybrid scene construction remains
+  native until it can use the same immutable scene plan.
 - The opaque G-buffer now freezes its material draw ordering and CSG CPU frame payload during graph declaration.
   Its instance and typed-material bytes are retained as immutable graph blobs and uploaded through Graphics-routed
   built-in buffer tasks after deferred clear. The tasks publish the buffers' automatic `Common` close boundary; the
@@ -189,6 +195,7 @@ can receive an unconditional final sign-off.
 | Graph-owned shadow material-context batch follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and forced-software GI capture | passed; all three immutable streams merge into Shadow Preparation, publish `Common`, and are handed off there as `ShaderResource` to later asynchronous trace consumers |
 | Graph-owned software scene-BVH pair follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and forced-software GI capture | passed; the frozen node and leaf-instance uploads merge into Shadow Preparation, publish `Common`, and are handed off there as one `ShaderResource` topology payload to later asynchronous trace consumers |
 | Graph-owned opaque hardware TLAS build follow-up: renderer build, FrontierSafe graph unit, and descriptor-buffer smoke | passed; `nwb_ecs_render` built, graph tests passed 50/50, and descriptor smoke passed 75 tests with 10 expected topology skips. The graph unit proves the backing-buffer `Common` to `AccelStructRead` handoff and that Shadow Preparation, rather than the frozen preflight data, owns later Compute consumers. |
+| Graph-owned opaque hardware BLAS build/refit follow-up: renderer build, FrontierSafe graph unit, and descriptor-buffer smoke | passed; `nwb_ecs_render` built, graph tests passed 50/50, and descriptor smoke passed 75 tests with 10 expected topology skips. The graph unit covers both a frozen BLAS build and a state-only compatibility BLAS backing, proving their `Common` to `AccelStructRead` handoff remains owned by Shadow Preparation before later Compute consumers. |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -217,7 +224,7 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    accumulation phases now freeze and publish their own per-write-point material/CSG streams, preserving the shared
    interval sample state across the low-resolution raster passes. Current and lagged deferred bindless selectors,
    the ray-trace material-context selector, caustic emission-target stream, surfel-frame constants, shadow
-   material-context batch, software scene-BVH pair, and opaque hardware TLAS build transaction are acceptance-safe
+   material-context batch, software scene-BVH pair, and opaque hardware TLAS and BLAS build/refit transactions are acceptance-safe
    graph-owned preparation work; skinning compute
    dispatch/its selector update and other specialized descriptor/resource updates still retain direct native
    recording or submission. The graph

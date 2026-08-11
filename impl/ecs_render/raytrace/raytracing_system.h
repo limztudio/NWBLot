@@ -57,6 +57,32 @@ using PreparedShadowTraceGeometryBufferVector = Vector<
 >;
 
 
+// A BLAS build derives its geometry directly from retained buffers. Keep the resolved operation rather than a
+// MeshResources pointer: runtime meshes can be replaced or pruned between preflight and native recording.
+struct PreparedMeshBlasBuild{
+    Name meshName = NAME_NONE;
+    Core::BufferHandle positionBuffer;
+    Core::BufferHandle triangleIndexBuffer;
+    Core::RayTracingAccelStructHandle blas;
+    Core::BufferHandle blasBackingBuffer;
+    u64 runtimeMeshVersion = 0u;
+    usize positionByteSize = 0u;
+    u32 vertexStride = 0u;
+    u32 vertexCount = 0u;
+    u32 indexCount = 0u;
+    u32 refitsBeforeBuild = 0u;
+    u32 refitsAfterBuild = 0u;
+    bool runtimeMesh = false;
+    bool firstBuild = false;
+    bool performRefit = false;
+};
+
+using PreparedMeshBlasBuildVector = Vector<
+    PreparedMeshBlasBuild,
+    Core::Alloc::GlobalArena
+>;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -80,7 +106,8 @@ public:
         bool surfelFrameConstantsGraphOwned = false,
         bool shadowMaterialContextBatchGraphOwned = false,
         bool sceneBvhBatchGraphOwned = false,
-        bool sceneTlasBuildGraphOwned = false
+        bool sceneTlasBuildGraphOwned = false,
+        bool meshBlasBuildsGraphOwned = false
     );
     [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept;
     void discardPreflightShadowVisibilityResources()noexcept;
@@ -147,6 +174,11 @@ public:
     // becomes valid only after that packet accepts; transparent/hybrid frames retain the compatibility path.
     [[nodiscard]] bool preparedSceneTlasBuildReady()const noexcept;
     void confirmPreparedSceneTlasBuild()noexcept;
+    // Opaque hardware frames retain exact BLAS build/refit choices. The selected handles outlive recording; only
+    // Shadow Preparation acceptance publishes mesh cache progress.
+    [[nodiscard]] bool preparedMeshBlasBuildsReady()const noexcept;
+    [[nodiscard]] const PreparedMeshBlasBuildVector& preparedMeshBlasBuilds()const noexcept;
+    void confirmPreparedMeshBlasBuilds()noexcept;
     void releaseRayTraceMaterialContextHeapHandles();
     void releaseSwBvhScratchHeapHandles();
     void releaseSurfelGiHeapHandles();
@@ -306,6 +338,9 @@ private:
     );
     [[nodiscard]] bool recordPreparedSceneTlasBuild(Core::CommandList& commandList);
     void clearPreparedSceneTlasBuild()noexcept;
+    [[nodiscard]] bool capturePreparedMeshBlasBuilds();
+    [[nodiscard]] bool recordPreparedMeshBlasBuilds(Core::CommandList& commandList);
+    void clearPreparedMeshBlasBuilds()noexcept;
     [[nodiscard]] bool prepareSurfelResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool recordPreparedSurfelFrameConstants(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool initializeSurfelResources(Core::CommandList& commandList);
@@ -456,6 +491,8 @@ private:
     u64 m_preparedSceneTlasStaticSceneHash = 0u;
     bool m_preparedSceneTlasStatic = false;
     bool m_preparedSceneTlasReady = false;
+    PreparedMeshBlasBuildVector m_preparedMeshBlasBuilds;
+    bool m_preparedMeshBlasBuildsReady = false;
     DeferredFrameTargets* m_shadowVisibilityPreparedTargets = nullptr;
     bool m_shadowVisibilityResourcesPreflighted = false;
     bool m_shadowVisibilityHardwareSupported = false;

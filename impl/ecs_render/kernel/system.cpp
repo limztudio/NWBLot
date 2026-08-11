@@ -48,6 +48,7 @@ RendererSystem::RendererSystem(
     , m_shadowComputePersistentStateHandoff(arena)
     , m_shadowVisibilityReturnStateHandoff(arena)
     , m_shadowPreparePersistentStateHandoff(arena)
+    , m_shadowPreparePersistentStateBackings(arena)
     , m_causticsComputePersistentStateHandoff(arena)
     , m_causticIrradianceLightingStateHandoff(arena)
     , m_causticIrradianceReturnStateHandoff(arena)
@@ -138,7 +139,7 @@ void RendererSystem::resetInvalidatedResourceStateHandoffs()noexcept{
     // The shadow-preparation packet owns its serial export; only retained cross-frame state is reset here.
     resetTargetGenerationStateHandoffs();
     m_shadowPreparePersistentStateHandoff.reset();
-    m_shadowPreparePersistentStateBacking = nullptr;
+    m_shadowPreparePersistentStateBackings.clear();
 }
 
 void RendererSystem::resetFrameRecordingStateHandoffs()noexcept{
@@ -1573,30 +1574,52 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // Record preparation and prefix through the graph's ready-frontier path. These renderer payloads intentionally
     // retain the serial default, while graph-owned upload packets later in the frame may opt into worker recording.
     const Core::GpuNativePacketRecorder deferredRecorder(device);
-    const Core::BufferHandle shadowPrepareBacking = m_rayTracingState.m_tlas
-        ? m_rayTracingState.m_tlas->getBackingBufferHandle()
-        : Core::BufferHandle{}
-    ;
-    // A replacement TLAS has a fresh backing generation. Do not seed it from a retained raw-pointer snapshot of the
-    // retired allocation; the newly created buffer begins at its declared creation state instead.
-    if(
-        !shadowPrepareBacking
-        || m_shadowPreparePersistentStateBacking.get() != shadowPrepareBacking.get()
-    ){
-        m_shadowPreparePersistentStateHandoff.reset();
-        m_shadowPreparePersistentStateBacking = nullptr;
+    Core::Alloc::ScratchArena shadowPrepareStateScratchArena(RendererArenaScope::s_TaskGraphArena);
+    Vector<Core::BufferHandle, Core::Alloc::ScratchArena> shadowPrepareLiveBackings{ shadowPrepareStateScratchArena };
+    Vector<Core::Buffer*, Core::Alloc::ScratchArena> shadowPrepareLiveBackingPointers{ shadowPrepareStateScratchArena };
+    const auto appendShadowPrepareBacking = [&](const Core::BufferHandle& backing){
+        if(!backing)
+            return;
+        for(const Core::BufferHandle& existing : shadowPrepareLiveBackings){
+            if(existing.get() == backing.get())
+                return;
+        }
+        shadowPrepareLiveBackings.push_back(backing);
+        shadowPrepareLiveBackingPointers.push_back(backing.get());
+    };
+    if(m_rayTracingState.m_tlas)
+        appendShadowPrepareBacking(m_rayTracingState.m_tlas->getBackingBufferHandle());
+    for(auto meshIt = meshState().m_meshes.begin(); meshIt != meshState().m_meshes.end(); ++meshIt){
+        const MeshResources& mesh = meshIt.value();
+        if(mesh.blas)
+            appendShadowPrepareBacking(mesh.blas->getBackingBufferHandle());
     }
+
+    // The handoff stores raw RHI pointers. Filter it into a local source for every current TLAS/BLAS backing before
+    // recording, but do not publish that filtered set yet: a rejected packet must leave the prior accepted seed
+    // untouched. The local strong handles remain alive through the accepted packet callback below.
+    Core::CommandListResourceStateHandoff shadowPrepareFilteredPriorState(m_arena);
+    bool shadowPrepareFilteredPriorStateReady = false;
+    if(m_shadowPreparePersistentStateHandoff.valid()){
+        shadowPrepareFilteredPriorStateReady = shadowPrepareFilteredPriorState.buildResourceSubset(
+                m_shadowPreparePersistentStateHandoff,
+                nullptr,
+                0u,
+                shadowPrepareLiveBackingPointers.data(),
+                shadowPrepareLiveBackingPointers.size()
+            )
+        ;
+    }
+
     Core::GpuExternalPacketStateSource shadowPrepareStateSources[1] = {};
     usize shadowPrepareStateSourceCount = 0u;
-    if(m_shadowPreparePersistentStateHandoff.valid()){
+    if(shadowPrepareFilteredPriorStateReady){
         if(!appendDeclaredStateSource(
             shadowPrepareStateSources,
             LengthOf(shadowPrepareStateSources),
             shadowPrepareStateSourceCount,
-            &m_shadowPreparePersistentStateHandoff
+            &shadowPrepareFilteredPriorState
         )){
-            m_shadowPreparePersistentStateHandoff.reset();
-            m_shadowPreparePersistentStateBacking = nullptr;
             shadowPrepareStateSourceCount = 0u;
         }
     }
@@ -1635,20 +1658,34 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ? m_deferredLightingRecordedGraph.packetFinalStateSeed(graphicsPrefixPacket)
         : nullptr
     ;
-    // Build the sparse TLAS-backing state candidate before submission, but publish it only from the accepted packet
-    // callback below. This avoids an accepted task cache being committed before a fallible state-subset extraction.
+    // Build the sparse TLAS/BLAS backing candidate before submission, but publish it only from the accepted packet
+    // callback below. Fan in the prior accepted backing states because a frame may leave a static BLAS untouched.
     Core::CommandListResourceStateHandoff shadowPrepareAcceptedStateCandidate(m_arena);
     bool shadowPrepareAcceptedStateCandidateReady = true;
-    if(shadowPrepareBacking){
-        Core::Buffer* const shadowPrepareBackingBuffers[] = { shadowPrepareBacking.get() };
+    if(!shadowPrepareLiveBackingPointers.empty()){
+        Core::CommandListResourceStateHandoff shadowPrepareFinalBackingState(m_arena);
         shadowPrepareAcceptedStateCandidateReady = shadowPrepareFinalStateSeed
-            && shadowPrepareAcceptedStateCandidate.buildResourceSubset(
+            && shadowPrepareFinalBackingState.buildResourceSubset(
                 *shadowPrepareFinalStateSeed,
                 nullptr,
                 0u,
-                shadowPrepareBackingBuffers,
-                LengthOf(shadowPrepareBackingBuffers)
+                shadowPrepareLiveBackingPointers.data(),
+                shadowPrepareLiveBackingPointers.size()
             )
+        ;
+        if(shadowPrepareAcceptedStateCandidateReady){
+            const Core::CommandListResourceStateHandoff* const stateBranches[] = { &shadowPrepareFinalBackingState };
+            shadowPrepareAcceptedStateCandidateReady = shadowPrepareFilteredPriorStateReady
+                ? shadowPrepareAcceptedStateCandidate.buildFanIn(
+                    shadowPrepareFilteredPriorState,
+                    stateBranches,
+                    LengthOf(stateBranches)
+                )
+                : shadowPrepareAcceptedStateCandidate.copyFrom(shadowPrepareFinalBackingState)
+            ;
+        }
+        shadowPrepareAcceptedStateCandidateReady = shadowPrepareAcceptedStateCandidateReady
+            && shadowPrepareAcceptedStateCandidate.valid()
             && !shadowPrepareAcceptedStateCandidate.empty()
         ;
     }
@@ -2673,7 +2710,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             RendererSystem* renderer = nullptr;
             Core::GpuSubmissionPacketId shadowPreparePacket;
             const Core::CommandListResourceStateHandoff* shadowPrepareStateCandidate = nullptr;
-            Core::BufferHandle shadowPrepareBacking;
+            const Vector<Core::BufferHandle, Core::Alloc::ScratchArena>* shadowPrepareStateBackings = nullptr;
             bool shadowPrepareStateReady = true;
         };
         PrefixTimingAcceptanceContext prefixTimingAcceptance{
@@ -2682,7 +2719,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             .renderer = this,
             .shadowPreparePacket = shadowPreparePacket,
             .shadowPrepareStateCandidate = &shadowPrepareAcceptedStateCandidate,
-            .shadowPrepareBacking = shadowPrepareBacking,
+            .shadowPrepareStateBackings = &shadowPrepareLiveBackings,
         };
         const auto acceptPrefixTimingPacket = [](
             void* const rawContext,
@@ -2700,17 +2737,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 }
 
                 RendererSystem& renderer = *context->renderer;
-                if(!context->shadowPrepareBacking){
+                if(
+                    !context->shadowPrepareStateBackings
+                    || context->shadowPrepareStateBackings->empty()
+                ){
                     renderer.m_shadowPreparePersistentStateHandoff.reset();
-                    renderer.m_shadowPreparePersistentStateBacking = nullptr;
+                    renderer.m_shadowPreparePersistentStateBackings.clear();
                 }
                 else if(
                     !context->shadowPrepareStateCandidate
                     || !context->shadowPrepareStateCandidate->valid()
                     || context->shadowPrepareStateCandidate->empty()
                 ){
-                    renderer.m_shadowPreparePersistentStateHandoff.reset();
-                    renderer.m_shadowPreparePersistentStateBacking = nullptr;
+                    // The packet is already accepted, so preserve the last accepted source rather than replacing it
+                    // with a partial generation. Re-pend the semantic plan for a conservative rebuild next frame.
+                    renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();
                     context->shadowPrepareStateReady = false;
                     return false;
                 }
@@ -2718,11 +2759,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     context->shadowPrepareStateReady = renderer.m_shadowPreparePersistentStateHandoff.copyFrom(
                         *context->shadowPrepareStateCandidate
                     );
-                    if(context->shadowPrepareStateReady)
-                        renderer.m_shadowPreparePersistentStateBacking = context->shadowPrepareBacking;
+                    if(context->shadowPrepareStateReady){
+                        renderer.m_shadowPreparePersistentStateBackings.clear();
+                        for(const Core::BufferHandle& backing : *context->shadowPrepareStateBackings)
+                            renderer.m_shadowPreparePersistentStateBackings.push_back(backing);
+                        // Task acceptance runs before this outer packet callback. Commit frozen AS cache/refit state
+                        // only after the accepted backing handoff has been retained successfully.
+                        renderer.m_raytracingSystem.confirmPreparedSceneTlasBuild();
+                        renderer.m_raytracingSystem.confirmPreparedMeshBlasBuilds();
+                    }
                     else{
-                        renderer.m_shadowPreparePersistentStateHandoff.reset();
-                        renderer.m_shadowPreparePersistentStateBacking = nullptr;
+                        renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();
+                        context->shadowPrepareStateReady = false;
                         return false;
                     }
                 }

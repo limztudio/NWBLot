@@ -35,6 +35,29 @@ public:
     [[nodiscard]] bool prepareAvboitPassResources(DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
     void clearAvboitTargets(Core::CommandList& commandList, AvboitFrameTargets& targets);
     void buildTransparentCsgIntervals(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
+    void renderAvboitTransparentCsgIntervals(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        const CsgFrameState& csgFrameState,
+        const MaterialPassDrawItems* preparedTransparentCsgReceiverSurfaceDrawItems = nullptr,
+        const CsgFrameGpuData* preparedTransparentCsgFrameData = nullptr,
+        usize preparedTransparentCsgInstanceCount = 0u,
+        usize preparedTransparentCsgMaterialTypedByteCount = 0u
+    );
+    void renderAvboitOccupancyPass(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        const CsgFrameState& csgFrameState,
+        const MaterialPassDrawItemPartitions* preparedOccupancyDrawItems = nullptr,
+        const CsgFrameGpuData* preparedOccupancyCsgFrameData = nullptr,
+        usize preparedOccupancyInstanceCount = 0u,
+        usize preparedOccupancyMaterialTypedByteCount = 0u
+    );
+    void renderAvboitPostOccupancyPasses(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        const CsgFrameState& csgFrameState
+    );
     // AVBOIT alternates raster and compute work. The Graphics-routed plan calls the three slices consecutively,
     // while the dedicated AsyncCompute schedule brackets the two compute dispatches with Graphics submissions.
     void renderAvboitPreDepthWarpPasses(

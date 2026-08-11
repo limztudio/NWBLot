@@ -9,8 +9,8 @@ graph-owned per-frame ImGui uploads, opt-in ready-frontier native recording, and
 routing, actual-device stale packet-recording recreation coverage, and graph-owned public setup uploads,
 graph-owned deferred mesh-view, scene-light, and scene-shading frame updates, and graph-owned decoded texture-asset
 uploads, graph-owned runtime-skinning joint-palette uploads, graph-owned opaque material draw-stream uploads, and
-graph-owned opaque CSG receiver/cutter/context/interval streams, and graph-owned transparent CSG interval-producer
-streams,
+graph-owned opaque CSG receiver/cutter/context/interval streams, graph-owned transparent CSG interval-producer
+streams, and graph-owned transparent AVBOIT occupancy material/CSG streams,
 2026-08-11.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
@@ -61,9 +61,14 @@ can receive an unconditional final sign-off.
   bindless-slot `ConstantBuffer` reads. The transparent CSG interval producer now does the same within AVBOIT-pre:
   it freezes its fresh mesh-view work region, receiver-surface draw ordering, material instance/typed data, and CSG
   receiver/cutter/context/sample payloads during graph declaration. Its serial Graphics upload chain merges into
-  the established AVBOIT-pre packet, which consumes the graph-owned bytes before the later compatibility AVBOIT
-  phases overwrite their shared buffers. The direct helpers remain only for those phase-specific transparent
-  material/CSG updates.
+  the established AVBOIT-pre packet, which consumes the graph-owned bytes before later AVBOIT phases overwrite
+  their shared buffers. The subsequent transparent occupancy phase now freezes its own material instance/typed
+  stream and, when it contains CSG draws, its receiver/cutter/clip-context stream. Its serial Graphics uploads run
+  after interval generation and merge into that same AVBOIT-pre packet; it deliberately retains the interval
+  producer's full-resolution sample-state payload for low-resolution sampling. The prepared native occupancy
+  consumer never regathers or rewrites those streams, and the renderer verifies that its task is in the interval
+  task's accepted packet. Direct helpers remain only for later transparent AVBOIT material phases and their
+  phase-specific CSG updates.
 - The compiler derives stable packet recording-frontier depths from packet dependencies. The native recorder may
   record an explicitly opted-in frontier concurrently with isolated per-packet state scratch and native command
   buffers; submission, timing, and failure reporting remain in stable compiler order. Command-IR capture and
@@ -108,6 +113,7 @@ can receive an unconditional final sign-off.
 | Graph-owned opaque material-stream follow-up: `nwb_ecs_graphics_tests`, graph/descriptor smoke, and runtime skinning smoke | passed; 17/17 ECS unit tests, 45/45 graph tests, descriptor smoke 74 passed with 10 expected topology skips, and the one-character Vulkan smoke completed its animated opaque-material case |
 | Graph-owned opaque CSG complete-stream follow-up: static/compute opaque capture plus transparent CSG regression captures | 5/5 passed; both opaque Vulkan/X11 paths consumed graph-owned receiver, cutter, context, and interval-state buffers before Opaque G-Buffer, while all three transparent compatibility captures remained correct |
 | Graph-owned transparent CSG interval-producer follow-up: ECS graphics unit plus static and skinned transparent CSG early/mid/late captures | 7/7 passed; the frozen receiver-surface payload is uploaded before AVBOIT-pre while the existing one/five-packet AVBOIT contract and visible transparent CSG cuts remain intact |
+| Graph-owned transparent AVBOIT occupancy-stream follow-up: ECS graphics, task-graph, descriptor smoke, transparent multi, plus static/skinned transparent CSG captures | 10/10 passed; interval generation, phase-local occupancy uploads, and prepared occupancy remain in one accepted AVBOIT-pre Graphics packet while the visible transparent and CSG cases stay correct |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -132,8 +138,10 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    direct path remains only as a compatibility fallback for worlds without a graph-owning renderer or a rejected
    graph attempt. Public buffer/texture setup uploads, decoded texture-asset uploads, and the shared deferred
    mesh-view, scene-light, scene-shading, runtime skinning joint-palette, and opaque material instance/typed updates
-   now use the graph-owned primitive path. Skinning compute dispatch/its selector update, transparent AVBOIT
-   occupancy/extinction/accumulation material streams and their phase-specific CSG updates, and other specialized
+   now use the graph-owned primitive path. The transparent AVBOIT interval producer and occupancy phase now freeze
+   and publish their own per-write-point material/CSG streams, preserving the shared interval sample state across
+   the low-resolution occupancy pass. Skinning compute dispatch/its selector update, transparent AVBOIT
+   extinction/accumulation material streams and their phase-specific CSG updates, and other specialized
    descriptor/resource updates still retain direct native recording or submission. The graph therefore does not yet
    authoritatively own all frame work and state retirement.
 
@@ -159,5 +167,5 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
 
 Do not relabel this result as final architectural completion without either implementing the five areas above or
 explicitly waiving them in a revised, version-controlled acceptance scope. The next implementation work should
-finish the remaining graph-owned asset/resource-update paths (notably the transparent AVBOIT material phases and
-their CSG updates), specialized descriptor/resource updates, and recovery proof.
+finish the remaining graph-owned asset/resource-update paths (notably the transparent AVBOIT extinction and
+accumulation phases and their CSG updates), specialized descriptor/resource updates, and recovery proof.

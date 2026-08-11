@@ -400,7 +400,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     m_renderer.csgSystem().dispatchCsgIntervalCombine(commandList, targets, csgFrameData);
 }
 
-void RendererAvboitSystem::renderAvboitPreDepthWarpPasses(
+void RendererAvboitSystem::renderAvboitTransparentCsgIntervals(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const CsgFrameState& csgFrameState,
@@ -409,11 +409,6 @@ void RendererAvboitSystem::renderAvboitPreDepthWarpPasses(
     const usize preparedTransparentCsgInstanceCount,
     const usize preparedTransparentCsgMaterialTypedByteCount
 ){
-    AvboitFrameTargets& avboitTargets = targets.avboit;
-    NWB_ASSERT(avboitTargets.valid());
-    NWB_ASSERT(avboitState().m_depthWarpPipeline);
-    NWB_ASSERT(avboitState().m_integratePipeline);
-
     if(preparedTransparentCsgReceiverSurfaceDrawItems || preparedTransparentCsgFrameData){
         NWB_ASSERT(preparedTransparentCsgReceiverSurfaceDrawItems);
         NWB_ASSERT(preparedTransparentCsgFrameData);
@@ -430,6 +425,21 @@ void RendererAvboitSystem::renderAvboitPreDepthWarpPasses(
     }
     else
         buildTransparentCsgIntervals(commandList, targets, csgFrameState);
+}
+
+void RendererAvboitSystem::renderAvboitOccupancyPass(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const CsgFrameState& csgFrameState,
+    const MaterialPassDrawItemPartitions* const preparedOccupancyDrawItems,
+    const CsgFrameGpuData* const preparedOccupancyCsgFrameData,
+    const usize preparedOccupancyInstanceCount,
+    const usize preparedOccupancyMaterialTypedByteCount
+){
+    AvboitFrameTargets& avboitTargets = targets.avboit;
+    NWB_ASSERT(avboitTargets.valid());
+    NWB_ASSERT(avboitState().m_depthWarpPipeline);
+    NWB_ASSERT(avboitState().m_integratePipeline);
 
     // Occupancy discovers opaque depth and writes coverage solely through global heap descriptors, which normal
     // command-state tracking cannot see. Keep both explicit transitions before the material pass.
@@ -437,15 +447,54 @@ void RendererAvboitSystem::renderAvboitPreDepthWarpPasses(
     commandList.setBufferState(avboitTargets.coverageBuffer.get(), Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
 
-    m_renderer.materialSystem().renderMaterialPass(
-        commandList,
-        avboitTargets.lowFramebuffer.get(),
-        MaterialPipelinePass::AvboitOccupancy,
-        true,
-        csgFrameState,
-        &avboitTargets
-    );
+    if(preparedOccupancyDrawItems || preparedOccupancyCsgFrameData){
+        NWB_ASSERT(preparedOccupancyDrawItems);
+        NWB_ASSERT(preparedOccupancyCsgFrameData);
+        if(preparedOccupancyDrawItems && preparedOccupancyCsgFrameData){
+            m_renderer.materialSystem().renderPreparedMaterialPass(
+                commandList,
+                avboitTargets.lowFramebuffer.get(),
+                MaterialPipelinePass::AvboitOccupancy,
+                &avboitTargets,
+                *preparedOccupancyDrawItems,
+                *preparedOccupancyCsgFrameData,
+                preparedOccupancyInstanceCount,
+                preparedOccupancyMaterialTypedByteCount
+            );
+        }
+    }
+    else{
+        m_renderer.materialSystem().renderMaterialPass(
+            commandList,
+            avboitTargets.lowFramebuffer.get(),
+            MaterialPipelinePass::AvboitOccupancy,
+            true,
+            csgFrameState,
+            &avboitTargets
+        );
+    }
     commandList.endRenderPass();
+}
+
+void RendererAvboitSystem::renderAvboitPreDepthWarpPasses(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const CsgFrameState& csgFrameState,
+    const MaterialPassDrawItems* const preparedTransparentCsgReceiverSurfaceDrawItems,
+    const CsgFrameGpuData* const preparedTransparentCsgFrameData,
+    const usize preparedTransparentCsgInstanceCount,
+    const usize preparedTransparentCsgMaterialTypedByteCount
+){
+    renderAvboitTransparentCsgIntervals(
+        commandList,
+        targets,
+        csgFrameState,
+        preparedTransparentCsgReceiverSurfaceDrawItems,
+        preparedTransparentCsgFrameData,
+        preparedTransparentCsgInstanceCount,
+        preparedTransparentCsgMaterialTypedByteCount
+    );
+    renderAvboitOccupancyPass(commandList, targets, csgFrameState);
 }
 
 void RendererAvboitSystem::renderAvboitExtinctionPass(
@@ -509,6 +558,22 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     );
 }
 
+void RendererAvboitSystem::renderAvboitPostOccupancyPasses(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const CsgFrameState& csgFrameState
+){
+    AvboitFrameTargets& avboitTargets = targets.avboit;
+    NWB_ASSERT(avboitTargets.valid());
+    NWB_ASSERT(avboitState().m_depthWarpPipeline);
+    NWB_ASSERT(avboitState().m_integratePipeline);
+
+    dispatchAvboitDepthWarp(commandList, avboitTargets);
+    renderAvboitExtinctionPass(commandList, avboitTargets, csgFrameState);
+    dispatchAvboitIntegration(commandList, avboitTargets);
+    renderAvboitAccumulatePass(commandList, targets, csgFrameState);
+}
+
 void RendererAvboitSystem::renderAvboitPasses(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
@@ -518,11 +583,6 @@ void RendererAvboitSystem::renderAvboitPasses(
     const usize preparedTransparentCsgInstanceCount,
     const usize preparedTransparentCsgMaterialTypedByteCount
 ){
-    AvboitFrameTargets& avboitTargets = targets.avboit;
-    NWB_ASSERT(avboitTargets.valid());
-    NWB_ASSERT(avboitState().m_depthWarpPipeline);
-    NWB_ASSERT(avboitState().m_integratePipeline);
-
     renderAvboitPreDepthWarpPasses(
         commandList,
         targets,
@@ -532,10 +592,7 @@ void RendererAvboitSystem::renderAvboitPasses(
         preparedTransparentCsgInstanceCount,
         preparedTransparentCsgMaterialTypedByteCount
     );
-    dispatchAvboitDepthWarp(commandList, avboitTargets);
-    renderAvboitExtinctionPass(commandList, avboitTargets, csgFrameState);
-    dispatchAvboitIntegration(commandList, avboitTargets);
-    renderAvboitAccumulatePass(commandList, targets, csgFrameState);
+    renderAvboitPostOccupancyPasses(commandList, targets, csgFrameState);
 }
 
 void RendererAvboitSystem::dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets){

@@ -60,6 +60,18 @@ public:
         const CsgFrameState& csgFrameState,
         const AvboitFrameTargets* avboitTargets
     );
+    // Graph-owned draw streams are already gathered, patched, and uploaded before native recording. This consumer
+    // deliberately performs no mutable mesh-view or material/CSG buffer updates.
+    void renderPreparedMaterialPass(
+        Core::CommandList& commandList,
+        Core::Framebuffer* framebuffer,
+        MaterialPipelinePass::Enum pass,
+        const AvboitFrameTargets* avboitTargets,
+        const MaterialPassDrawItemPartitions& drawItems,
+        const CsgFrameGpuData& csgFrameData,
+        usize instanceCount,
+        usize materialTypedByteCount
+    );
     [[nodiscard]] bool prepareMaterialPassResources(
         Core::Framebuffer* framebuffer,
         MaterialPipelinePass::Enum pass,

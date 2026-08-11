@@ -486,6 +486,66 @@ struct TransparentCsgIntervalGraphSnapshot{
 };
 
 
+// Each transparent AVBOIT raster phase overwrites the shared material and CSG streams. Retain this phase-local
+// payload so its native consumer cannot observe a later gather or mutate bytes owned by another phase.
+struct TransparentMaterialPassGraphSnapshot{
+    using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
+    using ReceiverRangeVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::GlobalArena>;
+    using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
+
+    DrawItemVector regularMeshDrawItems;
+    DrawItemVector regularComputeDrawItems;
+    DrawItemVector csgMeshDrawItems;
+    DrawItemVector csgComputeDrawItems;
+    ReceiverRangeVector csgReceiverRanges;
+    CutterVector csgCutters;
+    CsgFrameWorkRegion csgWorkRegion;
+    usize instanceCount = 0u;
+    usize materialTypedByteCount = 0u;
+    bool captured = false;
+
+    explicit TransparentMaterialPassGraphSnapshot(Core::Alloc::GlobalArena& arena)
+        : regularMeshDrawItems(arena)
+        , regularComputeDrawItems(arena)
+        , csgMeshDrawItems(arena)
+        , csgComputeDrawItems(arena)
+        , csgReceiverRanges(arena)
+        , csgCutters(arena)
+    {}
+
+    void capture(
+        const MaterialPassDrawItemPartitions& drawItems,
+        const CsgFrameGpuData& csgFrameData,
+        const usize inInstanceCount,
+        const usize inMaterialTypedByteCount
+    ){
+        regularMeshDrawItems.assign(drawItems.regular.meshDrawItems.begin(), drawItems.regular.meshDrawItems.end());
+        regularComputeDrawItems.assign(drawItems.regular.computeDrawItems.begin(), drawItems.regular.computeDrawItems.end());
+        csgMeshDrawItems.assign(drawItems.csg.meshDrawItems.begin(), drawItems.csg.meshDrawItems.end());
+        csgComputeDrawItems.assign(drawItems.csg.computeDrawItems.begin(), drawItems.csg.computeDrawItems.end());
+        csgReceiverRanges.assign(csgFrameData.receiverRanges.begin(), csgFrameData.receiverRanges.end());
+        csgCutters.assign(csgFrameData.cutters.begin(), csgFrameData.cutters.end());
+        csgWorkRegion = csgFrameData.workRegion;
+        instanceCount = inInstanceCount;
+        materialTypedByteCount = inMaterialTypedByteCount;
+        captured = true;
+    }
+
+    void materialize(
+        MaterialPassDrawItemPartitions& outDrawItems,
+        CsgFrameGpuData& outCsgFrameData
+    )const{
+        outDrawItems.regular.meshDrawItems.assign(regularMeshDrawItems.begin(), regularMeshDrawItems.end());
+        outDrawItems.regular.computeDrawItems.assign(regularComputeDrawItems.begin(), regularComputeDrawItems.end());
+        outDrawItems.csg.meshDrawItems.assign(csgMeshDrawItems.begin(), csgMeshDrawItems.end());
+        outDrawItems.csg.computeDrawItems.assign(csgComputeDrawItems.begin(), csgComputeDrawItems.end());
+        outCsgFrameData.receiverRanges.assign(csgReceiverRanges.begin(), csgReceiverRanges.end());
+        outCsgFrameData.cutters.assign(csgCutters.begin(), csgCutters.end());
+        outCsgFrameData.workRegion = csgWorkRegion;
+    }
+};
+
+
 // The opaque G-buffer runs after graph-owned material and CSG uploads plus the native deferred clear. Its barriers
 // and final state are therefore part of the graph packet; transparent CSG retains its separate AVBOIT snapshot.
 struct GbufferGraphTask{
@@ -779,9 +839,7 @@ struct AvboitPreGraphTask{
         DeferredFrameTargets* targets = nullptr;
         const CsgFrameState* csgFrameState = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        bool clearTargets = false;
         bool hasTransparentRenderers = false;
-        bool splitStages = false;
         ECSRenderDetail::TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
         bool transparentCsgStreamsUploaded = false;
 
@@ -817,30 +875,84 @@ struct AvboitPreGraphTask{
             preparedTransparentCsgInstanceCount = payload.transparentCsgSnapshot.instanceCount;
             preparedTransparentCsgMaterialTypedByteCount = payload.transparentCsgSnapshot.materialTypedByteCount;
         }
+        if(payload.hasTransparentRenderers){
+            payload.avboitSystem->renderAvboitTransparentCsgIntervals(
+                commandList,
+                *payload.targets,
+                *payload.csgFrameState,
+                preparedTransparentCsgReceiverSurfaceDrawItems,
+                preparedTransparentCsgFrameData,
+                preparedTransparentCsgInstanceCount,
+                preparedTransparentCsgMaterialTypedByteCount
+            );
+        }
+        return true;
+    }
+};
+
+
+// Occupancy follows the interval producer in the same AVBOIT packet, but has an independent immutable stream:
+// each transparent raster phase overwrites the shared material and CSG buffers with phase-local instance indices.
+struct AvboitOccupancyGraphTask{
+    struct Payload{
+        RendererAvboitSystem* avboitSystem = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        const CsgFrameState* csgFrameState = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        bool clearTargets = false;
+        bool hasTransparentRenderers = false;
+        bool splitStages = false;
+        ECSRenderDetail::TransparentMaterialPassGraphSnapshot occupancySnapshot;
+        bool occupancyPhasePrepared = false;
+        bool occupancyStreamsUploaded = false;
+
+        explicit Payload(Core::Alloc::GlobalArena& arena)
+            : occupancySnapshot(arena)
+        {}
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    ){
+        static_cast<void>(context);
+        if(!payload.avboitSystem || !payload.targets || !payload.csgFrameState || !payload.timingTicket)
+            return false;
+
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+        MaterialPassDrawItemPartitions occupancyDrawItems{ scratchArena };
+        CsgFrameGpuData occupancyCsgFrameData{ scratchArena };
+        const MaterialPassDrawItemPartitions* preparedOccupancyDrawItems = nullptr;
+        const CsgFrameGpuData* preparedOccupancyCsgFrameData = nullptr;
+        usize preparedOccupancyInstanceCount = 0u;
+        usize preparedOccupancyMaterialTypedByteCount = 0u;
+        if(payload.occupancyPhasePrepared && payload.occupancySnapshot.captured){
+            payload.occupancySnapshot.materialize(occupancyDrawItems, occupancyCsgFrameData);
+            preparedOccupancyDrawItems = &occupancyDrawItems;
+            preparedOccupancyCsgFrameData = &occupancyCsgFrameData;
+            preparedOccupancyInstanceCount = payload.occupancySnapshot.instanceCount;
+            preparedOccupancyMaterialTypedByteCount = payload.occupancySnapshot.materialTypedByteCount;
+        }
         if(payload.clearTargets)
             payload.avboitSystem->clearAvboitTargets(commandList, payload.targets->avboit);
         if(payload.hasTransparentRenderers){
-            if(payload.splitStages)
-                payload.avboitSystem->renderAvboitPreDepthWarpPasses(
+            payload.avboitSystem->renderAvboitOccupancyPass(
+                commandList,
+                *payload.targets,
+                *payload.csgFrameState,
+                preparedOccupancyDrawItems,
+                preparedOccupancyCsgFrameData,
+                preparedOccupancyInstanceCount,
+                preparedOccupancyMaterialTypedByteCount
+            );
+            if(!payload.splitStages)
+                payload.avboitSystem->renderAvboitPostOccupancyPasses(
                     commandList,
                     *payload.targets,
-                    *payload.csgFrameState,
-                    preparedTransparentCsgReceiverSurfaceDrawItems,
-                    preparedTransparentCsgFrameData,
-                    preparedTransparentCsgInstanceCount,
-                    preparedTransparentCsgMaterialTypedByteCount
+                    *payload.csgFrameState
                 );
-            else{
-                payload.avboitSystem->renderAvboitPasses(
-                    commandList,
-                    *payload.targets,
-                    *payload.csgFrameState,
-                    preparedTransparentCsgReceiverSurfaceDrawItems,
-                    preparedTransparentCsgFrameData,
-                    preparedTransparentCsgInstanceCount,
-                    preparedTransparentCsgMaterialTypedByteCount
-                );
-            }
         }
         RestoreAvboitGbufferInputs(commandList, *payload.targets);
         return true;
@@ -2908,6 +3020,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitPreTask = {};
+    m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
     m_deferredAvboitExtinctionTask = {};
     m_deferredAvboitIntegrationTask = {};
@@ -3666,9 +3779,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitPrePayload.targets = &deferredTargets;
     avboitPrePayload.csgFrameState = &csgFrameState;
     avboitPrePayload.timingTicket = &avboitPreTimingTicket;
-    avboitPrePayload.clearTargets = clearAvboitTargets;
     avboitPrePayload.hasTransparentRenderers = hasTransparentRenderers;
-    avboitPrePayload.splitStages = splitAvboitStages;
 
     // Freeze the transparent CSG interval producer before AVBOIT native recording.  Its shared instance/material
     // and CSG buffers are intentionally overwritten by the later occupancy/extinction/accumulation compatibility
@@ -3951,9 +4062,310 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         }
     }
 
+    // The interval producer consumes the first frozen transparent CSG stream. Its graph-visible states must be
+    // declared here, before its native work records, rather than on the later occupancy task.
+    Core::Alloc::ScratchArena avboitIntervalResourceScratch(RendererArenaScope::s_TaskGraphArena);
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitIntervalResourceUses{ avboitIntervalResourceScratch };
+    avboitIntervalResourceUses.reserve(11u);
+    if(avboitPrePayload.transparentCsgStreamsUploaded){
+        avboitIntervalResourceUses.push_back(ReadUse(depth));
+        avboitIntervalResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
+        avboitIntervalResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
+        avboitIntervalResourceUses.push_back(ReadUse(materialTyped, Core::ResourceStates::ShaderResource));
+        avboitIntervalResourceUses.push_back(ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource));
+        avboitIntervalResourceUses.push_back(ReadUse(csgCutters, Core::ResourceStates::ShaderResource));
+        avboitIntervalResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
+        avboitIntervalResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
+    }
+    avboitIntervalResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer, true));
+    avboitIntervalResourceUses.push_back(ReadUse(avboitMaterialDomain));
+    avboitIntervalResourceUses.push_back(ReadWriteUse(avboitCsgDomain, Core::ResourceStates::ShaderResource));
+
+    Core::GpuTaskSchedulingHint avboitIntervalScheduling;
+    avboitIntervalScheduling.cost = Core::GpuTaskCostHint::Large;
+    avboitIntervalScheduling.forceSubmissionBoundary = false;
+    avboitIntervalScheduling.allowPacketMerge = true;
+    avboitIntervalScheduling.mergeWithPrevious = avboitPrePayload.transparentCsgStreamsUploaded;
+    Core::GpuTaskDesc avboitIntervalDesc;
+    avboitIntervalDesc
+        .setIdentity(Name("render.avboit.intervals"))
+        .setMarkerLabel("Transparent CSG Intervals")
+        .setQueue(GraphicsQueueRequest())
+        .setScheduling(avboitIntervalScheduling)
+        .setDependencies(&transparentCsgUploadTask, 1u)
+        .setResourceUses(avboitIntervalResourceUses.data(), avboitIntervalResourceUses.size())
+    ;
+    m_deferredAvboitPreTask = m_deferredLightingTaskGraph.addTask<AvboitPreGraphTask>(
+        avboitIntervalDesc,
+        Move(avboitPrePayload)
+    );
+    if(!m_deferredAvboitPreTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG interval graph task"));
+        return;
+    }
+
+    AvboitOccupancyGraphTask::Payload avboitOccupancyPayload{ m_arena };
+    avboitOccupancyPayload.avboitSystem = &m_avboitSystem;
+    avboitOccupancyPayload.targets = &deferredTargets;
+    avboitOccupancyPayload.csgFrameState = &csgFrameState;
+    avboitOccupancyPayload.timingTicket = &avboitPreTimingTicket;
+    avboitOccupancyPayload.clearTargets = clearAvboitTargets;
+    avboitOccupancyPayload.hasTransparentRenderers = hasTransparentRenderers;
+    avboitOccupancyPayload.splitStages = splitAvboitStages;
+
+    Core::GpuTaskId occupancyUploadTask = m_deferredAvboitPreTask;
+    bool occupancyCsgStreamsUploaded = false;
+    if(hasTransparentRenderers){
+        Core::Alloc::ScratchArena occupancyUploadScratch(RendererArenaScope::s_TaskGraphArena);
+        MaterialPassDrawItemPartitions occupancyDrawItems{ occupancyUploadScratch };
+        InstanceGpuDataVector occupancyInstanceData{ occupancyUploadScratch };
+        CsgFrameGpuData occupancyCsgFrameData{ occupancyUploadScratch };
+#if defined(NWB_DEBUG)
+        ECSRenderDetail::MaterialTypedInstanceRangeVector occupancyMaterialTypedRanges{ occupancyUploadScratch };
+#endif
+        MaterialTypedByteDataVector occupancyMaterialTypedBytes{ occupancyUploadScratch };
+        m_materialSystem.gatherMaterialPassDrawItems(
+            deferredTargets.avboit.lowFramebuffer.get(),
+            MaterialPipelinePass::AvboitOccupancy,
+            true,
+            csgFrameState,
+            occupancyDrawItems,
+            occupancyInstanceData,
+            occupancyCsgFrameData,
+#if defined(NWB_DEBUG)
+            occupancyMaterialTypedRanges,
+#endif
+            occupancyMaterialTypedBytes,
+            RendererResourceLookupMode::PreparedOnly
+        );
+
+        const bool occupancyHasCsgDrawItems = !occupancyDrawItems.csg.empty();
+        if(!occupancyDrawItems.empty()){
+            if(
+                !materialInstances.valid()
+                || !materialTyped.valid()
+                || !m_materialSystem.materialPassDrawBuffersReady(
+                    occupancyInstanceData,
+                    occupancyMaterialTypedBytes
+                )
+                || !m_materialSystem.materialPassDrawResourcesReady(occupancyDrawItems.regular)
+                || (occupancyHasCsgDrawItems && (
+                    !occupancyCsgFrameData.hasWork()
+                    ||
+                    !csgReceiverRanges.valid()
+                    || !csgCutters.valid()
+                    || !csgClipContextSlots.valid()
+                    || !m_csgSystem.csgFrameBuffersReady(occupancyCsgFrameData)
+                    || !m_materialSystem.materialPassDrawResourcesReady(occupancyDrawItems.csg)
+                ))
+            ){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT occupancy resources were unavailable during graph declaration"));
+                return;
+            }
+
+            m_materialSystem.prepareMaterialPassInstanceUploadData(occupancyInstanceData);
+#if defined(NWB_DEBUG)
+            if(
+                occupancyInstanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
+                || occupancyCsgFrameData.receiverRanges.size() > Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData)
+                || occupancyCsgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
+            ){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: AVBOIT occupancy upload size overflows graph blob capacity"));
+                return;
+            }
+            NWB_ASSERT(occupancyInstanceData.size() == occupancyMaterialTypedRanges.size());
+            ECSRenderDetail::AssertMaterialTypedUploadRanges(
+                occupancyMaterialTypedRanges,
+                occupancyMaterialTypedBytes
+            );
+#endif
+
+            const Core::GpuUploadBlobId occupancyInstanceBlob = m_deferredLightingTaskGraph.copyUploadData(
+                occupancyInstanceData.data(),
+                occupancyInstanceData.size() * sizeof(InstanceGpuData),
+                alignof(InstanceGpuData)
+            );
+            const Core::GpuUploadBlobId occupancyMaterialTypedBlob = m_deferredLightingTaskGraph.copyUploadData(
+                occupancyMaterialTypedBytes.data(),
+                occupancyMaterialTypedBytes.size(),
+                alignof(u32)
+            );
+            if(!occupancyInstanceBlob.valid() || !occupancyMaterialTypedBlob.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT occupancy material upload data"));
+                return;
+            }
+
+            Core::GpuTaskSchedulingHint occupancyUploadScheduling;
+            occupancyUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
+            occupancyUploadScheduling.forceSubmissionBoundary = false;
+            occupancyUploadScheduling.allowPacketMerge = true;
+            occupancyUploadScheduling.mergeWithPrevious = true;
+
+            Core::GpuTaskDesc occupancyInstanceUploadDesc;
+            occupancyInstanceUploadDesc
+                .setIdentity(Name("render.avboit.occupancy.material_instances_upload"))
+                .setMarkerLabel("AVBOIT Occupancy Material Instances Upload")
+                .setQueue(GraphicsUploadQueueRequest())
+                .setScheduling(occupancyUploadScheduling)
+                .setDependencies(&occupancyUploadTask, 1u)
+            ;
+            occupancyUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+                occupancyInstanceUploadDesc,
+                Core::GpuUploadBufferTaskDesc{
+                    .source = occupancyInstanceBlob,
+                    .destination = materialInstances,
+                    .finalState = Core::ResourceStates::Common,
+                }
+            );
+            if(!occupancyUploadTask.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT occupancy material instance upload"));
+                return;
+            }
+
+            Core::GpuTaskDesc occupancyMaterialTypedUploadDesc;
+            occupancyMaterialTypedUploadDesc
+                .setIdentity(Name("render.avboit.occupancy.material_typed_upload"))
+                .setMarkerLabel("AVBOIT Occupancy Material Typed Upload")
+                .setQueue(GraphicsUploadQueueRequest())
+                .setScheduling(occupancyUploadScheduling)
+                .setDependencies(&occupancyUploadTask, 1u)
+            ;
+            occupancyUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+                occupancyMaterialTypedUploadDesc,
+                Core::GpuUploadBufferTaskDesc{
+                    .source = occupancyMaterialTypedBlob,
+                    .destination = materialTyped,
+                    .finalState = Core::ResourceStates::Common,
+                }
+            );
+            if(!occupancyUploadTask.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT occupancy material typed upload"));
+                return;
+            }
+
+            if(occupancyHasCsgDrawItems){
+                CsgClipContextSlots occupancyCsgClipContextSlotData;
+                if(!m_csgSystem.prepareCsgClipContextSlotData(
+                    occupancyCsgFrameData,
+                    occupancyCsgClipContextSlotData
+                )){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot AVBOIT occupancy CSG context data"));
+                    return;
+                }
+                const Core::GpuUploadBlobId occupancyCsgReceiverRangesBlob = m_deferredLightingTaskGraph.copyUploadData(
+                    occupancyCsgFrameData.receiverRanges.data(),
+                    occupancyCsgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData),
+                    alignof(CsgReceiverRangeGpuData)
+                );
+                const Core::GpuUploadBlobId occupancyCsgCuttersBlob = m_deferredLightingTaskGraph.copyUploadData(
+                    occupancyCsgFrameData.cutters.data(),
+                    occupancyCsgFrameData.cutters.size() * sizeof(CsgCutterGpuData),
+                    alignof(CsgCutterGpuData)
+                );
+                const Core::GpuUploadBlobId occupancyCsgClipContextSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
+                    &occupancyCsgClipContextSlotData,
+                    sizeof(occupancyCsgClipContextSlotData),
+                    alignof(CsgClipContextSlots)
+                );
+                if(
+                    !occupancyCsgReceiverRangesBlob.valid()
+                    || !occupancyCsgCuttersBlob.valid()
+                    || !occupancyCsgClipContextSlotsBlob.valid()
+                ){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT occupancy CSG upload data"));
+                    return;
+                }
+
+                Core::GpuTaskDesc occupancyCsgReceiverRangesUploadDesc;
+                occupancyCsgReceiverRangesUploadDesc
+                    .setIdentity(Name("render.avboit.occupancy.csg_receiver_ranges_upload"))
+                    .setMarkerLabel("AVBOIT Occupancy CSG Receiver Ranges Upload")
+                    .setQueue(GraphicsUploadQueueRequest())
+                    .setScheduling(occupancyUploadScheduling)
+                    .setDependencies(&occupancyUploadTask, 1u)
+                ;
+                occupancyUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+                    occupancyCsgReceiverRangesUploadDesc,
+                    Core::GpuUploadBufferTaskDesc{
+                        .source = occupancyCsgReceiverRangesBlob,
+                        .destination = csgReceiverRanges,
+                        .finalState = Core::ResourceStates::Common,
+                    }
+                );
+                if(!occupancyUploadTask.valid()){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT occupancy CSG receiver-range upload"));
+                    return;
+                }
+
+                Core::GpuTaskDesc occupancyCsgCuttersUploadDesc;
+                occupancyCsgCuttersUploadDesc
+                    .setIdentity(Name("render.avboit.occupancy.csg_cutters_upload"))
+                    .setMarkerLabel("AVBOIT Occupancy CSG Cutters Upload")
+                    .setQueue(GraphicsUploadQueueRequest())
+                    .setScheduling(occupancyUploadScheduling)
+                    .setDependencies(&occupancyUploadTask, 1u)
+                ;
+                occupancyUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+                    occupancyCsgCuttersUploadDesc,
+                    Core::GpuUploadBufferTaskDesc{
+                        .source = occupancyCsgCuttersBlob,
+                        .destination = csgCutters,
+                        .finalState = Core::ResourceStates::Common,
+                    }
+                );
+                if(!occupancyUploadTask.valid()){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT occupancy CSG cutter upload"));
+                    return;
+                }
+
+                Core::GpuTaskDesc occupancyCsgClipContextSlotsUploadDesc;
+                occupancyCsgClipContextSlotsUploadDesc
+                    .setIdentity(Name("render.avboit.occupancy.csg_clip_context_slots_upload"))
+                    .setMarkerLabel("AVBOIT Occupancy CSG Clip Context Slots Upload")
+                    .setQueue(GraphicsUploadQueueRequest())
+                    .setScheduling(occupancyUploadScheduling)
+                    .setDependencies(&occupancyUploadTask, 1u)
+                ;
+                occupancyUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+                    occupancyCsgClipContextSlotsUploadDesc,
+                    Core::GpuUploadBufferTaskDesc{
+                        .source = occupancyCsgClipContextSlotsBlob,
+                        .destination = csgClipContextSlots,
+                        .finalState = Core::ResourceStates::Common,
+                    }
+                );
+                if(!occupancyUploadTask.valid()){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT occupancy CSG clip-context upload"));
+                    return;
+                }
+                occupancyCsgStreamsUploaded = true;
+            }
+
+            avboitOccupancyPayload.occupancySnapshot.capture(
+                occupancyDrawItems,
+                occupancyCsgFrameData,
+                occupancyInstanceData.size(),
+                occupancyMaterialTypedBytes.size()
+            );
+            avboitOccupancyPayload.occupancyPhasePrepared = true;
+            avboitOccupancyPayload.occupancyStreamsUploaded = true;
+        }
+        else{
+            // The graph phase is still authoritative for an empty visible set. Retaining the empty snapshot prevents
+            // native recording from re-gathering mutable renderer state as a compatibility fallback.
+            avboitOccupancyPayload.occupancySnapshot.capture(
+                occupancyDrawItems,
+                occupancyCsgFrameData,
+                occupancyInstanceData.size(),
+                occupancyMaterialTypedBytes.size()
+            );
+            avboitOccupancyPayload.occupancyPhasePrepared = true;
+        }
+    }
+
     Core::Alloc::ScratchArena avboitPreResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitPreResourceUses{ avboitPreResourceScratch };
-    avboitPreResourceUses.reserve(16u + (avboitPrePayload.transparentCsgStreamsUploaded ? 7u : 0u));
+    avboitPreResourceUses.reserve(20u + (avboitOccupancyPayload.occupancyStreamsUploaded ? 7u : 0u));
     avboitPreResourceUses.push_back(ReadUse(albedo));
     avboitPreResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource, true));
     avboitPreResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
@@ -3967,49 +4379,49 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitPreResourceUses.push_back(ReadWriteUse(avboitControl, Core::ResourceStates::UnorderedAccess));
     avboitPreResourceUses.push_back(ReadWriteUse(avboitExtinction, Core::ResourceStates::UnorderedAccess));
     avboitPreResourceUses.push_back(ReadWriteUse(avboitExtinctionOverflow, Core::ResourceStates::UnorderedAccess));
-    if(avboitPrePayload.transparentCsgStreamsUploaded){
-        // The receiver-surface packet accesses all of these through bindless heap slots.  The graph owns the
-        // Common -> declared-read transitions after the immutable upload chain closes.
+    if(avboitOccupancyPayload.occupancyStreamsUploaded){
         avboitPreResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
         avboitPreResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
         avboitPreResourceUses.push_back(ReadUse(materialTyped, Core::ResourceStates::ShaderResource));
-        avboitPreResourceUses.push_back(ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource));
-        avboitPreResourceUses.push_back(ReadUse(csgCutters, Core::ResourceStates::ShaderResource));
-        avboitPreResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
-        avboitPreResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
+        if(occupancyCsgStreamsUploaded){
+            avboitPreResourceUses.push_back(ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource));
+            avboitPreResourceUses.push_back(ReadUse(csgCutters, Core::ResourceStates::ShaderResource));
+            avboitPreResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
+            // The preceding full-resolution interval producer owns this state. Occupancy only samples it.
+            avboitPreResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
+        }
     }
     avboitPreResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer, true));
     avboitPreResourceUses.push_back(ReadUse(avboitMaterialDomain));
-    avboitPreResourceUses.push_back(ReadWriteUse(avboitCsgDomain, Core::ResourceStates::ShaderResource));
+    avboitPreResourceUses.push_back(ReadUse(avboitCsgDomain, Core::ResourceStates::ShaderResource));
+
+    Core::GpuTaskSchedulingHint avboitOccupancyScheduling;
+    avboitOccupancyScheduling.cost = Core::GpuTaskCostHint::Large;
+    avboitOccupancyScheduling.forceSubmissionBoundary = false;
+    avboitOccupancyScheduling.allowPacketMerge = true;
+    avboitOccupancyScheduling.mergeWithPrevious = true;
+    Core::GpuTaskDesc avboitOccupancyDesc;
+    avboitOccupancyDesc
+        .setIdentity(Name("render.avboit.pre"))
+        .setMarkerLabel(splitAvboitStages ? "AVBOIT Pre" : "AVBOIT")
+        .setQueue(GraphicsQueueRequest())
+        .setScheduling(avboitOccupancyScheduling)
+        .setDependencies(&occupancyUploadTask, 1u)
+        .setResourceUses(avboitPreResourceUses.data(), avboitPreResourceUses.size())
+    ;
+    m_deferredAvboitOccupancyTask = m_deferredLightingTaskGraph.addTask<AvboitOccupancyGraphTask>(
+        avboitOccupancyDesc,
+        Move(avboitOccupancyPayload)
+    );
+    if(!m_deferredAvboitOccupancyTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT occupancy graph task"));
+        return;
+    }
+
     Core::GpuTaskSchedulingHint avboitGraphicsScheduling;
     avboitGraphicsScheduling.cost = Core::GpuTaskCostHint::Large;
     avboitGraphicsScheduling.forceSubmissionBoundary = true;
     avboitGraphicsScheduling.allowPacketMerge = false;
-    Core::GpuTaskSchedulingHint avboitPreScheduling = avboitGraphicsScheduling;
-    if(avboitPrePayload.transparentCsgStreamsUploaded){
-        // These uploads belong to the semantic AVBOIT-pre packet.  Keeping them in its immediate Graphics packet
-        // preserves the established one-packet/five-packet AVBOIT contract and its acceptance/timing range.
-        avboitPreScheduling.forceSubmissionBoundary = false;
-        avboitPreScheduling.allowPacketMerge = true;
-        avboitPreScheduling.mergeWithPrevious = true;
-    }
-    Core::GpuTaskDesc avboitPreDesc;
-    avboitPreDesc
-        .setIdentity(Name("render.avboit.pre"))
-        .setMarkerLabel(splitAvboitStages ? "AVBOIT Pre" : "AVBOIT")
-        .setQueue(GraphicsQueueRequest())
-        .setScheduling(avboitPreScheduling)
-        .setDependencies(&transparentCsgUploadTask, 1u)
-        .setResourceUses(avboitPreResourceUses.data(), avboitPreResourceUses.size())
-    ;
-    m_deferredAvboitPreTask = m_deferredLightingTaskGraph.addTask<AvboitPreGraphTask>(
-        avboitPreDesc,
-        Move(avboitPrePayload)
-    );
-    if(!m_deferredAvboitPreTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT pre graph task"));
-        return;
-    }
 
     if(splitAvboitStages){
         const Core::GpuTaskResourceUse depthWarpResourceUses[] = {
@@ -4022,7 +4434,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         avboitComputeScheduling.cost = Core::GpuTaskCostHint::Medium;
         avboitComputeScheduling.forceSubmissionBoundary = true;
         avboitComputeScheduling.allowPacketMerge = false;
-        const Core::GpuTaskId preDependency[] = { m_deferredAvboitPreTask };
+        const Core::GpuTaskId preDependency[] = { m_deferredAvboitOccupancyTask };
         Core::GpuTaskDesc depthWarpDesc;
         depthWarpDesc
             .setIdentity(Name("render.avboit.depth_warp"))
@@ -4146,7 +4558,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     }
     const Core::GpuTaskId avboitFinalTask = splitAvboitStages
         ? m_deferredAvboitAccumulationTask
-        : m_deferredAvboitPreTask
+        : m_deferredAvboitOccupancyTask
     ;
 
     const Core::GpuExternalCompletionId laggedLightingExternalDependencies[] = {

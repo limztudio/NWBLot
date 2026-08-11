@@ -222,6 +222,7 @@ void RendererSystem::invalidateResources(){
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitPreTask = {};
+    m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
     m_deferredAvboitExtinctionTask = {};
     m_deferredAvboitIntegrationTask = {};
@@ -460,6 +461,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredSurfelGiCounterReadbackTask = {};
     m_deferredHardwareCausticsTask = {};
     m_deferredAvboitPreTask = {};
+    m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
     m_deferredAvboitExtinctionTask = {};
     m_deferredAvboitIntegrationTask = {};
@@ -883,6 +885,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId avboitPrePacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitPreTask
     );
+    const Core::GpuSubmissionPacketId avboitOccupancyPacket = m_deferredLightingCompiledGraph.packetForTask(
+        m_deferredAvboitOccupancyTask
+    );
+    const bool avboitPrePacketContainsOccupancy = avboitPrePacket.valid()
+        && avboitOccupancyPacket.valid()
+        && avboitPrePacket == avboitOccupancyPacket
+    ;
     const Core::GpuPhysicalQueueInfo* const avboitPreQueue = avboitPrePacket.valid()
         ? m_deferredLightingCompiledGraph.queueInfo(m_deferredLightingCompiledGraph.packet(avboitPrePacket).queue)
         : nullptr
@@ -1147,7 +1156,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || hardwareCausticsQueue->queueClass != Core::CommandQueue::Graphics
         ))
         || !m_deferredAvboitPreTask.valid()
+        || !m_deferredAvboitOccupancyTask.valid()
         || !avboitPrePacket.valid()
+        || !avboitPrePacketContainsOccupancy
         || !avboitPreQueue
         || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
         || (avboitUsesAsyncCompute && (
@@ -1610,7 +1621,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && hardwareCausticsPacket.valid()
         ))
         && m_deferredAvboitPreTask.valid()
+        && m_deferredAvboitOccupancyTask.valid()
         && avboitPrePacket.valid()
+        && avboitPrePacketContainsOccupancy
         && (!avboitUsesAsyncCompute || (
             m_deferredAvboitDepthWarpTask.valid()
             && m_deferredAvboitExtinctionTask.valid()
@@ -1875,7 +1888,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         const bool avboitPacketsAccepted =
             m_deferredLightingTaskGraphValid
             && m_deferredAvboitPreTask.valid()
+            && m_deferredAvboitOccupancyTask.valid()
             && avboitPrePacket.valid()
+            && avboitPrePacketContainsOccupancy
             && avboitPacketRange.valid()
             && avboitPacketRange.packetCount == avboitTimingTicketCount
             && (!avboitUsesAsyncCompute || (

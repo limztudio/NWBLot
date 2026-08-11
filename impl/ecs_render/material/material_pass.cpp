@@ -230,6 +230,50 @@ void RendererMaterialSystem::renderMaterialPass(
     }
 }
 
+void RendererMaterialSystem::renderPreparedMaterialPass(
+    Core::CommandList& commandList,
+    Core::Framebuffer* framebuffer,
+    const MaterialPipelinePass::Enum pass,
+    const AvboitFrameTargets* const avboitTargets,
+    const MaterialPassDrawItemPartitions& drawItems,
+    const CsgFrameGpuData& csgFrameData,
+    const usize instanceCount,
+    const usize materialTypedByteCount
+){
+    if(!framebuffer || drawItems.empty())
+        return;
+    const bool usesAvboit = MaterialPipelinePassUsesRendererAvboit(pass);
+    if(usesAvboit && (!avboitTargets || !avboitTargets->valid()))
+        return;
+
+    commandList.endRenderPass();
+
+    Core::GpuTimingMeasure timing(
+        graphics().gpuTiming(),
+        __hidden_material_pass::MaterialPassGpuTimingScope(pass),
+        graphics().getDevice(),
+        commandList
+    );
+
+    // Graph declaration froze the draw ordering and published all stream bytes before this task records. Keep this
+    // consumer side-effect free: in particular, never replace its mesh-view, material, or CSG buffer contents.
+    if(!materialPassDrawBuffersReady(instanceCount, materialTypedByteCount))
+        return;
+    const bool regularDrawResourcesReady = materialPassDrawResourcesReady(drawItems.regular);
+    const bool csgResourcesReady = !csgFrameData.hasWork() || m_renderer.csgSystem().csgFrameBuffersReady(csgFrameData);
+    const bool csgDrawResourcesReady = csgResourcesReady
+        && (drawItems.csg.empty() || materialPassDrawResourcesReady(drawItems.csg))
+    ;
+
+    Core::ViewportState viewportState;
+    viewportState.addViewportAndScissorRect(framebuffer->getFramebufferInfo().getViewport());
+    const MaterialPassDrawContext drawContext{ commandList, framebuffer, pass, avboitTargets, viewportState };
+    if(regularDrawResourcesReady)
+        renderMaterialPassDrawItems(drawContext, drawItems.regular);
+    if(csgDrawResourcesReady)
+        renderMaterialPassDrawItems(drawContext, drawItems.csg);
+}
+
 void RendererMaterialSystem::gatherMaterialPassDrawItems(
     Core::Framebuffer* framebuffer,
     const MaterialPipelinePass::Enum pass,

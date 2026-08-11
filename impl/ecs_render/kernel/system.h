@@ -331,6 +331,7 @@ private:
     Core::GpuTaskId m_deferredSurfelGiCounterReadbackTask;
     Core::GpuTaskId m_deferredHardwareCausticsTask;
     Core::GpuTaskId m_deferredAvboitPreTask;
+    Core::GpuTaskId m_deferredAvboitOccupancyTask;
     Core::GpuTaskId m_deferredAvboitDepthWarpTask;
     Core::GpuTaskId m_deferredAvboitExtinctionTask;
     Core::GpuTaskId m_deferredAvboitIntegrationTask;

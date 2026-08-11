@@ -78,7 +78,8 @@ public:
         bool& outBackendReady,
         bool causticEmissionTargetsGraphOwned = false,
         bool surfelFrameConstantsGraphOwned = false,
-        bool shadowMaterialContextBatchGraphOwned = false
+        bool shadowMaterialContextBatchGraphOwned = false,
+        bool sceneBvhBatchGraphOwned = false
     );
     [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept;
     void discardPreflightShadowVisibilityResources()noexcept;
@@ -100,7 +101,8 @@ public:
     [[nodiscard]] bool buildSceneSwBvh(
         Core::CommandList& commandList,
         Core::Alloc::ScratchArena& scratchArena,
-        bool shadowMaterialContextBatchGraphOwned = false
+        bool shadowMaterialContextBatchGraphOwned = false,
+        bool sceneBvhBatchGraphOwned = false
     );
     void releaseCausticEmissionTargetHeapHandle();
     [[nodiscard]] bool createShadowVisibilityTarget(DeferredFrameTargets& targets);
@@ -132,6 +134,14 @@ public:
         Core::GpuUploadBlobId& outMaterialTypedBlob
     )const;
     void confirmPreparedShadowMaterialContextUploads()noexcept;
+    // The software scene hierarchy and its leaf instances share topology and leaf indices, so retain them as one
+    // immutable preflight batch and publish both only when the accepting Shadow Preparation packet submits.
+    [[nodiscard]] bool retainPreparedSceneBvhUploads(
+        Core::GpuTaskGraph& graph,
+        Core::GpuUploadBlobId& outNodeBlob,
+        Core::GpuUploadBlobId& outInstanceBlob
+    )const;
+    void confirmPreparedSceneBvhUploads()noexcept;
     void releaseRayTraceMaterialContextHeapHandles();
     void releaseSwBvhScratchHeapHandles();
     void releaseSurfelGiHeapHandles();
@@ -230,7 +240,8 @@ private:
     [[nodiscard]] bool buildSceneSwBvhImpl(
         Core::CommandList* commandList,
         Core::Alloc::ScratchArena& scratchArena,
-        bool shadowMaterialContextBatchGraphOwned = false
+        bool shadowMaterialContextBatchGraphOwned = false,
+        bool sceneBvhBatchGraphOwned = false
     );
     [[nodiscard]] bool prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool recordPreparedCausticEmissionTargets(Core::CommandList& commandList);
@@ -261,6 +272,27 @@ private:
         usize materialTypedByteCount
     )const;
     void clearPreparedShadowMaterialContext()noexcept;
+    [[nodiscard]] bool capturePreparedSceneBvh(
+        bool staticScene,
+        u64 staticSceneHash,
+        const void* nodeData,
+        usize nodeCount,
+        usize nodeByteCount,
+        const void* instanceData,
+        usize instanceCount,
+        usize instanceByteCount
+    );
+    [[nodiscard]] bool matchesPreparedSceneBvh(
+        bool staticScene,
+        u64 staticSceneHash,
+        const void* nodeData,
+        usize nodeCount,
+        usize nodeByteCount,
+        const void* instanceData,
+        usize instanceCount,
+        usize instanceByteCount
+    )const;
+    void clearPreparedSceneBvh()noexcept;
     [[nodiscard]] bool prepareSurfelResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool recordPreparedSurfelFrameConstants(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool initializeSurfelResources(Core::CommandList& commandList);
@@ -385,6 +417,21 @@ private:
     PreparedShadowMaterialContextRoute m_preparedShadowMaterialContextRoute = PreparedShadowMaterialContextRoute::None;
     bool m_preparedShadowMaterialContextStatic = false;
     bool m_preparedShadowMaterialContextReady = false;
+    // The CPU-built software scene BVH must retain node and leaf-instance bytes together: each node's leaf range
+    // indexes this exact instance stream. Hybrid HW-to-SW frames intentionally leave this compatibility-direct.
+    Vector<u8, Core::Alloc::GlobalArena> m_preparedSceneBvhNodeBytes;
+    Vector<u8, Core::Alloc::GlobalArena> m_preparedSceneBvhInstanceBytes;
+    Core::BufferHandle m_preparedSceneBvhNodeBuffer;
+    Core::BufferHandle m_preparedSceneBvhInstanceBuffer;
+    Core::GpuDescriptorHandle m_preparedSceneBvhNodeHeapHandle;
+    Core::GpuDescriptorHandle m_preparedSceneBvhInstanceHeapHandle;
+    usize m_preparedSceneBvhNodeCount = 0u;
+    usize m_preparedSceneBvhInstanceCount = 0u;
+    usize m_preparedSceneBvhNodeCapacity = 0u;
+    usize m_preparedSceneBvhInstanceCapacity = 0u;
+    u64 m_preparedSceneBvhStaticSceneHash = 0u;
+    bool m_preparedSceneBvhStatic = false;
+    bool m_preparedSceneBvhReady = false;
     DeferredFrameTargets* m_shadowVisibilityPreparedTargets = nullptr;
     bool m_shadowVisibilityResourcesPreflighted = false;
     bool m_shadowVisibilityHardwareSupported = false;

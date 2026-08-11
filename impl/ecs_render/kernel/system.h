@@ -332,6 +332,10 @@ private:
     Core::GpuTaskId m_shadowInstanceMaterialUploadTask;
     Core::GpuTaskId m_shadowInstanceUploadTask;
     Core::GpuTaskId m_shadowMaterialTypedUploadTask;
+    // Optional CPU-built software scene-BVH pair. Nodes address the companion leaf-instance stream, so both must
+    // merge into Shadow Preparation's packet before it owns the later asynchronous ShaderResource handoff.
+    Core::GpuTaskId m_sceneBvhNodesUploadTask;
+    Core::GpuTaskId m_sceneBvhInstancesUploadTask;
     // Optional lagged-history selector upload. It must merge into Deferred Lighting's packet, which already owns
     // both history acceptance and the external completion wait for the prior-frame images.
     Core::GpuTaskId m_deferredLaggedLightingHistorySlotsUploadTask;

@@ -211,6 +211,8 @@ void RendererSystem::invalidateResources(){
     m_shadowInstanceMaterialUploadTask = {};
     m_shadowInstanceUploadTask = {};
     m_shadowMaterialTypedUploadTask = {};
+    m_sceneBvhNodesUploadTask = {};
+    m_sceneBvhInstancesUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
@@ -462,6 +464,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_shadowInstanceMaterialUploadTask = {};
     m_shadowInstanceUploadTask = {};
     m_shadowMaterialTypedUploadTask = {};
+    m_sceneBvhNodesUploadTask = {};
+    m_sceneBvhInstancesUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -899,6 +903,28 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && shadowMaterialTypedUploadPacket == shadowPreparePacket
         ))
     ;
+    const Core::GpuSubmissionPacketId sceneBvhNodesUploadPacket =
+        m_sceneBvhNodesUploadTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_sceneBvhNodesUploadTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    const Core::GpuSubmissionPacketId sceneBvhInstancesUploadPacket =
+        m_sceneBvhInstancesUploadTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_sceneBvhInstancesUploadTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    // Scene-BVH nodes index the companion leaf-instance stream. Keep the whole immutable pair in the accepting
+    // Shadow Preparation packet so it becomes the only ShaderResource producer exposed to later Compute work.
+    const bool sceneBvhUploadsMergedIntoShadowPreparePacket =
+        m_sceneBvhNodesUploadTask.valid() == m_sceneBvhInstancesUploadTask.valid()
+        && (!m_sceneBvhNodesUploadTask.valid() || (
+            shadowPreparePacket.valid()
+            && sceneBvhNodesUploadPacket.valid()
+            && sceneBvhInstancesUploadPacket.valid()
+            && sceneBvhNodesUploadPacket == shadowPreparePacket
+            && sceneBvhInstancesUploadPacket == shadowPreparePacket
+        ))
+    ;
     const Core::GpuSubmissionPacketId graphicsPrefixPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_graphicsPrefixTask
     );
@@ -1283,6 +1309,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !causticEmissionTargetsUploadMergedIntoShadowPreparePacket
         || !surfelFrameConstantsUploadMergedIntoShadowPreparePacket
         || !shadowMaterialContextUploadsMergedIntoShadowPreparePacket
+        || !sceneBvhUploadsMergedIntoShadowPreparePacket
         || !shadowPrepareQueue
         || shadowPrepareQueue->queueClass != Core::CommandQueue::Graphics
         || !m_graphicsPrefixMeshViewSetupTask.valid()
@@ -2620,6 +2647,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && causticEmissionTargetsUploadMergedIntoShadowPreparePacket
             && surfelFrameConstantsUploadMergedIntoShadowPreparePacket
             && shadowMaterialContextUploadsMergedIntoShadowPreparePacket
+            && sceneBvhUploadsMergedIntoShadowPreparePacket
             && graphicsPrefixPacket.valid()
             && graphicsPrefixWorkPacketRange.valid()
             && shadowPrepareThroughPrefixPacketRange.valid()

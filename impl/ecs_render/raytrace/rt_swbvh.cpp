@@ -827,15 +827,22 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
 bool RendererRayTracingSystem::buildSceneSwBvh(
     Core::CommandList& commandList,
     Core::Alloc::ScratchArena& scratchArena,
-    const bool shadowMaterialContextBatchGraphOwned
+    const bool shadowMaterialContextBatchGraphOwned,
+    const bool sceneBvhBatchGraphOwned
 ){
-    return buildSceneSwBvhImpl(&commandList, scratchArena, shadowMaterialContextBatchGraphOwned);
+    return buildSceneSwBvhImpl(
+        &commandList,
+        scratchArena,
+        shadowMaterialContextBatchGraphOwned,
+        sceneBvhBatchGraphOwned
+    );
 }
 
 bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     Core::CommandList* const commandList,
     Core::Alloc::ScratchArena& scratchArena,
-    const bool shadowMaterialContextBatchGraphOwned
+    const bool shadowMaterialContextBatchGraphOwned,
+    const bool sceneBvhBatchGraphOwned
 ){
     using namespace __hidden_rt_swbvh;
 
@@ -1044,6 +1051,10 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
 
     const u32 instanceCount = static_cast<u32>(instances.size());
     if(instanceCount == 0u){
+        if(commandList && (shadowMaterialContextBatchGraphOwned || sceneBvhBatchGraphOwned)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software scene became empty after graph preflight; rejecting frozen trace uploads"));
+            return false;
+        }
         rayTracingState().m_sceneBvhInstanceCount = 0u;
         rayTracingState().m_sceneSwBvhStaticSceneHashValid = false;
         rayTracingState().m_swShadowMaterialContextHashValid = false;
@@ -1120,7 +1131,35 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             nodes.push_back(node);
         }
 
-        if(commandList){
+        if(!commandList){
+            if(!capturePreparedSceneBvh(
+                staticScene,
+                sceneStaticHash,
+                nodes.data(),
+                nodes.size(),
+                nodes.size() * sizeof(NwbBvhNodeGpu),
+                instances.data(),
+                instances.size(),
+                instances.size() * sizeof(SceneSwBvhInstanceGpu)
+            ))
+                return false;
+        }
+        else if(sceneBvhBatchGraphOwned){
+            if(!matchesPreparedSceneBvh(
+                staticScene,
+                sceneStaticHash,
+                nodes.data(),
+                nodes.size(),
+                nodes.size() * sizeof(NwbBvhNodeGpu),
+                instances.data(),
+                instances.size(),
+                instances.size() * sizeof(SceneSwBvhInstanceGpu)
+            )){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software scene BVH changed after graph preflight; rejecting frozen upload pair"));
+                return false;
+            }
+        }
+        else{
             Core::Buffer* nodeBuffer = rayTracingState().m_sceneBvhNodeBuffer.get();
             Core::Buffer* instanceBuffer = rayTracingState().m_sceneInstanceBuffer.get();
             commandList->setBufferState(nodeBuffer, Core::ResourceStates::CopyDest);
@@ -1132,6 +1171,10 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             commandList->setBufferState(instanceBuffer, Core::ResourceStates::ShaderResource);
             commandList->commitBarriers();
         }
+    }
+    else if(commandList && sceneBvhBatchGraphOwned){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned software scene BVH unexpectedly reused a native cache"));
+        return false;
     }
 
     // Preserve a valid typed buffer and refresh SW node-slot context independently.
@@ -1250,7 +1293,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     }
 
     rayTracingState().m_sceneBvhInstanceCount = instanceCount;
-    if(staticScene && commandList){
+    if(staticScene && commandList && !sceneBvhBatchGraphOwned){
         rayTracingState().m_sceneSwBvhStaticSceneHash = sceneStaticHash;
         rayTracingState().m_sceneSwBvhStaticSceneHashValid = true;
     }

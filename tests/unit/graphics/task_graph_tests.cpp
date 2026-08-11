@@ -3525,6 +3525,20 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         Graphics::ResourceStates::Common,
         Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
     );
+    const Graphics::GpuGraphResourceId sceneBvhNodes = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/scene_bvh_nodes"),
+        "Scene BVH Nodes",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId sceneBvhInstances = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/scene_bvh_instances"),
+        "Scene BVH Instances",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
     ASSERT_TRUE(currentBindlessSlots.valid());
     ASSERT_TRUE(materialContextSlots.valid());
     ASSERT_TRUE(causticEmissionTargets.valid());
@@ -3532,6 +3546,8 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     ASSERT_TRUE(shadowInstanceMaterials.valid());
     ASSERT_TRUE(shadowInstances.valid());
     ASSERT_TRUE(shadowMaterialTyped.valid());
+    ASSERT_TRUE(sceneBvhNodes.valid());
+    ASSERT_TRUE(sceneBvhInstances.valid());
 
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
@@ -3715,6 +3731,49 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     const Graphics::GpuTaskId shadowMaterialTypedUpload = graph.addTask(shadowMaterialTypedUploadDesc);
     ASSERT_TRUE(shadowMaterialTypedUpload.valid());
 
+    const Graphics::GpuTaskResourceUse sceneBvhNodesUploadUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = sceneBvhNodes,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Common,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskSchedulingHint sceneBvhUploadScheduling = uploadScheduling;
+    sceneBvhUploadScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    sceneBvhUploadScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskDesc sceneBvhNodesUploadDesc;
+    sceneBvhNodesUploadDesc
+        .setIdentity(Name("tests/task_graph/scene_bvh_nodes_upload"))
+        .setMarkerLabel("Scene BVH Nodes Upload")
+        .setQueue(graphicsUploadRequest)
+        .setScheduling(sceneBvhUploadScheduling)
+        .setDependencies(&shadowMaterialTypedUpload, 1u)
+        .setResourceUses(sceneBvhNodesUploadUses, LengthOf(sceneBvhNodesUploadUses))
+    ;
+    const Graphics::GpuTaskId sceneBvhNodesUpload = graph.addTask(sceneBvhNodesUploadDesc);
+    ASSERT_TRUE(sceneBvhNodesUpload.valid());
+
+    const Graphics::GpuTaskResourceUse sceneBvhInstancesUploadUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = sceneBvhInstances,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Common,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc sceneBvhInstancesUploadDesc;
+    sceneBvhInstancesUploadDesc
+        .setIdentity(Name("tests/task_graph/scene_bvh_instances_upload"))
+        .setMarkerLabel("Scene BVH Instances Upload")
+        .setQueue(graphicsUploadRequest)
+        .setScheduling(sceneBvhUploadScheduling)
+        .setDependencies(&sceneBvhNodesUpload, 1u)
+        .setResourceUses(sceneBvhInstancesUploadUses, LengthOf(sceneBvhInstancesUploadUses))
+    ;
+    const Graphics::GpuTaskId sceneBvhInstancesUpload = graph.addTask(sceneBvhInstancesUploadDesc);
+    ASSERT_TRUE(sceneBvhInstancesUpload.valid());
+
     const Graphics::GpuTaskResourceUse shadowPrepareUses[] = {
         Graphics::GpuTaskResourceUse{
             .resource = currentBindlessSlots,
@@ -3758,6 +3817,18 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
+        Graphics::GpuTaskResourceUse{
+            .resource = sceneBvhNodes,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = sceneBvhInstances,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
     };
     Graphics::GpuTaskDesc shadowPrepareDesc;
     shadowPrepareDesc
@@ -3765,7 +3836,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         .setMarkerLabel("Shadow Preparation")
         .setQueue(graphicsRequest)
         .setScheduling(shadowPrepareScheduling)
-        .setDependencies(&shadowMaterialTypedUpload, 1u)
+        .setDependencies(&sceneBvhInstancesUpload, 1u)
         .setResourceUses(shadowPrepareUses, LengthOf(shadowPrepareUses))
     ;
     const Graphics::GpuTaskId shadowPrepare = graph.addTask(shadowPrepareDesc);
@@ -3810,6 +3881,18 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         },
         Graphics::GpuTaskResourceUse{
             .resource = shadowMaterialTyped,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = sceneBvhNodes,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = sceneBvhInstances,
             .range = {},
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Read,
@@ -3860,6 +3943,10 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     const Graphics::GpuSubmissionPacketId shadowMaterialTypedUploadPacket = compiledGraph.packetForTask(
         shadowMaterialTypedUpload
     );
+    const Graphics::GpuSubmissionPacketId sceneBvhNodesUploadPacket = compiledGraph.packetForTask(sceneBvhNodesUpload);
+    const Graphics::GpuSubmissionPacketId sceneBvhInstancesUploadPacket = compiledGraph.packetForTask(
+        sceneBvhInstancesUpload
+    );
     const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
     const Graphics::GpuSubmissionPacketId shadowVisibilityPacket = compiledGraph.packetForTask(shadowVisibility);
     ASSERT_TRUE(uploadPacket.valid());
@@ -3869,6 +3956,8 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     ASSERT_TRUE(shadowInstanceMaterialsUploadPacket.valid());
     ASSERT_TRUE(shadowInstancesUploadPacket.valid());
     ASSERT_TRUE(shadowMaterialTypedUploadPacket.valid());
+    ASSERT_TRUE(sceneBvhNodesUploadPacket.valid());
+    ASSERT_TRUE(sceneBvhInstancesUploadPacket.valid());
     ASSERT_TRUE(shadowPreparePacket.valid());
     ASSERT_TRUE(shadowVisibilityPacket.valid());
     EXPECT_EQ(uploadPacket, shadowPreparePacket);
@@ -3878,8 +3967,10 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     EXPECT_EQ(shadowInstanceMaterialsUploadPacket, shadowPreparePacket);
     EXPECT_EQ(shadowInstancesUploadPacket, shadowPreparePacket);
     EXPECT_EQ(shadowMaterialTypedUploadPacket, shadowPreparePacket);
+    EXPECT_EQ(sceneBvhNodesUploadPacket, shadowPreparePacket);
+    EXPECT_EQ(sceneBvhInstancesUploadPacket, shadowPreparePacket);
     EXPECT_NE(shadowPreparePacket, shadowVisibilityPacket);
-    EXPECT_EQ(compiledGraph.packet(shadowPreparePacket).taskCount, 8u);
+    EXPECT_EQ(compiledGraph.packet(shadowPreparePacket).taskCount, 10u);
     const Graphics::GpuSubmissionPacketRange shadowPrepareRange = compiledGraph.packetRange(
         shadowPreparePacket,
         shadowPreparePacket
@@ -3897,6 +3988,8 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     bool transitionsShadowInstanceMaterials = false;
     bool transitionsShadowInstances = false;
     bool transitionsShadowMaterialTyped = false;
+    bool transitionsSceneBvhNodes = false;
+    bool transitionsSceneBvhInstances = false;
     for(usize index = 0u; index < compiledShadowPrepare->prologueBarrierCount; ++index){
         const Graphics::GpuCompiledBarrier& barrier = shadowPrepareBarriers[index];
         if(
@@ -3917,6 +4010,8 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             transitionsShadowInstanceMaterials = transitionsShadowInstanceMaterials || barrier.resource == shadowInstanceMaterials;
             transitionsShadowInstances = transitionsShadowInstances || barrier.resource == shadowInstances;
             transitionsShadowMaterialTyped = transitionsShadowMaterialTyped || barrier.resource == shadowMaterialTyped;
+            transitionsSceneBvhNodes = transitionsSceneBvhNodes || barrier.resource == sceneBvhNodes;
+            transitionsSceneBvhInstances = transitionsSceneBvhInstances || barrier.resource == sceneBvhInstances;
         }
     }
     EXPECT_TRUE(transitionsCurrentBindlessSlots);
@@ -3926,6 +4021,8 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     EXPECT_TRUE(transitionsShadowInstanceMaterials);
     EXPECT_TRUE(transitionsShadowInstances);
     EXPECT_TRUE(transitionsShadowMaterialTyped);
+    EXPECT_TRUE(transitionsSceneBvhNodes);
+    EXPECT_TRUE(transitionsSceneBvhInstances);
     ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(shadowVisibilityPacket)[0u].producer, shadowPreparePacket);
 }

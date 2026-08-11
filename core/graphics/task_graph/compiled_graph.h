@@ -32,6 +32,10 @@ struct GpuSubmissionPacket{
     u32 dependencyCount = 0u;
     u32 externalDependencyOffset = 0u;
     u32 externalDependencyCount = 0u;
+    // Compiler-derived ready-frontier depth for native recording. Packets in one depth have no internal packet
+    // producer relationship, so the runtime may record opted-in packets concurrently while retaining deterministic
+    // compile-order submission.
+    u32 recordingFrontier = 0u;
     // A late recovery/finalization packet receives waits for the latest accepted packet on every other physical
     // queue directly from GpuGraphSubmissionTransaction. It is a graph runtime policy, not a renderer token ladder.
     bool joinsAcceptedQueueFrontier = false;

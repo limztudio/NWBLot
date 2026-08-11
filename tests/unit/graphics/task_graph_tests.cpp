@@ -2640,6 +2640,79 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
 }
 
 
+TEST(GpuTaskGraph, DerivesStableRecordingReadyFrontiersFromPacketDependencies){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuTaskId first = AddTask(
+        graph,
+        Name("tests/task_graph/recording_frontier_first"),
+        "Recording Frontier First"
+    );
+    const Graphics::GpuTaskId second = AddTask(
+        graph,
+        Name("tests/task_graph/recording_frontier_second"),
+        "Recording Frontier Second"
+    );
+    const Graphics::GpuTaskId thirdDependencies[] = { first };
+    const Graphics::GpuTaskId third = AddTask(
+        graph,
+        Name("tests/task_graph/recording_frontier_third"),
+        "Recording Frontier Third",
+        thirdDependencies,
+        LengthOf(thirdDependencies)
+    );
+    const Graphics::GpuTaskId fourthDependencies[] = { second, third };
+    const Graphics::GpuTaskId fourth = AddTask(
+        graph,
+        Name("tests/task_graph/recording_frontier_fourth"),
+        "Recording Frontier Fourth",
+        fourthDependencies,
+        LengthOf(fourthDependencies)
+    );
+    ASSERT_TRUE(first.valid());
+    ASSERT_TRUE(second.valid());
+    ASSERT_TRUE(third.valid());
+    ASSERT_TRUE(fourth.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+
+    const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
+    const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(second);
+    const Graphics::GpuSubmissionPacketId thirdPacket = compiledGraph.packetForTask(third);
+    const Graphics::GpuSubmissionPacketId fourthPacket = compiledGraph.packetForTask(fourth);
+    ASSERT_TRUE(firstPacket.valid());
+    ASSERT_TRUE(secondPacket.valid());
+    ASSERT_TRUE(thirdPacket.valid());
+    ASSERT_TRUE(fourthPacket.valid());
+    EXPECT_EQ(compiledGraph.packet(firstPacket).recordingFrontier, 0u);
+    EXPECT_EQ(compiledGraph.packet(secondPacket).recordingFrontier, 0u);
+    EXPECT_EQ(compiledGraph.packet(thirdPacket).recordingFrontier, 1u);
+    EXPECT_EQ(compiledGraph.packet(fourthPacket).recordingFrontier, 2u);
+    ASSERT_EQ(compiledGraph.packet(thirdPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(thirdPacket)[0u].producer, firstPacket);
+    ASSERT_EQ(compiledGraph.packet(fourthPacket).dependencyCount, 2u);
+    bool hasSecondProducer = false;
+    bool hasThirdProducer = false;
+    for(const Graphics::GpuPacketDependency& dependency : {
+        compiledGraph.packetDependencies(fourthPacket)[0u],
+        compiledGraph.packetDependencies(fourthPacket)[1u],
+    }){
+        hasSecondProducer = hasSecondProducer || dependency.producer == secondPacket;
+        hasThirdProducer = hasThirdProducer || dependency.producer == thirdPacket;
+    }
+    EXPECT_TRUE(hasSecondProducer);
+    EXPECT_TRUE(hasThirdProducer);
+}
+
+
 TEST(GpuTaskGraph, KeepsPresentationOverlayInDistinctTerminalGraphicsPacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

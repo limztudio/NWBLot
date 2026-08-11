@@ -116,6 +116,9 @@ static bool BuildUploadPixels(ImTextureData& textureData, ByteVector& scratch, c
     scheduling.avoidQueueCrossing = !preferDedicatedTransport;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
+    // Texture bytes are copied into graph-owned blobs before declaration; this built-in upload has no mutable ImGui
+    // state during native recording and is safe to join other ready upload packets on worker threads.
+    scheduling.allowParallelRecording = true;
     return scheduling;
 }
 

@@ -1439,6 +1439,37 @@ bool GpuTaskGraphCompiler::compile(
         }
     }
 
+    // Packet dependencies are already constrained to earlier compiler-order packets. Persist the longest producer
+    // chain as immutable ready-frontier depth so native recording can fan out independent packets without changing
+    // the stable compile-order traversal used for submission, timing, and failure reporting.
+    for(usize packetIndex = 0u; packetIndex < outCompiledGraph.m_packets.size(); ++packetIndex){
+        GpuSubmissionPacket& packet = outCompiledGraph.m_packets[packetIndex];
+        u32 frontier = 0u;
+        for(u32 dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){
+            const GpuPacketDependency& dependency = outCompiledGraph.m_packetDependencies[
+                packet.dependencyOffset + dependencyIndex
+            ];
+            if(
+                dependency.consumer.index != packetIndex
+                || dependency.consumer.generation != outCompiledGraph.m_generation
+                || dependency.producer.index >= packetIndex
+                || dependency.producer.generation != outCompiledGraph.m_generation
+            ){
+                outCompiledGraph.reset();
+                return false;
+            }
+            const u32 producerFrontier = outCompiledGraph.m_packets[dependency.producer.index].recordingFrontier;
+            if(producerFrontier == Limit<u32>::s_Max){
+                outCompiledGraph.reset();
+                return false;
+            }
+            const u32 candidateFrontier = producerFrontier + 1u;
+            if(candidateFrontier > frontier)
+                frontier = candidateFrontier;
+        }
+        packet.recordingFrontier = frontier;
+    }
+
     outCompiledGraph.m_valid = true;
     return true;
 }

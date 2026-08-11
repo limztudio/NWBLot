@@ -5,7 +5,7 @@
 **Reviewed baseline:** `c62605d9` (`Fix acceptance policy regressions`), 2026-08-11.
 
 **Follow-up implementation:** physical queue identity, frontier-safe deferred scheduling, graph-bound presentation,
-and graph-owned per-frame ImGui uploads, 2026-08-11.
+graph-owned per-frame ImGui uploads, and opt-in ready-frontier native recording, 2026-08-11.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
 semantic dependencies, compile-time queue selection, packet construction, and inter-task barrier planning; native
@@ -28,6 +28,10 @@ can receive an unconditional final sign-off.
 - In the shared deferred path, ImGui vertex/index payloads and requested font/texture updates are retained as
   immutable graph blobs, lowered through the built-in upload tasks, and made dependencies of the terminal overlay
   or upload-completion packet. Small deltas stay on Graphics; amortizable updates prefer Transfer.
+- The compiler derives stable packet recording-frontier depths from packet dependencies. The native recorder may
+  record an explicitly opted-in frontier concurrently with isolated per-packet state scratch and native command
+  buffers; submission, timing, and failure reporting remain in stable compiler order. Command-IR capture and
+  legacy external-state overrides deliberately retain serial recording.
 
 ## Verification performed
 
@@ -46,6 +50,9 @@ can receive an unconditional final sign-off.
 | Retired-device submission token | verified: graph bindings reject a stale generation, and Vulkan rejects it at the native submission boundary |
 | Graph-owned ImGui setup-upload follow-up: `graphics_task_graph_tests` | 42/42 passed, including small Graphics-retained and large Transfer-preferred terminal upload routing |
 | Graph-owned ImGui setup-upload follow-up: `descriptor_buffer_tests` | 71 passed; 9 expected skips because this host has no dedicated Compute-only or Transfer-only family |
+| Ready-frontier recording follow-up: graph-unit binary | 43/43 passed, including deterministic compiler-derived frontier depth |
+| Ready-frontier recording follow-up: descriptor-buffer smoke binary | 72 passed; 9 expected skips because this host has no dedicated Compute-only or Transfer-only family; two independent immutable uploads recorded through a worker frontier and submitted in compiler order |
+| Ready-frontier recording follow-up: `nwb_ecs_ui` and `nwb_ecs_render` | passed |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -70,9 +77,11 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    native recording or submission. The graph therefore does not yet authoritatively own all frame work and state
    retirement.
 
-3. **Packet scheduling and recording completion.** Current merging is limited to compatible immediate
-   predecessors. Frontier splitting/scoring, graph-level parallel packet recording, and per-worker graph command
-   arenas from the proposal are not implemented.
+3. **Packet scheduling and recording completion (partially addressed).** Current merging is limited to compatible
+   immediate predecessors. The compiler-derived native ready-frontier recorder is implemented for explicit opt-in
+   packets, with isolated per-packet state scratch and independent native command buffers/pools; all other packets,
+   command-IR capture, and legacy external-state overrides retain serial recording. Frontier splitting/scoring and
+   reusable per-worker graph command-arena leases are still not implemented.
 
 4. **Generic recovery and invalidation proof.** The accepted-token transaction is sound for the exercised paths, and
    stale imported completion tokens now have graph and native-submission rejection coverage. Recovery is still not
@@ -87,6 +96,6 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
 ## Required decision for a strict closeout
 
 Do not relabel this result as final architectural completion without either implementing the five areas above or
-explicitly waiving them in a revised, version-controlled acceptance scope. The next implementation work should start
-with a scoped design decision for end-to-end physical queue identity and graph-owned upload/recovery paths; those
-choices determine the correct shape of packet frontiers, command arenas, and final performance validation.
+explicitly waiving them in a revised, version-controlled acceptance scope. The next implementation work should focus
+on same-class multi-queue routing and stale graph/command-arena recreation coverage, then complete the remaining
+graph-owned setup/resource-update paths and recovery proof.

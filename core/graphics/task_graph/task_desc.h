@@ -51,6 +51,10 @@ struct GpuTaskSchedulingHint{
     // The compiler preserves it as a separate packet and the submitter derives those waits from the graph-owned
     // submission transaction; callers do not assemble a queue-class token ladder.
     bool joinsAcceptedQueueFrontier = false;
+    // Recording stays serial unless every task in a packet explicitly opts in.  An opt-in record thunk may run on a
+    // worker concurrently with other opt-in packets from the same compiler-derived ready frontier, so it must not
+    // mutate shared CPU state or rely on thread-affine APIs. Submission remains in compiler order.
+    bool allowParallelRecording = false;
 };
 
 // A resource may be metadata-only during the shadow-graph phase, or may retain an imported engine handle through

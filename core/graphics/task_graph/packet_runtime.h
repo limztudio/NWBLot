@@ -8,6 +8,7 @@
 #include "compiled_graph.h"
 
 #include <core/alloc/scratch.h>
+#include <core/alloc/thread.h>
 #include <core/graphics/rhi/device.h>
 
 
@@ -31,7 +32,7 @@ struct GpuRecordedPacket{
 
     GpuSubmissionPacketId packet;
     // Native recording owns its newly-created lists through submission.
-    CommandListHandle ownedCommandLists[s_MaxCommandLists];
+    CommandListHandle ownedCommandLists[s_MaxCommandLists] = {};
     CommandList* commandLists[s_MaxCommandLists] = {};
     u8 commandListCount = 0u;
 };
@@ -40,16 +41,32 @@ struct GpuRecordedPacket{
 class GpuRecordedGraph final : NoCopy{
     friend class GpuNativePacketRecorder;
 
+private:
+    // Every ready-frontier worker receives isolated state-handoff scratch. This is separate from the per-packet
+    // final-state slots, which are written only by the packet's own recording worker and read by later frontiers.
+    struct PacketRecordingScratch final : NoCopy{
+        explicit PacketRecordingScratch(GraphicsArena& arena)
+            : initialStateSeed(arena)
+            , stateSubsetScratch(arena)
+            , stateMergeScratch(arena)
+            , externalBaseStateSeed(arena)
+            , externalMergedStateSeed(arena)
+        {}
+
+        CommandListResourceStateHandoff initialStateSeed;
+        CommandListResourceStateHandoff stateSubsetScratch;
+        CommandListResourceStateHandoff stateMergeScratch;
+        CommandListResourceStateHandoff externalBaseStateSeed;
+        CommandListResourceStateHandoff externalMergedStateSeed;
+    };
+
 public:
     explicit GpuRecordedGraph(GraphicsArena& arena)
         : m_arena(arena)
         , m_packets(arena)
         , m_packetStateSeeds(arena)
-        , m_initialStateSeed(arena)
-        , m_stateSubsetScratch(arena)
-        , m_stateMergeScratch(arena)
-        , m_externalBaseStateSeed(arena)
-        , m_externalMergedStateSeed(arena)
+        , m_serialRecordingScratch(arena)
+        , m_packetRecordingScratch(arena)
     {}
 
 
@@ -67,6 +84,7 @@ public:
 
 private:
     [[nodiscard]] bool buildPacketInitialStateSeed(
+        PacketRecordingScratch& scratch,
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketId& packet,
@@ -76,17 +94,15 @@ private:
     );
     [[nodiscard]] CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet)noexcept;
     [[nodiscard]] const CommandListResourceStateHandoff* packetStateSeed(const GpuSubmissionPacketId& packet)const noexcept;
+    [[nodiscard]] PacketRecordingScratch* packetRecordingScratch(const GpuSubmissionPacketId& packet)noexcept;
 
 
 private:
     GraphicsArena& m_arena;
     GraphicsVector<GpuRecordedPacket> m_packets;
     GraphicsVector<CommandListResourceStateHandoff> m_packetStateSeeds;
-    CommandListResourceStateHandoff m_initialStateSeed;
-    CommandListResourceStateHandoff m_stateSubsetScratch;
-    CommandListResourceStateHandoff m_stateMergeScratch;
-    CommandListResourceStateHandoff m_externalBaseStateSeed;
-    CommandListResourceStateHandoff m_externalMergedStateSeed;
+    PacketRecordingScratch m_serialRecordingScratch;
+    GraphicsVector<PacketRecordingScratch> m_packetRecordingScratch;
     u64 m_generation = 0u;
     u16 m_deviceGeneration = 0u;
     bool m_valid = false;
@@ -138,7 +154,30 @@ public:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
+    // Records compiler-ready frontiers with `workerPool`. Only packets whose tasks all set
+    // GpuTaskSchedulingHint::allowParallelRecording may share a worker frontier; every other packet remains serial.
+    // Command-IR capture deliberately keeps the established serial order. The method is synchronous: callers may
+    // submit or destroy the recorded graph once it returns.
+    [[nodiscard]] bool recordPacketRangeInReadyFrontiers(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuSubmissionPacketRange& range,
+        const GpuNativePacketRecordDesc* recordOverrides,
+        usize recordOverrideCount,
+        GpuRecordedGraph& outRecordedGraph,
+        Alloc::ThreadPool& workerPool,
+        GpuSubmissionPacketId* outFailedPacket = nullptr,
+        GpuCommandIrCapture* commandIrCapture = nullptr
+    )const;
 private:
+    [[nodiscard]] bool recordPacketWithScratch(
+        const GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        const GpuNativePacketRecordDesc& desc,
+        GpuRecordedGraph& outRecordedGraph,
+        GpuRecordedGraph::PacketRecordingScratch& scratch,
+        GpuCommandIrCapture* commandIrCapture
+    )const;
     Device& m_device;
 };
 

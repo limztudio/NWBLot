@@ -1376,6 +1376,195 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlo
 }
 
 
+// Independent immutable uploads are the first production opt-in packets for worker recording.  Use the real Vulkan
+// Device to prove the packet recorder keeps per-packet state scratch and command pools isolated before serial graph
+// submission consumes the recorded command lists in compiler order.
+TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRecordsIndependentGraphOwnedUploadsOnWorkers){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    static constexpr u32 s_FirstWords[] = {
+        0x4ef8a219u,
+        0x13c0ffeeu,
+        0x7f4a7c15u,
+        0x9e3779b9u,
+    };
+    static constexpr u32 s_SecondWords[] = {
+        0xfeedfaceu,
+        0x0badf00du,
+        0x2c1b3a49u,
+        0xd1cebeefu,
+    };
+    const auto createDestination = [&device]{
+        return device.createBuffer(
+            BufferDesc()
+                .setByteSize(sizeof(s_FirstWords))
+                .setInitialState(ResourceStates::Common)
+                .setQueueSharing(ResourceQueueSharing::Exclusive)
+                .setCpuAccess(CpuAccessMode::Read)
+        );
+    };
+    auto firstDestination = createDestination();
+    auto secondDestination = createDestination();
+    ASSERT_NE(firstDestination.get(), nullptr);
+    ASSERT_NE(secondDestination.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importDestination = [&graph](const BufferHandle& buffer, const Name& identity, const AStringView label){
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(label)
+                .setType(GpuGraphResourceType::Buffer)
+                .setInitialState(ResourceStates::Common)
+        );
+    };
+    const GpuGraphResourceId firstDestinationResource = importDestination(
+        firstDestination,
+        Name("tests/descriptor_buffer/parallel_upload_first_destination"),
+        "Parallel Upload First Destination"
+    );
+    const GpuGraphResourceId secondDestinationResource = importDestination(
+        secondDestination,
+        Name("tests/descriptor_buffer/parallel_upload_second_destination"),
+        "Parallel Upload Second Destination"
+    );
+    const GpuUploadBlobId firstSource = graph.copyUploadData(s_FirstWords, sizeof(s_FirstWords), alignof(u32));
+    const GpuUploadBlobId secondSource = graph.copyUploadData(s_SecondWords, sizeof(s_SecondWords), alignof(u32));
+    ASSERT_TRUE(firstDestinationResource.valid());
+    ASSERT_TRUE(secondDestinationResource.valid());
+    ASSERT_TRUE(firstSource.valid());
+    ASSERT_TRUE(secondSource.valid());
+
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    scheduling.allowParallelRecording = true;
+    const auto addUpload = [&](const Name& identity,
+        const AStringView label,
+        const GpuUploadBlobId source,
+        const GpuGraphResourceId destination,
+        QueueSubmissionToken* const acceptedToken
+    ){
+        GpuTaskDesc desc;
+        desc
+            .setIdentity(identity)
+            .setMarkerLabel(label)
+            .setQueue(GpuQueueRequest{
+                GpuQueueCapability::Transfer,
+                GpuQueuePreference::Transfer,
+                true,
+                true,
+            })
+            .setScheduling(scheduling)
+        ;
+        return graph.addUploadBufferTask(
+            desc,
+            GpuUploadBufferTaskDesc{
+                .source = source,
+                .destination = destination,
+                .finalState = ResourceStates::Common,
+                .acceptedToken = acceptedToken,
+            }
+        );
+    };
+    QueueSubmissionToken firstAcceptedToken;
+    QueueSubmissionToken secondAcceptedToken;
+    const GpuTaskId firstUpload = addUpload(
+        Name("tests/descriptor_buffer/parallel_upload_first"),
+        "Parallel Upload First",
+        firstSource,
+        firstDestinationResource,
+        &firstAcceptedToken
+    );
+    const GpuTaskId secondUpload = addUpload(
+        Name("tests/descriptor_buffer/parallel_upload_second"),
+        "Parallel Upload Second",
+        secondSource,
+        secondDestinationResource,
+        &secondAcceptedToken
+    );
+    ASSERT_TRUE(firstUpload.valid());
+    ASSERT_TRUE(secondUpload.valid());
+
+    const GpuPhysicalQueueInfo graphicsQueue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &graphicsQueue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/parallel_upload_recording_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(firstUpload);
+    const GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(secondUpload);
+    ASSERT_TRUE(firstPacket.valid());
+    ASSERT_TRUE(secondPacket.valid());
+    EXPECT_EQ(compiledGraph.packet(firstPacket).recordingFrontier, 0u);
+    EXPECT_EQ(compiledGraph.packet(secondPacket).recordingFrontier, 0u);
+
+    Alloc::ThreadPool recordingWorkers(2u, CpuAffinity::Any);
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInReadyFrontiers(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph,
+        recordingWorkers
+    ));
+    ASSERT_NE(recordedGraph.find(firstPacket), nullptr);
+    ASSERT_NE(recordedGraph.find(secondPacket), nullptr);
+    ASSERT_NE(recordedGraph.packetFinalStateSeed(firstPacket), nullptr);
+    ASSERT_NE(recordedGraph.packetFinalStateSeed(secondPacket), nullptr);
+
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(firstAcceptedToken.valid());
+    EXPECT_TRUE(secondAcceptedToken.valid());
+    ASSERT_TRUE(device.waitForIdle());
+
+    const u32* const firstWords = static_cast<const u32*>(device.mapBuffer(firstDestination.get(), CpuAccessMode::Read));
+    const u32* const secondWords = static_cast<const u32*>(device.mapBuffer(secondDestination.get(), CpuAccessMode::Read));
+    ASSERT_NE(firstWords, nullptr);
+    ASSERT_NE(secondWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_FirstWords); ++wordIndex){
+        EXPECT_EQ(firstWords[wordIndex], s_FirstWords[wordIndex]);
+        EXPECT_EQ(secondWords[wordIndex], s_SecondWords[wordIndex]);
+    }
+    device.unmapBuffer(firstDestination.get());
+    device.unmapBuffer(secondDestination.get());
+}
+
+
 TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadTextureTaskRecordsGraphOwnedBlobAndFinalState){
     auto& device = DescriptorBufferRoundTripTest::device();
     u8 sourceBytes[4u * 4u * 4u] = {

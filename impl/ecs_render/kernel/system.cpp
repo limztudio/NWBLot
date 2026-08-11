@@ -1327,8 +1327,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return true;
     };
 
-    // Record preparation and prefix together in compiler order. The compiler supplies every declared state seed;
-    // there is no cross-graph serial snapshot or renderer-owned packet handoff.
+    // Record preparation and prefix through the graph's ready-frontier path. These renderer payloads intentionally
+    // retain the serial default, while graph-owned upload packets later in the frame may opt into worker recording.
     const Core::GpuNativePacketRecorder deferredRecorder(device);
     const bool graphicsPrefixRecorded =
         m_deferredLightingTaskGraphValid
@@ -1340,13 +1340,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredShadowPrepareTask.valid()
         && shadowPreparePacket.valid()
         && graphicsPrefixPacket.valid()
-        && deferredRecorder.recordPacketRangeInCompileOrder(
+        && deferredRecorder.recordPacketRangeInReadyFrontiers(
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph,
             shadowPrepareThroughPrefixPacketRange,
             nullptr,
             0u,
-            m_deferredLightingRecordedGraph
+            m_deferredLightingRecordedGraph,
+            m_world.taskPool()
         )
     ;
     const Core::CommandListResourceStateHandoff* const shadowPrepareFinalStateSeed = graphicsPrefixRecorded
@@ -1629,13 +1630,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && effectsThroughPresentationPacketRange.valid()
     ;
     if(deferredPacketsRecorded){
-        deferredPacketsRecorded = deferredRecorder.recordPacketRangeInCompileOrder(
+        deferredPacketsRecorded = deferredRecorder.recordPacketRangeInReadyFrontiers(
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph,
             effectsThroughPresentationPacketRange,
             deferredRecordDescs,
             deferredRecordDescCount,
-            m_deferredLightingRecordedGraph
+            m_deferredLightingRecordedGraph,
+            m_world.taskPool()
         );
     }
     if(!deferredPacketsRecorded){

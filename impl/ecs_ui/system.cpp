@@ -139,6 +139,9 @@ static bool HasPendingTextureUploads(const ImDrawData& drawData){
     scheduling.avoidQueueCrossing = !preferDedicatedTransport;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
+    // Built-in graph uploads capture immutable blobs and create a fresh native command list, so independent vertex
+    // and index packets may record together once their shared scene-output dependency is ready.
+    scheduling.allowParallelRecording = true;
     return scheduling;
 }
 

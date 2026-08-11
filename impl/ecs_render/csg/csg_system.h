@@ -49,6 +49,9 @@ public:
     [[nodiscard]] bool prepareCsgFrameResources(usize receiverRangeCount, usize cutterCount);
     [[nodiscard]] bool csgFrameBuffersReady(const CsgFrameGpuData& csgFrameData)const;
     [[nodiscard]] bool uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
+    // The clip-context slot payload is a specialized descriptor indirection.  Generic receiver/cutter stream
+    // uploads may be graph-owned, while this narrow compatibility write remains adjacent to the native CSG draws.
+    [[nodiscard]] bool uploadCsgFrameContextSlots(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
     [[nodiscard]] bool uploadCsgIntervalSampleState(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
     void setCsgClipBufferStates(Core::CommandList& commandList);
     [[nodiscard]] bool resolveCsgReceiverClipDrawInfo(

@@ -191,6 +191,8 @@ private:
         Core::GpuGraphResourceId meshView,
         Core::GpuGraphResourceId materialInstances,
         Core::GpuGraphResourceId materialTyped,
+        Core::GpuGraphResourceId csgReceiverRanges,
+        Core::GpuGraphResourceId csgCutters,
         Core::GpuGraphResourceId currentBindlessSlots,
         Core::GpuGraphResourceId materialContextSlots,
         const Core::GpuGraphResourceId* shadowTraceGeometryResources,

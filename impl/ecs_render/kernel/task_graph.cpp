@@ -434,6 +434,7 @@ struct GbufferGraphTask{
         const bool* sceneShadingSetupReady = nullptr;
         OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
         bool materialDrawBuffersUploaded = false;
+        bool csgFrameBuffersUploaded = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : opaqueDrawSnapshot(arena)
@@ -495,7 +496,13 @@ struct GbufferGraphTask{
         ;
         const bool csgResourcesReady =
             deferredResourcesReady
-            && (opaqueDrawItems.csg.empty() || renderer.m_csgSystem.csgFrameBuffersReady(csgFrameData))
+            && (
+                !csgFrameData.hasWork()
+                || (
+                    payload.csgFrameBuffersUploaded
+                    && renderer.m_csgSystem.csgFrameBuffersReady(csgFrameData)
+                )
+            )
         ;
         const bool csgDrawResourcesReady =
             csgResourcesReady
@@ -508,7 +515,7 @@ struct GbufferGraphTask{
         if(deferredResourcesReady){
             const bool csgUploadReady =
                 csgResourcesReady
-                && (opaqueDrawItems.csg.empty() || renderer.m_csgSystem.uploadCsgFrameBuffers(commandList, csgFrameData))
+                && renderer.m_csgSystem.uploadCsgFrameContextSlots(commandList, csgFrameData)
             ;
             const bool csgSampleStateReady =
                 csgUploadReady
@@ -1168,6 +1175,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     const Core::GpuGraphResourceId meshView,
     const Core::GpuGraphResourceId materialInstances,
     const Core::GpuGraphResourceId materialTyped,
+    const Core::GpuGraphResourceId csgReceiverRanges,
+    const Core::GpuGraphResourceId csgCutters,
     const Core::GpuGraphResourceId currentBindlessSlots,
     const Core::GpuGraphResourceId materialContextSlots,
     const Core::GpuGraphResourceId* const shadowTraceGeometryResources,
@@ -1611,6 +1620,90 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         }
         gbufferPayload.materialDrawBuffersUploaded = true;
     }
+
+    // Receiver/cutter records are ordinary immutable frame streams.  Keep the descriptor-slot context payload
+    // native for now: it incorporates target-generation bindless indirection and remains a specialized update.
+    const bool hasCsgFrameGpuWork = csgFrameData.hasWork();
+    Core::GpuTaskId csgFrameUploadTask = materialDrawUploadTask;
+    if(hasCsgFrameGpuWork){
+        if(
+            !csgReceiverRanges.valid()
+            || !csgCutters.valid()
+            || !m_csgSystem.csgFrameBuffersReady(csgFrameData)
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared CSG frame buffers were unavailable during graph declaration"));
+            return false;
+        }
+#if defined(NWB_DEBUG)
+        if(
+            csgFrameData.receiverRanges.size() > Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData)
+            || csgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG frame upload size overflows graph blob capacity"));
+            return false;
+        }
+#endif
+
+        const Core::GpuUploadBlobId receiverRangesBlob = m_deferredLightingTaskGraph.copyUploadData(
+            csgFrameData.receiverRanges.data(),
+            csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData),
+            alignof(CsgReceiverRangeGpuData)
+        );
+        const Core::GpuUploadBlobId cuttersBlob = m_deferredLightingTaskGraph.copyUploadData(
+            csgFrameData.cutters.data(),
+            csgFrameData.cutters.size() * sizeof(CsgCutterGpuData),
+            alignof(CsgCutterGpuData)
+        );
+        if(!receiverRangesBlob.valid() || !cuttersBlob.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable CSG frame upload data"));
+            return false;
+        }
+
+        Core::GpuTaskDesc receiverRangesUploadDesc;
+        receiverRangesUploadDesc
+            .setIdentity(Name("render.graphics_prefix.csg_receiver_ranges_upload"))
+            .setMarkerLabel("CSG Receiver Ranges Upload")
+            .setQueue(GraphicsUploadQueueRequest())
+            .setScheduling(immutableUploadScheduling)
+            .setDependencies(&csgFrameUploadTask, 1u)
+        ;
+        csgFrameUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+            receiverRangesUploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = receiverRangesBlob,
+                .destination = csgReceiverRanges,
+                // CSG structured buffers restore Common at native packet close; G-buffer owns their transient SRV
+                // state exactly like the graph-owned material streams above.
+                .finalState = Core::ResourceStates::Common,
+            }
+        );
+        if(!csgFrameUploadTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned CSG receiver-range upload"));
+            return false;
+        }
+
+        Core::GpuTaskDesc cuttersUploadDesc;
+        cuttersUploadDesc
+            .setIdentity(Name("render.graphics_prefix.csg_cutters_upload"))
+            .setMarkerLabel("CSG Cutters Upload")
+            .setQueue(GraphicsUploadQueueRequest())
+            .setScheduling(immutableUploadScheduling)
+            .setDependencies(&csgFrameUploadTask, 1u)
+        ;
+        csgFrameUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+            cuttersUploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = cuttersBlob,
+                .destination = csgCutters,
+                .finalState = Core::ResourceStates::Common,
+            }
+        );
+        if(!csgFrameUploadTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned CSG cutter upload"));
+            return false;
+        }
+        gbufferPayload.csgFrameBuffersUploaded = true;
+    }
     gbufferPayload.opaqueDrawSnapshot.capture(
         opaqueDrawItems,
         csgFrameData,
@@ -1620,11 +1713,15 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
     Core::Alloc::ScratchArena gbufferResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferResourceUses{ gbufferResourceScratch };
-    gbufferResourceUses.reserve(hasOpaqueDrawItems ? 7u : 5u);
+    gbufferResourceUses.reserve((hasOpaqueDrawItems ? 7u : 5u) + (hasCsgFrameGpuWork ? 2u : 0u));
     gbufferResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
     if(hasOpaqueDrawItems){
         gbufferResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
         gbufferResourceUses.push_back(ReadUse(materialTyped, Core::ResourceStates::ShaderResource));
+    }
+    if(hasCsgFrameGpuWork){
+        gbufferResourceUses.push_back(ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource));
+        gbufferResourceUses.push_back(ReadUse(csgCutters, Core::ResourceStates::ShaderResource));
     }
     gbufferResourceUses.push_back(WriteUse(albedo, Core::ResourceStates::RenderTarget));
     gbufferResourceUses.push_back(WriteUse(normal, Core::ResourceStates::RenderTarget));
@@ -1641,7 +1738,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         .setMarkerLabel("Opaque G-Buffer")
         .setQueue(GraphicsQueueRequest())
         .setScheduling(gbufferScheduling)
-        .setDependencies(&materialDrawUploadTask, 1u)
+        .setDependencies(&csgFrameUploadTask, 1u)
         .setResourceUses(gbufferResourceUses.data(), gbufferResourceUses.size())
     ;
     m_graphicsPrefixGbufferTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::GbufferGraphTask>(
@@ -2868,6 +2965,22 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         )
         : Core::GpuGraphResourceId{}
     ;
+    const Core::GpuGraphResourceId csgReceiverRanges = m_csgState.m_receiverRangeBuffer
+        ? importBuffer(
+            m_csgState.m_receiverRangeBuffer,
+            Name("render.deferred.csg_receiver_ranges"),
+            "CSG Receiver Ranges"
+        )
+        : Core::GpuGraphResourceId{}
+    ;
+    const Core::GpuGraphResourceId csgCutters = m_csgState.m_cutterBuffer
+        ? importBuffer(
+            m_csgState.m_cutterBuffer,
+            Name("render.deferred.csg_cutters"),
+            "CSG Cutters"
+        )
+        : Core::GpuGraphResourceId{}
+    ;
     const Core::GpuGraphResourceId bindlessSlots = history
         ? importBuffer(
             history->slotsBuffer,
@@ -3060,6 +3173,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         meshView,
         materialInstances,
         materialTyped,
+        csgReceiverRanges,
+        csgCutters,
         currentBindlessSlots,
         materialContextSlots,
         traceGeometryResources.data(),

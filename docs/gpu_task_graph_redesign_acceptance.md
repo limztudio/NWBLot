@@ -8,7 +8,8 @@
 graph-owned per-frame ImGui uploads, opt-in ready-frontier native recording, and opt-in same-class physical Graphics
 routing, actual-device stale packet-recording recreation coverage, and graph-owned public setup uploads,
 graph-owned deferred mesh-view, scene-light, and scene-shading frame updates, and graph-owned decoded texture-asset
-uploads, graph-owned runtime-skinning joint-palette uploads, and graph-owned opaque material draw-stream uploads,
+uploads, graph-owned runtime-skinning joint-palette uploads, graph-owned opaque material draw-stream uploads, and
+graph-owned opaque CSG receiver/cutter streams,
 2026-08-11.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
@@ -53,8 +54,10 @@ can receive an unconditional final sign-off.
 - The opaque G-buffer now freezes its material draw ordering and CSG CPU frame payload during graph declaration.
   Its instance and typed-material bytes are retained as immutable graph blobs and uploaded through Graphics-routed
   built-in buffer tasks after deferred clear. The tasks publish the buffers' automatic `Common` close boundary; the
-  G-buffer declares the transient `ShaderResource` reads. CSG buffer and interval-sample writes remain on their
-  narrow direct compatibility path for the following tranche.
+  G-buffer declares the transient `ShaderResource` reads. CSG receiver-range and cutter records from that same
+  frozen payload are also immutable graph blobs, uploaded in order before the G-buffer, and explicitly declared as
+  transient `ShaderResource` reads. The target-generation clip-context slot payload and interval sample state remain
+  narrow direct compatibility paths because they are specialized descriptor/resource updates.
 - The compiler derives stable packet recording-frontier depths from packet dependencies. The native recorder may
   record an explicitly opted-in frontier concurrently with isolated per-packet state scratch and native command
   buffers; submission, timing, and failure reporting remain in stable compiler order. Command-IR capture and
@@ -97,6 +100,7 @@ can receive an unconditional final sign-off.
 | Graph-owned decoded-texture upload follow-up: `nwb_assets_texture_loader`, `nwb_graphics_task_graph_tests`, and `nwb_descriptor_buffer_tests` | passed; the native smoke now reads back two graph-owned mip payloads after their caller arrays are overwritten (74 passed; 10 expected topology skips) |
 | Graph-owned skinning joint-palette follow-up: `nwb_ecs_mesh_skinning`, `nwb_ecs_graphics_tests`, graph/descriptor smoke, and runtime skinning smoke | passed; the graph packet publishes `ShaderResource` joint palettes to the primary-Graphics skinning compute list; 17/17 ECS unit tests, 45/45 graph tests, descriptor smoke 74 passed with 10 expected topology skips, and the opt-in one-character fast smoke completed its animated case |
 | Graph-owned opaque material-stream follow-up: `nwb_ecs_graphics_tests`, graph/descriptor smoke, and runtime skinning smoke | passed; 17/17 ECS unit tests, 45/45 graph tests, descriptor smoke 74 passed with 10 expected topology skips, and the one-character Vulkan smoke completed its animated opaque-material case |
+| Graph-owned opaque CSG receiver/cutter-stream follow-up: static and compute-emulation CSG capture smoke | 2/2 passed; both Vulkan/X11 scenes rendered opaque CSG receivers through the ordered graph tasks before Opaque G-Buffer |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -121,8 +125,9 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    direct path remains only as a compatibility fallback for worlds without a graph-owning renderer or a rejected
    graph attempt. Public buffer/texture setup uploads, decoded texture-asset uploads, and the shared deferred
    mesh-view, scene-light, scene-shading, runtime skinning joint-palette, and opaque material instance/typed updates
-   now use the graph-owned primitive path. Skinning compute dispatch/its selector update, transparent material and
-   CSG streams, and other specialized descriptor/resource updates still retain direct native recording or
+   now use the graph-owned primitive path. Skinning compute dispatch/its selector update, transparent material
+   streams, CSG clip-context/interval-sample state, and other specialized descriptor/resource updates still retain
+   direct native recording or
    submission. The graph therefore does not yet authoritatively own all frame work and state retirement.
 
 3. **Packet scheduling and recording completion (partially addressed).** Current merging is limited to compatible
@@ -147,5 +152,5 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
 
 Do not relabel this result as final architectural completion without either implementing the five areas above or
 explicitly waiving them in a revised, version-controlled acceptance scope. The next implementation work should
-finish the remaining graph-owned asset/resource-update paths (notably transparent material/CSG streams and
-specialized descriptor/resource updates) and recovery proof.
+finish the remaining graph-owned asset/resource-update paths (notably transparent material streams and CSG
+clip-context/interval-sample state), specialized descriptor/resource updates, and recovery proof.

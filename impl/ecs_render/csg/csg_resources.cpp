@@ -648,19 +648,10 @@ bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, co
     NWB_ASSERT(m_renderer.meshSystem().meshFrameHeapHandlesReady());
     NWB_ASSERT(deferredState().m_targets.bindless.slotsBufferDescriptor.valid());
 
-    CsgClipContextSlots contextSlots;
-    contextSlots.receiverRanges = csgState().m_receiverRangeBufferHeapHandle.slot();
-    contextSlots.cutters = csgState().m_cutterBufferHeapHandle.slot();
-    contextSlots.materialTyped = drawState().m_materialTypedBufferHeapHandle.slot();
-    contextSlots.meshInstances = drawState().m_instanceBufferHeapHandle.slot();
-    contextSlots.deferredBindlessResources = deferredState().m_targets.bindless.slotsBufferDescriptor.slot();
-    contextSlots.intervalSampleState = csgState().m_intervalSampleStateHeapHandle.slot();
-
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgUpload, graphics().getDevice(), commandList);
 
     commandList.setBufferState(csgState().m_receiverRangeBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.setBufferState(csgState().m_cutterBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.setBufferState(csgState().m_clipContextSlotsBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.writeBuffer(
         csgState().m_receiverRangeBuffer.get(),
@@ -672,8 +663,37 @@ bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, co
         csgFrameData.cutters.data(),
         csgFrameData.cutters.size() * sizeof(CsgCutterGpuData)
     );
-    // This upload follows every capacity-growth replacement and every mesh-frame handle refresh, so the draw never
-    // observes a stale descriptor slot from a retired receiver/cutter/material/instance generation.
+    return uploadCsgFrameContextSlots(commandList, csgFrameData);
+}
+
+bool RendererCsgSystem::uploadCsgFrameContextSlots(
+    Core::CommandList& commandList,
+    const CsgFrameGpuData& csgFrameData
+){
+    if(!csgFrameData.hasWork())
+        return true;
+    NWB_ASSERT(csgState().m_receiverRangeBuffer);
+    NWB_ASSERT(csgState().m_cutterBuffer);
+    NWB_ASSERT(csgState().m_clipContextSlotsBuffer);
+    NWB_ASSERT(csgState().m_receiverRangeBufferHeapHandle.valid());
+    NWB_ASSERT(csgState().m_cutterBufferHeapHandle.valid());
+    NWB_ASSERT(csgState().m_clipContextSlotsHeapHandle.valid());
+    NWB_ASSERT(csgState().m_intervalSampleStateHeapHandle.valid());
+    NWB_ASSERT(m_renderer.meshSystem().meshFrameHeapHandlesReady());
+    NWB_ASSERT(deferredState().m_targets.bindless.slotsBufferDescriptor.valid());
+
+    // This write follows every capacity-growth replacement and mesh-frame handle refresh, so the native CSG draw
+    // never observes a stale descriptor slot from a retired receiver/cutter/material/instance generation.
+    CsgClipContextSlots contextSlots;
+    contextSlots.receiverRanges = csgState().m_receiverRangeBufferHeapHandle.slot();
+    contextSlots.cutters = csgState().m_cutterBufferHeapHandle.slot();
+    contextSlots.materialTyped = drawState().m_materialTypedBufferHeapHandle.slot();
+    contextSlots.meshInstances = drawState().m_instanceBufferHeapHandle.slot();
+    contextSlots.deferredBindlessResources = deferredState().m_targets.bindless.slotsBufferDescriptor.slot();
+    contextSlots.intervalSampleState = csgState().m_intervalSampleStateHeapHandle.slot();
+
+    commandList.setBufferState(csgState().m_clipContextSlotsBuffer.get(), Core::ResourceStates::CopyDest);
+    commandList.commitBarriers();
     commandList.writeBuffer(csgState().m_clipContextSlotsBuffer.get(), &contextSlots, sizeof(contextSlots));
     setCsgClipBufferStates(commandList);
     commandList.commitBarriers();

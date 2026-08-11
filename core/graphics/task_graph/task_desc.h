@@ -211,6 +211,23 @@ namespace GpuClearTextureTaskValueType{
     };
 };
 
+// A typed clear can bracket its own native command with narrow graph-owned instrumentation. The hooks stay outside
+// command capture/replay: they are recording-local observability, while the clear command remains the portable POD
+// operation captured by the optional IR stream.
+using GpuClearTextureTaskRecordHook = bool(*)(
+    void* context,
+    CommandList& commandList,
+    const GpuTaskRecordContext& recordContext
+);
+using GpuClearTextureTaskDiscardedHook = void(*)(void* context);
+
+struct GpuClearTextureTaskRecordHooks{
+    void* context = nullptr;
+    GpuClearTextureTaskRecordHook beforeClear = nullptr;
+    GpuClearTextureTaskRecordHook afterClear = nullptr;
+    GpuClearTextureTaskDiscardedHook discarded = nullptr;
+};
+
 struct GpuClearTextureTaskDesc{
     GpuGraphResourceId destination;
     TextureSubresourceSet subresources = s_AllSubresources;
@@ -222,6 +239,9 @@ struct GpuClearTextureTaskDesc{
     u8 stencilValue = 0u;
     bool clearDepth = false;
     bool clearStencil = false;
+    // Optional recording-local hooks. They bracket the native clear in the same graph task, so a later cross-queue
+    // consumer cannot split an instrumentation endpoint away from the command it observes.
+    GpuClearTextureTaskRecordHooks recordHooks;
     // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
     QueueSubmissionToken* acceptedToken = nullptr;
 };

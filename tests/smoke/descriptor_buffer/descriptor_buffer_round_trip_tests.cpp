@@ -3465,6 +3465,44 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     ASSERT_TRUE(textureResource.valid());
     ASSERT_TRUE(depthTextureResource.valid());
 
+    struct ClearTextureRecordHookState{
+        u32 beforeCount = 0u;
+        u32 afterCount = 0u;
+        u32 discardedCount = 0u;
+    };
+    ClearTextureRecordHookState textureHooks;
+    const GpuClearTextureTaskRecordHook beforeTextureClear = [](
+        void* const rawState,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(commandList);
+        static_cast<void>(context);
+        ClearTextureRecordHookState* const state = static_cast<ClearTextureRecordHookState*>(rawState);
+        if(!state)
+            return false;
+        ++state->beforeCount;
+        return true;
+    };
+    const GpuClearTextureTaskRecordHook afterTextureClear = [](
+        void* const rawState,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(commandList);
+        static_cast<void>(context);
+        ClearTextureRecordHookState* const state = static_cast<ClearTextureRecordHookState*>(rawState);
+        if(!state)
+            return false;
+        ++state->afterCount;
+        return true;
+    };
+    const GpuClearTextureTaskDiscardedHook discardTextureClear = [](void* const rawState){
+        ClearTextureRecordHookState* const state = static_cast<ClearTextureRecordHookState*>(rawState);
+        if(state)
+            ++state->discardedCount;
+    };
+
     GpuTaskSchedulingHint clearScheduling;
     clearScheduling.cost = GpuTaskCostHint::Small;
     clearScheduling.forceSubmissionBoundary = true;
@@ -3507,16 +3545,19 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
             .acceptedToken = &clearBufferAcceptedToken,
         }
     );
-    const GpuTaskId clearTextureTask = graph.addClearTextureTask(
-        clearTextureTaskDesc,
-        GpuClearTextureTaskDesc{
-            .destination = textureResource,
-            .subresources = TextureSubresourceSet(0u, 1u, 0u, 1u),
-            .valueType = GpuClearTextureTaskValueType::UInt,
-            .uintValue = UIntColor(0x10203040u, 0x50607080u, 0x90a0b0c0u, 0xd0e0f000u),
-            .acceptedToken = &clearTextureAcceptedToken,
-        }
-    );
+    GpuClearTextureTaskDesc clearTextureTaskDescPayload;
+    clearTextureTaskDescPayload.destination = textureResource;
+    clearTextureTaskDescPayload.subresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
+    clearTextureTaskDescPayload.valueType = GpuClearTextureTaskValueType::UInt;
+    clearTextureTaskDescPayload.uintValue = UIntColor(0x10203040u, 0x50607080u, 0x90a0b0c0u, 0xd0e0f000u);
+    clearTextureTaskDescPayload.recordHooks = GpuClearTextureTaskRecordHooks{
+        .context = &textureHooks,
+        .beforeClear = beforeTextureClear,
+        .afterClear = afterTextureClear,
+        .discarded = discardTextureClear,
+    };
+    clearTextureTaskDescPayload.acceptedToken = &clearTextureAcceptedToken;
+    const GpuTaskId clearTextureTask = graph.addClearTextureTask(clearTextureTaskDesc, clearTextureTaskDescPayload);
     const GpuTaskId clearDepthTextureTask = graph.addClearTextureTask(
         clearDepthTextureTaskDesc,
         GpuClearTextureTaskDesc{
@@ -3628,6 +3669,9 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
         nullptr,
         &commandIrCapture
     ));
+    EXPECT_EQ(textureHooks.beforeCount, 1u);
+    EXPECT_EQ(textureHooks.afterCount, 1u);
+    EXPECT_EQ(textureHooks.discardedCount, 0u);
     ASSERT_EQ(commandIrCapture.recordCount(), 3u);
     const GpuCommandIrBuiltinTaskRecord* const bufferCapture = commandIrCapture.recordAt(0u);
     const GpuCommandIrBuiltinTaskRecord* const textureCapture = commandIrCapture.recordAt(1u);
@@ -3679,6 +3723,163 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     for(usize wordIndex = 0u; wordIndex < 4u; ++wordIndex)
         EXPECT_EQ(clearedWords[wordIndex], 0xdecafbadU);
     device.unmapBuffer(buffer.get());
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTextureHooksDiscardOnPacketRecordFailure){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto texture = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UINT)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+    );
+    ASSERT_NE(texture.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId textureResource = graph.importTexture(
+        texture,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/clear_texture_hook_discard"))
+            .setMarkerLabel("Clear Texture Hook Discard")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(textureResource.valid());
+
+    struct HookState{
+        u32 beforeCount = 0u;
+        u32 afterCount = 0u;
+        u32 discardedCount = 0u;
+    } hooks;
+    const GpuClearTextureTaskRecordHook beforeClear = [](
+        void* const rawState,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(commandList);
+        static_cast<void>(context);
+        HookState* const state = static_cast<HookState*>(rawState);
+        if(!state)
+            return false;
+        ++state->beforeCount;
+        return true;
+    };
+    const GpuClearTextureTaskRecordHook afterClear = [](
+        void* const rawState,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    ){
+        static_cast<void>(commandList);
+        static_cast<void>(context);
+        HookState* const state = static_cast<HookState*>(rawState);
+        if(!state)
+            return false;
+        ++state->afterCount;
+        return true;
+    };
+    const GpuClearTextureTaskDiscardedHook discarded = [](void* const rawState){
+        HookState* const state = static_cast<HookState*>(rawState);
+        if(state)
+            ++state->discardedCount;
+    };
+
+    const GpuQueueRequest graphicsQueue{
+        GpuQueueCapability::Transfer,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint clearScheduling;
+    clearScheduling.cost = GpuTaskCostHint::Tiny;
+    clearScheduling.forceSubmissionBoundary = false;
+    clearScheduling.allowPacketMerge = true;
+    GpuTaskDesc clearDesc;
+    clearDesc
+        .setIdentity(Name("tests/descriptor_buffer/clear_texture_hook_discard_clear"))
+        .setMarkerLabel("Clear Texture Hook Discard Clear")
+        .setQueue(graphicsQueue)
+        .setScheduling(clearScheduling)
+    ;
+    GpuClearTextureTaskDesc clearTaskPayload;
+    clearTaskPayload.destination = textureResource;
+    clearTaskPayload.subresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
+    clearTaskPayload.valueType = GpuClearTextureTaskValueType::UInt;
+    clearTaskPayload.uintValue = UIntColor(0x12345678u);
+    clearTaskPayload.recordHooks = GpuClearTextureTaskRecordHooks{
+        .context = &hooks,
+        .beforeClear = beforeClear,
+        .afterClear = afterClear,
+        .discarded = discarded,
+    };
+    const GpuTaskId clearTask = graph.addClearTextureTask(clearDesc, clearTaskPayload);
+    ASSERT_TRUE(clearTask.valid());
+
+    bool shouldRecord = false;
+    bool retryTaskAttempted = false;
+    GpuTaskSchedulingHint retryScheduling = clearScheduling;
+    retryScheduling.mergeWithPrevious = true;
+    GpuTaskDesc retryDesc;
+    retryDesc
+        .setIdentity(Name("tests/descriptor_buffer/clear_texture_hook_discard_retry"))
+        .setMarkerLabel("Clear Texture Hook Discard Retry")
+        .setQueue(graphicsQueue)
+        .setScheduling(retryScheduling)
+        .setDependencies(&clearTask, 1u)
+    ;
+    const GpuTaskId retryTask = graph.addTask<NativePacketCaptureRetryTask>(
+        retryDesc,
+        NativePacketCaptureRetryTask::Payload{
+            .shouldRecord = &shouldRecord,
+            .attempted = &retryTaskAttempted,
+        }
+    );
+    ASSERT_TRUE(retryTask.valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/clear_texture_hook_discard_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    ASSERT_EQ(compiledGraph.packetCount(), 1u);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(clearTask);
+    ASSERT_TRUE(packet.valid());
+    EXPECT_EQ(compiledGraph.packetForTask(retryTask), packet);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    const GpuNativePacketRecorder recorder(device);
+    EXPECT_FALSE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = packet },
+        recordedGraph
+    ));
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    transaction.discardUnaccepted(graph, compiledGraph);
+    EXPECT_TRUE(retryTaskAttempted);
+    EXPECT_EQ(hooks.beforeCount, 1u);
+    EXPECT_EQ(hooks.afterCount, 1u);
+    EXPECT_EQ(hooks.discardedCount, 1u);
+    EXPECT_EQ(recordedGraph.find(packet), nullptr);
 }
 
 

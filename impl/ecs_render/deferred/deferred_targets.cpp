@@ -989,36 +989,6 @@ bool RendererDeferredSystem::createDeferredFrameTargets(const u32 width, const u
     return true;
 }
 
-void RendererDeferredSystem::clearDeferredTargets(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets
-){
-    NWB_ASSERT(targets.albedo);
-    NWB_ASSERT(targets.normal);
-    NWB_ASSERT(targets.worldPosition);
-    NWB_ASSERT(targets.opaqueColor);
-    NWB_ASSERT(targets.depth);
-
-    Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_DeferredClear, graphics().getDevice(), commandList);
-
-    // The graph-owned deferred-clear task lowers these CopyDest transitions before invoking this body. CSG interval
-    // targets retain their separate dynamic clear path after receiver work is gathered by the opaque task.
-
-    commandList.clearTextureFloat(targets.albedo.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
-    commandList.clearTextureFloat(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_GBufferNormalClearColor);
-    commandList.clearTextureFloat(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_GBufferWorldPositionClearColor);
-    commandList.clearTextureFloat(targets.opaqueColor.get(), ECSRenderDetail::s_FramebufferSubresources, ECSRenderDetail::s_ClearColor);
-
-    commandList.clearDepthStencilTexture(
-        targets.depth.get(),
-        ECSRenderDetail::s_FramebufferSubresources,
-        true,
-        Core::s_DepthClearValue,
-        false,
-        0
-    );
-}
-
 void RendererDeferredSystem::clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::Rect& csgClearRect){
     __hidden_deferred_targets::AssertCsgIntervalTargetsAvailable(targets);
 

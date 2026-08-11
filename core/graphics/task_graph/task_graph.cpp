@@ -341,7 +341,17 @@ struct ClearTextureTask{
             )
         )
             return false;
+        if(
+            payload.clearDesc.recordHooks.beforeClear
+            && !payload.clearDesc.recordHooks.beforeClear(
+                payload.clearDesc.recordHooks.context,
+                commandList,
+                context
+            )
+        )
+            return false;
 
+        bool clearRecorded = false;
         switch(payload.clearDesc.valueType){
         case GpuClearTextureTaskValueType::Float:
             commandList.clearTextureFloat(
@@ -349,21 +359,24 @@ struct ClearTextureTask{
                 payload.clearDesc.subresources,
                 payload.clearDesc.floatValue
             );
-            return true;
+            clearRecorded = true;
+            break;
         case GpuClearTextureTaskValueType::UInt:
             commandList.clearTextureUInt(
                 payload.destination.get(),
                 payload.clearDesc.subresources,
                 payload.clearDesc.uintValue
             );
-            return true;
+            clearRecorded = true;
+            break;
         case GpuClearTextureTaskValueType::Int:
             commandList.clearTextureInt(
                 payload.destination.get(),
                 payload.clearDesc.subresources,
                 payload.clearDesc.intValue
             );
-            return true;
+            clearRecorded = true;
+            break;
         case GpuClearTextureTaskValueType::DepthStencil:
             commandList.clearDepthStencilTexture(
                 payload.destination.get(),
@@ -373,15 +386,31 @@ struct ClearTextureTask{
                 payload.clearDesc.clearStencil,
                 payload.clearDesc.stencilValue
             );
-            return true;
+            clearRecorded = true;
+            break;
         default:
             return false;
         }
+        return clearRecorded
+            && (
+                !payload.clearDesc.recordHooks.afterClear
+                || payload.clearDesc.recordHooks.afterClear(
+                    payload.clearDesc.recordHooks.context,
+                    commandList,
+                    context
+                )
+            )
+        ;
     }
 
     static void accepted(Payload& payload, const QueueSubmissionToken& token){
         if(payload.clearDesc.acceptedToken)
             *payload.clearDesc.acceptedToken = token;
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.clearDesc.recordHooks.discarded)
+            payload.clearDesc.recordHooks.discarded(payload.clearDesc.recordHooks.context);
     }
 };
 
@@ -1025,7 +1054,7 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         payload,
         &RecordPayload<ClearTask>,
         &AcceptPayload<ClearTask>,
-        nullptr,
+        &DiscardPayload<ClearTask>,
         &DestroyPayload<ClearTask::Payload>
     );
     if(!task.valid())

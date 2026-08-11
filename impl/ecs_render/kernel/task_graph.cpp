@@ -340,32 +340,66 @@ struct SceneShadingSetupGraphTask{
 };
 
 
-// Deferred clear follows fully native setup. Its entry transitions are declaration-driven, so the recording body
-// contains only clear commands and timing.
-struct DeferredClearGraphTask{
-    struct Payload{
-        RendererSystem* renderer = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
-    };
+// Built-in clear tasks carry the actual CopyDest declarations and native commands. These hooks keep the semantic
+// deferred-clear measure inside the first/last clear operation, so FrontierSafe packetization cannot split a timer
+// endpoint away from the opaque-color clear's later asynchronous consumer.
+[[nodiscard]] static bool BeginDeferredClearTiming(
+    void* const rawState,
+    Core::CommandList& commandList,
+    const Core::GpuTaskRecordContext& context
+){
+    static_cast<void>(context);
+    DeferredClearTimingRecordState* const state = static_cast<DeferredClearTimingRecordState*>(rawState);
+    if(
+        !state
+        || !state->graphics
+        || !state->timing
+        || !state->timingTicket
+        || !*state->timingTicket
+        || *state->timing
+    )
+        return false;
 
-    [[nodiscard]] static bool record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    ){
-        static_cast<void>(context);
-        if(!payload.renderer || !payload.targets || !payload.timingTicket || !*payload.timingTicket)
-            return false;
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**state->timingTicket);
+    state->timing->emplace(
+        state->graphics->gpuTiming(),
+        RendererGpuTimingScope::s_DeferredClear,
+        state->graphics->getDevice(),
+        commandList
+    );
+    state->timing->value().finishMarker();
+    return true;
+}
 
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
-        payload.renderer->m_deferredSystem.clearDeferredTargets(
-            commandList,
-            *payload.targets
-        );
-        return true;
-    }
-};
+[[nodiscard]] static bool EndDeferredClearTiming(
+    void* const rawState,
+    Core::CommandList& commandList,
+    const Core::GpuTaskRecordContext& context
+){
+    static_cast<void>(context);
+    DeferredClearTimingRecordState* const state = static_cast<DeferredClearTimingRecordState*>(rawState);
+    if(
+        !state
+        || !state->timing
+        || !*state->timing
+        || !state->timingTicket
+        || !*state->timingTicket
+    )
+        return false;
+
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**state->timingTicket);
+    state->timing->value().finishTiming(commandList);
+    state->timing->reset();
+    return true;
+}
+
+static void DiscardDeferredClearTiming(void* const rawState){
+    DeferredClearTimingRecordState* const state = static_cast<DeferredClearTimingRecordState*>(rawState);
+    if(!state || !state->timing || !*state->timing)
+        return;
+    state->timing->value().discardTiming();
+    state->timing->reset();
+}
 
 
 // The opaque material draw ordering and CSG CPU frame data are captured while the graph is declared.  The paired
@@ -2014,6 +2048,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     const usize shadowTraceGeometryResourceCount,
     Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
+    Optional<Core::GpuTimingMeasure>& deferredClearTiming,
+    ECSRenderDetail::DeferredClearTimingRecordState& deferredClearTimingState,
     Core::GpuTimingSubmissionTicket** const timingTickets,
     const bool* const asyncPrefixTimingSpansOnePacket
 ){
@@ -2022,6 +2058,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
+    m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixTask = {};
@@ -2046,6 +2083,9 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         || !materialContextSlots.valid()
         || !timingTickets
         || !asyncPrefixTimingSpansOnePacket
+        || !deferredClearTimingState.graphics
+        || deferredClearTimingState.timing != &deferredClearTiming
+        || !deferredClearTimingState.timingTicket
         || (shadowTraceGeometryResourceCount != 0u && !shadowTraceGeometryResources)
     )
         return false;
@@ -2280,58 +2320,119 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         return false;
     }
 
-    {
-        Core::Alloc::ScratchArena clearResourceScratch(RendererArenaScope::s_TaskGraphArena);
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> clearResourceUses{ clearResourceScratch };
-        clearResourceUses.reserve(5u);
-        clearResourceUses.push_back(WriteTextureUse(
-            albedo,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::CopyDest
-        ));
-        clearResourceUses.push_back(WriteTextureUse(
-            normal,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::CopyDest
-        ));
-        clearResourceUses.push_back(WriteTextureUse(
-            worldPosition,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::CopyDest
-        ));
-        clearResourceUses.push_back(WriteTextureUse(
-            opaqueColor,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::CopyDest
-        ));
-        clearResourceUses.push_back(WriteTextureUse(
-            depth,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::CopyDest
-        ));
-        Core::GpuTaskSchedulingHint clearScheduling;
-        clearScheduling.cost = Core::GpuTaskCostHint::Tiny;
-        clearScheduling.forceSubmissionBoundary = false;
-        clearScheduling.allowPacketMerge = true;
-        clearScheduling.mergeWithPrevious = true;
+    // Built-in clears retain one declaration per target and record their exact native operation through the graph.
+    // Opaque color deliberately remains last: its post-clear timing endpoint stays inside the operation that owns the
+    // later Graphics-to-Compute handoff, so FrontierSafe packetization cannot split timing from the final clear.
+    Core::GpuTaskSchedulingHint clearScheduling;
+    clearScheduling.cost = Core::GpuTaskCostHint::Tiny;
+    clearScheduling.forceSubmissionBoundary = false;
+    clearScheduling.allowPacketMerge = true;
+    clearScheduling.mergeWithPrevious = true;
+    const auto makeClearDesc = [&clearScheduling](
+        const Name identity,
+        const AStringView markerLabel,
+        const Core::GpuTaskId* const dependency
+    ){
         Core::GpuTaskDesc clearDesc;
         clearDesc
-            .setIdentity(Name("render.graphics_prefix.deferred_clear"))
-            .setMarkerLabel("Deferred Clear")
-            .setQueue(GraphicsQueueRequest())
+            .setIdentity(identity)
+            .setMarkerLabel(markerLabel)
+            .setQueue(GraphicsUploadQueueRequest())
             .setScheduling(clearScheduling)
-            .setDependencies(&m_graphicsPrefixSceneShadingSetupTask, 1u)
-            .setResourceUses(clearResourceUses.data(), clearResourceUses.size())
+            .setDependencies(dependency, 1u)
         ;
-        m_graphicsPrefixDeferredClearTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::DeferredClearGraphTask>(
-            clearDesc,
-            ECSRenderDetail::DeferredClearGraphTask::Payload{
-                .renderer = this,
-                .targets = &deferredTargets,
-                .timingTicket = timingTicketSlot(PrefixTimingSlot::DeferredClear),
-            }
-        );
+        return clearDesc;
+    };
+    const Core::GpuClearTextureTaskRecordHooks deferredClearBeginHooks{
+        .context = &deferredClearTimingState,
+        .beforeClear = &ECSRenderDetail::BeginDeferredClearTiming,
+        .discarded = &ECSRenderDetail::DiscardDeferredClearTiming,
+    };
+    const Core::GpuClearTextureTaskRecordHooks deferredClearEndHooks{
+        .context = &deferredClearTimingState,
+        .afterClear = &ECSRenderDetail::EndDeferredClearTiming,
+        .discarded = &ECSRenderDetail::DiscardDeferredClearTiming,
+    };
+    const Core::GpuClearTextureTaskRecordHooks noDeferredClearHooks;
+    const auto makeFloatClearDesc = [](
+        const Core::GpuGraphResourceId destination,
+        const Core::Color& clearValue,
+        const Core::GpuClearTextureTaskRecordHooks& recordHooks
+    ){
+        Core::GpuClearTextureTaskDesc clearDesc;
+        clearDesc.destination = destination;
+        clearDesc.subresources = ECSRenderDetail::s_FramebufferSubresources;
+        clearDesc.valueType = Core::GpuClearTextureTaskValueType::Float;
+        clearDesc.floatValue = clearValue;
+        clearDesc.recordHooks = recordHooks;
+        return clearDesc;
+    };
+    const auto makeDepthClearDesc = [](const Core::GpuGraphResourceId destination){
+        Core::GpuClearTextureTaskDesc clearDesc;
+        clearDesc.destination = destination;
+        clearDesc.subresources = ECSRenderDetail::s_FramebufferSubresources;
+        clearDesc.valueType = Core::GpuClearTextureTaskValueType::DepthStencil;
+        clearDesc.depthValue = Core::s_DepthClearValue;
+        clearDesc.clearDepth = true;
+        return clearDesc;
+    };
+    Core::GpuTaskId deferredClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
+        makeClearDesc(
+            Name("render.graphics_prefix.deferred_clear_albedo"),
+            "Deferred Clear Albedo",
+            &m_graphicsPrefixSceneShadingSetupTask
+        ),
+        makeFloatClearDesc(albedo, ECSRenderDetail::s_ClearColor, deferredClearBeginHooks)
+    );
+    if(!deferredClearTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred albedo clear"));
+        return false;
     }
+    m_graphicsPrefixDeferredClearFirstTask = deferredClearTask;
+    deferredClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
+        makeClearDesc(
+            Name("render.graphics_prefix.deferred_clear_normal"),
+            "Deferred Clear Normal",
+            &deferredClearTask
+        ),
+        makeFloatClearDesc(normal, ECSRenderDetail::s_GBufferNormalClearColor, noDeferredClearHooks)
+    );
+    if(!deferredClearTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred normal clear"));
+        return false;
+    }
+    deferredClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
+        makeClearDesc(
+            Name("render.graphics_prefix.deferred_clear_world_position"),
+            "Deferred Clear World Position",
+            &deferredClearTask
+        ),
+        makeFloatClearDesc(worldPosition, ECSRenderDetail::s_GBufferWorldPositionClearColor, noDeferredClearHooks)
+    );
+    if(!deferredClearTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred world-position clear"));
+        return false;
+    }
+    deferredClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
+        makeClearDesc(
+            Name("render.graphics_prefix.deferred_clear_depth"),
+            "Deferred Clear Depth",
+            &deferredClearTask
+        ),
+        makeDepthClearDesc(depth)
+    );
+    if(!deferredClearTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred depth clear"));
+        return false;
+    }
+    m_graphicsPrefixDeferredClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
+        makeClearDesc(
+            Name("render.graphics_prefix.deferred_clear_opaque_color"),
+            "Deferred Clear Opaque Color",
+            &deferredClearTask
+        ),
+        makeFloatClearDesc(opaqueColor, ECSRenderDetail::s_ClearColor, deferredClearEndHooks)
+    );
     if(!m_graphicsPrefixDeferredClearTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-clear task"));
         return false;
@@ -3607,6 +3708,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::Framebuffer* const presentationFramebuffer,
     Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
+    Optional<Core::GpuTimingMeasure>& deferredClearTiming,
+    ECSRenderDetail::DeferredClearTimingRecordState& deferredClearTimingState,
     Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
     Core::GpuTimingSubmissionTicket** const graphicsPrefixTimingTickets,
     const bool* const asyncPrefixTimingSpansOnePacket,
@@ -3641,6 +3744,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredShadowPrepareTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
+    m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixTask = {};
@@ -4201,6 +4305,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         traceGeometryResources.size(),
         frameTimingTransaction,
         asyncPrefixTiming,
+        deferredClearTiming,
+        deferredClearTimingState,
         graphicsPrefixTimingTickets,
         asyncPrefixTimingSpansOnePacket
     )){

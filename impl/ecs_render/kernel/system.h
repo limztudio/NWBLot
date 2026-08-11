@@ -81,7 +81,11 @@ namespace ECSRenderDetail{
     struct MeshViewSetupGraphTask;
     struct MeshViewUploadCommitGraphTask;
     struct SceneShadingSetupGraphTask;
-    struct DeferredClearGraphTask;
+    struct DeferredClearTimingRecordState{
+        Core::Graphics* graphics = nullptr;
+        Optional<Core::GpuTimingMeasure>* timing = nullptr;
+        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
+    };
     struct GbufferGraphTask;
 };
 
@@ -100,7 +104,6 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend struct ECSRenderDetail::MeshViewSetupGraphTask;
     friend struct ECSRenderDetail::MeshViewUploadCommitGraphTask;
     friend struct ECSRenderDetail::SceneShadingSetupGraphTask;
-    friend struct ECSRenderDetail::DeferredClearGraphTask;
     friend struct ECSRenderDetail::GbufferGraphTask;
 
 private:
@@ -203,6 +206,8 @@ private:
         usize shadowTraceGeometryResourceCount,
         Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
+        Optional<Core::GpuTimingMeasure>& deferredClearTiming,
+        ECSRenderDetail::DeferredClearTimingRecordState& deferredClearTimingState,
         Core::GpuTimingSubmissionTicket** timingTickets,
         const bool* asyncPrefixTimingSpansOnePacket
     );
@@ -263,6 +268,8 @@ private:
         Core::Framebuffer* presentationFramebuffer,
         Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
+        Optional<Core::GpuTimingMeasure>& deferredClearTiming,
+        ECSRenderDetail::DeferredClearTimingRecordState& deferredClearTimingState,
         Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
         Core::GpuTimingSubmissionTicket** graphicsPrefixTimingTickets,
         const bool* asyncPrefixTimingSpansOnePacket,
@@ -344,6 +351,9 @@ private:
     Core::GpuTaskId m_deferredShadowPrepareTask;
     Core::GpuTaskId m_graphicsPrefixMeshViewSetupTask;
     Core::GpuTaskId m_graphicsPrefixSceneShadingSetupTask;
+    // The timer begins inside this first built-in clear and ends inside the terminal opaque-color clear below.
+    // Both IDs must compile into one Graphics packet before recording.
+    Core::GpuTaskId m_graphicsPrefixDeferredClearFirstTask;
     Core::GpuTaskId m_graphicsPrefixDeferredClearTask;
     Core::GpuTaskId m_graphicsPrefixGbufferTask;
     Core::GpuTaskId m_graphicsPrefixTask;

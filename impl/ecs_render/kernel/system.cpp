@@ -221,6 +221,7 @@ void RendererSystem::invalidateResources(){
     m_deferredShadowPrepareTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
+    m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixTask = {};
@@ -473,6 +474,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
+    m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixGbufferTask = {};
     m_graphicsPrefixTask = {};
@@ -728,6 +730,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // keeps those endpoints in one native submission.
     bool asyncPrefixTimingSpansOnePacket = true;
     Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
+    Optional<Core::GpuTimingMeasure> deferredClearTiming;
+    ECSRenderDetail::DeferredClearTimingRecordState deferredClearTimingState{
+        .graphics = &m_graphics,
+        .timing = &deferredClearTiming,
+        .timingTicket = &graphicsPrefixTimingTickets[static_cast<usize>(
+            ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::DeferredClear
+        )],
+    };
     Core::GpuTimingSubmissionTicket shadowVisibilityTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket softwareCausticsTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket surfelGiTimingTicket(m_graphics.gpuTiming());
@@ -759,6 +769,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         framebuffer,
         frameTimingTransaction,
         asyncPrefixTiming,
+        deferredClearTiming,
+        deferredClearTimingState,
         shadowPrepareTimingTicket,
         graphicsPrefixTimingTickets,
         &asyncPrefixTimingSpansOnePacket,
@@ -790,6 +802,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             framebuffer,
             frameTimingTransaction,
             asyncPrefixTiming,
+            deferredClearTiming,
+            deferredClearTimingState,
             shadowPrepareTimingTicket,
             graphicsPrefixTimingTickets,
             &asyncPrefixTimingSpansOnePacket,
@@ -938,6 +952,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixSceneShadingSetupTask);
     const Core::GpuSubmissionPacketId graphicsPrefixDeferredClearPacket =
         m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixDeferredClearTask);
+    const Core::GpuSubmissionPacketId graphicsPrefixDeferredClearFirstPacket =
+        m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixDeferredClearFirstTask);
     const Core::GpuSubmissionPacketId graphicsPrefixGbufferPacket =
         m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixGbufferTask);
     const Core::GpuSubmissionPacketId graphicsPrefixTaskPackets[graphicsPrefixTimingTicketCount] = {
@@ -1007,6 +1023,22 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ;
         graphicsPrefixPacketsAreGraphics = queue && queue->queueClass == Core::CommandQueue::Graphics;
     }
+    // The deferred-clear measure begins and ends inside the first and terminal typed clear tasks.  The terminal
+    // clear owns the later asynchronous handoff, so do not record unless the entire bracket is one Graphics packet.
+    const Core::GpuPhysicalQueueInfo* const graphicsPrefixDeferredClearQueue =
+        graphicsPrefixDeferredClearPacket.valid()
+            ? m_deferredLightingCompiledGraph.queueInfo(
+                m_deferredLightingCompiledGraph.packet(graphicsPrefixDeferredClearPacket).queue
+            )
+            : nullptr
+    ;
+    const bool graphicsPrefixDeferredClearBundleMerged =
+        graphicsPrefixDeferredClearFirstPacket.valid()
+        && graphicsPrefixDeferredClearPacket.valid()
+        && graphicsPrefixDeferredClearFirstPacket == graphicsPrefixDeferredClearPacket
+        && graphicsPrefixDeferredClearQueue
+        && graphicsPrefixDeferredClearQueue->queueClass == Core::CommandQueue::Graphics
+    ;
     const Core::GpuPhysicalQueueInfo* const shadowPrepareQueue = shadowPreparePacket.valid()
         ? m_deferredLightingCompiledGraph.queueInfo(
             m_deferredLightingCompiledGraph.packet(shadowPreparePacket).queue
@@ -1318,16 +1350,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || shadowPrepareQueue->queueClass != Core::CommandQueue::Graphics
         || !m_graphicsPrefixMeshViewSetupTask.valid()
         || !m_graphicsPrefixSceneShadingSetupTask.valid()
+        || !m_graphicsPrefixDeferredClearFirstTask.valid()
         || !m_graphicsPrefixDeferredClearTask.valid()
         || !m_graphicsPrefixGbufferTask.valid()
         || !m_graphicsPrefixTask.valid()
         || !graphicsPrefixMeshViewSetupPacket.valid()
         || !graphicsPrefixSceneShadingSetupPacket.valid()
+        || !graphicsPrefixDeferredClearFirstPacket.valid()
         || !graphicsPrefixDeferredClearPacket.valid()
         || !graphicsPrefixGbufferPacket.valid()
         || !graphicsPrefixPacket.valid()
         || !graphicsPrefixTimingBindingsValid
         || !graphicsPrefixPacketsAreGraphics
+        || !graphicsPrefixDeferredClearBundleMerged
         || !graphicsPrefixQueue
         || graphicsPrefixQueue->queueClass != Core::CommandQueue::Graphics
         || !m_deferredShadowVisibilityTask.valid()
@@ -1542,6 +1577,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             asyncPrefixTiming->discardTiming();
             asyncPrefixTiming.reset();
         }
+        if(deferredClearTiming){
+            deferredClearTiming->discardTiming();
+            deferredClearTiming.reset();
+        }
         if(asyncFinalTiming){
             asyncFinalTiming->discardTiming();
             asyncFinalTiming.reset();
@@ -1647,12 +1686,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingTaskGraphValid
         && m_graphicsPrefixMeshViewSetupTask.valid()
         && m_graphicsPrefixSceneShadingSetupTask.valid()
+        && m_graphicsPrefixDeferredClearFirstTask.valid()
         && m_graphicsPrefixDeferredClearTask.valid()
         && m_graphicsPrefixGbufferTask.valid()
         && m_graphicsPrefixTask.valid()
         && m_deferredShadowPrepareTask.valid()
         && shadowPreparePacket.valid()
         && graphicsPrefixPacket.valid()
+        && graphicsPrefixDeferredClearBundleMerged
         && deferredRecorder.recordPacketRangeInReadyFrontiers(
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph,
@@ -1935,10 +1976,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredLightingTaskGraphValid
         && m_graphicsPrefixMeshViewSetupTask.valid()
         && m_graphicsPrefixSceneShadingSetupTask.valid()
+        && m_graphicsPrefixDeferredClearFirstTask.valid()
         && m_graphicsPrefixDeferredClearTask.valid()
         && m_graphicsPrefixGbufferTask.valid()
         && m_graphicsPrefixTask.valid()
         && graphicsPrefixPacket.valid()
+        && graphicsPrefixDeferredClearBundleMerged
         && m_deferredShadowVisibilityTask.valid()
         && shadowVisibilityPacket.valid()
         && (hardwareShadowSupported || (
@@ -2820,6 +2863,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredShadowPrepareTask.valid()
             && m_graphicsPrefixMeshViewSetupTask.valid()
             && m_graphicsPrefixSceneShadingSetupTask.valid()
+            && m_graphicsPrefixDeferredClearFirstTask.valid()
             && m_graphicsPrefixDeferredClearTask.valid()
             && m_graphicsPrefixGbufferTask.valid()
             && m_graphicsPrefixTask.valid()
@@ -2831,6 +2875,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && shadowMaterialContextUploadsMergedIntoShadowPreparePacket
             && sceneBvhUploadsMergedIntoShadowPreparePacket
             && graphicsPrefixPacket.valid()
+            && graphicsPrefixDeferredClearBundleMerged
             && graphicsPrefixWorkPacketRange.valid()
             && shadowPrepareThroughPrefixPacketRange.valid()
             && shadowPreparePrefixTimingTicketsValid

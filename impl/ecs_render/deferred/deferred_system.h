@@ -78,7 +78,6 @@ public:
     [[nodiscard]] bool createDeferredPresentPipeline(Core::Framebuffer* presentationFramebuffer);
     void resetAvboitFrameTargets(AvboitFrameTargets& targets);
     void resetDeferredFrameTargets();
-    void clearDeferredTargets(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void clearCsgIntervalTargets(Core::CommandList& commandList, DeferredFrameTargets& targets, const Core::Rect& csgClearRect);
     [[nodiscard]] Core::GpuTaskId declareDeferredCompositeTask(
         Core::GpuTaskGraph& graph,

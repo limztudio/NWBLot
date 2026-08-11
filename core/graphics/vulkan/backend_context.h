@@ -69,6 +69,13 @@ private:
     };
     using SemaphoreVector = GraphicsVector<VkSemaphore>;
 
+    enum class FramePresentationSignalState : u8{
+        Idle,
+        Claimed,
+        Queued,
+        Accepted,
+    };
+
 
 private:
     static constexpr StringView s_EnabledInstanceExts[] = {
@@ -158,6 +165,14 @@ public:
     void resizeSwapChain();
     bool beginFrame(const BackBufferResizeCallbacks& callbacks);
     bool present();
+    // Claims the acquired image's completion semaphore for one exact graph packet. A null hook leaves the
+    // compatibility empty-submit path in present() active.
+    [[nodiscard]] QueueSubmissionPreSubmitHook claimFramePresentationSignal()noexcept;
+    // The renderer confirms only the terminal packet token accepted by the graph submission transaction.
+    [[nodiscard]] bool confirmFramePresentationSignal(const QueueSubmissionToken& token)noexcept;
+    // A hook that reached a rejected or abandoned submission cannot be reused blindly; retire that binary signal
+    // before the next frame instead of allowing it to leak into another present.
+    void cancelFramePresentationSignal()noexcept;
     void reportLiveObjects()const{}
 
 private:
@@ -173,6 +188,17 @@ private:
     void clearSemaphores(SemaphoreVector& semaphores);
     bool recreateSemaphores(SemaphoreVector& semaphores, usize count, AStringView operationName);
     [[nodiscard]] bool createFrameSyncQueries();
+    [[nodiscard]] static bool PrepareFramePresentationSignal(
+        void* context,
+        const GpuPhysicalQueueId& executionQueue,
+        QueueSubmissionNativeSignal& outSignal
+    );
+    [[nodiscard]] bool prepareFramePresentationSignal(
+        const GpuPhysicalQueueId& executionQueue,
+        QueueSubmissionNativeSignal& outSignal
+    )noexcept;
+    void replaceFramePresentationSemaphoreAfterIdle()noexcept;
+    void resetFramePresentationSignal()noexcept;
 
 
 private:
@@ -216,6 +242,12 @@ private:
 
     SemaphoreVector m_acquireSemaphores;
     SemaphoreVector m_presentSemaphores;
+
+    VkSemaphore m_framePresentationSemaphore = VK_NULL_HANDLE;
+    GpuPhysicalQueueId m_framePresentationQueue;
+    u32 m_framePresentationSwapChainIndex = Limit<u32>::s_Max;
+    FramePresentationSignalState m_framePresentationSignalState = FramePresentationSignalState::Idle;
+    bool m_frameAcquired = false;
 
     ::Queue<EventQueryHandle, Alloc::GlobalArena> m_framesInFlight;
     Vector<EventQueryHandle, Alloc::GlobalArena> m_queryPool;

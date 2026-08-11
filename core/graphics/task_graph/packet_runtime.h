@@ -175,6 +175,14 @@ struct GpuTaskGraphPacketTimingTicket{
     GpuTimingSubmissionTicket* timingTicket = nullptr;
 };
 
+// Associates one packet with a native pre-submit hook. The graph still owns packet routing and all timeline waits;
+// this narrow escape hatch is for one-shot native signals such as the swap-chain binary semaphore that must be
+// emitted by the terminal presentation packet itself.
+struct GpuTaskGraphPacketSubmissionHook{
+    GpuSubmissionPacketId packet;
+    QueueSubmissionPreSubmitHook hook;
+};
+
 
 // Runs immediately after a packet accepts its submission token. Returning false stops the current range traversal,
 // but retains the accepted packet so the caller can submit an appropriate recovery or finalization tail.
@@ -259,7 +267,8 @@ public:
         usize externalCompletionTokenCount,
         GpuGraphSubmissionTransaction& transaction,
         Alloc::ScratchArena& scratchArena,
-        GpuTimingSubmissionTicket* timingTicket = nullptr
+        GpuTimingSubmissionTicket* timingTicket = nullptr,
+        const QueueSubmissionPreSubmitHook* preSubmitHook = nullptr
     )const;
     // Submits one compiler-derived non-empty contiguous range. Dependencies outside the range must already be
     // accepted in the transaction; this preserves graph-owned waits while allowing intentional late tails. An
@@ -276,7 +285,9 @@ public:
         GpuGraphSubmissionTransaction& transaction,
         Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
-        const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr
+        const GpuTaskGraphPacketAcceptedCallback* acceptedCallback = nullptr,
+        const GpuTaskGraphPacketSubmissionHook* submissionHooks = nullptr,
+        usize submissionHookCount = 0u
     )const;
 private:
     Device& m_device;

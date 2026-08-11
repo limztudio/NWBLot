@@ -2056,7 +2056,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 .timingTicket = &deferredPresentTimingTicket,
             },
         };
-        const bool deferredPresentationAccepted =
+        const bool terminalPresentationReady =
             m_deferredLightingTaskGraphValid
             && m_deferredPresentTask.valid()
             && m_deferredSurfelGiTask.valid()
@@ -2066,6 +2066,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && terminalPresentationPacket.valid()
             && terminalPresentationPacketRange.valid()
             && terminalPresentationPacketRange.packetCount >= LengthOf(deferredPresentTimingTickets)
+        ;
+        // BackendContext turns this into a submission-local binary signal only when a swap-chain image is active.
+        // Empty hooks retain the compatibility present() path for non-windowed/direct render callers.
+        const Core::QueueSubmissionPreSubmitHook framePresentationSignal = terminalPresentationReady
+            ? m_graphics.claimFramePresentationSignal()
+            : Core::QueueSubmissionPreSubmitHook{}
+        ;
+        const Core::GpuTaskGraphPacketSubmissionHook terminalPresentationSubmissionHooks[] = {
+            Core::GpuTaskGraphPacketSubmissionHook{
+                .packet = terminalPresentationPacket,
+                .hook = framePresentationSignal,
+            },
+        };
+        const bool deferredPresentationAccepted =
+            terminalPresentationReady
             && deferredPresentSubmitter.submitPacketRangeInCompileOrder(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
@@ -2076,7 +2091,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 deferredPresentTimingTickets,
                 LengthOf(deferredPresentTimingTickets),
                 m_deferredLightingSubmissionTransaction,
-                presentScratchArena
+                presentScratchArena,
+                nullptr,
+                nullptr,
+                framePresentationSignal.valid() ? terminalPresentationSubmissionHooks : nullptr,
+                framePresentationSignal.valid() ? LengthOf(terminalPresentationSubmissionHooks) : 0u
             )
         ;
         finalPresentationSubmissionToken = deferredPresentationAccepted
@@ -2084,11 +2103,28 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             : Core::QueueSubmissionToken{}
         ;
         if(!finalPresentationSubmissionToken.valid()){
+            if(framePresentationSignal.valid())
+                m_graphics.cancelFramePresentationSignal();
             const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardTimingTickets();
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: graph-owned deferred presentation submission was rejected"));
             if(!recovered)
                 failFrameRenderRecovery();
+            return false;
+        }
+        if(
+            framePresentationSignal.valid()
+            && !m_graphics.confirmFramePresentationSignal(finalPresentationSubmissionToken)
+        ){
+            // A terminal packet reached a queue but its native present signal did not retain matching physical
+            // identity. Do not let present() fall back to a potentially unordered broad-Graphics submit.
+            m_graphics.cancelFramePresentationSignal();
+            const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
+            discardTimingTickets();
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: terminal graph presentation signal confirmation failed"));
+            if(!recovered)
+                failFrameRenderRecovery();
+            failFrameRenderRecovery();
             return false;
         }
         if(!frameTimingTransaction.confirmEndSubmission(true)){

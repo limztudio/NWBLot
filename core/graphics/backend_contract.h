@@ -29,7 +29,8 @@ concept BackendApi = requires(
     const T& constBackend,
     GraphicsVector<AdapterInfo>& adapters,
     const BackBufferResizeCallbacks& callbacks,
-    const Common::FrameParam& frameParam
+    const Common::FrameParam& frameParam,
+    const QueueSubmissionToken& submissionToken
 ){
     { constBackend.getDevice() }->SameAs<GraphicsBackend::Device*>;
     { constBackend.getRendererString() }->SameAs<const tchar*>;
@@ -48,6 +49,9 @@ concept BackendApi = requires(
     backend.destroy();
     backend.resizeSwapChain();
     { backend.beginFrame(callbacks) }->SameAs<bool>;
+    { backend.claimFramePresentationSignal() }->SameAs<QueueSubmissionPreSubmitHook>;
+    { backend.confirmFramePresentationSignal(submissionToken) }->SameAs<bool>;
+    backend.cancelFramePresentationSignal();
     { backend.present() }->SameAs<bool>;
     backend.reportLiveObjects();
 };

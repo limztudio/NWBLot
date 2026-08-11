@@ -80,6 +80,14 @@ static const char* GpuCrashAvailabilityText(const bool available){
     return available ? "available" : "unavailable";
 }
 
+[[nodiscard]] static VkSemaphore DecodeSubmissionNativeSemaphore(const Object& semaphore)noexcept{
+#if VK_USE_64_BIT_PTR_DEFINES
+    return static_cast<VkSemaphore>(semaphore.pointer);
+#else
+    return static_cast<VkSemaphore>(semaphore.integer);
+#endif
+}
+
 
 static bool MountPipelineCacheVolume(
     const Path& directory,
@@ -1112,13 +1120,44 @@ QueueSubmissionToken Device::executeCommandLists(
         }
     }
 
+    // The hook runs only after this submission's queue and timeline waits validate. Its native signal is passed as
+    // submission-local data into Queue::submit, so a concurrent submit cannot consume the presentation semaphore.
+    Queue::SubmissionSignal hookSignal = {};
+    const Queue::SubmissionSignal* localSignals = nullptr;
+    usize localSignalCount = 0u;
+    if(submitDesc.preSubmitHook.valid()){
+        QueueSubmissionNativeSignal nativeSignal;
+        if(
+            !submitDesc.preSubmitHook.invoke(
+                submitDesc.preSubmitHook.context,
+                executionQueue,
+                nativeSignal
+            )
+            || !nativeSignal.valid()
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to prepare exact queue submission hook"));
+            return {};
+        }
+
+        hookSignal.semaphore = VulkanDetail::DecodeSubmissionNativeSemaphore(nativeSignal.semaphore);
+        hookSignal.value = nativeSignal.value;
+        if(hookSignal.semaphore == VK_NULL_HANDLE){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exact queue submission hook returned an invalid native semaphore"));
+            return {};
+        }
+        localSignals = &hookSignal;
+        localSignalCount = 1u;
+    }
+
     bool submissionAccepted = false;
     const u64 submittedID = queue->submit(
         pCommandLists,
         numCommandLists,
         localWaits.empty() ? nullptr : localWaits.data(),
         localWaits.size(),
-        &submissionAccepted
+        &submissionAccepted,
+        localSignals,
+        localSignalCount
     );
 
     if(!submittedOwners.empty()){

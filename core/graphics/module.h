@@ -161,6 +161,12 @@ public:
     void addRenderPassToBack(IRenderPass& pass);
     void removeRenderPass(IRenderPass& pass);
 
+    // The deferred graph claims the current swap-chain binary semaphore and attaches it to its exact terminal
+    // packet. Direct/non-graph render paths receive an empty hook and retain BackendContext::present()'s fallback.
+    [[nodiscard]] QueueSubmissionPreSubmitHook claimFramePresentationSignal()noexcept;
+    [[nodiscard]] bool confirmFramePresentationSignal(const QueueSubmissionToken& token)noexcept;
+    void cancelFramePresentationSignal()noexcept;
+
     // Optional overlays register here instead of coupling a renderer directly to their module. The active
     // contributor may append one final Graphics packet to a renderer-owned task graph before presentation.
     void setTaskGraphPresentationContributor(IGpuTaskGraphPresentationContributor* contributor)noexcept{

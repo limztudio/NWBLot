@@ -684,6 +684,19 @@ bool Graphics::getSelectedAdapterInfo(AdapterInfo& outAdapter)const{
     return m_backend->getSelectedAdapterInfo(outAdapter);
 }
 
+QueueSubmissionPreSubmitHook Graphics::claimFramePresentationSignal()noexcept{
+    return m_backend ? m_backend->claimFramePresentationSignal() : QueueSubmissionPreSubmitHook{};
+}
+
+bool Graphics::confirmFramePresentationSignal(const QueueSubmissionToken& token)noexcept{
+    return m_backend && m_backend->confirmFramePresentationSignal(token);
+}
+
+void Graphics::cancelFramePresentationSignal()noexcept{
+    if(m_backend)
+        m_backend->cancelFramePresentationSignal();
+}
+
 void Graphics::addRenderPassToFront(IRenderPass& pass){
     m_renderPasses.remove(&pass);
     m_renderPasses.push_front(&pass);

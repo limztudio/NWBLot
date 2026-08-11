@@ -755,13 +755,19 @@ public:
         VkSemaphore semaphore = VK_NULL_HANDLE;
         u64 value = 0u;
     };
+    struct SubmissionSignal{
+        VkSemaphore semaphore = VK_NULL_HANDLE;
+        u64 value = 0u;
+    };
 
     u64 submit(
         CommandList* const* ppCmd,
         usize numCmd,
         const SubmissionWait* localWaits = nullptr,
         usize localWaitCount = 0u,
-        bool* outSubmissionAccepted = nullptr
+        bool* outSubmissionAccepted = nullptr,
+        const SubmissionSignal* localSignals = nullptr,
+        usize localSignalCount = 0u
     );
     void updateLastFinishedID();
 

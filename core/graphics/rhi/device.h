@@ -90,15 +90,47 @@ struct QueueSubmissionToken{
     }
 };
 
+// One opaque native binary semaphore signal contributed by a submission-local hook. `Object` avoids exposing a
+// backend handle type to graph code; only the native Device that owns the exact queue may decode it. This is narrow
+// by design: swap-chain presentation requires one binary signal, while timeline dependencies remain token based.
+struct QueueSubmissionNativeSignal{
+    Object semaphore = Object(u64{0u});
+    u64 value = 0u;
+
+    [[nodiscard]] constexpr bool valid()const noexcept{ return semaphore.integer != 0u; }
+};
+
+// Called immediately before one validated native submission reaches its selected physical queue. It returns an
+// opaque binary signal that Device attaches directly to that submission, rather than appending it to a queue-global
+// pending list where another concurrent submit could consume it. A callback may retain the identity only to verify
+// the immediately returned completion token; it must not use it to route later submissions.
+using QueueSubmissionPreSubmitCallback = bool(*) (
+    void* context,
+    const GpuPhysicalQueueId& executionQueue,
+    QueueSubmissionNativeSignal& outSignal
+);
+
+struct QueueSubmissionPreSubmitHook{
+    void* context = nullptr;
+    QueueSubmissionPreSubmitCallback invoke = nullptr;
+
+    [[nodiscard]] constexpr bool valid()const noexcept{ return invoke != nullptr; }
+};
+
 // Submission-local cross-queue dependencies. Same-queue tokens collapse to normal queue order; distinct queue
 // tokens become timeline waits on the consuming submission. The caller owns the token array until submit returns.
 struct QueueSubmissionDesc{
     const QueueSubmissionToken* waitTokens = nullptr;
     usize waitTokenCount = 0;
+    QueueSubmissionPreSubmitHook preSubmitHook;
 
     constexpr QueueSubmissionDesc& setWaitTokens(const QueueSubmissionToken* value, usize count){
         waitTokens = value;
         waitTokenCount = count;
+        return *this;
+    }
+    constexpr QueueSubmissionDesc& setPreSubmitHook(const QueueSubmissionPreSubmitHook value){
+        preSubmitHook = value;
         return *this;
     }
 };

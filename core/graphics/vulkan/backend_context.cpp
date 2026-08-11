@@ -490,6 +490,146 @@ Texture* BackendContext::getBackBuffer(u32 index)const{
     return nullptr;
 }
 
+QueueSubmissionPreSubmitHook BackendContext::claimFramePresentationSignal()noexcept{
+    if(
+        !m_rhiDevice
+        || !m_frameAcquired
+        || m_framePresentationSignalState != FramePresentationSignalState::Idle
+        || !m_swapChain
+        || m_swapChainIndex >= m_presentSemaphores.size()
+    )
+        return {};
+
+    const VkSemaphore semaphore = m_presentSemaphores[m_swapChainIndex];
+    if(semaphore == VK_NULL_HANDLE)
+        return {};
+
+    m_framePresentationSemaphore = semaphore;
+    m_framePresentationSwapChainIndex = m_swapChainIndex;
+    m_framePresentationQueue = {};
+    m_framePresentationSignalState = FramePresentationSignalState::Claimed;
+    return QueueSubmissionPreSubmitHook{
+        .context = this,
+        .invoke = &BackendContext::PrepareFramePresentationSignal,
+    };
+}
+
+bool BackendContext::PrepareFramePresentationSignal(
+    void* const context,
+    const GpuPhysicalQueueId& executionQueue,
+    QueueSubmissionNativeSignal& outSignal
+){
+    if(!context)
+        return false;
+    return static_cast<BackendContext*>(context)->prepareFramePresentationSignal(executionQueue, outSignal);
+}
+
+bool BackendContext::prepareFramePresentationSignal(
+    const GpuPhysicalQueueId& executionQueue,
+    QueueSubmissionNativeSignal& outSignal
+)noexcept{
+    outSignal = {};
+    if(
+        !m_rhiDevice
+        || !m_frameAcquired
+        || m_framePresentationSignalState != FramePresentationSignalState::Claimed
+        || !executionQueue.valid()
+        || !m_swapChain
+        || m_framePresentationSemaphore == VK_NULL_HANDLE
+        || m_framePresentationSwapChainIndex != m_swapChainIndex
+        || m_swapChainIndex >= m_presentSemaphores.size()
+        || m_presentSemaphores[m_swapChainIndex] != m_framePresentationSemaphore
+    )
+        return false;
+
+    const GpuPhysicalQueueInfo* const queueInfo = m_rhiDevice->getPhysicalQueueInfo(executionQueue);
+    if(!queueInfo || queueInfo->queueClass != CommandQueue::Graphics)
+        return false;
+
+#if VK_USE_64_BIT_PTR_DEFINES
+    outSignal.semaphore = Object(static_cast<void*>(m_framePresentationSemaphore));
+#else
+    outSignal.semaphore = Object(static_cast<u64>(m_framePresentationSemaphore));
+#endif
+    outSignal.value = 0u;
+    if(!outSignal.valid())
+        return false;
+
+    m_framePresentationQueue = executionQueue;
+    m_framePresentationSignalState = FramePresentationSignalState::Queued;
+    return true;
+}
+
+bool BackendContext::confirmFramePresentationSignal(const QueueSubmissionToken& token)noexcept{
+    if(
+        !m_rhiDevice
+        || !m_frameAcquired
+        || m_framePresentationSignalState != FramePresentationSignalState::Queued
+        || !token.valid()
+        || token.queue != CommandQueue::Graphics
+        || !token.matchesPhysicalQueue(
+            m_framePresentationQueue.index,
+            m_framePresentationQueue.deviceGeneration
+        )
+        || m_framePresentationSwapChainIndex != m_swapChainIndex
+        || m_swapChainIndex >= m_presentSemaphores.size()
+        || m_presentSemaphores[m_swapChainIndex] != m_framePresentationSemaphore
+    )
+        return false;
+
+    const GpuPhysicalQueueInfo* const queueInfo = m_rhiDevice->getPhysicalQueueInfo(m_framePresentationQueue);
+    if(!queueInfo || queueInfo->queueClass != CommandQueue::Graphics)
+        return false;
+
+    m_framePresentationSignalState = FramePresentationSignalState::Accepted;
+    return true;
+}
+
+void BackendContext::replaceFramePresentationSemaphoreAfterIdle()noexcept{
+    if(
+        !m_vulkanDevice
+        || m_framePresentationSemaphore == VK_NULL_HANDLE
+        || m_framePresentationSwapChainIndex >= m_presentSemaphores.size()
+        || m_presentSemaphores[m_framePresentationSwapChainIndex] != m_framePresentationSemaphore
+    )
+        return;
+
+    VkSemaphoreCreateInfo createInfo = {};
+    createInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    VkSemaphore replacement = VK_NULL_HANDLE;
+    const VkResult result = vkCreateSemaphore(m_vulkanDevice, &createInfo, nullptr, &replacement);
+    if(result != VK_SUCCESS){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to replace an abandoned presentation semaphore. {}"), ResultToString(result));
+        return;
+    }
+
+    vkDestroySemaphore(m_vulkanDevice, m_framePresentationSemaphore, nullptr);
+    m_presentSemaphores[m_framePresentationSwapChainIndex] = replacement;
+}
+
+void BackendContext::resetFramePresentationSignal()noexcept{
+    m_framePresentationSemaphore = VK_NULL_HANDLE;
+    m_framePresentationQueue = {};
+    m_framePresentationSwapChainIndex = Limit<u32>::s_Max;
+    m_framePresentationSignalState = FramePresentationSignalState::Idle;
+}
+
+void BackendContext::cancelFramePresentationSignal()noexcept{
+    if(m_framePresentationSignalState == FramePresentationSignalState::Idle)
+        return;
+
+    if(m_framePresentationSignalState == FramePresentationSignalState::Claimed){
+        resetFramePresentationSignal();
+        return;
+    }
+
+    // The callback runs before the Vulkan submit returns. If graph acceptance then fails, Queued may still have
+    // reached the driver, so wait and replace the binary semaphore rather than risking a second signal on it.
+    if(m_rhiDevice && m_rhiDevice->waitForIdle())
+        replaceFramePresentationSemaphoreAfterIdle();
+    resetFramePresentationSignal();
+}
+
 void BackendContext::clearSemaphores(SemaphoreVector& semaphores){
     if(m_vulkanDevice){
         for(auto& semaphore : semaphores){
@@ -1772,8 +1912,17 @@ bool BackendContext::createWindowSurface(){
 
 
 void BackendContext::destroySwapChain(){
+    const bool replacePresentationSemaphore =
+        m_framePresentationSignalState == FramePresentationSignalState::Queued
+        || m_framePresentationSignalState == FramePresentationSignalState::Accepted
+    ;
+    VkResult idleResult = VK_SUCCESS;
     if(m_vulkanDevice)
-        vkDeviceWaitIdle(m_vulkanDevice);
+        idleResult = vkDeviceWaitIdle(m_vulkanDevice);
+    if(replacePresentationSemaphore && idleResult == VK_SUCCESS)
+        replaceFramePresentationSemaphoreAfterIdle();
+    resetFramePresentationSignal();
+    m_frameAcquired = false;
 
     if(m_swapChain){
         vkDestroySwapchainKHR(m_vulkanDevice, m_swapChain, nullptr);
@@ -2267,6 +2416,8 @@ bool BackendContext::createSwapChain(){
 
     m_swapChainIndex = 0;
     m_acquireSemaphoreIndex = 0;
+    resetFramePresentationSignal();
+    m_frameAcquired = false;
 
     return true;
 }
@@ -2274,6 +2425,11 @@ bool BackendContext::createSwapChain(){
 void BackendContext::destroy(){
     if(m_rhiDevice)
         m_rhiDevice->waitForIdle();
+
+    // destroy() already joined all device work, and its semaphore pools are released below. Do not allocate a
+    // replacement for an abandoned graph signal on this terminal path.
+    resetFramePresentationSignal();
+    m_frameAcquired = false;
 
     while(!m_framesInFlight.empty())
         m_framesInFlight.pop();
@@ -2320,6 +2476,11 @@ void BackendContext::destroy(){
 bool BackendContext::beginFrame(const BackBufferResizeCallbacks& callbacks){
     VkResult res = VK_SUCCESS;
     VkSemaphore semaphore = VK_NULL_HANDLE;
+
+    // A previous frame can abort after its terminal graph packet accepted but before present() consumed the binary
+    // semaphore. Retire it before acquiring another image so no swap-chain semaphore is signalled twice.
+    cancelFramePresentationSignal();
+    m_frameAcquired = false;
 
     if(!m_swapChain || m_acquireSemaphores.empty()){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: beginFrame skipped because swap chain or acquire semaphores are not ready."));
@@ -2383,6 +2544,7 @@ bool BackendContext::beginFrame(const BackBufferResizeCallbacks& callbacks){
     if(res == VK_SUCCESS || res == VK_SUBOPTIMAL_KHR){
         m_acquireSemaphoreIndex = (m_acquireSemaphoreIndex + 1) % static_cast<uint32_t>(m_acquireSemaphores.size());
         m_rhiDevice->queueWaitForSemaphore(CommandQueue::Graphics, semaphore, 0);
+        m_frameAcquired = true;
         return true;
     }
 
@@ -2395,20 +2557,34 @@ bool BackendContext::beginFrame(const BackBufferResizeCallbacks& callbacks){
 bool BackendContext::present(){
     VkResult res = VK_SUCCESS;
 
-    if(!m_swapChain || m_presentSemaphores.empty() || m_swapChainImages.empty()){
+    if(!m_frameAcquired || !m_swapChain || m_presentSemaphores.empty() || m_swapChainImages.empty()){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: present skipped because swap chain or present semaphores are not ready."));
+        cancelFramePresentationSignal();
+        m_frameAcquired = false;
         return false;
     }
 
-    if(m_swapChainIndex >= m_presentSemaphores.size() || m_swapChainIndex >= m_swapChainImages.size())
+    if(m_swapChainIndex >= m_presentSemaphores.size() || m_swapChainIndex >= m_swapChainImages.size()){
+        cancelFramePresentationSignal();
         m_swapChainIndex = 0;
+    }
 
     const VkSemaphore& semaphore = m_presentSemaphores[m_swapChainIndex];
 
-    m_rhiDevice->queueSignalSemaphore(CommandQueue::Graphics, semaphore, 0);
+    const bool graphSignalAccepted =
+        m_framePresentationSignalState == FramePresentationSignalState::Accepted
+        && m_framePresentationSwapChainIndex == m_swapChainIndex
+        && m_framePresentationSemaphore == semaphore
+    ;
 
-    // Force semaphore signal by executing empty command list
-    m_rhiDevice->executeCommandLists(nullptr, 0);
+    if(!graphSignalAccepted){
+        cancelFramePresentationSignal();
+
+        m_rhiDevice->queueSignalSemaphore(CommandQueue::Graphics, semaphore, 0);
+
+        // Compatibility fallback for render paths that have not claimed the graph-owned terminal packet signal.
+        m_rhiDevice->executeCommandLists(nullptr, 0);
+    }
 
     VkPresentInfoKHR presentInfo = {};
     presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -2420,11 +2596,21 @@ bool BackendContext::present(){
 
     res = vkQueuePresentKHR(m_presentQueue, &presentInfo);
     if(!(res == VK_SUCCESS || res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR)){
+        // A failed present is not guaranteed to consume the binary signal. Replace the graph-owned semaphore after
+        // joining the device instead of allowing a later frame to signal the same binary semaphore again.
+        if(graphSignalAccepted && m_rhiDevice && m_rhiDevice->waitForIdle())
+            replaceFramePresentationSemaphoreAfterIdle();
+        resetFramePresentationSignal();
+        m_frameAcquired = false;
         if(res == VK_ERROR_DEVICE_LOST && m_rhiDevice)
             m_rhiDevice->captureGpuCrash("present");
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue present failed. {}"), ResultToString(res));
         return false;
     }
+
+    // vkQueuePresentKHR has consumed the graph signal on every success/suboptimal path before the frame fence work.
+    resetFramePresentationSignal();
+    m_frameAcquired = false;
 
     while(m_framesInFlight.size() >= m_maxFramesInFlight){
         auto query = m_framesInFlight.front();

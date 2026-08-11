@@ -452,6 +452,29 @@ struct NativePacketRangeAcceptanceObserver{
 }
 
 
+// The production presentation hook supplies a real swap-chain binary semaphore. The headless fixture cannot
+// manufacture one through BackendContext, so this probe verifies range validation rejects a hook before native
+// submission or callback invocation.
+struct NativePacketSubmissionHookObserver{
+    u32 invocationCount = 0u;
+};
+
+[[nodiscard]] static bool RejectNativePacketSubmissionHook(
+    void* const rawContext,
+    const GpuPhysicalQueueId& executionQueue,
+    QueueSubmissionNativeSignal& outSignal
+){
+    NativePacketSubmissionHookObserver* const context =
+        static_cast<NativePacketSubmissionHookObserver*>(rawContext)
+    ;
+    if(!context || !executionQueue.valid())
+        return false;
+    ++context->invocationCount;
+    outSignal = {};
+    return false;
+}
+
+
 // Minimal graph-native timing endpoints used to exercise a late recovery packet in the same submission transaction.
 struct NativeFrameTimingPacketTask{
     enum class Endpoint : u8{
@@ -2928,6 +2951,36 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     EXPECT_EQ(acceptanceObserver.lastPacket, writerPacket);
     EXPECT_TRUE(transaction.packetToken(writerPacket).valid());
     EXPECT_FALSE(transaction.packetToken(readerPacket).valid());
+
+    NativePacketSubmissionHookObserver hookObserver;
+    const QueueSubmissionPreSubmitHook rejectedHook{
+        .context = &hookObserver,
+        .invoke = RejectNativePacketSubmissionHook,
+    };
+    const GpuTaskGraphPacketSubmissionHook outsideRangeSubmissionHook[] = {
+        GpuTaskGraphPacketSubmissionHook{
+            .packet = writerPacket,
+            .hook = rejectedHook,
+        },
+    };
+    EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.packetRange(readerPacket, readerPacket),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena,
+        nullptr,
+        &acceptedCallback,
+        outsideRangeSubmissionHook,
+        LengthOf(outsideRangeSubmissionHook)
+    ));
+    EXPECT_EQ(hookObserver.invocationCount, 0u);
+
     acceptanceObserver.continueSubmission = true;
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,

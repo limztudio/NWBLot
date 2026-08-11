@@ -650,10 +650,34 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_rayTracingState.m_surfelCountReadbackSubmissionToken
     ;
 
-    // The graph-owned prefix packet retains the established timing scope across mesh-view setup,
-    // scene-shading setup, deferred clear, G-buffer, and normalization.
+    // Each semantic prefix stage starts with its own ticket. After frontier-safe compilation, tasks that share a
+    // native packet are rebound to one ticket, while a split prefix retains one complete ticket per submission.
     Core::GpuTimingSubmissionTicket shadowPrepareTimingTicket(m_graphics.gpuTiming());
-    Core::GpuTimingSubmissionTicket graphicsPrefixTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket graphicsPrefixMeshViewSetupTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket graphicsPrefixSceneShadingSetupTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket graphicsPrefixDeferredClearTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket graphicsPrefixGbufferTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket graphicsPrefixNormalizeTimingTicket(m_graphics.gpuTiming());
+    constexpr usize graphicsPrefixTimingTicketCount = static_cast<usize>(
+        ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::kCount
+    );
+    Core::GpuTimingSubmissionTicket* graphicsPrefixTimingTickets[graphicsPrefixTimingTicketCount] = {
+        &graphicsPrefixMeshViewSetupTimingTicket,
+        &graphicsPrefixSceneShadingSetupTimingTicket,
+        &graphicsPrefixDeferredClearTimingTicket,
+        &graphicsPrefixGbufferTimingTicket,
+        &graphicsPrefixNormalizeTimingTicket,
+    };
+    Core::GpuTimingSubmissionTicket* const graphicsPrefixOwnedTimingTickets[graphicsPrefixTimingTicketCount] = {
+        &graphicsPrefixMeshViewSetupTimingTicket,
+        &graphicsPrefixSceneShadingSetupTimingTicket,
+        &graphicsPrefixDeferredClearTimingTicket,
+        &graphicsPrefixGbufferTimingTicket,
+        &graphicsPrefixNormalizeTimingTicket,
+    };
+    // The optional AsyncPrefix query spans Mesh View Setup through Normalize, so it is only valid when compilation
+    // keeps those endpoints in one native submission.
+    bool asyncPrefixTimingSpansOnePacket = true;
     Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
     Core::GpuTimingSubmissionTicket shadowVisibilityTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket softwareCausticsTimingTicket(m_graphics.gpuTiming());
@@ -687,7 +711,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         frameTimingTransaction,
         asyncPrefixTiming,
         shadowPrepareTimingTicket,
-        graphicsPrefixTimingTicket,
+        graphicsPrefixTimingTickets,
+        &asyncPrefixTimingSpansOnePacket,
         asyncFinalTiming,
         avboitPreTimingTicket,
         avboitDepthWarpTimingTicket,
@@ -717,7 +742,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             frameTimingTransaction,
             asyncPrefixTiming,
             shadowPrepareTimingTicket,
-            graphicsPrefixTimingTicket,
+            graphicsPrefixTimingTickets,
+            &asyncPrefixTimingSpansOnePacket,
             asyncFinalTiming,
             avboitPreTimingTicket,
             avboitDepthWarpTimingTicket,
@@ -741,6 +767,50 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId graphicsPrefixPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_graphicsPrefixTask
     );
+    const Core::GpuSubmissionPacketId graphicsPrefixMeshViewSetupPacket =
+        m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixMeshViewSetupTask);
+    const Core::GpuSubmissionPacketId graphicsPrefixSceneShadingSetupPacket =
+        m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixSceneShadingSetupTask);
+    const Core::GpuSubmissionPacketId graphicsPrefixDeferredClearPacket =
+        m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixDeferredClearTask);
+    const Core::GpuSubmissionPacketId graphicsPrefixGbufferPacket =
+        m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixGbufferTask);
+    const Core::GpuSubmissionPacketId graphicsPrefixTaskPackets[graphicsPrefixTimingTicketCount] = {
+        graphicsPrefixMeshViewSetupPacket,
+        graphicsPrefixSceneShadingSetupPacket,
+        graphicsPrefixDeferredClearPacket,
+        graphicsPrefixGbufferPacket,
+        graphicsPrefixPacket,
+    };
+    bool graphicsPrefixTimingBindingsValid = true;
+    usize graphicsPrefixUniquePacketCount = 0u;
+    for(usize prefixTaskIndex = 0u; prefixTaskIndex < graphicsPrefixTimingTicketCount; ++prefixTaskIndex){
+        const Core::GpuSubmissionPacketId packet = graphicsPrefixTaskPackets[prefixTaskIndex];
+        if(
+            !packet.valid()
+            || (prefixTaskIndex != 0u && packet.index < graphicsPrefixTaskPackets[prefixTaskIndex - 1u].index)
+        ){
+            graphicsPrefixTimingBindingsValid = false;
+            break;
+        }
+        bool sharesPacketWithEarlierTask = false;
+        for(usize earlierTaskIndex = 0u; earlierTaskIndex < prefixTaskIndex; ++earlierTaskIndex){
+            if(packet != graphicsPrefixTaskPackets[earlierTaskIndex])
+                continue;
+            graphicsPrefixTimingTickets[prefixTaskIndex] = graphicsPrefixTimingTickets[earlierTaskIndex];
+            sharesPacketWithEarlierTask = true;
+            break;
+        }
+        if(!sharesPacketWithEarlierTask){
+            graphicsPrefixTimingTickets[prefixTaskIndex] = graphicsPrefixOwnedTimingTickets[prefixTaskIndex];
+            ++graphicsPrefixUniquePacketCount;
+        }
+    }
+    // GpuTimingMeasure is deliberately submission-local. Skip this optional long-lived scope when the compiler
+    // exposes a frontier between its endpoints; every packet still has its own submission ticket below.
+    asyncPrefixTimingSpansOnePacket = graphicsPrefixTimingBindingsValid
+        && graphicsPrefixMeshViewSetupPacket == graphicsPrefixPacket
+    ;
     const Core::GpuSubmissionPacketId shadowVisibilityPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredShadowVisibilityTask
     );
@@ -759,6 +829,18 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         )
         : nullptr
     ;
+    bool graphicsPrefixPacketsAreGraphics = graphicsPrefixTimingBindingsValid;
+    for(usize prefixTaskIndex = 0u;
+        graphicsPrefixPacketsAreGraphics && prefixTaskIndex < graphicsPrefixTimingTicketCount;
+        ++prefixTaskIndex
+    ){
+        const Core::GpuSubmissionPacketId packet = graphicsPrefixTaskPackets[prefixTaskIndex];
+        const Core::GpuPhysicalQueueInfo* const queue = packet.valid()
+            ? m_deferredLightingCompiledGraph.queueInfo(m_deferredLightingCompiledGraph.packet(packet).queue)
+            : nullptr
+        ;
+        graphicsPrefixPacketsAreGraphics = queue && queue->queueClass == Core::CommandQueue::Graphics;
+    }
     const Core::GpuPhysicalQueueInfo* const shadowPrepareQueue = shadowPreparePacket.valid()
         ? m_deferredLightingCompiledGraph.queueInfo(
             m_deferredLightingCompiledGraph.packet(shadowPreparePacket).queue
@@ -908,6 +990,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     // endpoints only; raw compiler-order indices remain inside the task-graph runtime.
     const Core::GpuSubmissionPacketRange shadowPreparePacketRange =
         m_deferredLightingCompiledGraph.packetRange(shadowPreparePacket, shadowPreparePacket);
+    const Core::GpuSubmissionPacketRange graphicsPrefixWorkPacketRange =
+        m_deferredLightingCompiledGraph.packetRange(graphicsPrefixMeshViewSetupPacket, graphicsPrefixPacket);
     const Core::GpuSubmissionPacketRange graphicsPrefixPacketRange =
         m_deferredLightingCompiledGraph.packetRange(graphicsPrefixPacket, graphicsPrefixPacket);
     const Core::GpuSubmissionPacketRange shadowPrepareThroughPrefixPacketRange =
@@ -968,6 +1052,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         + (m_deferredSurfelGiCounterReadbackTask.valid() ? 1u : 0u)
         + (captureLaggedLightingHistory ? 1u : 0u)
     ;
+    const auto discardGraphicsPrefixTimingTickets = [&graphicsPrefixOwnedTimingTickets](){
+        for(Core::GpuTimingSubmissionTicket* const timingTicket : graphicsPrefixOwnedTimingTickets)
+            timingTicket->discard();
+    };
     if(
         !m_deferredLightingTaskGraphValid
         || !m_deferredShadowPrepareTask.valid()
@@ -979,7 +1067,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_graphicsPrefixDeferredClearTask.valid()
         || !m_graphicsPrefixGbufferTask.valid()
         || !m_graphicsPrefixTask.valid()
+        || !graphicsPrefixMeshViewSetupPacket.valid()
+        || !graphicsPrefixSceneShadingSetupPacket.valid()
+        || !graphicsPrefixDeferredClearPacket.valid()
+        || !graphicsPrefixGbufferPacket.valid()
         || !graphicsPrefixPacket.valid()
+        || !graphicsPrefixTimingBindingsValid
+        || !graphicsPrefixPacketsAreGraphics
         || !graphicsPrefixQueue
         || graphicsPrefixQueue->queueClass != Core::CommandQueue::Graphics
         || !m_deferredShadowVisibilityTask.valid()
@@ -1060,10 +1154,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !deferredFrameRecoveryQueue
         || !shadowPreparePacketRange.valid()
         || shadowPreparePacketRange.packetCount != 1u
+        || !graphicsPrefixWorkPacketRange.valid()
+        || graphicsPrefixWorkPacketRange.packetCount != graphicsPrefixUniquePacketCount
         || !graphicsPrefixPacketRange.valid()
         || graphicsPrefixPacketRange.packetCount != 1u
         || !shadowPrepareThroughPrefixPacketRange.valid()
-        || shadowPrepareThroughPrefixPacketRange.packetCount != 2u
+        || shadowPrepareThroughPrefixPacketRange.packetCount
+            != shadowPreparePacketRange.packetCount + graphicsPrefixWorkPacketRange.packetCount
         || !shadowEffectsPacketRange.valid()
         || shadowEffectsPacketRange.packetCount != (hardwareShadowSupported ? 1u : 2u)
         || !surfelGiPacketRange.valid()
@@ -1117,13 +1214,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         hardwareCausticsTimingTicket.discard();
         shadowVisibilityTimingTicket.discard();
         shadowPrepareTimingTicket.discard();
-        graphicsPrefixTimingTicket.discard();
+        discardGraphicsPrefixTimingTickets();
         return;
     }
     const bool deferredLightingRunsOnCompute = deferredLightingQueue->queueClass == Core::CommandQueue::Compute;
     const auto discardTimingTickets = [
         &shadowPrepareTimingTicket,
-        &graphicsPrefixTimingTicket,
+        &discardGraphicsPrefixTimingTickets,
         &shadowVisibilityTimingTicket,
         &hardwareCausticsTimingTicket,
         &softwareCausticsTimingTicket,
@@ -1138,7 +1235,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &deferredPresentTimingTicket
     ](){
         shadowPrepareTimingTicket.discard();
-        graphicsPrefixTimingTicket.discard();
+        discardGraphicsPrefixTimingTickets();
         shadowVisibilityTimingTicket.discard();
         hardwareCausticsTimingTicket.discard();
         softwareCausticsTimingTicket.discard();
@@ -1504,7 +1601,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingCompiledGraph
         );
         shadowPrepareTimingTicket.discard();
-        graphicsPrefixTimingTicket.discard();
+        discardGraphicsPrefixTimingTickets();
         avboitPreTimingTicket.discard();
         shadowVisibilityTimingTicket.discard();
         softwareCausticsTimingTicket.discard();
@@ -1548,7 +1645,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingCompiledGraph
         );
         shadowPrepareTimingTicket.discard();
-        graphicsPrefixTimingTicket.discard();
+        discardGraphicsPrefixTimingTickets();
         avboitPreTimingTicket.discard();
         shadowVisibilityTimingTicket.discard();
         softwareCausticsTimingTicket.discard();
@@ -2117,20 +2214,71 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         return true;
     };
 
-    // Preparation and Prefix are the first two packets in the shared transaction. Every later task resolves
-    // compiler-owned dependencies; no renderer-side completion or serial-state bridge remains.
+    // Preparation and the compiler-derived graphics-prefix chain start the shared transaction. A frontier-safe
+    // prefix may contain several Graphics packets; every actual packet receives exactly one timing ticket.
     {
         Core::Alloc::ScratchArena shadowPreparePrefixScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter shadowPreparePrefixSubmitter(device);
-        const Core::GpuTaskGraphPacketTimingTicket shadowPreparePrefixTimingTickets[] = {
+        Core::GpuTaskGraphPacketTimingTicket shadowPreparePrefixTimingTickets[
+            1u + graphicsPrefixTimingTicketCount
+        ] = {};
+        usize shadowPreparePrefixTimingTicketCount = 0u;
+        shadowPreparePrefixTimingTickets[shadowPreparePrefixTimingTicketCount++] =
             Core::GpuTaskGraphPacketTimingTicket{
                 .packet = shadowPreparePacket,
                 .timingTicket = &shadowPrepareTimingTicket,
-            },
-            Core::GpuTaskGraphPacketTimingTicket{
-                .packet = graphicsPrefixPacket,
-                .timingTicket = &graphicsPrefixTimingTicket,
-            },
+            }
+        ;
+        bool shadowPreparePrefixTimingTicketsValid = graphicsPrefixTimingBindingsValid;
+        for(usize prefixTaskIndex = 0u;
+            shadowPreparePrefixTimingTicketsValid && prefixTaskIndex < graphicsPrefixTimingTicketCount;
+            ++prefixTaskIndex
+        ){
+            const Core::GpuSubmissionPacketId packet = graphicsPrefixTaskPackets[prefixTaskIndex];
+            bool packetAlreadyTimed = false;
+            for(usize earlierTaskIndex = 0u; earlierTaskIndex < prefixTaskIndex; ++earlierTaskIndex){
+                if(packet == graphicsPrefixTaskPackets[earlierTaskIndex]){
+                    packetAlreadyTimed = true;
+                    break;
+                }
+            }
+            if(packetAlreadyTimed)
+                continue;
+            if(!packet.valid() || !graphicsPrefixTimingTickets[prefixTaskIndex]){
+                shadowPreparePrefixTimingTicketsValid = false;
+                break;
+            }
+            shadowPreparePrefixTimingTickets[shadowPreparePrefixTimingTicketCount++] =
+                Core::GpuTaskGraphPacketTimingTicket{
+                    .packet = packet,
+                    .timingTicket = graphicsPrefixTimingTickets[prefixTaskIndex],
+                }
+            ;
+        }
+        struct PrefixTimingAcceptanceContext{
+            Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
+            Core::GpuSubmissionPacketId frameBeginPacket;
+        };
+        PrefixTimingAcceptanceContext prefixTimingAcceptance{
+            .frameTimingTransaction = &frameTimingTransaction,
+            .frameBeginPacket = graphicsPrefixMeshViewSetupPacket,
+        };
+        const auto acceptPrefixTimingPacket = [](
+            void* const rawContext,
+            const Core::GpuSubmissionPacketId& packet,
+            const Core::QueueSubmissionToken& token
+        ) -> bool {
+            static_cast<void>(token);
+            PrefixTimingAcceptanceContext* const context = static_cast<PrefixTimingAcceptanceContext*>(rawContext);
+            if(!context || !context->frameTimingTransaction || !context->frameBeginPacket.valid())
+                return false;
+            if(packet == context->frameBeginPacket)
+                context->frameTimingTransaction->confirmBeginSubmission();
+            return true;
+        };
+        const Core::GpuTaskGraphPacketAcceptedCallback shadowPreparePrefixAcceptedCallback{
+            .context = &prefixTimingAcceptance,
+            .invoke = acceptPrefixTimingPacket,
         };
         const bool shadowPreparePrefixAccepted =
             m_deferredLightingTaskGraphValid
@@ -2142,8 +2290,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_graphicsPrefixTask.valid()
             && shadowPreparePacket.valid()
             && graphicsPrefixPacket.valid()
+            && graphicsPrefixWorkPacketRange.valid()
             && shadowPrepareThroughPrefixPacketRange.valid()
-            && shadowPrepareThroughPrefixPacketRange.packetCount == LengthOf(shadowPreparePrefixTimingTickets)
+            && shadowPreparePrefixTimingTicketsValid
+            && shadowPreparePrefixTimingTicketCount == 1u + graphicsPrefixUniquePacketCount
+            && shadowPrepareThroughPrefixPacketRange.packetCount == shadowPreparePrefixTimingTicketCount
             && shadowPreparePrefixSubmitter.submitPacketRangeInCompileOrder(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
@@ -2152,9 +2303,11 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                 nullptr,
                 0u,
                 shadowPreparePrefixTimingTickets,
-                LengthOf(shadowPreparePrefixTimingTickets),
+                shadowPreparePrefixTimingTicketCount,
                 m_deferredLightingSubmissionTransaction,
-                shadowPreparePrefixScratchArena
+                shadowPreparePrefixScratchArena,
+                nullptr,
+                &shadowPreparePrefixAcceptedCallback
             )
         ;
         if(
@@ -2162,10 +2315,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             || !m_deferredLightingSubmissionTransaction.packetToken(shadowPreparePacket).valid()
             || !m_deferredLightingSubmissionTransaction.packetToken(graphicsPrefixPacket).valid()
         ){
+            const bool recovered = recoverPendingFrameThenDiscardUnaccepted();
             discardRenderPackets();
+            if(!recovered)
+                failFrameRenderRecovery();
             return;
         }
-        frameTimingTransaction.confirmBeginSubmission();
         Core::Alloc::ScratchArena shadowEffectsScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter shadowEffectsSubmitter(device);
         const Core::GpuTaskGraphPacketTimingTicket shadowEffectsTimingTickets[] = {

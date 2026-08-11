@@ -65,6 +65,17 @@ namespace ECSRenderDetail{
         bool hasTransparentRenderers = false;
         bool hardwareCaustics = false;
     };
+    // These semantic prefix stages may coalesce into one native submission or split at a compiler-derived
+    // cross-queue frontier. Each stage points at a rebindable timing slot so the renderer can attach one ticket
+    // to every actual packet after compilation.
+    enum class DeferredGraphicsPrefixTimingSlot : u8{
+        MeshViewSetup,
+        SceneShadingSetup,
+        DeferredClear,
+        Gbuffer,
+        Normalize,
+        kCount,
+    };
     struct ShadowPrepareGraphTask;
     struct MeshViewSetupGraphTask;
     struct SceneShadingSetupGraphTask;
@@ -181,7 +192,8 @@ private:
         usize shadowTraceGeometryResourceCount,
         Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
-        Core::GpuTimingSubmissionTicket& timingTicket
+        Core::GpuTimingSubmissionTicket** timingTickets,
+        const bool* asyncPrefixTimingSpansOnePacket
     );
     [[nodiscard]] bool declareDeferredShadowVisibilityTask(
         DeferredFrameTargets& deferredTargets,
@@ -241,7 +253,8 @@ private:
         Core::GpuTimingFrameTransaction& frameTimingTransaction,
         Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
         Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
-        Core::GpuTimingSubmissionTicket& graphicsPrefixTimingTicket,
+        Core::GpuTimingSubmissionTicket** graphicsPrefixTimingTickets,
+        const bool* asyncPrefixTimingSpansOnePacket,
         Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
         Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
         Core::GpuTimingSubmissionTicket& avboitDepthWarpTimingTicket,

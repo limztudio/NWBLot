@@ -172,7 +172,8 @@ struct MeshViewSetupGraphTask{
         RendererSystem* renderer = nullptr;
         Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncPrefixTiming = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
+        const bool* asyncPrefixTimingSpansOnePacket = nullptr;
         bool* ready = nullptr;
         f32 meshViewAspectRatio = 1.f;
         const Core::GpuTaskId* shadowVisibilityTask = nullptr;
@@ -192,6 +193,8 @@ struct MeshViewSetupGraphTask{
             || !payload.frameTimingTransaction
             || !payload.asyncPrefixTiming
             || !payload.timingTicket
+            || !*payload.timingTicket
+            || !payload.asyncPrefixTimingSpansOnePacket
             || !payload.ready
             || !shadowVisibilityQueue
         )
@@ -200,7 +203,7 @@ struct MeshViewSetupGraphTask{
         RendererSystem& renderer = *payload.renderer;
         const bool shadowVisibilityRunsOnCompute =
             shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute;
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
         const bool recordsGraphicsFrameMarker =
             !shadowVisibilityRunsOnCompute && RendererGpuTimingScope::s_Frame.valid()
         ;
@@ -212,7 +215,7 @@ struct MeshViewSetupGraphTask{
             renderer.m_graphics.getDevice(),
             commandList
         );
-        if(shadowVisibilityRunsOnCompute){
+        if(shadowVisibilityRunsOnCompute && *payload.asyncPrefixTimingSpansOnePacket){
             payload.asyncPrefixTiming->emplace(
                 renderer.m_graphics.gpuTiming(),
                 RendererGpuTimingScope::s_AsyncPrefix,
@@ -235,7 +238,7 @@ struct MeshViewSetupGraphTask{
 struct SceneShadingSetupGraphTask{
     struct Payload{
         RendererSystem* renderer = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         bool* ready = nullptr;
         f32 meshViewAspectRatio = 1.f;
     };
@@ -246,10 +249,10 @@ struct SceneShadingSetupGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.renderer || !payload.timingTicket || !payload.ready)
+        if(!payload.renderer || !payload.timingTicket || !*payload.timingTicket || !payload.ready)
             return false;
 
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
         *payload.ready = payload.renderer->m_deferredSystem.updateSceneShadingBuffer(
             commandList,
             payload.meshViewAspectRatio
@@ -265,7 +268,7 @@ struct DeferredClearGraphTask{
     struct Payload{
         RendererSystem* renderer = nullptr;
         DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -274,10 +277,10 @@ struct DeferredClearGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.renderer || !payload.targets || !payload.timingTicket)
+        if(!payload.renderer || !payload.targets || !payload.timingTicket || !*payload.timingTicket)
             return false;
 
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
         payload.renderer->m_deferredSystem.clearDeferredTargets(
             commandList,
             *payload.targets
@@ -294,7 +297,7 @@ struct GbufferGraphTask{
         RendererSystem* renderer = nullptr;
         DeferredFrameTargets* targets = nullptr;
         const CsgFrameState* csgFrameState = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         bool hasOpaqueCsgFrameWork = false;
         const bool* meshViewSetupReady = nullptr;
         const bool* sceneShadingSetupReady = nullptr;
@@ -311,6 +314,7 @@ struct GbufferGraphTask{
             || !payload.targets
             || !payload.csgFrameState
             || !payload.timingTicket
+            || !*payload.timingTicket
             || !payload.meshViewSetupReady
             || !payload.sceneShadingSetupReady
         )
@@ -319,7 +323,7 @@ struct GbufferGraphTask{
         RendererSystem& renderer = *payload.renderer;
         DeferredFrameTargets& deferredTargets = *payload.targets;
         const CsgFrameState& csgFrameState = *payload.csgFrameState;
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
         MaterialPassDrawItemPartitions opaqueDrawItems{ scratchArena };
@@ -512,7 +516,7 @@ struct PostGbufferNormalizeGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncPrefixTiming = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         const Core::GpuTaskId* shadowVisibilityTask = nullptr;
     };
 
@@ -525,10 +529,16 @@ struct PostGbufferNormalizeGraphTask{
             context,
             payload.shadowVisibilityTask
         );
-        if(!payload.raytracingSystem || !payload.targets || !payload.timingTicket || !shadowVisibilityQueue)
+        if(
+            !payload.raytracingSystem
+            || !payload.targets
+            || !payload.timingTicket
+            || !*payload.timingTicket
+            || !shadowVisibilityQueue
+        )
             return false;
 
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
         payload.raytracingSystem->normalizePostGbufferPacketResources(commandList, *payload.targets);
         if(
             shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute
@@ -1040,9 +1050,11 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     const usize shadowTraceGeometryResourceCount,
     Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
-    Core::GpuTimingSubmissionTicket& timingTicket
+    Core::GpuTimingSubmissionTicket** const timingTickets,
+    const bool* const asyncPrefixTimingSpansOnePacket
 ){
     using namespace __hidden_renderer_task_graph;
+    using PrefixTimingSlot = ECSRenderDetail::DeferredGraphicsPrefixTimingSlot;
 
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -1068,9 +1080,18 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         || !meshView.valid()
         || !currentBindlessSlots.valid()
         || !materialContextSlots.valid()
+        || !timingTickets
+        || !asyncPrefixTimingSpansOnePacket
         || (shadowTraceGeometryResourceCount != 0u && !shadowTraceGeometryResources)
     )
         return false;
+    for(usize timingSlot = 0u; timingSlot < static_cast<usize>(PrefixTimingSlot::kCount); ++timingSlot){
+        if(!timingTickets[timingSlot])
+            return false;
+    }
+    const auto timingTicketSlot = [timingTickets](const PrefixTimingSlot slot){
+        return &timingTickets[static_cast<usize>(slot)];
+    };
     const Core::GpuTaskResourceUse meshViewSetupResourceUses[] = {
         WriteUse(meshView, Core::ResourceStates::ConstantBuffer),
     };
@@ -1093,7 +1114,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             .renderer = this,
             .frameTimingTransaction = &frameTimingTransaction,
             .asyncPrefixTiming = &asyncPrefixTiming,
-            .timingTicket = &timingTicket,
+            .timingTicket = timingTicketSlot(PrefixTimingSlot::MeshViewSetup),
+            .asyncPrefixTimingSpansOnePacket = asyncPrefixTimingSpansOnePacket,
             .ready = &m_graphicsPrefixMeshViewSetupReady,
             .meshViewAspectRatio = meshViewAspectRatio,
             .shadowVisibilityTask = &m_deferredShadowVisibilityTask,
@@ -1126,7 +1148,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         sceneShadingSetupDesc,
         ECSRenderDetail::SceneShadingSetupGraphTask::Payload{
             .renderer = this,
-            .timingTicket = &timingTicket,
+            .timingTicket = timingTicketSlot(PrefixTimingSlot::SceneShadingSetup),
             .ready = &m_graphicsPrefixSceneShadingSetupReady,
             .meshViewAspectRatio = meshViewAspectRatio,
         }
@@ -1184,7 +1206,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             ECSRenderDetail::DeferredClearGraphTask::Payload{
                 .renderer = this,
                 .targets = &deferredTargets,
-                .timingTicket = &timingTicket,
+                .timingTicket = timingTicketSlot(PrefixTimingSlot::DeferredClear),
             }
         );
     }
@@ -1220,7 +1242,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             .renderer = this,
             .targets = &deferredTargets,
             .csgFrameState = &csgFrameState,
-            .timingTicket = &timingTicket,
+            .timingTicket = timingTicketSlot(PrefixTimingSlot::Gbuffer),
             .hasOpaqueCsgFrameWork = hasOpaqueCsgFrameWork,
             .meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady,
             .sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady,
@@ -1270,7 +1292,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             .raytracingSystem = &m_raytracingSystem,
             .targets = &deferredTargets,
             .asyncPrefixTiming = &asyncPrefixTiming,
-            .timingTicket = &timingTicket,
+            .timingTicket = timingTicketSlot(PrefixTimingSlot::Normalize),
             .shadowVisibilityTask = &m_deferredShadowVisibilityTask,
         }
     );
@@ -2180,7 +2202,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Core::GpuTimingFrameTransaction& frameTimingTransaction,
     Optional<Core::GpuTimingMeasure>& asyncPrefixTiming,
     Core::GpuTimingSubmissionTicket& shadowPrepareTimingTicket,
-    Core::GpuTimingSubmissionTicket& graphicsPrefixTimingTicket,
+    Core::GpuTimingSubmissionTicket** const graphicsPrefixTimingTickets,
+    const bool* const asyncPrefixTimingSpansOnePacket,
     Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
     Core::GpuTimingSubmissionTicket& avboitPreTimingTicket,
     Core::GpuTimingSubmissionTicket& avboitDepthWarpTimingTicket,
@@ -2623,7 +2646,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         traceGeometryResources.size(),
         frameTimingTransaction,
         asyncPrefixTiming,
-        graphicsPrefixTimingTicket
+        graphicsPrefixTimingTickets,
+        asyncPrefixTimingSpansOnePacket
     )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred graphics-prefix packet"));
         return;
@@ -3402,13 +3426,18 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     }
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     const Core::GpuTaskGraphCompiler compiler;
+    Core::GpuTaskGraphCompileOptions compileOptions;
+    // A graphics prefix can now split immediately after work that enables a different physical queue. This exposes
+    // the true cross-queue frontier while preserving the compiler's declaration-derived dependency order.
+    compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierSafe;
     if(!compiler.compile(
         m_deferredLightingTaskGraph,
         m_deferredLightingTaskGraphAnalysis,
         topology,
         m_deferredLightingTaskGraphQueueAssignments,
         m_deferredLightingCompiledGraph,
-        scratchArena
+        scratchArena,
+        compileOptions
     )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile deferred AVBOIT/lighting/composite/present task graph"));
         return;

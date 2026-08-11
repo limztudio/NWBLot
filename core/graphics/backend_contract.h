@@ -151,6 +151,9 @@ concept DeviceApi = requires(
     device.queueWaitForCommandList(CommandQueue::Graphics, CommandQueue::Graphics, u64{});
     { device.resolveRenderLane(RenderLane::AsyncCompute) }->SameAs<CommandQueue::Enum>;
     { device.isRenderLaneDedicated(RenderLane::AsyncCompute) }->SameAs<bool>;
+    { device.getDeviceGeneration() }->SameAs<u16>;
+    { device.getPhysicalQueueIndex(CommandQueue::Graphics) }->SameAs<u16>;
+    { device.matchesPhysicalQueueIdentity(CommandQueue::Graphics, u16{}, u16{}) }->SameAs<bool>;
     { device.isDeviceLost() }->SameAs<bool>;
     { device.waitForIdle() }->SameAs<bool>;
     device.runGarbageCollection();

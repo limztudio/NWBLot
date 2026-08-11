@@ -556,7 +556,10 @@ struct Result{
     if(!device.getQueue(CommandQueue::Graphics) || graphicsFamily == Limit<u32>::s_Max)
         return false;
     const GpuPhysicalQueueInfo queue{
-        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .id = GpuPhysicalQueueId{
+            device.getPhysicalQueueIndex(CommandQueue::Graphics),
+            device.getDeviceGeneration(),
+        },
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
             static_cast<u8>(GpuQueueCapability::Graphics)

@@ -2,7 +2,9 @@
 
 **Decision:** conditional closeout; **not** strict final architecture acceptance.
 
-**Reviewed revision:** `c62605d9` (`Fix acceptance policy regressions`), 2026-08-11.
+**Reviewed baseline:** `c62605d9` (`Fix acceptance policy regressions`), 2026-08-11.
+
+**Follow-up implementation:** physical queue identity and stale-device completion validation, 2026-08-11.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
 semantic dependencies, compile-time queue selection, packet construction, and inter-task barrier planning; native
@@ -35,6 +37,9 @@ can receive an unconditional final sign-off.
 | Project policy checks (`return_value_handling`, test `std::` use, interop containers) | passed |
 | Command-IR and Transfer A/B launcher/runner self-tests | passed |
 | Command-IR profile, 4,096 records, Vulkan validation | passed; capture remained allocation-free and direct `CopyBuffer` replay was 3.63% faster than `Core::CommandList` replay |
+| Physical queue identity follow-up: graph unit binary | 37/37 passed |
+| Physical queue identity follow-up: descriptor-buffer smoke binary | 68 passed; 9 expected skips because this host has no dedicated Compute-only or Transfer-only family |
+| Retired-device submission token | verified: graph bindings reject a stale generation, and Vulkan rejects it at the native submission boundary |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -45,9 +50,12 @@ runtime IR templates or general direct-Vulkan IR replay.
 
 These are substantive scope gaps, not failures hidden by the hardware waiver.
 
-1. **End-to-end physical queue identity.** `GpuPhysicalQueueId` is compiler metadata, but submission tokens and
-   state handoffs ultimately identify `CommandQueue` classes. The runtime does not yet support multiple same-class
-   physical queues or carry device generation through every external completion identity.
+1. **End-to-end physical queue identity (partially addressed).** Vulkan now assigns every accepted
+   `QueueSubmissionToken` a concrete queue index and device generation. Graph recording, packet acceptance, and
+   imported completion bindings require that identity; the renderer and native smoke topologies obtain it from the
+   Device; and a token from a retired device is rejected at the native submission boundary. The runtime still exposes
+   only one concrete queue per `CommandQueue` class, state handoffs remain class-oriented, and no multi-queue
+   same-class selection/transport API exists yet.
 
 2. **Complete graph ownership.** Renderer code still builds packet ranges, controls recording/submission, and holds
    legacy state-handoff data. Setup uploads, asset uploads, skinning, and UI also retain direct native recording or
@@ -57,9 +65,10 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    predecessors. Frontier splitting/scoring, graph-level parallel packet recording, and per-worker graph command
    arenas from the proposal are not implemented.
 
-4. **Generic recovery and invalidation proof.** The accepted-token transaction is sound for the exercised paths, but
-   recovery is not proven to join every possible Transfer queue route, and there is no end-to-end stale
-   compiled-graph/device-recreation lease test.
+4. **Generic recovery and invalidation proof.** The accepted-token transaction is sound for the exercised paths, and
+   stale imported completion tokens now have graph and native-submission rejection coverage. Recovery is still not
+   proven to join every possible Transfer queue route, and there is no complete stale compiled-graph/command-arena
+   recreation lease test.
 
 5. **Final parity and performance evidence.** There is no immutable current baseline, legacy-to-graph pixel parity
    corpus, complete bindless-domain audit, or target-scene critical-path comparison. Dedicated-Transfer ownership/

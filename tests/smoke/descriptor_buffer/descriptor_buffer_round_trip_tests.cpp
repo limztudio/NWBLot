@@ -215,6 +215,18 @@ Optional<Common::LoggerRegistrationGuard> DescriptorBufferRoundTripTest::s_logge
     );
 }
 
+// Graph topology IDs must be the identities emitted by the concrete Device, not local array positions. This keeps
+// the native packet smoke paths honest across device recreation and distinct Compute/Transfer transports.
+[[nodiscard]] static GpuPhysicalQueueId BackendQueueId(
+    GraphicsBackend::Device& device,
+    const CommandQueue::Enum queue
+){
+    return GpuPhysicalQueueId{
+        device.getPhysicalQueueIndex(queue),
+        device.getDeviceGeneration(),
+    };
+}
+
 
 // RendererSystem requests this terminal policy only when accepted cross-queue ownership cannot be recovered. The
 // Graphics owner must stop the current generation before it records another frame, leaving orderly teardown and
@@ -230,6 +242,58 @@ TEST_F(DescriptorBufferRoundTripTest, DeviceRecreationRequestStopsTheCurrentGrap
 
     EXPECT_TRUE(graphics.isDeviceRecreationRequested());
     EXPECT_FALSE(graphics.runFrame());
+}
+
+
+// A timeline value is only meaningful for the Device that issued it.  Make the rejection observable at the native
+// submission boundary so an imported graph completion cannot accidentally wait on a recycled queue timeline after
+// device recreation.
+TEST_F(DescriptorBufferRoundTripTest, QueueSubmissionRejectsRetiredDeviceGeneration){
+    QueueSubmissionToken retiredToken;
+    {
+        HeadlessGraphicsScope producerScope;
+        ASSERT_TRUE(producerScope.initialize());
+        auto& producer = producerScope.graphics().getDevice();
+
+        auto producerCommandList = producer.createCommandList();
+        ASSERT_NE(producerCommandList.get(), nullptr);
+        producerCommandList->open();
+        producerCommandList->close();
+        CommandList* const producerCommandLists[] = { producerCommandList.get() };
+
+        retiredToken = producer.executeCommandLists(
+            producerCommandLists,
+            LengthOf(producerCommandLists),
+            CommandQueue::Graphics,
+            QueueSubmissionDesc{}
+        );
+        ASSERT_TRUE(retiredToken.valid());
+        ASSERT_TRUE(retiredToken.hasPhysicalQueueIdentity());
+        EXPECT_TRUE(producer.matchesPhysicalQueueIdentity(
+            retiredToken.queue,
+            retiredToken.physicalQueueIndex,
+            retiredToken.deviceGeneration
+        ));
+    }
+
+    HeadlessGraphicsScope consumerScope;
+    ASSERT_TRUE(consumerScope.initialize());
+    auto& consumer = consumerScope.graphics().getDevice();
+    EXPECT_NE(retiredToken.deviceGeneration, consumer.getDeviceGeneration());
+    EXPECT_FALSE(consumer.matchesPhysicalQueueIdentity(
+        retiredToken.queue,
+        retiredToken.physicalQueueIndex,
+        retiredToken.deviceGeneration
+    ));
+
+    const QueueSubmissionDesc staleWait = QueueSubmissionDesc().setWaitTokens(&retiredToken, 1u);
+#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
+    EXPECT_DEATH_IF_SUPPORTED({
+        EXPECT_FALSE(consumer.executeCommandLists(nullptr, 0u, CommandQueue::Graphics, staleWait).valid());
+    }, "");
+#else
+    EXPECT_FALSE(consumer.executeCommandLists(nullptr, 0u, CommandQueue::Graphics, staleWait).valid());
+#endif
 }
 
 
@@ -729,7 +793,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
     ASSERT_TRUE(normalizeTask.valid());
 
     const GpuPhysicalQueueInfo queue{
-        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
             static_cast<u8>(GpuQueueCapability::Graphics)
@@ -907,7 +971,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
     ;
     GpuPhysicalQueueInfo queues[2u] = {
         GpuPhysicalQueueInfo{
-            .id = GpuPhysicalQueueId{ 0u, 1u },
+            .id = BackendQueueId(device, CommandQueue::Graphics),
             .queueClass = CommandQueue::Graphics,
             .capabilities = static_cast<GpuQueueCapability::Mask>(
                 static_cast<u8>(GpuQueueCapability::Graphics)
@@ -922,7 +986,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
     usize queueCount = 1u;
     if(dedicatedTransfer){
         queues[queueCount] = GpuPhysicalQueueInfo{
-            .id = GpuPhysicalQueueId{ 1u, 1u },
+            .id = BackendQueueId(device, CommandQueue::Transfer),
             .queueClass = CommandQueue::Transfer,
             .capabilities = GpuQueueCapability::Transfer,
             .familyIndex = transferFamily,
@@ -1213,7 +1277,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
     ;
     GpuPhysicalQueueInfo queues[2u] = {
         GpuPhysicalQueueInfo{
-            .id = GpuPhysicalQueueId{ 0u, 1u },
+            .id = BackendQueueId(device, CommandQueue::Graphics),
             .queueClass = CommandQueue::Graphics,
             .capabilities = static_cast<GpuQueueCapability::Mask>(
                 static_cast<u8>(GpuQueueCapability::Graphics)
@@ -1228,7 +1292,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
     usize queueCount = 1u;
     if(dedicatedTransfer){
         queues[queueCount] = GpuPhysicalQueueInfo{
-            .id = GpuPhysicalQueueId{ 1u, 1u },
+            .id = BackendQueueId(device, CommandQueue::Transfer),
             .queueClass = CommandQueue::Transfer,
             .capabilities = GpuQueueCapability::Transfer,
             .familyIndex = transferFamily,
@@ -1442,7 +1506,7 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersC
     ASSERT_TRUE(secondCopyTask.valid());
 
     const GpuPhysicalQueueInfo queue{
-        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
             static_cast<u8>(GpuQueueCapability::Graphics)
@@ -1895,7 +1959,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     ;
     GpuPhysicalQueueInfo queues[2u] = {
         GpuPhysicalQueueInfo{
-            .id = GpuPhysicalQueueId{ 0u, 1u },
+            .id = BackendQueueId(device, CommandQueue::Graphics),
             .queueClass = CommandQueue::Graphics,
             .capabilities = static_cast<GpuQueueCapability::Mask>(
                 static_cast<u8>(GpuQueueCapability::Graphics)
@@ -1910,7 +1974,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     usize queueCount = 1u;
     if(dedicatedTransfer){
         queues[queueCount] = GpuPhysicalQueueInfo{
-            .id = GpuPhysicalQueueId{ 1u, 1u },
+            .id = BackendQueueId(device, CommandQueue::Transfer),
             .queueClass = CommandQueue::Transfer,
             .capabilities = GpuQueueCapability::Transfer,
             .familyIndex = transferFamily,
@@ -2068,7 +2132,7 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrCaptureRollsBackARejectedPacketBe
     ASSERT_TRUE(retryTask.valid());
 
     const GpuPhysicalQueueInfo queue{
-        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
             static_cast<u8>(GpuQueueCapability::Graphics)
@@ -2265,7 +2329,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     ASSERT_TRUE(reader.valid());
 
     const GpuPhysicalQueueInfo queue{
-        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
             static_cast<u8>(GpuQueueCapability::Graphics)
@@ -2590,7 +2654,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
     ASSERT_TRUE(compositeTask.valid());
 
     const GpuPhysicalQueueInfo queue{
-        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
             static_cast<u8>(GpuQueueCapability::Graphics)
@@ -2877,7 +2941,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
     ASSERT_TRUE(historyTask.valid());
 
     const GpuPhysicalQueueInfo queue{
-        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
             static_cast<u8>(GpuQueueCapability::Graphics)
@@ -3754,7 +3818,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     ASSERT_TRUE(recoveryTask.valid());
 
     const GpuPhysicalQueueInfo queue{
-        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
             static_cast<u8>(GpuQueueCapability::Graphics)
@@ -6417,7 +6481,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
     ASSERT_TRUE(presentTask.valid());
 
     const GpuPhysicalQueueInfo queue{
-        .id = GpuPhysicalQueueId{ 0u, 1u },
+        .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
             static_cast<u8>(GpuQueueCapability::Graphics)

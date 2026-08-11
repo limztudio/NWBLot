@@ -284,7 +284,6 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
     CsgShapeRegistry m_csgShapeRegistry;
-    u16 m_taskGraphDeviceGeneration = 1u;
     // Shadow Preparation, the native Graphics prefix, Shadow Visibility, Software Caustics, Surfel GI, AVBOIT, Hardware Caustics,
     // Deferred Lighting, Composite, Present, optional lagged-history copy, and recovery share one packet graph. The
     // prefix's five command lists remain a temporary recording bridge inside its first Graphics packet.

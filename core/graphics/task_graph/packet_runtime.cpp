@@ -45,6 +45,21 @@ bool GpuRecordedGraph::validFor(const GpuCompiledGraph& compiledGraph)const noex
     ;
 }
 
+bool GpuTaskGraphExternalCompletionToken::validFor(const GpuCompiledGraph& compiledGraph)const noexcept{
+    if(
+        !compiledGraph.valid()
+        || !completion.valid()
+        || completion.generation != compiledGraph.generation()
+        || !token.valid()
+        || !token.hasPhysicalQueueIdentity()
+    )
+        return false;
+
+    // The producer can be absent from this frame's topology (for example after an async lane is disabled), so the
+    // graph validates device lifetime here and leaves concrete queue validation to the submitting Device.
+    return token.deviceGeneration == compiledGraph.deviceGeneration();
+}
+
 const GpuRecordedPacket* GpuRecordedGraph::find(const GpuSubmissionPacketId& packet)const noexcept{
     if(!packet.valid() || packet.generation != m_generation)
         return nullptr;
@@ -292,7 +307,15 @@ bool GpuNativePacketRecorder::recordPacket(
 
     const GpuSubmissionPacket& packet = compiledGraph.packet(desc.packet);
     const GpuPhysicalQueueInfo* const queue = compiledGraph.queueInfo(packet.queue);
-    if(!queue || queue->queueClass >= CommandQueue::kCount)
+    if(
+        !queue
+        || queue->queueClass >= CommandQueue::kCount
+        || !m_device.matchesPhysicalQueueIdentity(
+            queue->queueClass,
+            packet.queue.index,
+            packet.queue.deviceGeneration
+        )
+    )
         return false;
 
     const usize captureRecordCount = commandIrCapture ? commandIrCapture->recordCount() : 0u;
@@ -457,21 +480,26 @@ bool GpuGraphSubmissionTransaction::markPacketRecorded(const GpuSubmissionPacket
     return true;
 }
 
-void GpuGraphSubmissionTransaction::acceptPacket(
+bool GpuGraphSubmissionTransaction::acceptPacket(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId& packetID,
     const QueueSubmissionToken& token
 )noexcept{
     if(!validFor(compiledGraph) || !compiledGraph.validPacket(packetID) || !token.valid())
-        return;
+        return false;
     const GpuSubmissionPacket& packet = compiledGraph.packet(packetID);
     const GpuPhysicalQueueInfo* const queueInfo = compiledGraph.queueInfo(packet.queue);
-    if(!queueInfo || queueInfo->queueClass >= CommandQueue::kCount)
-        return;
+    if(
+        !queueInfo
+        || queueInfo->queueClass >= CommandQueue::kCount
+        || token.queue != queueInfo->queueClass
+        || !token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration)
+    )
+        return false;
     GpuPacketRuntime& runtime = m_packets[packetID.index];
     if(runtime.state != GpuPacketRuntimeState::Recorded)
-        return;
+        return false;
 
     runtime.state = GpuPacketRuntimeState::Accepted;
     runtime.token = token;
@@ -488,7 +516,7 @@ void GpuGraphSubmissionTransaction::acceptPacket(
             latest.queueClass = queueInfo->queueClass;
             latest.token = token;
             latest.acceptanceOrdinal = m_acceptedSubmissionCount;
-            return;
+            return true;
         }
     }
     m_latestAcceptedQueueTokens.push_back(LatestAcceptedQueueToken{
@@ -497,6 +525,7 @@ void GpuGraphSubmissionTransaction::acceptPacket(
         .token = token,
         .acceptanceOrdinal = m_acceptedSubmissionCount,
     });
+    return true;
 }
 
 void GpuGraphSubmissionTransaction::rejectPacket(
@@ -602,6 +631,11 @@ bool GpuTaskGraphSubmitter::submitPacket(
         || recordedPacket->commandListCount == 0u
         || recordedPacket->commandListCount > GpuRecordedPacket::s_MaxCommandLists
         || !queue
+        || !m_device.matchesPhysicalQueueIdentity(
+            queue->queueClass,
+            packet.queue.index,
+            packet.queue.deviceGeneration
+        )
     ){
         transaction.rejectPacket(graph, compiledGraph, packetID);
         return false;
@@ -633,6 +667,10 @@ bool GpuTaskGraphSubmitter::submitPacket(
         for(usize tokenIndex = 0u; tokenIndex < externalCompletionTokenCount; ++tokenIndex){
             const GpuTaskGraphExternalCompletionToken& binding = externalCompletionTokens[tokenIndex];
             if(binding.completion == completion){
+                if(!binding.validFor(compiledGraph)){
+                    transaction.rejectPacket(graph, compiledGraph, packetID);
+                    return false;
+                }
                 token = binding.token;
                 break;
             }
@@ -667,8 +705,8 @@ bool GpuTaskGraphSubmitter::submitPacket(
         return false;
     }
 
-    transaction.acceptPacket(graph, compiledGraph, packetID, token);
-    return true;
+    NWB_ASSERT(token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration));
+    return transaction.acceptPacket(graph, compiledGraph, packetID, token);
 }
 
 
@@ -701,7 +739,7 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
 
     for(usize tokenIndex = 0u; tokenIndex < externalCompletionTokenCount; ++tokenIndex){
         const GpuTaskGraphExternalCompletionToken& token = externalCompletionTokens[tokenIndex];
-        if(!token.completion.valid() || !token.token.valid())
+        if(!token.validFor(compiledGraph))
             return false;
         for(usize previousIndex = 0u; previousIndex < tokenIndex; ++previousIndex){
             if(externalCompletionTokens[previousIndex].completion == token.completion)

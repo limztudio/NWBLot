@@ -242,10 +242,6 @@ void RendererSystem::invalidateResources(){
     m_deferredLightingCompiledGraph.reset();
     m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
     m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
-    m_taskGraphDeviceGeneration = m_taskGraphDeviceGeneration == Limit<u16>::s_Max
-        ? 1u
-        : static_cast<u16>(m_taskGraphDeviceGeneration + 1u)
-    ;
     resetInvalidatedResourceStateHandoffs();
     resetLaggedLightingHistoryTracking();
     m_frameRenderRecoveryFailed = false;

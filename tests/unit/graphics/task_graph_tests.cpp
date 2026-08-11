@@ -2477,8 +2477,42 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
     transaction.reset(compiledGraph);
     ASSERT_TRUE(transaction.markPacketRecorded(firstPacket));
-    const Graphics::QueueSubmissionToken firstToken{ Graphics::CommandQueue::Compute, 41u };
-    transaction.acceptPacket(graph, compiledGraph, firstPacket, firstToken);
+    const Graphics::GpuPhysicalQueueId firstQueue = compiledGraph.packet(firstPacket).queue;
+    const Graphics::QueueSubmissionToken firstToken{
+        .queue = Graphics::CommandQueue::Compute,
+        .value = 41u,
+        .physicalQueueIndex = firstQueue.index,
+        .deviceGeneration = firstQueue.deviceGeneration,
+    };
+    const Graphics::GpuTaskGraphExternalCompletionToken externalCompletionToken{
+        .completion = completion,
+        .token = firstToken,
+    };
+    EXPECT_TRUE(externalCompletionToken.validFor(compiledGraph));
+    // An external completion can originate on a valid current-device queue that this compiled graph does not use.
+    // Concrete queue existence/identity is checked later by the submitting Device, not by this graph-local binding.
+    const Graphics::GpuTaskGraphExternalCompletionToken inactiveQueueCompletionToken{
+        .completion = completion,
+        .token = Graphics::QueueSubmissionToken{
+            .queue = Graphics::CommandQueue::Transfer,
+            .value = 40u,
+            .physicalQueueIndex = 2u,
+            .deviceGeneration = compiledGraph.deviceGeneration(),
+        },
+    };
+    EXPECT_TRUE(inactiveQueueCompletionToken.validFor(compiledGraph));
+    Graphics::GpuTaskGraphExternalCompletionToken staleExternalCompletionToken = externalCompletionToken;
+    staleExternalCompletionToken.token.deviceGeneration = firstQueue.deviceGeneration == Limit<u16>::s_Max
+        ? 1u
+        : static_cast<u16>(firstQueue.deviceGeneration + 1u)
+    ;
+    EXPECT_FALSE(staleExternalCompletionToken.validFor(compiledGraph));
+    Graphics::QueueSubmissionToken mismatchedFirstToken = firstToken;
+    mismatchedFirstToken.physicalQueueIndex = 0u;
+    if(mismatchedFirstToken.physicalQueueIndex == firstQueue.index)
+        mismatchedFirstToken.physicalQueueIndex = 1u;
+    EXPECT_FALSE(transaction.acceptPacket(graph, compiledGraph, firstPacket, mismatchedFirstToken));
+    ASSERT_TRUE(transaction.acceptPacket(graph, compiledGraph, firstPacket, firstToken));
     EXPECT_EQ(acceptedCount, 1u);
     EXPECT_EQ(discardedCount, 0u);
     EXPECT_EQ(acceptedToken.queue, firstToken.queue);
@@ -2506,8 +2540,14 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     );
 
     ASSERT_TRUE(transaction.markPacketRecorded(recoveryPacket));
-    const Graphics::QueueSubmissionToken recoveryToken{ Graphics::CommandQueue::Graphics, 42u };
-    transaction.acceptPacket(graph, compiledGraph, recoveryPacket, recoveryToken);
+    const Graphics::GpuPhysicalQueueId recoveryQueue = compiledGraph.packet(recoveryPacket).queue;
+    const Graphics::QueueSubmissionToken recoveryToken{
+        .queue = Graphics::CommandQueue::Graphics,
+        .value = 42u,
+        .physicalQueueIndex = recoveryQueue.index,
+        .deviceGeneration = recoveryQueue.deviceGeneration,
+    };
+    ASSERT_TRUE(transaction.acceptPacket(graph, compiledGraph, recoveryPacket, recoveryToken));
     EXPECT_EQ(acceptedCount, 2u);
     EXPECT_EQ(discardedCount, 1u);
     EXPECT_EQ(acceptedToken.queue, recoveryToken.queue);

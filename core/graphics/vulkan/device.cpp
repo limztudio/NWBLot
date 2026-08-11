@@ -10,6 +10,7 @@
 #include <core/filesystem/volume_staging.h>
 #include <global/filesystem/volume_naming.h>
 #include <core/common/log.h>
+#include <global/atomic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,6 +34,26 @@ static constexpr AStringView s_PipelineCacheVolumeName = "runtime_pipeline_cache
 static constexpr u64 s_PipelineCacheVolumeSegmentSize = 16ull * 1024ull * 1024ull;
 static constexpr u64 s_PipelineCacheVolumeMetadataSize = 4ull * 1024ull;
 static constexpr usize s_PipelineCacheDataMaxAttempts = 4;
+
+// Queue timeline values are only meaningful within one logical-device lifetime.  The backend currently exposes one
+// concrete queue for each CommandQueue transport, so the transport ordinal is its stable physical index.  Keep the
+// generation process-wide to make a recreated Device reject a completion token produced by its predecessor.
+static Atomic<u32> s_NextDeviceGeneration{ 1u };
+
+[[nodiscard]] static u16 AllocateDeviceGeneration()noexcept{
+    u16 generation = static_cast<u16>(s_NextDeviceGeneration.fetch_add(1u, MemoryOrder::relaxed));
+    while(generation == 0u)
+        generation = static_cast<u16>(s_NextDeviceGeneration.fetch_add(1u, MemoryOrder::relaxed));
+    return generation;
+}
+
+[[nodiscard]] static constexpr u16 PhysicalQueueIndex(const CommandQueue::Enum queue)noexcept{
+    const u32 index = static_cast<u32>(queue);
+    return index < static_cast<u32>(CommandQueue::kCount)
+        ? static_cast<u16>(index)
+        : Limit<u16>::s_Max
+    ;
+}
 
 static AStringView TrimGpuCrashText(const AStringView text){
     return AStringView(text.data(), Min(text.size(), s_MaxGpuCrashMarkerChars));
@@ -154,6 +175,7 @@ static bool RetrievePipelineCacheData(VkDevice device, VkPipelineCache pipelineC
 Device::Device(const DeviceDesc& desc)
     : RefCounter<GraphicsResource>(desc.threadPool)
     , m_gpuCrashDiagnosticsEnabled(desc.gpuCrashDiagnosticsEnabled)
+    , m_deviceGeneration(VulkanDetail::AllocateDeviceGeneration())
     , m_gpuCrashTracker(desc.allocator.getObjectArena())
     , m_gpuCrashReportArena(VulkanArenaScope::s_GpuCrashReportArena, Alloc::PersistentArena::StructureAlignedSize(s_GpuCrashReportArenaSize))
     , m_gpuCrashVendorBinaryArena(VulkanArenaScope::s_GpuCrashVendorBinaryArena, Alloc::PersistentArena::StructureAlignedSize(s_MaxDeviceFaultVendorBinaryBytes))
@@ -664,6 +686,26 @@ Queue* Device::getQueue(CommandQueue::Enum queueType){
     return nullptr;
 }
 
+u16 Device::getPhysicalQueueIndex(const CommandQueue::Enum queue)const noexcept{
+    const u32 queueIndex = static_cast<u32>(queue);
+    return queueIndex < static_cast<u32>(CommandQueue::kCount) && m_queues[queueIndex]
+        ? VulkanDetail::PhysicalQueueIndex(queue)
+        : Limit<u16>::s_Max
+    ;
+}
+
+bool Device::matchesPhysicalQueueIdentity(
+    const CommandQueue::Enum queue,
+    const u16 physicalQueueIndex,
+    const u16 deviceGeneration
+)const noexcept{
+    const u16 expectedPhysicalQueueIndex = getPhysicalQueueIndex(queue);
+    return deviceGeneration == m_deviceGeneration
+        && expectedPhysicalQueueIndex != Limit<u16>::s_Max
+        && physicalQueueIndex == expectedPhysicalQueueIndex
+    ;
+}
+
 #if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
 
 void Device::rejectNextSubmissionForTesting(const CommandQueue::Enum queue){
@@ -804,6 +846,17 @@ QueueSubmissionToken Device::executeCommandLists(
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: dependency token is not accepted"));
                 return {};
             }
+            if(
+                !token.hasPhysicalQueueIdentity()
+                || !matchesPhysicalQueueIdentity(
+                    token.queue,
+                    token.physicalQueueIndex,
+                    token.deviceGeneration
+                )
+            ){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: dependency token belongs to a different physical queue or device generation"));
+                return {};
+            }
 
             Queue* const producerQueue = getQueue(token.queue);
             if(!producerQueue || producerQueue->m_trackingSemaphore == VK_NULL_HANDLE){
@@ -887,7 +940,12 @@ QueueSubmissionToken Device::executeCommandLists(
     if(!submissionAccepted)
         return {};
 
-    return QueueSubmissionToken{ executionQueue, submittedID };
+    return QueueSubmissionToken{
+        .queue = executionQueue,
+        .value = submittedID,
+        .physicalQueueIndex = getPhysicalQueueIndex(executionQueue),
+        .deviceGeneration = m_deviceGeneration,
+    };
 }
 
 QueueSubmissionToken Device::executeCommandLists(

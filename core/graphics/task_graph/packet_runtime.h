@@ -159,7 +159,12 @@ struct GpuPacketRuntime{
 
 struct GpuTaskGraphExternalCompletionToken{
     GpuExternalCompletionId completion;
+    // The token must retain the exact physical queue and device-generation identity returned by native submission.
+    // Graph waits reject broad CommandQueue-only completions so a stale timeline value cannot alias a recreated
+    // device or a future same-class queue.
     QueueSubmissionToken token;
+
+    [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
 };
 
 
@@ -196,7 +201,7 @@ public:
 
     [[nodiscard]] bool validFor(const GpuCompiledGraph& compiledGraph)const noexcept;
     [[nodiscard]] bool markPacketRecorded(const GpuSubmissionPacketId& packet)noexcept;
-    void acceptPacket(
+    [[nodiscard]] bool acceptPacket(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketId& packet,

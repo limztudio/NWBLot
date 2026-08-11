@@ -64,12 +64,29 @@ namespace RenderLane{
 
 // A completion edge produced only by an accepted queue submission. `valid()` is intentionally false for rejected or
 // empty work, while an accepted synchronization-only submission may still produce a token for dependency forwarding.
+// `physicalQueueIndex` and `deviceGeneration` identify the concrete backend queue that produced the timeline value.
+// They are deliberately optional for retained source compatibility with older direct callers; graph submission and
+// external graph completions require them so a token from a retired device cannot be mistaken for current work.
 struct QueueSubmissionToken{
     CommandQueue::Enum queue = CommandQueue::kCount;
     u64 value = 0;
+    u16 physicalQueueIndex = Limit<u16>::s_Max;
+    u16 deviceGeneration = 0u;
 
     [[nodiscard]] constexpr bool valid()const{
         return static_cast<u32>(queue) < static_cast<u32>(CommandQueue::kCount) && value != 0u;
+    }
+    [[nodiscard]] constexpr bool hasPhysicalQueueIdentity()const{
+        return physicalQueueIndex != Limit<u16>::s_Max && deviceGeneration != 0u;
+    }
+    [[nodiscard]] constexpr bool matchesPhysicalQueue(
+        const u16 index,
+        const u16 generation
+    )const{
+        return hasPhysicalQueueIdentity()
+            && physicalQueueIndex == index
+            && deviceGeneration == generation
+        ;
     }
 };
 

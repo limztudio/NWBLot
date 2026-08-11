@@ -2237,6 +2237,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
 
     const auto& device = graphics().getDevice();
+    const u16 deviceGeneration = device.getDeviceGeneration();
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
     const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
     const u32 transferFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Transfer);
@@ -3413,7 +3414,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     );
     Core::GpuPhysicalQueueInfo queues[3u] = {
         Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 0u, m_taskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{
+                device.getPhysicalQueueIndex(Core::CommandQueue::Graphics),
+                deviceGeneration,
+            },
             .queueClass = Core::CommandQueue::Graphics,
             .capabilities = graphicsQueueCapabilities,
             .familyIndex = graphicsFamilyIndex,
@@ -3424,7 +3428,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     usize queueCount = 1u;
     if(dedicatedAsyncCompute){
         queues[queueCount] = Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 1u, m_taskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{
+                device.getPhysicalQueueIndex(Core::CommandQueue::Compute),
+                deviceGeneration,
+            },
             .queueClass = Core::CommandQueue::Compute,
             .capabilities = computeQueueCapabilities,
             .familyIndex = computeFamilyIndex,
@@ -3435,7 +3442,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     }
     if(dedicatedTransfer){
         queues[queueCount] = Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{ 2u, m_taskGraphDeviceGeneration },
+            .id = Core::GpuPhysicalQueueId{
+                device.getPhysicalQueueIndex(Core::CommandQueue::Transfer),
+                deviceGeneration,
+            },
             .queueClass = Core::CommandQueue::Transfer,
             .capabilities = Core::GpuQueueCapability::Transfer,
             .familyIndex = transferFamilyIndex,

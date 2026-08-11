@@ -2379,6 +2379,16 @@ public:
     void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance);
     [[nodiscard]] CommandQueue::Enum resolveRenderLane(RenderLane::Enum lane)const;
     [[nodiscard]] bool isRenderLaneDedicated(RenderLane::Enum lane)const;
+    // The current Vulkan topology exposes one concrete queue for each CommandQueue transport.  Keep this identity
+    // explicit so task-graph packet metadata and external completion tokens cannot survive device recreation or
+    // silently alias a different queue class.
+    [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_deviceGeneration; }
+    [[nodiscard]] u16 getPhysicalQueueIndex(CommandQueue::Enum queue)const noexcept;
+    [[nodiscard]] bool matchesPhysicalQueueIdentity(
+        CommandQueue::Enum queue,
+        u16 physicalQueueIndex,
+        u16 deviceGeneration
+    )const noexcept;
     // Device loss requires full device recreation.
     [[nodiscard]] bool isDeviceLost()const noexcept{ return m_deviceLost.load(MemoryOrder::acquire); }
     // Cross-queue timing requires Graphics and Compute timestamp support.
@@ -2538,6 +2548,7 @@ private:
 private:
     // First: queues unregister command lists during destruction.
     bool m_gpuCrashDiagnosticsEnabled = false;
+    u16 m_deviceGeneration = 0u;
     // Distinguishes submit rejection from device loss.
     Atomic<bool> m_deviceLost = false;
     Atomic<bool> m_gpuCrashCaptured = false;

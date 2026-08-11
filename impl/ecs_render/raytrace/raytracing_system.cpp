@@ -29,6 +29,7 @@ RendererRayTracingSystem::RendererRayTracingSystem(RendererSystem& renderer)
     , m_preparedSceneTlasInstances(arena())
     , m_preparedSceneTlasBlases(arena())
     , m_preparedMeshBlasBuilds(arena())
+    , m_preparedMeshSwBvhBuilds(arena())
 {}
 
 RendererRayTracingSystem::~RendererRayTracingSystem() = default;
@@ -71,6 +72,12 @@ void RendererRayTracingSystem::logCapabilityOnce(){
 
 bool RendererRayTracingSystem::shadowVisibilityResourcesPreflighted()const noexcept{
     return m_shadowVisibilityResourcesPreflighted;
+}
+
+bool RendererRayTracingSystem::shadowVisibilitySoftwareResourcesPreflighted()const noexcept{
+    return m_shadowVisibilityTraceResourcesPreflighted
+        && (!m_shadowVisibilityHardwareSupported || m_shadowVisibilityHybridResourcesPreflighted)
+    ;
 }
 
 void RendererRayTracingSystem::clearPreparedShadowMaterialContext()noexcept{
@@ -631,7 +638,9 @@ bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(){
     // intentionally leaves its old software tables intact, and those stale pointers must never enter this graph.
     const bool includeHardware = m_shadowVisibilityHardwareSupported && m_shadowVisibilityTraceResourcesPreflighted;
     const bool includeSoftware = m_shadowVisibilityTraceResourcesPreflighted
-        && (!m_shadowVisibilityHardwareSupported || m_shadowVisibilityHybridPipelinePreflighted)
+        // Hybrid may still record its direct SW build before a later traversal-pipeline miss makes the transparent
+        // fallback unavailable. Retain/import that native producer state by resource readiness, not pipeline use.
+        && (!m_shadowVisibilityHardwareSupported || m_shadowVisibilityHybridResourcesPreflighted)
     ;
     if(!includeHardware && !includeSoftware)
         return true;
@@ -852,6 +861,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     clearPreparedSceneBvh();
     clearPreparedSceneTlasBuild();
     clearPreparedMeshBlasBuilds();
+    clearPreparedMeshSwBvhBuilds();
     m_shadowVisibilityPreparedTargets = nullptr;
     m_shadowVisibilityResourcesPreflighted = false;
     m_shadowVisibilityHardwareSupported = false;
@@ -904,6 +914,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     clearPreparedSceneBvh();
     clearPreparedSceneTlasBuild();
     clearPreparedMeshBlasBuilds();
+    clearPreparedMeshSwBvhBuilds();
     // Surfel GI is a per-frame consumer of the scene selected below. Never let an empty or rejected preflight reuse
     // the preceding frame's backend selection and dispatch against stale trace inputs.
     rayTracingState().m_hybridTransparentShadowReady = false;
@@ -1077,7 +1088,6 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         m_shadowVisibilityResourcesPreflighted = true;
         return true;
     }
-
     // Enable surfel GI on the SW path (the surfel trace reuses the SW scene BVH the SW shadow/caustic paths built) and
     // create its resources in the prepare phase right after the scene BVH is resident. renderSurfelGi can then spawn,
     // hash, and trace on the same frame surfels become active. The pool/hash/pipeline resources live on
@@ -1096,6 +1106,11 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         m_shadowVisibilityResourcesPreflighted = true;
         return true;
     }
+    // The software-only route can freeze every selected per-mesh build/refit because it has no later non-fatal
+    // hardware fallback. A capture miss keeps the established direct recorder for this frame rather than mixing a
+    // partially frozen operation with a live one.
+    if(!capturePreparedMeshSwBvhBuilds())
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software BVH mesh build plan"));
     m_shadowVisibilityTraceResourcesPreflighted = true;
 
     const bool backendReady = ensureSwShadowPipeline();
@@ -1166,7 +1181,8 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     const bool shadowMaterialContextBatchGraphOwned,
     const bool sceneBvhBatchGraphOwned,
     const bool sceneTlasBuildGraphOwned,
-    const bool meshBlasBuildsGraphOwned
+    const bool meshBlasBuildsGraphOwned,
+    const bool meshSwBvhBuildsGraphOwned
 ){
     outBackendReady = false;
     if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
@@ -1232,13 +1248,21 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
         return true;
     }
 
-    if(!buildPendingMeshSwBvh(commandList))
+    const bool meshSwBvhReady = meshSwBvhBuildsGraphOwned
+        ? recordPreparedMeshSwBvhBuilds(commandList)
+        : buildPendingMeshSwBvh(commandList)
+    ;
+    if(!meshSwBvhReady){
+        if(meshSwBvhBuildsGraphOwned)
+            return false;
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow BVH update failed"));
+    }
     if(!buildSceneSwBvh(
         commandList,
         scratchArena,
         shadowMaterialContextBatchGraphOwned,
-        sceneBvhBatchGraphOwned
+        sceneBvhBatchGraphOwned,
+        meshSwBvhBuildsGraphOwned
     )){
         if(shadowMaterialContextBatchGraphOwned || sceneBvhBatchGraphOwned)
             return false;

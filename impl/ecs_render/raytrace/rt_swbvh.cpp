@@ -630,6 +630,293 @@ bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(){
     return allResourcesReady;
 }
 
+void RendererRayTracingSystem::clearPreparedMeshSwBvhBuilds()noexcept{
+    m_preparedMeshSwBvhBuilds.clear();
+    m_preparedMeshSwBvhBuildsReady = false;
+}
+
+bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(){
+    clearPreparedMeshSwBvhBuilds();
+    auto& state = rayTracingState();
+    bool hasCandidate = false;
+    for(auto it = meshState().m_meshes.begin(); it != meshState().m_meshes.end(); ++it){
+        const MeshResources& mesh = it.value();
+        if(mesh.runtimeMesh || mesh.swBvhBuildPending){
+            hasCandidate = true;
+            break;
+        }
+    }
+    // A software-only frame can have no dirty/static or runtime mesh work. In that case the shared scratch has not
+    // necessarily been allocated, and an authoritative empty plan must retain the established no-op path.
+    if(!hasCandidate)
+        return true;
+    const auto sharedResourcesReady = [&]{
+        return
+            state.m_bvhSortKeysBuffer
+            && state.m_bvhSortPayloadBuffer
+            && state.m_bvhVisitCounterBuffer
+            && __hidden_rt_swbvh::IsStorageBufferHeapHandle(state.m_bvhSortKeysHeapHandle)
+            && __hidden_rt_swbvh::IsStorageBufferHeapHandle(state.m_bvhSortPayloadHeapHandle)
+            && __hidden_rt_swbvh::IsStorageBufferHeapHandle(state.m_bvhVisitCounterHeapHandle)
+        ;
+    };
+    if(!sharedResourcesReady())
+        return false;
+
+    auto& meshes = meshState().m_meshes;
+    for(auto it = meshes.begin(); it != meshes.end(); ++it){
+        const MeshResources& mesh = it.value();
+        // Runtime meshes update every software-only frame; static meshes enter exactly while their topology is
+        // pending. This mirrors the direct loop, including off-screen mesh resources.
+        if(!mesh.runtimeMesh && !mesh.swBvhBuildPending)
+            continue;
+        if(
+            !mesh.meshName
+            || !mesh.positionBuffer
+            || !mesh.triangleIndexBuffer
+            || mesh.meshletPrimitiveIndexCount == 0u
+            || (mesh.meshletPrimitiveIndexCount % s_RayTracingTriangleIndexCount) != 0u
+            || !meshSwBvhResourcesReady(
+                mesh.swBvhNodeBuffer,
+                mesh.swBvhParentBuffer,
+                mesh.swBvhNodeHeapHandle,
+                mesh.swBvhParentHeapHandle
+            )
+            || !__hidden_rt_swbvh::IsStorageBufferHeapHandle(mesh.swBvhPositionHeapHandle)
+            || !__hidden_rt_swbvh::IsStorageBufferHeapHandle(mesh.swBvhTriangleIndexHeapHandle)
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software BVH build for mesh '{}'")
+                , StringConvert(mesh.meshName.c_str())
+            );
+            clearPreparedMeshSwBvhBuilds();
+            return false;
+        }
+
+        const u32 primitiveCount = mesh.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
+        const bool firstBuild = !mesh.swBvhTopologyBuilt;
+        const bool performRefit =
+            mesh.runtimeMesh
+            && !firstBuild
+            && mesh.swBvhRefitsSinceRebuild < adaptiveRefitsBeforeRebuild(primitiveCount)
+        ;
+        const Core::BufferDesc& positionDesc = mesh.positionBuffer->getDescription();
+        const Core::BufferDesc& indexDesc = mesh.triangleIndexBuffer->getDescription();
+        const Core::BufferDesc& nodeDesc = mesh.swBvhNodeBuffer->getDescription();
+        const Core::BufferDesc& parentDesc = mesh.swBvhParentBuffer->getDescription();
+        const Core::BufferDesc& keysDesc = state.m_bvhSortKeysBuffer->getDescription();
+        const Core::BufferDesc& payloadDesc = state.m_bvhSortPayloadBuffer->getDescription();
+        const Core::BufferDesc& counterDesc = state.m_bvhVisitCounterBuffer->getDescription();
+        m_preparedMeshSwBvhBuilds.push_back(PreparedMeshSwBvhBuild{
+            .meshName = mesh.meshName,
+            .positionBuffer = mesh.positionBuffer,
+            .triangleIndexBuffer = mesh.triangleIndexBuffer,
+            .nodeBuffer = mesh.swBvhNodeBuffer,
+            .parentBuffer = mesh.swBvhParentBuffer,
+            .sortKeysBuffer = state.m_bvhSortKeysBuffer,
+            .sortPayloadBuffer = state.m_bvhSortPayloadBuffer,
+            .visitCounterBuffer = state.m_bvhVisitCounterBuffer,
+            .positionHeapHandle = mesh.swBvhPositionHeapHandle,
+            .triangleIndexHeapHandle = mesh.swBvhTriangleIndexHeapHandle,
+            .nodeHeapHandle = mesh.swBvhNodeHeapHandle,
+            .parentHeapHandle = mesh.swBvhParentHeapHandle,
+            .sortKeysHeapHandle = state.m_bvhSortKeysHeapHandle,
+            .sortPayloadHeapHandle = state.m_bvhSortPayloadHeapHandle,
+            .visitCounterHeapHandle = state.m_bvhVisitCounterHeapHandle,
+            .aabbMin = mesh.csgLocalBounds.minBounds,
+            .aabbMax = mesh.csgLocalBounds.maxBounds,
+            .runtimeMeshVersion = mesh.runtimeMeshVersion,
+            .positionByteSize = positionDesc.byteSize,
+            .indexByteSize = indexDesc.byteSize,
+            .nodeByteSize = nodeDesc.byteSize,
+            .parentByteSize = parentDesc.byteSize,
+            .sortKeysByteSize = keysDesc.byteSize,
+            .sortPayloadByteSize = payloadDesc.byteSize,
+            .visitCounterByteSize = counterDesc.byteSize,
+            .primitiveCount = primitiveCount,
+            .refitsBeforeBuild = mesh.swBvhRefitsSinceRebuild,
+            .refitsAfterBuild = performRefit ? (mesh.swBvhRefitsSinceRebuild + 1u) : 0u,
+            .runtimeMesh = mesh.runtimeMesh,
+            .buildPending = mesh.swBvhBuildPending,
+            .firstBuild = firstBuild,
+            .performRefit = performRefit,
+        });
+    }
+    m_preparedMeshSwBvhBuildsReady = !m_preparedMeshSwBvhBuilds.empty();
+    return true;
+}
+
+bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuilds(Core::CommandList& commandList){
+    if(!m_preparedMeshSwBvhBuildsReady || m_preparedMeshSwBvhBuilds.empty())
+        return false;
+
+    const auto matchesPlan = [this](const MeshResources& mesh, const PreparedMeshSwBvhBuild& build){
+        const auto& state = rayTracingState();
+        if(
+            mesh.meshName != build.meshName
+            || mesh.runtimeMesh != build.runtimeMesh
+            || mesh.runtimeMeshVersion != build.runtimeMeshVersion
+            || mesh.positionBuffer.get() != build.positionBuffer.get()
+            || mesh.triangleIndexBuffer.get() != build.triangleIndexBuffer.get()
+            || mesh.swBvhNodeBuffer.get() != build.nodeBuffer.get()
+            || mesh.swBvhParentBuffer.get() != build.parentBuffer.get()
+            || mesh.swBvhPositionHeapHandle != build.positionHeapHandle
+            || mesh.swBvhTriangleIndexHeapHandle != build.triangleIndexHeapHandle
+            || mesh.swBvhNodeHeapHandle != build.nodeHeapHandle
+            || mesh.swBvhParentHeapHandle != build.parentHeapHandle
+            || state.m_bvhSortKeysBuffer.get() != build.sortKeysBuffer.get()
+            || state.m_bvhSortPayloadBuffer.get() != build.sortPayloadBuffer.get()
+            || state.m_bvhVisitCounterBuffer.get() != build.visitCounterBuffer.get()
+            || state.m_bvhSortKeysHeapHandle != build.sortKeysHeapHandle
+            || state.m_bvhSortPayloadHeapHandle != build.sortPayloadHeapHandle
+            || state.m_bvhVisitCounterHeapHandle != build.visitCounterHeapHandle
+            || mesh.meshletPrimitiveIndexCount != build.primitiveCount * s_RayTracingTriangleIndexCount
+            || mesh.swBvhRefitsSinceRebuild != build.refitsBeforeBuild
+            || mesh.swBvhBuildPending != build.buildPending
+            || (!mesh.swBvhTopologyBuilt) != build.firstBuild
+            || mesh.csgLocalBounds.minBounds != build.aabbMin
+            || mesh.csgLocalBounds.maxBounds != build.aabbMax
+            || !meshSwBvhResourcesReady(
+                mesh.swBvhNodeBuffer,
+                mesh.swBvhParentBuffer,
+                mesh.swBvhNodeHeapHandle,
+                mesh.swBvhParentHeapHandle
+            )
+        )
+            return false;
+        return
+            mesh.positionBuffer->getDescription().byteSize == build.positionByteSize
+            && mesh.triangleIndexBuffer->getDescription().byteSize == build.indexByteSize
+            && mesh.swBvhNodeBuffer->getDescription().byteSize == build.nodeByteSize
+            && mesh.swBvhParentBuffer->getDescription().byteSize == build.parentByteSize
+            && state.m_bvhSortKeysBuffer->getDescription().byteSize == build.sortKeysByteSize
+            && state.m_bvhSortPayloadBuffer->getDescription().byteSize == build.sortPayloadByteSize
+            && state.m_bvhVisitCounterBuffer->getDescription().byteSize == build.visitCounterByteSize
+        ;
+    };
+
+    auto& meshes = meshState().m_meshes;
+    for(const PreparedMeshSwBvhBuild& build : m_preparedMeshSwBvhBuilds){
+        const auto found = meshes.find(build.meshName);
+        if(found == meshes.end() || !matchesPlan(found.value(), build)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build no longer matches mesh '{}'")
+                , StringConvert(build.meshName.c_str())
+            );
+            return false;
+        }
+    }
+
+    for(const PreparedMeshSwBvhBuild& build : m_preparedMeshSwBvhBuilds){
+        commandList.setBufferState(build.positionBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.setBufferState(build.triangleIndexBuffer.get(), Core::ResourceStates::ShaderResource);
+        commandList.commitBarriers();
+
+        Core::BufferHandle nodeBuffer = build.nodeBuffer;
+        Core::BufferHandle parentBuffer = build.parentBuffer;
+        const bool recorded = build.performRefit
+            ? refitMeshSwBvhPrepared(
+                commandList,
+                build.positionHeapHandle.slot(),
+                build.triangleIndexHeapHandle.slot(),
+                build.primitiveCount,
+                nodeBuffer,
+                parentBuffer,
+                build.nodeHeapHandle,
+                build.parentHeapHandle
+            )
+            : buildMeshSwBvhPrepared(
+                commandList,
+                build.positionHeapHandle.slot(),
+                build.triangleIndexHeapHandle.slot(),
+                build.primitiveCount,
+                LoadFloatInt(build.aabbMin),
+                LoadFloatInt(build.aabbMax),
+                nodeBuffer,
+                parentBuffer,
+                build.nodeHeapHandle,
+                build.parentHeapHandle
+            )
+        ;
+        if(!recorded){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen software BVH build for mesh '{}'")
+                , StringConvert(build.meshName.c_str())
+            );
+            return false;
+        }
+    }
+    return true;
+}
+
+bool RendererRayTracingSystem::preparedMeshSwBvhBuildsReady()const noexcept{
+    return m_preparedMeshSwBvhBuildsReady;
+}
+
+const PreparedMeshSwBvhBuildVector& RendererRayTracingSystem::preparedMeshSwBvhBuilds()const noexcept{
+    return m_preparedMeshSwBvhBuilds;
+}
+
+void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds()noexcept{
+    if(!m_preparedMeshSwBvhBuildsReady)
+        return;
+
+    bool allPlansCurrent = true;
+    auto& meshes = meshState().m_meshes;
+    for(const PreparedMeshSwBvhBuild& build : m_preparedMeshSwBvhBuilds){
+        const auto found = meshes.find(build.meshName);
+        if(
+            found == meshes.end()
+            || found.value().runtimeMesh != build.runtimeMesh
+            || found.value().runtimeMeshVersion != build.runtimeMeshVersion
+            || found.value().positionBuffer.get() != build.positionBuffer.get()
+            || found.value().triangleIndexBuffer.get() != build.triangleIndexBuffer.get()
+            || found.value().swBvhNodeBuffer.get() != build.nodeBuffer.get()
+            || found.value().swBvhParentBuffer.get() != build.parentBuffer.get()
+            || found.value().swBvhRefitsSinceRebuild != build.refitsBeforeBuild
+            || found.value().swBvhBuildPending != build.buildPending
+            || (!found.value().swBvhTopologyBuilt) != build.firstBuild
+        ){
+            allPlansCurrent = false;
+            continue;
+        }
+
+        MeshResources& mesh = found.value();
+        if(!mesh.runtimeMesh)
+            mesh.swBvhBuildPending = false;
+        if(!build.performRefit)
+            mesh.swBvhTopologyBuilt = true;
+        mesh.swBvhRefitsSinceRebuild = build.refitsAfterBuild;
+        if(build.firstBuild){
+            NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built software BVH for mesh '{}' (runtime {}, {} triangles)")
+                , StringConvert(build.meshName.c_str())
+                , build.runtimeMesh
+                , static_cast<u64>(build.primitiveCount)
+            );
+        }
+    }
+    if(!allPlansCurrent)
+        rayTracingState().m_sceneSwBvhStaticSceneHashValid = false;
+    clearPreparedMeshSwBvhBuilds();
+}
+
+bool RendererRayTracingSystem::preparedMeshSwBvhBuildProducesTopology(const MeshResources& mesh)const noexcept{
+    if(!m_preparedMeshSwBvhBuildsReady)
+        return false;
+    for(const PreparedMeshSwBvhBuild& build : m_preparedMeshSwBvhBuilds){
+        if(
+            build.meshName == mesh.meshName
+            && build.runtimeMesh == mesh.runtimeMesh
+            && build.runtimeMeshVersion == mesh.runtimeMeshVersion
+            && build.positionBuffer.get() == mesh.positionBuffer.get()
+            && build.triangleIndexBuffer.get() == mesh.triangleIndexBuffer.get()
+            && build.nodeBuffer.get() == mesh.swBvhNodeBuffer.get()
+            && build.parentBuffer.get() == mesh.swBvhParentBuffer.get()
+            && build.buildPending == mesh.swBvhBuildPending
+            && build.refitsBeforeBuild == mesh.swBvhRefitsSinceRebuild
+        )
+            return !build.performRefit;
+    }
+    return false;
+}
+
 bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena& scratchArena){
     return buildSceneTlasImpl(nullptr, scratchArena);
 }
@@ -1074,13 +1361,15 @@ bool RendererRayTracingSystem::buildSceneSwBvh(
     Core::CommandList& commandList,
     Core::Alloc::ScratchArena& scratchArena,
     const bool shadowMaterialContextBatchGraphOwned,
-    const bool sceneBvhBatchGraphOwned
+    const bool sceneBvhBatchGraphOwned,
+    const bool meshSwBvhBuildsGraphOwned
 ){
     return buildSceneSwBvhImpl(
         &commandList,
         scratchArena,
         shadowMaterialContextBatchGraphOwned,
-        sceneBvhBatchGraphOwned
+        sceneBvhBatchGraphOwned,
+        meshSwBvhBuildsGraphOwned
     );
 }
 
@@ -1088,7 +1377,8 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     Core::CommandList* const commandList,
     Core::Alloc::ScratchArena& scratchArena,
     const bool shadowMaterialContextBatchGraphOwned,
-    const bool sceneBvhBatchGraphOwned
+    const bool sceneBvhBatchGraphOwned,
+    const bool meshSwBvhBuildsGraphOwned
 ){
     using namespace __hidden_rt_swbvh;
 
@@ -1168,6 +1458,10 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         const bool topologyReady = mesh && (
             mesh->swBvhTopologyBuilt
             || (!commandList && (mesh->runtimeMesh || mesh->swBvhBuildPending))
+            // A frozen software-only plan records before this scene gather but commits MeshResources only after the
+            // packet accepts. Its exact full-build operation therefore authoritatively supplies topology for this
+            // one recording pass without an optimistic CPU-side state mutation.
+            || (commandList && meshSwBvhBuildsGraphOwned && preparedMeshSwBvhBuildProducesTopology(*mesh))
         );
         if(
             !meshReady

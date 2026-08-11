@@ -103,6 +103,7 @@ struct ShadowPrepareGraphTask{
         bool sceneBvhBatchGraphOwned = false;
         bool sceneTlasBuildGraphOwned = false;
         bool meshBlasBuildsGraphOwned = false;
+        bool meshSwBvhBuildsGraphOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -140,7 +141,8 @@ struct ShadowPrepareGraphTask{
                 payload.shadowMaterialContextBatchGraphOwned,
                 payload.sceneBvhBatchGraphOwned,
                 payload.sceneTlasBuildGraphOwned,
-                payload.meshBlasBuildsGraphOwned
+                payload.meshBlasBuildsGraphOwned,
+                payload.meshSwBvhBuildsGraphOwned
             )
         ;
         // The graph-owned material-context selector was snapshotted after preflight settled every backing handle.
@@ -1351,6 +1353,8 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     const Core::GpuGraphResourceId materialContextSlots,
     const Core::GpuGraphResourceId* const shadowTraceGeometryResources,
     const usize shadowTraceGeometryResourceCount,
+    const Core::GpuGraphResourceId* const softwareBvhBuildStateResources,
+    const usize softwareBvhBuildStateResourceCount,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace __hidden_renderer_task_graph;
@@ -1372,6 +1376,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         || !currentBindlessSlots.valid()
         || !materialContextSlots.valid()
         || (shadowTraceGeometryResourceCount != 0u && !shadowTraceGeometryResources)
+        || (softwareBvhBuildStateResourceCount != 0u && !softwareBvhBuildStateResources)
     )
         return false;
 
@@ -1833,10 +1838,21 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build plan has no scene TLAS"));
         return false;
     }
+    const bool meshSwBvhBuildsGraphOwned = m_raytracingSystem.preparedMeshSwBvhBuildsReady();
+    const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds = m_raytracingSystem.preparedMeshSwBvhBuilds();
+    if(meshSwBvhBuildsGraphOwned && preparedMeshSwBvhBuilds.empty()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build plan has no operations"));
+        return false;
+    }
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
-    resourceUses.reserve(19u + shadowTraceGeometryResourceCount + meshState().m_meshes.size() * 2u);
+    resourceUses.reserve(
+        19u
+        + shadowTraceGeometryResourceCount
+        + softwareBvhBuildStateResourceCount
+        + meshState().m_meshes.size() * 2u
+    );
     // Shadow Preparation owns each preflight input's post-transition packet boundary. This deliberately supersedes
     // preceding immutable uploads as graph producers, so later Compute readers wait on this first Graphics packet
     // rather than forcing FrontierSafe packetization to split an upload away from its accepting consumer.
@@ -1863,6 +1879,14 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         if(!resource.valid())
             return false;
         resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::ShaderResource));
+    }
+    for(usize resourceIndex = 0u; resourceIndex < softwareBvhBuildStateResourceCount; ++resourceIndex){
+        const Core::GpuGraphResourceId resource = softwareBvhBuildStateResources[resourceIndex];
+        if(!resource.valid())
+            return false;
+        // Parent links and global build scratch retain their native UAV close state. They are state-only graph
+        // resources: later traversal keeps its narrower node/geometry declarations.
+        resourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::UnorderedAccess));
     }
 
     bool resourcesImported = true;
@@ -1953,6 +1977,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .sceneBvhBatchGraphOwned = sceneBvhBatchGraphOwned,
             .sceneTlasBuildGraphOwned = sceneTlasBuildGraphOwned,
             .meshBlasBuildsGraphOwned = meshBlasBuildsGraphOwned,
+            .meshSwBvhBuildsGraphOwned = meshSwBvhBuildsGraphOwned,
         }
     );
     if(!m_deferredShadowPrepareTask.valid()){
@@ -3722,10 +3747,14 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hardwareTraceGeometryResources{ traceGeometryScratchArena };
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> hardwareTraceAttributeResources{ traceGeometryScratchArena };
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareTraceGeometryResources{ traceGeometryScratchArena };
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareBvhBuildStateResources{ traceGeometryScratchArena };
+    Vector<Core::Buffer*, Core::Alloc::ScratchArena> softwareBvhBuildStateBuffers{ traceGeometryScratchArena };
     traceGeometryResources.reserve(preparedTraceGeometry.size());
     hardwareTraceGeometryResources.reserve(preparedTraceGeometry.size());
     hardwareTraceAttributeResources.reserve(preparedTraceGeometry.size());
     softwareTraceGeometryResources.reserve(preparedTraceGeometry.size());
+    softwareBvhBuildStateResources.reserve(meshState().m_meshes.size() + 3u);
+    softwareBvhBuildStateBuffers.reserve(meshState().m_meshes.size() + 3u);
 
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
@@ -3766,6 +3795,79 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             | PreparedShadowTraceGeometryRole::SoftwareAttribute
         ))
             softwareTraceGeometryResources.push_back(resource);
+    }
+    bool softwareTraceResourcesPrepared = false;
+    for(const PreparedShadowTraceGeometryBuffer& preparedBuffer : preparedTraceGeometry){
+        if(preparedBuffer.roles & (
+            PreparedShadowTraceGeometryRole::SoftwareNode
+            | PreparedShadowTraceGeometryRole::SoftwarePosition
+            | PreparedShadowTraceGeometryRole::SoftwareIndex
+            | PreparedShadowTraceGeometryRole::SoftwareAttribute
+        )){
+            softwareTraceResourcesPrepared = true;
+            break;
+        }
+    }
+    if(softwareTraceResourcesPrepared){
+        const auto appendSoftwareBvhBuildState = [&](
+            const Core::BufferHandle& buffer,
+            const Name identity,
+            const AStringView label
+        ){
+            if(!buffer || !identity)
+                return false;
+            for(Core::Buffer* const existing : softwareBvhBuildStateBuffers){
+                if(existing == buffer.get())
+                    return true;
+            }
+            const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
+            if(!resource.valid())
+                return false;
+            softwareBvhBuildStateBuffers.push_back(buffer.get());
+            softwareBvhBuildStateResources.push_back(resource);
+            return true;
+        };
+        for(auto meshIt = meshState().m_meshes.begin(); meshIt != meshState().m_meshes.end(); ++meshIt){
+            const MeshResources& mesh = meshIt.value();
+            if(!mesh.swBvhNodeBuffer && !mesh.swBvhParentBuffer)
+                continue;
+            if(
+                !mesh.swBvhNodeBuffer
+                || !mesh.swBvhParentBuffer
+                || !appendSoftwareBvhBuildState(
+                    mesh.swBvhParentBuffer,
+                    DeriveName(mesh.meshName, AStringView(":shadow_trace_sw_parent")),
+                    "Software BVH Parent"
+                )
+            ){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import software BVH parent build state"));
+                return;
+            }
+        }
+        const RendererRayTracingState& traceState = rayTracingState();
+        if(
+            !traceState.m_bvhSortKeysBuffer
+            || !traceState.m_bvhSortPayloadBuffer
+            || !traceState.m_bvhVisitCounterBuffer
+            || !appendSoftwareBvhBuildState(
+                traceState.m_bvhSortKeysBuffer,
+                Name("render.shadow_trace.sw_bvh_sort_keys"),
+                "Software BVH Sort Keys"
+            )
+            || !appendSoftwareBvhBuildState(
+                traceState.m_bvhSortPayloadBuffer,
+                Name("render.shadow_trace.sw_bvh_sort_payload"),
+                "Software BVH Sort Payload"
+            )
+            || !appendSoftwareBvhBuildState(
+                traceState.m_bvhVisitCounterBuffer,
+                Name("render.shadow_trace.sw_bvh_visit_counter"),
+                "Software BVH Visit Counter"
+            )
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shared software BVH build state"));
+            return;
+        }
     }
     const Core::GpuGraphResourceId albedo = importTexture(
         deferredTargets.albedo,
@@ -4064,6 +4166,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         materialContextSlots,
         traceGeometryResources.data(),
         traceGeometryResources.size(),
+        softwareBvhBuildStateResources.data(),
+        softwareBvhBuildStateResources.size(),
         shadowPrepareTimingTicket
     )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation packet"));

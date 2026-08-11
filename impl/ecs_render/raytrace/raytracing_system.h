@@ -83,6 +83,50 @@ using PreparedMeshBlasBuildVector = Vector<
 >;
 
 
+// The software mesh builder shares global sort/payload/counter storage, so one frozen operation retains both its
+// mesh-local inputs/outputs and the exact shared scratch generation. Never retain MeshResources pointers: runtime
+// geometry can be replaced or pruned between preflight and Shadow Preparation recording.
+struct PreparedMeshSwBvhBuild{
+    Name meshName = NAME_NONE;
+    Core::BufferHandle positionBuffer;
+    Core::BufferHandle triangleIndexBuffer;
+    Core::BufferHandle nodeBuffer;
+    Core::BufferHandle parentBuffer;
+    Core::BufferHandle sortKeysBuffer;
+    Core::BufferHandle sortPayloadBuffer;
+    Core::BufferHandle visitCounterBuffer;
+    Core::GpuDescriptorHandle positionHeapHandle;
+    Core::GpuDescriptorHandle triangleIndexHeapHandle;
+    Core::GpuDescriptorHandle nodeHeapHandle;
+    Core::GpuDescriptorHandle parentHeapHandle;
+    Core::GpuDescriptorHandle sortKeysHeapHandle;
+    Core::GpuDescriptorHandle sortPayloadHeapHandle;
+    Core::GpuDescriptorHandle visitCounterHeapHandle;
+    Float3Int aabbMin;
+    Float3Int aabbMax;
+    u64 runtimeMeshVersion = 0u;
+    usize positionByteSize = 0u;
+    usize indexByteSize = 0u;
+    usize nodeByteSize = 0u;
+    usize parentByteSize = 0u;
+    usize sortKeysByteSize = 0u;
+    usize sortPayloadByteSize = 0u;
+    usize visitCounterByteSize = 0u;
+    u32 primitiveCount = 0u;
+    u32 refitsBeforeBuild = 0u;
+    u32 refitsAfterBuild = 0u;
+    bool runtimeMesh = false;
+    bool buildPending = false;
+    bool firstBuild = false;
+    bool performRefit = false;
+};
+
+using PreparedMeshSwBvhBuildVector = Vector<
+    PreparedMeshSwBvhBuild,
+    Core::Alloc::GlobalArena
+>;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -107,9 +151,11 @@ public:
         bool shadowMaterialContextBatchGraphOwned = false,
         bool sceneBvhBatchGraphOwned = false,
         bool sceneTlasBuildGraphOwned = false,
-        bool meshBlasBuildsGraphOwned = false
+        bool meshBlasBuildsGraphOwned = false,
+        bool meshSwBvhBuildsGraphOwned = false
     );
     [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept;
+    [[nodiscard]] bool shadowVisibilitySoftwareResourcesPreflighted()const noexcept;
     void discardPreflightShadowVisibilityResources()noexcept;
     // These are retained handles for the current frozen trace plan. The graph imports each physical buffer once and
     // uses the shared IDs for every packet that manually stages it.
@@ -130,7 +176,8 @@ public:
         Core::CommandList& commandList,
         Core::Alloc::ScratchArena& scratchArena,
         bool shadowMaterialContextBatchGraphOwned = false,
-        bool sceneBvhBatchGraphOwned = false
+        bool sceneBvhBatchGraphOwned = false,
+        bool meshSwBvhBuildsGraphOwned = false
     );
     void releaseCausticEmissionTargetHeapHandle();
     [[nodiscard]] bool createShadowVisibilityTarget(DeferredFrameTargets& targets);
@@ -179,6 +226,11 @@ public:
     [[nodiscard]] bool preparedMeshBlasBuildsReady()const noexcept;
     [[nodiscard]] const PreparedMeshBlasBuildVector& preparedMeshBlasBuilds()const noexcept;
     void confirmPreparedMeshBlasBuilds()noexcept;
+    // Software-only frames freeze every selected mesh build/refit against its shared scratch generation. Hybrid
+    // hardware-to-software fallback intentionally retains the direct native path because its SW half is non-fatal.
+    [[nodiscard]] bool preparedMeshSwBvhBuildsReady()const noexcept;
+    [[nodiscard]] const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds()const noexcept;
+    void confirmPreparedMeshSwBvhBuilds()noexcept;
     void releaseRayTraceMaterialContextHeapHandles();
     void releaseSwBvhScratchHeapHandles();
     void releaseSurfelGiHeapHandles();
@@ -278,7 +330,8 @@ private:
         Core::CommandList* commandList,
         Core::Alloc::ScratchArena& scratchArena,
         bool shadowMaterialContextBatchGraphOwned = false,
-        bool sceneBvhBatchGraphOwned = false
+        bool sceneBvhBatchGraphOwned = false,
+        bool meshSwBvhBuildsGraphOwned = false
     );
     [[nodiscard]] bool prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool recordPreparedCausticEmissionTargets(Core::CommandList& commandList);
@@ -341,6 +394,10 @@ private:
     [[nodiscard]] bool capturePreparedMeshBlasBuilds();
     [[nodiscard]] bool recordPreparedMeshBlasBuilds(Core::CommandList& commandList);
     void clearPreparedMeshBlasBuilds()noexcept;
+    [[nodiscard]] bool capturePreparedMeshSwBvhBuilds();
+    [[nodiscard]] bool recordPreparedMeshSwBvhBuilds(Core::CommandList& commandList);
+    [[nodiscard]] bool preparedMeshSwBvhBuildProducesTopology(const MeshResources& mesh)const noexcept;
+    void clearPreparedMeshSwBvhBuilds()noexcept;
     [[nodiscard]] bool prepareSurfelResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool recordPreparedSurfelFrameConstants(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool initializeSurfelResources(Core::CommandList& commandList);
@@ -493,6 +550,8 @@ private:
     bool m_preparedSceneTlasReady = false;
     PreparedMeshBlasBuildVector m_preparedMeshBlasBuilds;
     bool m_preparedMeshBlasBuildsReady = false;
+    PreparedMeshSwBvhBuildVector m_preparedMeshSwBvhBuilds;
+    bool m_preparedMeshSwBvhBuildsReady = false;
     DeferredFrameTargets* m_shadowVisibilityPreparedTargets = nullptr;
     bool m_shadowVisibilityResourcesPreflighted = false;
     bool m_shadowVisibilityHardwareSupported = false;

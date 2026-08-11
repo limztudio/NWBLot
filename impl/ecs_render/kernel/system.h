@@ -173,6 +173,8 @@ private:
         Core::GpuGraphResourceId materialContextSlots,
         const Core::GpuGraphResourceId* shadowTraceGeometryResources,
         usize shadowTraceGeometryResourceCount,
+        const Core::GpuGraphResourceId* softwareBvhBuildStateResources,
+        usize softwareBvhBuildStateResourceCount,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
     [[nodiscard]] bool declareDeferredGraphicsPrefixTasks(
@@ -400,10 +402,10 @@ private:
     // consumes the visibility result on the same Compute lane, so the result snapshot remains Compute-local.
     Core::CommandListResourceStateHandoff m_shadowComputePersistentStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityReturnStateHandoff;
-    // Native TLAS and BLAS builds write backing storage inside Shadow Preparation. Retain only accepted live
-    // generations so the next frame's first graph packet seeds their real AccelStructRead states.
+    // Native TLAS/BLAS and software-BVH build storage changes inside Shadow Preparation. Retain only accepted live
+    // generations so the next frame's first graph packet seeds their real acceleration and UAV states.
     Core::CommandListResourceStateHandoff m_shadowPreparePersistentStateHandoff;
-    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_shadowPreparePersistentStateBackings;
+    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_shadowPreparePersistentStateBuffers;
     // Software caustics retain their temporal scratch on the dedicated Compute lane. Hardware dispatch-rays caustics
     // use the Graphics hardware-caustics packet; normal deferred lighting consumes either resolved irradiance on Compute, while
     // the optional lagged path snapshots it for the next Graphics lighting packet.

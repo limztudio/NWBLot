@@ -3557,6 +3557,34 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         Graphics::ResourceStates::Common,
         Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
     );
+    const Graphics::GpuGraphResourceId swBvhParent = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/sw_bvh_parent"),
+        "Software BVH Parent",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId swBvhSortKeys = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/sw_bvh_sort_keys"),
+        "Software BVH Sort Keys",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId swBvhSortPayload = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/sw_bvh_sort_payload"),
+        "Software BVH Sort Payload",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId swBvhVisitCounter = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/sw_bvh_visit_counter"),
+        "Software BVH Visit Counter",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
     const Graphics::GpuGraphResourceId sceneTlas = AddAccelStructMetadata(
         graph,
         Name("tests/task_graph/scene_tlas"),
@@ -3608,6 +3636,10 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     ASSERT_TRUE(shadowMaterialTyped.valid());
     ASSERT_TRUE(sceneBvhNodes.valid());
     ASSERT_TRUE(sceneBvhInstances.valid());
+    ASSERT_TRUE(swBvhParent.valid());
+    ASSERT_TRUE(swBvhSortKeys.valid());
+    ASSERT_TRUE(swBvhSortPayload.valid());
+    ASSERT_TRUE(swBvhVisitCounter.valid());
     ASSERT_TRUE(sceneTlas.valid());
     ASSERT_TRUE(sceneTlasBacking.valid());
     ASSERT_TRUE(meshBlasA.valid());
@@ -3895,6 +3927,32 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
+        // SW mesh build parent links and shared scratch remain native UAVs after Shadow Preparation. They are
+        // state-only graph inputs so an accepted packet can seed a later build/refit without normalizing them to SRV.
+        Graphics::GpuTaskResourceUse{
+            .resource = swBvhParent,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = swBvhSortKeys,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = swBvhSortPayload,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = swBvhVisitCounter,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::UnorderedAccess,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
         // Shadow Preparation is the accepting producer for the native TLAS build. The recorder publishes its
         // explicit AccelStructWrite -> AccelStructRead transition before this graph-visible final state.
         Graphics::GpuTaskResourceUse{
@@ -4108,6 +4166,10 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     bool transitionsShadowMaterialTyped = false;
     bool transitionsSceneBvhNodes = false;
     bool transitionsSceneBvhInstances = false;
+    bool transitionsSwBvhParent = false;
+    bool transitionsSwBvhSortKeys = false;
+    bool transitionsSwBvhSortPayload = false;
+    bool transitionsSwBvhVisitCounter = false;
     bool transitionsSceneTlasBacking = false;
     bool transitionsMeshBlasABacking = false;
     bool transitionsMeshBlasBBacking = false;
@@ -4137,6 +4199,16 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         if(
             barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
             && barrier.before == Graphics::ResourceStates::Common
+            && barrier.after == Graphics::ResourceStates::UnorderedAccess
+        ){
+            transitionsSwBvhParent = transitionsSwBvhParent || barrier.resource == swBvhParent;
+            transitionsSwBvhSortKeys = transitionsSwBvhSortKeys || barrier.resource == swBvhSortKeys;
+            transitionsSwBvhSortPayload = transitionsSwBvhSortPayload || barrier.resource == swBvhSortPayload;
+            transitionsSwBvhVisitCounter = transitionsSwBvhVisitCounter || barrier.resource == swBvhVisitCounter;
+        }
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+            && barrier.before == Graphics::ResourceStates::Common
             && barrier.after == Graphics::ResourceStates::AccelStructRead
         )
             transitionsSceneTlasBacking = transitionsSceneTlasBacking || barrier.resource == sceneTlasBacking;
@@ -4158,6 +4230,10 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     EXPECT_TRUE(transitionsShadowMaterialTyped);
     EXPECT_TRUE(transitionsSceneBvhNodes);
     EXPECT_TRUE(transitionsSceneBvhInstances);
+    EXPECT_TRUE(transitionsSwBvhParent);
+    EXPECT_TRUE(transitionsSwBvhSortKeys);
+    EXPECT_TRUE(transitionsSwBvhSortPayload);
+    EXPECT_TRUE(transitionsSwBvhVisitCounter);
     EXPECT_TRUE(transitionsSceneTlasBacking);
     EXPECT_TRUE(transitionsMeshBlasABacking);
     EXPECT_TRUE(transitionsMeshBlasBBacking);

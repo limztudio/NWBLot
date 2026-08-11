@@ -99,6 +99,7 @@ struct ShadowPrepareGraphTask{
         bool rayTraceMaterialContextSlotsGraphOwned = false;
         bool causticEmissionTargetsGraphOwned = false;
         bool surfelFrameConstantsGraphOwned = false;
+        bool shadowMaterialContextBatchGraphOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -132,7 +133,8 @@ struct ShadowPrepareGraphTask{
                 *payload.targets,
                 renderer.m_preparedShadowVisibilityReady,
                 payload.causticEmissionTargetsGraphOwned,
-                payload.surfelFrameConstantsGraphOwned
+                payload.surfelFrameConstantsGraphOwned,
+                payload.shadowMaterialContextBatchGraphOwned
             )
         ;
         // The graph-owned material-context selector was snapshotted after preflight settled every backing handle.
@@ -158,6 +160,8 @@ struct ShadowPrepareGraphTask{
             payload.targets->bindless.slotsUploaded = true;
         if(payload.renderer)
             payload.renderer->m_raytracingSystem.confirmPreparedShadowTraceGeometryNormalization();
+        if(payload.renderer && payload.shadowMaterialContextBatchGraphOwned)
+            payload.renderer->m_raytracingSystem.confirmPreparedShadowMaterialContextUploads();
     }
 
     static void discarded(Payload& payload){
@@ -1348,6 +1352,9 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     m_rayTraceMaterialContextSlotsUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};
     m_surfelFrameConstantsUploadTask = {};
+    m_shadowInstanceMaterialUploadTask = {};
+    m_shadowInstanceUploadTask = {};
+    m_shadowMaterialTypedUploadTask = {};
     if(
         !deferredTargets.valid()
         || !deferredTargets.bindless.valid()
@@ -1572,9 +1579,139 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         shadowPrepareDependency = m_surfelFrameConstantsUploadTask;
     }
 
+    const Core::GpuGraphResourceId shadowInstanceMaterials = m_rayTracingState.m_shadowInstanceMaterialBuffer
+        ? importBuffer(
+            m_rayTracingState.m_shadowInstanceMaterialBuffer,
+            Name("render.deferred_effects.instance_material"),
+            "Shadow Instance Materials"
+        )
+        : Core::GpuGraphResourceId{}
+    ;
+    const Core::GpuGraphResourceId shadowInstances = m_rayTracingState.m_shadowInstanceBuffer
+        ? importBuffer(
+            m_rayTracingState.m_shadowInstanceBuffer,
+            Name("render.deferred_effects.shadow_instances"),
+            "Shadow Instances"
+        )
+        : Core::GpuGraphResourceId{}
+    ;
+    const Core::GpuGraphResourceId shadowMaterialTyped = m_rayTracingState.m_shadowMaterialTypedBuffer
+        ? importBuffer(
+            m_rayTracingState.m_shadowMaterialTypedBuffer,
+            Name("render.deferred_effects.material_typed"),
+            "Shadow Typed Materials"
+        )
+        : Core::GpuGraphResourceId{}
+    ;
+    if(
+        (m_rayTracingState.m_shadowInstanceMaterialBuffer && !shadowInstanceMaterials.valid())
+        || (m_rayTracingState.m_shadowInstanceBuffer && !shadowInstances.valid())
+        || (m_rayTracingState.m_shadowMaterialTypedBuffer && !shadowMaterialTyped.valid())
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted shadow material-context buffers"));
+        return false;
+    }
+
+    Core::GpuUploadBlobId shadowInstanceMaterialsBlob;
+    Core::GpuUploadBlobId shadowInstancesBlob;
+    Core::GpuUploadBlobId shadowMaterialTypedBlob;
+    if(!m_raytracingSystem.retainPreparedShadowMaterialContextUploads(
+        m_deferredLightingTaskGraph,
+        shadowInstanceMaterialsBlob,
+        shadowInstancesBlob,
+        shadowMaterialTypedBlob
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted shadow material-context upload data"));
+        return false;
+    }
+    const bool shadowMaterialContextBatchGraphOwned = shadowInstanceMaterialsBlob.valid();
+    if(
+        shadowMaterialContextBatchGraphOwned != shadowInstancesBlob.valid()
+        || shadowMaterialContextBatchGraphOwned != shadowMaterialTypedBlob.valid()
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: incomplete frozen shadow material-context upload batch"));
+        return false;
+    }
+    if(shadowMaterialContextBatchGraphOwned){
+        if(!shadowInstanceMaterials.valid() || !shadowInstances.valid() || !shadowMaterialTyped.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen shadow material-context batch has no imported destination"));
+            return false;
+        }
+
+        Core::GpuTaskSchedulingHint shadowMaterialContextUploadScheduling;
+        shadowMaterialContextUploadScheduling.cost = Core::GpuTaskCostHint::Medium;
+        shadowMaterialContextUploadScheduling.forceSubmissionBoundary = false;
+        shadowMaterialContextUploadScheduling.allowPacketMerge = true;
+        shadowMaterialContextUploadScheduling.mergeWithPrevious = true;
+
+        Core::GpuTaskDesc shadowInstanceMaterialsUploadDesc;
+        shadowInstanceMaterialsUploadDesc
+            .setIdentity(Name("render.deferred_effects.instance_material_upload"))
+            .setMarkerLabel("Shadow Instance Materials Upload")
+            .setQueue(GraphicsUploadQueueRequest())
+            .setScheduling(shadowMaterialContextUploadScheduling)
+            .setDependencies(&shadowPrepareDependency, 1u)
+        ;
+        m_shadowInstanceMaterialUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+            shadowInstanceMaterialsUploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = shadowInstanceMaterialsBlob,
+                .destination = shadowInstanceMaterials,
+                .finalState = Core::ResourceStates::Common,
+            }
+        );
+        if(!m_shadowInstanceMaterialUploadTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shadow instance-material upload"));
+            return false;
+        }
+
+        Core::GpuTaskDesc shadowInstancesUploadDesc;
+        shadowInstancesUploadDesc
+            .setIdentity(Name("render.deferred_effects.shadow_instances_upload"))
+            .setMarkerLabel("Shadow Instances Upload")
+            .setQueue(GraphicsUploadQueueRequest())
+            .setScheduling(shadowMaterialContextUploadScheduling)
+            .setDependencies(&m_shadowInstanceMaterialUploadTask, 1u)
+        ;
+        m_shadowInstanceUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+            shadowInstancesUploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = shadowInstancesBlob,
+                .destination = shadowInstances,
+                .finalState = Core::ResourceStates::Common,
+            }
+        );
+        if(!m_shadowInstanceUploadTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shadow instance upload"));
+            return false;
+        }
+
+        Core::GpuTaskDesc shadowMaterialTypedUploadDesc;
+        shadowMaterialTypedUploadDesc
+            .setIdentity(Name("render.deferred_effects.material_typed_upload"))
+            .setMarkerLabel("Shadow Typed Materials Upload")
+            .setQueue(GraphicsUploadQueueRequest())
+            .setScheduling(shadowMaterialContextUploadScheduling)
+            .setDependencies(&m_shadowInstanceUploadTask, 1u)
+        ;
+        m_shadowMaterialTypedUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+            shadowMaterialTypedUploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = shadowMaterialTypedBlob,
+                .destination = shadowMaterialTyped,
+                .finalState = Core::ResourceStates::Common,
+            }
+        );
+        if(!m_shadowMaterialTypedUploadTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shadow typed-material upload"));
+            return false;
+        }
+        shadowPrepareDependency = m_shadowMaterialTypedUploadTask;
+    }
+
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
-    resourceUses.reserve(14u + shadowTraceGeometryResourceCount);
+    resourceUses.reserve(17u + shadowTraceGeometryResourceCount);
     // Shadow Preparation owns each preflight input's post-transition packet boundary. This deliberately supersedes
     // preceding immutable uploads as graph producers, so later Compute readers wait on this first Graphics packet
     // rather than forcing FrontierSafe packetization to split an upload away from its accepting consumer.
@@ -1586,6 +1723,12 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         resourceUses.push_back(WriteUse(causticEmissionTargets, Core::ResourceStates::ShaderResource));
     if(surfelFrameConstants.valid())
         resourceUses.push_back(WriteUse(surfelFrameConstants, Core::ResourceStates::ConstantBuffer));
+    if(shadowInstanceMaterials.valid())
+        resourceUses.push_back(WriteUse(shadowInstanceMaterials, Core::ResourceStates::ShaderResource));
+    if(shadowInstances.valid())
+        resourceUses.push_back(WriteUse(shadowInstances, Core::ResourceStates::ShaderResource));
+    if(shadowMaterialTyped.valid())
+        resourceUses.push_back(WriteUse(shadowMaterialTyped, Core::ResourceStates::ShaderResource));
     for(usize resourceIndex = 0u; resourceIndex < shadowTraceGeometryResourceCount; ++resourceIndex){
         const Core::GpuGraphResourceId resource = shadowTraceGeometryResources[resourceIndex];
         if(!resource.valid())
@@ -1613,24 +1756,6 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             m_rayTracingState.m_sceneInstanceBuffer,
             Name("render.shadow_visibility.scene_instances"),
             "Scene Instances",
-            Core::ResourceStates::ShaderResource
-        )
-        && appendOptionalWriteBuffer(
-            m_rayTracingState.m_shadowInstanceMaterialBuffer,
-            Name("render.deferred_effects.instance_material"),
-            "Shadow Instance Materials",
-            Core::ResourceStates::ShaderResource
-        )
-        && appendOptionalWriteBuffer(
-            m_rayTracingState.m_shadowMaterialTypedBuffer,
-            Name("render.deferred_effects.material_typed"),
-            "Shadow Typed Materials",
-            Core::ResourceStates::ShaderResource
-        )
-        && appendOptionalWriteBuffer(
-            m_rayTracingState.m_shadowInstanceBuffer,
-            Name("render.deferred_effects.shadow_instances"),
-            "Shadow Instances",
             Core::ResourceStates::ShaderResource
         )
     ;
@@ -1682,6 +1807,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .rayTraceMaterialContextSlotsGraphOwned = true,
             .causticEmissionTargetsGraphOwned = true,
             .surfelFrameConstantsGraphOwned = true,
+            .shadowMaterialContextBatchGraphOwned = shadowMaterialContextBatchGraphOwned,
         }
     );
     if(!m_deferredShadowPrepareTask.valid()){
@@ -3336,6 +3462,9 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_rayTraceMaterialContextSlotsUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};
     m_surfelFrameConstantsUploadTask = {};
+    m_shadowInstanceMaterialUploadTask = {};
+    m_shadowInstanceUploadTask = {};
+    m_shadowMaterialTypedUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};

@@ -3504,10 +3504,34 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         Graphics::ResourceStates::Common,
         Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
     );
+    const Graphics::GpuGraphResourceId shadowInstanceMaterials = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/shadow_instance_materials"),
+        "Shadow Instance Materials",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId shadowInstances = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/shadow_instances"),
+        "Shadow Instances",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId shadowMaterialTyped = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/shadow_material_typed"),
+        "Shadow Typed Materials",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
     ASSERT_TRUE(currentBindlessSlots.valid());
     ASSERT_TRUE(materialContextSlots.valid());
     ASSERT_TRUE(causticEmissionTargets.valid());
     ASSERT_TRUE(surfelFrameConstants.valid());
+    ASSERT_TRUE(shadowInstanceMaterials.valid());
+    ASSERT_TRUE(shadowInstances.valid());
+    ASSERT_TRUE(shadowMaterialTyped.valid());
 
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
@@ -3628,6 +3652,69 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     const Graphics::GpuTaskId surfelFrameConstantsUpload = graph.addTask(surfelFrameConstantsUploadDesc);
     ASSERT_TRUE(surfelFrameConstantsUpload.valid());
 
+    const Graphics::GpuTaskResourceUse shadowInstanceMaterialsUploadUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = shadowInstanceMaterials,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Common,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskSchedulingHint shadowMaterialContextUploadScheduling = uploadScheduling;
+    shadowMaterialContextUploadScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    shadowMaterialContextUploadScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskDesc shadowInstanceMaterialsUploadDesc;
+    shadowInstanceMaterialsUploadDesc
+        .setIdentity(Name("tests/task_graph/shadow_instance_materials_upload"))
+        .setMarkerLabel("Shadow Instance Materials Upload")
+        .setQueue(graphicsUploadRequest)
+        .setScheduling(shadowMaterialContextUploadScheduling)
+        .setDependencies(&surfelFrameConstantsUpload, 1u)
+        .setResourceUses(shadowInstanceMaterialsUploadUses, LengthOf(shadowInstanceMaterialsUploadUses))
+    ;
+    const Graphics::GpuTaskId shadowInstanceMaterialsUpload = graph.addTask(shadowInstanceMaterialsUploadDesc);
+    ASSERT_TRUE(shadowInstanceMaterialsUpload.valid());
+
+    const Graphics::GpuTaskResourceUse shadowInstancesUploadUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = shadowInstances,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Common,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc shadowInstancesUploadDesc;
+    shadowInstancesUploadDesc
+        .setIdentity(Name("tests/task_graph/shadow_instances_upload"))
+        .setMarkerLabel("Shadow Instances Upload")
+        .setQueue(graphicsUploadRequest)
+        .setScheduling(shadowMaterialContextUploadScheduling)
+        .setDependencies(&shadowInstanceMaterialsUpload, 1u)
+        .setResourceUses(shadowInstancesUploadUses, LengthOf(shadowInstancesUploadUses))
+    ;
+    const Graphics::GpuTaskId shadowInstancesUpload = graph.addTask(shadowInstancesUploadDesc);
+    ASSERT_TRUE(shadowInstancesUpload.valid());
+
+    const Graphics::GpuTaskResourceUse shadowMaterialTypedUploadUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = shadowMaterialTyped,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Common,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc shadowMaterialTypedUploadDesc;
+    shadowMaterialTypedUploadDesc
+        .setIdentity(Name("tests/task_graph/shadow_material_typed_upload"))
+        .setMarkerLabel("Shadow Typed Materials Upload")
+        .setQueue(graphicsUploadRequest)
+        .setScheduling(shadowMaterialContextUploadScheduling)
+        .setDependencies(&shadowInstancesUpload, 1u)
+        .setResourceUses(shadowMaterialTypedUploadUses, LengthOf(shadowMaterialTypedUploadUses))
+    ;
+    const Graphics::GpuTaskId shadowMaterialTypedUpload = graph.addTask(shadowMaterialTypedUploadDesc);
+    ASSERT_TRUE(shadowMaterialTypedUpload.valid());
+
     const Graphics::GpuTaskResourceUse shadowPrepareUses[] = {
         Graphics::GpuTaskResourceUse{
             .resource = currentBindlessSlots,
@@ -3653,6 +3740,24 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             .requiredState = Graphics::ResourceStates::ConstantBuffer,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
+        Graphics::GpuTaskResourceUse{
+            .resource = shadowInstanceMaterials,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = shadowInstances,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = shadowMaterialTyped,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
     };
     Graphics::GpuTaskDesc shadowPrepareDesc;
     shadowPrepareDesc
@@ -3660,7 +3765,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         .setMarkerLabel("Shadow Preparation")
         .setQueue(graphicsRequest)
         .setScheduling(shadowPrepareScheduling)
-        .setDependencies(&surfelFrameConstantsUpload, 1u)
+        .setDependencies(&shadowMaterialTypedUpload, 1u)
         .setResourceUses(shadowPrepareUses, LengthOf(shadowPrepareUses))
     ;
     const Graphics::GpuTaskId shadowPrepare = graph.addTask(shadowPrepareDesc);
@@ -3689,6 +3794,24 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             .resource = surfelFrameConstants,
             .range = {},
             .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = shadowInstanceMaterials,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = shadowInstances,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = shadowMaterialTyped,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Read,
         },
     };
@@ -3728,20 +3851,35 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     const Graphics::GpuSubmissionPacketId surfelFrameConstantsUploadPacket = compiledGraph.packetForTask(
         surfelFrameConstantsUpload
     );
+    const Graphics::GpuSubmissionPacketId shadowInstanceMaterialsUploadPacket = compiledGraph.packetForTask(
+        shadowInstanceMaterialsUpload
+    );
+    const Graphics::GpuSubmissionPacketId shadowInstancesUploadPacket = compiledGraph.packetForTask(
+        shadowInstancesUpload
+    );
+    const Graphics::GpuSubmissionPacketId shadowMaterialTypedUploadPacket = compiledGraph.packetForTask(
+        shadowMaterialTypedUpload
+    );
     const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
     const Graphics::GpuSubmissionPacketId shadowVisibilityPacket = compiledGraph.packetForTask(shadowVisibility);
     ASSERT_TRUE(uploadPacket.valid());
     ASSERT_TRUE(materialContextUploadPacket.valid());
     ASSERT_TRUE(causticEmissionTargetsUploadPacket.valid());
     ASSERT_TRUE(surfelFrameConstantsUploadPacket.valid());
+    ASSERT_TRUE(shadowInstanceMaterialsUploadPacket.valid());
+    ASSERT_TRUE(shadowInstancesUploadPacket.valid());
+    ASSERT_TRUE(shadowMaterialTypedUploadPacket.valid());
     ASSERT_TRUE(shadowPreparePacket.valid());
     ASSERT_TRUE(shadowVisibilityPacket.valid());
     EXPECT_EQ(uploadPacket, shadowPreparePacket);
     EXPECT_EQ(materialContextUploadPacket, shadowPreparePacket);
     EXPECT_EQ(causticEmissionTargetsUploadPacket, shadowPreparePacket);
     EXPECT_EQ(surfelFrameConstantsUploadPacket, shadowPreparePacket);
+    EXPECT_EQ(shadowInstanceMaterialsUploadPacket, shadowPreparePacket);
+    EXPECT_EQ(shadowInstancesUploadPacket, shadowPreparePacket);
+    EXPECT_EQ(shadowMaterialTypedUploadPacket, shadowPreparePacket);
     EXPECT_NE(shadowPreparePacket, shadowVisibilityPacket);
-    EXPECT_EQ(compiledGraph.packet(shadowPreparePacket).taskCount, 5u);
+    EXPECT_EQ(compiledGraph.packet(shadowPreparePacket).taskCount, 8u);
     const Graphics::GpuSubmissionPacketRange shadowPrepareRange = compiledGraph.packetRange(
         shadowPreparePacket,
         shadowPreparePacket
@@ -3756,6 +3894,9 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     bool transitionsMaterialContextSlots = false;
     bool transitionsCausticEmissionTargets = false;
     bool transitionsSurfelFrameConstants = false;
+    bool transitionsShadowInstanceMaterials = false;
+    bool transitionsShadowInstances = false;
+    bool transitionsShadowMaterialTyped = false;
     for(usize index = 0u; index < compiledShadowPrepare->prologueBarrierCount; ++index){
         const Graphics::GpuCompiledBarrier& barrier = shadowPrepareBarriers[index];
         if(
@@ -3771,14 +3912,20 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
             && barrier.before == Graphics::ResourceStates::Common
             && barrier.after == Graphics::ResourceStates::ShaderResource
-            && barrier.resource == causticEmissionTargets
-        )
-            transitionsCausticEmissionTargets = true;
+        ){
+            transitionsCausticEmissionTargets = transitionsCausticEmissionTargets || barrier.resource == causticEmissionTargets;
+            transitionsShadowInstanceMaterials = transitionsShadowInstanceMaterials || barrier.resource == shadowInstanceMaterials;
+            transitionsShadowInstances = transitionsShadowInstances || barrier.resource == shadowInstances;
+            transitionsShadowMaterialTyped = transitionsShadowMaterialTyped || barrier.resource == shadowMaterialTyped;
+        }
     }
     EXPECT_TRUE(transitionsCurrentBindlessSlots);
     EXPECT_TRUE(transitionsMaterialContextSlots);
     EXPECT_TRUE(transitionsCausticEmissionTargets);
     EXPECT_TRUE(transitionsSurfelFrameConstants);
+    EXPECT_TRUE(transitionsShadowInstanceMaterials);
+    EXPECT_TRUE(transitionsShadowInstances);
+    EXPECT_TRUE(transitionsShadowMaterialTyped);
     ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(shadowVisibilityPacket)[0u].producer, shadowPreparePacket);
 }

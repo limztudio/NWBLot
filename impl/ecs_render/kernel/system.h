@@ -327,6 +327,11 @@ private:
     // Optional per-frame surfel constant payload. It must merge into that same first Graphics packet so the later
     // asynchronous GI pass inherits Shadow Preparation's ConstantBuffer handoff rather than an upload frontier.
     Core::GpuTaskId m_surfelFrameConstantsUploadTask;
+    // Optional ABI-coupled shadow material context batch. Every upload must merge into Shadow Preparation so its SRV
+    // handoff, rather than any individual upload, owns the later asynchronous trace consumers.
+    Core::GpuTaskId m_shadowInstanceMaterialUploadTask;
+    Core::GpuTaskId m_shadowInstanceUploadTask;
+    Core::GpuTaskId m_shadowMaterialTypedUploadTask;
     // Optional lagged-history selector upload. It must merge into Deferred Lighting's packet, which already owns
     // both history acceptance and the external completion wait for the prior-frame images.
     Core::GpuTaskId m_deferredLaggedLightingHistorySlotsUploadTask;

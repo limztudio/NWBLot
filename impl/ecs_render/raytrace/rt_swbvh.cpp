@@ -413,13 +413,18 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
     return buildSceneTlasImpl(nullptr, scratchArena);
 }
 
-bool RendererRayTracingSystem::buildSceneTlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
-    return buildSceneTlasImpl(&commandList, scratchArena);
+bool RendererRayTracingSystem::buildSceneTlas(
+    Core::CommandList& commandList,
+    Core::Alloc::ScratchArena& scratchArena,
+    const bool shadowMaterialContextBatchGraphOwned
+){
+    return buildSceneTlasImpl(&commandList, scratchArena, shadowMaterialContextBatchGraphOwned);
 }
 
 bool RendererRayTracingSystem::buildSceneTlasImpl(
     Core::CommandList* const commandList,
-    Core::Alloc::ScratchArena& scratchArena
+    Core::Alloc::ScratchArena& scratchArena,
+    const bool shadowMaterialContextBatchGraphOwned
 ){
     using namespace __hidden_rt_swbvh;
 
@@ -741,33 +746,71 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
                 )
             )
                 return false;
-        }
-        if(commandList){
-            Core::Buffer* materialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
-            commandList->setBufferState(materialBuffer, Core::ResourceStates::CopyDest);
-            commandList->commitBarriers();
-            commandList->writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
-            commandList->setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
-            commandList->commitBarriers();
-            if(!UploadPreparedShadowMaterialContextBuffers(
-                *commandList,
-                *rayTracingState().m_shadowInstanceBuffer.get(),
-                *rayTracingState().m_shadowMaterialTypedBuffer.get(),
-                shadowInstanceData,
-                shadowMaterialTypedBytes,
+            if(!capturePreparedShadowMaterialContext(
+                PreparedShadowMaterialContextRoute::Hardware,
+                staticScene,
+                hwMaterialContextHash,
+                instanceMaterials.data(),
+                instanceMaterials.size(),
+                instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu),
+                shadowInstanceData.data(),
+                shadowInstanceData.size(),
+                shadowInstanceData.size() * sizeof(InstanceGpuData),
+                shadowMaterialTypedBytes.data(),
                 materialTypedUploadBytes
             ))
                 return false;
-
-            if(staticScene){
-                rayTracingState().m_hwShadowMaterialContextHash = hwMaterialContextHash;
-                rayTracingState().m_hwShadowMaterialContextHashValid = true;
-            }
-            else
-                rayTracingState().m_hwShadowMaterialContextHashValid = false;
-            // HW context cannot represent SW node slots.
-            rayTracingState().m_swShadowMaterialContextHashValid = false;
         }
+        if(commandList){
+            if(shadowMaterialContextBatchGraphOwned){
+                if(!matchesPreparedShadowMaterialContext(
+                    PreparedShadowMaterialContextRoute::Hardware,
+                    staticScene,
+                    hwMaterialContextHash,
+                    instanceMaterials.data(),
+                    instanceMaterials.size(),
+                    instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu),
+                    shadowInstanceData.data(),
+                    shadowInstanceData.size(),
+                    shadowInstanceData.size() * sizeof(InstanceGpuData),
+                    shadowMaterialTypedBytes.data(),
+                    materialTypedUploadBytes
+                )){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW shadow material context changed after graph preflight; rejecting frozen upload batch"));
+                    return false;
+                }
+            }
+            else{
+                Core::Buffer* materialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
+                commandList->setBufferState(materialBuffer, Core::ResourceStates::CopyDest);
+                commandList->commitBarriers();
+                commandList->writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
+                commandList->setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
+                commandList->commitBarriers();
+                if(!UploadPreparedShadowMaterialContextBuffers(
+                    *commandList,
+                    *rayTracingState().m_shadowInstanceBuffer.get(),
+                    *rayTracingState().m_shadowMaterialTypedBuffer.get(),
+                    shadowInstanceData,
+                    shadowMaterialTypedBytes,
+                    materialTypedUploadBytes
+                ))
+                    return false;
+
+                if(staticScene){
+                    rayTracingState().m_hwShadowMaterialContextHash = hwMaterialContextHash;
+                    rayTracingState().m_hwShadowMaterialContextHashValid = true;
+                }
+                else
+                    rayTracingState().m_hwShadowMaterialContextHashValid = false;
+                // HW context cannot represent SW node slots.
+                rayTracingState().m_swShadowMaterialContextHashValid = false;
+            }
+        }
+    }
+    else if(commandList && shadowMaterialContextBatchGraphOwned){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned HW shadow material context unexpectedly reused a native cache"));
+        return false;
     }
 
     if(staticScene && commandList){
@@ -781,13 +824,18 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     return buildSceneSwBvhImpl(nullptr, scratchArena);
 }
 
-bool RendererRayTracingSystem::buildSceneSwBvh(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena){
-    return buildSceneSwBvhImpl(&commandList, scratchArena);
+bool RendererRayTracingSystem::buildSceneSwBvh(
+    Core::CommandList& commandList,
+    Core::Alloc::ScratchArena& scratchArena,
+    const bool shadowMaterialContextBatchGraphOwned
+){
+    return buildSceneSwBvhImpl(&commandList, scratchArena, shadowMaterialContextBatchGraphOwned);
 }
 
 bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     Core::CommandList* const commandList,
-    Core::Alloc::ScratchArena& scratchArena
+    Core::Alloc::ScratchArena& scratchArena,
+    const bool shadowMaterialContextBatchGraphOwned
 ){
     using namespace __hidden_rt_swbvh;
 
@@ -1134,33 +1182,71 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                 )
             )
                 return false;
-        }
-        if(commandList){
-            Core::Buffer* materialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
-            commandList->setBufferState(materialBuffer, Core::ResourceStates::CopyDest);
-            commandList->commitBarriers();
-            commandList->writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
-            commandList->setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
-            commandList->commitBarriers();
-            if(!UploadPreparedShadowMaterialContextBuffers(
-                *commandList,
-                *rayTracingState().m_shadowInstanceBuffer.get(),
-                *rayTracingState().m_shadowMaterialTypedBuffer.get(),
-                shadowInstanceData,
-                shadowMaterialTypedBytes,
+            if(!capturePreparedShadowMaterialContext(
+                PreparedShadowMaterialContextRoute::Software,
+                staticScene,
+                swMaterialContextHash,
+                instanceMaterials.data(),
+                instanceMaterials.size(),
+                instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu),
+                shadowInstanceData.data(),
+                shadowInstanceData.size(),
+                shadowInstanceData.size() * sizeof(InstanceGpuData),
+                shadowMaterialTypedBytes.data(),
                 materialTypedUploadBytes
             ))
                 return false;
-
-            if(staticScene){
-                rayTracingState().m_swShadowMaterialContextHash = swMaterialContextHash;
-                rayTracingState().m_swShadowMaterialContextHashValid = true;
-            }
-            else
-                rayTracingState().m_swShadowMaterialContextHashValid = false;
-            // HW context cannot represent SW node slots.
-            rayTracingState().m_hwShadowMaterialContextHashValid = false;
         }
+        if(commandList){
+            if(shadowMaterialContextBatchGraphOwned){
+                if(!matchesPreparedShadowMaterialContext(
+                    PreparedShadowMaterialContextRoute::Software,
+                    staticScene,
+                    swMaterialContextHash,
+                    instanceMaterials.data(),
+                    instanceMaterials.size(),
+                    instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu),
+                    shadowInstanceData.data(),
+                    shadowInstanceData.size(),
+                    shadowInstanceData.size() * sizeof(InstanceGpuData),
+                    shadowMaterialTypedBytes.data(),
+                    materialTypedUploadBytes
+                )){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: SW shadow material context changed after graph preflight; rejecting frozen upload batch"));
+                    return false;
+                }
+            }
+            else{
+                Core::Buffer* materialBuffer = rayTracingState().m_shadowInstanceMaterialBuffer.get();
+                commandList->setBufferState(materialBuffer, Core::ResourceStates::CopyDest);
+                commandList->commitBarriers();
+                commandList->writeBuffer(materialBuffer, instanceMaterials.data(), instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu));
+                commandList->setBufferState(materialBuffer, Core::ResourceStates::ShaderResource);
+                commandList->commitBarriers();
+                if(!UploadPreparedShadowMaterialContextBuffers(
+                    *commandList,
+                    *rayTracingState().m_shadowInstanceBuffer.get(),
+                    *rayTracingState().m_shadowMaterialTypedBuffer.get(),
+                    shadowInstanceData,
+                    shadowMaterialTypedBytes,
+                    materialTypedUploadBytes
+                ))
+                    return false;
+
+                if(staticScene){
+                    rayTracingState().m_swShadowMaterialContextHash = swMaterialContextHash;
+                    rayTracingState().m_swShadowMaterialContextHashValid = true;
+                }
+                else
+                    rayTracingState().m_swShadowMaterialContextHashValid = false;
+                // HW context cannot represent SW node slots.
+                rayTracingState().m_hwShadowMaterialContextHashValid = false;
+            }
+        }
+    }
+    else if(commandList && shadowMaterialContextBatchGraphOwned){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned SW shadow material context unexpectedly reused a native cache"));
+        return false;
     }
 
     rayTracingState().m_sceneBvhInstanceCount = instanceCount;

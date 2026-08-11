@@ -208,6 +208,9 @@ void RendererSystem::invalidateResources(){
     m_rayTraceMaterialContextSlotsUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};
     m_surfelFrameConstantsUploadTask = {};
+    m_shadowInstanceMaterialUploadTask = {};
+    m_shadowInstanceUploadTask = {};
+    m_shadowMaterialTypedUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
@@ -456,6 +459,9 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_rayTraceMaterialContextSlotsUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};
     m_surfelFrameConstantsUploadTask = {};
+    m_shadowInstanceMaterialUploadTask = {};
+    m_shadowInstanceUploadTask = {};
+    m_shadowMaterialTypedUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -859,6 +865,40 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && surfelFrameConstantsUploadPacket == shadowPreparePacket
         )
     ;
+    const Core::GpuSubmissionPacketId shadowInstanceMaterialUploadPacket =
+        m_shadowInstanceMaterialUploadTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_shadowInstanceMaterialUploadTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    const Core::GpuSubmissionPacketId shadowInstanceUploadPacket =
+        m_shadowInstanceUploadTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_shadowInstanceUploadTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    const Core::GpuSubmissionPacketId shadowMaterialTypedUploadPacket =
+        m_shadowMaterialTypedUploadTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_shadowMaterialTypedUploadTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    // This ABI-coupled triple must remain in the first accepted Graphics packet. Shadow Preparation supersedes the
+    // upload writers as the ShaderResource producer observed by later asynchronous trace passes.
+    const bool shadowMaterialContextUploadsMergedIntoShadowPreparePacket =
+        (!m_shadowInstanceMaterialUploadTask.valid() || (
+            shadowPreparePacket.valid()
+            && shadowInstanceMaterialUploadPacket.valid()
+            && shadowInstanceMaterialUploadPacket == shadowPreparePacket
+        ))
+        && (!m_shadowInstanceUploadTask.valid() || (
+            shadowPreparePacket.valid()
+            && shadowInstanceUploadPacket.valid()
+            && shadowInstanceUploadPacket == shadowPreparePacket
+        ))
+        && (!m_shadowMaterialTypedUploadTask.valid() || (
+            shadowPreparePacket.valid()
+            && shadowMaterialTypedUploadPacket.valid()
+            && shadowMaterialTypedUploadPacket == shadowPreparePacket
+        ))
+    ;
     const Core::GpuSubmissionPacketId graphicsPrefixPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_graphicsPrefixTask
     );
@@ -1242,6 +1282,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket
         || !causticEmissionTargetsUploadMergedIntoShadowPreparePacket
         || !surfelFrameConstantsUploadMergedIntoShadowPreparePacket
+        || !shadowMaterialContextUploadsMergedIntoShadowPreparePacket
         || !shadowPrepareQueue
         || shadowPrepareQueue->queueClass != Core::CommandQueue::Graphics
         || !m_graphicsPrefixMeshViewSetupTask.valid()
@@ -2578,6 +2619,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket
             && causticEmissionTargetsUploadMergedIntoShadowPreparePacket
             && surfelFrameConstantsUploadMergedIntoShadowPreparePacket
+            && shadowMaterialContextUploadsMergedIntoShadowPreparePacket
             && graphicsPrefixPacket.valid()
             && graphicsPrefixWorkPacketRange.valid()
             && shadowPrepareThroughPrefixPacketRange.valid()

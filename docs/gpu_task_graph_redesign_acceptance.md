@@ -12,7 +12,7 @@ uploads, graph-owned runtime-skinning joint-palette uploads, graph-owned opaque 
 graph-owned opaque CSG receiver/cutter/context/interval streams, graph-owned transparent CSG interval-producer
 streams, and graph-owned transparent AVBOIT occupancy, extinction, and accumulation material/CSG streams,
 and graph-owned current and lagged deferred bindless-selector, ray-trace material-context selector, caustic
-emission-target, and surfel-frame constant uploads,
+emission-target, surfel-frame constant, and shadow material-context batch uploads,
 2026-08-12.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
@@ -85,6 +85,13 @@ can receive an unconditional final sign-off.
   later asynchronous GI work. There is intentionally no residency bit: a rejected packet rebuilds the immutable
   payload from the preserved frame state, while the later Surfel GI path remains responsible for frame progression.
   The direct writer remains only for non-graph compatibility callers.
+- Shadow-trace material context now freezes its ABI-coupled instance-material table, instance records, and typed
+  material byte stream together before recording. For hardware-only and forced-software routes, a complete
+  all-or-nothing immutable triple chains into Shadow Preparation and publishes automatic-state `Common`; Shadow
+  Preparation retains the logical `ShaderResource` writes so later Compute trace work waits on the accepted first
+  Graphics packet. Hybrid transparent hardware-to-software frames deliberately retain their native fallback, since
+  the later software build can fail after a valid hardware result. The static cache commits only after Shadow
+  Preparation accepts; rejection and record-time mismatch discard the frozen plan.
 - The opaque G-buffer now freezes its material draw ordering and CSG CPU frame payload during graph declaration.
   Its instance and typed-material bytes are retained as immutable graph blobs and uploaded through Graphics-routed
   built-in buffer tasks after deferred clear. The tasks publish the buffers' automatic `Common` close boundary; the
@@ -162,6 +169,7 @@ can receive an unconditional final sign-off.
 | Graph-owned ray-trace material-context selector follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and opaque CSG capture | passed; a post-preflight immutable selector blob merges into Shadow Preparation, publishes `Common`, and is logically handed off there to the later Compute trace consumers |
 | Graph-owned caustic emission-target follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and caustic-sphere capture | passed; the preflight-frozen refractive AABB payload merges into Shadow Preparation, publishes `Common`, and is logically handed off there to software and hardware caustic consumers |
 | Graph-owned Surfel frame-constants follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and forced-software GI capture | passed; the immutable 80-byte payload merges into Shadow Preparation, publishes `Common`, and is logically handed off there to later asynchronous Surfel GI work |
+| Graph-owned shadow material-context batch follow-up: FrontierSafe graph unit, descriptor-buffer smoke, and forced-software GI capture | passed; all three immutable streams merge into Shadow Preparation, publish `Common`, and are handed off there as `ShaderResource` to later asynchronous trace consumers |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -189,8 +197,8 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    now use the graph-owned primitive path. The transparent AVBOIT interval producer, occupancy, extinction, and
    accumulation phases now freeze and publish their own per-write-point material/CSG streams, preserving the shared
    interval sample state across the low-resolution raster passes. Current and lagged deferred bindless selectors,
-   the ray-trace material-context selector, caustic emission-target stream, and surfel-frame constants are
-   acceptance-safe graph uploads; skinning compute dispatch/its selector update and other specialized
+   the ray-trace material-context selector, caustic emission-target stream, surfel-frame constants, and shadow
+   material-context batch are acceptance-safe graph uploads; skinning compute dispatch/its selector update and other specialized
    descriptor/resource updates still retain direct native recording or submission. The graph
    therefore does not yet authoritatively own all frame work and state retirement.
 

@@ -77,7 +77,8 @@ public:
         DeferredFrameTargets& targets,
         bool& outBackendReady,
         bool causticEmissionTargetsGraphOwned = false,
-        bool surfelFrameConstantsGraphOwned = false
+        bool surfelFrameConstantsGraphOwned = false,
+        bool shadowMaterialContextBatchGraphOwned = false
     );
     [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept;
     void discardPreflightShadowVisibilityResources()noexcept;
@@ -91,8 +92,16 @@ public:
 
     [[nodiscard]] bool buildPendingMeshBlas(Core::CommandList& commandList);
     [[nodiscard]] bool buildPendingMeshSwBvh(Core::CommandList& commandList);
-    [[nodiscard]] bool buildSceneTlas(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool buildSceneSwBvh(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
+    [[nodiscard]] bool buildSceneTlas(
+        Core::CommandList& commandList,
+        Core::Alloc::ScratchArena& scratchArena,
+        bool shadowMaterialContextBatchGraphOwned = false
+    );
+    [[nodiscard]] bool buildSceneSwBvh(
+        Core::CommandList& commandList,
+        Core::Alloc::ScratchArena& scratchArena,
+        bool shadowMaterialContextBatchGraphOwned = false
+    );
     void releaseCausticEmissionTargetHeapHandle();
     [[nodiscard]] bool createShadowVisibilityTarget(DeferredFrameTargets& targets);
     [[nodiscard]] bool createCausticTargets(DeferredFrameTargets& targets);
@@ -114,6 +123,15 @@ public:
         const DeferredFrameTargets& targets,
         Core::GpuUploadBlobId& outBlob
     )const;
+    // The material table, instance stream, and typed bytes share indices and offsets, so retain them only as one
+    // preflight-frozen graph upload batch.
+    [[nodiscard]] bool retainPreparedShadowMaterialContextUploads(
+        Core::GpuTaskGraph& graph,
+        Core::GpuUploadBlobId& outInstanceMaterialBlob,
+        Core::GpuUploadBlobId& outInstanceBlob,
+        Core::GpuUploadBlobId& outMaterialTypedBlob
+    )const;
+    void confirmPreparedShadowMaterialContextUploads()noexcept;
     void releaseRayTraceMaterialContextHeapHandles();
     void releaseSwBvhScratchHeapHandles();
     void releaseSurfelGiHeapHandles();
@@ -195,20 +213,54 @@ public:
 
 private:
     struct SurfelGiInitializationGraphTask;
+    enum class PreparedShadowMaterialContextRoute : u8{
+        None,
+        Hardware,
+        Software,
+    };
 
     [[nodiscard]] bool preparePendingMeshBlasResources();
     [[nodiscard]] bool prepareSceneTlasResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool prepareSceneSwBvhResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool buildSceneTlasImpl(
         Core::CommandList* commandList,
-        Core::Alloc::ScratchArena& scratchArena
+        Core::Alloc::ScratchArena& scratchArena,
+        bool shadowMaterialContextBatchGraphOwned = false
     );
     [[nodiscard]] bool buildSceneSwBvhImpl(
         Core::CommandList* commandList,
-        Core::Alloc::ScratchArena& scratchArena
+        Core::Alloc::ScratchArena& scratchArena,
+        bool shadowMaterialContextBatchGraphOwned = false
     );
     [[nodiscard]] bool prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool recordPreparedCausticEmissionTargets(Core::CommandList& commandList);
+    [[nodiscard]] bool capturePreparedShadowMaterialContext(
+        PreparedShadowMaterialContextRoute route,
+        bool staticScene,
+        u64 hash,
+        const void* instanceMaterialData,
+        usize instanceMaterialCount,
+        usize instanceMaterialByteCount,
+        const void* instanceData,
+        usize instanceCount,
+        usize instanceByteCount,
+        const void* materialTypedData,
+        usize materialTypedByteCount
+    );
+    [[nodiscard]] bool matchesPreparedShadowMaterialContext(
+        PreparedShadowMaterialContextRoute route,
+        bool staticScene,
+        u64 hash,
+        const void* instanceMaterialData,
+        usize instanceMaterialCount,
+        usize instanceMaterialByteCount,
+        const void* instanceData,
+        usize instanceCount,
+        usize instanceByteCount,
+        const void* materialTypedData,
+        usize materialTypedByteCount
+    )const;
+    void clearPreparedShadowMaterialContext()noexcept;
     [[nodiscard]] bool prepareSurfelResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool recordPreparedSurfelFrameConstants(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool initializeSurfelResources(Core::CommandList& commandList);
@@ -312,6 +364,27 @@ private:
     // Persist across graph declaration/recording so the immutable blob and compatibility writer never regather
     // mutable renderer state after preflight. The bytes are tightly packed NwbCausticEmissionTargetGpu records.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedCausticEmissionTargetBytes;
+    // The complete shadow material context remains retained until the accepting Shadow Preparation packet commits its
+    // static cache. Each vector is one ABI-coupled part of the same payload; never graph-upload one independently.
+    Vector<u8, Core::Alloc::GlobalArena> m_preparedShadowInstanceMaterialBytes;
+    Vector<u8, Core::Alloc::GlobalArena> m_preparedShadowInstanceBytes;
+    Vector<u8, Core::Alloc::GlobalArena> m_preparedShadowMaterialTypedBytes;
+    Core::BufferHandle m_preparedShadowInstanceMaterialBuffer;
+    Core::BufferHandle m_preparedShadowInstanceBuffer;
+    Core::BufferHandle m_preparedShadowMaterialTypedBuffer;
+    Core::GpuDescriptorHandle m_preparedShadowInstanceMaterialHeapHandle;
+    Core::GpuDescriptorHandle m_preparedShadowInstanceHeapHandle;
+    Core::GpuDescriptorHandle m_preparedShadowMaterialTypedHeapHandle;
+    usize m_preparedShadowInstanceMaterialCount = 0u;
+    usize m_preparedShadowInstanceCount = 0u;
+    usize m_preparedShadowMaterialTypedUploadBytes = 0u;
+    usize m_preparedShadowInstanceMaterialCapacity = 0u;
+    usize m_preparedShadowInstanceCapacity = 0u;
+    usize m_preparedShadowMaterialTypedCapacity = 0u;
+    u64 m_preparedShadowMaterialContextHash = 0u;
+    PreparedShadowMaterialContextRoute m_preparedShadowMaterialContextRoute = PreparedShadowMaterialContextRoute::None;
+    bool m_preparedShadowMaterialContextStatic = false;
+    bool m_preparedShadowMaterialContextReady = false;
     DeferredFrameTargets* m_shadowVisibilityPreparedTargets = nullptr;
     bool m_shadowVisibilityResourcesPreflighted = false;
     bool m_shadowVisibilityHardwareSupported = false;

@@ -5501,6 +5501,115 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSetupTextureAutomaticallyFallsBa
 }
 
 
+// Decoded/static textures carry multiple mip/slice payloads, so they cannot use the one-subresource setup helper.
+// The batch primitive must retain each CPU payload as a graph blob, serialize the subresource uploads through one
+// terminal acceptance point, and publish ShaderResource state for every mip before a legacy Graphics consumer runs.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndPublishesTerminalToken){
+    auto& graphics = s_scope->graphics();
+    auto& device = DescriptorBufferRoundTripTest::device();
+
+    u8 mip0Bytes[4u * 4u * 4u];
+    u8 mip1Bytes[2u * 2u * 4u];
+    for(usize byteIndex = 0u; byteIndex < sizeof(mip0Bytes); ++byteIndex)
+        mip0Bytes[byteIndex] = static_cast<u8>(byteIndex * 13u + 7u);
+    for(usize byteIndex = 0u; byteIndex < sizeof(mip1Bytes); ++byteIndex)
+        mip1Bytes[byteIndex] = static_cast<u8>(byteIndex * 29u + 3u);
+    u8 expectedMip0[sizeof(mip0Bytes)];
+    u8 expectedMip1[sizeof(mip1Bytes)];
+    NWB_MEMCPY(expectedMip0, sizeof(expectedMip0), mip0Bytes, sizeof(mip0Bytes));
+    NWB_MEMCPY(expectedMip1, sizeof(expectedMip1), mip1Bytes, sizeof(mip1Bytes));
+
+    const TextureHandle destination = graphics.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setMipLevels(2u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInitialState(ResourceStates::ShaderResource)
+            .setKeepInitialState(true)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
+    );
+    ASSERT_NE(destination.get(), nullptr);
+
+    const Graphics::TextureUploadRegion regions[] = {
+        Graphics::TextureUploadRegion{
+            .data = mip0Bytes,
+            .dataSize = sizeof(mip0Bytes),
+            .rowPitch = 4u * 4u,
+            .depthPitch = 4u * 4u * 4u,
+            .arraySlice = 0u,
+            .mipLevel = 0u,
+        },
+        Graphics::TextureUploadRegion{
+            .data = mip1Bytes,
+            .dataSize = sizeof(mip1Bytes),
+            .rowPitch = 2u * 4u,
+            .depthPitch = 2u * 2u * 4u,
+            .arraySlice = 0u,
+            .mipLevel = 1u,
+        },
+    };
+    QueueSubmissionToken acceptedToken;
+    ASSERT_TRUE(graphics.uploadTextureBatch(Graphics::TextureUploadBatchDesc{
+        .destination = destination,
+        .regions = regions,
+        .regionCount = LengthOf(regions),
+        .finalState = ResourceStates::ShaderResource,
+        .acceptedToken = &acceptedToken,
+    }));
+    ASSERT_TRUE(acceptedToken.valid());
+
+    // Graph declaration has already copied the regions into immutable blobs.  Overwrite the caller arrays before
+    // the native work completes; readback must still observe the original bytes.
+    NWB_MEMSET(mip0Bytes, 0, sizeof(mip0Bytes));
+    NWB_MEMSET(mip1Bytes, 0, sizeof(mip1Bytes));
+    ASSERT_TRUE(device.waitForIdle());
+
+    const u8* const expectedMips[] = { expectedMip0, expectedMip1 };
+    const u32 mipWidths[] = { 4u, 2u };
+    const u32 mipHeights[] = { 4u, 2u };
+    for(u32 mipLevel = 0u; mipLevel < LengthOf(expectedMips); ++mipLevel){
+        StagingTextureHandle readback = device.createStagingTexture(destination->getDescription(), CpuAccessMode::Read);
+        ASSERT_NE(readback.get(), nullptr);
+        TextureSlice slice;
+        slice.setMipLevel(mipLevel);
+        CommandListHandle readbackCommandList = device.createCommandList();
+        ASSERT_NE(readbackCommandList.get(), nullptr);
+        readbackCommandList->open();
+        ASSERT_TRUE(readbackCommandList->hasCommandBuffer());
+        readbackCommandList->copyTexture(readback.get(), slice, destination.get(), slice);
+        readbackCommandList->close();
+        CommandList* const readbackLists[] = { readbackCommandList.get() };
+        ASSERT_TRUE(device.executeCommandLists(
+            readbackLists,
+            LengthOf(readbackLists),
+            CommandQueue::Graphics,
+            QueueSubmissionDesc{}
+        ).valid());
+        ASSERT_TRUE(device.waitForIdle());
+
+        usize rowPitch = 0u;
+        const u8* const readbackBytes = static_cast<const u8*>(device.mapStagingTexture(
+            readback.get(),
+            slice,
+            CpuAccessMode::Read,
+            &rowPitch
+        ));
+        ASSERT_NE(readbackBytes, nullptr);
+        ASSERT_GE(rowPitch, static_cast<usize>(mipWidths[mipLevel]) * 4u);
+        for(u32 row = 0u; row < mipHeights[mipLevel]; ++row){
+            for(usize byteIndex = 0u; byteIndex < static_cast<usize>(mipWidths[mipLevel]) * 4u; ++byteIndex){
+                EXPECT_EQ(
+                    readbackBytes[static_cast<usize>(row) * rowPitch + byteIndex],
+                    expectedMips[mipLevel][static_cast<usize>(row) * mipWidths[mipLevel] * 4u + byteIndex]
+                );
+            }
+        }
+        device.unmapStagingTexture(readback.get());
+    }
+}
+
+
 // A dedicated compute family is optional in CI, but when one exists this is the phase-zero ownership proof:
 // exclusive storage moves Compute -> Graphics -> Compute with paired release/acquire barriers and submission-local
 // timeline tokens. No rendering job has moved yet; this specifically validates the resource-lifecycle round trip

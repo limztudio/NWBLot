@@ -58,6 +58,31 @@ public:
         QueueSubmissionToken* acceptedToken = nullptr;
     };
 
+    // One immutable CPU payload for a texture subresource upload.  uploadTextureBatch() copies every region into
+    // graph-owned blobs before native recording, so the caller may release its decoded asset memory when the call
+    // returns.  A 3D mip is one region at arraySlice 0 whose depthPitch covers a single Z slice; 2D/cube uploads
+    // provide one region per array slice.
+    struct TextureUploadRegion{
+        const void* data = nullptr;
+        usize dataSize = 0u;
+        usize rowPitch = 0u;
+        usize depthPitch = 0u;
+        u32 arraySlice = 0u;
+        u32 mipLevel = 0u;
+    };
+
+    // Uploads every listed region into an existing texture through a compiler-owned task graph.  This is the
+    // multi-subresource companion to TextureSetupDesc for decoded/static assets.  `finalState` is explicit so a
+    // caller cannot publish an opaque post-write layout; for keepInitialState textures it must equal initialState.
+    struct TextureUploadBatchDesc{
+        TextureHandle destination;
+        const TextureUploadRegion* regions = nullptr;
+        usize regionCount = 0u;
+        ResourceStates::Mask finalState = ResourceStates::Unknown;
+        CommandQueue::Enum queue = CommandQueue::kCount;
+        QueueSubmissionToken* acceptedToken = nullptr;
+    };
+
     struct MeshSetupDesc{
         const void* vertexData = nullptr;
         usize vertexDataSize = 0;
@@ -213,6 +238,7 @@ public:
 
     [[nodiscard]] BufferHandle setupBuffer(const BufferSetupDesc& desc)const;
     [[nodiscard]] TextureHandle setupTexture(const TextureSetupDesc& desc)const;
+    [[nodiscard]] bool uploadTextureBatch(const TextureUploadBatchDesc& desc)const;
     [[nodiscard]] MeshResource setupMesh(const MeshSetupDesc& desc)const;
 
     [[nodiscard]] JobHandle setupBufferAsync(const BufferSetupDesc& desc, BufferHandle& outBuffer);

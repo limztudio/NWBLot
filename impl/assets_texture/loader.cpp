@@ -602,14 +602,22 @@ static void StoreHdrAlpha(
     return true;
 }
 
-[[nodiscard]] static bool UploadLdrTextureMip(
-    Core::CommandList& commandList,
-    Core::Texture& texture,
+struct DecodedTextureMipUpload{
+    explicit DecodedTextureMipUpload(Core::Alloc::ScratchArena& arena)
+        : bytes(arena)
+    {}
+
+    Vector<u8, Core::Alloc::ScratchArena> bytes;
+    usize rowPitch = 0u;
+    usize sliceByteCount = 0u;
+};
+
+[[nodiscard]] static bool DecodeLdrTextureMip(
     const Texture& textureAsset,
     const TextureMipLevel& mip,
     const u32 mipLevel,
     const Core::Format::Enum format,
-    Vector<u8, Core::Alloc::ScratchArena>& scratchBytes
+    DecodedTextureMipUpload& outUpload
 ){
     usize rowPitch = 0u;
     usize sliceUploadByteCount = 0u;
@@ -636,9 +644,9 @@ static void StoreHdrAlpha(
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: texture mip upload size exceeds addressable memory"));
         return false;
     }
-    scratchBytes.resize(sliceUploadByteCount * mip.sliceCount);
+    outUpload.bytes.resize(sliceUploadByteCount * mip.sliceCount);
     for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
-        u8* const destination = scratchBytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount;
+        u8* const destination = outUpload.bytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount;
         bool decoded = false;
         if(IsAstc4x4LdrFormat(format))
             decoded = DecodeTextureSliceAsAstc(textureAsset, mip, sliceIndex, destination, sliceUploadByteCount);
@@ -649,27 +657,17 @@ static void StoreHdrAlpha(
         if(!decoded)
             return false;
     }
-
-    if(textureAsset.dimension() == TextureDimension::Texture3D){
-        commandList.writeTexture(&texture, 0u, mipLevel, scratchBytes.data(), rowPitch, sliceUploadByteCount);
-        return true;
-    }
-
-    for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
-        const u8* const source = scratchBytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount;
-        commandList.writeTexture(&texture, sliceIndex, mipLevel, source, rowPitch, sliceUploadByteCount);
-    }
+    outUpload.rowPitch = rowPitch;
+    outUpload.sliceByteCount = sliceUploadByteCount;
     return true;
 }
 
-[[nodiscard]] static bool UploadHdrTextureMip(
-    Core::CommandList& commandList,
-    Core::Texture& texture,
+[[nodiscard]] static bool DecodeHdrTextureMip(
     const Texture& textureAsset,
     const TextureMipLevel& mip,
     const u32 mipLevel,
     const Core::Format::Enum format,
-    Vector<u8, Core::Alloc::ScratchArena>& scratchBytes
+    DecodedTextureMipUpload& outUpload
 ){
     const bool compressedOutput = IsHdrCompressedFormat(format);
     if(!compressedOutput && format != Core::Format::RGBA16_FLOAT){
@@ -698,9 +696,9 @@ static void StoreHdrAlpha(
 
     const usize rowPitch = static_cast<usize>(rowPitch64);
     const usize sliceUploadByteCount = static_cast<usize>(sliceUploadByteCount64);
-    scratchBytes.resize(sliceUploadByteCount * mip.sliceCount);
+    outUpload.bytes.resize(sliceUploadByteCount * mip.sliceCount);
     for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
-        u8* const destination = scratchBytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount;
+        u8* const destination = outUpload.bytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount;
         if(!DecodeHdrTextureSlice(textureAsset, mip, mipLevel, sliceIndex, format, destination, sliceUploadByteCount))
             return false;
         if(
@@ -709,32 +707,22 @@ static void StoreHdrAlpha(
         )
             return false;
     }
-
-    if(textureAsset.dimension() == TextureDimension::Texture3D){
-        commandList.writeTexture(&texture, 0u, mipLevel, scratchBytes.data(), rowPitch, sliceUploadByteCount);
-        return true;
-    }
-
-    for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
-        const u8* const source = scratchBytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount;
-        commandList.writeTexture(&texture, sliceIndex, mipLevel, source, rowPitch, sliceUploadByteCount);
-    }
+    outUpload.rowPitch = rowPitch;
+    outUpload.sliceByteCount = sliceUploadByteCount;
     return true;
 }
 
-[[nodiscard]] static bool UploadTextureMip(
-    Core::CommandList& commandList,
-    Core::Texture& texture,
+[[nodiscard]] static bool DecodeTextureMip(
     const Texture& textureAsset,
     const TextureMipLevel& mip,
     const u32 mipLevel,
     const Core::Format::Enum format,
-    Vector<u8, Core::Alloc::ScratchArena>& scratchBytes
+    DecodedTextureMipUpload& outUpload
 ){
     if(textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4)
-        return UploadLdrTextureMip(commandList, texture, textureAsset, mip, mipLevel, format, scratchBytes);
+        return DecodeLdrTextureMip(textureAsset, mip, mipLevel, format, outUpload);
     if(textureAsset.payloadFormat() == TexturePayloadFormat::UastcHdr4x4)
-        return UploadHdrTextureMip(commandList, texture, textureAsset, mip, mipLevel, format, scratchBytes);
+        return DecodeHdrTextureMip(textureAsset, mip, mipLevel, format, outUpload);
 
     NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: unsupported texture payload format"));
     return false;
@@ -829,7 +817,10 @@ bool TextureAssetLoader::Create(
         .setDimension(textureDimension)
         .setInitialState(Core::ResourceStates::ShaderResource)
         .setKeepInitialState(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        // Static decoded assets are immediately sampled by Graphics/Compute, while sizeable batches may use a
+        // dedicated Transfer producer.  Declare all three consumer/producer transports before creation so the
+        // graph-owned upload can choose the automatic Transfer -> Compute -> Graphics route safely.
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .setName(imageName)
     ;
     if(textureAsset.dimension() == TextureDimension::TextureCube)
@@ -879,36 +870,73 @@ bool TextureAssetLoader::Create(
 
     __hidden_texture_loader::InitializeBasisTranscoder();
 
-    Core::CommandListHandle commandList = device.createCommandList();
-    if(!commandList){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create an upload command list for texture '{}'"), owner, StringConvert(imageName.c_str()));
-        return false;
-    }
-
     Core::Alloc::ScratchArena scratchArena(AssetsTextureArenaScope::s_UploadScratchArena);
-    Vector<u8, Core::Alloc::ScratchArena> uploadBytes{scratchArena};
-    commandList->open();
+    Vector<__hidden_texture_loader::DecodedTextureMipUpload, Core::Alloc::ScratchArena> decodedMips{scratchArena};
+    decodedMips.reserve(textureAsset.mipLevels().size());
     for(usize mipIndex = 0u; mipIndex < textureAsset.mipLevels().size(); ++mipIndex){
-        if(!__hidden_texture_loader::UploadTextureMip(
-            *commandList,
-            *texture,
+        decodedMips.emplace_back(scratchArena);
+        if(!__hidden_texture_loader::DecodeTextureMip(
             textureAsset,
             textureAsset.mipLevels()[mipIndex],
             static_cast<u32>(mipIndex),
             format,
-            uploadBytes
+            decodedMips.back()
         )){
-            commandList->close();
             return false;
         }
     }
-    commandList->close();
 
-    Core::CommandList* commandLists[]{ commandList.get() };
-    bool submitted = false;
-    device.executeCommandLists(commandLists, LengthOf(commandLists), Core::CommandQueue::Graphics, &submitted);
-    if(!submitted){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to submit texture upload for '{}'"), owner, StringConvert(imageName.c_str()));
+    Vector<Core::Graphics::TextureUploadRegion, Core::Alloc::ScratchArena> uploadRegions{scratchArena};
+    for(usize mipIndex = 0u; mipIndex < textureAsset.mipLevels().size(); ++mipIndex){
+        const TextureMipLevel& mip = textureAsset.mipLevels()[mipIndex];
+        const __hidden_texture_loader::DecodedTextureMipUpload& decoded = decodedMips[mipIndex];
+        if(
+            decoded.bytes.empty()
+            || decoded.rowPitch == 0u
+            || decoded.sliceByteCount == 0u
+            || mip.sliceCount == 0u
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: decoded texture '{}' mip {} has an empty upload region")
+                , owner
+                , StringConvert(imageName.c_str())
+                , static_cast<u32>(mipIndex)
+            );
+            return false;
+        }
+
+        if(textureAsset.dimension() == TextureDimension::Texture3D){
+            uploadRegions.emplace_back(Core::Graphics::TextureUploadRegion{
+                .data = decoded.bytes.data(),
+                .dataSize = decoded.bytes.size(),
+                .rowPitch = decoded.rowPitch,
+                .depthPitch = decoded.sliceByteCount,
+                .arraySlice = 0u,
+                .mipLevel = static_cast<u32>(mipIndex),
+            });
+            continue;
+        }
+
+        for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
+            uploadRegions.emplace_back(Core::Graphics::TextureUploadRegion{
+                .data = decoded.bytes.data() + static_cast<usize>(sliceIndex) * decoded.sliceByteCount,
+                .dataSize = decoded.sliceByteCount,
+                .rowPitch = decoded.rowPitch,
+                .depthPitch = decoded.sliceByteCount,
+                .arraySlice = sliceIndex,
+                .mipLevel = static_cast<u32>(mipIndex),
+            });
+        }
+    }
+
+    Core::QueueSubmissionToken uploadToken;
+    if(!graphics.uploadTextureBatch(Core::Graphics::TextureUploadBatchDesc{
+        .destination = texture,
+        .regions = uploadRegions.data(),
+        .regionCount = uploadRegions.size(),
+        .finalState = Core::ResourceStates::ShaderResource,
+        .acceptedToken = &uploadToken,
+    })){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to submit graph-owned texture upload for '{}'"), owner, StringConvert(imageName.c_str()));
         return false;
     }
 

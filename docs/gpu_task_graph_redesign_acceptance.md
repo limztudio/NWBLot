@@ -6,7 +6,7 @@
 
 **Follow-up implementation:** physical queue identity, frontier-safe deferred scheduling, graph-bound presentation,
 graph-owned per-frame ImGui uploads, opt-in ready-frontier native recording, and opt-in same-class physical Graphics
-routing, 2026-08-11.
+routing, plus actual-device stale packet-recording recreation coverage, 2026-08-11.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
 semantic dependencies, compile-time queue selection, packet construction, and inter-task barrier planning; native
@@ -64,6 +64,7 @@ can receive an unconditional final sign-off.
 | Ready-frontier recording follow-up: `nwb_ecs_ui` and `nwb_ecs_render` | passed |
 | Same-class Graphics routing follow-up: graph-unit binary | 45/45 passed, including deterministic opt-in balancing, same-family state planning, duplicate native queue rejection, and stale recording/transaction recreation |
 | Same-class Graphics routing follow-up: descriptor-buffer smoke binary | 72 passed; 10 expected skips. The added real-Vulkan route skipped because this adapter exposes only one Graphics queue; the existing 9 skips lack dedicated Compute-only or Transfer-only families |
+| Actual device-recreation graph-packet follow-up: descriptor-buffer smoke binary | 73 passed; 10 expected skips. A real headless Graphics instance releases its recorded packets/transaction before teardown, recreates its device, then recompiles, records, and submits only on the replacement generation |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -98,9 +99,10 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
 
 4. **Generic recovery and invalidation proof.** The accepted-token transaction is sound for the exercised paths,
    stale imported completion tokens have graph and native-submission rejection coverage, and recording/transaction
-   state is now invalidated and recreated across a compiled-graph generation change. Recovery is still not proven to
-   join every possible Transfer queue route, and there is no complete stale compiled-graph/command-arena lease test
-   across actual device recreation.
+   state is now invalidated and recreated across a compiled-graph generation change. A real headless Graphics
+   device-lifetime test now verifies the renderer-style reset before teardown, rejects the retired token generation,
+   and records/submits a fresh packet after recreation. Recovery is still not proven to join every possible Transfer
+   queue route.
 
 5. **Final parity and performance evidence.** There is no immutable current baseline, legacy-to-graph pixel parity
    corpus, complete bindless-domain audit, or target-scene critical-path comparison. Dedicated-Transfer ownership/
@@ -111,5 +113,4 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
 
 Do not relabel this result as final architectural completion without either implementing the five areas above or
 explicitly waiving them in a revised, version-controlled acceptance scope. The next implementation work should
-complete stale graph/command-arena lease recreation across actual device recovery, then finish the remaining
-graph-owned setup/resource-update paths and recovery proof.
+finish the remaining graph-owned setup/resource-update paths and recovery proof.

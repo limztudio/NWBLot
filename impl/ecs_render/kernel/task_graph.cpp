@@ -97,6 +97,7 @@ struct ShadowPrepareGraphTask{
         bool deferredBindlessSlotsWereUploaded = false;
         bool currentBindlessSlotsGraphOwned = false;
         bool rayTraceMaterialContextSlotsGraphOwned = false;
+        bool causticEmissionTargetsGraphOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -128,7 +129,8 @@ struct ShadowPrepareGraphTask{
             && renderer.m_raytracingSystem.recordPreflightShadowVisibilityResources(
                 commandList,
                 *payload.targets,
-                renderer.m_preparedShadowVisibilityReady
+                renderer.m_preparedShadowVisibilityReady,
+                payload.causticEmissionTargetsGraphOwned
             )
         ;
         // The graph-owned material-context selector was snapshotted after preflight settled every backing handle.
@@ -1342,6 +1344,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     m_deferredShadowPrepareTask = {};
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
+    m_causticEmissionTargetsUploadTask = {};
     if(
         !deferredTargets.valid()
         || !deferredTargets.bindless.valid()
@@ -1444,16 +1447,82 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
+    const Name causticEmissionTargetsIdentity = graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
+        && graphics().queryFeatureSupport(Core::Feature::RayQuery)
+            ? Name("render.hardware_caustics.emission_targets")
+            : Name("render.software_caustics.emission_targets")
+    ;
+    const Core::GpuGraphResourceId causticEmissionTargets = m_rayTracingState.m_causticEmissionTargetBuffer
+        ? importBuffer(
+            m_rayTracingState.m_causticEmissionTargetBuffer,
+            causticEmissionTargetsIdentity,
+            "Caustic Emission Targets"
+        )
+        : Core::GpuGraphResourceId{}
+    ;
+    if(m_rayTracingState.m_causticEmissionTargetBuffer && !causticEmissionTargets.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted caustic emission targets"));
+        return false;
+    }
+
+    Core::GpuUploadBlobId causticEmissionTargetsBlob;
+    if(!m_raytracingSystem.retainPreparedCausticEmissionTargetUpload(
+        m_deferredLightingTaskGraph,
+        causticEmissionTargetsBlob
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted caustic emission-target upload data"));
+        return false;
+    }
+
+    Core::GpuTaskId shadowPrepareDependency = m_rayTraceMaterialContextSlotsUploadTask;
+    if(causticEmissionTargetsBlob.valid()){
+        if(!causticEmissionTargets.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: caustic emission-target upload has no imported destination"));
+            return false;
+        }
+
+        Core::GpuTaskSchedulingHint causticEmissionTargetsUploadScheduling;
+        causticEmissionTargetsUploadScheduling.cost = Core::GpuTaskCostHint::Medium;
+        causticEmissionTargetsUploadScheduling.forceSubmissionBoundary = false;
+        causticEmissionTargetsUploadScheduling.allowPacketMerge = true;
+        causticEmissionTargetsUploadScheduling.mergeWithPrevious = true;
+        Core::GpuTaskDesc causticEmissionTargetsUploadDesc;
+        causticEmissionTargetsUploadDesc
+            .setIdentity(Name("render.raytrace.caustic_emission_targets_upload"))
+            .setMarkerLabel("Caustic Emission Targets Upload")
+            .setQueue(GraphicsUploadQueueRequest())
+            .setScheduling(causticEmissionTargetsUploadScheduling)
+            .setDependencies(&m_rayTraceMaterialContextSlotsUploadTask, 1u)
+        ;
+        m_causticEmissionTargetsUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+            causticEmissionTargetsUploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = causticEmissionTargetsBlob,
+                .destination = causticEmissionTargets,
+                // This automatic-state buffer publishes Common. Shadow Preparation owns the following SRV handoff
+                // and thereby becomes the single producer observed by later software or hardware caustic packets.
+                .finalState = Core::ResourceStates::Common,
+            }
+        );
+        if(!m_causticEmissionTargetsUploadTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare caustic emission-target upload"));
+            return false;
+        }
+        shadowPrepareDependency = m_causticEmissionTargetsUploadTask;
+    }
+
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
-    resourceUses.reserve(12u + shadowTraceGeometryResourceCount);
-    // Shadow Preparation owns both selectors' post-transition packet boundary. This deliberately supersedes the
-    // preceding immutable uploads as the graph producers: later Compute readers wait on this first Graphics packet,
-    // rather than forcing FrontierSafe packetization to split either upload away from its accepting consumer.
+    resourceUses.reserve(13u + shadowTraceGeometryResourceCount);
+    // Shadow Preparation owns each preflight input's post-transition packet boundary. This deliberately supersedes
+    // preceding immutable uploads as graph producers, so later Compute readers wait on this first Graphics packet
+    // rather than forcing FrontierSafe packetization to split an upload away from its accepting consumer.
     resourceUses.push_back(ReadWriteUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     // Retain Shadow Preparation as the graph producer for this selector. Its direct compatibility path writes the
     // same bytes natively; on the graph path this WAW handoff retires the immutable upload before later Compute reads.
     resourceUses.push_back(WriteUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
+    if(causticEmissionTargets.valid())
+        resourceUses.push_back(WriteUse(causticEmissionTargets, Core::ResourceStates::ShaderResource));
     for(usize resourceIndex = 0u; resourceIndex < shadowTraceGeometryResourceCount; ++resourceIndex){
         const Core::GpuGraphResourceId resource = shadowTraceGeometryResources[resourceIndex];
         if(!resource.valid())
@@ -1502,15 +1571,6 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             Core::ResourceStates::ShaderResource
         )
         && appendOptionalWriteBuffer(
-            m_rayTracingState.m_causticEmissionTargetBuffer,
-            graphics().queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
-                && graphics().queryFeatureSupport(Core::Feature::RayQuery)
-                ? Name("render.hardware_caustics.emission_targets")
-                : Name("render.software_caustics.emission_targets"),
-            "Caustic Emission Targets",
-            Core::ResourceStates::ShaderResource
-        )
-        && appendOptionalWriteBuffer(
             m_rayTracingState.m_surfelConstants,
             Name("render.surfel_gi.constants"),
             "Surfel Constants",
@@ -1543,7 +1603,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     scheduling.forceSubmissionBoundary = false;
     scheduling.allowPacketMerge = true;
     scheduling.mergeWithPrevious = true;
-    const Core::GpuTaskId* const dependencies = &m_rayTraceMaterialContextSlotsUploadTask;
+    const Core::GpuTaskId* const dependencies = &shadowPrepareDependency;
     constexpr usize dependencyCount = 1u;
     Core::GpuTaskDesc desc;
     desc
@@ -1563,6 +1623,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .deferredBindlessSlotsWereUploaded = deferredTargets.bindless.slotsUploaded,
             .currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned,
             .rayTraceMaterialContextSlotsGraphOwned = true,
+            .causticEmissionTargetsGraphOwned = true,
         }
     );
     if(!m_deferredShadowPrepareTask.valid()){
@@ -3215,6 +3276,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredLightingTaskGraphValid = false;
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
+    m_causticEmissionTargetsUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};

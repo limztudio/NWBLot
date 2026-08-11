@@ -3473,7 +3473,7 @@ TEST(GpuTaskGraph, FrontierSafePacketizationKeepsMergeWhenLaterTaskOwnsCrossQueu
 }
 
 
-TEST(GpuTaskGraph, MergesDeferredSelectorsIntoShadowPreparePacket){
+TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId currentBindlessSlots = AddBufferMetadata(
@@ -3490,8 +3490,16 @@ TEST(GpuTaskGraph, MergesDeferredSelectorsIntoShadowPreparePacket){
         Graphics::ResourceStates::Common,
         Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
     );
+    const Graphics::GpuGraphResourceId causticEmissionTargets = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/caustic_emission_targets"),
+        "Caustic Emission Targets",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
     ASSERT_TRUE(currentBindlessSlots.valid());
     ASSERT_TRUE(materialContextSlots.valid());
+    ASSERT_TRUE(causticEmissionTargets.valid());
 
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
@@ -3567,6 +3575,29 @@ TEST(GpuTaskGraph, MergesDeferredSelectorsIntoShadowPreparePacket){
     const Graphics::GpuTaskId materialContextUpload = graph.addTask(materialContextUploadDesc);
     ASSERT_TRUE(materialContextUpload.valid());
 
+    const Graphics::GpuTaskResourceUse causticEmissionTargetsUploadUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = causticEmissionTargets,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::Common,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskSchedulingHint causticEmissionTargetsUploadScheduling = uploadScheduling;
+    causticEmissionTargetsUploadScheduling.cost = Graphics::GpuTaskCostHint::Medium;
+    causticEmissionTargetsUploadScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskDesc causticEmissionTargetsUploadDesc;
+    causticEmissionTargetsUploadDesc
+        .setIdentity(Name("tests/task_graph/caustic_emission_targets_upload"))
+        .setMarkerLabel("Caustic Emission Targets Upload")
+        .setQueue(graphicsUploadRequest)
+        .setScheduling(causticEmissionTargetsUploadScheduling)
+        .setDependencies(&materialContextUpload, 1u)
+        .setResourceUses(causticEmissionTargetsUploadUses, LengthOf(causticEmissionTargetsUploadUses))
+    ;
+    const Graphics::GpuTaskId causticEmissionTargetsUpload = graph.addTask(causticEmissionTargetsUploadDesc);
+    ASSERT_TRUE(causticEmissionTargetsUpload.valid());
+
     const Graphics::GpuTaskResourceUse shadowPrepareUses[] = {
         Graphics::GpuTaskResourceUse{
             .resource = currentBindlessSlots,
@@ -3580,6 +3611,12 @@ TEST(GpuTaskGraph, MergesDeferredSelectorsIntoShadowPreparePacket){
             .requiredState = Graphics::ResourceStates::ConstantBuffer,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
+        Graphics::GpuTaskResourceUse{
+            .resource = causticEmissionTargets,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
     };
     Graphics::GpuTaskDesc shadowPrepareDesc;
     shadowPrepareDesc
@@ -3587,7 +3624,7 @@ TEST(GpuTaskGraph, MergesDeferredSelectorsIntoShadowPreparePacket){
         .setMarkerLabel("Shadow Preparation")
         .setQueue(graphicsRequest)
         .setScheduling(shadowPrepareScheduling)
-        .setDependencies(&materialContextUpload, 1u)
+        .setDependencies(&causticEmissionTargetsUpload, 1u)
         .setResourceUses(shadowPrepareUses, LengthOf(shadowPrepareUses))
     ;
     const Graphics::GpuTaskId shadowPrepare = graph.addTask(shadowPrepareDesc);
@@ -3604,6 +3641,12 @@ TEST(GpuTaskGraph, MergesDeferredSelectorsIntoShadowPreparePacket){
             .resource = materialContextSlots,
             .range = {},
             .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = causticEmissionTargets,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Read,
         },
     };
@@ -3637,16 +3680,21 @@ TEST(GpuTaskGraph, MergesDeferredSelectorsIntoShadowPreparePacket){
 
     const Graphics::GpuSubmissionPacketId uploadPacket = compiledGraph.packetForTask(upload);
     const Graphics::GpuSubmissionPacketId materialContextUploadPacket = compiledGraph.packetForTask(materialContextUpload);
+    const Graphics::GpuSubmissionPacketId causticEmissionTargetsUploadPacket = compiledGraph.packetForTask(
+        causticEmissionTargetsUpload
+    );
     const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
     const Graphics::GpuSubmissionPacketId shadowVisibilityPacket = compiledGraph.packetForTask(shadowVisibility);
     ASSERT_TRUE(uploadPacket.valid());
     ASSERT_TRUE(materialContextUploadPacket.valid());
+    ASSERT_TRUE(causticEmissionTargetsUploadPacket.valid());
     ASSERT_TRUE(shadowPreparePacket.valid());
     ASSERT_TRUE(shadowVisibilityPacket.valid());
     EXPECT_EQ(uploadPacket, shadowPreparePacket);
     EXPECT_EQ(materialContextUploadPacket, shadowPreparePacket);
+    EXPECT_EQ(causticEmissionTargetsUploadPacket, shadowPreparePacket);
     EXPECT_NE(shadowPreparePacket, shadowVisibilityPacket);
-    EXPECT_EQ(compiledGraph.packet(shadowPreparePacket).taskCount, 3u);
+    EXPECT_EQ(compiledGraph.packet(shadowPreparePacket).taskCount, 4u);
     const Graphics::GpuSubmissionPacketRange shadowPrepareRange = compiledGraph.packetRange(
         shadowPreparePacket,
         shadowPreparePacket
@@ -3659,6 +3707,7 @@ TEST(GpuTaskGraph, MergesDeferredSelectorsIntoShadowPreparePacket){
     ASSERT_NE(shadowPrepareBarriers, nullptr);
     bool transitionsCurrentBindlessSlots = false;
     bool transitionsMaterialContextSlots = false;
+    bool transitionsCausticEmissionTargets = false;
     for(usize index = 0u; index < compiledShadowPrepare->prologueBarrierCount; ++index){
         const Graphics::GpuCompiledBarrier& barrier = shadowPrepareBarriers[index];
         if(
@@ -3669,9 +3718,17 @@ TEST(GpuTaskGraph, MergesDeferredSelectorsIntoShadowPreparePacket){
             transitionsCurrentBindlessSlots = transitionsCurrentBindlessSlots || barrier.resource == currentBindlessSlots;
             transitionsMaterialContextSlots = transitionsMaterialContextSlots || barrier.resource == materialContextSlots;
         }
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+            && barrier.before == Graphics::ResourceStates::Common
+            && barrier.after == Graphics::ResourceStates::ShaderResource
+            && barrier.resource == causticEmissionTargets
+        )
+            transitionsCausticEmissionTargets = true;
     }
     EXPECT_TRUE(transitionsCurrentBindlessSlots);
     EXPECT_TRUE(transitionsMaterialContextSlots);
+    EXPECT_TRUE(transitionsCausticEmissionTargets);
     ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(shadowVisibilityPacket)[0u].producer, shadowPreparePacket);
 }

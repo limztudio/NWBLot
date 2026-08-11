@@ -75,7 +75,8 @@ public:
     [[nodiscard]] bool recordPreflightShadowVisibilityResources(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        bool& outBackendReady
+        bool& outBackendReady,
+        bool causticEmissionTargetsGraphOwned = false
     );
     [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept;
     void discardPreflightShadowVisibilityResources()noexcept;
@@ -99,6 +100,12 @@ public:
     [[nodiscard]] bool snapshotRayTraceMaterialContextSlots(RayTraceMaterialContextSlots& outSlots);
     // Compatibility-only direct writer for callers outside the shared graph path.
     [[nodiscard]] bool uploadRayTraceMaterialContextSlots(Core::CommandList& commandList);
+    // Retain the exact preflight-gathered caustic AABB stream as an immutable graph blob. A valid empty result
+    // authoritatively represents a frame without refractive emission targets.
+    [[nodiscard]] bool retainPreparedCausticEmissionTargetUpload(
+        Core::GpuTaskGraph& graph,
+        Core::GpuUploadBlobId& outBlob
+    )const;
     void releaseRayTraceMaterialContextHeapHandles();
     void releaseSwBvhScratchHeapHandles();
     void releaseSurfelGiHeapHandles();
@@ -193,11 +200,7 @@ private:
         Core::Alloc::ScratchArena& scratchArena
     );
     [[nodiscard]] bool prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool recordCausticEmissionTargets(Core::CommandList& commandList, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool prepareCausticEmissionTargetsImpl(
-        Core::CommandList* commandList,
-        Core::Alloc::ScratchArena& scratchArena
-    );
+    [[nodiscard]] bool recordPreparedCausticEmissionTargets(Core::CommandList& commandList);
     [[nodiscard]] bool prepareSurfelResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool recordPreparedSurfelFrameConstants(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool initializeSurfelResources(Core::CommandList& commandList);
@@ -298,6 +301,9 @@ private:
 private:
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;
+    // Persist across graph declaration/recording so the immutable blob and compatibility writer never regather
+    // mutable renderer state after preflight. The bytes are tightly packed NwbCausticEmissionTargetGpu records.
+    Vector<u8, Core::Alloc::GlobalArena> m_preparedCausticEmissionTargetBytes;
     DeferredFrameTargets* m_shadowVisibilityPreparedTargets = nullptr;
     bool m_shadowVisibilityResourcesPreflighted = false;
     bool m_shadowVisibilityHardwareSupported = false;

@@ -206,6 +206,7 @@ void RendererSystem::invalidateResources(){
     m_raytracingSystem.invalidatePreparedShadowTraceGeometryBuffers();
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
+    m_causticEmissionTargetsUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
@@ -452,6 +453,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
 void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
+    m_causticEmissionTargetsUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -823,6 +825,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             shadowPreparePacket.valid()
             && rayTraceMaterialContextSlotsUploadPacket.valid()
             && rayTraceMaterialContextSlotsUploadPacket == shadowPreparePacket
+        )
+    ;
+    const Core::GpuSubmissionPacketId causticEmissionTargetsUploadPacket =
+        m_causticEmissionTargetsUploadTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_causticEmissionTargetsUploadTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    // The caustic input upload is optional for an empty refractive set, but a nonempty payload must live in the
+    // exact Shadow Preparation packet that owns the following ShaderResource handoff to later Compute consumers.
+    const bool causticEmissionTargetsUploadMergedIntoShadowPreparePacket =
+        !m_causticEmissionTargetsUploadTask.valid()
+        || (
+            shadowPreparePacket.valid()
+            && causticEmissionTargetsUploadPacket.valid()
+            && causticEmissionTargetsUploadPacket == shadowPreparePacket
         )
     ;
     const Core::GpuSubmissionPacketId graphicsPrefixPacket = m_deferredLightingCompiledGraph.packetForTask(
@@ -1206,6 +1223,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !shadowPreparePacket.valid()
         || !deferredBindlessSlotsUploadMergedIntoShadowPreparePacket
         || !rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket
+        || !causticEmissionTargetsUploadMergedIntoShadowPreparePacket
         || !shadowPrepareQueue
         || shadowPrepareQueue->queueClass != Core::CommandQueue::Graphics
         || !m_graphicsPrefixMeshViewSetupTask.valid()
@@ -2540,6 +2558,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && shadowPreparePacket.valid()
             && deferredBindlessSlotsUploadMergedIntoShadowPreparePacket
             && rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket
+            && causticEmissionTargetsUploadMergedIntoShadowPreparePacket
             && graphicsPrefixPacket.valid()
             && graphicsPrefixWorkPacketRange.valid()
             && shadowPrepareThroughPrefixPacketRange.valid()

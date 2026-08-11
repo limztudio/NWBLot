@@ -321,6 +321,9 @@ private:
     // Immutable ray-trace descriptor-slot snapshot. It must merge into the same first Graphics packet so later
     // Compute trace consumers inherit Shadow Preparation's ConstantBuffer handoff rather than an upload frontier.
     Core::GpuTaskId m_rayTraceMaterialContextSlotsUploadTask;
+    // Optional immutable refractive-AABB stream. It must merge into that same first Graphics packet so caustic
+    // Compute consumers inherit Shadow Preparation's ShaderResource handoff rather than an upload frontier.
+    Core::GpuTaskId m_causticEmissionTargetsUploadTask;
     // Optional lagged-history selector upload. It must merge into Deferred Lighting's packet, which already owns
     // both history acceptance and the external completion wait for the prior-frame images.
     Core::GpuTaskId m_deferredLaggedLightingHistorySlotsUploadTask;

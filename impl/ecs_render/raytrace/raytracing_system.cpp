@@ -20,6 +20,7 @@ RendererRayTracingSystem::RendererRayTracingSystem(RendererSystem& renderer)
     : RendererSystemSubsystemBase<RendererSystem>(renderer)
     , m_preparedShadowTraceGeometryBuffers(arena())
     , m_acceptedShadowTraceGeometryBuffers(arena())
+    , m_preparedCausticEmissionTargetBytes(arena())
 {}
 
 RendererRayTracingSystem::~RendererRayTracingSystem() = default;
@@ -311,6 +312,7 @@ void RendererRayTracingSystem::invalidatePreparedShadowTraceGeometryBuffers()noe
 
 void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexcept{
     m_preparedShadowTraceGeometryBuffers.clear();
+    m_preparedCausticEmissionTargetBytes.clear();
     m_shadowVisibilityPreparedTargets = nullptr;
     m_shadowVisibilityResourcesPreflighted = false;
     m_shadowVisibilityHardwareSupported = false;
@@ -594,14 +596,15 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
 bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    bool& outBackendReady
+    bool& outBackendReady,
+    const bool causticEmissionTargetsGraphOwned
 ){
     outBackendReady = false;
     if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
         return false;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
-    if(!recordCausticEmissionTargets(commandList, scratchArena))
+    if(!causticEmissionTargetsGraphOwned && !recordPreparedCausticEmissionTargets(commandList))
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: caustic emission-target upload failed"));
 
     // A non-fatal preflight miss intentionally leaves tracing unavailable for this frame. Do not retry capacity

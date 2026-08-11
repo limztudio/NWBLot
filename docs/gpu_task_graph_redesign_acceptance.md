@@ -8,7 +8,7 @@
 graph-owned per-frame ImGui uploads, opt-in ready-frontier native recording, and opt-in same-class physical Graphics
 routing, actual-device stale packet-recording recreation coverage, and graph-owned public setup uploads,
 graph-owned deferred mesh-view, scene-light, and scene-shading frame updates, and graph-owned decoded texture-asset
-uploads,
+uploads, and graph-owned runtime-skinning joint-palette uploads,
 2026-08-11.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
@@ -38,6 +38,10 @@ can receive an unconditional final sign-off.
   retains each region as a graph upload blob, serializes the subresources to one terminal accepted token, declares
   `ShaderResource` as the visible final state, and keeps the automatic Transfer -> Compute -> Graphics route plus
   consumer readiness bridge. Bindless sampled-image allocation/commit follows only after that graph batch accepts.
+- Active runtime skinning joint palettes are now derived before recording, copied into immutable graph upload blobs,
+  compiled and submitted on the primary Graphics transport, then exposed through the terminal native state handoff
+  to the established skinning compute list. The compute dispatch and its one-time bindless selector write retain
+  their acceptance-guarded compatibility path pending the specialized descriptor-update tranche.
 - In the shared deferred path, ImGui vertex/index payloads and requested font/texture updates are retained as
   immutable graph blobs, lowered through the built-in upload tasks, and made dependencies of the terminal overlay
   or upload-completion packet. Small deltas stay on Graphics; amortizable updates prefer Transfer.
@@ -86,6 +90,7 @@ can receive an unconditional final sign-off.
 | Graph-owned deferred-frame upload follow-up: `nwb_ecs_graphics_tests`, `nwb_graphics_task_graph_tests`, and `nwb_descriptor_buffer_tests` | 3/3 passed |
 | Graph-owned deferred-frame upload follow-up: rebuilt `nwb_testbed` window capture | passed; a real X11/Vulkan deferred frame completed with the graph-owned mesh-view, scene-light, and scene-shading uploads |
 | Graph-owned decoded-texture upload follow-up: `nwb_assets_texture_loader`, `nwb_graphics_task_graph_tests`, and `nwb_descriptor_buffer_tests` | passed; the native smoke now reads back two graph-owned mip payloads after their caller arrays are overwritten (74 passed; 10 expected topology skips) |
+| Graph-owned skinning joint-palette follow-up: `nwb_ecs_mesh_skinning`, `nwb_ecs_graphics_tests`, graph/descriptor smoke, and runtime skinning smoke | passed; the graph packet publishes `ShaderResource` joint palettes to the primary-Graphics skinning compute list; 17/17 ECS unit tests, 45/45 graph tests, descriptor smoke 74 passed with 10 expected topology skips, and the opt-in one-character fast smoke completed its animated case |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -109,9 +114,10 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    legacy state-handoff data. The shared deferred path now owns per-frame ImGui draw/font/texture uploads; its
    direct path remains only as a compatibility fallback for worlds without a graph-owning renderer or a rejected
    graph attempt. Public buffer/texture setup uploads, decoded texture-asset uploads, and the shared deferred
-   mesh-view, scene-light, and scene-shading frame updates now use the graph-owned primitive path, but skinning,
-   draw-time material/CSG streams, and specialized descriptor/resource updates still retain direct native recording
-   or submission. The graph therefore does not yet authoritatively own all frame work and state retirement.
+   mesh-view, scene-light, scene-shading, and runtime skinning joint-palette updates now use the graph-owned
+   primitive path, but skinning compute dispatch/its selector update, draw-time material/CSG streams, and other
+   specialized descriptor/resource updates still retain direct native recording or submission. The graph therefore
+   does not yet authoritatively own all frame work and state retirement.
 
 3. **Packet scheduling and recording completion (partially addressed).** Current merging is limited to compatible
    immediate predecessors. The compiler-derived native ready-frontier recorder is implemented for explicit opt-in
@@ -135,5 +141,5 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
 
 Do not relabel this result as final architectural completion without either implementing the five areas above or
 explicitly waiving them in a revised, version-controlled acceptance scope. The next implementation work should
-finish the remaining graph-owned asset/resource-update paths (notably skinning and draw-time material/CSG streams)
-and recovery proof.
+finish the remaining graph-owned asset/resource-update paths (notably draw-time material/CSG streams and specialized
+descriptor/resource updates) and recovery proof.

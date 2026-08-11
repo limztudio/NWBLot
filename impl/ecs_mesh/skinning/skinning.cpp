@@ -92,53 +92,6 @@ static void SetSkinnedBufferStates(
     commandList.setBufferState(instance.skinnedTangentBuffer.get(), state);
 }
 
-struct RuntimeSkinPayloadScratch{
-    Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena> skinInfluences;
-    Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> jointMatrices;
-    Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> poseJoints;
-    u32 resolvedSkinningMode = SkeletonSkinningMode::LinearBlend;
-
-    explicit RuntimeSkinPayloadScratch(Core::Alloc::ScratchArena& scratchArena)
-        : skinInfluences(scratchArena)
-        , jointMatrices(scratchArena)
-        , poseJoints(scratchArena)
-    {}
-
-    [[nodiscard]] bool hasActiveSkin()const{
-        return !skinInfluences.empty() && !jointMatrices.empty();
-    }
-};
-
-static bool BuildRuntimeSkinPayload(
-    MeshSkinningRuntimeInstance& instance,
-    const SkeletonJointPaletteComponent* jointPalette,
-    const SkeletonPoseComponent* skeletonPose,
-    RuntimeSkinPayloadScratch& payload
-){
-    payload.resolvedSkinningMode = jointPalette ? jointPalette->skinningMode : SkeletonSkinningMode::LinearBlend;
-    if(SkeletonRuntime::HasSkeletonPose(skeletonPose)){
-        if(!SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*skeletonPose, payload.poseJoints, payload.resolvedSkinningMode)){
-            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
-            return false;
-        }
-        return MeshSkinningPayload::BuildSkinPayloadFromJointMatrices(
-            instance,
-            payload.poseJoints,
-            payload.resolvedSkinningMode,
-            payload.skinInfluences,
-            payload.jointMatrices
-        );
-    }
-
-    return MeshSkinningPayload::BuildSkinPayload(
-        instance,
-        jointPalette,
-        payload.skinInfluences,
-        payload.jointMatrices
-    );
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -154,8 +107,8 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
     const SkeletonPoseComponent* skeletonPose
 ){
     Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_PrepareRuntimeArena);
-    __hidden_skinning::RuntimeSkinPayloadScratch payload{ scratchArena };
-    if(!__hidden_skinning::BuildRuntimeSkinPayload(instance, jointPalette, skeletonPose, payload))
+    RuntimeSkinPayloadScratch payload{ scratchArena };
+    if(!MeshSkinningPayload::BuildRuntimeSkinPayload(instance, jointPalette, skeletonPose, payload))
         return false;
 
     const bool hasActiveSkin = payload.hasActiveSkin();
@@ -206,8 +159,8 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
     outCommit.editRevision = instance.editRevision;
 
     Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_DispatchRuntimeArena);
-    __hidden_skinning::RuntimeSkinPayloadScratch payload{ scratchArena };
-    if(!__hidden_skinning::BuildRuntimeSkinPayload(instance, jointPalette, skeletonPose, payload))
+    RuntimeSkinPayloadScratch payload{ scratchArena };
+    if(!MeshSkinningPayload::BuildRuntimeSkinPayload(instance, jointPalette, skeletonPose, payload))
         return false;
 
     const bool hasActiveSkin = payload.hasActiveSkin();
@@ -260,19 +213,6 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
         outCommit.bindlessResourceSlotsUploadRecorded = bindlessResourceSlotsUploadRecorded;
         return true;
     }
-
-    usize jointPaletteBytes = 0;
-    if(!__hidden_skinning::BufferPayloadBytes(
-        payload.jointMatrices.size(),
-        sizeof(SkeletonJointMatrix),
-        jointPaletteBytes,
-        NWB_TEXT("joint palette")
-    ))
-        return false;
-
-    commandList.setBufferState(resources->jointPaletteBuffer.get(), Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    commandList.writeBuffer(resources->jointPaletteBuffer.get(), payload.jointMatrices.data(), jointPaletteBytes);
 
     __hidden_skinning::SetRestBufferStates(
         commandList,

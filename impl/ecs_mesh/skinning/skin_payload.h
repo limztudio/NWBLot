@@ -10,6 +10,7 @@
 #include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <impl/assets_mesh/skin_validation.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
+#include <core/alloc/scratch.h>
 #include <core/common/log.h>
 
 
@@ -34,6 +35,25 @@ static_assert(
     alignof(MeshSkinningInfluenceGpu) >= alignof(Float4),
     "MeshSkinning influence GPU layout must stay SIMD-aligned"
 );
+
+// Resource preparation and graph upload declaration must derive the exact same pose payload.  The graph copies
+// jointMatrices into an immutable blob before this scratch storage is released.
+struct RuntimeSkinPayloadScratch final{
+    Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena> skinInfluences;
+    Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> jointMatrices;
+    Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> poseJoints;
+    u32 resolvedSkinningMode = SkeletonSkinningMode::LinearBlend;
+
+    explicit RuntimeSkinPayloadScratch(Core::Alloc::ScratchArena& scratchArena)
+        : skinInfluences(scratchArena)
+        , jointMatrices(scratchArena)
+        , poseJoints(scratchArena)
+    {}
+
+    [[nodiscard]] bool hasActiveSkin()const{
+        return !skinInfluences.empty() && !jointMatrices.empty();
+    }
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -184,6 +204,42 @@ template<typename SkinInfluenceVector, typename JointPaletteVector>
         jointPalette->skinningMode,
         outSkinInfluences,
         outJointPalette
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The render pass uses this shared helper twice: first while declaring graph-owned joint-palette upload blobs and
+// again while recording the legacy compute work that consumes them.  Keeping pose resolution here prevents those
+// two phases from drifting apart.
+[[nodiscard]] inline bool BuildRuntimeSkinPayload(
+    MeshSkinningRuntimeInstance& instance,
+    const SkeletonJointPaletteComponent* jointPalette,
+    const SkeletonPoseComponent* skeletonPose,
+    RuntimeSkinPayloadScratch& payload
+){
+    payload.resolvedSkinningMode = jointPalette ? jointPalette->skinningMode : SkeletonSkinningMode::LinearBlend;
+    if(SkeletonRuntime::HasSkeletonPose(skeletonPose)){
+        if(!SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*skeletonPose, payload.poseJoints, payload.resolvedSkinningMode)){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
+            return false;
+        }
+        return BuildSkinPayloadFromJointMatrices(
+            instance,
+            payload.poseJoints,
+            payload.resolvedSkinningMode,
+            payload.skinInfluences,
+            payload.jointMatrices
+        );
+    }
+
+    return BuildSkinPayload(
+        instance,
+        jointPalette,
+        payload.skinInfluences,
+        payload.jointMatrices
     );
 }
 

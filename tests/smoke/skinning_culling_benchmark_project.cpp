@@ -72,6 +72,12 @@ static constexpr u32 s_BenchmarkRepeatCount = 4u;
 static constexpr u32 s_WarmupFrameCount = 8u;
 static constexpr u32 s_SampleFrameCount = 16u;
 static constexpr u32 s_FinishDrainFrameCount = 30u;
+// Keeps the full benchmark as the default while letting functional smoke runs exercise a live animated skinning
+// upload without spending several minutes on every performance case on a software or low-throughput adapter.
+static constexpr u32 s_FastSmokeCharacterCount = 1u;
+static constexpr u32 s_FastSmokeWarmupFrameCount = 1u;
+static constexpr u32 s_FastSmokeSampleFrameCount = 3u;
+static constexpr u32 s_FastSmokeFinishDrainFrameCount = 1u;
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.65f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 2.0f;
@@ -85,6 +91,7 @@ static constexpr u32 s_StaticPreviewAnimatedJointModulo = 2u;
 static constexpr AStringView s_BenchmarkModelPath = "project/characters/body/model";
 static constexpr AStringView s_SkinningBenchmarkMaterialPath = "project/smoke/skinning_culling_benchmark/materials/solid";
 static constexpr StringView s_StaticPreviewEnv = "NWB_SKINNING_CULLING_STATIC_PREVIEW";
+static constexpr StringView s_FastSmokeEnv = "NWB_SKINNING_CULLING_FAST_SMOKE";
 static constexpr Name s_ModelSkeletonObject("skeleton");
 
 static constexpr BenchmarkCase s_BenchmarkCases[] = {
@@ -148,6 +155,10 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
 
 [[nodiscard]] static bool StaticPreviewEnabled(){
     return EnvironmentFlagEnabled(s_StaticPreviewEnv.data());
+}
+
+[[nodiscard]] static bool FastSmokeEnabled(){
+    return EnvironmentFlagEnabled(s_FastSmokeEnv.data());
 }
 
 static void BuildAnimatedJointMatrix(
@@ -393,13 +404,33 @@ private:
         }
     }
 
+    [[nodiscard]] u32 repeatCount()const noexcept{
+        return m_fastSmoke ? 1u : s_BenchmarkRepeatCount;
+    }
+
+    [[nodiscard]] usize caseCount()const noexcept{
+        return m_fastSmoke ? 1u : s_BenchmarkCaseCount;
+    }
+
+    [[nodiscard]] u32 warmupFrameCount()const noexcept{
+        return m_fastSmoke ? s_FastSmokeWarmupFrameCount : s_WarmupFrameCount;
+    }
+
+    [[nodiscard]] u32 sampleFrameCount()const noexcept{
+        return m_fastSmoke ? s_FastSmokeSampleFrameCount : s_SampleFrameCount;
+    }
+
+    [[nodiscard]] u32 finishDrainFrameCount()const noexcept{
+        return m_fastSmoke ? s_FastSmokeFinishDrainFrameCount : s_FinishDrainFrameCount;
+    }
+
     void configureCase(){
         const BenchmarkCase& benchmarkCase = s_BenchmarkCases[m_caseIndex];
         m_runtimeMeshProvider.setMode(benchmarkCase.mode);
         configureCamera(benchmarkCase.view);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: begin repeat={}/{} mode={} view={}")
             , m_repeatIndex + 1u
-            , s_BenchmarkRepeatCount
+            , repeatCount()
             , StringConvert(BenchmarkModeName(benchmarkCase.mode))
             , StringConvert(BenchmarkViewName(benchmarkCase.view))
         );
@@ -409,36 +440,36 @@ private:
         const BenchmarkCase& benchmarkCase = s_BenchmarkCases[m_caseIndex];
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: end repeat={}/{} mode={} view={} sample_frames={}")
             , m_repeatIndex + 1u
-            , s_BenchmarkRepeatCount
+            , repeatCount()
             , StringConvert(BenchmarkModeName(benchmarkCase.mode))
             , StringConvert(BenchmarkViewName(benchmarkCase.view))
-            , s_SampleFrameCount
+            , sampleFrameCount()
         );
     }
 
     void finishBenchmark(){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SkinningCullingBenchmark: completed repeats={} cases={} warmup_frames={} sample_frames={}")
-            , s_BenchmarkRepeatCount
-            , static_cast<u32>(s_BenchmarkCaseCount)
-            , s_WarmupFrameCount
-            , s_SampleFrameCount
+            , repeatCount()
+            , static_cast<u32>(caseCount())
+            , warmupFrameCount()
+            , sampleFrameCount()
         );
     }
 
     void advanceCaseOrFinish(){
-        if(m_caseRenderedFrames < s_WarmupFrameCount + s_SampleFrameCount)
+        if(m_caseRenderedFrames < warmupFrameCount() + sampleFrameCount())
             return;
 
         finishCase();
         ++m_caseIndex;
         m_caseRenderedFrames = 0u;
 
-        if(m_caseIndex >= s_BenchmarkCaseCount){
+        if(m_caseIndex >= caseCount()){
             ++m_repeatIndex;
-            if(m_repeatIndex >= s_BenchmarkRepeatCount){
+            if(m_repeatIndex >= repeatCount()){
                 finishBenchmark();
                 m_finished = true;
-                m_finishDrainFrames = s_FinishDrainFrameCount;
+                m_finishDrainFrames = finishDrainFrameCount();
                 return;
             }
 
@@ -477,6 +508,7 @@ public:
         , m_entities(context.objectArena)
         , m_bindJoints(context.objectArena)
         , m_staticPreview(StaticPreviewEnabled())
+        , m_fastSmoke(!m_staticPreview && FastSmokeEnabled())
     {}
 
     virtual ~SkinningCullingBenchmarkProject()override{
@@ -525,7 +557,10 @@ public:
         model.virtualPath = Name(s_BenchmarkModelPath);
         BenchmarkMaterialRef material;
         material.virtualPath = Name(s_SkinningBenchmarkMaterialPath);
-        const u32 characterCount = m_staticPreview ? 1u : s_CharacterCount;
+        const u32 characterCount = m_staticPreview
+            ? 1u
+            : (m_fastSmoke ? s_FastSmokeCharacterCount : s_CharacterCount)
+        ;
         m_entities.reserve(characterCount);
         Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::GlobalArena> modelOwners(m_context.objectArena);
         modelOwners.reserve(characterCount);
@@ -629,6 +664,7 @@ private:
     bool m_finished = false;
     bool m_quitRequested = false;
     bool m_staticPreview = false;
+    bool m_fastSmoke = false;
 };
 
 

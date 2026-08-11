@@ -246,6 +246,9 @@ private:
         const SkeletonPoseComponent* skeletonPose,
         MeshSkinningSubmissionCommit& outCommit
     );
+    // Declares every active frame's joint palette as immutable graph-owned upload data, submits it on the primary
+    // Graphics transport, and retains the terminal state handoff for the legacy compute command list.
+    [[nodiscard]] bool submitFrameJointPaletteUploads();
     [[nodiscard]] bool prepareRuntimeMeshResources(
         MeshSkinningRuntimeInstance& instance,
         const SkeletonJointPaletteComponent* jointPalette,
@@ -288,6 +291,7 @@ private:
     MeshSkinningRuntimeCache m_runtimeMeshCache;
 
     HashMap<u64, RuntimeResources, Hasher<u64>, EqualTo<u64>, Core::Alloc::GlobalArena> m_runtimeResources;
+    Core::CommandListResourceStateHandoff m_graphOwnedJointPaletteStateHandoff;
     Core::BindingLayoutHandle m_skinningBindingLayout;
     Core::ShaderHandle m_skinningComputeShader;
     Core::ComputePipelineHandle m_skinningComputePipeline;

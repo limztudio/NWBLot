@@ -333,17 +333,103 @@ void RendererAvboitSystem::buildTransparentCsgIntervals(
     m_renderer.csgSystem().dispatchCsgIntervalCombine(commandList, targets, csgFrameData);
 }
 
+void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const MaterialPassDrawItems& receiverSurfaceDrawItems,
+    const CsgFrameGpuData& csgFrameData,
+    const usize instanceCount,
+    const usize materialTypedByteCount
+){
+    if(
+        !targets.framebuffer
+        || receiverSurfaceDrawItems.empty()
+        || !csgFrameData.hasWork()
+    )
+        return;
+
+    Core::GpuTimingMeasure timing(
+        graphics().gpuTiming(),
+        RendererGpuTimingScope::s_TransparentCsgIntervals,
+        graphics().getDevice(),
+        commandList
+    );
+    // Match the legacy interval producer: later transparent material passes sample these images through global
+    // descriptors, so clear the selected work rect even if a defensive readiness check below declines the draw.
+    m_renderer.m_deferredSystem.clearCsgIntervalTargets(
+        commandList,
+        targets,
+        csgFrameData.workRegion.resolveRect(targets.width, targets.height)
+    );
+
+    // The graph copied the material and CSG bytes after preflight froze every selected handle.  Do not rebuild or
+    // rewrite them here: a rejected packet will re-declare the retained blobs, while this native step only consumes
+    // the graph-owned data.
+    const bool drawBuffersReady = m_renderer.materialSystem().materialPassDrawBuffersReady(
+        instanceCount,
+        materialTypedByteCount
+    );
+    const bool csgResourcesReady = m_renderer.csgSystem().csgFrameBuffersReady(csgFrameData);
+    const bool receiverSurfaceDrawResourcesReady =
+        m_renderer.materialSystem().materialPassDrawResourcesReady(receiverSurfaceDrawItems)
+    ;
+    if(!drawBuffersReady || !csgResourcesReady || !receiverSurfaceDrawResourcesReady)
+        return;
+
+    Core::ViewportState viewportState;
+    viewportState
+        .addViewport(targets.framebuffer->getFramebufferInfo().getViewport())
+        .addScissorRect(csgFrameData.workRegion.resolveRect(targets.width, targets.height))
+    ;
+
+    m_renderer.csgSystem().dispatchCsgIntervalPeels(commandList, targets, csgFrameData);
+
+    const MaterialPassDrawContext csgReceiverSurfaceDrawContext{
+        commandList,
+        targets.framebuffer.get(),
+        MaterialPipelinePass::CsgReceiverSurface,
+        nullptr,
+        viewportState
+    };
+    m_renderer.materialSystem().renderMaterialPassDrawItems(
+        csgReceiverSurfaceDrawContext,
+        receiverSurfaceDrawItems
+    );
+
+    m_renderer.csgSystem().dispatchCsgReceiverSpanBuild(commandList, targets, csgFrameData);
+    m_renderer.csgSystem().dispatchCsgIntervalCombine(commandList, targets, csgFrameData);
+}
+
 void RendererAvboitSystem::renderAvboitPreDepthWarpPasses(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const CsgFrameState& csgFrameState
+    const CsgFrameState& csgFrameState,
+    const MaterialPassDrawItems* const preparedTransparentCsgReceiverSurfaceDrawItems,
+    const CsgFrameGpuData* const preparedTransparentCsgFrameData,
+    const usize preparedTransparentCsgInstanceCount,
+    const usize preparedTransparentCsgMaterialTypedByteCount
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
     NWB_ASSERT(avboitState().m_depthWarpPipeline);
     NWB_ASSERT(avboitState().m_integratePipeline);
 
-    buildTransparentCsgIntervals(commandList, targets, csgFrameState);
+    if(preparedTransparentCsgReceiverSurfaceDrawItems || preparedTransparentCsgFrameData){
+        NWB_ASSERT(preparedTransparentCsgReceiverSurfaceDrawItems);
+        NWB_ASSERT(preparedTransparentCsgFrameData);
+        if(preparedTransparentCsgReceiverSurfaceDrawItems && preparedTransparentCsgFrameData){
+            renderPreparedTransparentCsgIntervals(
+                commandList,
+                targets,
+                *preparedTransparentCsgReceiverSurfaceDrawItems,
+                *preparedTransparentCsgFrameData,
+                preparedTransparentCsgInstanceCount,
+                preparedTransparentCsgMaterialTypedByteCount
+            );
+        }
+    }
+    else
+        buildTransparentCsgIntervals(commandList, targets, csgFrameState);
 
     // Occupancy discovers opaque depth and writes coverage solely through global heap descriptors, which normal
     // command-state tracking cannot see. Keep both explicit transitions before the material pass.
@@ -426,14 +512,26 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
 void RendererAvboitSystem::renderAvboitPasses(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const CsgFrameState& csgFrameState
+    const CsgFrameState& csgFrameState,
+    const MaterialPassDrawItems* const preparedTransparentCsgReceiverSurfaceDrawItems,
+    const CsgFrameGpuData* const preparedTransparentCsgFrameData,
+    const usize preparedTransparentCsgInstanceCount,
+    const usize preparedTransparentCsgMaterialTypedByteCount
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
     NWB_ASSERT(avboitState().m_depthWarpPipeline);
     NWB_ASSERT(avboitState().m_integratePipeline);
 
-    renderAvboitPreDepthWarpPasses(commandList, targets, csgFrameState);
+    renderAvboitPreDepthWarpPasses(
+        commandList,
+        targets,
+        csgFrameState,
+        preparedTransparentCsgReceiverSurfaceDrawItems,
+        preparedTransparentCsgFrameData,
+        preparedTransparentCsgInstanceCount,
+        preparedTransparentCsgMaterialTypedByteCount
+    );
     dispatchAvboitDepthWarp(commandList, avboitTargets);
     renderAvboitExtinctionPass(commandList, avboitTargets, csgFrameState);
     dispatchAvboitIntegration(commandList, avboitTargets);

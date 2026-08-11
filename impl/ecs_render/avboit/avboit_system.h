@@ -37,12 +37,38 @@ public:
     void buildTransparentCsgIntervals(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
     // AVBOIT alternates raster and compute work. The Graphics-routed plan calls the three slices consecutively,
     // while the dedicated AsyncCompute schedule brackets the two compute dispatches with Graphics submissions.
-    void renderAvboitPreDepthWarpPasses(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
+    void renderAvboitPreDepthWarpPasses(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        const CsgFrameState& csgFrameState,
+        const MaterialPassDrawItems* preparedTransparentCsgReceiverSurfaceDrawItems = nullptr,
+        const CsgFrameGpuData* preparedTransparentCsgFrameData = nullptr,
+        usize preparedTransparentCsgInstanceCount = 0u,
+        usize preparedTransparentCsgMaterialTypedByteCount = 0u
+    );
     void renderAvboitExtinctionPass(Core::CommandList& commandList, AvboitFrameTargets& targets, const CsgFrameState& csgFrameState);
     void renderAvboitAccumulatePass(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
-    void renderAvboitPasses(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameState& csgFrameState);
+    void renderAvboitPasses(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        const CsgFrameState& csgFrameState,
+        const MaterialPassDrawItems* preparedTransparentCsgReceiverSurfaceDrawItems = nullptr,
+        const CsgFrameGpuData* preparedTransparentCsgFrameData = nullptr,
+        usize preparedTransparentCsgInstanceCount = 0u,
+        usize preparedTransparentCsgMaterialTypedByteCount = 0u
+    );
     void dispatchAvboitDepthWarp(Core::CommandList& commandList, AvboitFrameTargets& targets);
     void dispatchAvboitIntegration(Core::CommandList& commandList, AvboitFrameTargets& targets);
+
+private:
+    void renderPreparedTransparentCsgIntervals(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        const MaterialPassDrawItems& receiverSurfaceDrawItems,
+        const CsgFrameGpuData& csgFrameData,
+        usize instanceCount,
+        usize materialTypedByteCount
+    );
 };
 
 

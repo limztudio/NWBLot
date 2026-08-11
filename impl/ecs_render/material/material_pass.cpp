@@ -242,7 +242,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif
     MaterialTypedByteDataVector& materialTypedBytes,
-    const RendererResourceLookupMode::Enum lookupMode
+    const RendererResourceLookupMode::Enum lookupMode,
+    const ECSRenderDetail::MeshViewGpuData* const csgWorkRegionMeshViewState
 ){
     if(!framebuffer)
         return;
@@ -535,7 +536,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 framebufferInfo.width,
                 framebufferInfo.height,
                 csgFrameData,
-                csgRange
+                csgRange,
+                csgWorkRegionMeshViewState
             ))
                 return false;
             // The cap shader evaluates the same cook-generated surface hook as the receiver using this typed

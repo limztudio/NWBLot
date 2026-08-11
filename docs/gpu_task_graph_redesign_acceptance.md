@@ -9,7 +9,8 @@ graph-owned per-frame ImGui uploads, opt-in ready-frontier native recording, and
 routing, actual-device stale packet-recording recreation coverage, and graph-owned public setup uploads,
 graph-owned deferred mesh-view, scene-light, and scene-shading frame updates, and graph-owned decoded texture-asset
 uploads, graph-owned runtime-skinning joint-palette uploads, graph-owned opaque material draw-stream uploads, and
-graph-owned opaque CSG receiver/cutter/context/interval streams,
+graph-owned opaque CSG receiver/cutter/context/interval streams, and graph-owned transparent CSG interval-producer
+streams,
 2026-08-11.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
@@ -57,8 +58,12 @@ can receive an unconditional final sign-off.
   G-buffer declares the transient `ShaderResource` reads. CSG receiver-range, cutter, clip-context, and interval
   sample bytes from that same frozen payload are immutable graph blobs, uploaded in order before the G-buffer. The
   graph declares the receiver/cutter `ShaderResource` reads and the context/sample plus target-generation deferred
-  bindless-slot `ConstantBuffer` reads. The legacy direct upload helpers remain only for the separate transparent
-  CSG path pending its own frozen AVBOIT graph snapshot.
+  bindless-slot `ConstantBuffer` reads. The transparent CSG interval producer now does the same within AVBOIT-pre:
+  it freezes its fresh mesh-view work region, receiver-surface draw ordering, material instance/typed data, and CSG
+  receiver/cutter/context/sample payloads during graph declaration. Its serial Graphics upload chain merges into
+  the established AVBOIT-pre packet, which consumes the graph-owned bytes before the later compatibility AVBOIT
+  phases overwrite their shared buffers. The direct helpers remain only for those phase-specific transparent
+  material/CSG updates.
 - The compiler derives stable packet recording-frontier depths from packet dependencies. The native recorder may
   record an explicitly opted-in frontier concurrently with isolated per-packet state scratch and native command
   buffers; submission, timing, and failure reporting remain in stable compiler order. Command-IR capture and
@@ -102,6 +107,7 @@ can receive an unconditional final sign-off.
 | Graph-owned skinning joint-palette follow-up: `nwb_ecs_mesh_skinning`, `nwb_ecs_graphics_tests`, graph/descriptor smoke, and runtime skinning smoke | passed; the graph packet publishes `ShaderResource` joint palettes to the primary-Graphics skinning compute list; 17/17 ECS unit tests, 45/45 graph tests, descriptor smoke 74 passed with 10 expected topology skips, and the opt-in one-character fast smoke completed its animated case |
 | Graph-owned opaque material-stream follow-up: `nwb_ecs_graphics_tests`, graph/descriptor smoke, and runtime skinning smoke | passed; 17/17 ECS unit tests, 45/45 graph tests, descriptor smoke 74 passed with 10 expected topology skips, and the one-character Vulkan smoke completed its animated opaque-material case |
 | Graph-owned opaque CSG complete-stream follow-up: static/compute opaque capture plus transparent CSG regression captures | 5/5 passed; both opaque Vulkan/X11 paths consumed graph-owned receiver, cutter, context, and interval-state buffers before Opaque G-Buffer, while all three transparent compatibility captures remained correct |
+| Graph-owned transparent CSG interval-producer follow-up: ECS graphics unit plus static and skinned transparent CSG early/mid/late captures | 7/7 passed; the frozen receiver-surface payload is uploaded before AVBOIT-pre while the existing one/five-packet AVBOIT contract and visible transparent CSG cuts remain intact |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -126,9 +132,10 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    direct path remains only as a compatibility fallback for worlds without a graph-owning renderer or a rejected
    graph attempt. Public buffer/texture setup uploads, decoded texture-asset uploads, and the shared deferred
    mesh-view, scene-light, scene-shading, runtime skinning joint-palette, and opaque material instance/typed updates
-   now use the graph-owned primitive path. Skinning compute dispatch/its selector update, transparent material and
-   transparent CSG streams, and other specialized descriptor/resource updates still retain direct native recording or
-   submission. The graph therefore does not yet authoritatively own all frame work and state retirement.
+   now use the graph-owned primitive path. Skinning compute dispatch/its selector update, transparent AVBOIT
+   occupancy/extinction/accumulation material streams and their phase-specific CSG updates, and other specialized
+   descriptor/resource updates still retain direct native recording or submission. The graph therefore does not yet
+   authoritatively own all frame work and state retirement.
 
 3. **Packet scheduling and recording completion (partially addressed).** Current merging is limited to compatible
    immediate predecessors. The compiler-derived native ready-frontier recorder is implemented for explicit opt-in
@@ -152,5 +159,5 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
 
 Do not relabel this result as final architectural completion without either implementing the five areas above or
 explicitly waiving them in a revised, version-controlled acceptance scope. The next implementation work should
-finish the remaining graph-owned asset/resource-update paths (notably transparent material and CSG streams),
-specialized descriptor/resource updates, and recovery proof.
+finish the remaining graph-owned asset/resource-update paths (notably the transparent AVBOIT material phases and
+their CSG updates), specialized descriptor/resource updates, and recovery proof.

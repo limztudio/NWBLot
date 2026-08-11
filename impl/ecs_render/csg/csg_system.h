@@ -21,6 +21,10 @@ namespace Scene{
     struct TransformComponent;
 };
 
+namespace ECSRenderDetail{
+    struct MeshViewGpuData;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -80,7 +84,8 @@ public:
         u32 frameWidth,
         u32 frameHeight,
         CsgFrameGpuData& csgFrameData,
-        CsgReceiverRangeGpuData& outRange
+        CsgReceiverRangeGpuData& outRange,
+        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState = nullptr
     )const;
 };
 

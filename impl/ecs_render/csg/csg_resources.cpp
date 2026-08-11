@@ -782,7 +782,8 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
     const u32 frameWidth,
     const u32 frameHeight,
     CsgFrameGpuData& csgFrameData,
-    CsgReceiverRangeGpuData& outRange
+    CsgReceiverRangeGpuData& outRange,
+    const ECSRenderDetail::MeshViewGpuData* const csgWorkRegionMeshViewState
 )const{
     outRange = CsgReceiverRangeGpuData{};
     if(csgFrameData.cutters.size() > static_cast<usize>(Limit<u32>::s_Max))
@@ -812,7 +813,11 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
 
     bool meshViewReady = false;
     SIMDMatrix worldToClip;
-    if(drawState().m_meshViewGpuDataValid){
+    if(csgWorkRegionMeshViewState){
+        worldToClip = LoadFloat(csgWorkRegionMeshViewState->worldToClip);
+        meshViewReady = !MatrixIsNaN(worldToClip) && !MatrixIsInfinite(worldToClip);
+    }
+    else if(drawState().m_meshViewGpuDataValid){
         ECSRenderDetail::MeshViewGpuData meshViewData;
         NWB_MEMCPY(&meshViewData, sizeof(meshViewData), drawState().m_meshViewGpuData, sizeof(meshViewData));
         worldToClip = LoadFloat(meshViewData.worldToClip);

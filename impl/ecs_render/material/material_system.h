@@ -25,6 +25,10 @@ namespace RendererResourceLookupMode{
     };
 };
 
+namespace ECSRenderDetail{
+    struct MeshViewGpuData;
+};
+
 class RendererMaterialSystem final : public RendererSystemSubsystemBase<RendererSystem>{
 public:
     explicit RendererMaterialSystem(RendererSystem& renderer);
@@ -75,7 +79,10 @@ public:
         ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif
         MaterialTypedByteDataVector& materialTypedBytes,
-        RendererResourceLookupMode::Enum lookupMode
+        RendererResourceLookupMode::Enum lookupMode,
+        // Graph declaration can supply the exact immutable view payload that will be uploaded before this CSG
+        // work records. Compatibility paths retain the accepted CPU mirror fallback.
+        const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState = nullptr
     );
     [[nodiscard]] static bool findMaterialInstanceOverrideField(
         Core::ECS::EntityID entity,

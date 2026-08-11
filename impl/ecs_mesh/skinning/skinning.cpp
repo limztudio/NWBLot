@@ -32,46 +32,6 @@ namespace __hidden_skinning{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool BufferPayloadBytes(const usize count, const usize stride, usize& outBytes, const tchar* label){
-    outBytes = 0u;
-    if(stride != 0u && TryMultiply<usize>(count, stride, outBytes))
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
-    return false;
-}
-
-static bool ResolveRestBufferBytes(
-    const MeshSkinningRuntimeInstance& instance,
-    usize& outPositionBytes,
-    usize& outNormalBytes,
-    usize& outTangentBytes
-){
-    outPositionBytes = 0u;
-    outNormalBytes = 0u;
-    outTangentBytes = 0u;
-    return
-        BufferPayloadBytes(
-            instance.restPositions.size(),
-            sizeof(Float3U),
-            outPositionBytes,
-            NWB_TEXT("rest position")
-        )
-        && BufferPayloadBytes(
-            instance.restNormals.size(),
-            sizeof(Half4U),
-            outNormalBytes,
-            NWB_TEXT("rest normal")
-        )
-        && BufferPayloadBytes(
-            instance.restTangents.size(),
-            sizeof(Half4U),
-            outTangentBytes,
-            NWB_TEXT("rest tangent")
-        )
-    ;
-}
-
 static void SetRestBufferStates(
     Core::CommandList& commandList,
     MeshSkinningRuntimeInstance& instance,
@@ -140,12 +100,22 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
 
     RuntimeResources* resources = nullptr;
     bool resourcesRebuilt = false;
-    return ensureRuntimeResources(
+    if(!ensureRuntimeResources(
         instance,
         payloadViews,
         resources,
         resourcesRebuilt
-    );
+    ))
+        return false;
+
+    // Releasing a pose rebuilds the per-dispatch descriptors before the subsequent render pass can observe the
+    // previous skinning generation. Force one rest->skinned copy so the output streams no longer retain that pose.
+    if(!hasActiveSkin && hadSkinningResources && resourcesRebuilt){
+        instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
+            instance.dirtyFlags | RuntimeMeshDirtyFlag::SkinningInputDirty
+        );
+    }
+    return true;
 }
 
 bool MeshSkinningSystem::dispatchRuntimeMesh(
@@ -197,7 +167,9 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
     if(!hasActiveSkin){
         const bool copiesRestBuffers = skinnedMeshInputDirty || hadSkinningResources;
         if(copiesRestBuffers){
-            if(!copyRestToSkinned(commandList, instance))
+            if(hasGraphOwnedRestCopyPlan(instance))
+                transitionGraphCopiedRestStreams(commandList, instance);
+            else if(!copyRestToSkinned(commandList, instance))
                 return false;
         }
 
@@ -205,6 +177,10 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
             if(!dispatchMeshletBounds(commandList, instance, *resources))
                 return false;
         }
+        // A released pose restores skinned normals from rest data, but the ray-tracing attribute stream still
+        // contains the prior active pose until its normal repack runs once more.
+        if(copiesRestBuffers && !dispatchRepackNormals(commandList, instance, *resources))
+            return false;
 
         outCommit.handledDirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
             (skinnedMeshInputDirty ? RuntimeMeshDirtyFlag::SkinningInputDirty : RuntimeMeshDirtyFlag::None)
@@ -262,8 +238,8 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
     if(!dispatchMeshletBounds(commandList, instance, *resources))
         return false;
     // Re-derive the RT attribute buffer's shading normals from this frame's deformed normals so the shadow + caustic
-    // traces bend on the live pose. Only in the active-skin branch: the !hasActiveSkin path leaves skinned==rest and
-    // the attribute buffer already holds bind-pose normals, so a repack there would be a no-op.
+    // traces bend on the live pose. A released active pose also repacks once after rest data is copied back; steady
+    // no-active frames leave skinned==rest and the attribute buffer already holds bind-pose normals.
     if(!dispatchRepackNormals(commandList, instance, *resources))
         return false;
 
@@ -275,11 +251,51 @@ bool MeshSkinningSystem::dispatchRuntimeMesh(
     return true;
 }
 
+bool MeshSkinningSystem::hasGraphOwnedRestCopyPlan(const MeshSkinningRuntimeInstance& instance)const{
+    usize positionBytes = 0u;
+    usize normalBytes = 0u;
+    usize tangentBytes = 0u;
+    if(!resolveRestToSkinnedCopyByteCounts(instance, positionBytes, normalBytes, tangentBytes))
+        return false;
+
+    for(const GraphOwnedRestCopyPlan& plan : m_graphOwnedRestCopyPlans){
+        if(
+            plan.handle == instance.handle
+            && plan.editRevision == instance.editRevision
+            && plan.restPositionBuffer.get() == instance.restPositionBuffer.get()
+            && plan.restNormalBuffer.get() == instance.restNormalBuffer.get()
+            && plan.restTangentBuffer.get() == instance.restTangentBuffer.get()
+            && plan.skinnedPositionBuffer.get() == instance.skinnedPositionBuffer.get()
+            && plan.skinnedNormalBuffer.get() == instance.skinnedNormalBuffer.get()
+            && plan.skinnedTangentBuffer.get() == instance.skinnedTangentBuffer.get()
+            && plan.positionBytes == positionBytes
+            && plan.normalBytes == normalBytes
+            && plan.tangentBytes == tangentBytes
+        )
+            return true;
+    }
+    return false;
+}
+
+void MeshSkinningSystem::transitionGraphCopiedRestStreams(
+    Core::CommandList& commandList,
+    MeshSkinningRuntimeInstance& instance
+)const{
+    // The graph-owned primitive copy publishes CopyDest. The native bounds pass consumes only positions, while the
+    // renderer later consumes normals and tangents too, so preserve the direct-copy helper's complete SRV handoff.
+    __hidden_skinning::SetSkinnedBufferStates(
+        commandList,
+        instance,
+        Core::ResourceStates::ShaderResource
+    );
+    commandList.commitBarriers();
+}
+
 bool MeshSkinningSystem::copyRestToSkinned(Core::CommandList& commandList, MeshSkinningRuntimeInstance& instance){
     usize positionBytes = 0;
     usize normalBytes = 0;
     usize tangentBytes = 0;
-    if(!__hidden_skinning::ResolveRestBufferBytes(
+    if(!resolveRestToSkinnedCopyByteCounts(
         instance,
         positionBytes,
         normalBytes,
@@ -349,12 +365,12 @@ bool MeshSkinningSystem::dispatchRepackNormals(
     MeshSkinningRuntimeInstance& instance,
     const RuntimeResources& resources
 ){
-    // RT unsupported (no attribute buffer) -> nothing to repack; not an error. Only reached from the active-skin
-    // branch, so skinnedNormalBuffer already holds this frame's deformed normals (set ShaderResource at the end of
-    // the skinning dispatch). This pass overwrites the triangle-corner normal slots of attributeBuffer in place; the
-    // single-instance buffer is safe to write here because the frame-begin fence retires all prior in-flight frames
-    // before this command list records, and the renderer's RT reads run later (skinning render pass precedes the
-    // renderer pass), exactly as for the skinned position/normal buffers.
+    // RT unsupported (no attribute buffer) -> nothing to repack; not an error. Active skinning and a released pose
+    // both enter with skinnedNormalBuffer holding this frame's intended normals in ShaderResource state. This pass
+    // overwrites the triangle-corner normal slots of attributeBuffer in place; the single-instance buffer is safe to
+    // write here because the frame-begin fence retires all prior in-flight frames before this command list records,
+    // and the renderer's RT reads run later (skinning render pass precedes the renderer pass), exactly as for the
+    // skinned position/normal buffers.
     if(!instance.attributeBuffer || !resources.bindlessHeapHandles.resourceSlots.valid() || !m_repackComputePipeline)
         return true;
 

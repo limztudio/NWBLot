@@ -205,6 +205,23 @@ private:
         [[nodiscard]] bool hasActiveSkin()const{ return skinInfluenceCount != 0u && jointPaletteCount != 0u; }
     };
 
+    // The graph-owned no-active-skin copy is accepted before the legacy bounds command list opens.  Retain the
+    // exact buffer generation so that recording can only skip its native duplicate when the runtime mesh has not
+    // changed between graph declaration and dispatch.
+    struct GraphOwnedRestCopyPlan{
+        RuntimeMeshHandle handle;
+        u32 editRevision = 0u;
+        Core::BufferHandle restPositionBuffer;
+        Core::BufferHandle restNormalBuffer;
+        Core::BufferHandle restTangentBuffer;
+        Core::BufferHandle skinnedPositionBuffer;
+        Core::BufferHandle skinnedNormalBuffer;
+        Core::BufferHandle skinnedTangentBuffer;
+        usize positionBytes = 0u;
+        usize normalBytes = 0u;
+        usize tangentBytes = 0u;
+    };
+
 
 public:
     using ShaderPathResolveCallback = Function<
@@ -246,8 +263,9 @@ private:
         const SkeletonPoseComponent* skeletonPose,
         MeshSkinningSubmissionCommit& outCommit
     );
-    // Declares every active frame's joint palette as immutable graph-owned upload data, submits it on the primary
-    // Graphics transport, and retains the terminal state handoff for the legacy compute command list.
+    // Declares frame-local skinning updates as graph-owned work on primary Graphics: active joint palettes upload
+    // immutable bytes and no-active-skin meshes copy rest streams into their skinned outputs.  The terminal state
+    // handoff opens the established native bounds/selector command list.
     [[nodiscard]] bool submitFrameJointPaletteUploads();
     [[nodiscard]] bool prepareRuntimeMeshResources(
         MeshSkinningRuntimeInstance& instance,
@@ -255,6 +273,16 @@ private:
         const SkeletonPoseComponent* skeletonPose
     );
     [[nodiscard]] bool copyRestToSkinned(Core::CommandList& commandList, MeshSkinningRuntimeInstance& instance);
+    [[nodiscard]] bool hasGraphOwnedRestCopyPlan(const MeshSkinningRuntimeInstance& instance)const;
+    void transitionGraphCopiedRestStreams(Core::CommandList& commandList, MeshSkinningRuntimeInstance& instance)const;
+    [[nodiscard]] static bool resolveRestToSkinnedCopyByteCounts(
+        const MeshSkinningRuntimeInstance& instance,
+        usize& outPositionBytes,
+        usize& outNormalBytes,
+        usize& outTangentBytes
+    );
+    void resetAcceptedSkinningStateHandoff()noexcept;
+    [[nodiscard]] bool replaceAcceptedSkinningStateHandoff(const Core::CommandListResourceStateHandoff& state);
     [[nodiscard]] bool dispatchMeshletBounds(
         Core::CommandList& commandList,
         MeshSkinningRuntimeInstance& instance,
@@ -291,6 +319,11 @@ private:
     MeshSkinningRuntimeCache m_runtimeMeshCache;
 
     HashMap<u64, RuntimeResources, Hasher<u64>, EqualTo<u64>, Core::Alloc::GlobalArena> m_runtimeResources;
+    Vector<GraphOwnedRestCopyPlan, Core::Alloc::GlobalArena> m_graphOwnedRestCopyPlans;
+    // The accepted frame state persists across graph/native boundaries and across frames. The per-frame graph
+    // snapshot below opens the native continuation immediately after its accepted packet.
+    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedSkinningStateBuffers;
+    Core::CommandListResourceStateHandoff m_acceptedSkinningStateHandoff;
     Core::CommandListResourceStateHandoff m_graphOwnedJointPaletteStateHandoff;
     Core::BindingLayoutHandle m_skinningBindingLayout;
     Core::ShaderHandle m_skinningComputeShader;

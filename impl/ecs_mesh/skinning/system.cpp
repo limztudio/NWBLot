@@ -94,6 +94,7 @@ struct PendingRuntimeMeshSubmission{
 }
 
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -101,6 +102,109 @@ struct PendingRuntimeMeshSubmission{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool MeshSkinningSystem::resolveRestToSkinnedCopyByteCounts(
+    const MeshSkinningRuntimeInstance& instance,
+    usize& outPositionBytes,
+    usize& outNormalBytes,
+    usize& outTangentBytes
+){
+    const auto resolvePayloadBytes = [](const usize count, const usize stride, usize& outBytes, const tchar* label){
+        outBytes = 0u;
+        if(stride != 0u && TryMultiply<usize>(count, stride, outBytes))
+            return true;
+
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
+        return false;
+    };
+    return
+        resolvePayloadBytes(instance.restPositions.size(), sizeof(Float3U), outPositionBytes, NWB_TEXT("rest position"))
+        && resolvePayloadBytes(instance.restNormals.size(), sizeof(Half4U), outNormalBytes, NWB_TEXT("rest normal"))
+        && resolvePayloadBytes(instance.restTangents.size(), sizeof(Half4U), outTangentBytes, NWB_TEXT("rest tangent"))
+    ;
+}
+
+void MeshSkinningSystem::resetAcceptedSkinningStateHandoff()noexcept{
+    m_acceptedSkinningStateHandoff.reset();
+    m_acceptedSkinningStateBuffers.clear();
+}
+
+bool MeshSkinningSystem::replaceAcceptedSkinningStateHandoff(
+    const Core::CommandListResourceStateHandoff& state
+){
+    if(!state.valid()){
+        resetAcceptedSkinningStateHandoff();
+        return false;
+    }
+
+    // The handoff stores raw RHI pointers. Retain and filter against every current skinning buffer before replacing
+    // it, so runtime-resource pruning/rebuild cannot leave an external source dangling or accidentally revive an
+    // old buffer whose address was reused by a new generation.
+    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> retainedBuffers(m_arena);
+    Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_FrameUploadArena);
+    Vector<Core::Buffer*, Core::Alloc::ScratchArena> currentBuffers(scratchArena);
+    const auto retainBuffer = [&](const Core::BufferHandle& buffer){
+        if(!buffer)
+            return;
+        retainedBuffers.push_back(buffer);
+        currentBuffers.push_back(buffer.get());
+    };
+    m_world.view<SkinnedMeshBindingComponent>().each(
+        [&](Core::ECS::EntityID, const SkinnedMeshBindingComponent& binding){
+            if(!binding.runtimeMesh.valid())
+                return;
+
+            const MeshSkinningRuntimeInstance* const instance = m_runtimeMeshCache.findInstance(binding.runtimeMesh);
+            if(!instance || !instance->valid())
+                return;
+
+            retainBuffer(instance->restPositionBuffer);
+            retainBuffer(instance->restNormalBuffer);
+            retainBuffer(instance->restTangentBuffer);
+            retainBuffer(instance->skinnedPositionBuffer);
+            retainBuffer(instance->skinnedNormalBuffer);
+            retainBuffer(instance->skinnedTangentBuffer);
+            retainBuffer(instance->uv0Buffer);
+            retainBuffer(instance->colorBuffer);
+            retainBuffer(instance->meshletDescBuffer);
+            retainBuffer(instance->meshletBoundsBuffer);
+            retainBuffer(instance->meshletPositionRefDeltaBuffer);
+            retainBuffer(instance->meshletAttributeRefDeltaBuffer);
+            retainBuffer(instance->meshletLocalVertexRefBuffer);
+            retainBuffer(instance->meshletPrimitiveIndexBuffer);
+            retainBuffer(instance->attributeSkinBuffer);
+            retainBuffer(instance->triangleIndexBuffer);
+            retainBuffer(instance->attributeBuffer);
+
+            const auto foundResources = m_runtimeResources.find(instance->handle.value);
+            if(
+                foundResources != m_runtimeResources.end()
+                && foundResources.value().editRevision == instance->editRevision
+            ){
+                retainBuffer(foundResources.value().skinBuffer);
+                retainBuffer(foundResources.value().jointPaletteBuffer);
+                retainBuffer(foundResources.value().bindlessResourceSlotsBuffer);
+            }
+        }
+    );
+
+    Core::CommandListResourceStateHandoff filteredState(m_arena);
+    if(!filteredState.buildResourceSubset(
+        state,
+        nullptr,
+        0u,
+        currentBuffers.data(),
+        currentBuffers.size()
+    ) || !m_acceptedSkinningStateHandoff.copyFrom(filteredState)){
+        resetAcceptedSkinningStateHandoff();
+        return false;
+    }
+    m_acceptedSkinningStateBuffers.clear();
+    for(Core::BufferHandle& buffer : retainedBuffers)
+        m_acceptedSkinningStateBuffers.push_back(Move(buffer));
+    return true;
+}
 
 
 MeshSkinningSystem::MeshSkinningSystem(
@@ -120,6 +224,9 @@ MeshSkinningSystem::MeshSkinningSystem(
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_runtimeMeshCache(arena, graphics, assetManager)
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), arena)
+    , m_graphOwnedRestCopyPlans(arena)
+    , m_acceptedSkinningStateBuffers(arena)
+    , m_acceptedSkinningStateHandoff(arena)
     , m_graphOwnedJointPaletteStateHandoff(arena)
 {
     writeAccess<SkinnedMeshBindingComponent>();
@@ -207,6 +314,17 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
         }
     );
 
+    // A frame may have no native skinning submission after bindings are removed. Keep the accepted state source
+    // useful for surviving generations, but filter out retired buffers now so its ownership handles cannot pin an
+    // otherwise-pruned runtime mesh indefinitely.
+    if(
+        m_acceptedSkinningStateHandoff.valid()
+        && !replaceAcceptedSkinningStateHandoff(m_acceptedSkinningStateHandoff)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to prune the accepted skinning state handoff"));
+        return false;
+    }
+
     if(!ready || !hasRenderWork)
         return ready;
 
@@ -289,6 +407,7 @@ bool MeshSkinningSystem::containsRuntimeMesh(const Name& meshKey, const u64 vers
 
 bool MeshSkinningSystem::submitFrameJointPaletteUploads(){
     m_graphOwnedJointPaletteStateHandoff.reset();
+    m_graphOwnedRestCopyPlans.clear();
 
     auto& device = m_graphics.getDevice();
     const Core::GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
@@ -300,6 +419,10 @@ bool MeshSkinningSystem::submitFrameJointPaletteUploads(){
     Core::GpuTaskGraph graph(m_arena);
     Core::GpuTaskId terminalTask;
     Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_FrameUploadArena);
+    const auto discardGraphOwnedFrameUpdates = [&](){
+        m_graphOwnedJointPaletteStateHandoff.reset();
+        m_graphOwnedRestCopyPlans.clear();
+    };
     auto skinningBindings = m_world.view<SkinnedMeshBindingComponent>();
     bool declarationFailed = false;
     skinningBindings.each(
@@ -325,8 +448,147 @@ bool MeshSkinningSystem::submitFrameJointPaletteUploads(){
             // compute path will report the same invalid payload and leave that mesh retryable next frame.
             if(!MeshSkinningPayload::BuildRuntimeSkinPayload(*instance, jointPalette, skeletonPose, payload))
                 return;
-            if(!payload.hasActiveSkin())
+            if(!payload.hasActiveSkin()){
+                const bool copiesRestBuffers =
+                    (instance->dirtyFlags & RuntimeMeshDirtyFlag::SkinningInputDirty) != 0u
+                    || hadSkinningResources
+                ;
+                if(!copiesRestBuffers)
+                    return;
+
+                usize positionBytes = 0u;
+                usize normalBytes = 0u;
+                usize tangentBytes = 0u;
+                if(!resolveRestToSkinnedCopyByteCounts(
+                    *instance,
+                    positionBytes,
+                    normalBytes,
+                    tangentBytes
+                ) || positionBytes == 0u || normalBytes == 0u || tangentBytes == 0u){
+                    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to resolve rest-to-skinned copy sizes for runtime mesh '{}'"), instance->handle.value);
+                    declarationFailed = true;
+                    return;
+                }
+
+                const auto importCopyBuffer = [&](
+                    const Core::BufferHandle& buffer,
+                    const AStringView label,
+                    const usize requiredBytes
+                ){
+                    if(!buffer)
+                        return Core::GpuGraphResourceId{};
+                    const Core::BufferDesc& bufferDesc = buffer->getDescription();
+                    if(!bufferDesc.debugName || requiredBytes > bufferDesc.byteSize)
+                        return Core::GpuGraphResourceId{};
+                    return graph.importBuffer(
+                        buffer,
+                        Core::GpuGraphResourceDesc{}
+                            .setIdentity(bufferDesc.debugName)
+                            .setMarkerLabel(label)
+                            .setType(Core::GpuGraphResourceType::Buffer)
+                            .setInitialState(bufferDesc.initialState)
+                            .setQueueSharing(bufferDesc.queueSharing)
+                    );
+                };
+                const Core::GpuGraphResourceId restPositions = importCopyBuffer(
+                    instance->restPositionBuffer,
+                    "Runtime Rest Positions",
+                    positionBytes
+                );
+                const Core::GpuGraphResourceId restNormals = importCopyBuffer(
+                    instance->restNormalBuffer,
+                    "Runtime Rest Normals",
+                    normalBytes
+                );
+                const Core::GpuGraphResourceId restTangents = importCopyBuffer(
+                    instance->restTangentBuffer,
+                    "Runtime Rest Tangents",
+                    tangentBytes
+                );
+                const Core::GpuGraphResourceId skinnedPositions = importCopyBuffer(
+                    instance->skinnedPositionBuffer,
+                    "Runtime Skinned Positions",
+                    positionBytes
+                );
+                const Core::GpuGraphResourceId skinnedNormals = importCopyBuffer(
+                    instance->skinnedNormalBuffer,
+                    "Runtime Skinned Normals",
+                    normalBytes
+                );
+                const Core::GpuGraphResourceId skinnedTangents = importCopyBuffer(
+                    instance->skinnedTangentBuffer,
+                    "Runtime Skinned Tangents",
+                    tangentBytes
+                );
+                if(
+                    !restPositions.valid()
+                    || !restNormals.valid()
+                    || !restTangents.valid()
+                    || !skinnedPositions.valid()
+                    || !skinnedNormals.valid()
+                    || !skinnedTangents.valid()
+                ){
+                    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has no graph-importable rest-to-skinned buffers"), instance->handle.value);
+                    declarationFailed = true;
+                    return;
+                }
+
+                const Core::GpuCopyBufferTaskRegion copyRegions[] = {
+                    Core::GpuCopyBufferTaskRegion{
+                        .source = restPositions,
+                        .destination = skinnedPositions,
+                        .dataSizeBytes = positionBytes,
+                    },
+                    Core::GpuCopyBufferTaskRegion{
+                        .source = restNormals,
+                        .destination = skinnedNormals,
+                        .dataSizeBytes = normalBytes,
+                    },
+                    Core::GpuCopyBufferTaskRegion{
+                        .source = restTangents,
+                        .destination = skinnedTangents,
+                        .dataSizeBytes = tangentBytes,
+                    },
+                };
+                Core::GpuTaskDesc copyDesc;
+                copyDesc
+                    .setIdentity(Name("mesh_skinning.frame_rest_to_skinned_copy"))
+                    .setMarkerLabel("Skinning Rest-to-Skinned Copy")
+                    .setQueue(__hidden_system::JointPaletteUploadQueueRequest())
+                    .setScheduling(__hidden_system::JointPaletteUploadScheduling(terminalTask.valid()))
+                ;
+                if(terminalTask.valid())
+                    copyDesc.setDependencies(&terminalTask, 1u);
+
+                const Core::GpuTaskId copyTask = graph.addCopyBufferTask(
+                    copyDesc,
+                    Core::GpuCopyBufferTaskDesc{
+                        .regions = copyRegions,
+                        .regionCount = LengthOf(copyRegions),
+                    }
+                );
+                if(!copyTask.valid()){
+                    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned rest-to-skinned copy for runtime mesh '{}'"), instance->handle.value);
+                    declarationFailed = true;
+                    return;
+                }
+
+                GraphOwnedRestCopyPlan plan;
+                plan.handle = instance->handle;
+                plan.editRevision = instance->editRevision;
+                plan.restPositionBuffer = instance->restPositionBuffer;
+                plan.restNormalBuffer = instance->restNormalBuffer;
+                plan.restTangentBuffer = instance->restTangentBuffer;
+                plan.skinnedPositionBuffer = instance->skinnedPositionBuffer;
+                plan.skinnedNormalBuffer = instance->skinnedNormalBuffer;
+                plan.skinnedTangentBuffer = instance->skinnedTangentBuffer;
+                plan.positionBytes = positionBytes;
+                plan.normalBytes = normalBytes;
+                plan.tangentBytes = tangentBytes;
+                m_graphOwnedRestCopyPlans.push_back(Move(plan));
+                terminalTask = copyTask;
                 return;
+            }
 
             if(foundResources == m_runtimeResources.end() || !foundResources.value().jointPaletteBuffer){
                 NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: active runtime mesh '{}' has no joint palette buffer"), instance->handle.value);
@@ -399,8 +661,10 @@ bool MeshSkinningSystem::submitFrameJointPaletteUploads(){
         }
     );
 
-    if(declarationFailed)
+    if(declarationFailed){
+        discardGraphOwnedFrameUpdates();
         return false;
+    }
     if(!terminalTask.valid())
         return true;
 
@@ -411,42 +675,79 @@ bool MeshSkinningSystem::submitFrameJointPaletteUploads(){
     Core::GpuGraphSubmissionTransaction transaction(m_arena);
     const Core::GpuTaskGraphCompiler compiler;
     if(!compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena)){
+        discardGraphOwnedFrameUpdates();
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to compile graph-owned joint palette uploads"));
+        return false;
+    }
+
+    if(compiledGraph.packetCount() != 1u){
+        discardGraphOwnedFrameUpdates();
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning frame updates did not merge into one primary Graphics packet"));
         return false;
     }
 
     const Core::GpuSubmissionPacketId terminalPacket = compiledGraph.packetForTask(terminalTask);
     if(!terminalPacket.valid()){
+        discardGraphOwnedFrameUpdates();
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: joint palette upload graph has no terminal packet"));
         return false;
     }
     const Core::GpuSubmissionPacket& packet = compiledGraph.packet(terminalPacket);
     const Core::GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
     if(packet.queue != graphicsQueue){
+        discardGraphOwnedFrameUpdates();
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: joint palette upload graph did not retain the primary Graphics queue"));
         return false;
     }
 
     transaction.reset(compiledGraph);
     const Core::GpuNativePacketRecorder recorder(device);
+    Core::GpuExternalPacketStateSource previousFrameStateSources[1u] = {};
+    Core::GpuNativePacketRecordDesc recordOverrides[1u] = {};
+    usize recordOverrideCount = 0u;
+    if(m_acceptedSkinningStateHandoff.valid()){
+        previousFrameStateSources[0u] = Core::GpuExternalPacketStateSource{
+            .states = &m_acceptedSkinningStateHandoff,
+        };
+        recordOverrides[0u] = Core::GpuNativePacketRecordDesc{
+            .packet = terminalPacket,
+            .externalStateSources = previousFrameStateSources,
+            .externalStateSourceCount = LengthOf(previousFrameStateSources),
+        };
+        recordOverrideCount = LengthOf(recordOverrides);
+    }
     if(!recorder.recordPacketRangeInCompileOrder(
         graph,
         compiledGraph,
         compiledGraph.allPacketRange(),
-        nullptr,
-        0u,
+        recordOverrides,
+        recordOverrideCount,
         recordedGraph
     )){
         transaction.discardUnaccepted(graph, compiledGraph);
+        discardGraphOwnedFrameUpdates();
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to record graph-owned joint palette uploads"));
         return false;
     }
 
     const Core::CommandListResourceStateHandoff* const finalStates = recordedGraph.packetFinalStateSeed(terminalPacket);
-    if(!finalStates || !m_graphOwnedJointPaletteStateHandoff.copyFrom(*finalStates)){
+    Core::CommandListResourceStateHandoff graphStateHandoff(m_arena);
+    const Core::CommandListResourceStateHandoff* const graphStateBranches[] = { finalStates };
+    if(
+        !finalStates
+        || (
+            m_acceptedSkinningStateHandoff.valid()
+            ? !graphStateHandoff.buildFanIn(
+                m_acceptedSkinningStateHandoff,
+                graphStateBranches,
+                LengthOf(graphStateBranches)
+            )
+            : !graphStateHandoff.copyFrom(*finalStates)
+        )
+    ){
         transaction.discardUnaccepted(graph, compiledGraph);
-        m_graphOwnedJointPaletteStateHandoff.reset();
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain graph-owned joint palette state"));
+        discardGraphOwnedFrameUpdates();
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain graph-owned skinning frame state"));
         return false;
     }
 
@@ -464,15 +765,27 @@ bool MeshSkinningSystem::submitFrameJointPaletteUploads(){
         scratchArena
     )){
         transaction.discardUnaccepted(graph, compiledGraph);
-        m_graphOwnedJointPaletteStateHandoff.reset();
+        discardGraphOwnedFrameUpdates();
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned joint palette submission was rejected"));
         return false;
     }
 
     const Core::QueueSubmissionToken uploadToken = transaction.packetToken(terminalPacket);
     if(!uploadToken.valid() || !uploadToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration)){
-        m_graphOwnedJointPaletteStateHandoff.reset();
+        discardGraphOwnedFrameUpdates();
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned joint palette submission lost its Graphics queue identity"));
+        return false;
+    }
+    // Filter the accepted state before publishing the graph-to-native seed. The fan-in can still contain a retired
+    // runtime-buffer generation from the previous frame; replaceAcceptedSkinningStateHandoff drops it and retains
+    // every live buffer before releasing the old handles. Copying the unfiltered fan-in here would leave the native
+    // command list with dangling raw pointers after a resource rebuild.
+    if(
+        !replaceAcceptedSkinningStateHandoff(graphStateHandoff)
+        || !m_graphOwnedJointPaletteStateHandoff.copyFrom(m_acceptedSkinningStateHandoff)
+    ){
+        discardGraphOwnedFrameUpdates();
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain accepted graph-owned skinning state"));
         return false;
     }
     return true;
@@ -497,13 +810,18 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
 
     Core::GpuTimingSubmissionTicket timingTicket(m_graphics.gpuTiming());
     bool submittedWork = false;
+    Core::CommandListResourceStateHandoff nativeFinalStateHandoff(m_arena);
 
     {
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
         commandList->open(
             m_graphOwnedJointPaletteStateHandoff.valid()
                 ? &m_graphOwnedJointPaletteStateHandoff
-                : nullptr
+                : (
+                    m_acceptedSkinningStateHandoff.valid()
+                        ? &m_acceptedSkinningStateHandoff
+                        : nullptr
+                )
         );
 
         skinningBindings.each(
@@ -540,12 +858,18 @@ void MeshSkinningSystem::render(Core::Framebuffer* framebuffer){
             }
         );
 
-        commandList->close();
+        commandList->close(&nativeFinalStateHandoff);
     }
 
     if(submittedWork){
+        if(!nativeFinalStateHandoff.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to record the native skinning state handoff"));
+            return;
+        }
         Core::CommandList* commandLists[] = { commandList };
         const bool submissionAccepted = timingTicket.submit(device, commandLists, 1u);
+        if(submissionAccepted && !replaceAcceptedSkinningStateHandoff(nativeFinalStateHandoff))
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain the accepted native skinning state handoff"));
         // CPU visibility follows GPU queue acceptance. If this submission is rejected, both the deformation dirty
         // state and the selector upload remain pending so the next frame records the complete pose again.
         for(const __hidden_system::PendingRuntimeMeshSubmission& pendingSubmission : pendingSubmissions){
@@ -593,7 +917,9 @@ void MeshSkinningSystem::pruneRuntimeResources(){
 
 void MeshSkinningSystem::invalidateResources(){
     m_renderCommandList.reset();
+    resetAcceptedSkinningStateHandoff();
     m_graphOwnedJointPaletteStateHandoff.reset();
+    m_graphOwnedRestCopyPlans.clear();
     for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end(); ++it)
         releaseRuntimeResourceBindlessHeapHandles(it.value());
     m_runtimeResources.clear();

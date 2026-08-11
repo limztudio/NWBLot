@@ -2498,6 +2498,341 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
 }
 
 
+// Skinning's no-active-pose path uploads a small palette payload then copies rest position, normal, and tangent
+// streams into their skinned counterparts.  Keep this as a real primary-Graphics packet proof: the native bounds
+// continuation must observe every copy state and explicitly promote all three outputs before renderer consumption.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesAndHandsOffAllStreams){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    static constexpr u32 s_PaletteWords[] = {
+        0x6a5d39c1u,
+        0x1147beefu,
+        0x91c0ffeeu,
+        0x3a72d409u,
+    };
+    static constexpr u32 s_RestPositionWords[] = {
+        0x13c0ffeeu,
+        0x4a7b12d3u,
+        0x9e3779b9u,
+        0xfeedfaceu,
+    };
+    static constexpr u32 s_RestNormalWords[] = {
+        0x0ddba11au,
+        0x51a7e001u,
+        0x8badf00du,
+        0x7f4a1c32u,
+    };
+    static constexpr u32 s_RestTangentWords[] = {
+        0x42f0a7c3u,
+        0x0decaf42u,
+        0x7a5e19d4u,
+        0xc001d00du,
+    };
+
+    const auto createRestBuffer = [&device](const Name& debugName){
+        return device.createBuffer(
+            BufferDesc()
+                .setDebugName(debugName)
+                .setByteSize(sizeof(s_RestPositionWords))
+                .setInitialState(ResourceStates::Common)
+                .setQueueSharing(ResourceQueueSharing::Exclusive)
+                .setCpuAccess(CpuAccessMode::Write)
+        );
+    };
+    const auto createSkinnedBuffer = [&device](const Name& debugName){
+        return device.createBuffer(
+            BufferDesc()
+                .setDebugName(debugName)
+                .setByteSize(sizeof(s_RestPositionWords))
+                .setInitialState(ResourceStates::Common)
+                .setQueueSharing(ResourceQueueSharing::Exclusive)
+                .setCpuAccess(CpuAccessMode::Read)
+        );
+    };
+    auto restPosition = createRestBuffer(Name("tests/descriptor_buffer/skinning_rest_position"));
+    auto restNormal = createRestBuffer(Name("tests/descriptor_buffer/skinning_rest_normal"));
+    auto restTangent = createRestBuffer(Name("tests/descriptor_buffer/skinning_rest_tangent"));
+    auto skinnedPosition = createSkinnedBuffer(Name("tests/descriptor_buffer/skinning_skinned_position"));
+    auto skinnedNormal = createSkinnedBuffer(Name("tests/descriptor_buffer/skinning_skinned_normal"));
+    auto skinnedTangent = createSkinnedBuffer(Name("tests/descriptor_buffer/skinning_skinned_tangent"));
+    auto palette = device.createBuffer(
+        BufferDesc()
+            .setDebugName(Name("tests/descriptor_buffer/skinning_palette"))
+            .setByteSize(sizeof(s_PaletteWords))
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::Exclusive)
+    );
+    ASSERT_NE(restPosition.get(), nullptr);
+    ASSERT_NE(restNormal.get(), nullptr);
+    ASSERT_NE(restTangent.get(), nullptr);
+    ASSERT_NE(skinnedPosition.get(), nullptr);
+    ASSERT_NE(skinnedNormal.get(), nullptr);
+    ASSERT_NE(skinnedTangent.get(), nullptr);
+    ASSERT_NE(palette.get(), nullptr);
+
+    const auto writeWords = [&device](Buffer* const buffer, const u32* const words){
+        u32* const mappedWords = static_cast<u32*>(device.mapBuffer(buffer, CpuAccessMode::Write));
+        ASSERT_NE(mappedWords, nullptr);
+        for(usize wordIndex = 0u; wordIndex < LengthOf(s_RestPositionWords); ++wordIndex)
+            mappedWords[wordIndex] = words[wordIndex];
+        device.unmapBuffer(buffer);
+    };
+    writeWords(restPosition.get(), s_RestPositionWords);
+    writeWords(restNormal.get(), s_RestNormalWords);
+    writeWords(restTangent.get(), s_RestTangentWords);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const auto importBuffer = [&graph](
+        const BufferHandle& buffer,
+        const Name& identity,
+        const AStringView markerLabel
+    ){
+        const BufferDesc& description = buffer->getDescription();
+        return graph.importBuffer(
+            buffer,
+            GpuGraphResourceDesc{}
+                .setIdentity(identity)
+                .setMarkerLabel(markerLabel)
+                .setType(GpuGraphResourceType::Buffer)
+                .setInitialState(description.initialState)
+                .setQueueSharing(description.queueSharing)
+        );
+    };
+    const GpuGraphResourceId paletteResource = importBuffer(
+        palette,
+        Name("tests/descriptor_buffer/skinning_palette"),
+        "Skinning Palette"
+    );
+    const GpuGraphResourceId restPositionResource = importBuffer(
+        restPosition,
+        Name("tests/descriptor_buffer/skinning_rest_position"),
+        "Skinning Rest Position"
+    );
+    const GpuGraphResourceId restNormalResource = importBuffer(
+        restNormal,
+        Name("tests/descriptor_buffer/skinning_rest_normal"),
+        "Skinning Rest Normal"
+    );
+    const GpuGraphResourceId restTangentResource = importBuffer(
+        restTangent,
+        Name("tests/descriptor_buffer/skinning_rest_tangent"),
+        "Skinning Rest Tangent"
+    );
+    const GpuGraphResourceId skinnedPositionResource = importBuffer(
+        skinnedPosition,
+        Name("tests/descriptor_buffer/skinning_skinned_position"),
+        "Skinning Skinned Position"
+    );
+    const GpuGraphResourceId skinnedNormalResource = importBuffer(
+        skinnedNormal,
+        Name("tests/descriptor_buffer/skinning_skinned_normal"),
+        "Skinning Skinned Normal"
+    );
+    const GpuGraphResourceId skinnedTangentResource = importBuffer(
+        skinnedTangent,
+        Name("tests/descriptor_buffer/skinning_skinned_tangent"),
+        "Skinning Skinned Tangent"
+    );
+    ASSERT_TRUE(paletteResource.valid());
+    ASSERT_TRUE(restPositionResource.valid());
+    ASSERT_TRUE(restNormalResource.valid());
+    ASSERT_TRUE(restTangentResource.valid());
+    ASSERT_TRUE(skinnedPositionResource.valid());
+    ASSERT_TRUE(skinnedNormalResource.valid());
+    ASSERT_TRUE(skinnedTangentResource.valid());
+    const GpuUploadBlobId paletteBlob = graph.copyUploadData(
+        s_PaletteWords,
+        sizeof(s_PaletteWords),
+        alignof(u32)
+    );
+    ASSERT_TRUE(paletteBlob.valid());
+
+    const GpuQueueRequest graphicsUploadQueue{
+        GpuQueueCapability::Transfer,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint paletteScheduling;
+    paletteScheduling.cost = GpuTaskCostHint::Tiny;
+    paletteScheduling.overlapPreferred = false;
+    paletteScheduling.avoidQueueCrossing = true;
+    paletteScheduling.forceSubmissionBoundary = false;
+    paletteScheduling.allowPacketMerge = true;
+    paletteScheduling.mergeWithPrevious = false;
+    GpuTaskDesc paletteDesc;
+    paletteDesc
+        .setIdentity(Name("tests/descriptor_buffer/skinning_palette_upload"))
+        .setMarkerLabel("Skinning Palette Upload")
+        .setQueue(graphicsUploadQueue)
+        .setScheduling(paletteScheduling)
+    ;
+    const GpuTaskId paletteTask = graph.addUploadBufferTask(
+        paletteDesc,
+        GpuUploadBufferTaskDesc{
+            .source = paletteBlob,
+            .destination = paletteResource,
+            .finalState = ResourceStates::ShaderResource,
+        }
+    );
+    ASSERT_TRUE(paletteTask.valid());
+
+    GpuTaskSchedulingHint restCopyScheduling = paletteScheduling;
+    restCopyScheduling.mergeWithPrevious = true;
+    const GpuTaskDesc restCopyDesc = GpuTaskDesc{}
+        .setIdentity(Name("tests/descriptor_buffer/skinning_rest_to_skinned_copy"))
+        .setMarkerLabel("Skinning Rest-to-Skinned Copy")
+        .setQueue(graphicsUploadQueue)
+        .setScheduling(restCopyScheduling)
+        .setDependencies(&paletteTask, 1u)
+    ;
+    const GpuCopyBufferTaskRegion copyRegions[] = {
+        GpuCopyBufferTaskRegion{
+            .source = restPositionResource,
+            .destination = skinnedPositionResource,
+            .dataSizeBytes = sizeof(s_RestPositionWords),
+        },
+        GpuCopyBufferTaskRegion{
+            .source = restNormalResource,
+            .destination = skinnedNormalResource,
+            .dataSizeBytes = sizeof(s_RestNormalWords),
+        },
+        GpuCopyBufferTaskRegion{
+            .source = restTangentResource,
+            .destination = skinnedTangentResource,
+            .dataSizeBytes = sizeof(s_RestTangentWords),
+        },
+    };
+    QueueSubmissionToken copyAcceptedToken;
+    const GpuTaskId restCopyTask = graph.addCopyBufferTask(
+        restCopyDesc,
+        GpuCopyBufferTaskDesc{
+            .regions = copyRegions,
+            .regionCount = LengthOf(copyRegions),
+            .acceptedToken = &copyAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(restCopyTask.valid());
+    ASSERT_EQ(graph.taskAt(restCopyTask.index).resourceUseCount, 6u);
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    ASSERT_TRUE(primaryGraphicsQueue.valid());
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/skinning_rest_copy_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuTaskQueueAssignment* const paletteAssignment = assignments.find(paletteTask);
+    const GpuTaskQueueAssignment* const restCopyAssignment = assignments.find(restCopyTask);
+    ASSERT_NE(paletteAssignment, nullptr);
+    ASSERT_NE(restCopyAssignment, nullptr);
+    EXPECT_EQ(paletteAssignment->queue, primaryGraphicsQueue);
+    EXPECT_EQ(restCopyAssignment->queue, primaryGraphicsQueue);
+    const GpuSubmissionPacketId palettePacket = compiledGraph.packetForTask(paletteTask);
+    const GpuSubmissionPacketId restCopyPacket = compiledGraph.packetForTask(restCopyTask);
+    ASSERT_TRUE(palettePacket.valid());
+    ASSERT_TRUE(restCopyPacket.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(palettePacket, restCopyPacket);
+    EXPECT_EQ(compiledGraph.packet(restCopyPacket).queue, primaryGraphicsQueue);
+    EXPECT_EQ(compiledGraph.packet(restCopyPacket).taskCount, 2u);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+    const CommandListResourceStateHandoff* const graphFinalState = recordedGraph.packetFinalStateSeed(restCopyPacket);
+    ASSERT_NE(graphFinalState, nullptr);
+    auto graphStateProbe = device.createCommandList();
+    ASSERT_NE(graphStateProbe.get(), nullptr);
+    graphStateProbe->open(graphFinalState);
+    EXPECT_EQ(graphStateProbe->getBufferState(palette.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(graphStateProbe->getBufferState(restPosition.get()), ResourceStates::CopySource);
+    EXPECT_EQ(graphStateProbe->getBufferState(restNormal.get()), ResourceStates::CopySource);
+    EXPECT_EQ(graphStateProbe->getBufferState(restTangent.get()), ResourceStates::CopySource);
+    EXPECT_EQ(graphStateProbe->getBufferState(skinnedPosition.get()), ResourceStates::CopyDest);
+    EXPECT_EQ(graphStateProbe->getBufferState(skinnedNormal.get()), ResourceStates::CopyDest);
+    EXPECT_EQ(graphStateProbe->getBufferState(skinnedTangent.get()), ResourceStates::CopyDest);
+    graphStateProbe->close();
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken graphToken = transaction.packetToken(restCopyPacket);
+    ASSERT_TRUE(graphToken.valid());
+    ASSERT_TRUE(copyAcceptedToken.valid());
+    EXPECT_EQ(copyAcceptedToken.queue, graphToken.queue);
+    EXPECT_EQ(copyAcceptedToken.value, graphToken.value);
+
+    CommandListResourceStateHandoff nativeFinalState(DescriptorBufferRoundTripTest::arena());
+    auto nativeContinuation = device.createCommandList();
+    ASSERT_NE(nativeContinuation.get(), nullptr);
+    nativeContinuation->open(graphFinalState);
+    EXPECT_EQ(nativeContinuation->getBufferState(skinnedPosition.get()), ResourceStates::CopyDest);
+    EXPECT_EQ(nativeContinuation->getBufferState(skinnedNormal.get()), ResourceStates::CopyDest);
+    EXPECT_EQ(nativeContinuation->getBufferState(skinnedTangent.get()), ResourceStates::CopyDest);
+    nativeContinuation->setBufferState(skinnedPosition.get(), ResourceStates::ShaderResource);
+    nativeContinuation->setBufferState(skinnedNormal.get(), ResourceStates::ShaderResource);
+    nativeContinuation->setBufferState(skinnedTangent.get(), ResourceStates::ShaderResource);
+    nativeContinuation->commitBarriers();
+    nativeContinuation->close(&nativeFinalState);
+    ASSERT_TRUE(nativeFinalState.valid());
+    auto nativeStateProbe = device.createCommandList();
+    ASSERT_NE(nativeStateProbe.get(), nullptr);
+    nativeStateProbe->open(&nativeFinalState);
+    EXPECT_EQ(nativeStateProbe->getBufferState(skinnedPosition.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(nativeStateProbe->getBufferState(skinnedNormal.get()), ResourceStates::ShaderResource);
+    EXPECT_EQ(nativeStateProbe->getBufferState(skinnedTangent.get()), ResourceStates::ShaderResource);
+    nativeStateProbe->close();
+
+    CommandList* const nativeContinuationLists[] = { nativeContinuation.get() };
+    const QueueSubmissionToken nativeToken = device.executeCommandLists(
+        nativeContinuationLists,
+        LengthOf(nativeContinuationLists),
+        primaryGraphicsQueue,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(nativeToken.valid());
+    EXPECT_TRUE(nativeToken.matchesPhysicalQueue(
+        primaryGraphicsQueue.index,
+        primaryGraphicsQueue.deviceGeneration
+    ));
+    ASSERT_TRUE(device.waitForIdle());
+
+    const auto expectCopiedWords = [&device](Buffer* const buffer, const u32* const expectedWords){
+        const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(buffer, CpuAccessMode::Read));
+        ASSERT_NE(copiedWords, nullptr);
+        for(usize wordIndex = 0u; wordIndex < LengthOf(s_RestPositionWords); ++wordIndex)
+            EXPECT_EQ(copiedWords[wordIndex], expectedWords[wordIndex]);
+        device.unmapBuffer(buffer);
+    };
+    expectCopiedWords(skinnedPosition.get(), s_RestPositionWords);
+    expectCopiedWords(skinnedNormal.get(), s_RestNormalWords);
+    expectCopiedWords(skinnedTangent.get(), s_RestTangentWords);
+}
+
+
 // The optional IR lowerer selects one packet from a full primitive capture only after graph-aware preflight. A
 // malformed later command in that packet must leave the earlier valid copy unrecorded; the success paths prove both
 // the ordinary Core::CommandList lowerer and the explicitly pre-stated direct-Vulkan CopyBuffer prototype.

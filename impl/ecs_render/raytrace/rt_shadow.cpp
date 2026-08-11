@@ -900,7 +900,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
             rayTracingState().m_swShadowEdgeStatsPending = true;
             rayTracingState().m_swShadowEdgeStatsPendingTick = tick;
             rayTracingState().m_swShadowEdgeStatsPendingSubmissionID = 0u;
-            rayTracingState().m_swShadowEdgeStatsPendingSubmissionQueue = Core::CommandQueue::kCount;
+            rayTracingState().m_swShadowEdgeStatsPendingSubmissionPhysicalQueue = {};
             rayTracingState().m_swShadowEdgeStatsPendingSubmissionUnconfirmed = true;
         }
         else if(
@@ -913,9 +913,9 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
                 && (
                     rayTracingState().m_swShadowEdgeStatsPendingSubmissionID == 0u
                     || (
-                        rayTracingState().m_swShadowEdgeStatsPendingSubmissionQueue != Core::CommandQueue::kCount
+                        rayTracingState().m_swShadowEdgeStatsPendingSubmissionPhysicalQueue.valid()
                         && graphics().getDevice().queueGetCompletedInstance(
-                            rayTracingState().m_swShadowEdgeStatsPendingSubmissionQueue
+                            rayTracingState().m_swShadowEdgeStatsPendingSubmissionPhysicalQueue
                         ) >= rayTracingState().m_swShadowEdgeStatsPendingSubmissionID
                     )
                 )
@@ -936,7 +936,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(Core::CommandList& c
                 }
                 rayTracingState().m_swShadowEdgeStatsPending = false;
                 rayTracingState().m_swShadowEdgeStatsPendingSubmissionID = 0u;
-                rayTracingState().m_swShadowEdgeStatsPendingSubmissionQueue = Core::CommandQueue::kCount;
+                rayTracingState().m_swShadowEdgeStatsPendingSubmissionPhysicalQueue = {};
                 rayTracingState().m_swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
             }
         }

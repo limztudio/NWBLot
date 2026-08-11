@@ -1214,7 +1214,13 @@ bool RendererRayTracingSystem::renderSurfelGi(Core::CommandList& commandList, De
         const Core::QueueSubmissionToken submissionToken = rayTracingState().m_surfelCountReadbackSubmissionToken;
         const bool submissionComplete =
             submissionToken.valid()
-            && graphics().getDevice().queueGetCompletedInstance(submissionToken.queue) >= submissionToken.value
+            && submissionToken.hasPhysicalQueueIdentity()
+            && graphics().getDevice().queueGetCompletedInstance(
+                Core::GpuPhysicalQueueId{
+                    submissionToken.physicalQueueIndex,
+                    submissionToken.deviceGeneration,
+                }
+            ) >= submissionToken.value
         ;
         if(
             submissionToken.valid()

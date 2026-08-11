@@ -585,6 +585,26 @@ QueueSubmissionToken GpuTimingSubmissionTicket::submit(
     Device& device,
     CommandList* const* commandLists,
     const usize commandListCount,
+    const GpuPhysicalQueueId& executionQueue,
+    const QueueSubmissionDesc& submitDesc
+){
+    if(!prepareSubmission(commandLists, commandListCount))
+        return {};
+
+    const QueueSubmissionToken token = device.executeCommandLists(
+        commandLists,
+        commandListCount,
+        executionQueue,
+        submitDesc
+    );
+    resolveSubmission(token.valid());
+    return token;
+}
+
+QueueSubmissionToken GpuTimingSubmissionTicket::submit(
+    Device& device,
+    CommandList* const* commandLists,
+    const usize commandListCount,
     const CommandQueue::Enum executionQueue,
     const QueueSubmissionDesc& submitDesc
 ){

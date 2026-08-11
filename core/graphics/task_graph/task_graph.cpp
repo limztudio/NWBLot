@@ -1474,13 +1474,13 @@ bool GpuTaskGraph::applyCompiledBarrier(
             resource.type != GpuGraphResourceType::Texture
             || !resource.texture
             || !resolveOwnershipQueues()
-            || commandList.getDescription().queueType != sourceQueue->queueClass
+            || commandList.getDescription().physicalQueue != sourceQueue->id
         )
             return false;
         commandList.releaseTextureOwnership(
             resource.texture.get(),
             barrier.range.textureSubresources,
-            destinationQueue->queueClass
+            destinationQueue->id
         );
         return true;
     }
@@ -1491,16 +1491,16 @@ bool GpuTaskGraph::applyCompiledBarrier(
             resource.type != GpuGraphResourceType::Buffer
             || !resource.buffer
             || !resolveOwnershipQueues()
-            || commandList.getDescription().queueType != sourceQueue->queueClass
+            || commandList.getDescription().physicalQueue != sourceQueue->id
         )
             return false;
-        commandList.releaseBufferOwnership(resource.buffer.get(), destinationQueue->queueClass);
+        commandList.releaseBufferOwnership(resource.buffer.get(), destinationQueue->id);
         return true;
     }
     case GpuCompiledBarrierType::TextureOwnershipAcquire:
     case GpuCompiledBarrierType::BufferOwnershipAcquire:{
         const GpuPhysicalQueueInfo* const destinationQueue = compiledGraph.queueInfo(barrier.destinationQueue);
-        if(!resolveOwnershipQueues() || commandList.getDescription().queueType != destinationQueue->queueClass)
+        if(!resolveOwnershipQueues() || commandList.getDescription().physicalQueue != destinationQueue->id)
             return false;
 
         // CommandList::open imports the compiler-selected producer state seed before packet prologue lowering. That

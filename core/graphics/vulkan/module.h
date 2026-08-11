@@ -39,6 +39,19 @@ namespace ObjectTypes{
 class Device;
 typedef Handle<Device> DeviceHandle;
 
+// One real VkQueue exposed to the RHI. The registry may contain more than one entry with the same broad queue
+// class; `primaryForClass` only preserves legacy CommandQueue-based callers while graph packets use the physical
+// ID assigned by Device.
+struct VulkanPhysicalQueueDesc{
+    VkQueue queue = VK_NULL_HANDLE;
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
+    GpuQueueCapability::Mask capabilities = GpuQueueCapability::None;
+    u32 familyIndex = Limit<u32>::s_Max;
+    u32 queueIndex = 0u;
+    bool dedicated = false;
+    bool primaryForClass = false;
+};
+
 struct DeviceDesc{
     VkInstance instance = VK_NULL_HANDLE;
     VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
@@ -56,6 +69,11 @@ struct DeviceDesc{
     bool asyncComputeLaneEnabled = false;
     // True only when the renderer requested Transfer and a distinct dedicated transfer-only family was created.
     bool transferQueueEnabled = false;
+
+    // Preferred native registry input. Existing grouped fields above remain as a source-compatible fallback for
+    // older creation code; new creation paths should enumerate every active VkQueue here.
+    const VulkanPhysicalQueueDesc* physicalQueues = nullptr;
+    usize physicalQueueCount = 0u;
 
     GraphicsAllocator& allocator;
     Alloc::ThreadPool& threadPool;

@@ -29,11 +29,15 @@ void RendererRayTracingSystem::confirmShadowVisibilitySubmission(const Core::Que
         !rayTracingState().m_swShadowEdgeStatsPending
         || !rayTracingState().m_swShadowEdgeStatsPendingSubmissionUnconfirmed
         || !submissionToken.valid()
+        || !submissionToken.hasPhysicalQueueIdentity()
     )
         return;
 
     rayTracingState().m_swShadowEdgeStatsPendingSubmissionID = submissionToken.value;
-    rayTracingState().m_swShadowEdgeStatsPendingSubmissionQueue = submissionToken.queue;
+    rayTracingState().m_swShadowEdgeStatsPendingSubmissionPhysicalQueue = Core::GpuPhysicalQueueId{
+        submissionToken.physicalQueueIndex,
+        submissionToken.deviceGeneration,
+    };
     rayTracingState().m_swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
 }
 

@@ -553,10 +553,6 @@ VkBufferMemoryBarrier2 BuildBufferOwnershipAcquireBarrier(
     return barrier;
 }
 
-bool IsKnownQueue(const CommandQueue::Enum queue){
-    return static_cast<u32>(queue) < static_cast<u32>(CommandQueue::kCount);
-}
-
 bool NeedsTextureStateBarrier(const ResourceStates::Mask oldState, const ResourceStates::Mask stateBits, const bool uavBarrierEnabled){
     return oldState != stateBits || (oldState == ResourceStates::UnorderedAccess && uavBarrierEnabled);
 }
@@ -643,44 +639,44 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
     Vector<VkImageMemoryBarrier2, Alloc::ScratchArena> acquireImageBarriers{scratchArena};
     Vector<VkBufferMemoryBarrier2, Alloc::ScratchArena> acquireBufferBarriers{scratchArena};
 
-    const auto appendTextureAcquire = [&](Texture& texture, const TextureSubresourceSet& subresources, const ResourceStates::Mask state, const ResourceQueueSharing::Mask sharing, const CommandQueue::Enum ownerQueue, const CommandQueue::Enum releaseDestinationQueue) -> bool {
+    const auto appendTextureAcquire = [&](Texture& texture, const TextureSubresourceSet& subresources, const ResourceStates::Mask state, const ResourceQueueSharing::Mask sharing, const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue) -> bool {
         if(sharing != texture.m_desc.queueSharing){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff texture sharing contract does not match the resource description"));
             return false;
         }
 
         if(m_device.usesConcurrentQueueSharing(sharing)){
-            if(ownerQueue != CommandQueue::kCount || releaseDestinationQueue != CommandQueue::kCount){
+            if(ownerQueue.valid() || releaseDestinationQueue.valid()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Concurrent texture state handoff unexpectedly carries exclusive ownership"));
                 return false;
             }
             return true;
         }
 
-        if(!__hidden_vulkan_state_tracking::IsKnownQueue(ownerQueue) && ownerQueue != CommandQueue::kCount){
+        if(ownerQueue.valid() && !m_device.matchesPhysicalQueueIdentity(ownerQueue)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Texture state handoff has an invalid owner queue"));
             return false;
         }
-        if(!__hidden_vulkan_state_tracking::IsKnownQueue(releaseDestinationQueue) && releaseDestinationQueue != CommandQueue::kCount){
+        if(releaseDestinationQueue.valid() && !m_device.matchesPhysicalQueueIdentity(releaseDestinationQueue)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Texture state handoff has an invalid ownership destination"));
             return false;
         }
 
-        if(releaseDestinationQueue == CommandQueue::kCount){
-            if(ownerQueue != CommandQueue::kCount && ownerQueue != m_desc.queueType){
+        if(!releaseDestinationQueue.valid()){
+            if(ownerQueue.valid() && ownerQueue != m_desc.physicalQueue){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff changes queue without a release/acquire transfer"));
                 return false;
             }
             return true;
         }
 
-        if(ownerQueue == CommandQueue::kCount || releaseDestinationQueue != m_desc.queueType){
+        if(!ownerQueue.valid() || releaseDestinationQueue != m_desc.physicalQueue){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff is not imported by its declared destination queue"));
             return false;
         }
 
         const u32 sourceQueueFamily = m_device.getQueueFamilyIndex(ownerQueue);
-        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_desc.queueType);
+        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_desc.physicalQueue);
         if(sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive texture handoff references an unavailable queue family"));
             return false;
@@ -698,44 +694,44 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
         }
         return true;
     };
-    const auto appendBufferAcquire = [&](Buffer& buffer, const ResourceStates::Mask state, const ResourceQueueSharing::Mask sharing, const CommandQueue::Enum ownerQueue, const CommandQueue::Enum releaseDestinationQueue) -> bool {
+    const auto appendBufferAcquire = [&](Buffer& buffer, const ResourceStates::Mask state, const ResourceQueueSharing::Mask sharing, const GpuPhysicalQueueId ownerQueue, const GpuPhysicalQueueId releaseDestinationQueue) -> bool {
         if(sharing != buffer.m_desc.queueSharing){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Resource-state handoff buffer sharing contract does not match the resource description"));
             return false;
         }
 
         if(m_device.usesConcurrentQueueSharing(sharing)){
-            if(ownerQueue != CommandQueue::kCount || releaseDestinationQueue != CommandQueue::kCount){
+            if(ownerQueue.valid() || releaseDestinationQueue.valid()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Concurrent buffer state handoff unexpectedly carries exclusive ownership"));
                 return false;
             }
             return true;
         }
 
-        if(!__hidden_vulkan_state_tracking::IsKnownQueue(ownerQueue) && ownerQueue != CommandQueue::kCount){
+        if(ownerQueue.valid() && !m_device.matchesPhysicalQueueIdentity(ownerQueue)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Buffer state handoff has an invalid owner queue"));
             return false;
         }
-        if(!__hidden_vulkan_state_tracking::IsKnownQueue(releaseDestinationQueue) && releaseDestinationQueue != CommandQueue::kCount){
+        if(releaseDestinationQueue.valid() && !m_device.matchesPhysicalQueueIdentity(releaseDestinationQueue)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Buffer state handoff has an invalid ownership destination"));
             return false;
         }
 
-        if(releaseDestinationQueue == CommandQueue::kCount){
-            if(ownerQueue != CommandQueue::kCount && ownerQueue != m_desc.queueType){
+        if(!releaseDestinationQueue.valid()){
+            if(ownerQueue.valid() && ownerQueue != m_desc.physicalQueue){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff changes queue without a release/acquire transfer"));
                 return false;
             }
             return true;
         }
 
-        if(ownerQueue == CommandQueue::kCount || releaseDestinationQueue != m_desc.queueType){
+        if(!ownerQueue.valid() || releaseDestinationQueue != m_desc.physicalQueue){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff is not imported by its declared destination queue"));
             return false;
         }
 
         const u32 sourceQueueFamily = m_device.getQueueFamilyIndex(ownerQueue);
-        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_desc.queueType);
+        const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(m_desc.physicalQueue);
         if(sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED || destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exclusive buffer handoff references an unavailable queue family"));
             return false;
@@ -818,24 +814,24 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
 
 void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& states)const{
     states.reset();
-    const auto getTextureOwnership = [&](const TextureSubresourceStateKey& key, const ResourceQueueSharing::Mask sharing, CommandQueue::Enum& outOwner, CommandQueue::Enum& outReleaseDestination){
-        outOwner = CommandQueue::kCount;
-        outReleaseDestination = CommandQueue::kCount;
+    const auto getTextureOwnership = [&](const TextureSubresourceStateKey& key, const ResourceQueueSharing::Mask sharing, GpuPhysicalQueueId& outOwner, GpuPhysicalQueueId& outReleaseDestination){
+        outOwner = {};
+        outReleaseDestination = {};
         if(m_device.usesConcurrentQueueSharing(sharing))
             return;
 
-        outOwner = m_desc.queueType;
+        outOwner = m_desc.physicalQueue;
         const auto releaseIt = m_textureOwnershipReleaseDestinations.find(key);
         if(releaseIt != m_textureOwnershipReleaseDestinations.end())
             outReleaseDestination = releaseIt.value();
     };
-    const auto getBufferOwnership = [&](Buffer* buffer, const ResourceQueueSharing::Mask sharing, CommandQueue::Enum& outOwner, CommandQueue::Enum& outReleaseDestination){
-        outOwner = CommandQueue::kCount;
-        outReleaseDestination = CommandQueue::kCount;
+    const auto getBufferOwnership = [&](Buffer* buffer, const ResourceQueueSharing::Mask sharing, GpuPhysicalQueueId& outOwner, GpuPhysicalQueueId& outReleaseDestination){
+        outOwner = {};
+        outReleaseDestination = {};
         if(m_device.usesConcurrentQueueSharing(sharing))
             return;
 
-        outOwner = m_desc.queueType;
+        outOwner = m_desc.physicalQueue;
         const auto releaseIt = m_bufferOwnershipReleaseDestinations.find(buffer);
         if(releaseIt != m_bufferOwnershipReleaseDestinations.end())
             outReleaseDestination = releaseIt.value();
@@ -847,8 +843,8 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         if(!key.texture)
             continue;
 
-        CommandQueue::Enum ownerQueue = CommandQueue::kCount;
-        CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
+        GpuPhysicalQueueId ownerQueue;
+        GpuPhysicalQueueId releaseDestinationQueue;
         getTextureOwnership(key, key.texture->m_desc.queueSharing, ownerQueue, releaseDestinationQueue);
         states.m_textureStates.push_back(CommandListResourceStateHandoff::TextureState{
             key.texture,
@@ -866,8 +862,8 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         if(!it->first)
             continue;
 
-        CommandQueue::Enum ownerQueue = CommandQueue::kCount;
-        CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
+        GpuPhysicalQueueId ownerQueue;
+        GpuPhysicalQueueId releaseDestinationQueue;
         getBufferOwnership(it->first, it->first->m_desc.queueSharing, ownerQueue, releaseDestinationQueue);
         states.m_bufferStates.push_back(CommandListResourceStateHandoff::BufferState{
             it->first,
@@ -883,8 +879,8 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         if(!it->first)
             continue;
 
-        CommandQueue::Enum ownerQueue = CommandQueue::kCount;
-        CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
+        GpuPhysicalQueueId ownerQueue;
+        GpuPhysicalQueueId releaseDestinationQueue;
         const TextureSubresourceStateKey key{ it->first, 0u, 0u };
         getTextureOwnership(key, it->first->m_desc.queueSharing, ownerQueue, releaseDestinationQueue);
         states.m_permanentTextureStates.push_back(CommandListResourceStateHandoff::PermanentTextureState{
@@ -901,8 +897,8 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         if(!it->first)
             continue;
 
-        CommandQueue::Enum ownerQueue = CommandQueue::kCount;
-        CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
+        GpuPhysicalQueueId ownerQueue;
+        GpuPhysicalQueueId releaseDestinationQueue;
         getBufferOwnership(it->first, it->first->m_desc.queueSharing, ownerQueue, releaseDestinationQueue);
         states.m_permanentBufferStates.push_back(CommandListResourceStateHandoff::BufferState{
             it->first,
@@ -920,7 +916,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
     if(m_textureOwnershipReleaseDestinations.empty() && m_bufferOwnershipReleaseDestinations.empty())
         return;
 
-    const u32 sourceQueueFamily = m_device.getQueueFamilyIndex(m_desc.queueType);
+    const u32 sourceQueueFamily = m_device.getQueueFamilyIndex(m_desc.physicalQueue);
     if(sourceQueueFamily == VK_QUEUE_FAMILY_IGNORED){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release resource ownership from an unavailable source queue family"));
         return;
@@ -936,7 +932,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
             continue;
         }
 
-        const CommandQueue::Enum destinationQueue = it.value();
+        const GpuPhysicalQueueId destinationQueue = it.value();
         const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(destinationQueue);
         if(destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release texture ownership to an unavailable destination queue family"));
@@ -966,7 +962,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
             continue;
         }
 
-        const CommandQueue::Enum destinationQueue = it.value();
+        const GpuPhysicalQueueId destinationQueue = it.value();
         const u32 destinationQueueFamily = m_device.getQueueFamilyIndex(destinationQueue);
         if(destinationQueueFamily == VK_QUEUE_FAMILY_IGNORED){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot release buffer ownership to an unavailable destination queue family"));
@@ -1303,6 +1299,14 @@ void CommandList::releaseTextureOwnership(
     TextureSubresourceSet subresources,
     const CommandQueue::Enum destinationQueue
 ){
+    releaseTextureOwnership(textureResource, subresources, m_device.getPrimaryPhysicalQueue(destinationQueue));
+}
+
+void CommandList::releaseTextureOwnership(
+    Texture* textureResource,
+    TextureSubresourceSet subresources,
+    const GpuPhysicalQueueId destinationQueue
+){
     if(!textureResource || !m_currentCmdBuf)
         return;
 
@@ -1366,6 +1370,13 @@ void CommandList::releaseBufferOwnership(Buffer* bufferResource, const RenderLan
 }
 
 void CommandList::releaseBufferOwnership(Buffer* bufferResource, const CommandQueue::Enum destinationQueue){
+    releaseBufferOwnership(bufferResource, m_device.getPrimaryPhysicalQueue(destinationQueue));
+}
+
+void CommandList::releaseBufferOwnership(
+    Buffer* bufferResource,
+    const GpuPhysicalQueueId destinationQueue
+){
     if(!bufferResource || !m_currentCmdBuf)
         return;
 

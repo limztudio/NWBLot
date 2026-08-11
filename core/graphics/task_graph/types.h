@@ -18,17 +18,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace GpuQueueCapability{
-    enum Mask : u8{
-        None = 0u,
-        Transfer = 1u << 0u,
-        Compute = 1u << 1u,
-        Graphics = 1u << 2u,
-    };
-
-    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
-};
-
 namespace GpuQueuePreference{
     enum Enum : u8{
         Graphics,
@@ -40,41 +29,9 @@ namespace GpuQueuePreference{
     };
 };
 
-// Queue preferences describe desired capability classes; this ID identifies one concrete queue in a particular
-// device lifetime. The current topology maps Graphics, optional dedicated Compute, and optional dedicated Transfer
-// transports while leaving room for multiple queues of one class later.
-struct GpuPhysicalQueueId{
-    u16 index = Limit<u16>::s_Max;
-    u16 deviceGeneration = 0u;
-
-    [[nodiscard]] constexpr bool valid()const{
-        return index != Limit<u16>::s_Max && deviceGeneration != 0u;
-    }
-};
-inline constexpr bool operator==(const GpuPhysicalQueueId& lhs, const GpuPhysicalQueueId& rhs)noexcept{
-    return lhs.index == rhs.index && lhs.deviceGeneration == rhs.deviceGeneration;
-}
-inline constexpr bool operator!=(const GpuPhysicalQueueId& lhs, const GpuPhysicalQueueId& rhs)noexcept{
-    return !(lhs == rhs);
-}
-
-// `queueClass` is the current physical submission transport. It is deliberately distinct from
-// GpuQueuePreference: the former names a real queue, while the latter is a task declaration policy.
-struct GpuPhysicalQueueInfo{
-    GpuPhysicalQueueId id;
-    CommandQueue::Enum queueClass = CommandQueue::kCount;
-    GpuQueueCapability::Mask capabilities = GpuQueueCapability::None;
-    u32 familyIndex = Limit<u32>::s_Max;
-    u32 queueIndex = 0u;
-    bool dedicated = false;
-};
-
-// This view is immutable for one compile. The renderer owns device discovery and supplies only queues that may
-// receive work; graph code never infers or fabricates a fallback physical queue.
-struct GpuTaskGraphQueueTopology{
-    const GpuPhysicalQueueInfo* queues = nullptr;
-    usize queueCount = 0u;
-};
+// The graph consumes the Device's immutable physical registry. Keep the existing name as a source-compatible
+// graph-facing alias while making the queue metadata itself part of the RHI command contract.
+using GpuTaskGraphQueueTopology = GpuPhysicalQueueTopology;
 
 namespace GpuTaskCostHint{
     enum Enum : u8{

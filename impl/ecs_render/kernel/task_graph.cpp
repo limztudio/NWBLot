@@ -2236,7 +2236,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
 
     const auto& device = graphics().getDevice();
-    const u16 deviceGeneration = device.getDeviceGeneration();
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
     const u32 computeFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Compute);
     const u32 transferFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Transfer);
@@ -3394,61 +3393,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         return;
     }
 
-    const Core::GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
-        static_cast<u8>(Core::GpuQueueCapability::Graphics)
-        | static_cast<u8>(Core::GpuQueueCapability::Compute)
-        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
-    );
-    const Core::GpuQueueCapability::Mask computeQueueCapabilities = static_cast<Core::GpuQueueCapability::Mask>(
-        static_cast<u8>(Core::GpuQueueCapability::Compute)
-        | static_cast<u8>(Core::GpuQueueCapability::Transfer)
-    );
-    Core::GpuPhysicalQueueInfo queues[3u] = {
-        Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{
-                device.getPhysicalQueueIndex(Core::CommandQueue::Graphics),
-                deviceGeneration,
-            },
-            .queueClass = Core::CommandQueue::Graphics,
-            .capabilities = graphicsQueueCapabilities,
-            .familyIndex = graphicsFamilyIndex,
-            .queueIndex = 0u,
-            .dedicated = false,
-        },
-    };
-    usize queueCount = 1u;
-    if(dedicatedAsyncCompute){
-        queues[queueCount] = Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{
-                device.getPhysicalQueueIndex(Core::CommandQueue::Compute),
-                deviceGeneration,
-            },
-            .queueClass = Core::CommandQueue::Compute,
-            .capabilities = computeQueueCapabilities,
-            .familyIndex = computeFamilyIndex,
-            .queueIndex = 0u,
-            .dedicated = true,
-        };
-        ++queueCount;
+    // The backend owns physical queue discovery and identity. The renderer consumes this immutable view directly so
+    // graph packets can target multiple same-class native queues without rebuilding a class-shaped topology here.
+    const Core::GpuTaskGraphQueueTopology topology = device.getPhysicalQueueTopology();
+    if(!topology.queues || topology.queueCount == 0u){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: no native physical queue registry is available for the deferred graph"));
+        return;
     }
-    if(dedicatedTransfer){
-        queues[queueCount] = Core::GpuPhysicalQueueInfo{
-            .id = Core::GpuPhysicalQueueId{
-                device.getPhysicalQueueIndex(Core::CommandQueue::Transfer),
-                deviceGeneration,
-            },
-            .queueClass = Core::CommandQueue::Transfer,
-            .capabilities = Core::GpuQueueCapability::Transfer,
-            .familyIndex = transferFamilyIndex,
-            .queueIndex = 0u,
-            .dedicated = true,
-        };
-        ++queueCount;
-    }
-    const Core::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = queueCount,
-    };
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     const Core::GpuTaskGraphCompiler compiler;
     if(!compiler.compile(

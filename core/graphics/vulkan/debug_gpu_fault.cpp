@@ -65,7 +65,7 @@ inline constexpr u32 s_FaultComputeSpirv[] = {
 void Device::debugTriggerGpuFault(const u64 faultDeviceAddress){
     using namespace __hidden_debug_gpu_fault;
 
-    Optional<Queue>& graphicsQueue = m_queues[static_cast<u32>(CommandQueue::Graphics)];
+    Queue* const graphicsQueue = getQueue(CommandQueue::Graphics);
     if(!graphicsQueue){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: [debug] GPU fault injection skipped; no graphics queue."));
         return;

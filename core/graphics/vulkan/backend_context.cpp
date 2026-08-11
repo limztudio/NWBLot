@@ -2148,6 +2148,53 @@ bool BackendContext::createDevice(){
     }
     deviceDesc.asyncComputeLaneEnabled = m_asyncComputeLaneEnabled;
     deviceDesc.transferQueueEnabled = m_transferQueueEnabled;
+    const GpuQueueCapability::Mask graphicsQueueCapabilities = static_cast<GpuQueueCapability::Mask>(
+        static_cast<u8>(GpuQueueCapability::Graphics)
+        | static_cast<u8>(GpuQueueCapability::Compute)
+        | static_cast<u8>(GpuQueueCapability::Transfer)
+    );
+    const GpuQueueCapability::Mask computeQueueCapabilities = static_cast<GpuQueueCapability::Mask>(
+        static_cast<u8>(GpuQueueCapability::Compute)
+        | static_cast<u8>(GpuQueueCapability::Transfer)
+    );
+    VulkanPhysicalQueueDesc physicalQueues[3u] = {
+        VulkanPhysicalQueueDesc{
+            .queue = m_graphicsQueue,
+            .queueClass = CommandQueue::Graphics,
+            .capabilities = graphicsQueueCapabilities,
+            .familyIndex = static_cast<u32>(m_graphicsQueueFamily),
+            .queueIndex = s_GraphicsQueueIndex,
+            .dedicated = false,
+            .primaryForClass = true,
+        },
+    };
+    usize physicalQueueCount = 1u;
+    if(m_asyncComputeLaneEnabled){
+        physicalQueues[physicalQueueCount] = VulkanPhysicalQueueDesc{
+            .queue = m_computeQueue,
+            .queueClass = CommandQueue::Compute,
+            .capabilities = computeQueueCapabilities,
+            .familyIndex = static_cast<u32>(m_computeQueueFamily),
+            .queueIndex = s_ComputeQueueIndex,
+            .dedicated = true,
+            .primaryForClass = true,
+        };
+        ++physicalQueueCount;
+    }
+    if(m_transferQueueEnabled){
+        physicalQueues[physicalQueueCount] = VulkanPhysicalQueueDesc{
+            .queue = m_transferQueue,
+            .queueClass = CommandQueue::Transfer,
+            .capabilities = GpuQueueCapability::Transfer,
+            .familyIndex = static_cast<u32>(m_transferQueueFamily),
+            .queueIndex = s_TransferQueueIndex,
+            .dedicated = true,
+            .primaryForClass = true,
+        };
+        ++physicalQueueCount;
+    }
+    deviceDesc.physicalQueues = physicalQueues;
+    deviceDesc.physicalQueueCount = physicalQueueCount;
     deviceDesc.instanceExtensions = vecInstanceExt.data();
     deviceDesc.numInstanceExtensions = vecInstanceExt.size();
     deviceDesc.deviceExtensions = vecDeviceExt.data();

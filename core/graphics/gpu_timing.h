@@ -297,6 +297,13 @@ public:
         CommandQueue::Enum executionQueue,
         const QueueSubmissionDesc& submitDesc
     );
+    [[nodiscard]] QueueSubmissionToken submit(
+        Device& device,
+        CommandList* const* commandLists,
+        usize commandListCount,
+        const GpuPhysicalQueueId& executionQueue,
+        const QueueSubmissionDesc& submitDesc
+    );
     // Explicitly releases all timing scopes when a caller elects not to submit its recorded command lists.
     void discard();
 

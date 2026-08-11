@@ -78,12 +78,18 @@ void TrackedCommandBuffer::clearTrackedReferences(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Queue::Queue(const VulkanContext& context, Device& device, CommandQueue::Enum queueID, VkQueue queue, u32 queueFamilyIndex)
+Queue::Queue(
+    const VulkanContext& context,
+    Device& device,
+    const GpuPhysicalQueueInfo& info,
+    VkQueue queue
+)
     : m_context(context)
     , m_device(device)
     , m_queue(queue)
-    , m_queueID(queueID)
-    , m_queueFamilyIndex(queueFamilyIndex)
+    , m_queueID(info.queueClass)
+    , m_physicalQueue(info.id)
+    , m_queueFamilyIndex(info.familyIndex)
     , m_waitSemaphores(context.objectArena)
     , m_waitSemaphoreValues(context.objectArena)
     , m_signalSemaphores(context.objectArena)
@@ -237,8 +243,15 @@ u64 Queue::submit(
     if(hasCommands){
         for(usize i = 0; i < numCmd; ++i){
             auto* cmdList = ppCmd[i];
-            if(cmdList && cmdList->m_currentCmdBuf && cmdList->m_desc.queueType != m_queueID){
-                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list queue type does not match the execution queue"));
+            if(
+                cmdList
+                && cmdList->m_currentCmdBuf
+                && (
+                    cmdList->m_desc.queueType != m_queueID
+                    || cmdList->m_desc.physicalQueue != m_physicalQueue
+                )
+            ){
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list physical queue does not match the execution queue"));
                 clearPendingSemaphores();
                 return m_lastSubmittedID;
             }
@@ -441,6 +454,10 @@ void Device::queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore
 }
 
 u64 Device::queueGetCompletedInstance(CommandQueue::Enum queue){
+    return queueGetCompletedInstance(getPrimaryPhysicalQueue(queue));
+}
+
+u64 Device::queueGetCompletedInstance(const GpuPhysicalQueueId& queue){
     // executeCommandLists() uses this on a rejected submit to retire CPU-side upload/scratch bookkeeping. A
     // VK_ERROR_DEVICE_LOST rejection has already marked the device terminal, so do not issue a second timeline query
     // while performing that cleanup.

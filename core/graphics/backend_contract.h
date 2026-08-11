@@ -146,14 +146,20 @@ concept DeviceApi = requires(
     { device.createCommandList(commandListParams) }->SameAs<CommandListHandle>;
     { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics) }->SameAs<u64>;
     { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics, outSubmitted) }->SameAs<u64>;
+    { device.executeCommandLists(commandLists, usize{}, GpuPhysicalQueueId{}, outSubmitted) }->SameAs<u64>;
     { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics, submissionDesc) }->SameAs<QueueSubmissionToken>;
+    { device.executeCommandLists(commandLists, usize{}, GpuPhysicalQueueId{}, submissionDesc) }->SameAs<QueueSubmissionToken>;
     { device.executeCommandLists(commandLists, usize{}, RenderLane::AsyncCompute, submissionDesc) }->SameAs<QueueSubmissionToken>;
     device.queueWaitForCommandList(CommandQueue::Graphics, CommandQueue::Graphics, u64{});
     { device.resolveRenderLane(RenderLane::AsyncCompute) }->SameAs<CommandQueue::Enum>;
     { device.isRenderLaneDedicated(RenderLane::AsyncCompute) }->SameAs<bool>;
     { device.getDeviceGeneration() }->SameAs<u16>;
     { device.getPhysicalQueueIndex(CommandQueue::Graphics) }->SameAs<u16>;
+    { device.getPrimaryPhysicalQueue(CommandQueue::Graphics) }->SameAs<GpuPhysicalQueueId>;
+    { device.getPhysicalQueueTopology() }->SameAs<GpuPhysicalQueueTopology>;
+    { device.getPhysicalQueueInfo(GpuPhysicalQueueId{}) }->SameAs<const GpuPhysicalQueueInfo*>;
     { device.matchesPhysicalQueueIdentity(CommandQueue::Graphics, u16{}, u16{}) }->SameAs<bool>;
+    { device.matchesPhysicalQueueIdentity(GpuPhysicalQueueId{}) }->SameAs<bool>;
     { device.isDeviceLost() }->SameAs<bool>;
     { device.waitForIdle() }->SameAs<bool>;
     device.runGarbageCollection();
@@ -162,6 +168,7 @@ concept DeviceApi = requires(
     { device.queryCoopVecFeatures() }->SameAs<CooperativeVectorDeviceFeatures>;
     { device.getCoopVecMatrixSize(CooperativeVectorDataType::Float16, CooperativeVectorMatrixLayout::RowMajor, i32{}, i32{}) }->SameAs<usize>;
     { device.getNativeQueue(ObjectType{}, CommandQueue::Graphics) }->SameAs<Object>;
+    { device.getNativeQueue(ObjectType{}, GpuPhysicalQueueId{}) }->SameAs<Object>;
     { device.isGpuCrashDiagnosticsEnabled() }->SameAs<bool>;
     { device.getGpuCrashTracker() }->SameAs<GpuCrashTracker&>;
 };
@@ -274,6 +281,8 @@ concept CommandListApi = requires(
     commandList.setAccelStructState(accelStruct, ResourceStates::AccelStructRead);
     commandList.releaseTextureOwnership(texture, subresources, CommandQueue::Compute);
     commandList.releaseBufferOwnership(buffer, CommandQueue::Compute);
+    commandList.releaseTextureOwnership(texture, subresources, GpuPhysicalQueueId{});
+    commandList.releaseBufferOwnership(buffer, GpuPhysicalQueueId{});
     commandList.releaseTextureOwnership(texture, subresources, CommandQueue::Transfer);
     commandList.releaseBufferOwnership(buffer, CommandQueue::Transfer);
     commandList.releaseTextureOwnership(texture, subresources, RenderLane::AsyncCompute);

@@ -572,7 +572,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         bool hwCausticDispatchLogged = false;
         bool causticEmissionGateLogged = false;
         bool surfelSeeded = false;
-        Core::CommandQueue::Enum swShadowEdgeStatsPendingSubmissionQueue = Core::CommandQueue::kCount;
+        Core::GpuPhysicalQueueId swShadowEdgeStatsPendingSubmissionPhysicalQueue;
     };
     const PostGbufferPacketCpuState postGbufferPacketCpuState{
         m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionID,
@@ -595,7 +595,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_rayTracingState.m_hwCausticDispatchLogged,
         m_rayTracingState.m_causticEmissionGateLogged,
         m_rayTracingState.m_surfelSeeded,
-        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionQueue,
+        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionPhysicalQueue,
     };
     const auto restorePrefixCpuState = [&](){
         // Rejected G-buffer recording invalidates CPU upload mirrors.
@@ -610,7 +610,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_rayTracingState.m_swShadowEdgeStatsPending = postGbufferPacketCpuState.swShadowEdgeStatsPending;
         m_rayTracingState.m_swShadowEdgeStatsPendingTick = postGbufferPacketCpuState.swShadowEdgeStatsPendingTick;
         m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionID = postGbufferPacketCpuState.swShadowEdgeStatsPendingSubmissionID;
-        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionQueue = postGbufferPacketCpuState.swShadowEdgeStatsPendingSubmissionQueue;
+        m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionPhysicalQueue = postGbufferPacketCpuState.swShadowEdgeStatsPendingSubmissionPhysicalQueue;
         m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionUnconfirmed = postGbufferPacketCpuState.swShadowEdgeStatsPendingSubmissionUnconfirmed;
         m_rayTracingState.m_swShadowDispatchLogged = postGbufferPacketCpuState.swShadowDispatchLogged;
     };
@@ -2560,6 +2560,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                     NWB_ASSERT(
                         m_rayTracingState.m_surfelCountReadbackSubmissionToken.queue == readbackSubmissionToken.queue
                         && m_rayTracingState.m_surfelCountReadbackSubmissionToken.value == readbackSubmissionToken.value
+                        && m_rayTracingState.m_surfelCountReadbackSubmissionToken.matchesPhysicalQueue(
+                            readbackSubmissionToken.physicalQueueIndex,
+                            readbackSubmissionToken.deviceGeneration
+                        )
                     );
                 }
             }

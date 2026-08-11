@@ -116,19 +116,29 @@ struct CommandListParameters{
     // Type of the queue that this command list is to be executed on.
     // Dedicated Compute and Transfer queues expose only the command subsets their Vulkan families support.
     CommandQueue::Enum queueType = CommandQueue::Graphics;
-    // Logical lane selection is resolved by Device::createCommandList. Keep the resolved physical queue type in this
-    // structure so existing command-list validation and upload lifetime tracking remain queue-based.
+    // Device resolves queueType/renderLane to this actual queue before the command list is created. Explicit graph
+    // packets set it directly, so command pools, uploads, and ownership handoffs never collapse same-class queues.
+    GpuPhysicalQueueId physicalQueue;
+    // Logical lane selection is resolved by Device::createCommandList. Keep the resolved broad class in this
+    // structure for ordinary command validation while physicalQueue selects the native transport.
     RenderLane::Enum renderLane = RenderLane::Graphics;
     bool resolveRenderLane = false;
 
     constexpr CommandListParameters& setQueueType(CommandQueue::Enum value){
         queueType = value;
+        physicalQueue = {};
         resolveRenderLane = false;
         return *this;
     }
     constexpr CommandListParameters& setRenderLane(RenderLane::Enum value){
         renderLane = value;
+        physicalQueue = {};
         resolveRenderLane = true;
+        return *this;
+    }
+    constexpr CommandListParameters& setPhysicalQueue(GpuPhysicalQueueId value){
+        physicalQueue = value;
+        resolveRenderLane = false;
         return *this;
     }
 };

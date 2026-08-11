@@ -310,18 +310,14 @@ bool GpuNativePacketRecorder::recordPacket(
     if(
         !queue
         || queue->queueClass >= CommandQueue::kCount
-        || !m_device.matchesPhysicalQueueIdentity(
-            queue->queueClass,
-            packet.queue.index,
-            packet.queue.deviceGeneration
-        )
+        || !m_device.matchesPhysicalQueueIdentity(packet.queue)
     )
         return false;
 
     const usize captureRecordCount = commandIrCapture ? commandIrCapture->recordCount() : 0u;
 
     CommandListParameters parameters;
-    parameters.setQueueType(queue->queueClass);
+    parameters.setPhysicalQueue(packet.queue);
     CommandListHandle commandList = m_device.createCommandList(parameters);
     if(!commandList)
         return false;
@@ -628,11 +624,7 @@ bool GpuTaskGraphSubmitter::submitPacket(
         || recordedPacket->commandListCount == 0u
         || recordedPacket->commandListCount > GpuRecordedPacket::s_MaxCommandLists
         || !queue
-        || !m_device.matchesPhysicalQueueIdentity(
-            queue->queueClass,
-            packet.queue.index,
-            packet.queue.deviceGeneration
-        )
+        || !m_device.matchesPhysicalQueueIdentity(packet.queue)
     ){
         transaction.rejectPacket(graph, compiledGraph, packetID);
         return false;
@@ -699,13 +691,13 @@ bool GpuTaskGraphSubmitter::submitPacket(
             m_device,
             recordedPacket->commandLists,
             recordedPacket->commandListCount,
-            queue->queueClass,
+            packet.queue,
             submitDesc
         )
         : m_device.executeCommandLists(
             recordedPacket->commandLists,
             recordedPacket->commandListCount,
-            queue->queueClass,
+            packet.queue,
             submitDesc
         )
     ;

@@ -740,7 +740,7 @@ class Queue final : NoCopy{
 
 
 public:
-    Queue(const VulkanContext& context, Device& device, CommandQueue::Enum queueID, VkQueue queue, u32 queueFamilyIndex);
+    Queue(const VulkanContext& context, Device& device, const GpuPhysicalQueueInfo& info, VkQueue queue);
     ~Queue();
 
 
@@ -781,6 +781,7 @@ private:
 
     VkQueue m_queue;
     CommandQueue::Enum m_queueID;
+    GpuPhysicalQueueId m_physicalQueue;
     u32 m_queueFamilyIndex;
 
     Futex m_mutex;
@@ -884,18 +885,33 @@ private:
     struct BufferChunk final : public RefCounter<GraphicsResource>{
         BufferHandle buffer;
         TrackedCommandBuffer* owner;
-        CommandQueue::Enum queueID;
+        GpuPhysicalQueueId physicalQueue;
         u64 size;
         u64 allocated;
         u64 version;
 
 
-        BufferChunk(Alloc::ThreadPool& pool, BufferHandle buf, TrackedCommandBuffer* chunkOwner, CommandQueue::Enum queue, u64 sz);
+        BufferChunk(
+            Alloc::ThreadPool& pool,
+            BufferHandle buf,
+            TrackedCommandBuffer* chunkOwner,
+            GpuPhysicalQueueId queue,
+            u64 sz
+        );
         ~BufferChunk();
     };
     using BufferChunkPtr = RefCountPtr<BufferChunk>;
     using BufferChunkList = List<BufferChunkPtr, Alloc::GlobalArena>;
     using ChunkRecyclePredicate = bool (*)(TrackedCommandBuffer* owner, const void* context);
+    struct ActiveQueueChunks{
+        GpuPhysicalQueueId queue;
+        BufferChunkList chunks;
+
+        ActiveQueueChunks(GraphicsArena& arena, GpuPhysicalQueueId value)
+            : queue(value)
+            , chunks(arena)
+        {}
+    };
 
 
 public:
@@ -911,18 +927,30 @@ public:
         u64* pOffset,
         void** pCpuVA,
         TrackedCommandBuffer* owner,
-        CommandQueue::Enum queueID,
+        GpuPhysicalQueueId queue,
         u64 completedVersion,
         u32 alignment = s_DefaultUploadSuballocationAlignment
     );
-    void submitChunks(CommandQueue::Enum queueID, u64 submittedVersion, TrackedCommandBuffer* const* submittedOwners, usize submittedOwnerCount);
-    void discardChunks(CommandQueue::Enum queueID, TrackedCommandBuffer* owner, u64 reusableVersion);
+    void submitChunks(
+        GpuPhysicalQueueId queue,
+        u64 submittedVersion,
+        TrackedCommandBuffer* const* submittedOwners,
+        usize submittedOwnerCount
+    );
+    void discardChunks(GpuPhysicalQueueId queue, TrackedCommandBuffer* owner, u64 reusableVersion);
 
 
 private:
-    void trimChunkPoolLocked(const u64* completedVersions);
+    void trimChunkPoolLocked();
+    [[nodiscard]] BufferChunkList* findActiveChunksLocked(GpuPhysicalQueueId queue, bool create);
     BufferChunkList::iterator recycleActiveChunkLocked(BufferChunkList& activeChunks, BufferChunkList::iterator it, u64 version, bool resetAllocated);
-    void recycleMatchingActiveChunks(u32 queueIndex, u64 version, bool resetAllocated, const u64* completedVersions, ChunkRecyclePredicate predicate, const void* predicateContext);
+    void recycleMatchingActiveChunks(
+        GpuPhysicalQueueId queue,
+        u64 version,
+        bool resetAllocated,
+        ChunkRecyclePredicate predicate,
+        const void* predicateContext
+    );
 
     Device& m_device;
     u64 m_defaultChunkSize;
@@ -932,7 +960,7 @@ private:
     u64 m_chunkPoolBytes = 0;
 
     BufferChunkList m_chunkPool;
-    BufferChunkList m_activeChunks[static_cast<u32>(CommandQueue::kCount)];
+    GraphicsDeque<ActiveQueueChunks> m_activeChunks;
 };
 
 
@@ -1009,13 +1037,13 @@ inline UploadManager::BufferChunk::BufferChunk(
     Alloc::ThreadPool& pool,
     BufferHandle buf,
     TrackedCommandBuffer* chunkOwner,
-    CommandQueue::Enum queue,
+    GpuPhysicalQueueId queue,
     u64 sz
 )
     : RefCounter<GraphicsResource>(pool)
     , buffer(Move(buf))
     , owner(chunkOwner)
-    , queueID(queue)
+    , physicalQueue(queue)
     , size(sz)
     , allocated(0)
     , version(0)
@@ -2061,6 +2089,8 @@ public:
     void releaseBufferOwnership(Buffer* buffer, CommandQueue::Enum destinationQueue);
     void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, RenderLane::Enum destinationLane);
     void releaseBufferOwnership(Buffer* buffer, RenderLane::Enum destinationLane);
+    void releaseTextureOwnership(Texture* texture, TextureSubresourceSet subresources, GpuPhysicalQueueId destinationQueue);
+    void releaseBufferOwnership(Buffer* buffer, GpuPhysicalQueueId destinationQueue);
 
     void setPermanentTextureState(Texture* texture, ResourceStates::Mask stateBits);
     void setPermanentBufferState(Buffer* buffer, ResourceStates::Mask stateBits);
@@ -2231,8 +2261,8 @@ private:
 
     Vector<VkImageMemoryBarrier2, Alloc::GlobalArena> m_pendingImageBarriers;
     Vector<VkBufferMemoryBarrier2, Alloc::GlobalArena> m_pendingBufferBarriers;
-    HashMap<TextureSubresourceStateKey, CommandQueue::Enum, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureOwnershipReleaseDestinations;
-    HashMap<Buffer*, CommandQueue::Enum, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferOwnershipReleaseDestinations;
+    HashMap<TextureSubresourceStateKey, GpuPhysicalQueueId, TextureSubresourceStateKeyHasher, TextureSubresourceStateKeyEqualTo, Alloc::GlobalArena> m_textureOwnershipReleaseDestinations;
+    HashMap<Buffer*, GpuPhysicalQueueId, Hasher<Buffer*>, EqualTo<Buffer*>, Alloc::GlobalArena> m_bufferOwnershipReleaseDestinations;
 
     Vector<Handle<AccelStruct>, Alloc::GlobalArena> m_pendingCompactions;
 };
@@ -2374,11 +2404,23 @@ public:
         CommandQueue::Enum executionQueue = CommandQueue::Graphics,
         bool* outCommandListsSubmitted = nullptr
     );
+    u64 executeCommandLists(
+        CommandList* const* pCommandLists,
+        usize numCommandLists,
+        const GpuPhysicalQueueId& executionQueue,
+        bool* outCommandListsSubmitted = nullptr
+    );
     // Cross-lane dependencies are immutable submission-local token edges.
     [[nodiscard]] QueueSubmissionToken executeCommandLists(
         CommandList* const* pCommandLists,
         usize numCommandLists,
         CommandQueue::Enum executionQueue,
+        const QueueSubmissionDesc& submitDesc
+    );
+    [[nodiscard]] QueueSubmissionToken executeCommandLists(
+        CommandList* const* pCommandLists,
+        usize numCommandLists,
+        const GpuPhysicalQueueId& executionQueue,
         const QueueSubmissionDesc& submitDesc
     );
     [[nodiscard]] QueueSubmissionToken executeCommandLists(
@@ -2390,16 +2432,19 @@ public:
     void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance);
     [[nodiscard]] CommandQueue::Enum resolveRenderLane(RenderLane::Enum lane)const;
     [[nodiscard]] bool isRenderLaneDedicated(RenderLane::Enum lane)const;
-    // The current Vulkan topology exposes one concrete queue for each CommandQueue transport.  Keep this identity
-    // explicit so task-graph packet metadata and external completion tokens cannot survive device recreation or
-    // silently alias a different queue class.
+    // The registry owns every active native VkQueue. Broad CommandQueue calls resolve through the designated
+    // primary record only for legacy callers; graph recording/submission selects a concrete ID directly.
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_deviceGeneration; }
     [[nodiscard]] u16 getPhysicalQueueIndex(CommandQueue::Enum queue)const noexcept;
+    [[nodiscard]] GpuPhysicalQueueId getPrimaryPhysicalQueue(CommandQueue::Enum queue)const noexcept;
+    [[nodiscard]] GpuPhysicalQueueTopology getPhysicalQueueTopology()const noexcept;
+    [[nodiscard]] const GpuPhysicalQueueInfo* getPhysicalQueueInfo(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] bool matchesPhysicalQueueIdentity(
         CommandQueue::Enum queue,
         u16 physicalQueueIndex,
         u16 deviceGeneration
     )const noexcept;
+    [[nodiscard]] bool matchesPhysicalQueueIdentity(const GpuPhysicalQueueId& queue)const noexcept;
     // Device loss requires full device recreation.
     [[nodiscard]] bool isDeviceLost()const noexcept{ return m_deviceLost.load(MemoryOrder::acquire); }
     // Cross-queue timing requires Graphics and Compute timestamp support.
@@ -2407,6 +2452,7 @@ public:
         return m_context.physicalDeviceProperties.limits.timestampComputeAndGraphics == VK_TRUE;
     }
     [[nodiscard]] u32 getQueueFamilyIndex(CommandQueue::Enum queue)const;
+    [[nodiscard]] u32 getQueueFamilyIndex(const GpuPhysicalQueueId& queue)const;
     [[nodiscard]] bool usesConcurrentQueueSharing(ResourceQueueSharing::Mask sharing)const{
         return UsesConcurrentQueueSharing(sharing, m_context);
     }
@@ -2417,6 +2463,7 @@ public:
     [[nodiscard]] CooperativeVectorDeviceFeatures queryCoopVecFeatures();
     usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns);
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue);
+    [[nodiscard]] Object getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue);
     bool isGpuCrashDiagnosticsEnabled(){ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.NV_device_diagnostic_checkpoints; }
     bool isAmdBreadcrumbEnabled(){ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.AMD_buffer_marker && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
     // NV and AMD marker paths share one command-list tracker.
@@ -2433,9 +2480,11 @@ public:
     void queueWaitForSemaphore(CommandQueue::Enum waitQueue, VkSemaphore semaphore, u64 value);
     void queueSignalSemaphore(CommandQueue::Enum executionQueue, VkSemaphore semaphore, u64 value);
     [[nodiscard]] u64 queueGetCompletedInstance(CommandQueue::Enum queue);
+    [[nodiscard]] u64 queueGetCompletedInstance(const GpuPhysicalQueueId& queue);
 
 public:
     [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType);
+    [[nodiscard]] Queue* getQueue(const GpuPhysicalQueueId& queue);
 #if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
     // Test-only validated-submit rejection seam exercises production cleanup.
     void rejectNextSubmissionForTesting(CommandQueue::Enum queue);
@@ -2447,6 +2496,8 @@ public:
 
 
 private:
+    [[nodiscard]] bool registerPhysicalQueue(const VulkanPhysicalQueueDesc& desc);
+    void configureLegacyQueueContext();
 #if !defined(NWB_FINAL) || defined(NWB_ENABLE_TEST_FEATURE_OVERRIDES)
     [[nodiscard]] bool consumeSubmissionRejectionForTesting(CommandQueue::Enum queue);
 #endif
@@ -2576,7 +2627,9 @@ private:
     GpuDescriptorHeap m_gpuDescriptorHeap;
     Path m_pipelineCacheDirectory;
     GraphicsString m_pipelineCacheVolumeName;
-    Optional<Queue> m_queues[static_cast<u32>(CommandQueue::kCount)];
+    GraphicsVector<Queue*> m_physicalQueues;
+    GraphicsVector<GpuPhysicalQueueInfo> m_physicalQueueInfos;
+    Array<Queue*, static_cast<u32>(CommandQueue::kCount)> m_primaryQueues = {};
     // Only block-compressed entries are populated; all are resolved before the device is exposed.
     Array<FormatSupport::Mask, static_cast<usize>(Format::kCount)> m_compressedFormatSupport = {};
 

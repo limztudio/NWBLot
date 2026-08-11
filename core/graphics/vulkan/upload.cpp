@@ -73,10 +73,7 @@ UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLi
     , m_memoryLimit(memoryLimit)
     , m_isScratchBuffer(isScratchBuffer)
     , m_chunkPool(m_device.m_context.objectArena)
-    , m_activeChunks{
-        BufferChunkList(m_device.m_context.objectArena),
-        BufferChunkList(m_device.m_context.objectArena)
-    }
+    , m_activeChunks(m_device.m_context.objectArena)
 {}
 UploadManager::~UploadManager(){
     clear();
@@ -84,11 +81,13 @@ UploadManager::~UploadManager(){
 
 void UploadManager::clear(){
     m_chunkPool.clear();
-    for(auto& chunks : m_activeChunks)
-        chunks.clear();
+    for(ActiveQueueChunks& entry : m_activeChunks)
+        entry.chunks.clear();
+    m_activeChunks.clear();
+    m_chunkPoolBytes = 0u;
 }
 
-void UploadManager::trimChunkPoolLocked(const u64* completedVersions){
+void UploadManager::trimChunkPoolLocked(){
     if(m_memoryLimit == 0)
         return;
 
@@ -100,8 +99,8 @@ void UploadManager::trimChunkPoolLocked(const u64* completedVersions){
             continue;
         }
 
-        const u32 chunkQueueIndex = static_cast<u32>(chunk->queueID);
-        if(chunkQueueIndex >= static_cast<u32>(CommandQueue::kCount) || chunk->version > completedVersions[chunkQueueIndex]){
+        const u64 completedVersion = m_device.queueGetCompletedInstance(chunk->physicalQueue);
+        if(!chunk->physicalQueue.valid() || chunk->version > completedVersion){
             ++it;
             continue;
         }
@@ -112,6 +111,22 @@ void UploadManager::trimChunkPoolLocked(const u64* completedVersions){
             m_chunkPoolBytes = 0;
         it = m_chunkPool.erase(it);
     }
+}
+
+UploadManager::BufferChunkList* UploadManager::findActiveChunksLocked(
+    const GpuPhysicalQueueId queue,
+    const bool create
+){
+    if(!queue.valid())
+        return nullptr;
+    for(ActiveQueueChunks& entry : m_activeChunks){
+        if(entry.queue == queue)
+            return &entry.chunks;
+    }
+    if(!create)
+        return nullptr;
+    m_activeChunks.emplace_back(m_device.m_context.objectArena, queue);
+    return &m_activeChunks.back().chunks;
 }
 
 UploadManager::BufferChunkList::iterator UploadManager::recycleActiveChunkLocked(BufferChunkList& activeChunks, BufferChunkList::iterator it, const u64 version, const bool resetAllocated){
@@ -131,21 +146,22 @@ UploadManager::BufferChunkList::iterator UploadManager::recycleActiveChunkLocked
 }
 
 void UploadManager::recycleMatchingActiveChunks(
-    const u32 queueIndex,
+    const GpuPhysicalQueueId queue,
     const u64 version,
     const bool resetAllocated,
-    const u64* completedVersions,
     const ChunkRecyclePredicate predicate,
     const void* predicateContext
 ){
     ScopedLock lock(m_mutex);
-    auto& activeChunks = m_activeChunks[queueIndex];
+    BufferChunkList* const activeChunks = findActiveChunksLocked(queue, false);
+    if(!activeChunks)
+        return;
 
-    auto it = activeChunks.begin();
-    while(it != activeChunks.end()){
+    auto it = activeChunks->begin();
+    while(it != activeChunks->end()){
         BufferChunkPtr& chunk = *it;
         if(!chunk){
-            it = activeChunks.erase(it);
+            it = activeChunks->erase(it);
             continue;
         }
         if(!predicate(chunk->owner, predicateContext)){
@@ -153,21 +169,31 @@ void UploadManager::recycleMatchingActiveChunks(
             continue;
         }
 
-        it = recycleActiveChunkLocked(activeChunks, it, version, resetAllocated);
+        it = recycleActiveChunkLocked(*activeChunks, it, version, resetAllocated);
     }
 
-    trimChunkPoolLocked(completedVersions);
+    trimChunkPoolLocked();
 }
 
-bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, void** pCpuVA, TrackedCommandBuffer* owner, CommandQueue::Enum queueID, u64 completedVersion, u32 alignment){
+bool UploadManager::suballocateBuffer(
+    const u64 size,
+    Buffer** const pBuffer,
+    u64* const pOffset,
+    void** const pCpuVA,
+    TrackedCommandBuffer* const owner,
+    const GpuPhysicalQueueId queue,
+    const u64 completedVersion,
+    const u32 alignment
+){
     if(!pBuffer || !pOffset || !owner)
         return false;
-    const u32 queueIndex = static_cast<u32>(queueID);
-    if(queueIndex >= static_cast<u32>(CommandQueue::kCount))
+    if(!m_device.matchesPhysicalQueueIdentity(queue))
         return false;
 
     ScopedLock lock(m_mutex);
-    auto& activeChunks = m_activeChunks[queueIndex];
+    BufferChunkList* const activeChunks = findActiveChunksLocked(queue, true);
+    if(!activeChunks)
+        return false;
 
     const auto trySuballocateFromChunk = [&](BufferChunk& chunk) -> bool {
         u64 alignedOffset = 0;
@@ -186,20 +212,20 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
         return true;
     };
 
-    for(auto it = activeChunks.rbegin(); it != activeChunks.rend(); ++it){
+    for(auto it = activeChunks->rbegin(); it != activeChunks->rend(); ++it){
         if((*it)->owner == owner && trySuballocateFromChunk(**it))
             return true;
     }
 
     for(auto it = m_chunkPool.begin(); it != m_chunkPool.end(); ++it){
         BufferChunkPtr& pooledChunk = *it;
-        if(pooledChunk->queueID == queueID && pooledChunk->size >= size && pooledChunk->version <= completedVersion){
+        if(pooledChunk->physicalQueue == queue && pooledChunk->size >= size && pooledChunk->version <= completedVersion){
             if(m_chunkPoolBytes >= pooledChunk->size)
                 m_chunkPoolBytes -= pooledChunk->size;
             else
                 m_chunkPoolBytes = 0;
-            activeChunks.push_back(Move(pooledChunk));
-            BufferChunkPtr& currentChunk = activeChunks.back();
+            activeChunks->push_back(Move(pooledChunk));
+            BufferChunkPtr& currentChunk = activeChunks->back();
             m_chunkPool.erase(it);
             currentChunk->owner = owner;
             currentChunk->allocated = 0;
@@ -221,21 +247,21 @@ bool UploadManager::suballocateBuffer(u64 size, Buffer** pBuffer, u64* pOffset, 
     if(!bufferHandle)
         return false;
 
-    activeChunks.push_back(MakeRefCount<BufferChunk>(m_device.m_context.threadPool, Move(bufferHandle), owner, queueID, chunkSize));
-    BufferChunkPtr& currentChunk = activeChunks.back();
+    activeChunks->push_back(MakeRefCount<BufferChunk>(m_device.m_context.threadPool, Move(bufferHandle), owner, queue, chunkSize));
+    BufferChunkPtr& currentChunk = activeChunks->back();
     currentChunk->version = completedVersion;
 
     return trySuballocateFromChunk(*currentChunk);
 }
 
-void UploadManager::submitChunks(CommandQueue::Enum queueID, u64 submittedVersion, TrackedCommandBuffer* const* submittedOwners, usize submittedOwnerCount){
-    const u32 queueIndex = static_cast<u32>(queueID);
-    if(queueIndex >= static_cast<u32>(CommandQueue::kCount) || !submittedOwners || submittedOwnerCount == 0)
+void UploadManager::submitChunks(
+    const GpuPhysicalQueueId queue,
+    const u64 submittedVersion,
+    TrackedCommandBuffer* const* const submittedOwners,
+    const usize submittedOwnerCount
+){
+    if(!m_device.matchesPhysicalQueueIdentity(queue) || !submittedOwners || submittedOwnerCount == 0u)
         return;
-
-    u64 completedVersions[static_cast<u32>(CommandQueue::kCount)]{};
-    for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)
-        completedVersions[i] = m_device.queueGetCompletedInstance(static_cast<CommandQueue::Enum>(i));
 
     if(submittedOwnerCount > VulkanDetail::s_SubmittedOwnerLookupThreshold){
         Alloc::ScratchArena scratchArena(VulkanArenaScope::s_SubmitChunksArena);
@@ -253,10 +279,9 @@ void UploadManager::submitChunks(CommandQueue::Enum queueID, u64 submittedVersio
 
         const VulkanDetail::SubmittedOwnerLookupContext submittedLookupContext{ &submittedOwnerLookup };
         recycleMatchingActiveChunks(
-            queueIndex,
+            queue,
             submittedVersion,
             false,
-            completedVersions,
             VulkanDetail::IsSubmittedOwnerInLookup,
             &submittedLookupContext
         );
@@ -264,20 +289,18 @@ void UploadManager::submitChunks(CommandQueue::Enum queueID, u64 submittedVersio
     }
 
     const VulkanDetail::SubmittedOwnersContext submittedContext{ submittedOwners, submittedOwnerCount };
-    recycleMatchingActiveChunks(queueIndex, submittedVersion, false, completedVersions, VulkanDetail::IsSubmittedOwner, &submittedContext);
+    recycleMatchingActiveChunks(queue, submittedVersion, false, VulkanDetail::IsSubmittedOwner, &submittedContext);
 }
 
-void UploadManager::discardChunks(CommandQueue::Enum queueID, TrackedCommandBuffer* owner, u64 reusableVersion){
-    const u32 queueIndex = static_cast<u32>(queueID);
-    if(queueIndex >= static_cast<u32>(CommandQueue::kCount) || !owner)
+void UploadManager::discardChunks(
+    const GpuPhysicalQueueId queue,
+    TrackedCommandBuffer* const owner,
+    const u64 reusableVersion
+){
+    if(!m_device.matchesPhysicalQueueIdentity(queue) || !owner)
         return;
 
-    u64 completedVersions[static_cast<u32>(CommandQueue::kCount)]{};
-    for(u32 i = 0; i < static_cast<u32>(CommandQueue::kCount); ++i)
-        completedVersions[i] = m_device.queueGetCompletedInstance(static_cast<CommandQueue::Enum>(i));
-    completedVersions[queueIndex] = Max(completedVersions[queueIndex], reusableVersion);
-
-    recycleMatchingActiveChunks(queueIndex, reusableVersion, true, completedVersions, VulkanDetail::IsMatchingOwner, owner);
+    recycleMatchingActiveChunks(queue, reusableVersion, true, VulkanDetail::IsMatchingOwner, owner);
 }
 
 

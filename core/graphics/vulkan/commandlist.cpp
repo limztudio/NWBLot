@@ -44,10 +44,10 @@ void CommandList::discardUnsubmittedUploadChunks(){
         return;
 
     TrackedCommandBuffer* owner = m_currentCmdBuf.get();
-    const u64 reusableVersion = m_device.queueGetCompletedInstance(m_desc.queueType);
+    const u64 reusableVersion = m_device.queueGetCompletedInstance(m_desc.physicalQueue);
 
-    m_device.m_uploadManager.discardChunks(m_desc.queueType, owner, reusableVersion);
-    m_device.m_scratchManager.discardChunks(m_desc.queueType, owner, reusableVersion);
+    m_device.m_uploadManager.discardChunks(m_desc.physicalQueue, owner, reusableVersion);
+    m_device.m_scratchManager.discardChunks(m_desc.physicalQueue, owner, reusableVersion);
 }
 
 void CommandList::open(const CommandListResourceStateHandoff* initialStates){
@@ -62,7 +62,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
         return;
     }
 
-    Queue* queue = m_device.getQueue(m_desc.queueType);
+    Queue* queue = m_device.getQueue(m_desc.physicalQueue);
     if(!queue){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Requested queue is not available"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Requested queue is not available"));

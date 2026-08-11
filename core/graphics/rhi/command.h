@@ -31,6 +31,52 @@ namespace CommandQueue{
     };
 };
 
+// A task may request a capability class, but native recording and submission need to name the exact Vulkan queue
+// that owns its command pool and timeline. Physical IDs are scoped to one logical-device generation; an invalid
+// ID deliberately cannot be used as an ownership or retirement key.
+struct GpuPhysicalQueueId{
+    u16 index = Limit<u16>::s_Max;
+    u16 deviceGeneration = 0u;
+
+    [[nodiscard]] constexpr bool valid()const{
+        return index != Limit<u16>::s_Max && deviceGeneration != 0u;
+    }
+};
+inline constexpr bool operator==(const GpuPhysicalQueueId& lhs, const GpuPhysicalQueueId& rhs)noexcept{
+    return lhs.index == rhs.index && lhs.deviceGeneration == rhs.deviceGeneration;
+}
+inline constexpr bool operator!=(const GpuPhysicalQueueId& lhs, const GpuPhysicalQueueId& rhs)noexcept{
+    return !(lhs == rhs);
+}
+
+namespace GpuQueueCapability{
+    enum Mask : u8{
+        None = 0u,
+        Transfer = 1u << 0u,
+        Compute = 1u << 1u,
+        Graphics = 1u << 2u,
+    };
+
+    NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
+};
+
+// `queueClass` retains broad API capability validation. `id` selects the real native transport, including when a
+// device exposes more than one queue of the same class.
+struct GpuPhysicalQueueInfo{
+    GpuPhysicalQueueId id;
+    CommandQueue::Enum queueClass = CommandQueue::kCount;
+    GpuQueueCapability::Mask capabilities = GpuQueueCapability::None;
+    u32 familyIndex = Limit<u32>::s_Max;
+    u32 queueIndex = 0u;
+    bool dedicated = false;
+};
+
+// Borrowed immutable registry view. The producing Device owns the storage for its entire lifetime.
+struct GpuPhysicalQueueTopology{
+    const GpuPhysicalQueueInfo* queues = nullptr;
+    usize queueCount = 0u;
+};
+
 typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
 typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 
@@ -61,26 +107,26 @@ private:
         ArraySlice arraySlice = 0;
         ResourceStates::Mask state = ResourceStates::Unknown;
         ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
-        // kCount means concurrently shared (or not yet claimed). Otherwise this is the physical queue that last
-        // owned the exclusive resource. A non-kCount releaseDestination requires a paired acquire on that queue.
-        CommandQueue::Enum ownerQueue = CommandQueue::kCount;
-        CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
+        // An invalid ID means concurrently shared (or not yet claimed). Otherwise this is the exact native queue
+        // that last owned the exclusive resource. A valid release destination requires a paired acquire there.
+        GpuPhysicalQueueId ownerQueue;
+        GpuPhysicalQueueId releaseDestinationQueue;
     };
 
     struct BufferState{
         Buffer* buffer = nullptr;
         ResourceStates::Mask state = ResourceStates::Unknown;
         ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
-        CommandQueue::Enum ownerQueue = CommandQueue::kCount;
-        CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
+        GpuPhysicalQueueId ownerQueue;
+        GpuPhysicalQueueId releaseDestinationQueue;
     };
 
     struct PermanentTextureState{
         Texture* texture = nullptr;
         ResourceStates::Mask state = ResourceStates::Unknown;
         ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
-        CommandQueue::Enum ownerQueue = CommandQueue::kCount;
-        CommandQueue::Enum releaseDestinationQueue = CommandQueue::kCount;
+        GpuPhysicalQueueId ownerQueue;
+        GpuPhysicalQueueId releaseDestinationQueue;
     };
 
 

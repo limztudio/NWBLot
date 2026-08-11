@@ -486,7 +486,7 @@ struct RtShadowState{
     bool m_swShadowEdgeStatsPending = false;
     bool m_shadowResolvePipelineFailed = false;
     bool m_shadowResolveRgbPipelineFailed = false;
-    Core::CommandQueue::Enum m_swShadowEdgeStatsPendingSubmissionQueue = Core::CommandQueue::kCount;
+    Core::GpuPhysicalQueueId m_swShadowEdgeStatsPendingSubmissionPhysicalQueue;
     bool m_swShadowEdgeStatsPendingSubmissionUnconfirmed = false;
     bool m_shadowPipelineFailed = false;
     bool m_swShadowPipelineFailed = false;

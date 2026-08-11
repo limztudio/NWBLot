@@ -84,9 +84,23 @@ struct CsgClipContextSlots{
     u32 padding1 = 0u;
 };
 
+// This uniform payload feeds the interval-sampling CSG shaders through the slot selected by CsgClipContextSlots.
+// It remains a graph-owned immutable frame blob when the opaque deferred graph is active.
+struct CsgIntervalSampleStateGpuData{
+    u32 workMinX = 0u;
+    u32 workMinY = 0u;
+    u32 workMaxX = 0u;
+    u32 workMaxY = 0u;
+    u32 meshViewHeapSlot = 0u;
+    u32 resourceSlotPadding0 = 0u;
+    u32 resourceSlotPadding1 = 0u;
+    u32 resourceSlotPadding2 = 0u;
+};
+
 static_assert(sizeof(CsgReceiverRangeGpuData) == sizeof(u32) * 8u + sizeof(Float34) + sizeof(CsgBoundsGpuData), "CsgReceiverRangeGpuData layout must match the CSG shader");
 static_assert(sizeof(CsgCutterGpuData) == sizeof(Float4) + sizeof(Float34) + sizeof(Float4) * 2u, "CsgCutterGpuData layout must match the CSG shader");
 static_assert(sizeof(CsgClipContextSlots) == sizeof(u32) * 8u, "CSG clip context slots must stay two uint4 lanes");
+static_assert(sizeof(CsgIntervalSampleStateGpuData) == sizeof(u32) * 8u, "CSG interval sample state must match shader layout");
 static_assert(alignof(CsgReceiverRangeGpuData) >= alignof(Float4), "CsgReceiverRangeGpuData must stay SIMD-aligned");
 static_assert(alignof(CsgCutterGpuData) >= alignof(Float4), "CsgCutterGpuData must stay SIMD-aligned");
 static_assert(alignof(CsgReceiverCpuBounds) >= alignof(Float4), "CsgReceiverCpuBounds must stay SIMD-friendly");

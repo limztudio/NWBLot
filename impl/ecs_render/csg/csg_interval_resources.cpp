@@ -343,7 +343,7 @@ bool RendererCsgSystem::createCsgIntervalSampleStateBuffer(){
 
     Core::BufferDesc bufferDesc;
     bufferDesc
-        .setByteSize(sizeof(__hidden_csg_interval_peel::CsgIntervalSampleStateGpuData))
+        .setByteSize(sizeof(CsgIntervalSampleStateGpuData))
         .setIsConstantBuffer(true)
         .setDebugName("engine/csg/interval_sample_state")
         .enableAutomaticStateTracking(Core::ResourceStates::Common)

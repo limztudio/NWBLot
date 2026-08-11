@@ -142,6 +142,31 @@ static void DispatchCsgIntervalCompute(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool RendererCsgSystem::prepareCsgIntervalSampleStateData(
+    const DeferredFrameTargets& targets,
+    const CsgFrameGpuData& csgFrameData,
+    CsgIntervalSampleStateGpuData& outState
+)const{
+    outState = CsgIntervalSampleStateGpuData{};
+    if(!csgFrameData.hasWork())
+        return true;
+    if(
+        !csgState().m_intervalSampleStateBuffer
+        || !drawState().m_meshViewBufferHeapHandle.valid()
+        || !m_renderer.meshSystem().meshFrameHeapHandlesReady()
+    )
+        return false;
+
+    // The work rectangle and heap slot are both resolved after preflight chose this frame's target generation.
+    // Freeze them before graph recording so retry/acceptance cannot observe later mutable renderer state.
+    outState = __hidden_csg_interval_peel::BuildCsgIntervalSampleState(
+        targets,
+        csgFrameData,
+        drawState().m_meshViewBufferHeapHandle.slot()
+    );
+    return true;
+}
+
 bool RendererCsgSystem::uploadCsgIntervalSampleState(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
@@ -155,13 +180,9 @@ bool RendererCsgSystem::uploadCsgIntervalSampleState(
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgSampleStateUpload, graphics().getDevice(), commandList);
 
-    const __hidden_csg_interval_peel::CsgIntervalSampleStateGpuData state =
-        __hidden_csg_interval_peel::BuildCsgIntervalSampleState(
-            targets,
-            csgFrameData,
-            drawState().m_meshViewBufferHeapHandle.slot()
-        )
-    ;
+    CsgIntervalSampleStateGpuData state;
+    if(!prepareCsgIntervalSampleStateData(targets, csgFrameData, state))
+        return false;
     commandList.setBufferState(csgState().m_intervalSampleStateBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     commandList.writeBuffer(csgState().m_intervalSampleStateBuffer.get(), &state, sizeof(state));

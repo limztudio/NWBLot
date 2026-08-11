@@ -46,23 +46,6 @@ static_assert(sizeof(CsgIntervalDispatchPushConstants) == NWB_CSG_INTERVAL_DISPA
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CsgIntervalSampleStateGpuData{
-    u32 workMinX = 0u;
-    u32 workMinY = 0u;
-    u32 workMaxX = 0u;
-    u32 workMaxY = 0u;
-    u32 meshViewHeapSlot = 0u;
-    u32 resourceSlotPadding0 = 0u;
-    u32 resourceSlotPadding1 = 0u;
-    u32 resourceSlotPadding2 = 0u;
-};
-
-static_assert(sizeof(CsgIntervalSampleStateGpuData) == sizeof(u32) * 8u, "CSG interval sample state must match shader layout");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace CsgTextureAccess{
     enum Enum : u8{
         None,

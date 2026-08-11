@@ -633,6 +633,32 @@ bool RendererCsgSystem::csgFrameBuffersReady(const CsgFrameGpuData& csgFrameData
     ;
 }
 
+bool RendererCsgSystem::prepareCsgClipContextSlotData(
+    const CsgFrameGpuData& csgFrameData,
+    CsgClipContextSlots& outContextSlots
+)const{
+    outContextSlots = CsgClipContextSlots{};
+    if(!csgFrameData.hasWork())
+        return true;
+    if(
+        !csgFrameBuffersReady(csgFrameData)
+        || !drawState().m_materialTypedBufferHeapHandle.valid()
+        || !drawState().m_instanceBufferHeapHandle.valid()
+        || !deferredState().m_targets.bindless.slotsBufferDescriptor.valid()
+    )
+        return false;
+
+    // Buffer selection, descriptor registration, and target selection have all completed before graph declaration.
+    // Capture every indirection now so a later native record never observes handles from a different generation.
+    outContextSlots.receiverRanges = csgState().m_receiverRangeBufferHeapHandle.slot();
+    outContextSlots.cutters = csgState().m_cutterBufferHeapHandle.slot();
+    outContextSlots.materialTyped = drawState().m_materialTypedBufferHeapHandle.slot();
+    outContextSlots.meshInstances = drawState().m_instanceBufferHeapHandle.slot();
+    outContextSlots.deferredBindlessResources = deferredState().m_targets.bindless.slotsBufferDescriptor.slot();
+    outContextSlots.intervalSampleState = csgState().m_intervalSampleStateHeapHandle.slot();
+    return true;
+}
+
 bool RendererCsgSystem::uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData){
     if(!csgFrameData.hasWork())
         return true;
@@ -682,15 +708,9 @@ bool RendererCsgSystem::uploadCsgFrameContextSlots(
     NWB_ASSERT(m_renderer.meshSystem().meshFrameHeapHandlesReady());
     NWB_ASSERT(deferredState().m_targets.bindless.slotsBufferDescriptor.valid());
 
-    // This write follows every capacity-growth replacement and mesh-frame handle refresh, so the native CSG draw
-    // never observes a stale descriptor slot from a retired receiver/cutter/material/instance generation.
     CsgClipContextSlots contextSlots;
-    contextSlots.receiverRanges = csgState().m_receiverRangeBufferHeapHandle.slot();
-    contextSlots.cutters = csgState().m_cutterBufferHeapHandle.slot();
-    contextSlots.materialTyped = drawState().m_materialTypedBufferHeapHandle.slot();
-    contextSlots.meshInstances = drawState().m_instanceBufferHeapHandle.slot();
-    contextSlots.deferredBindlessResources = deferredState().m_targets.bindless.slotsBufferDescriptor.slot();
-    contextSlots.intervalSampleState = csgState().m_intervalSampleStateHeapHandle.slot();
+    if(!prepareCsgClipContextSlotData(csgFrameData, contextSlots))
+        return false;
 
     commandList.setBufferState(csgState().m_clipContextSlotsBuffer.get(), Core::ResourceStates::CopyDest);
     commandList.commitBarriers();

@@ -513,14 +513,9 @@ struct GbufferGraphTask{
             && (opaqueDrawItems.csgReceiverSurface.empty() || renderer.m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
         ;
         if(deferredResourcesReady){
-            const bool csgUploadReady =
-                csgResourcesReady
-                && renderer.m_csgSystem.uploadCsgFrameContextSlots(commandList, csgFrameData)
-            ;
-            const bool csgSampleStateReady =
-                csgUploadReady
-                && (!csgFrameData.hasWork() || renderer.m_csgSystem.uploadCsgIntervalSampleState(commandList, deferredTargets, csgFrameData))
-            ;
+            // Every opaque CSG frame byte is now captured in immutable graph uploads. Native recording consumes those
+            // declared resources without rewriting the clip-context or interval-sample uniform payloads.
+            const bool csgSampleStateReady = csgResourcesReady;
             if(csgSampleStateReady && csgFrameData.hasWork())
                 renderer.m_csgSystem.dispatchCsgIntervalPeels(commandList, deferredTargets, csgFrameData);
             const MaterialPassDrawContext opaqueDrawContext{
@@ -1177,6 +1172,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     const Core::GpuGraphResourceId materialTyped,
     const Core::GpuGraphResourceId csgReceiverRanges,
     const Core::GpuGraphResourceId csgCutters,
+    const Core::GpuGraphResourceId csgClipContextSlots,
+    const Core::GpuGraphResourceId csgIntervalSampleState,
     const Core::GpuGraphResourceId currentBindlessSlots,
     const Core::GpuGraphResourceId materialContextSlots,
     const Core::GpuGraphResourceId* const shadowTraceGeometryResources,
@@ -1621,14 +1618,16 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         gbufferPayload.materialDrawBuffersUploaded = true;
     }
 
-    // Receiver/cutter records are ordinary immutable frame streams.  Keep the descriptor-slot context payload
-    // native for now: it incorporates target-generation bindless indirection and remains a specialized update.
+    // Freeze every opaque CSG upload byte after preflight fixed the buffer, descriptor, and target generations.
+    // Native G-buffer recording consumes these values without rebuilding either CSG uniform payload from live state.
     const bool hasCsgFrameGpuWork = csgFrameData.hasWork();
     Core::GpuTaskId csgFrameUploadTask = materialDrawUploadTask;
     if(hasCsgFrameGpuWork){
         if(
             !csgReceiverRanges.valid()
             || !csgCutters.valid()
+            || !csgClipContextSlots.valid()
+            || !csgIntervalSampleState.valid()
             || !m_csgSystem.csgFrameBuffersReady(csgFrameData)
         ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared CSG frame buffers were unavailable during graph declaration"));
@@ -1644,6 +1643,20 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         }
 #endif
 
+        CsgClipContextSlots csgClipContextSlotData;
+        CsgIntervalSampleStateGpuData csgIntervalSampleStateData;
+        if(
+            !m_csgSystem.prepareCsgClipContextSlotData(csgFrameData, csgClipContextSlotData)
+            || !m_csgSystem.prepareCsgIntervalSampleStateData(
+                deferredTargets,
+                csgFrameData,
+                csgIntervalSampleStateData
+            )
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot opaque CSG auxiliary upload data"));
+            return false;
+        }
+
         const Core::GpuUploadBlobId receiverRangesBlob = m_deferredLightingTaskGraph.copyUploadData(
             csgFrameData.receiverRanges.data(),
             csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData),
@@ -1654,7 +1667,22 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             csgFrameData.cutters.size() * sizeof(CsgCutterGpuData),
             alignof(CsgCutterGpuData)
         );
-        if(!receiverRangesBlob.valid() || !cuttersBlob.valid()){
+        const Core::GpuUploadBlobId clipContextSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
+            &csgClipContextSlotData,
+            sizeof(csgClipContextSlotData),
+            alignof(CsgClipContextSlots)
+        );
+        const Core::GpuUploadBlobId intervalSampleStateBlob = m_deferredLightingTaskGraph.copyUploadData(
+            &csgIntervalSampleStateData,
+            sizeof(csgIntervalSampleStateData),
+            alignof(CsgIntervalSampleStateGpuData)
+        );
+        if(
+            !receiverRangesBlob.valid()
+            || !cuttersBlob.valid()
+            || !clipContextSlotsBlob.valid()
+            || !intervalSampleStateBlob.valid()
+        ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable CSG frame upload data"));
             return false;
         }
@@ -1702,6 +1730,48 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned CSG cutter upload"));
             return false;
         }
+
+        Core::GpuTaskDesc clipContextSlotsUploadDesc;
+        clipContextSlotsUploadDesc
+            .setIdentity(Name("render.graphics_prefix.csg_clip_context_slots_upload"))
+            .setMarkerLabel("CSG Clip Context Slots Upload")
+            .setQueue(GraphicsUploadQueueRequest())
+            .setScheduling(immutableUploadScheduling)
+            .setDependencies(&csgFrameUploadTask, 1u)
+        ;
+        csgFrameUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+            clipContextSlotsUploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = clipContextSlotsBlob,
+                .destination = csgClipContextSlots,
+                .finalState = Core::ResourceStates::Common,
+            }
+        );
+        if(!csgFrameUploadTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned CSG clip-context upload"));
+            return false;
+        }
+
+        Core::GpuTaskDesc intervalSampleStateUploadDesc;
+        intervalSampleStateUploadDesc
+            .setIdentity(Name("render.graphics_prefix.csg_interval_sample_state_upload"))
+            .setMarkerLabel("CSG Interval Sample State Upload")
+            .setQueue(GraphicsUploadQueueRequest())
+            .setScheduling(immutableUploadScheduling)
+            .setDependencies(&csgFrameUploadTask, 1u)
+        ;
+        csgFrameUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+            intervalSampleStateUploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = intervalSampleStateBlob,
+                .destination = csgIntervalSampleState,
+                .finalState = Core::ResourceStates::Common,
+            }
+        );
+        if(!csgFrameUploadTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned CSG interval-state upload"));
+            return false;
+        }
         gbufferPayload.csgFrameBuffersUploaded = true;
     }
     gbufferPayload.opaqueDrawSnapshot.capture(
@@ -1713,7 +1783,7 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
 
     Core::Alloc::ScratchArena gbufferResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferResourceUses{ gbufferResourceScratch };
-    gbufferResourceUses.reserve((hasOpaqueDrawItems ? 7u : 5u) + (hasCsgFrameGpuWork ? 2u : 0u));
+    gbufferResourceUses.reserve((hasOpaqueDrawItems ? 7u : 5u) + (hasCsgFrameGpuWork ? 5u : 0u));
     gbufferResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
     if(hasOpaqueDrawItems){
         gbufferResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
@@ -1722,6 +1792,10 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     if(hasCsgFrameGpuWork){
         gbufferResourceUses.push_back(ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource));
         gbufferResourceUses.push_back(ReadUse(csgCutters, Core::ResourceStates::ShaderResource));
+        gbufferResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
+        gbufferResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
+        // CSG resolves target-specific images through the deferred bindless-slot buffer selected in its context.
+        gbufferResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     }
     gbufferResourceUses.push_back(WriteUse(albedo, Core::ResourceStates::RenderTarget));
     gbufferResourceUses.push_back(WriteUse(normal, Core::ResourceStates::RenderTarget));
@@ -2981,6 +3055,22 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         )
         : Core::GpuGraphResourceId{}
     ;
+    const Core::GpuGraphResourceId csgClipContextSlots = m_csgState.m_clipContextSlotsBuffer
+        ? importBuffer(
+            m_csgState.m_clipContextSlotsBuffer,
+            Name("render.deferred.csg_clip_context_slots"),
+            "CSG Clip Context Slots"
+        )
+        : Core::GpuGraphResourceId{}
+    ;
+    const Core::GpuGraphResourceId csgIntervalSampleState = m_csgState.m_intervalSampleStateBuffer
+        ? importBuffer(
+            m_csgState.m_intervalSampleStateBuffer,
+            Name("render.deferred.csg_interval_sample_state"),
+            "CSG Interval Sample State"
+        )
+        : Core::GpuGraphResourceId{}
+    ;
     const Core::GpuGraphResourceId bindlessSlots = history
         ? importBuffer(
             history->slotsBuffer,
@@ -3175,6 +3265,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         materialTyped,
         csgReceiverRanges,
         csgCutters,
+        csgClipContextSlots,
+        csgIntervalSampleState,
         currentBindlessSlots,
         materialContextSlots,
         traceGeometryResources.data(),

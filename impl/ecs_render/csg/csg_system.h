@@ -48,9 +48,20 @@ public:
     // consume these resources after this prepass has completed.
     [[nodiscard]] bool prepareCsgFrameResources(usize receiverRangeCount, usize cutterCount);
     [[nodiscard]] bool csgFrameBuffersReady(const CsgFrameGpuData& csgFrameData)const;
+    // Capture all descriptor-derived CSG uniform bytes while preflight has frozen the current buffer and target
+    // generations. The deferred graph retains these values as immutable blobs before native recording begins.
+    [[nodiscard]] bool prepareCsgClipContextSlotData(
+        const CsgFrameGpuData& csgFrameData,
+        CsgClipContextSlots& outContextSlots
+    )const;
+    [[nodiscard]] bool prepareCsgIntervalSampleStateData(
+        const DeferredFrameTargets& targets,
+        const CsgFrameGpuData& csgFrameData,
+        CsgIntervalSampleStateGpuData& outState
+    )const;
     [[nodiscard]] bool uploadCsgFrameBuffers(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
-    // The clip-context slot payload is a specialized descriptor indirection.  Generic receiver/cutter stream
-    // uploads may be graph-owned, while this narrow compatibility write remains adjacent to the native CSG draws.
+    // Retained for transparent/legacy native paths. The opaque deferred graph instead snapshots this descriptor
+    // indirection during declaration and uploads the captured bytes through its graph task chain.
     [[nodiscard]] bool uploadCsgFrameContextSlots(Core::CommandList& commandList, const CsgFrameGpuData& csgFrameData);
     [[nodiscard]] bool uploadCsgIntervalSampleState(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData);
     void setCsgClipBufferStates(Core::CommandList& commandList);

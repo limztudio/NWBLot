@@ -193,6 +193,8 @@ private:
         Core::GpuGraphResourceId materialTyped,
         Core::GpuGraphResourceId csgReceiverRanges,
         Core::GpuGraphResourceId csgCutters,
+        Core::GpuGraphResourceId csgClipContextSlots,
+        Core::GpuGraphResourceId csgIntervalSampleState,
         Core::GpuGraphResourceId currentBindlessSlots,
         Core::GpuGraphResourceId materialContextSlots,
         const Core::GpuGraphResourceId* shadowTraceGeometryResources,

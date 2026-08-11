@@ -225,6 +225,7 @@ MeshSkinningSystem::MeshSkinningSystem(
     , m_runtimeMeshCache(arena, graphics, assetManager)
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), arena)
     , m_graphOwnedRestCopyPlans(arena)
+    , m_graphOwnedBindlessResourceSlotsPlans(arena)
     , m_acceptedSkinningStateBuffers(arena)
     , m_acceptedSkinningStateHandoff(arena)
     , m_graphOwnedJointPaletteStateHandoff(arena)
@@ -408,6 +409,7 @@ bool MeshSkinningSystem::containsRuntimeMesh(const Name& meshKey, const u64 vers
 bool MeshSkinningSystem::submitFrameJointPaletteUploads(){
     m_graphOwnedJointPaletteStateHandoff.reset();
     m_graphOwnedRestCopyPlans.clear();
+    m_graphOwnedBindlessResourceSlotsPlans.clear();
 
     auto& device = m_graphics.getDevice();
     const Core::GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
@@ -422,6 +424,7 @@ bool MeshSkinningSystem::submitFrameJointPaletteUploads(){
     const auto discardGraphOwnedFrameUpdates = [&](){
         m_graphOwnedJointPaletteStateHandoff.reset();
         m_graphOwnedRestCopyPlans.clear();
+        m_graphOwnedBindlessResourceSlotsPlans.clear();
     };
     auto skinningBindings = m_world.view<SkinnedMeshBindingComponent>();
     bool declarationFailed = false;
@@ -448,6 +451,105 @@ bool MeshSkinningSystem::submitFrameJointPaletteUploads(){
             // compute path will report the same invalid payload and leave that mesh retryable next frame.
             if(!MeshSkinningPayload::BuildRuntimeSkinPayload(*instance, jointPalette, skeletonPose, payload))
                 return;
+
+            // The selector is consumed by every native skinning, bounds, and normal-repack dispatch. It is not
+            // coupled to an active palette or a rest-stream copy: an inactive meshlet-bounds update is still a
+            // selector-only graph frame. Freeze its immutable 64-byte payload before any early no-active return.
+            const RuntimeMeshDirtyFlags dispatchDirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
+                RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty
+            );
+            const bool dispatchConsumesSelector =
+                !instance->meshlets.empty()
+                && (
+                    payload.hasActiveSkin()
+                    || (instance->dirtyFlags & dispatchDirtyFlags) != 0u
+                    || hadSkinningResources
+                )
+            ;
+            if(
+                dispatchConsumesSelector
+                && foundResources != m_runtimeResources.end()
+                && !foundResources.value().bindlessResourceSlotsUploaded
+            ){
+                const RuntimeResources& resources = foundResources.value();
+                const Core::BufferHandle& slotsBuffer = resources.bindlessResourceSlotsBuffer;
+                if(
+                    !slotsBuffer
+                    || !resources.bindlessHeapHandles.resourceSlots.valid()
+                    || resources.bindlessHeapHandles.resourceSlots.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
+                ){
+                    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has no valid bindless selector resource"), instance->handle.value);
+                    declarationFailed = true;
+                    return;
+                }
+                const Core::BufferDesc& slotsDesc = slotsBuffer->getDescription();
+                const Name uploadIdentity = DeriveRuntimeResourceName(
+                    instance->sourceName,
+                    instance->handle.value,
+                    instance->editRevision,
+                    "mesh_skinning_bindless_slots_upload"
+                );
+                if(!slotsDesc.debugName || !uploadIdentity){
+                    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has no graph identity for its bindless slot upload"), instance->handle.value);
+                    declarationFailed = true;
+                    return;
+                }
+                const Core::GpuGraphResourceId slotsDestination = graph.importBuffer(
+                    slotsBuffer,
+                    Core::GpuGraphResourceDesc{}
+                        .setIdentity(slotsDesc.debugName)
+                        .setMarkerLabel("Skinning Bindless Slots")
+                        .setType(Core::GpuGraphResourceType::Buffer)
+                        .setInitialState(slotsDesc.initialState)
+                        .setQueueSharing(slotsDesc.queueSharing)
+                );
+                const Core::GpuUploadBlobId slotsSource = graph.copyUploadData(
+                    &resources.bindlessResourceSlots,
+                    sizeof(resources.bindlessResourceSlots),
+                    alignof(RuntimeBindlessResourceSlots)
+                );
+                if(!slotsDestination.valid() || !slotsSource.valid()){
+                    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain graph-owned bindless slots for runtime mesh '{}'"), instance->handle.value);
+                    declarationFailed = true;
+                    return;
+                }
+
+                Core::GpuTaskDesc slotsUploadDesc;
+                slotsUploadDesc
+                    .setIdentity(uploadIdentity)
+                    .setMarkerLabel("Skinning Bindless Slots Upload")
+                    .setQueue(__hidden_system::JointPaletteUploadQueueRequest())
+                    .setScheduling(__hidden_system::JointPaletteUploadScheduling(terminalTask.valid()))
+                ;
+                if(terminalTask.valid())
+                    slotsUploadDesc.setDependencies(&terminalTask, 1u);
+
+                // Automatic state tracking restores this selector to Common at packet close. The following native
+                // command list owns the Common -> ConstantBuffer transition before it binds the selector heap slot.
+                const Core::GpuTaskId slotsUploadTask = graph.addUploadBufferTask(
+                    slotsUploadDesc,
+                    Core::GpuUploadBufferTaskDesc{
+                        .source = slotsSource,
+                        .destination = slotsDestination,
+                        .finalState = Core::ResourceStates::Common,
+                    }
+                );
+                if(!slotsUploadTask.valid()){
+                    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned bindless slots for runtime mesh '{}'"), instance->handle.value);
+                    declarationFailed = true;
+                    return;
+                }
+
+                GraphOwnedBindlessResourceSlotsPlan plan;
+                plan.handle = instance->handle;
+                plan.editRevision = instance->editRevision;
+                plan.slotsBuffer = slotsBuffer;
+                plan.slotsDescriptor = resources.bindlessHeapHandles.resourceSlots;
+                plan.payload = resources.bindlessResourceSlots;
+                plan.uploadTask = slotsUploadTask;
+                m_graphOwnedBindlessResourceSlotsPlans.push_back(Move(plan));
+                terminalTask = slotsUploadTask;
+            }
             if(!payload.hasActiveSkin()){
                 const bool copiesRestBuffers =
                     (instance->dirtyFlags & RuntimeMeshDirtyFlag::SkinningInputDirty) != 0u
@@ -692,6 +794,14 @@ bool MeshSkinningSystem::submitFrameJointPaletteUploads(){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: joint palette upload graph has no terminal packet"));
         return false;
     }
+    for(const GraphOwnedBindlessResourceSlotsPlan& plan : m_graphOwnedBindlessResourceSlotsPlans){
+        const Core::GpuSubmissionPacketId selectorPacket = compiledGraph.packetForTask(plan.uploadTask);
+        if(!selectorPacket.valid() || selectorPacket != terminalPacket){
+            discardGraphOwnedFrameUpdates();
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: bindless selector upload detached from the native handoff packet"));
+            return false;
+        }
+    }
     const Core::GpuSubmissionPacket& packet = compiledGraph.packet(terminalPacket);
     const Core::GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
     if(packet.queue != graphicsQueue){
@@ -788,6 +898,7 @@ bool MeshSkinningSystem::submitFrameJointPaletteUploads(){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain accepted graph-owned skinning state"));
         return false;
     }
+    confirmGraphOwnedBindlessResourceSlotsUploads();
     return true;
 }
 
@@ -920,6 +1031,7 @@ void MeshSkinningSystem::invalidateResources(){
     resetAcceptedSkinningStateHandoff();
     m_graphOwnedJointPaletteStateHandoff.reset();
     m_graphOwnedRestCopyPlans.clear();
+    m_graphOwnedBindlessResourceSlotsPlans.clear();
     for(auto it = m_runtimeResources.begin(); it != m_runtimeResources.end(); ++it)
         releaseRuntimeResourceBindlessHeapHandles(it.value());
     m_runtimeResources.clear();

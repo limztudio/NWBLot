@@ -2498,6 +2498,186 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
 }
 
 
+// Skinning publishes its immutable bindless selector through the primary-Graphics graph packet, then the retained
+// native compute continuation owns Common -> ConstantBuffer before it dereferences the selector heap slot.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesAndHandsOffToNativeCompute){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    static constexpr u32 s_SelectorWords[] = {
+        0x14a6f3c9u,
+        0x09b5d217u,
+        0x6c1e8f42u,
+        0xcafebabeu,
+        0x7f4a1c32u,
+        0x10293847u,
+        0x55aa33ccu,
+        0x8badf00du,
+        0x0ddba11au,
+        0x4e6f7788u,
+        0x9e3779b9u,
+        0xfeedfaceu,
+        0x243f6a88u,
+        0x85a308d3u,
+        0x13198a2eu,
+        0x03707344u,
+    };
+    auto selectorBuffer = device.createBuffer(
+        BufferDesc()
+            .setDebugName(Name("tests/descriptor_buffer/skinning_bindless_selector"))
+            .setByteSize(sizeof(s_SelectorWords))
+            .setIsConstantBuffer(true)
+            .enableAutomaticStateTracking(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::Exclusive)
+            .setCpuAccess(CpuAccessMode::Read)
+    );
+    ASSERT_NE(selectorBuffer.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const BufferDesc& selectorDesc = selectorBuffer->getDescription();
+    const GpuGraphResourceId selectorResource = graph.importBuffer(
+        selectorBuffer,
+        GpuGraphResourceDesc{}
+            .setIdentity(selectorDesc.debugName)
+            .setMarkerLabel("Skinning Bindless Selector")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(selectorDesc.initialState)
+            .setQueueSharing(selectorDesc.queueSharing)
+    );
+    const GpuUploadBlobId selectorBlob = graph.copyUploadData(
+        s_SelectorWords,
+        sizeof(s_SelectorWords),
+        alignof(u32)
+    );
+    ASSERT_TRUE(selectorResource.valid());
+    ASSERT_TRUE(selectorBlob.valid());
+
+    const GpuQueueRequest graphicsUploadQueue{
+        GpuQueueCapability::Transfer,
+        GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    GpuTaskSchedulingHint selectorScheduling;
+    selectorScheduling.cost = GpuTaskCostHint::Tiny;
+    selectorScheduling.overlapPreferred = false;
+    selectorScheduling.avoidQueueCrossing = true;
+    selectorScheduling.forceSubmissionBoundary = false;
+    selectorScheduling.allowPacketMerge = true;
+    selectorScheduling.mergeWithPrevious = false;
+    QueueSubmissionToken selectorAcceptedToken;
+    const GpuTaskId selectorTask = graph.addUploadBufferTask(
+        GpuTaskDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/skinning_bindless_selector_upload"))
+            .setMarkerLabel("Skinning Bindless Slots Upload")
+            .setQueue(graphicsUploadQueue)
+            .setScheduling(selectorScheduling),
+        GpuUploadBufferTaskDesc{
+            .source = selectorBlob,
+            .destination = selectorResource,
+            // Automatic state tracking requires the graph-visible state to remain its Common initial state. The
+            // following native list declares the descriptor-visible ConstantBuffer use.
+            .finalState = ResourceStates::Common,
+            .acceptedToken = &selectorAcceptedToken,
+        }
+    );
+    ASSERT_TRUE(selectorTask.valid());
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    const GpuPhysicalQueueId primaryGraphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
+    ASSERT_NE(topology.queues, nullptr);
+    ASSERT_GT(topology.queueCount, 0u);
+    ASSERT_TRUE(primaryGraphicsQueue.valid());
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/skinning_selector_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuTaskQueueAssignment* const selectorAssignment = assignments.find(selectorTask);
+    ASSERT_NE(selectorAssignment, nullptr);
+    EXPECT_EQ(selectorAssignment->queue, primaryGraphicsQueue);
+    const GpuSubmissionPacketId selectorPacket = compiledGraph.packetForTask(selectorTask);
+    ASSERT_TRUE(selectorPacket.valid());
+    EXPECT_EQ(compiledGraph.packetCount(), 1u);
+    EXPECT_EQ(compiledGraph.packet(selectorPacket).queue, primaryGraphicsQueue);
+    EXPECT_EQ(compiledGraph.packet(selectorPacket).taskCount, 1u);
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+    const CommandListResourceStateHandoff* const graphFinalState = recordedGraph.packetFinalStateSeed(selectorPacket);
+    ASSERT_NE(graphFinalState, nullptr);
+    auto graphStateProbe = device.createCommandList();
+    ASSERT_NE(graphStateProbe.get(), nullptr);
+    graphStateProbe->open(graphFinalState);
+    EXPECT_EQ(graphStateProbe->getBufferState(selectorBuffer.get()), ResourceStates::Common);
+    graphStateProbe->close();
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken graphToken = transaction.packetToken(selectorPacket);
+    ASSERT_TRUE(graphToken.valid());
+    ASSERT_TRUE(selectorAcceptedToken.valid());
+    EXPECT_EQ(selectorAcceptedToken.queue, graphToken.queue);
+    EXPECT_EQ(selectorAcceptedToken.value, graphToken.value);
+
+    CommandListResourceStateHandoff nativeFinalState(DescriptorBufferRoundTripTest::arena());
+    auto nativeContinuation = device.createCommandList();
+    ASSERT_NE(nativeContinuation.get(), nullptr);
+    nativeContinuation->open(graphFinalState);
+    EXPECT_EQ(nativeContinuation->getBufferState(selectorBuffer.get()), ResourceStates::Common);
+    nativeContinuation->setBufferState(selectorBuffer.get(), ResourceStates::ConstantBuffer);
+    nativeContinuation->commitBarriers();
+    EXPECT_EQ(nativeContinuation->getBufferState(selectorBuffer.get()), ResourceStates::ConstantBuffer);
+    nativeContinuation->close(&nativeFinalState);
+    ASSERT_TRUE(nativeFinalState.valid());
+    auto nativeStateProbe = device.createCommandList();
+    ASSERT_NE(nativeStateProbe.get(), nullptr);
+    nativeStateProbe->open(&nativeFinalState);
+    EXPECT_EQ(nativeStateProbe->getBufferState(selectorBuffer.get()), ResourceStates::Common);
+    nativeStateProbe->close();
+
+    CommandList* const nativeContinuationLists[] = { nativeContinuation.get() };
+    const QueueSubmissionToken nativeToken = device.executeCommandLists(
+        nativeContinuationLists,
+        LengthOf(nativeContinuationLists),
+        primaryGraphicsQueue,
+        QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(nativeToken.valid());
+    EXPECT_TRUE(nativeToken.matchesPhysicalQueue(
+        primaryGraphicsQueue.index,
+        primaryGraphicsQueue.deviceGeneration
+    ));
+    ASSERT_TRUE(device.waitForIdle());
+
+    const u32* const uploadedWords = static_cast<const u32*>(device.mapBuffer(selectorBuffer.get(), CpuAccessMode::Read));
+    ASSERT_NE(uploadedWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_SelectorWords); ++wordIndex)
+        EXPECT_EQ(uploadedWords[wordIndex], s_SelectorWords[wordIndex]);
+    device.unmapBuffer(selectorBuffer.get());
+}
+
+
 // Skinning's no-active-pose path uploads a small palette payload then copies rest position, normal, and tangent
 // streams into their skinned counterparts.  Keep this as a real primary-Graphics packet proof: the native bounds
 // continuation must observe every copy state and explicitly promote all three outputs before renderer consumption.

@@ -11,6 +11,7 @@
 #include <core/ecs/system.h>
 #include <core/graphics/render_pass.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
+#include <core/graphics/task_graph/types.h>
 #include <impl/assets/graphics/skinned_mesh/constants.h>
 #include <impl/ecs_mesh/runtime/mesh.h>
 #include <impl/ecs_mesh/components.h>
@@ -126,6 +127,8 @@ private:
         u32 primitiveIndices = 0u;
         u32 meshletBounds = 0u;
         u32 attributeBuffer = 0u;
+
+        [[nodiscard]] constexpr bool operator==(const RuntimeBindlessResourceSlots&)const = default;
     };
     static_assert(sizeof(RuntimeBindlessResourceSlots) == sizeof(u32) * 16u, "MeshSkinning bindless resource slots must stay four uint4 lanes");
 
@@ -222,6 +225,17 @@ private:
         usize tangentBytes = 0u;
     };
 
+    // The selector blob is accepted by the primary-Graphics graph packet before the native skinning continuation
+    // opens. Retain the exact generation and graph task until that accepted packet can publish residency.
+    struct GraphOwnedBindlessResourceSlotsPlan{
+        RuntimeMeshHandle handle;
+        u32 editRevision = 0u;
+        Core::BufferHandle slotsBuffer;
+        Core::GpuDescriptorHandle slotsDescriptor = Core::GpuDescriptorHandle::invalid();
+        RuntimeBindlessResourceSlots payload;
+        Core::GpuTaskId uploadTask;
+    };
+
 
 public:
     using ShaderPathResolveCallback = Function<
@@ -274,6 +288,7 @@ private:
     );
     [[nodiscard]] bool copyRestToSkinned(Core::CommandList& commandList, MeshSkinningRuntimeInstance& instance);
     [[nodiscard]] bool hasGraphOwnedRestCopyPlan(const MeshSkinningRuntimeInstance& instance)const;
+    void confirmGraphOwnedBindlessResourceSlotsUploads();
     void transitionGraphCopiedRestStreams(Core::CommandList& commandList, MeshSkinningRuntimeInstance& instance)const;
     [[nodiscard]] static bool resolveRestToSkinnedCopyByteCounts(
         const MeshSkinningRuntimeInstance& instance,
@@ -320,6 +335,7 @@ private:
 
     HashMap<u64, RuntimeResources, Hasher<u64>, EqualTo<u64>, Core::Alloc::GlobalArena> m_runtimeResources;
     Vector<GraphOwnedRestCopyPlan, Core::Alloc::GlobalArena> m_graphOwnedRestCopyPlans;
+    Vector<GraphOwnedBindlessResourceSlotsPlan, Core::Alloc::GlobalArena> m_graphOwnedBindlessResourceSlotsPlans;
     // The accepted frame state persists across graph/native boundaries and across frames. The per-frame graph
     // snapshot below opens the native continuation immediately after its accepted packet.
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedSkinningStateBuffers;

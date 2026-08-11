@@ -43,14 +43,15 @@ can receive an unconditional final sign-off.
   retains each region as a graph upload blob, serializes the subresources to one terminal accepted token, declares
   `ShaderResource` as the visible final state, and keeps the automatic Transfer -> Compute -> Graphics route plus
   consumer readiness bridge. Bindless sampled-image allocation/commit follows only after that graph batch accepts.
-- Active runtime skinning joint palettes are now derived before recording, copied into immutable graph upload blobs,
-  compiled and submitted on the primary Graphics transport, then exposed through the terminal native state handoff
-  to the established skinning compute list. The compute dispatch and its one-time bindless selector write retain
-  their acceptance-guarded compatibility path pending the specialized descriptor-update tranche.
+- Active runtime skinning joint palettes and one-time bindless resource selectors are now derived before recording,
+  copied into immutable graph upload blobs, compiled and submitted on the primary Graphics transport, then exposed
+  through the terminal native state handoff to the established skinning compute list. Automatic selector buffers
+  publish `Common`; the native continuation owns the `ConstantBuffer` transition and accepted graph packets alone
+  commit selector residency. The compute dispatch and dirty-state commit remain native.
 - No-active runtime skinning now graph-owns the serial three-region rest-position/normal/tangent to skinned-stream
   copy in that same primary-Graphics packet. Its accepted state seeds the native bounds/repack continuation, which
-  promotes every skinned stream to `ShaderResource`; dirty-state and selector commits remain owned by the later
-  native submission, and releasing a pose forces one bind-pose copy/repack.
+  promotes every skinned stream to `ShaderResource`; dirty-state commits remain owned by the later native
+  submission, and releasing a pose forces one bind-pose copy/repack.
 - In the shared deferred path, ImGui vertex/index payloads and requested font/texture updates are retained as
   immutable graph blobs, lowered through the built-in upload tasks, and made dependencies of the terminal overlay
   or upload-completion packet. Small deltas stay on Graphics; amortizable updates prefer Transfer.
@@ -226,16 +227,16 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
    legacy state-handoff data. The shared deferred path now owns per-frame ImGui draw/font/texture uploads; its
    direct path remains only as a compatibility fallback for worlds without a graph-owning renderer or a rejected
    graph attempt. Public buffer/texture setup uploads, decoded texture-asset uploads, and the shared deferred
-   mesh-view, scene-light, scene-shading, runtime skinning joint-palette and no-active rest-stream updates, and opaque material instance/typed updates
+   mesh-view, scene-light, scene-shading, runtime skinning joint-palette, selector, and no-active rest-stream
+   updates, and opaque material instance/typed updates
    now use the graph-owned primitive path. The transparent AVBOIT interval producer, occupancy, extinction, and
    accumulation phases now freeze and publish their own per-write-point material/CSG streams, preserving the shared
    interval sample state across the low-resolution raster passes. Current and lagged deferred bindless selectors,
    the ray-trace material-context selector, caustic emission-target stream, surfel-frame constants, shadow
    material-context batch, software scene-BVH pair, software-only per-mesh SW-BVH build/refit, and opaque hardware
    TLAS and BLAS build/refit transactions are acceptance-safe
-   graph-owned preparation work; skinning compute
-   dispatch/its selector update and other specialized descriptor/resource updates still retain direct native
-   recording or submission. The graph
+   graph-owned preparation work; skinning compute dispatch and other specialized descriptor/resource updates still
+   retain direct native recording or submission. The graph
    therefore does not yet authoritatively own all frame work and state retirement.
 
 3. **Packet scheduling and recording completion (partially addressed).** Current merging is limited to compatible

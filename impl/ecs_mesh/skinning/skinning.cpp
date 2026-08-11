@@ -277,6 +277,26 @@ bool MeshSkinningSystem::hasGraphOwnedRestCopyPlan(const MeshSkinningRuntimeInst
     return false;
 }
 
+void MeshSkinningSystem::confirmGraphOwnedBindlessResourceSlotsUploads(){
+    for(const GraphOwnedBindlessResourceSlotsPlan& plan : m_graphOwnedBindlessResourceSlotsPlans){
+        const auto foundResources = m_runtimeResources.find(plan.handle.value);
+        if(foundResources == m_runtimeResources.end())
+            continue;
+
+        RuntimeResources& resources = foundResources.value();
+        if(
+            resources.editRevision != plan.editRevision
+            || resources.bindlessResourceSlotsBuffer.get() != plan.slotsBuffer.get()
+            || resources.bindlessHeapHandles.resourceSlots != plan.slotsDescriptor
+        )
+            continue;
+
+        if(resources.bindlessResourceSlots == plan.payload)
+            resources.bindlessResourceSlotsUploaded = true;
+    }
+    m_graphOwnedBindlessResourceSlotsPlans.clear();
+}
+
 void MeshSkinningSystem::transitionGraphCopiedRestStreams(
     Core::CommandList& commandList,
     MeshSkinningRuntimeInstance& instance

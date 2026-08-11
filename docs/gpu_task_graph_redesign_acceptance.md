@@ -6,7 +6,8 @@
 
 **Follow-up implementation:** physical queue identity, frontier-safe deferred scheduling, graph-bound presentation,
 graph-owned per-frame ImGui uploads, opt-in ready-frontier native recording, and opt-in same-class physical Graphics
-routing, plus actual-device stale packet-recording recreation coverage, 2026-08-11.
+routing, actual-device stale packet-recording recreation coverage, and graph-owned public setup uploads,
+2026-08-11.
 
 The task/resource-graph migration is accepted as the current bounded renderer architecture: graph declaration owns
 semantic dependencies, compile-time queue selection, packet construction, and inter-task barrier planning; native
@@ -26,6 +27,11 @@ can receive an unconditional final sign-off.
   facade is not used to restore renderer scheduling.
 - Large setup uploads have an automatic Transfer-preferred route with Graphics/Compute fallback. The external
   dedicated-Transfer performance proof is explicitly deferred by the user for this closeout.
+- Representable synchronous `Graphics::setupBuffer` and `Graphics::setupTexture` payloads now declare a one-packet
+  graph upload: caller bytes are retained as immutable graph blobs, the built-in buffer/texture task publishes the
+  graph-visible final state and accepted producer token, and the pre-existing consumer-queue readiness bridge preserves
+  the returned-handle compatibility contract. The direct path remains a narrow fallback for combined depth/stencil
+  or unknown keep-initial-state descriptors until specialized declaration-safe tasks exist.
 - In the shared deferred path, ImGui vertex/index payloads and requested font/texture updates are retained as
   immutable graph blobs, lowered through the built-in upload tasks, and made dependencies of the terminal overlay
   or upload-completion packet. Small deltas stay on Graphics; amortizable updates prefer Transfer.
@@ -65,6 +71,7 @@ can receive an unconditional final sign-off.
 | Same-class Graphics routing follow-up: graph-unit binary | 45/45 passed, including deterministic opt-in balancing, same-family state planning, duplicate native queue rejection, and stale recording/transaction recreation |
 | Same-class Graphics routing follow-up: descriptor-buffer smoke binary | 72 passed; 10 expected skips. The added real-Vulkan route skipped because this adapter exposes only one Graphics queue; the existing 9 skips lack dedicated Compute-only or Transfer-only families |
 | Actual device-recreation graph-packet follow-up: descriptor-buffer smoke binary | 73 passed; 10 expected skips. A real headless Graphics instance releases its recorded packets/transaction before teardown, recreates its device, then recompiles, records, and submits only on the replacement generation |
+| Graph-owned public setup-upload follow-up: descriptor-buffer smoke binary | 73 passed; 10 expected skips. Normal buffer and texture setup routes compile, record, and submit through one graph packet while preserving queue selection, graph-visible final states, and Graphics readiness; the dedicated-Transfer probe is hardware-skipped on this adapter |
 
 The latest local command-IR evidence is under
 `.cozter/out/ab-results/command-ir/20260811_050635/`. It is intentionally local/ignored A/B evidence rather than a
@@ -87,9 +94,9 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
 2. **Complete graph ownership.** Renderer code still builds packet ranges, controls recording/submission, and holds
    legacy state-handoff data. The shared deferred path now owns per-frame ImGui draw/font/texture uploads; its
    direct path remains only as a compatibility fallback for worlds without a graph-owning renderer or a rejected
-   graph attempt. Generic setup/asset uploads, skinning, and some renderer resource-update paths still retain direct
-   native recording or submission. The graph therefore does not yet authoritatively own all frame work and state
-   retirement.
+   graph attempt. Public buffer/texture setup uploads now use the graph-owned primitive path, but generic asset
+   decoding uploads, skinning, and some renderer resource-update paths still retain direct native recording or
+   submission. The graph therefore does not yet authoritatively own all frame work and state retirement.
 
 3. **Packet scheduling and recording completion (partially addressed).** Current merging is limited to compatible
    immediate predecessors. The compiler-derived native ready-frontier recorder is implemented for explicit opt-in
@@ -113,4 +120,4 @@ These are substantive scope gaps, not failures hidden by the hardware waiver.
 
 Do not relabel this result as final architectural completion without either implementing the five areas above or
 explicitly waiving them in a revised, version-controlled acceptance scope. The next implementation work should
-finish the remaining graph-owned setup/resource-update paths and recovery proof.
+finish the remaining graph-owned asset/resource-update paths and recovery proof.

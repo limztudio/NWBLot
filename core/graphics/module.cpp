@@ -4,6 +4,8 @@
 
 #include "module.h"
 #include "backend_selection.h"
+#include "task_graph/compiler.h"
+#include "task_graph/packet_runtime.h"
 
 #include <core/common/log.h>
 #include <core/telemetry/session.h>
@@ -168,6 +170,144 @@ constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
         uploadQueue,
         QueueSubmissionDesc{}
     );
+    return outUploadToken.valid()
+        && BridgeSetupUploadToConsumerQueues(device, outUploadToken, queueSharing)
+    ;
+}
+
+// The synchronous setup APIs predate frame-owned graph declaration, but their ordinary buffer/texture uploads
+// have all of the information a graph task needs: an immutable source blob, one destination resource, an exact
+// final state, and an already-resolved physical transport. Keep the public API synchronous while using the same
+// compiler/recorder/transaction path as graph-owned frame uploads. The compatibility bridge remains below the
+// graph packet because setup callers receive a resource handle rather than an external-completion handle.
+[[nodiscard]] static GpuQueueRequest SetupUploadGraphQueueRequest(const CommandQueue::Enum uploadQueue)noexcept{
+    GpuQueueRequest request;
+    request.requiredCapabilities = GpuQueueCapability::Transfer;
+    request.allowFallback = false;
+    request.compilerMayOverridePreference = false;
+    switch(uploadQueue){
+    case CommandQueue::Graphics:
+        request.preferredQueue = GpuQueuePreference::Graphics;
+        break;
+    case CommandQueue::Compute:
+        request.preferredQueue = GpuQueuePreference::Compute;
+        break;
+    case CommandQueue::Transfer:
+        request.preferredQueue = GpuQueuePreference::Transfer;
+        break;
+    default:
+        request.requiredCapabilities = GpuQueueCapability::None;
+        request.preferredQueue = GpuQueuePreference::Any;
+        break;
+    }
+    return request;
+}
+
+[[nodiscard]] static GpuTaskSchedulingHint SetupUploadGraphScheduling(const usize byteCount)noexcept{
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = byteCount >= s_TransferPreferredUploadMinimumBytes
+        ? GpuTaskCostHint::Large
+        : GpuTaskCostHint::Tiny
+    ;
+    // A public setup call returns one accepted producer token, so retain a distinct explicit packet.
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    return scheduling;
+}
+
+[[nodiscard]] static ResourceStates::Mask SetupUploadGraphFinalState(
+    const ResourceStates::Mask declaredInitialState
+)noexcept{
+    // Unknown is a valid legacy descriptor state. The graph still needs a concrete post-write state; CopyDest is
+    // exactly what the native write leaves behind when the old setup path has no declared final transition.
+    return declaredInitialState == ResourceStates::Unknown
+        ? ResourceStates::CopyDest
+        : declaredInitialState
+    ;
+}
+
+[[nodiscard]] static bool CanDeclareGraphOwnedBufferSetupUpload(const Graphics::BufferSetupDesc& desc)noexcept{
+    // Built-in buffer uploads retain Vulkan's copy-region alignment contract. Keep the legacy direct route for
+    // callers that rely on its pre-existing diagnostic behavior rather than changing their setup API result here.
+    return
+        (desc.destOffsetBytes & (sizeof(u32) - 1u)) == 0u
+        && (desc.dataSize & (sizeof(u32) - 1u)) == 0u
+        && (!desc.bufferDesc.keepInitialState || desc.bufferDesc.initialState != ResourceStates::Unknown)
+    ;
+}
+
+[[nodiscard]] static bool CanDeclareGraphOwnedTextureSetupUpload(const Graphics::TextureSetupDesc& desc)noexcept{
+    const FormatInfo& formatInfo = GetFormatInfo(desc.textureDesc.format);
+    // The graph helper intentionally uses the same single-aspect write primitive as ordinary color/depth-only
+    // texture setup. Combined depth/stencil uploads and unknown keep-initial-state descriptors stay on the narrow
+    // legacy path until they have a declaration-safe specialized upload task.
+    return
+        !(formatInfo.hasDepth && formatInfo.hasStencil)
+        && (!desc.textureDesc.keepInitialState || desc.textureDesc.initialState != ResourceStates::Unknown)
+    ;
+}
+
+template<typename DeclareTask>
+[[nodiscard]] static bool SubmitGraphOwnedSetupUpload(
+    GraphicsBackend::Device& device,
+    GraphicsArena& graphArena,
+    const ResourceQueueSharing::Mask queueSharing,
+    DeclareTask&& declareTask,
+    QueueSubmissionToken& outUploadToken
+){
+    outUploadToken = {};
+
+    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
+    if(!topology.queues || topology.queueCount == 0u)
+        return false;
+
+    GpuTaskGraph graph(graphArena);
+    const GpuTaskId uploadTask = declareTask(graph);
+    if(!uploadTask.valid())
+        return false;
+
+    GpuTaskGraphAnalysis analysis(graphArena);
+    GpuTaskGraphQueueAssignments assignments(graphArena);
+    GpuCompiledGraph compiledGraph(graphArena);
+    GpuRecordedGraph recordedGraph(graphArena);
+    GpuGraphSubmissionTransaction transaction(graphArena);
+    Alloc::ScratchArena scratchArena(Name("graphics.setup_upload_graph_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    if(!compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena))
+        return false;
+
+    const GpuSubmissionPacketId uploadPacket = compiledGraph.packetForTask(uploadTask);
+    if(!uploadPacket.valid())
+        return false;
+
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    if(!recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = uploadPacket },
+        recordedGraph
+    )){
+        transaction.discardUnaccepted(graph, compiledGraph);
+        return false;
+    }
+
+    const GpuTaskGraphSubmitter submitter(device);
+    if(!submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        uploadPacket,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    )){
+        transaction.discardUnaccepted(graph, compiledGraph);
+        return false;
+    }
+
+    outUploadToken = transaction.packetToken(uploadPacket);
     return outUploadToken.valid()
         && BridgeSetupUploadToConsumerQueues(device, outUploadToken, queueSharing)
     ;
@@ -1115,6 +1255,60 @@ BufferHandle Graphics::setupBuffer(const BufferSetupDesc& desc)const{
         return {};
     }
 
+    if(__hidden_graphics::CanDeclareGraphOwnedBufferSetupUpload(desc)){
+        QueueSubmissionToken uploadToken;
+        const bool submitted = __hidden_graphics::SubmitGraphOwnedSetupUpload(
+            device,
+            m_allocator.getObjectArena(),
+            uploadDesc.queueSharing,
+            [&buffer, &desc, &uploadDesc, uploadQueue, &uploadToken](GpuTaskGraph& graph){
+                const GpuGraphResourceId destination = graph.importBuffer(
+                    buffer,
+                    GpuGraphResourceDesc{}
+                        .setIdentity(Name("graphics.setup_buffer.resource"))
+                        .setMarkerLabel("Setup Buffer")
+                        .setType(GpuGraphResourceType::Buffer)
+                        .setInitialState(uploadDesc.initialState)
+                        .setQueueSharing(uploadDesc.queueSharing)
+                );
+                const GpuUploadBlobId source = graph.copyUploadData(
+                    desc.data,
+                    desc.dataSize,
+                    alignof(u32)
+                );
+                if(!destination.valid() || !source.valid())
+                    return GpuTaskId{};
+
+                GpuTaskDesc uploadTaskDesc;
+                uploadTaskDesc
+                    .setIdentity(Name("graphics.setup_buffer.upload"))
+                    .setMarkerLabel("Setup Buffer Upload")
+                    .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue))
+                    .setScheduling(__hidden_graphics::SetupUploadGraphScheduling(desc.dataSize))
+                ;
+                return graph.addUploadBufferTask(
+                    uploadTaskDesc,
+                    GpuUploadBufferTaskDesc{
+                        .source = source,
+                        .destination = destination,
+                        .destinationOffsetBytes = desc.destOffsetBytes,
+                        .finalState = __hidden_graphics::SetupUploadGraphFinalState(uploadDesc.initialState),
+                        .acceptedToken = &uploadToken,
+                    }
+                );
+            },
+            uploadToken
+        );
+        if(!submitted){
+            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit graph-owned setup buffer upload '{}'"), StringConvert(desc.bufferDesc.debugName.c_str()));
+            return {};
+        }
+        if(desc.acceptedToken)
+            *desc.acceptedToken = uploadToken;
+        return buffer;
+    }
+
+    // Compatibility fallback for the narrow descriptor cases the built-in graph uploads intentionally reject.
     CommandListParameters cmdParams;
     cmdParams.setQueueType(uploadQueue);
     CommandListHandle commandList = device.createCommandList(cmdParams);
@@ -1178,6 +1372,60 @@ TextureHandle Graphics::setupTexture(const TextureSetupDesc& desc)const{
         return {};
     }
 
+    if(__hidden_graphics::CanDeclareGraphOwnedTextureSetupUpload(desc)){
+        QueueSubmissionToken uploadToken;
+        const bool submitted = __hidden_graphics::SubmitGraphOwnedSetupUpload(
+            device,
+            m_allocator.getObjectArena(),
+            uploadDesc.queueSharing,
+            [&texture, &desc, &uploadDesc, uploadQueue, &uploadToken](GpuTaskGraph& graph){
+                const GpuGraphResourceId destination = graph.importTexture(
+                    texture,
+                    GpuGraphResourceDesc{}
+                        .setIdentity(Name("graphics.setup_texture.resource"))
+                        .setMarkerLabel("Setup Texture")
+                        .setType(GpuGraphResourceType::Texture)
+                        .setInitialState(uploadDesc.initialState)
+                        .setQueueSharing(uploadDesc.queueSharing)
+                );
+                const GpuUploadBlobId source = graph.copyUploadData(desc.data, desc.uploadDataSize, alignof(u32));
+                if(!destination.valid() || !source.valid())
+                    return GpuTaskId{};
+
+                GpuTaskDesc uploadTaskDesc;
+                uploadTaskDesc
+                    .setIdentity(Name("graphics.setup_texture.upload"))
+                    .setMarkerLabel("Setup Texture Upload")
+                    .setQueue(__hidden_graphics::SetupUploadGraphQueueRequest(uploadQueue))
+                    .setScheduling(__hidden_graphics::SetupUploadGraphScheduling(desc.uploadDataSize))
+                ;
+                return graph.addUploadTextureTask(
+                    uploadTaskDesc,
+                    GpuUploadTextureTaskDesc{
+                        .source = source,
+                        .destination = destination,
+                        .arraySlice = desc.arraySlice,
+                        .mipLevel = desc.mipLevel,
+                        .rowPitch = desc.rowPitch,
+                        .depthPitch = desc.depthPitch,
+                        .finalState = __hidden_graphics::SetupUploadGraphFinalState(uploadDesc.initialState),
+                        .acceptedToken = &uploadToken,
+                    }
+                );
+            },
+            uploadToken
+        );
+        if(!submitted){
+            NWB_LOGGER_ERROR(NWB_TEXT("Graphics: failed to submit graph-owned setup texture upload '{}'"), StringConvert(desc.textureDesc.name.c_str()));
+            return {};
+        }
+        if(desc.acceptedToken)
+            *desc.acceptedToken = uploadToken;
+        return texture;
+    }
+
+    // See the buffer path: specialized combined-depth/stencil and unknown keep-initial-state uploads retain their
+    // pre-graph command-list implementation until they can make the same exact final-state declaration.
     CommandListParameters cmdParams;
     cmdParams.setQueueType(uploadQueue);
     CommandListHandle commandList = device.createCommandList(cmdParams);

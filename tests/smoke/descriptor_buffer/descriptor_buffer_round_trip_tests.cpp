@@ -5331,10 +5331,11 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedTransferQueueCopiesConcurrentBuff
 }
 
 
-// Setup uploads expose only a returned resource handle, so an automatic Transfer producer must publish readiness
-// onto Graphics before it returns. This deliberately submits the Graphics copy without an explicit wait token: queue
-// order behind the setup bridge is the compatibility contract that keeps legacy callers and graph imports safe.
-TEST_F(DescriptorBufferRoundTripTest, SetupBufferUsesDedicatedTransferAndBridgesGraphicsReadiness){
+// Graph-owned setup uploads expose only a returned resource handle, so an automatic Transfer producer must publish
+// readiness onto Graphics before it returns. This deliberately submits the Graphics copy without an explicit wait
+// token: queue order behind the setup bridge is the compatibility contract that keeps legacy callers and graph
+// imports safe.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSetupBufferUsesDedicatedTransferAndBridgesGraphicsReadiness){
     HeadlessGraphicsScope transferScope;
     ASSERT_TRUE(transferScope.setTransferQueueEnabled(true));
     if(!transferScope.initialize())
@@ -5404,7 +5405,7 @@ TEST_F(DescriptorBufferRoundTripTest, SetupBufferUsesDedicatedTransferAndBridges
 // If no dedicated Transfer family exists, automatic sizeable setup uploads must still choose a real transport: a
 // dedicated Compute queue when one is available, otherwise the established Graphics path. The accepted token makes
 // this routing observable without exposing a backend-specific queue object through the public setup API.
-TEST_F(DescriptorBufferRoundTripTest, SetupBufferAutomaticallyFallsBackWithoutTransfer){
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSetupBufferAutomaticallyFallsBackWithoutTransfer){
     HeadlessGraphicsScope fallbackScope;
     ASSERT_TRUE(fallbackScope.setTransferQueueEnabled(false));
     if(!fallbackScope.initialize())
@@ -5451,7 +5452,7 @@ TEST_F(DescriptorBufferRoundTripTest, SetupBufferAutomaticallyFallsBackWithoutTr
 // Exercise the texture path through the same automatic resolver. A one-mip 512x512 RGBA texture is deliberately
 // large enough to cross the automatic-transfer threshold; with Transfer disabled it must use Compute when present
 // or retain Graphics, while publishing the requested ShaderResource state before the setup call returns.
-TEST_F(DescriptorBufferRoundTripTest, SetupTextureAutomaticallyFallsBackWithoutTransfer){
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSetupTextureAutomaticallyFallsBackWithoutTransfer){
     HeadlessGraphicsScope fallbackScope;
     ASSERT_TRUE(fallbackScope.setTransferQueueEnabled(false));
     if(!fallbackScope.initialize())

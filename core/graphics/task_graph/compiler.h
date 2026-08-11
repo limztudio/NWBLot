@@ -78,6 +78,22 @@ struct GpuTaskQueueAssignment{
     bool dedicated = false;
 };
 
+// Migration starts with explicitly requested compatible merges. Frontier-safe packetization preserves those requests
+// unless a task already in the preceding packet enables a consumer on another physical queue; that producer needs
+// its own signal point so the consumer does not wait for unrelated later same-queue work.
+namespace GpuTaskGraphPacketizationPolicy{
+    enum Enum : u8{
+        ExplicitMerge,
+        FrontierSafe,
+
+        kCount,
+    };
+};
+
+struct GpuTaskGraphCompileOptions{
+    GpuTaskGraphPacketizationPolicy::Enum packetizationPolicy = GpuTaskGraphPacketizationPolicy::ExplicitMerge;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -194,7 +210,8 @@ public:
         const GpuTaskGraphQueueTopology& topology,
         GpuTaskGraphQueueAssignments& outAssignments,
         GpuCompiledGraph& outCompiledGraph,
-        Alloc::ScratchArena& scratchArena
+        Alloc::ScratchArena& scratchArena,
+        const GpuTaskGraphCompileOptions& options = {}
     )const;
 };
 

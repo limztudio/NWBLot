@@ -1008,7 +1008,8 @@ bool GpuTaskGraphCompiler::compile(
     const GpuTaskGraphQueueTopology& topology,
     GpuTaskGraphQueueAssignments& outAssignments,
     GpuCompiledGraph& outCompiledGraph,
-    Alloc::ScratchArena& scratchArena
+    Alloc::ScratchArena& scratchArena,
+    const GpuTaskGraphCompileOptions& options
 )const{
     using namespace __hidden_gpu_task_graph_compiler;
 
@@ -1016,7 +1017,11 @@ bool GpuTaskGraphCompiler::compile(
     if(!analyze(graph, outAnalysis, scratchArena) || !assignQueues(graph, outAnalysis, topology, outAssignments))
         return false;
 
-    if(topology.queueCount == 0u || !topology.queues)
+    if(
+        topology.queueCount == 0u
+        || !topology.queues
+        || options.packetizationPolicy >= GpuTaskGraphPacketizationPolicy::kCount
+    )
         return false;
 
     outCompiledGraph.m_generation = graph.generation();
@@ -1066,6 +1071,35 @@ bool GpuTaskGraphCompiler::compile(
                     && !preceding.scheduling.forceSubmissionBoundary
                     && !preceding.scheduling.joinsAcceptedQueueFrontier
                 ;
+            }
+            if(
+                precedingPacketAllowsMerge
+                && options.packetizationPolicy == GpuTaskGraphPacketizationPolicy::FrontierSafe
+            ){
+                for(u32 precedingTaskIndex = 0u;
+                    precedingPacketAllowsMerge && precedingTaskIndex < precedingPacket.taskCount;
+                    ++precedingTaskIndex
+                ){
+                    const GpuTaskId precedingTask = outCompiledGraph.m_packetTasks[
+                        precedingPacket.taskOffset + precedingTaskIndex
+                    ];
+                    for(const GpuTaskDependencyEdge& edge : outAnalysis.edges()){
+                        if(edge.producer != precedingTask)
+                            continue;
+
+                        const GpuTaskQueueAssignment* const consumerAssignment = outAssignments.find(edge.consumer);
+                        // Queue assignment covers every analyzed task. Treat a broken assignment conservatively so a
+                        // missing consumer identity cannot hide a required cross-queue signal frontier.
+                        if(
+                            !consumerAssignment
+                            || !consumerAssignment->queue.valid()
+                            || consumerAssignment->queue != precedingPacket.queue
+                        ){
+                            precedingPacketAllowsMerge = false;
+                            break;
+                        }
+                    }
+                }
             }
             if(precedingPacketAllowsMerge){
                 packetID = GpuSubmissionPacketId{

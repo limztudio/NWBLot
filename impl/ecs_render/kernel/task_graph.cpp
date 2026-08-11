@@ -95,6 +95,7 @@ struct ShadowPrepareGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool deferredBindlessSlotsWereUploaded = false;
+        bool currentBindlessSlotsGraphOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -109,20 +110,20 @@ struct ShadowPrepareGraphTask{
         RendererSystem& renderer = *payload.renderer;
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
         renderer.m_preparedShadowVisibilityReady = false;
-        const bool deferredBindlessResourcesUploaded = renderer.m_deferredSystem.uploadDeferredBindlessFrameResources(
-            commandList,
-            *payload.targets
-        );
-        // An already-uploaded selector still crosses a packet boundary. Track its known ConstantBuffer state so
-        // the compiler-generated Prefix seed remains populated on every frame, not only after a fresh upload.
-        if(deferredBindlessResourcesUploaded){
+        const bool deferredBindlessResourcesReady = payload.currentBindlessSlotsGraphOwned
+            ? payload.targets->bindless.valid()
+            : renderer.m_deferredSystem.uploadDeferredBindlessFrameResources(commandList, *payload.targets)
+        ;
+        // Compatibility callers retain their direct selector update. The graph-owned path publishes Common from
+        // its built-in upload and this task's declared ConstantBuffer read owns the transition.
+        if(deferredBindlessResourcesReady && !payload.currentBindlessSlotsGraphOwned){
             commandList.setBufferState(
                 payload.targets->bindless.slotsBuffer.get(),
                 Core::ResourceStates::ConstantBuffer
             );
             commandList.commitBarriers();
         }
-        const bool shadowResourcesPrepared = deferredBindlessResourcesUploaded
+        const bool shadowResourcesPrepared = deferredBindlessResourcesReady
             && renderer.m_raytracingSystem.recordPreflightShadowVisibilityResources(
                 commandList,
                 *payload.targets,
@@ -144,6 +145,8 @@ struct ShadowPrepareGraphTask{
 
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         static_cast<void>(token);
+        if(payload.targets && payload.currentBindlessSlotsGraphOwned)
+            payload.targets->bindless.slotsUploaded = true;
         if(payload.renderer)
             payload.renderer->m_raytracingSystem.confirmPreparedShadowTraceGeometryNormalization();
     }
@@ -1147,6 +1150,7 @@ struct DeferredPresentGraphTask{
         Optional<Core::GpuTimingMeasure>* asyncFinalTiming = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const Core::GpuTaskId* shadowVisibilityTask = nullptr;
+        bool currentBindlessSlotsGraphOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -1186,7 +1190,8 @@ struct DeferredPresentGraphTask{
         const bool presentRecorded = payload.deferredSystem->renderDeferredPresent(
             commandList,
             *payload.targets,
-            payload.presentationFramebuffer
+            payload.presentationFramebuffer,
+            payload.currentBindlessSlotsGraphOwned
         );
         const bool frameTimingEnded = presentRecorded
             && payload.frameTimingTransaction->recordEnd(commandList)
@@ -1319,6 +1324,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     using namespace __hidden_renderer_task_graph;
 
     m_deferredShadowPrepareTask = {};
+    m_deferredBindlessSlotsUploadTask = {};
     if(
         !deferredTargets.valid()
         || !deferredTargets.bindless.valid()
@@ -1328,12 +1334,55 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         || (shadowTraceGeometryResourceCount != 0u && !shadowTraceGeometryResources)
     )
         return false;
+
+    const bool currentBindlessSlotsGraphOwned = !deferredTargets.bindless.slotsUploaded;
+    if(currentBindlessSlotsGraphOwned){
+        const Core::GpuUploadBlobId bindlessSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
+            &deferredTargets.bindless.slots,
+            sizeof(deferredTargets.bindless.slots),
+            alignof(DeferredBindlessResourceSlots)
+        );
+        if(!bindlessSlotsBlob.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain deferred bindless selector upload data"));
+            return false;
+        }
+
+        Core::GpuTaskSchedulingHint uploadScheduling;
+        uploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
+        uploadScheduling.forceSubmissionBoundary = false;
+        uploadScheduling.allowPacketMerge = true;
+        Core::GpuTaskDesc uploadDesc;
+        uploadDesc
+            .setIdentity(Name("render.deferred.bindless_slots_upload"))
+            .setMarkerLabel("Deferred Bindless Slots Upload")
+            .setQueue(GraphicsUploadQueueRequest())
+            .setScheduling(uploadScheduling)
+        ;
+        m_deferredBindlessSlotsUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+            uploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = bindlessSlotsBlob,
+                .destination = currentBindlessSlots,
+                // The selector buffer restores Common when its command list closes. Shadow Preparation owns the
+                // following Common -> ConstantBuffer transition through its declared read use.
+                .finalState = Core::ResourceStates::Common,
+            }
+        );
+        if(!m_deferredBindlessSlotsUploadTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred bindless selector upload"));
+            return false;
+        }
+    }
+
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     resourceUses.reserve(12u + shadowTraceGeometryResourceCount);
+    // Shadow Preparation owns the selector's post-transition packet boundary. This deliberately supersedes the
+    // preceding immutable upload as the graph producer: later Compute readers must wait on this first Graphics
+    // packet, rather than forcing FrontierSafe packetization to split the upload away from its accepting consumer.
     resourceUses.push_back(ReadWriteUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     resourceUses.push_back(WriteUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
     for(usize resourceIndex = 0u; resourceIndex < shadowTraceGeometryResourceCount; ++resourceIndex){
@@ -1422,14 +1471,21 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
 
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
-    scheduling.forceSubmissionBoundary = true;
-    scheduling.allowPacketMerge = false;
+    scheduling.forceSubmissionBoundary = !currentBindlessSlotsGraphOwned;
+    scheduling.allowPacketMerge = currentBindlessSlotsGraphOwned;
+    scheduling.mergeWithPrevious = currentBindlessSlotsGraphOwned;
+    const Core::GpuTaskId* const dependencies = currentBindlessSlotsGraphOwned
+        ? &m_deferredBindlessSlotsUploadTask
+        : nullptr
+    ;
+    const usize dependencyCount = currentBindlessSlotsGraphOwned ? 1u : 0u;
     Core::GpuTaskDesc desc;
     desc
         .setIdentity(Name("render.shadow_prepare"))
         .setMarkerLabel("Shadow Preparation")
         .setQueue(GraphicsQueueRequest())
         .setScheduling(scheduling)
+        .setDependencies(dependencies, dependencyCount)
         .setResourceUses(resourceUses.data(), resourceUses.size())
     ;
     m_deferredShadowPrepareTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::ShadowPrepareGraphTask>(
@@ -1439,6 +1495,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .targets = &deferredTargets,
             .timingTicket = &timingTicket,
             .deferredBindlessSlotsWereUploaded = deferredTargets.bindless.slotsUploaded,
+            .currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned,
         }
     );
     if(!m_deferredShadowPrepareTask.valid()){
@@ -3089,6 +3146,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     using namespace __hidden_renderer_task_graph;
 
     m_deferredLightingTaskGraphValid = false;
+    m_deferredBindlessSlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -3545,6 +3603,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation packet"));
         return;
     }
+    const bool currentBindlessSlotsGraphOwned = m_deferredBindlessSlotsUploadTask.valid();
 
     if(!declareDeferredGraphicsPrefixTasks(
         deferredTargets,
@@ -5330,6 +5389,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         desc,
         deferredTargets,
         useLaggedLightingHistory,
+        currentBindlessSlotsGraphOwned,
         lightingTimingTicket
     );
     if(!m_deferredLightingTask.valid()){
@@ -5388,6 +5448,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         m_deferredLightingTaskGraph,
         compositeDesc,
         deferredTargets,
+        currentBindlessSlotsGraphOwned,
         compositeTimingTicket
     );
     if(!m_deferredCompositeTask.valid()){
@@ -5438,6 +5499,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .asyncFinalTiming = &asyncFinalTiming,
             .timingTicket = &presentTimingTicket,
             .shadowVisibilityTask = &m_deferredShadowVisibilityTask,
+            .currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned,
         }
     );
     if(!m_deferredPresentTask.valid()){

@@ -61,9 +61,15 @@ public:
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
         bool useLaggedLightingHistory,
+        bool currentBindlessSlotsGraphOwned,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
-    [[nodiscard]] bool renderDeferredLighting(Core::CommandList& commandList, DeferredFrameTargets& targets, bool useLaggedLightingHistory = false);
+    [[nodiscard]] bool renderDeferredLighting(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool useLaggedLightingHistory = false,
+        bool currentBindlessSlotsGraphOwned = false
+    );
     [[nodiscard]] bool createDeferredFrameTargets(u32 width, u32 height);
     [[nodiscard]] bool createDeferredCompositeResources();
     [[nodiscard]] bool createDeferredCompositePipeline();
@@ -76,10 +82,20 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
+        bool currentBindlessSlotsGraphOwned,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
-    [[nodiscard]] bool renderDeferredComposite(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    [[nodiscard]] bool renderDeferredPresent(Core::CommandList& commandList, DeferredFrameTargets& targets, Core::Framebuffer* presentationFramebuffer);
+    [[nodiscard]] bool renderDeferredComposite(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        bool currentBindlessSlotsGraphOwned = false
+    );
+    [[nodiscard]] bool renderDeferredPresent(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        Core::Framebuffer* presentationFramebuffer,
+        bool currentBindlessSlotsGraphOwned = false
+    );
     // One-time target-generation upload shared by every consumer of DeferredBindlessResourceSlots. Shadow tracing runs
     // before deferred lighting, so it must be able to make the slot cbuffer resident during shadow preparation.
     [[nodiscard]] bool uploadDeferredBindlessFrameResources(Core::CommandList& commandList, DeferredFrameTargets& targets);

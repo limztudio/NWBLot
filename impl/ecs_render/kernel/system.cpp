@@ -204,6 +204,7 @@ void RendererSystem::invalidateResources(){
     m_preparedShadowVisibilityReady = false;
     m_raytracingSystem.discardPreflightShadowVisibilityResources();
     m_raytracingSystem.invalidatePreparedShadowTraceGeometryBuffers();
+    m_deferredBindlessSlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -447,6 +448,7 @@ bool RendererSystem::prepareResources(Core::Framebuffer* framebuffer){
 }
 
 void RendererSystem::render(Core::Framebuffer* framebuffer){
+    m_deferredBindlessSlotsUploadTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearTask = {};
@@ -789,6 +791,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId shadowPreparePacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredShadowPrepareTask
     );
+    const Core::GpuSubmissionPacketId deferredBindlessSlotsUploadPacket =
+        m_deferredBindlessSlotsUploadTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredBindlessSlotsUploadTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    // The prefix submission range is anchored at Shadow Preparation. A selector upload is safe only when the
+    // compiler keeps it in that exact packet; otherwise it would be recorded but omitted from the accepted range.
+    const bool deferredBindlessSlotsUploadMergedIntoShadowPreparePacket =
+        !m_deferredBindlessSlotsUploadTask.valid()
+        || (
+            shadowPreparePacket.valid()
+            && deferredBindlessSlotsUploadPacket.valid()
+            && deferredBindlessSlotsUploadPacket == shadowPreparePacket
+        )
+    ;
     const Core::GpuSubmissionPacketId graphicsPrefixPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_graphicsPrefixTask
     );
@@ -1153,6 +1170,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         !m_deferredLightingTaskGraphValid
         || !m_deferredShadowPrepareTask.valid()
         || !shadowPreparePacket.valid()
+        || !deferredBindlessSlotsUploadMergedIntoShadowPreparePacket
         || !shadowPrepareQueue
         || shadowPrepareQueue->queueClass != Core::CommandQueue::Graphics
         || !m_graphicsPrefixMeshViewSetupTask.valid()

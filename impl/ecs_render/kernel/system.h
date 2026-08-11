@@ -315,6 +315,9 @@ private:
     Core::GpuCompiledGraph m_deferredLightingCompiledGraph;
     Core::GpuRecordedGraph m_deferredLightingRecordedGraph;
     Core::GpuGraphSubmissionTransaction m_deferredLightingSubmissionTransaction;
+    // Optional immutable target-generation selector upload. It must merge into Shadow Preparation's first
+    // Graphics packet so its acceptance commits the CPU residency bit atomically with the first consumer.
+    Core::GpuTaskId m_deferredBindlessSlotsUploadTask;
     Core::GpuTaskId m_deferredShadowPrepareTask;
     Core::GpuTaskId m_graphicsPrefixMeshViewSetupTask;
     Core::GpuTaskId m_graphicsPrefixSceneShadingSetupTask;

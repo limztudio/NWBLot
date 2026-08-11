@@ -36,6 +36,7 @@ struct DeferredLightingGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool useLaggedLightingHistory = false;
+        bool currentBindlessSlotsGraphOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -51,7 +52,8 @@ struct DeferredLightingGraphTask{
         return payload.deferredSystem->renderDeferredLighting(
             commandList,
             *payload.targets,
-            payload.useLaggedLightingHistory
+            payload.useLaggedLightingHistory,
+            payload.currentBindlessSlotsGraphOwned
         );
     }
 };
@@ -173,6 +175,7 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredLightingTask(
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
     const bool useLaggedLightingHistory,
+    const bool currentBindlessSlotsGraphOwned,
     Core::GpuTimingSubmissionTicket& timingTicket
 ){
     return graph.addTask<__hidden_deferred_lighting::DeferredLightingGraphTask>(
@@ -182,6 +185,7 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredLightingTask(
             .targets = &targets,
             .timingTicket = &timingTicket,
             .useLaggedLightingHistory = useLaggedLightingHistory,
+            .currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned,
         }
     );
 }
@@ -352,11 +356,12 @@ bool RendererDeferredSystem::updateSceneShadingBuffer(Core::CommandList& command
 bool RendererDeferredSystem::renderDeferredLighting(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const bool useLaggedLightingHistory
+    const bool useLaggedLightingHistory,
+    const bool currentBindlessSlotsGraphOwned
 ){
     NWB_ASSERT(deferredState().m_lightingPipeline);
 
-    if(!uploadDeferredBindlessFrameResources(commandList, targets))
+    if(!currentBindlessSlotsGraphOwned && !uploadDeferredBindlessFrameResources(commandList, targets))
         return false;
     if(useLaggedLightingHistory && !uploadLaggedLightingHistoryResources(commandList, targets))
         return false;

@@ -3473,6 +3473,138 @@ TEST(GpuTaskGraph, FrontierSafePacketizationKeepsMergeWhenLaterTaskOwnsCrossQueu
 }
 
 
+TEST(GpuTaskGraph, MergesDeferredBindlessUploadIntoShadowPreparePacket){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId currentBindlessSlots = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/deferred_bindless_slots"),
+        "Deferred Bindless Slots",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    ASSERT_TRUE(currentBindlessSlots.valid());
+
+    const Graphics::GpuQueueRequest graphicsRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest graphicsUploadRequest{
+        Graphics::GpuQueueCapability::Transfer,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    const Graphics::GpuQueueRequest computeRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint uploadScheduling;
+    uploadScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    uploadScheduling.forceSubmissionBoundary = false;
+    uploadScheduling.allowPacketMerge = true;
+    Graphics::GpuTaskSchedulingHint shadowPrepareScheduling;
+    shadowPrepareScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    shadowPrepareScheduling.forceSubmissionBoundary = false;
+    shadowPrepareScheduling.allowPacketMerge = true;
+    shadowPrepareScheduling.mergeWithPrevious = true;
+    Graphics::GpuTaskSchedulingHint boundaryScheduling;
+    boundaryScheduling.forceSubmissionBoundary = true;
+    boundaryScheduling.allowPacketMerge = false;
+
+    const Graphics::GpuTaskResourceUse uploadUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = currentBindlessSlots,
+            .range = {},
+            // Keep-initial-state selector buffers publish Common after their built-in copy. The first native
+            // consumer transitions it to ConstantBuffer and owns the following cross-queue state handoff.
+            .requiredState = Graphics::ResourceStates::Common,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
+    };
+    Graphics::GpuTaskDesc uploadDesc;
+    uploadDesc
+        .setIdentity(Name("tests/task_graph/deferred_bindless_slots_upload"))
+        .setMarkerLabel("Deferred Bindless Slots Upload")
+        .setQueue(graphicsUploadRequest)
+        .setScheduling(uploadScheduling)
+        .setResourceUses(uploadUses, LengthOf(uploadUses))
+    ;
+    const Graphics::GpuTaskId upload = graph.addTask(uploadDesc);
+    ASSERT_TRUE(upload.valid());
+
+    const Graphics::GpuTaskResourceUse shadowPrepareUses[] = {
+        Graphics::GpuTaskResourceUse{
+            .resource = currentBindlessSlots,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::ConstantBuffer,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+    };
+    Graphics::GpuTaskDesc shadowPrepareDesc;
+    shadowPrepareDesc
+        .setIdentity(Name("tests/task_graph/deferred_bindless_shadow_prepare"))
+        .setMarkerLabel("Shadow Preparation")
+        .setQueue(graphicsRequest)
+        .setScheduling(shadowPrepareScheduling)
+        .setDependencies(&upload, 1u)
+        .setResourceUses(shadowPrepareUses, LengthOf(shadowPrepareUses))
+    ;
+    const Graphics::GpuTaskId shadowPrepare = graph.addTask(shadowPrepareDesc);
+    ASSERT_TRUE(shadowPrepare.valid());
+
+    Graphics::GpuTaskDesc shadowVisibilityDesc;
+    shadowVisibilityDesc
+        .setIdentity(Name("tests/task_graph/deferred_bindless_shadow_visibility"))
+        .setMarkerLabel("Shadow Visibility")
+        .setQueue(computeRequest)
+        .setScheduling(boundaryScheduling)
+        .setDependencies(&shadowPrepare, 1u)
+        .setResourceUses(shadowPrepareUses, LengthOf(shadowPrepareUses))
+    ;
+    const Graphics::GpuTaskId shadowVisibility = graph.addTask(shadowVisibilityDesc);
+    ASSERT_TRUE(shadowVisibility.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphCompileOptions frontierOptions;
+    frontierOptions.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
+    ASSERT_EQ(compiledGraph.packetCount(), 2u);
+
+    const Graphics::GpuSubmissionPacketId uploadPacket = compiledGraph.packetForTask(upload);
+    const Graphics::GpuSubmissionPacketId shadowPreparePacket = compiledGraph.packetForTask(shadowPrepare);
+    const Graphics::GpuSubmissionPacketId shadowVisibilityPacket = compiledGraph.packetForTask(shadowVisibility);
+    ASSERT_TRUE(uploadPacket.valid());
+    ASSERT_TRUE(shadowPreparePacket.valid());
+    ASSERT_TRUE(shadowVisibilityPacket.valid());
+    EXPECT_EQ(uploadPacket, shadowPreparePacket);
+    EXPECT_NE(shadowPreparePacket, shadowVisibilityPacket);
+    EXPECT_EQ(compiledGraph.packet(shadowPreparePacket).taskCount, 2u);
+    const Graphics::GpuSubmissionPacketRange shadowPrepareRange = compiledGraph.packetRange(
+        shadowPreparePacket,
+        shadowPreparePacket
+    );
+    ASSERT_TRUE(shadowPrepareRange.valid());
+    EXPECT_EQ(shadowPrepareRange.packetCount, 1u);
+    ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 1u);
+    EXPECT_EQ(compiledGraph.packetDependencies(shadowVisibilityPacket)[0u].producer, shadowPreparePacket);
+}
+
+
 TEST(GpuTaskGraph, MergesExtinctionUploadChainIntoAsyncAvboitPacket){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

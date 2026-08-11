@@ -144,6 +144,14 @@ public:
         const InstanceGpuDataVector& instanceData,
         const MaterialTypedByteDataVector& materialTypedBytes
     )const;
+    [[nodiscard]] bool materialPassDrawBuffersReady(
+        usize instanceCount,
+        usize materialTypedByteCount
+    )const;
+    // The CSG context descriptor is selected through every instance's retained heap-slot lane.  Graph declaration
+    // patches the immutable upload copy before the packet is recorded; the legacy direct upload path shares this
+    // helper so both routes keep the exact same instance ABI.
+    void prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData);
     [[nodiscard]] bool uploadInstanceBuffer(Core::CommandList& commandList, InstanceGpuDataVector& instanceData);
     [[nodiscard]] bool uploadMaterialTypedBuffer(Core::CommandList& commandList, const MaterialTypedByteDataVector& materialTypedBytes);
     [[nodiscard]] bool uploadMaterialPassDrawBuffers(

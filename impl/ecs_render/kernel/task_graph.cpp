@@ -342,17 +342,102 @@ struct DeferredClearGraphTask{
 };
 
 
-// The opaque G-buffer keeps its existing recording body, but now runs after the native deferred clear. Its resource
-// barriers and final state are therefore part of the graph packet.
+// The opaque material draw ordering and CSG CPU frame data are captured while the graph is declared.  The paired
+// instance/material blobs are therefore immutable packet inputs rather than data rebuilt while a native task records.
+struct OpaqueMaterialPassGraphSnapshot{
+    using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
+    using ReceiverRangeVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::GlobalArena>;
+    using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
+
+    DrawItemVector regularMeshDrawItems;
+    DrawItemVector regularComputeDrawItems;
+    DrawItemVector csgMeshDrawItems;
+    DrawItemVector csgComputeDrawItems;
+    DrawItemVector csgReceiverSurfaceMeshDrawItems;
+    DrawItemVector csgReceiverSurfaceComputeDrawItems;
+    ReceiverRangeVector csgReceiverRanges;
+    CutterVector csgCutters;
+    CsgFrameWorkRegion csgWorkRegion;
+    usize instanceCount = 0u;
+    usize materialTypedByteCount = 0u;
+    bool captured = false;
+
+    explicit OpaqueMaterialPassGraphSnapshot(Core::Alloc::GlobalArena& arena)
+        : regularMeshDrawItems(arena)
+        , regularComputeDrawItems(arena)
+        , csgMeshDrawItems(arena)
+        , csgComputeDrawItems(arena)
+        , csgReceiverSurfaceMeshDrawItems(arena)
+        , csgReceiverSurfaceComputeDrawItems(arena)
+        , csgReceiverRanges(arena)
+        , csgCutters(arena)
+    {}
+
+    void capture(
+        const MaterialPassDrawItemPartitions& drawItems,
+        const CsgFrameGpuData& csgFrameData,
+        const usize inInstanceCount,
+        const usize inMaterialTypedByteCount
+    ){
+        regularMeshDrawItems.assign(drawItems.regular.meshDrawItems.begin(), drawItems.regular.meshDrawItems.end());
+        regularComputeDrawItems.assign(drawItems.regular.computeDrawItems.begin(), drawItems.regular.computeDrawItems.end());
+        csgMeshDrawItems.assign(drawItems.csg.meshDrawItems.begin(), drawItems.csg.meshDrawItems.end());
+        csgComputeDrawItems.assign(drawItems.csg.computeDrawItems.begin(), drawItems.csg.computeDrawItems.end());
+        csgReceiverSurfaceMeshDrawItems.assign(
+            drawItems.csgReceiverSurface.meshDrawItems.begin(),
+            drawItems.csgReceiverSurface.meshDrawItems.end()
+        );
+        csgReceiverSurfaceComputeDrawItems.assign(
+            drawItems.csgReceiverSurface.computeDrawItems.begin(),
+            drawItems.csgReceiverSurface.computeDrawItems.end()
+        );
+        csgReceiverRanges.assign(csgFrameData.receiverRanges.begin(), csgFrameData.receiverRanges.end());
+        csgCutters.assign(csgFrameData.cutters.begin(), csgFrameData.cutters.end());
+        csgWorkRegion = csgFrameData.workRegion;
+        instanceCount = inInstanceCount;
+        materialTypedByteCount = inMaterialTypedByteCount;
+        captured = true;
+    }
+
+    void materialize(
+        MaterialPassDrawItemPartitions& outDrawItems,
+        CsgFrameGpuData& outCsgFrameData
+    )const{
+        outDrawItems.regular.meshDrawItems.assign(regularMeshDrawItems.begin(), regularMeshDrawItems.end());
+        outDrawItems.regular.computeDrawItems.assign(regularComputeDrawItems.begin(), regularComputeDrawItems.end());
+        outDrawItems.csg.meshDrawItems.assign(csgMeshDrawItems.begin(), csgMeshDrawItems.end());
+        outDrawItems.csg.computeDrawItems.assign(csgComputeDrawItems.begin(), csgComputeDrawItems.end());
+        outDrawItems.csgReceiverSurface.meshDrawItems.assign(
+            csgReceiverSurfaceMeshDrawItems.begin(),
+            csgReceiverSurfaceMeshDrawItems.end()
+        );
+        outDrawItems.csgReceiverSurface.computeDrawItems.assign(
+            csgReceiverSurfaceComputeDrawItems.begin(),
+            csgReceiverSurfaceComputeDrawItems.end()
+        );
+        outCsgFrameData.receiverRanges.assign(csgReceiverRanges.begin(), csgReceiverRanges.end());
+        outCsgFrameData.cutters.assign(csgCutters.begin(), csgCutters.end());
+        outCsgFrameData.workRegion = csgWorkRegion;
+    }
+};
+
+
+// The opaque G-buffer runs after graph-owned material uploads and the native deferred clear. Its barriers and final
+// state are therefore part of the graph packet, while CSG's remaining direct writes stay isolated for the next step.
 struct GbufferGraphTask{
     struct Payload{
         RendererSystem* renderer = nullptr;
         DeferredFrameTargets* targets = nullptr;
-        const CsgFrameState* csgFrameState = nullptr;
         Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
         bool hasOpaqueCsgFrameWork = false;
         const bool* meshViewSetupReady = nullptr;
         const bool* sceneShadingSetupReady = nullptr;
+        OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
+        bool materialDrawBuffersUploaded = false;
+
+        explicit Payload(Core::Alloc::GlobalArena& arena)
+            : opaqueDrawSnapshot(arena)
+        {}
     };
 
     [[nodiscard]] static bool record(
@@ -364,27 +449,21 @@ struct GbufferGraphTask{
         if(
             !payload.renderer
             || !payload.targets
-            || !payload.csgFrameState
             || !payload.timingTicket
             || !*payload.timingTicket
             || !payload.meshViewSetupReady
             || !payload.sceneShadingSetupReady
+            || !payload.opaqueDrawSnapshot.captured
         )
             return false;
 
         RendererSystem& renderer = *payload.renderer;
         DeferredFrameTargets& deferredTargets = *payload.targets;
-        const CsgFrameState& csgFrameState = *payload.csgFrameState;
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
         MaterialPassDrawItemPartitions opaqueDrawItems{ scratchArena };
-        InstanceGpuDataVector instanceData{ scratchArena };
         CsgFrameGpuData csgFrameData{ scratchArena };
-#if defined(NWB_DEBUG)
-        ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{ scratchArena };
-#endif
-        MaterialTypedByteDataVector materialTypedBytes{ scratchArena };
 
         Core::ViewportState deferredViewportState;
         deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
@@ -394,22 +473,8 @@ struct GbufferGraphTask{
             && payload.sceneShadingSetupReady
             && *payload.sceneShadingSetupReady
         ;
-        if(frameSetupReady){
-            renderer.m_materialSystem.gatherMaterialPassDrawItems(
-                deferredTargets.framebuffer.get(),
-                MaterialPipelinePass::Opaque,
-                false,
-                csgFrameState,
-                opaqueDrawItems,
-                instanceData,
-                csgFrameData,
-#if defined(NWB_DEBUG)
-                materialTypedRanges,
-#endif
-                materialTypedBytes,
-                RendererResourceLookupMode::PreparedOnly
-            );
-        }
+        if(frameSetupReady)
+            payload.opaqueDrawSnapshot.materialize(opaqueDrawItems, csgFrameData);
 
         const Core::Rect opaqueCsgClearRect = csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height);
         if(payload.hasOpaqueCsgFrameWork)
@@ -418,7 +483,11 @@ struct GbufferGraphTask{
         const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
         const bool deferredResourcesReady =
             hasDeferredDrawItems
-            && renderer.m_materialSystem.materialPassDrawBuffersReady(instanceData, materialTypedBytes)
+            && payload.materialDrawBuffersUploaded
+            && renderer.m_materialSystem.materialPassDrawBuffersReady(
+                payload.opaqueDrawSnapshot.instanceCount,
+                payload.opaqueDrawSnapshot.materialTypedByteCount
+            )
         ;
         const bool regularDrawResourcesReady =
             deferredResourcesReady
@@ -436,18 +505,7 @@ struct GbufferGraphTask{
             csgResourcesReady
             && (opaqueDrawItems.csgReceiverSurface.empty() || renderer.m_materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface))
         ;
-        const bool deferredUploadReady =
-            deferredResourcesReady
-            && renderer.m_materialSystem.uploadMaterialPassDrawBuffers(
-                commandList,
-                instanceData,
-#if defined(NWB_DEBUG)
-                materialTypedRanges,
-#endif
-                materialTypedBytes
-            )
-        ;
-        if(deferredUploadReady){
+        if(deferredResourcesReady){
             const bool csgUploadReady =
                 csgResourcesReady
                 && (opaqueDrawItems.csg.empty() || renderer.m_csgSystem.uploadCsgFrameBuffers(commandList, csgFrameData))
@@ -1108,6 +1166,8 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
     const Core::GpuGraphResourceId sceneShading,
     const Core::GpuGraphResourceId lights,
     const Core::GpuGraphResourceId meshView,
+    const Core::GpuGraphResourceId materialInstances,
+    const Core::GpuGraphResourceId materialTyped,
     const Core::GpuGraphResourceId currentBindlessSlots,
     const Core::GpuGraphResourceId materialContextSlots,
     const Core::GpuGraphResourceId* const shadowTraceGeometryResources,
@@ -1437,13 +1497,139 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         return false;
     }
 
-    const Core::GpuTaskResourceUse gbufferResourceUses[] = {
-        ReadUse(meshView, Core::ResourceStates::ConstantBuffer),
-        WriteUse(albedo, Core::ResourceStates::RenderTarget),
-        WriteUse(normal, Core::ResourceStates::RenderTarget),
-        WriteUse(worldPosition, Core::ResourceStates::RenderTarget),
-        WriteUse(depth, Core::ResourceStates::DepthWrite),
-    };
+    // Freeze the opaque packet's draw ordering before recording.  The two copied blobs below are the exact source
+    // of the heap-selected instance/material streams consumed by these saved draw items.
+    Core::Alloc::ScratchArena materialUploadScratch(RendererArenaScope::s_TaskGraphArena);
+    MaterialPassDrawItemPartitions opaqueDrawItems{ materialUploadScratch };
+    InstanceGpuDataVector instanceData{ materialUploadScratch };
+    CsgFrameGpuData csgFrameData{ materialUploadScratch };
+#if defined(NWB_DEBUG)
+    ECSRenderDetail::MaterialTypedInstanceRangeVector materialTypedRanges{ materialUploadScratch };
+#endif
+    MaterialTypedByteDataVector materialTypedBytes{ materialUploadScratch };
+    m_materialSystem.gatherMaterialPassDrawItems(
+        deferredTargets.framebuffer.get(),
+        MaterialPipelinePass::Opaque,
+        false,
+        csgFrameState,
+        opaqueDrawItems,
+        instanceData,
+        csgFrameData,
+#if defined(NWB_DEBUG)
+        materialTypedRanges,
+#endif
+        materialTypedBytes,
+        RendererResourceLookupMode::PreparedOnly
+    );
+
+    ECSRenderDetail::GbufferGraphTask::Payload gbufferPayload{ m_arena };
+    gbufferPayload.renderer = this;
+    gbufferPayload.targets = &deferredTargets;
+    gbufferPayload.timingTicket = timingTicketSlot(PrefixTimingSlot::Gbuffer);
+    gbufferPayload.hasOpaqueCsgFrameWork = hasOpaqueCsgFrameWork;
+    gbufferPayload.meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady;
+    gbufferPayload.sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady;
+
+    const bool hasOpaqueDrawItems = !opaqueDrawItems.empty();
+    Core::GpuTaskId materialDrawUploadTask = m_graphicsPrefixDeferredClearTask;
+    if(hasOpaqueDrawItems){
+        if(
+            !materialInstances.valid()
+            || !materialTyped.valid()
+            || !m_materialSystem.materialPassDrawBuffersReady(instanceData, materialTypedBytes)
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared opaque material draw buffers were unavailable during graph declaration"));
+            return false;
+        }
+        m_materialSystem.prepareMaterialPassInstanceUploadData(instanceData);
+#if defined(NWB_DEBUG)
+        if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: opaque material instance upload size overflows graph blob capacity"));
+            return false;
+        }
+        NWB_ASSERT(instanceData.size() == materialTypedRanges.size());
+        ECSRenderDetail::AssertMaterialTypedUploadRanges(materialTypedRanges, materialTypedBytes);
+#endif
+
+        const Core::GpuUploadBlobId instanceBlob = m_deferredLightingTaskGraph.copyUploadData(
+            instanceData.data(),
+            instanceData.size() * sizeof(InstanceGpuData),
+            alignof(InstanceGpuData)
+        );
+        const Core::GpuUploadBlobId materialTypedBlob = m_deferredLightingTaskGraph.copyUploadData(
+            materialTypedBytes.data(),
+            materialTypedBytes.size(),
+            alignof(u32)
+        );
+        if(!instanceBlob.valid() || !materialTypedBlob.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable opaque material upload data"));
+            return false;
+        }
+
+        Core::GpuTaskDesc instanceUploadDesc;
+        instanceUploadDesc
+            .setIdentity(Name("render.graphics_prefix.material_instances_upload"))
+            .setMarkerLabel("Material Instances Upload")
+            .setQueue(GraphicsUploadQueueRequest())
+            .setScheduling(immutableUploadScheduling)
+            .setDependencies(&materialDrawUploadTask, 1u)
+        ;
+        materialDrawUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+            instanceUploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = instanceBlob,
+                .destination = materialInstances,
+                // Both draw buffers use automatic Common restoration when the native packet closes.  Keep that
+                // graph-visible boundary exact; the G-buffer read below owns the transient SRV transition.
+                .finalState = Core::ResourceStates::Common,
+            }
+        );
+        if(!materialDrawUploadTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned material instance upload"));
+            return false;
+        }
+
+        Core::GpuTaskDesc materialTypedUploadDesc;
+        materialTypedUploadDesc
+            .setIdentity(Name("render.graphics_prefix.material_typed_upload"))
+            .setMarkerLabel("Material Typed Upload")
+            .setQueue(GraphicsUploadQueueRequest())
+            .setScheduling(immutableUploadScheduling)
+            .setDependencies(&materialDrawUploadTask, 1u)
+        ;
+        materialDrawUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+            materialTypedUploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = materialTypedBlob,
+                .destination = materialTyped,
+                .finalState = Core::ResourceStates::Common,
+            }
+        );
+        if(!materialDrawUploadTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned material typed upload"));
+            return false;
+        }
+        gbufferPayload.materialDrawBuffersUploaded = true;
+    }
+    gbufferPayload.opaqueDrawSnapshot.capture(
+        opaqueDrawItems,
+        csgFrameData,
+        instanceData.size(),
+        materialTypedBytes.size()
+    );
+
+    Core::Alloc::ScratchArena gbufferResourceScratch(RendererArenaScope::s_TaskGraphArena);
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> gbufferResourceUses{ gbufferResourceScratch };
+    gbufferResourceUses.reserve(hasOpaqueDrawItems ? 7u : 5u);
+    gbufferResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
+    if(hasOpaqueDrawItems){
+        gbufferResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
+        gbufferResourceUses.push_back(ReadUse(materialTyped, Core::ResourceStates::ShaderResource));
+    }
+    gbufferResourceUses.push_back(WriteUse(albedo, Core::ResourceStates::RenderTarget));
+    gbufferResourceUses.push_back(WriteUse(normal, Core::ResourceStates::RenderTarget));
+    gbufferResourceUses.push_back(WriteUse(worldPosition, Core::ResourceStates::RenderTarget));
+    gbufferResourceUses.push_back(WriteUse(depth, Core::ResourceStates::DepthWrite));
     Core::GpuTaskSchedulingHint gbufferScheduling;
     gbufferScheduling.cost = Core::GpuTaskCostHint::Medium;
     gbufferScheduling.forceSubmissionBoundary = false;
@@ -1455,20 +1641,12 @@ bool RendererSystem::declareDeferredGraphicsPrefixTasks(
         .setMarkerLabel("Opaque G-Buffer")
         .setQueue(GraphicsQueueRequest())
         .setScheduling(gbufferScheduling)
-        .setDependencies(&m_graphicsPrefixDeferredClearTask, 1u)
-        .setResourceUses(gbufferResourceUses, LengthOf(gbufferResourceUses))
+        .setDependencies(&materialDrawUploadTask, 1u)
+        .setResourceUses(gbufferResourceUses.data(), gbufferResourceUses.size())
     ;
     m_graphicsPrefixGbufferTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::GbufferGraphTask>(
         gbufferDesc,
-        ECSRenderDetail::GbufferGraphTask::Payload{
-            .renderer = this,
-            .targets = &deferredTargets,
-            .csgFrameState = &csgFrameState,
-            .timingTicket = timingTicketSlot(PrefixTimingSlot::Gbuffer),
-            .hasOpaqueCsgFrameWork = hasOpaqueCsgFrameWork,
-            .meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady,
-            .sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady,
-        }
+        Move(gbufferPayload)
     );
     if(!m_graphicsPrefixGbufferTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque G-buffer task"));
@@ -2674,6 +2852,22 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         Name("render.deferred.mesh_view"),
         "Mesh View"
     );
+    const Core::GpuGraphResourceId materialInstances = m_drawState.m_instanceBuffer
+        ? importBuffer(
+            m_drawState.m_instanceBuffer,
+            Name("render.deferred.material_instances"),
+            "Material Instances"
+        )
+        : Core::GpuGraphResourceId{}
+    ;
+    const Core::GpuGraphResourceId materialTyped = m_drawState.m_materialTypedBuffer
+        ? importBuffer(
+            m_drawState.m_materialTypedBuffer,
+            Name("render.deferred.material_typed"),
+            "Material Typed Data"
+        )
+        : Core::GpuGraphResourceId{}
+    ;
     const Core::GpuGraphResourceId bindlessSlots = history
         ? importBuffer(
             history->slotsBuffer,
@@ -2864,6 +3058,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         sceneShading,
         lights,
         meshView,
+        materialInstances,
+        materialTyped,
         currentBindlessSlots,
         materialContextSlots,
         traceGeometryResources.data(),

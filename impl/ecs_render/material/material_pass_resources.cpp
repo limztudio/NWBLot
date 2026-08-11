@@ -246,22 +246,30 @@ bool RendererMaterialSystem::materialPassDrawBuffersReady(
     if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes, uploadBytes))
         return false;
 
-    const usize requiredMaterialTypedBytes = Max<usize>(uploadBytes, sizeof(u32));
+    return materialPassDrawBuffersReady(instanceData.size(), uploadBytes);
+}
+
+bool RendererMaterialSystem::materialPassDrawBuffersReady(
+    const usize instanceCount,
+    const usize materialTypedByteCount
+)const{
+    if(
+        materialTypedByteCount == 0u
+        || (materialTypedByteCount & (sizeof(u32) - 1u)) != 0u
+    )
+        return false;
+
+    const usize requiredMaterialTypedBytes = Max<usize>(materialTypedByteCount, sizeof(u32));
     NWB_ASSERT((requiredMaterialTypedBytes & (sizeof(u32) - 1u)) == 0u);
 
     return
-        (instanceData.empty() || (drawState().m_instanceBuffer && drawState().m_instanceBufferCapacity >= instanceData.size()))
+        (instanceCount == 0u || (drawState().m_instanceBuffer && drawState().m_instanceBufferCapacity >= instanceCount))
         && drawState().m_materialTypedBuffer
         && drawState().m_materialTypedBufferCapacity >= requiredMaterialTypedBytes
     ;
 }
 
-bool RendererMaterialSystem::uploadInstanceBuffer(Core::CommandList& commandList, InstanceGpuDataVector& instanceData){
-    if(instanceData.empty())
-        return true;
-    NWB_ASSERT(drawState().m_instanceBuffer);
-    NWB_ASSERT(drawState().m_instanceBufferCapacity >= instanceData.size());
-
+void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(InstanceGpuDataVector& instanceData){
     // Slot 6 carries CSG's heap-selected UniformBuffer context for every raster instance, avoiding a second
     // pipeline-local resource descriptor in the mesh and compute geometry stages.
     const u32 csgContextHeapSlot = csgState().m_clipContextSlotsHeapHandle.valid()
@@ -270,6 +278,15 @@ bool RendererMaterialSystem::uploadInstanceBuffer(Core::CommandList& commandList
     ;
     for(InstanceGpuData& instance : instanceData)
         instance.geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT] = csgContextHeapSlot;
+}
+
+bool RendererMaterialSystem::uploadInstanceBuffer(Core::CommandList& commandList, InstanceGpuDataVector& instanceData){
+    if(instanceData.empty())
+        return true;
+    NWB_ASSERT(drawState().m_instanceBuffer);
+    NWB_ASSERT(drawState().m_instanceBufferCapacity >= instanceData.size());
+
+    prepareMaterialPassInstanceUploadData(instanceData);
 
 #if defined(NWB_DEBUG)
     if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)){

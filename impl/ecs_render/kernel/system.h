@@ -189,6 +189,8 @@ private:
         Core::GpuGraphResourceId sceneShading,
         Core::GpuGraphResourceId lights,
         Core::GpuGraphResourceId meshView,
+        Core::GpuGraphResourceId materialInstances,
+        Core::GpuGraphResourceId materialTyped,
         Core::GpuGraphResourceId currentBindlessSlots,
         Core::GpuGraphResourceId materialContextSlots,
         const Core::GpuGraphResourceId* shadowTraceGeometryResources,

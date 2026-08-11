@@ -521,6 +521,43 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
     EXPECT_FALSE(graph.validResource(resource));
 }
 
+TEST(GpuTaskGraph, OwnsUploadBlobsAndInvalidatesThemOnReset){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    u8 sourceBytes[] = { 0x17u, 0x3au, 0x5cu, 0x8eu };
+
+    EXPECT_FALSE(graph.copyUploadData(nullptr, sizeof(sourceBytes), alignof(u8)).valid());
+    EXPECT_FALSE(graph.copyUploadData(sourceBytes, 0u, alignof(u8)).valid());
+    EXPECT_FALSE(graph.copyUploadData(sourceBytes, sizeof(sourceBytes), 3u).valid());
+
+    const Graphics::GpuUploadBlobId blob = graph.copyUploadData(sourceBytes, sizeof(sourceBytes), alignof(u32));
+    ASSERT_TRUE(blob.valid());
+    EXPECT_TRUE(graph.validUploadBlob(blob));
+    EXPECT_EQ(graph.uploadBlobCount(), 1u);
+
+    sourceBytes[0u] = 0u;
+    usize byteSize = 0u;
+    const auto* const storedBytes = static_cast<const u8*>(graph.uploadBlobData(blob, byteSize));
+    ASSERT_NE(storedBytes, nullptr);
+    ASSERT_EQ(byteSize, sizeof(sourceBytes));
+    EXPECT_EQ(storedBytes[0u], 0x17u);
+    EXPECT_EQ(storedBytes[1u], 0x3au);
+    EXPECT_EQ(storedBytes[2u], 0x5cu);
+    EXPECT_EQ(storedBytes[3u], 0x8eu);
+
+    graph.reset();
+    EXPECT_FALSE(graph.validUploadBlob(blob));
+    EXPECT_EQ(graph.uploadBlobCount(), 0u);
+    byteSize = Limit<usize>::s_Max;
+    EXPECT_EQ(graph.uploadBlobData(blob, byteSize), nullptr);
+    EXPECT_EQ(byteSize, 0u);
+
+    const Graphics::GpuUploadBlobId replacement = graph.copyUploadData(sourceBytes, sizeof(sourceBytes), alignof(u32));
+    ASSERT_TRUE(replacement.valid());
+    EXPECT_EQ(replacement.index, 0u);
+    EXPECT_NE(replacement.generation, blob.generation);
+}
+
 TEST(GpuTaskGraph, OwnsPipelineMetadataAndInvalidatesPipelineIdsOnReset){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -2347,13 +2384,6 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
             .setMarkerLabel("External Completion")
     );
     ASSERT_TRUE(completion.valid());
-    const Graphics::GpuExternalCompletionId recoveryCompletion = graph.importExternalCompletion(
-        Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/task_graph/packet_recovery_predecessor"))
-            .setMarkerLabel("Recovery Predecessor")
-    );
-    ASSERT_TRUE(recoveryCompletion.valid());
-
     u32 acceptedCount = 0u;
     u32 discardedCount = 0u;
     Graphics::QueueSubmissionToken acceptedToken;
@@ -2387,6 +2417,23 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     );
     ASSERT_TRUE(second.valid());
 
+    Graphics::GpuTaskDesc transferDesc;
+    transferDesc
+        .setIdentity(Name("tests/task_graph/packet_transfer"))
+        .setMarkerLabel("Packet Transfer")
+        .setQueue(Graphics::GpuQueueRequest{
+            Graphics::GpuQueueCapability::Transfer,
+            Graphics::GpuQueuePreference::Transfer,
+            false,
+            false,
+        })
+    ;
+    const Graphics::GpuTaskId transfer = graph.addTask<PacketLifecycleTask>(
+        transferDesc,
+        PacketLifecycleTask::Payload{ &acceptedCount, &discardedCount, &acceptedToken }
+    );
+    ASSERT_TRUE(transfer.valid());
+
     const Graphics::GpuGraphResourceId recoveryDomain = AddHazardDomain(
         graph,
         Name("tests/task_graph/packet_recovery_domain"),
@@ -2404,6 +2451,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     Graphics::GpuTaskSchedulingHint recoveryScheduling;
     recoveryScheduling.forceSubmissionBoundary = true;
     recoveryScheduling.allowPacketMerge = false;
+    recoveryScheduling.joinsAcceptedQueueFrontier = true;
     Graphics::GpuTaskDesc recoveryDesc;
     recoveryDesc
         .setIdentity(Name("tests/task_graph/packet_recovery"))
@@ -2415,7 +2463,6 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
             false,
         })
         .setScheduling(recoveryScheduling)
-        .setExternalDependencies(&recoveryCompletion, 1u)
         .setResourceUses(recoveryUses, LengthOf(recoveryUses))
     ;
     const Graphics::GpuTaskId recovery = graph.addTask<PacketLifecycleTask>(
@@ -2424,7 +2471,11 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     );
     ASSERT_TRUE(recovery.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        DedicatedComputeQueue(),
+        DedicatedTransferQueue(),
+    };
     const Graphics::GpuTaskGraphQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
@@ -2434,14 +2485,16 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
     ASSERT_TRUE(compiledGraph.validFor(graph));
-    ASSERT_EQ(compiledGraph.taskCount(), 3u);
-    ASSERT_EQ(compiledGraph.packetCount(), 3u);
+    ASSERT_EQ(compiledGraph.taskCount(), 4u);
+    ASSERT_EQ(compiledGraph.packetCount(), 4u);
 
     const Graphics::GpuSubmissionPacketId firstPacket = compiledGraph.packetForTask(first);
     const Graphics::GpuSubmissionPacketId secondPacket = compiledGraph.packetForTask(second);
+    const Graphics::GpuSubmissionPacketId transferPacket = compiledGraph.packetForTask(transfer);
     const Graphics::GpuSubmissionPacketId recoveryPacket = compiledGraph.packetForTask(recovery);
     ASSERT_TRUE(firstPacket.valid());
     ASSERT_TRUE(secondPacket.valid());
+    ASSERT_TRUE(transferPacket.valid());
     ASSERT_TRUE(recoveryPacket.valid());
     EXPECT_NE(firstPacket, secondPacket);
     EXPECT_NE(recoveryPacket, secondPacket);
@@ -2471,13 +2524,14 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_EQ(compiledGraph.packetExternalDependencies(secondPacket)[0], completion);
     const auto& recoveryPacketPlan = compiledGraph.packet(recoveryPacket);
     EXPECT_EQ(recoveryPacketPlan.dependencyCount, 0u);
-    ASSERT_EQ(recoveryPacketPlan.externalDependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetExternalDependencies(recoveryPacket)[0], recoveryCompletion);
+    EXPECT_EQ(recoveryPacketPlan.externalDependencyCount, 0u);
+    EXPECT_TRUE(recoveryPacketPlan.joinsAcceptedQueueFrontier);
 
     Graphics::GpuGraphSubmissionTransaction transaction(testArena.arena);
     transaction.reset(compiledGraph);
     ASSERT_TRUE(transaction.markPacketRecorded(firstPacket));
     const Graphics::GpuPhysicalQueueId firstQueue = compiledGraph.packet(firstPacket).queue;
+    const Graphics::GpuPhysicalQueueId recoveryQueue = compiledGraph.packet(recoveryPacket).queue;
     const Graphics::QueueSubmissionToken firstToken{
         .queue = Graphics::CommandQueue::Compute,
         .value = 41u,
@@ -2519,14 +2573,25 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
     EXPECT_EQ(acceptedToken.value, firstToken.value);
     ASSERT_NE(transaction.latestAcceptedToken(compiledGraph.packet(firstPacket).queue), nullptr);
     EXPECT_EQ(transaction.latestAcceptedToken(compiledGraph.packet(firstPacket).queue)->value, firstToken.value);
-    ASSERT_NE(transaction.latestAcceptedToken(Graphics::CommandQueue::Compute), nullptr);
-    EXPECT_EQ(transaction.latestAcceptedToken(Graphics::CommandQueue::Compute)->value, firstToken.value);
-    EXPECT_EQ(transaction.latestAcceptedToken(Graphics::CommandQueue::Graphics), nullptr);
+    EXPECT_EQ(transaction.latestAcceptedToken(recoveryQueue), nullptr);
+
+    ASSERT_TRUE(transaction.markPacketRecorded(transferPacket));
+    const Graphics::GpuPhysicalQueueId transferQueue = compiledGraph.packet(transferPacket).queue;
+    const Graphics::QueueSubmissionToken transferToken{
+        .queue = Graphics::CommandQueue::Transfer,
+        .value = 42u,
+        .physicalQueueIndex = transferQueue.index,
+        .deviceGeneration = transferQueue.deviceGeneration,
+    };
+    ASSERT_TRUE(transaction.acceptPacket(graph, compiledGraph, transferPacket, transferToken));
+    EXPECT_EQ(acceptedCount, 2u);
+    ASSERT_NE(transaction.latestAcceptedToken(transferQueue), nullptr);
+    EXPECT_EQ(transaction.latestAcceptedToken(transferQueue)->value, transferToken.value);
 
     // A later packet may reject while the independent recovery tail remains Declared. The accepted producer stays
     // visible, then recovery can still accept before the normal blanket cleanup rejects any remaining packet.
     transaction.rejectPacket(graph, compiledGraph, secondPacket);
-    EXPECT_EQ(acceptedCount, 1u);
+    EXPECT_EQ(acceptedCount, 2u);
     EXPECT_EQ(discardedCount, 1u);
     ASSERT_NE(transaction.packetRuntime(secondPacket), nullptr);
     EXPECT_EQ(
@@ -2539,24 +2604,32 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         Graphics::GpuPacketRuntimeState::Declared
     );
 
+    Core::Alloc::ScratchArena recoveryScratchArena(s_TaskGraphScratchArena);
+    Vector<Graphics::QueueSubmissionToken, Core::Alloc::ScratchArena> recoveryWaitTokens(recoveryScratchArena);
+    ASSERT_TRUE(transaction.appendAcceptedQueueFrontierWaitTokens(recoveryQueue, recoveryWaitTokens));
+    ASSERT_EQ(recoveryWaitTokens.size(), 2u);
+    EXPECT_EQ(recoveryWaitTokens[0u].value, firstToken.value);
+    EXPECT_EQ(recoveryWaitTokens[0u].physicalQueueIndex, firstQueue.index);
+    EXPECT_EQ(recoveryWaitTokens[1u].value, transferToken.value);
+    EXPECT_EQ(recoveryWaitTokens[1u].physicalQueueIndex, transferQueue.index);
+
     ASSERT_TRUE(transaction.markPacketRecorded(recoveryPacket));
-    const Graphics::GpuPhysicalQueueId recoveryQueue = compiledGraph.packet(recoveryPacket).queue;
     const Graphics::QueueSubmissionToken recoveryToken{
         .queue = Graphics::CommandQueue::Graphics,
-        .value = 42u,
+        .value = 43u,
         .physicalQueueIndex = recoveryQueue.index,
         .deviceGeneration = recoveryQueue.deviceGeneration,
     };
     ASSERT_TRUE(transaction.acceptPacket(graph, compiledGraph, recoveryPacket, recoveryToken));
-    EXPECT_EQ(acceptedCount, 2u);
+    EXPECT_EQ(acceptedCount, 3u);
     EXPECT_EQ(discardedCount, 1u);
     EXPECT_EQ(acceptedToken.queue, recoveryToken.queue);
     EXPECT_EQ(acceptedToken.value, recoveryToken.value);
-    ASSERT_NE(transaction.latestAcceptedToken(Graphics::CommandQueue::Graphics), nullptr);
-    EXPECT_EQ(transaction.latestAcceptedToken(Graphics::CommandQueue::Graphics)->value, recoveryToken.value);
+    ASSERT_NE(transaction.latestAcceptedToken(recoveryQueue), nullptr);
+    EXPECT_EQ(transaction.latestAcceptedToken(recoveryQueue)->value, recoveryToken.value);
 
     transaction.discardUnaccepted(graph, compiledGraph);
-    EXPECT_EQ(acceptedCount, 2u);
+    EXPECT_EQ(acceptedCount, 3u);
     EXPECT_EQ(discardedCount, 1u);
     ASSERT_NE(transaction.packetRuntime(recoveryPacket), nullptr);
     EXPECT_EQ(

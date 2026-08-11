@@ -233,7 +233,6 @@ void RendererSystem::invalidateResources(){
     m_deferredFrameRecoveryTask = {};
     m_deferredSurfelGiCounterReadbackCompletion = {};
     m_deferredLightingHistoryCompletion = {};
-    m_deferredFrameRecoveryCompletion = {};
     m_deferredFrameRecoveryArmed = false;
     m_deferredFrameRecoveryRetiresTiming = false;
     m_deferredLightingTaskGraph.reset();
@@ -461,7 +460,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredFrameRecoveryTask = {};
     m_deferredSurfelGiCounterReadbackCompletion = {};
     m_deferredLightingHistoryCompletion = {};
-    m_deferredFrameRecoveryCompletion = {};
     m_deferredFrameRecoveryArmed = false;
     m_deferredFrameRecoveryRetiresTiming = false;
     m_deferredLightingTaskGraph.reset();
@@ -1042,7 +1040,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredCompositeTask.valid()
         || !m_deferredPresentTask.valid()
         || !m_deferredFrameRecoveryTask.valid()
-        || !m_deferredFrameRecoveryCompletion.valid()
         || (m_deferredSurfelGiCounterReadbackCompletion.valid()
             && !surfelCounterReadbackCompletionToken.valid())
         || (captureLaggedLightingHistory && (
@@ -1479,7 +1476,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredCompositeTask.valid()
         && m_deferredPresentTask.valid()
         && m_deferredFrameRecoveryTask.valid()
-        && m_deferredFrameRecoveryCompletion.valid()
         && (!captureLaggedLightingHistory || (
             m_deferredLaggedLightingHistoryTask.valid()
             && deferredLaggedLightingHistoryPacket.valid()
@@ -1578,10 +1574,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::QueueSubmissionToken avboitFinalSubmissionToken;
     Core::QueueSubmissionToken deferredLightingSubmissionToken;
     Core::QueueSubmissionToken deferredCompositeSubmissionToken;
-    const auto submitFrameRecoveryPacket = [&](const Core::QueueSubmissionToken* const asyncWaitToken) -> bool {
-        // Retire the accepted frame scope after a rejected packet and join the latest accepted non-Graphics producer.
-        // The transaction provides the durable Graphics fallback as well, so recovery owns no renderer-side
-        // predecessor token ladder. Same-queue waits collapse to queue ordering.
+    const auto submitFrameRecoveryPacket = [&]() -> bool {
+        // Retire the accepted frame scope after a rejected packet. The transaction supplies one latest token from
+        // every other accepted physical queue directly to the graph-marked recovery packet; Graphics order covers
+        // its own accepted prefix without a redundant timeline wait.
         if(device.isDeviceLost()){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery packet skipped because the graphics device is lost"));
             m_deferredFrameRecoveryArmed = false;
@@ -1589,14 +1585,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             frameTimingTransaction.discard();
             return false;
         }
-        NWB_ASSERT(!asyncWaitToken || asyncWaitToken->valid());
-        const Core::QueueSubmissionToken* const graphicsFallbackToken =
-            m_deferredLightingSubmissionTransaction.latestAcceptedToken(Core::CommandQueue::Graphics)
-        ;
-        const Core::QueueSubmissionToken* const recoveryPredecessorToken = asyncWaitToken
-            ? asyncWaitToken
-            : graphicsFallbackToken
-        ;
         const bool retireTiming = frameTimingTransaction.needsRetirement();
         if(retireTiming)
             frameTimingTransaction.prepareForRecovery();
@@ -1622,12 +1610,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         if(
             !m_deferredLightingTaskGraphValid
             || !m_deferredFrameRecoveryTask.valid()
-            || !m_deferredFrameRecoveryCompletion.valid()
             || !deferredFrameRecoveryPacket.valid()
             || !deferredFrameRecoveryPacketRange.valid()
             || !deferredFrameRecoveryQueue
             || deferredFrameRecoveryQueue->queueClass != Core::CommandQueue::Graphics
-            || !recoveryPredecessorToken
+            || !m_deferredLightingCompiledGraph.packet(deferredFrameRecoveryPacket).joinsAcceptedQueueFrontier
+            || !m_deferredLightingSubmissionTransaction.hasAcceptedPackets()
         ){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: deferred frame recovery packet was unavailable"));
             discardFrameRecovery();
@@ -1648,10 +1636,6 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             return false;
         }
 
-        const Core::GpuTaskGraphExternalCompletionToken recoveryCompletionToken{
-            .completion = m_deferredFrameRecoveryCompletion,
-            .token = *recoveryPredecessorToken,
-        };
         Core::Alloc::ScratchArena recoveryScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraphSubmitter submitter(device);
         const bool recoveryAccepted = submitter.submitPacketRangeInCompileOrder(
@@ -1659,8 +1643,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             m_deferredLightingCompiledGraph,
             m_deferredLightingRecordedGraph,
             deferredFrameRecoveryPacketRange,
-            &recoveryCompletionToken,
-            1u,
+            nullptr,
+            0u,
             nullptr,
             0u,
             m_deferredLightingSubmissionTransaction,
@@ -1686,12 +1670,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         restoreAvboitCpuState();
     };
     const auto recoverPendingFrameSubmission = [&]() -> bool {
-        // The transaction retains actual accepted transport order, so recovery waits for the latest Compute packet
-        // without mirroring every optional renderer packet in a manual token ladder.
-        const Core::QueueSubmissionToken* const asyncWaitToken =
-            m_deferredLightingSubmissionTransaction.latestAcceptedToken(Core::CommandQueue::Compute);
-        return (asyncWaitToken || frameTimingTransaction.needsRetirement())
-            ? submitFrameRecoveryPacket(asyncWaitToken)
+        return (m_deferredLightingSubmissionTransaction.hasAcceptedPackets() || frameTimingTransaction.needsRetirement())
+            ? submitFrameRecoveryPacket()
             : true
         ;
     };
@@ -2719,7 +2699,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
                         )
                     ;
                     if(!historyCopyReturnStatesReady){
-                        if(!submitFrameRecoveryPacket(&historyCopySubmissionToken))
+                        if(!submitFrameRecoveryPacket())
                             failFrameRenderRecovery();
                         // Lost retained copy state leaves no safe producer layout.
                         failFrameRenderRecovery();

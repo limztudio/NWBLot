@@ -32,6 +32,9 @@ struct GpuSubmissionPacket{
     u32 dependencyCount = 0u;
     u32 externalDependencyOffset = 0u;
     u32 externalDependencyCount = 0u;
+    // A late recovery/finalization packet receives waits for the latest accepted packet on every other physical
+    // queue directly from GpuGraphSubmissionTransaction. It is a graph runtime policy, not a renderer token ladder.
+    bool joinsAcceptedQueueFrontier = false;
     bool recordsTiming = true;
 };
 
@@ -115,6 +118,7 @@ private:
 // Recording happens only after the compiler has selected a concrete physical queue and packet.  Task record thunks
 // receive immutable compiled metadata rather than a nullable renderer-specific context.
 struct GpuTaskRecordContext{
+    const GpuTaskGraph& taskGraph;
     const GpuCompiledGraph& graph;
     GpuTaskId task;
     GpuSubmissionPacketId packet;

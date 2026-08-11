@@ -317,13 +317,12 @@ private:
     Core::GpuTaskId m_deferredCompositeTask;
     Core::GpuTaskId m_deferredPresentTask;
     Core::GpuTaskId m_deferredLaggedLightingHistoryTask;
-    // Recovery stays unrecorded until a later packet rejects. It uses a generic accepted-producer completion so the
-    // Graphics tail can join the latest AsyncCompute/Transfer work, or the Prefix Graphics submission when none did.
+    // Recovery stays unrecorded until a later packet rejects. Its graph-owned submission join waits for every latest
+    // accepted non-Graphics physical queue while Graphics queue order covers the accepted prefix.
     Core::GpuTaskId m_deferredFrameRecoveryTask;
     // Imported only while the preceding frame's diagnostic Transfer readback remains in flight.
     Core::GpuExternalCompletionId m_deferredSurfelGiCounterReadbackCompletion;
     Core::GpuExternalCompletionId m_deferredLightingHistoryCompletion;
-    Core::GpuExternalCompletionId m_deferredFrameRecoveryCompletion;
     bool m_graphicsPrefixMeshViewSetupReady = false;
     bool m_graphicsPrefixSceneShadingSetupReady = false;
     bool m_deferredFrameRecoveryArmed = false;

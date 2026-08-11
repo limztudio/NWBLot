@@ -171,6 +171,22 @@ inline constexpr bool operator==(const GpuGraphResourceId& lhs, const GpuGraphRe
 }
 inline constexpr bool operator!=(const GpuGraphResourceId& lhs, const GpuGraphResourceId& rhs)noexcept{ return !(lhs == rhs); }
 
+// Upload bytes belong to one graph generation just like task/resource handles. The blob is CPU-side ownership
+// only: native recording copies it through the existing per-command-buffer staging allocator, after which normal
+// upload-chunk retirement remains responsible for GPU lifetime.
+struct GpuUploadBlobId{
+    u32 index = Limit<u32>::s_Max;
+    u64 generation = 0u;
+
+    [[nodiscard]] constexpr bool valid()const{ return index != Limit<u32>::s_Max && generation != 0u; }
+};
+inline constexpr bool operator==(const GpuUploadBlobId& lhs, const GpuUploadBlobId& rhs)noexcept{
+    return lhs.index == rhs.index && lhs.generation == rhs.generation;
+}
+inline constexpr bool operator!=(const GpuUploadBlobId& lhs, const GpuUploadBlobId& rhs)noexcept{
+    return !(lhs == rhs);
+}
+
 // Pipelines use the same graph-generation contract as resources and tasks.  They deliberately identify a
 // graph-owned retained handle rather than exposing a backend pointer to packet capture or future IR records.
 namespace GpuGraphPipelineType{

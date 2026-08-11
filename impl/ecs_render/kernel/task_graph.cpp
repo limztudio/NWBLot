@@ -2224,7 +2224,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredFrameRecoveryTask = {};
     m_deferredSurfelGiCounterReadbackCompletion = {};
     m_deferredLightingHistoryCompletion = {};
-    m_deferredFrameRecoveryCompletion = {};
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
     m_deferredFrameRecoveryArmed = false;
@@ -3356,20 +3355,12 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     }
 
     // Recovery is a late independent Graphics tail. It deliberately has no packet dependency on normal work: a
-    // rejected suffix must not prevent it from retiring the accepted frame prefix. At submission it always binds
-    // this completion to the latest accepted non-Graphics producer, or to the accepted Prefix Graphics token.
+    // rejected suffix must not prevent it from retiring the accepted frame prefix. Its compiled packet asks the
+    // graph transaction to join every accepted non-Graphics physical queue at submit time.
     const Core::GpuGraphResourceId recoveryDomain = m_deferredLightingTaskGraph.importHazardDomain(
         HazardDomainDesc(Name("render.frame_recovery.timing"), "Frame Recovery Timing")
     );
-    Core::GpuExternalCompletionDesc recoveryCompletionDesc;
-    recoveryCompletionDesc
-        .setIdentity(Name("render.frame_recovery.predecessor_complete"))
-        .setMarkerLabel("Latest Frame Producer Complete")
-    ;
-    m_deferredFrameRecoveryCompletion = m_deferredLightingTaskGraph.importExternalCompletion(
-        recoveryCompletionDesc
-    );
-    if(!recoveryDomain.valid() || !m_deferredFrameRecoveryCompletion.valid()){
+    if(!recoveryDomain.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred frame-recovery graph resources"));
         return;
     }
@@ -3381,13 +3372,13 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     recoveryScheduling.cost = Core::GpuTaskCostHint::Tiny;
     recoveryScheduling.forceSubmissionBoundary = true;
     recoveryScheduling.allowPacketMerge = false;
+    recoveryScheduling.joinsAcceptedQueueFrontier = true;
     Core::GpuTaskDesc recoveryDesc;
     recoveryDesc
         .setIdentity(Name("render.frame_recovery"))
         .setMarkerLabel("Frame Recovery")
         .setQueue(GraphicsQueueRequest())
         .setScheduling(recoveryScheduling)
-        .setExternalDependencies(&m_deferredFrameRecoveryCompletion, 1u)
         .setResourceUses(recoveryResourceUses, LengthOf(recoveryResourceUses))
     ;
     m_deferredFrameRecoveryTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::FrameRecoveryGraphTask>(

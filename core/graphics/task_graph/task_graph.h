@@ -129,6 +129,14 @@ private:
         u32 markerLabelSize = 0u;
     };
 
+    struct GpuUploadBlobNode{
+        explicit GpuUploadBlobNode(GraphicsArena& arena)
+            : bytes(arena)
+        {}
+
+        GraphicsBytes bytes;
+    };
+
 
 public:
     explicit GpuTaskGraph(GraphicsArena& arena);
@@ -149,6 +157,20 @@ public:
     // regions and retains the imported textures through recording, so desc must declare Transfer capability and
     // must not provide separate resource uses.
     [[nodiscard]] GpuTaskId addCopyTextureTask(const GpuTaskDesc& desc, const GpuCopyTextureTaskDesc& copyDesc);
+
+    // Copies caller-owned bytes into graph-owned CPU storage. `alignment` must be a nonzero power of two; blobs
+    // expose only an opaque byte view, so no typed-alignment promise escapes the graph. Built-in upload tasks resolve
+    // the immutable blob while recording, then use the ordinary CommandList staging allocator for GPU lifetime.
+    [[nodiscard]] GpuUploadBlobId copyUploadData(
+        const void* data,
+        usize byteSize,
+        usize alignment = alignof(u8)
+    );
+
+    // Adds graph-owned buffer/texture uploads. Their single resource use describes the state visible after the
+    // task's internal CopyDest write and optional final transition, so later graph packets see exact final state.
+    [[nodiscard]] GpuTaskId addUploadBufferTask(const GpuTaskDesc& desc, const GpuUploadBufferTaskDesc& uploadDesc);
+    [[nodiscard]] GpuTaskId addUploadTextureTask(const GpuTaskDesc& desc, const GpuUploadTextureTaskDesc& uploadDesc);
 
     // Adds a graph-owned native uint-buffer clear. The helper retains the imported buffer and derives its CopyDest
     // write declaration, so desc must declare Transfer capability and must not provide separate resource uses.
@@ -233,10 +255,12 @@ public:
     [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
     [[nodiscard]] bool validTask(const GpuTaskId& id)const noexcept;
     [[nodiscard]] bool validResource(const GpuGraphResourceId& id)const noexcept;
+    [[nodiscard]] bool validUploadBlob(const GpuUploadBlobId& id)const noexcept;
     [[nodiscard]] bool validPipeline(const GpuGraphPipelineId& id)const noexcept;
     [[nodiscard]] bool validExternalCompletion(const GpuExternalCompletionId& id)const noexcept;
     [[nodiscard]] usize taskCount()const noexcept{ return m_tasks.size(); }
     [[nodiscard]] usize resourceCount()const noexcept{ return m_resources.size(); }
+    [[nodiscard]] usize uploadBlobCount()const noexcept{ return m_uploadBlobs.size(); }
     [[nodiscard]] usize pipelineCount()const noexcept{ return m_pipelines.size(); }
     [[nodiscard]] usize externalCompletionCount()const noexcept{ return m_externalCompletions.size(); }
     [[nodiscard]] GpuTaskGraphTaskView taskAt(usize index)const;
@@ -245,6 +269,9 @@ public:
     [[nodiscard]] GpuTaskGraphExternalCompletionView externalCompletionAt(usize index)const;
     [[nodiscard]] Texture* textureForResource(const GpuGraphResourceId& resource)const noexcept;
     [[nodiscard]] Buffer* bufferForResource(const GpuGraphResourceId& resource)const noexcept;
+    // Immutable byte view for graph-owned task recorders. Callers must consume it only while the graph generation
+    // remains valid; `outByteSize` is zero and the return value is null for an invalid/stale blob handle.
+    [[nodiscard]] const void* uploadBlobData(const GpuUploadBlobId& blob, usize& outByteSize)const noexcept;
     [[nodiscard]] GraphicsPipeline* graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
     [[nodiscard]] ComputePipeline* computePipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
     [[nodiscard]] MeshletPipeline* meshletPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
@@ -307,6 +334,7 @@ private:
     [[nodiscard]] GpuGraphResourceId appendResource(const GpuGraphResourceDesc& desc);
     [[nodiscard]] GpuGraphPipelineId appendPipeline(const GpuGraphPipelineDesc& desc);
     [[nodiscard]] GpuExternalCompletionId appendExternalCompletion(const GpuExternalCompletionDesc& desc);
+    [[nodiscard]] const GpuUploadBlobNode* findUploadBlob(const GpuUploadBlobId& blob)const noexcept;
     [[nodiscard]] bool appendMarkerLabel(AStringView text, u32& outOffset, u32& outSize);
     [[nodiscard]] AStringView markerLabel(u32 offset, u32 size)const;
     void destroyTaskPayloads()noexcept;
@@ -321,6 +349,7 @@ private:
     GraphicsVector<GpuGraphResourceNode> m_resources;
     GraphicsVector<GpuGraphPipelineNode> m_pipelines;
     GraphicsVector<GpuExternalCompletionNode> m_externalCompletions;
+    GraphicsVector<GpuUploadBlobNode> m_uploadBlobs;
     GraphicsBytes m_markerText;
     u64 m_generation = 0u;
 };

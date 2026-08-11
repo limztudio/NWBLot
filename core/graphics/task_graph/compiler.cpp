@@ -1048,6 +1048,7 @@ bool GpuTaskGraphCompiler::compile(
             task.scheduling.mergeWithPrevious
             && task.scheduling.allowPacketMerge
             && !task.scheduling.forceSubmissionBoundary
+            && !task.scheduling.joinsAcceptedQueueFrontier
             && !outCompiledGraph.m_packets.empty()
         ;
         if(mergeRequested){
@@ -1063,6 +1064,7 @@ bool GpuTaskGraphCompiler::compile(
                 const GpuTaskGraphTaskView preceding = graph.taskAt(precedingTask.index);
                 precedingPacketAllowsMerge = preceding.scheduling.allowPacketMerge
                     && !preceding.scheduling.forceSubmissionBoundary
+                    && !preceding.scheduling.joinsAcceptedQueueFrontier
                 ;
             }
             if(precedingPacketAllowsMerge){
@@ -1083,6 +1085,7 @@ bool GpuTaskGraphCompiler::compile(
                 .queue = assignment->queue,
                 .taskOffset = static_cast<u32>(outCompiledGraph.m_packetTasks.size()),
                 .taskCount = 1u,
+                .joinsAcceptedQueueFrontier = task.scheduling.joinsAcceptedQueueFrontier,
             });
         }
         outCompiledGraph.m_packetTasks.push_back(taskID);

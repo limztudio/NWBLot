@@ -229,8 +229,10 @@ concept CommandListApi = requires(
     commandList.copyTexture(texture, textureSlice, texture, textureSlice);
     commandList.copyTexture(stagingTexture, textureSlice, texture, textureSlice);
     commandList.copyTexture(texture, textureSlice, stagingTexture, textureSlice);
+    { commandList.tryWriteTexture(texture, u32{}, u32{}, data, usize{}, usize{}) }->SameAs<bool>;
     commandList.writeTexture(texture, u32{}, u32{}, data, usize{}, usize{});
     commandList.resolveTexture(texture, subresources, texture, subresources);
+    { commandList.tryWriteBuffer(buffer, data, usize{}, u64{}) }->SameAs<bool>;
     commandList.writeBuffer(buffer, data, usize{}, u64{});
     commandList.clearBufferUInt(buffer, u32{});
     commandList.copyBuffer(buffer, u64{}, buffer, u64{}, u64{});

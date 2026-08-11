@@ -476,22 +476,26 @@ bool CommandList::prepareUploadStaging(const void* data, const usize dataSize, c
     return true;
 }
 
-void CommandList::writeBuffer(Buffer* bufferResource, const void* data, usize dataSize, u64 destOffsetBytes){
+bool CommandList::tryWriteBuffer(Buffer* bufferResource, const void* data, usize dataSize, u64 destOffsetBytes){
     if(dataSize == 0)
-        return;
+        return false;
 
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("write buffer"), NWB_TEXT("buffer or data is null"), bufferResource, data))
-        return;
+        return false;
 
     Buffer& buffer = *bufferResource;
     const BufferDesc& desc = buffer.getDescription();
     if(!VulkanDetail::DebugValidateBufferRange(desc, destOffsetBytes, static_cast<u64>(dataSize), NWB_TEXT("write buffer"), NWB_TEXT("destination")))
-        return;
+        return false;
+    if((destOffsetBytes & s_BufferAlignmentMask) != 0u || (dataSize & s_BufferAlignmentMask) != 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write buffer: copy offset and size must be 4-byte aligned"));
+        return false;
+    }
 
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
     if(!prepareUploadStaging(data, dataSize, NWB_TEXT("writeBuffer"), stagingBuffer, stagingOffset))
-        return;
+        return false;
 
     setBufferState(bufferResource, ResourceStates::CopyDest);
 
@@ -504,6 +508,11 @@ void CommandList::writeBuffer(Buffer* bufferResource, const void* data, usize da
 
     retainResource(bufferResource);
     retainStagingBuffer(*stagingBuffer);
+    return true;
+}
+
+void CommandList::writeBuffer(Buffer* bufferResource, const void* data, usize dataSize, u64 destOffsetBytes){
+    static_cast<void>(tryWriteBuffer(bufferResource, data, dataSize, destOffsetBytes));
 }
 
 void CommandList::clearBufferUInt(Buffer* bufferResource, u32 clearValue){

@@ -47,6 +47,10 @@ struct GpuTaskSchedulingHint{
     // Merging remains opt-in while imported recording bridges are retired incrementally.  When set, this task may
     // share the immediately preceding compatible packet instead of creating a new queue submission.
     bool mergeWithPrevious = false;
+    // A late recovery/finalization packet must wait for the latest accepted work on every other physical queue.
+    // The compiler preserves it as a separate packet and the submitter derives those waits from the graph-owned
+    // submission transaction; callers do not assemble a queue-class token ladder.
+    bool joinsAcceptedQueueFrontier = false;
 };
 
 // A resource may be metadata-only during the shadow-graph phase, or may retain an imported engine handle through
@@ -148,6 +152,33 @@ struct GpuCopyTextureTaskDesc{
     const GpuCopyTextureTaskRegion* regions = nullptr;
     usize regionCount = 0u;
     // Optional lifecycle output. It is written only after the containing packet submission has been accepted.
+    QueueSubmissionToken* acceptedToken = nullptr;
+};
+
+
+// Caller bytes are copied into a graph-owned upload blob before declaration. The task records that blob through the
+// existing CommandList staging path, so the blob is not a second persistent GPU upload allocator. `finalState`
+// describes the task's graph-visible final state after its internal CopyDest write completes.
+struct GpuUploadBufferTaskDesc{
+    GpuUploadBlobId source;
+    GpuGraphResourceId destination;
+    u64 destinationOffsetBytes = 0u;
+    ResourceStates::Mask finalState = ResourceStates::CopyDest;
+    // Optional lifecycle output. Storage must outlive late recording/submission; the helper clears it at declaration
+    // and again if the task is discarded, then writes the accepted packet token only after successful submission.
+    QueueSubmissionToken* acceptedToken = nullptr;
+};
+
+struct GpuUploadTextureTaskDesc{
+    GpuUploadBlobId source;
+    GpuGraphResourceId destination;
+    u32 arraySlice = 0u;
+    u32 mipLevel = 0u;
+    usize rowPitch = 0u;
+    usize depthPitch = 0u;
+    ResourceStates::Mask finalState = ResourceStates::CopyDest;
+    // Optional lifecycle output. Storage must outlive late recording/submission; the helper clears it at declaration
+    // and again if the task is discarded, then writes the accepted packet token only after successful submission.
     QueueSubmissionToken* acceptedToken = nullptr;
 };
 

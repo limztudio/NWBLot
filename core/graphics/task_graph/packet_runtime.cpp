@@ -340,6 +340,7 @@ bool GpuNativePacketRecorder::recordPacket(
             break;
         }
         const GpuTaskRecordContext context{
+            .taskGraph = graph,
             .graph = compiledGraph,
             .task = task,
             .packet = desc.packet,
@@ -513,17 +514,13 @@ bool GpuGraphSubmissionTransaction::acceptPacket(
 
     for(LatestAcceptedQueueToken& latest : m_latestAcceptedQueueTokens){
         if(latest.queue == packet.queue){
-            latest.queueClass = queueInfo->queueClass;
             latest.token = token;
-            latest.acceptanceOrdinal = m_acceptedSubmissionCount;
             return true;
         }
     }
     m_latestAcceptedQueueTokens.push_back(LatestAcceptedQueueToken{
         .queue = packet.queue,
-        .queueClass = queueInfo->queueClass,
         .token = token,
-        .acceptanceOrdinal = m_acceptedSubmissionCount,
     });
     return true;
 }
@@ -574,23 +571,23 @@ const QueueSubmissionToken* GpuGraphSubmissionTransaction::latestAcceptedToken(
     return nullptr;
 }
 
-const QueueSubmissionToken* GpuGraphSubmissionTransaction::latestAcceptedToken(
-    const CommandQueue::Enum queueClass
-)const noexcept{
-    if(queueClass >= CommandQueue::kCount)
-        return nullptr;
+bool GpuGraphSubmissionTransaction::appendAcceptedQueueFrontierWaitTokens(
+    const GpuPhysicalQueueId& destinationQueue,
+    Vector<QueueSubmissionToken, Alloc::ScratchArena>& outTokens
+)const{
+    if(!m_valid || !destinationQueue.valid() || destinationQueue.deviceGeneration != m_deviceGeneration)
+        return false;
 
-    const LatestAcceptedQueueToken* result = nullptr;
     for(const LatestAcceptedQueueToken& latest : m_latestAcceptedQueueTokens){
-        if(
-            latest.queueClass != queueClass
-            || !latest.token.valid()
-            || (result && result->acceptanceOrdinal >= latest.acceptanceOrdinal)
-        )
+        if(latest.queue == destinationQueue)
             continue;
-        result = &latest;
+        if(!latest.queue.valid() || latest.queue.deviceGeneration != m_deviceGeneration || !latest.token.valid())
+            return false;
+        // The transaction holds one newest accepted token per physical queue, so this cannot duplicate a producer
+        // even when a queue accepted several packets before the recovery tail is armed.
+        outTokens.push_back(latest.token);
     }
-    return result ? &result->token : nullptr;
+    return true;
 }
 
 const GpuPacketRuntime* GpuGraphSubmissionTransaction::packetRuntime(
@@ -649,7 +646,11 @@ bool GpuTaskGraphSubmitter::submitPacket(
     }
 
     Vector<QueueSubmissionToken, Alloc::ScratchArena> waitTokens(scratchArena);
-    waitTokens.reserve(packet.dependencyCount + packet.externalDependencyCount);
+    waitTokens.reserve(
+        packet.dependencyCount
+        + packet.externalDependencyCount
+        + (packet.joinsAcceptedQueueFrontier ? compiledGraph.packetCount() : 0u)
+    );
     const GpuPacketDependency* const dependencies = compiledGraph.packetDependencies(packetID);
     for(u32 dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){
         const QueueSubmissionToken token = transaction.packetToken(dependencies[dependencyIndex].producer);
@@ -680,6 +681,14 @@ bool GpuTaskGraphSubmitter::submitPacket(
             return false;
         }
         waitTokens.push_back(token);
+    }
+
+    if(
+        packet.joinsAcceptedQueueFrontier
+        && !transaction.appendAcceptedQueueFrontierWaitTokens(packet.queue, waitTokens)
+    ){
+        transaction.rejectPacket(graph, compiledGraph, packetID);
+        return false;
     }
 
     QueueSubmissionDesc submitDesc;

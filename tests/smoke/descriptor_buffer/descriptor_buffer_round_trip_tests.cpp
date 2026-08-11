@@ -1067,6 +1067,453 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
 }
 
 
+// Upload blobs copy caller bytes at declaration, then record through the ordinary CommandList staging allocator.
+// Mutating the original stack storage before late packet recording must therefore not affect the submitted upload.
+TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlobAndPublishesAcceptedToken){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    u32 sourceWords[] = {
+        0x13c0ffeeu,
+        0x4a7b12d3u,
+        0x9e3779b9u,
+        0xfeedfaceu,
+    };
+    static constexpr u32 s_ExpectedWords[] = {
+        0x13c0ffeeu,
+        0x4a7b12d3u,
+        0x9e3779b9u,
+        0xfeedfaceu,
+    };
+    auto destination = device.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(sourceWords))
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::Exclusive)
+            .setCpuAccess(CpuAccessMode::Read)
+    );
+    ASSERT_NE(destination.get(), nullptr);
+    auto keepInitialDestination = device.createBuffer(
+        BufferDesc()
+            .setByteSize(sizeof(sourceWords))
+            .enableAutomaticStateTracking(ResourceStates::Common)
+    );
+    ASSERT_NE(keepInitialDestination.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId destinationResource = graph.importBuffer(
+        destination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/built_in_upload_buffer_destination"))
+            .setMarkerLabel("Built-In Upload Buffer Destination")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(destinationResource.valid());
+    const GpuGraphResourceId keepInitialDestinationResource = graph.importBuffer(
+        keepInitialDestination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/built_in_upload_buffer_keep_initial_destination"))
+            .setMarkerLabel("Built-In Upload Buffer Keep Initial Destination")
+            .setType(GpuGraphResourceType::Buffer)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(keepInitialDestinationResource.valid());
+    const GpuUploadBlobId source = graph.copyUploadData(sourceWords, sizeof(sourceWords), alignof(u32));
+    ASSERT_TRUE(source.valid());
+    ASSERT_TRUE(graph.validUploadBlob(source));
+    ASSERT_EQ(graph.uploadBlobCount(), 1u);
+    for(u32& word : sourceWords)
+        word = 0u;
+
+    GpuTaskSchedulingHint scheduling;
+    scheduling.cost = GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    GpuTaskDesc uploadTaskDesc;
+    uploadTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/built_in_upload_buffer"))
+        .setMarkerLabel("Built-In Buffer Upload")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Transfer,
+            GpuQueuePreference::Transfer,
+            true,
+            true,
+        })
+        .setScheduling(scheduling)
+    ;
+    const QueueSubmissionToken staleToken{
+        .queue = CommandQueue::Graphics,
+        .value = 7u,
+    };
+    ASSERT_TRUE(staleToken.valid());
+    QueueSubmissionToken acceptedToken = staleToken;
+    const GpuTaskId uploadTask = graph.addUploadBufferTask(
+        uploadTaskDesc,
+        GpuUploadBufferTaskDesc{
+            .source = source,
+            .destination = destinationResource,
+            .finalState = ResourceStates::ShaderResource,
+            .acceptedToken = &acceptedToken,
+        }
+    );
+    ASSERT_TRUE(uploadTask.valid());
+    // Declaration clears a stale caller token. It is populated only once the packet reaches queue submission.
+    EXPECT_FALSE(acceptedToken.valid());
+    ASSERT_TRUE(graph.taskAt(uploadTask.index).hasPayload);
+    ASSERT_EQ(graph.taskAt(uploadTask.index).resourceUseCount, 1u);
+    EXPECT_FALSE(graph.addUploadBufferTask(
+        uploadTaskDesc,
+        GpuUploadBufferTaskDesc{
+            .source = source,
+            .destination = destinationResource,
+            .destinationOffsetBytes = sizeof(sourceWords),
+        }
+    ).valid());
+    EXPECT_FALSE(graph.addUploadBufferTask(
+        uploadTaskDesc,
+        GpuUploadBufferTaskDesc{
+            .source = source,
+            .destination = destinationResource,
+            .destinationOffsetBytes = 1u,
+        }
+    ).valid());
+    const u8 unalignedByte = 0xabu;
+    const GpuUploadBlobId unalignedSource = graph.copyUploadData(&unalignedByte, sizeof(unalignedByte));
+    ASSERT_TRUE(unalignedSource.valid());
+    EXPECT_FALSE(graph.addUploadBufferTask(
+        uploadTaskDesc,
+        GpuUploadBufferTaskDesc{
+            .source = unalignedSource,
+            .destination = destinationResource,
+        }
+    ).valid());
+    // Automatic state tracking restores the backend descriptor state when a command list closes. A different
+    // graph-visible final state would leave the next packet with an incorrect compiler seed, so reject it early.
+    EXPECT_FALSE(graph.addUploadBufferTask(
+        uploadTaskDesc,
+        GpuUploadBufferTaskDesc{
+            .source = source,
+            .destination = keepInitialDestinationResource,
+            .finalState = ResourceStates::ShaderResource,
+        }
+    ).valid());
+
+    const u32 graphicsFamily = device.getQueueFamilyIndex(CommandQueue::Graphics);
+    const u32 transferFamily = device.getQueueFamilyIndex(CommandQueue::Transfer);
+    const bool dedicatedTransfer = device.getQueue(CommandQueue::Transfer)
+        && transferFamily != Limit<u32>::s_Max
+        && transferFamily != graphicsFamily
+    ;
+    GpuPhysicalQueueInfo queues[2u] = {
+        GpuPhysicalQueueInfo{
+            .id = BackendQueueId(device, CommandQueue::Graphics),
+            .queueClass = CommandQueue::Graphics,
+            .capabilities = static_cast<GpuQueueCapability::Mask>(
+                static_cast<u8>(GpuQueueCapability::Graphics)
+                | static_cast<u8>(GpuQueueCapability::Compute)
+                | static_cast<u8>(GpuQueueCapability::Transfer)
+            ),
+            .familyIndex = graphicsFamily,
+            .queueIndex = 0u,
+            .dedicated = false,
+        },
+    };
+    usize queueCount = 1u;
+    if(dedicatedTransfer){
+        queues[queueCount] = GpuPhysicalQueueInfo{
+            .id = BackendQueueId(device, CommandQueue::Transfer),
+            .queueClass = CommandQueue::Transfer,
+            .capabilities = GpuQueueCapability::Transfer,
+            .familyIndex = transferFamily,
+            .queueIndex = 0u,
+            .dedicated = true,
+        };
+        ++queueCount;
+    }
+    const GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = queueCount,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/built_in_upload_buffer_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuTaskQueueAssignment* const assignment = assignments.find(uploadTask);
+    ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->queueClass, dedicatedTransfer ? CommandQueue::Transfer : CommandQueue::Graphics);
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(uploadTask);
+    ASSERT_TRUE(packet.valid());
+
+    const GpuNativePacketRecorder recorder(device);
+    // Upload blobs deliberately have no command-IR encoding. A capture attempt exercises record failure followed by
+    // transaction discard, which must clear an output token rather than leaving an unrelated accepted value alive.
+    GpuRecordedGraph rejectedRecordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction rejectedTransaction(DescriptorBufferRoundTripTest::arena());
+    rejectedTransaction.reset(compiledGraph);
+    GpuCommandIrCapture rejectedCapture(DescriptorBufferRoundTripTest::arena());
+    acceptedToken = staleToken;
+    EXPECT_FALSE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = packet },
+        rejectedRecordedGraph,
+        &rejectedCapture
+    ));
+    rejectedTransaction.discardUnaccepted(graph, compiledGraph);
+    EXPECT_FALSE(acceptedToken.valid());
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        recordedGraph
+    ));
+    ASSERT_NE(recordedGraph.packetFinalStateSeed(packet), nullptr);
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        compiledGraph.allPacketRange(),
+        nullptr,
+        0u,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    const QueueSubmissionToken packetToken = transaction.packetToken(packet);
+    ASSERT_TRUE(packetToken.valid());
+    EXPECT_TRUE(acceptedToken.valid());
+    EXPECT_EQ(acceptedToken.queue, packetToken.queue);
+    EXPECT_EQ(acceptedToken.value, packetToken.value);
+    ASSERT_TRUE(device.waitForIdle());
+
+    const u32* const uploadedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    ASSERT_NE(uploadedWords, nullptr);
+    for(usize wordIndex = 0u; wordIndex < LengthOf(s_ExpectedWords); ++wordIndex)
+        EXPECT_EQ(uploadedWords[wordIndex], s_ExpectedWords[wordIndex]);
+    device.unmapBuffer(destination.get());
+}
+
+
+TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadTextureTaskRecordsGraphOwnedBlobAndFinalState){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    u8 sourceBytes[4u * 4u * 4u] = {
+        0x1u, 0x2u, 0x3u, 0xffu,  0x4u, 0x5u, 0x6u, 0xffu,
+        0x7u, 0x8u, 0x9u, 0xffu,  0xau, 0xbu, 0xcu, 0xffu,
+        0xdu, 0xeu, 0xfu, 0xffu,  0x10u, 0x11u, 0x12u, 0xffu,
+        0x13u, 0x14u, 0x15u, 0xffu, 0x16u, 0x17u, 0x18u, 0xffu,
+        0x19u, 0x1au, 0x1bu, 0xffu, 0x1cu, 0x1du, 0x1eu, 0xffu,
+        0x1fu, 0x20u, 0x21u, 0xffu, 0x22u, 0x23u, 0x24u, 0xffu,
+        0x25u, 0x26u, 0x27u, 0xffu, 0x28u, 0x29u, 0x2au, 0xffu,
+        0x2bu, 0x2cu, 0x2du, 0xffu, 0x2eu, 0x2fu, 0x30u, 0xffu,
+    };
+    u8 expectedBytes[sizeof(sourceBytes)];
+    NWB_MEMCPY(expectedBytes, sizeof(expectedBytes), sourceBytes, sizeof(sourceBytes));
+    auto destination = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+            .setQueueSharing(ResourceQueueSharing::GraphicsAndTransfer)
+    );
+    ASSERT_NE(destination.get(), nullptr);
+    auto keepInitialDestination = device.createTexture(
+        TextureDesc()
+            .setWidth(4u)
+            .setHeight(4u)
+            .setFormat(Format::RGBA8_UNORM)
+            .setInUAV(true)
+            .setInitialState(ResourceStates::Common)
+            .setKeepInitialState(true)
+    );
+    ASSERT_NE(keepInitialDestination.get(), nullptr);
+
+    GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
+    const GpuGraphResourceId destinationResource = graph.importTexture(
+        destination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/built_in_upload_texture_destination"))
+            .setMarkerLabel("Built-In Upload Texture Destination")
+            .setType(GpuGraphResourceType::Texture)
+    );
+    ASSERT_TRUE(destinationResource.valid());
+    const GpuGraphResourceId keepInitialDestinationResource = graph.importTexture(
+        keepInitialDestination,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/built_in_upload_texture_keep_initial_destination"))
+            .setMarkerLabel("Built-In Upload Texture Keep Initial Destination")
+            .setType(GpuGraphResourceType::Texture)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(keepInitialDestinationResource.valid());
+    const GpuUploadBlobId source = graph.copyUploadData(sourceBytes, sizeof(sourceBytes), alignof(u32));
+    ASSERT_TRUE(source.valid());
+    NWB_MEMSET(sourceBytes, 0, sizeof(sourceBytes));
+
+    GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    GpuTaskDesc uploadTaskDesc;
+    uploadTaskDesc
+        .setIdentity(Name("tests/descriptor_buffer/built_in_upload_texture"))
+        .setMarkerLabel("Built-In Texture Upload")
+        .setQueue(GpuQueueRequest{
+            GpuQueueCapability::Transfer,
+            GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(scheduling)
+    ;
+    QueueSubmissionToken acceptedToken;
+    const GpuTaskId uploadTask = graph.addUploadTextureTask(
+        uploadTaskDesc,
+        GpuUploadTextureTaskDesc{
+            .source = source,
+            .destination = destinationResource,
+            .finalState = ResourceStates::ShaderResource,
+            .acceptedToken = &acceptedToken,
+        }
+    );
+    ASSERT_TRUE(uploadTask.valid());
+    ASSERT_EQ(graph.taskAt(uploadTask.index).resourceUseCount, 1u);
+    EXPECT_FALSE(graph.addUploadTextureTask(
+        uploadTaskDesc,
+        GpuUploadTextureTaskDesc{
+            .source = source,
+            .destination = destinationResource,
+            .mipLevel = 1u,
+        }
+    ).valid());
+    // `writeTexture` lowers row/depth pitches into VkBufferImageCopy's 32-bit texel fields. The helper must reject
+    // an otherwise small 2D upload whose explicit depth pitch exceeds that native limit, rather than accepting a
+    // packet whose recorder later emits no copy.
+    EXPECT_FALSE(graph.addUploadTextureTask(
+        uploadTaskDesc,
+        GpuUploadTextureTaskDesc{
+            .source = source,
+            .destination = destinationResource,
+            .rowPitch = 16u,
+            .depthPitch = static_cast<usize>(Limit<u32>::s_Max + 1ull) * 16u,
+        }
+    ).valid());
+    EXPECT_FALSE(graph.addUploadTextureTask(
+        uploadTaskDesc,
+        GpuUploadTextureTaskDesc{
+            .source = source,
+            .destination = keepInitialDestinationResource,
+            .finalState = ResourceStates::ShaderResource,
+        }
+    ).valid());
+
+    const GpuPhysicalQueueInfo queue{
+        .id = BackendQueueId(device, CommandQueue::Graphics),
+        .queueClass = CommandQueue::Graphics,
+        .capabilities = static_cast<GpuQueueCapability::Mask>(
+            static_cast<u8>(GpuQueueCapability::Graphics)
+            | static_cast<u8>(GpuQueueCapability::Compute)
+            | static_cast<u8>(GpuQueueCapability::Transfer)
+        ),
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
+        .dedicated = false,
+    };
+    const GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
+    GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
+    GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/built_in_upload_texture_scratch"));
+    const GpuTaskGraphCompiler compiler;
+    ASSERT_TRUE(compiler.compile(graph, analysis, topology, assignments, compiledGraph, scratchArena));
+    const GpuSubmissionPacketId packet = compiledGraph.packetForTask(uploadTask);
+    ASSERT_TRUE(packet.valid());
+
+    GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
+    GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
+    transaction.reset(compiledGraph);
+    const GpuNativePacketRecorder recorder(device);
+    ASSERT_TRUE(recorder.recordPacket(
+        graph,
+        compiledGraph,
+        GpuNativePacketRecordDesc{ .packet = packet },
+        recordedGraph
+    ));
+    const CommandListResourceStateHandoff* const finalState = recordedGraph.packetFinalStateSeed(packet);
+    ASSERT_NE(finalState, nullptr);
+    auto stateProbe = device.createCommandList();
+    ASSERT_NE(stateProbe.get(), nullptr);
+    stateProbe->open(finalState);
+    EXPECT_EQ(stateProbe->getTextureSubresourceState(destination.get(), 0u, 0u), ResourceStates::ShaderResource);
+    stateProbe->close();
+
+    const GpuTaskGraphSubmitter submitter(device);
+    ASSERT_TRUE(submitter.submitPacket(
+        graph,
+        compiledGraph,
+        recordedGraph,
+        packet,
+        nullptr,
+        0u,
+        transaction,
+        scratchArena
+    ));
+    EXPECT_TRUE(acceptedToken.valid());
+    EXPECT_EQ(acceptedToken.value, transaction.packetToken(packet).value);
+    EXPECT_TRUE(device.waitForIdle());
+
+    // The copied caller array was overwritten before late recording. Read the image back to prove native recording
+    // resolved the graph-owned blob, rather than retaining a caller pointer or merely publishing a state handoff.
+    StagingTextureHandle readback = device.createStagingTexture(destination->getDescription(), CpuAccessMode::Read);
+    ASSERT_NE(readback.get(), nullptr);
+    CommandListHandle readbackCommandList = device.createCommandList();
+    ASSERT_NE(readbackCommandList.get(), nullptr);
+    readbackCommandList->open(finalState);
+    ASSERT_TRUE(readbackCommandList->hasCommandBuffer());
+    readbackCommandList->copyTexture(readback.get(), TextureSlice{}, destination.get(), TextureSlice{});
+    readbackCommandList->close();
+    CommandList* const readbackLists[] = { readbackCommandList.get() };
+    ASSERT_TRUE(device.executeCommandLists(
+        readbackLists,
+        LengthOf(readbackLists),
+        CommandQueue::Graphics,
+        QueueSubmissionDesc{}
+    ).valid());
+    ASSERT_TRUE(device.waitForIdle());
+    usize readbackRowPitch = 0u;
+    const auto* const readbackBytes = static_cast<const u8*>(device.mapStagingTexture(
+        readback.get(),
+        TextureSlice{},
+        CpuAccessMode::Read,
+        &readbackRowPitch
+    ));
+    ASSERT_NE(readbackBytes, nullptr);
+    ASSERT_GE(readbackRowPitch, 4u * sizeof(u32));
+    for(u32 row = 0u; row < 4u; ++row){
+        for(usize byte = 0u; byte < 4u * sizeof(u32); ++byte){
+            EXPECT_EQ(
+                readbackBytes[static_cast<usize>(row) * readbackRowPitch + byte],
+                expectedBytes[static_cast<usize>(row) * 4u * sizeof(u32) + byte]
+            );
+        }
+    }
+    device.unmapStagingTexture(readback.get());
+}
+
+
 // The buffer primitive follows the same late-recording/lifecycle contract as texture copies, while its two exact
 // regions are retained by the payload. The Graphics producer and consumer make a dedicated Transfer route prove
 // an exclusive Graphics -> Transfer -> Graphics ownership handoff; single-queue hosts exercise fallback.
@@ -3682,8 +4129,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionRetiresAcceptedPr
 
 
 // A recovery packet is declared with the normal frame graph but recorded only after a later packet rejects. It must
-// remain independent of that rejected packet, consume the accepted Prefix completion, and retire the timing scope
-// before the shared transaction rejects any remaining normal work.
+// remain independent of that rejected packet, join the accepted queue frontier, and retire the timing scope before
+// the shared transaction rejects any remaining normal work.
 TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInSharedTransaction){
     auto& graphics = s_scope->graphics();
     auto& device = DescriptorBufferRoundTripTest::device();
@@ -3707,14 +4154,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
             .setMarkerLabel("Frame Recovery")
             .setType(GpuGraphResourceType::HazardDomain)
     );
-    const GpuExternalCompletionId recoveryPredecessor = graph.importExternalCompletion(
-        GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/descriptor_buffer/recovery_predecessor"))
-            .setMarkerLabel("Recovery Predecessor Complete")
-    );
     ASSERT_TRUE(frameTimingDomain.valid());
     ASSERT_TRUE(recoveryDomain.valid());
-    ASSERT_TRUE(recoveryPredecessor.valid());
 
     const GpuTaskResourceUse frameTimingUses[] = {
         GpuTaskResourceUse{
@@ -3795,13 +4236,14 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     );
     ASSERT_TRUE(finalTask.valid());
 
+    GpuTaskSchedulingHint recoveryScheduling = scheduling;
+    recoveryScheduling.joinsAcceptedQueueFrontier = true;
     GpuTaskDesc recoveryDesc;
     recoveryDesc
         .setIdentity(Name("tests/descriptor_buffer/recovery_tail"))
         .setMarkerLabel("Frame Recovery")
         .setQueue(graphicsQueue)
-        .setScheduling(scheduling)
-        .setExternalDependencies(&recoveryPredecessor, 1u)
+        .setScheduling(recoveryScheduling)
         .setResourceUses(recoveryUses, LengthOf(recoveryUses))
     ;
     const GpuTaskId recoveryTask = graph.addTask<NativeFrameRecoveryPacketTask>(
@@ -3851,8 +4293,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     EXPECT_EQ(compiledGraph.packetIdAt(1u), finalPacket);
     EXPECT_EQ(compiledGraph.packetIdAt(2u), recoveryPacket);
     EXPECT_EQ(compiledGraph.packet(recoveryPacket).dependencyCount, 0u);
-    ASSERT_EQ(compiledGraph.packet(recoveryPacket).externalDependencyCount, 1u);
-    EXPECT_EQ(compiledGraph.packetExternalDependencies(recoveryPacket)[0], recoveryPredecessor);
+    EXPECT_EQ(compiledGraph.packet(recoveryPacket).externalDependencyCount, 0u);
+    EXPECT_TRUE(compiledGraph.packet(recoveryPacket).joinsAcceptedQueueFrontier);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -3918,17 +4360,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
         recordedGraph
     ));
     ASSERT_TRUE(recoveryRecorded);
-    const GpuTaskGraphExternalCompletionToken recoveryCompletionToken{
-        .completion = recoveryPredecessor,
-        .token = prefixToken,
-    };
     ASSERT_TRUE(submitter.submitPacket(
         graph,
         compiledGraph,
         recordedGraph,
         recoveryPacket,
-        &recoveryCompletionToken,
-        1u,
+        nullptr,
+        0u,
         transaction,
         scratchArena
     ));

@@ -1973,9 +1973,16 @@ void CommandList::copyTexture(Texture* dest, const TextureSlice& destSlice, Stag
     retainResource(src);
 }
 
-void CommandList::writeTexture(Texture* destResource, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch){
+bool CommandList::tryWriteTexture(
+    Texture* destResource,
+    u32 arraySlice,
+    u32 mipLevel,
+    const void* data,
+    usize rowPitch,
+    usize depthPitch
+){
     if(!VulkanDetail::DebugValidateNotNull(NWB_TEXT("write texture"), NWB_TEXT("destination texture is null"), destResource))
-        return;
+        return false;
 
     Texture& dest = *destResource;
     const TextureDesc& texDesc = dest.m_desc;
@@ -1983,26 +1990,26 @@ void CommandList::writeTexture(Texture* destResource, u32 arraySlice, u32 mipLev
     if(texDesc.sampleCount != 1){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: destination texture must be single-sampled"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: destination texture must be single-sampled"));
-        return;
+        return false;
     }
 
     if(!data){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: source data is null"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: source data is null"));
-        return;
+        return false;
     }
 
     if(mipLevel >= texDesc.mipLevels || arraySlice >= texDesc.arraySize){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: subresource is out of bounds"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: subresource is out of bounds"));
-        return;
+        return false;
     }
 #endif
 
     const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(texDesc, mipLevel);
 
     if(!VulkanDetail::DebugValidateBufferImageCopyAspect(dest.m_aspectMask, NWB_TEXT("write texture")))
-        return;
+        return false;
 
     VulkanDetail::BufferImageCopyLayout copyLayout;
     if(
@@ -2018,19 +2025,19 @@ void CommandList::writeTexture(Texture* destResource, u32 arraySlice, u32 mipLev
         )
     ){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: invalid buffer-image copy layout"));
-        return;
+        return false;
     }
     if(copyLayout.requiredSize > static_cast<u64>(Limit<usize>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to write texture: upload size exceeds addressable memory"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to write texture: upload size exceeds addressable memory"));
-        return;
+        return false;
     }
 
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
     const usize uploadSize = static_cast<usize>(copyLayout.requiredSize);
     if(!prepareUploadStaging(data, uploadSize, NWB_TEXT("writeTexture"), stagingBuffer, stagingOffset))
-        return;
+        return false;
 
     setTextureState(destResource, TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u), ResourceStates::CopyDest);
 
@@ -2045,6 +2052,11 @@ void CommandList::writeTexture(Texture* destResource, u32 arraySlice, u32 mipLev
 
     retainResource(destResource);
     retainStagingBuffer(*stagingBuffer);
+    return true;
+}
+
+void CommandList::writeTexture(Texture* destResource, u32 arraySlice, u32 mipLevel, const void* data, usize rowPitch, usize depthPitch){
+    static_cast<void>(tryWriteTexture(destResource, arraySlice, mipLevel, data, rowPitch, depthPitch));
 }
 
 void CommandList::resolveTexture(Texture* destResource, const TextureSubresourceSet& dstSubresources, Texture* srcResource, const TextureSubresourceSet& srcSubresources){

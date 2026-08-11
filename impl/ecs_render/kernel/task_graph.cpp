@@ -101,6 +101,7 @@ struct ShadowPrepareGraphTask{
         bool surfelFrameConstantsGraphOwned = false;
         bool shadowMaterialContextBatchGraphOwned = false;
         bool sceneBvhBatchGraphOwned = false;
+        bool sceneTlasBuildGraphOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -136,7 +137,8 @@ struct ShadowPrepareGraphTask{
                 payload.causticEmissionTargetsGraphOwned,
                 payload.surfelFrameConstantsGraphOwned,
                 payload.shadowMaterialContextBatchGraphOwned,
-                payload.sceneBvhBatchGraphOwned
+                payload.sceneBvhBatchGraphOwned,
+                payload.sceneTlasBuildGraphOwned
             )
         ;
         // The graph-owned material-context selector was snapshotted after preflight settled every backing handle.
@@ -166,6 +168,8 @@ struct ShadowPrepareGraphTask{
             payload.renderer->m_raytracingSystem.confirmPreparedShadowMaterialContextUploads();
         if(payload.renderer && payload.sceneBvhBatchGraphOwned)
             payload.renderer->m_raytracingSystem.confirmPreparedSceneBvhUploads();
+        if(payload.renderer && payload.sceneTlasBuildGraphOwned)
+            payload.renderer->m_raytracingSystem.confirmPreparedSceneTlasBuild();
     }
 
     static void discarded(Payload& payload){
@@ -1812,6 +1816,14 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         shadowPrepareDependency = m_sceneBvhInstancesUploadTask;
     }
 
+    // Opaque hardware TLAS builds retain their preflight instance stream inside Shadow Preparation itself. They do
+    // not add an upload packet: the existing first Graphics packet owns the native build and its acceptance cache.
+    const bool sceneTlasBuildGraphOwned = m_raytracingSystem.preparedSceneTlasBuildReady();
+    if(sceneTlasBuildGraphOwned && !m_rayTracingState.m_tlas){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build has no imported acceleration structure"));
+        return false;
+    }
+
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     resourceUses.reserve(19u + shadowTraceGeometryResourceCount);
@@ -1856,6 +1868,8 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         );
         resourcesImported = resourcesImported && tlas.valid() && tlasBacking.valid();
         if(tlas.valid() && tlasBacking.valid()){
+            // The native TLAS builder explicitly transitions Write -> Read inside Shadow Preparation. Keep this
+            // graph-visible final read state as the accepting packet's cross-queue and cross-frame handoff.
             resourceUses.push_back(ReadWriteUse(tlas, Core::ResourceStates::AccelStructRead));
             resourceUses.push_back(WriteUse(tlasBacking, Core::ResourceStates::AccelStructRead));
         }
@@ -1894,6 +1908,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .surfelFrameConstantsGraphOwned = true,
             .shadowMaterialContextBatchGraphOwned = shadowMaterialContextBatchGraphOwned,
             .sceneBvhBatchGraphOwned = sceneBvhBatchGraphOwned,
+            .sceneTlasBuildGraphOwned = sceneTlasBuildGraphOwned,
         }
     );
     if(!m_deferredShadowPrepareTask.valid()){

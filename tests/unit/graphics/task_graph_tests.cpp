@@ -92,6 +92,24 @@ inline constexpr Name s_TaskGraphScratchArena("tests/graphics/task_graph_scratch
     return graph.importResource(desc);
 }
 
+[[nodiscard]] Graphics::GpuGraphResourceId AddAccelStructMetadata(
+    Graphics::GpuTaskGraph& graph,
+    const Name& identity,
+    const AStringView label,
+    const Graphics::ResourceStates::Mask initialState = Graphics::ResourceStates::Common,
+    const Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Exclusive
+){
+    Graphics::GpuGraphResourceDesc desc;
+    desc
+        .setIdentity(identity)
+        .setMarkerLabel(label)
+        .setType(Graphics::GpuGraphResourceType::AccelStruct)
+        .setInitialState(initialState)
+        .setQueueSharing(queueSharing)
+    ;
+    return graph.importResource(desc);
+}
+
 [[nodiscard]] Graphics::GpuGraphPipelineId AddPipelineMetadata(
     Graphics::GpuTaskGraph& graph,
     const Name& identity,
@@ -3539,6 +3557,20 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
         Graphics::ResourceStates::Common,
         Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
     );
+    const Graphics::GpuGraphResourceId sceneTlas = AddAccelStructMetadata(
+        graph,
+        Name("tests/task_graph/scene_tlas"),
+        "Scene TLAS",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
+    const Graphics::GpuGraphResourceId sceneTlasBacking = AddBufferMetadata(
+        graph,
+        Name("tests/task_graph/scene_tlas_backing"),
+        "Scene TLAS Backing",
+        Graphics::ResourceStates::Common,
+        Graphics::ResourceQueueSharing::GraphicsAndAsyncCompute
+    );
     ASSERT_TRUE(currentBindlessSlots.valid());
     ASSERT_TRUE(materialContextSlots.valid());
     ASSERT_TRUE(causticEmissionTargets.valid());
@@ -3548,6 +3580,8 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     ASSERT_TRUE(shadowMaterialTyped.valid());
     ASSERT_TRUE(sceneBvhNodes.valid());
     ASSERT_TRUE(sceneBvhInstances.valid());
+    ASSERT_TRUE(sceneTlas.valid());
+    ASSERT_TRUE(sceneTlasBacking.valid());
 
     const Graphics::GpuQueueRequest graphicsRequest{
         Graphics::GpuQueueCapability::Graphics,
@@ -3829,6 +3863,20 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             .requiredState = Graphics::ResourceStates::ShaderResource,
             .access = Graphics::GpuTaskResourceAccess::Write,
         },
+        // Shadow Preparation is the accepting producer for the native TLAS build. The recorder publishes its
+        // explicit AccelStructWrite -> AccelStructRead transition before this graph-visible final state.
+        Graphics::GpuTaskResourceUse{
+            .resource = sceneTlas,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::AccelStructRead,
+            .access = Graphics::GpuTaskResourceAccess::ReadWrite,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = sceneTlasBacking,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::AccelStructRead,
+            .access = Graphics::GpuTaskResourceAccess::Write,
+        },
     };
     Graphics::GpuTaskDesc shadowPrepareDesc;
     shadowPrepareDesc
@@ -3895,6 +3943,18 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             .resource = sceneBvhInstances,
             .range = {},
             .requiredState = Graphics::ResourceStates::ShaderResource,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = sceneTlas,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::AccelStructRead,
+            .access = Graphics::GpuTaskResourceAccess::Read,
+        },
+        Graphics::GpuTaskResourceUse{
+            .resource = sceneTlasBacking,
+            .range = {},
+            .requiredState = Graphics::ResourceStates::AccelStructRead,
             .access = Graphics::GpuTaskResourceAccess::Read,
         },
     };
@@ -3990,6 +4050,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     bool transitionsShadowMaterialTyped = false;
     bool transitionsSceneBvhNodes = false;
     bool transitionsSceneBvhInstances = false;
+    bool transitionsSceneTlasBacking = false;
     for(usize index = 0u; index < compiledShadowPrepare->prologueBarrierCount; ++index){
         const Graphics::GpuCompiledBarrier& barrier = shadowPrepareBarriers[index];
         if(
@@ -4013,6 +4074,12 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
             transitionsSceneBvhNodes = transitionsSceneBvhNodes || barrier.resource == sceneBvhNodes;
             transitionsSceneBvhInstances = transitionsSceneBvhInstances || barrier.resource == sceneBvhInstances;
         }
+        if(
+            barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+            && barrier.before == Graphics::ResourceStates::Common
+            && barrier.after == Graphics::ResourceStates::AccelStructRead
+        )
+            transitionsSceneTlasBacking = transitionsSceneTlasBacking || barrier.resource == sceneTlasBacking;
     }
     EXPECT_TRUE(transitionsCurrentBindlessSlots);
     EXPECT_TRUE(transitionsMaterialContextSlots);
@@ -4023,6 +4090,7 @@ TEST(GpuTaskGraph, MergesDeferredPreflightUploadsIntoShadowPreparePacket){
     EXPECT_TRUE(transitionsShadowMaterialTyped);
     EXPECT_TRUE(transitionsSceneBvhNodes);
     EXPECT_TRUE(transitionsSceneBvhInstances);
+    EXPECT_TRUE(transitionsSceneTlasBacking);
     ASSERT_EQ(compiledGraph.packet(shadowVisibilityPacket).dependencyCount, 1u);
     EXPECT_EQ(compiledGraph.packetDependencies(shadowVisibilityPacket)[0u].producer, shadowPreparePacket);
 }

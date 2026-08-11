@@ -26,6 +26,8 @@ RendererRayTracingSystem::RendererRayTracingSystem(RendererSystem& renderer)
     , m_preparedShadowMaterialTypedBytes(arena())
     , m_preparedSceneBvhNodeBytes(arena())
     , m_preparedSceneBvhInstanceBytes(arena())
+    , m_preparedSceneTlasInstances(arena())
+    , m_preparedSceneTlasBlases(arena())
 {}
 
 RendererRayTracingSystem::~RendererRayTracingSystem() = default;
@@ -477,6 +479,126 @@ void RendererRayTracingSystem::confirmPreparedSceneBvhUploads()noexcept{
     clearPreparedSceneBvh();
 }
 
+void RendererRayTracingSystem::clearPreparedSceneTlasBuild()noexcept{
+    m_preparedSceneTlasInstances.clear();
+    m_preparedSceneTlasBlases.clear();
+    m_preparedSceneTlas = nullptr;
+    m_preparedSceneTlasBackingBuffer = nullptr;
+    m_preparedSceneTlasHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_preparedSceneTlasMaxInstances = 0u;
+    m_preparedSceneTlasStaticSceneHash = 0u;
+    m_preparedSceneTlasStatic = false;
+    m_preparedSceneTlasReady = false;
+}
+
+bool RendererRayTracingSystem::capturePreparedSceneTlasBuild(
+    const bool staticScene,
+    const u64 staticSceneHash,
+    const Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena>& instances,
+    const Vector<Core::RayTracingAccelStructHandle, Core::Alloc::ScratchArena>& instanceBlases
+){
+    clearPreparedSceneTlasBuild();
+    const auto& state = rayTracingState();
+    if(
+        instances.empty()
+        || instances.size() != instanceBlases.size()
+        || !state.m_tlas
+        || !state.m_tlas->getBackingBufferHandle()
+        || state.m_tlasMaxInstances < instances.size()
+        || !state.m_tlasHeapHandle.valid()
+        || state.m_tlasHeapHandle.descriptorClass() != Core::GpuDescriptorClass::AccelStruct
+    )
+        return false;
+
+    m_preparedSceneTlasInstances.reserve(instances.size());
+    m_preparedSceneTlasBlases.reserve(instanceBlases.size());
+    for(usize index = 0u; index < instances.size(); ++index){
+        const Core::RayTracingAccelStructHandle& blas = instanceBlases[index];
+        if(!blas || instances[index].bottomLevelAS != blas.get()){
+            clearPreparedSceneTlasBuild();
+            return false;
+        }
+        m_preparedSceneTlasInstances.push_back(instances[index]);
+        m_preparedSceneTlasBlases.push_back(blas);
+    }
+    m_preparedSceneTlas = state.m_tlas;
+    m_preparedSceneTlasBackingBuffer = state.m_tlas->getBackingBufferHandle();
+    m_preparedSceneTlasHeapHandle = state.m_tlasHeapHandle;
+    m_preparedSceneTlasMaxInstances = state.m_tlasMaxInstances;
+    m_preparedSceneTlasStaticSceneHash = staticSceneHash;
+    m_preparedSceneTlasStatic = staticScene;
+    m_preparedSceneTlasReady = true;
+    return true;
+}
+
+bool RendererRayTracingSystem::recordPreparedSceneTlasBuild(Core::CommandList& commandList){
+    const auto& state = rayTracingState();
+    if(
+        !m_preparedSceneTlasReady
+        || m_preparedSceneTlasInstances.empty()
+        || m_preparedSceneTlasInstances.size() != m_preparedSceneTlasBlases.size()
+        || state.m_tlas.get() != m_preparedSceneTlas.get()
+        || !state.m_tlas
+        || state.m_tlas->getBackingBufferHandle().get() != m_preparedSceneTlasBackingBuffer.get()
+        || state.m_tlasMaxInstances != m_preparedSceneTlasMaxInstances
+        || state.m_tlasHeapHandle != m_preparedSceneTlasHeapHandle
+        || !state.m_tlasHeapHandle.valid()
+        || state.m_tlasHeapHandle.descriptorClass() != Core::GpuDescriptorClass::AccelStruct
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build no longer matches preflight storage"));
+        return false;
+    }
+    for(usize index = 0u; index < m_preparedSceneTlasInstances.size(); ++index){
+        if(
+            !m_preparedSceneTlasBlases[index]
+            || m_preparedSceneTlasInstances[index].bottomLevelAS != m_preparedSceneTlasBlases[index].get()
+        ){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build lost a referenced BLAS"));
+            return false;
+        }
+    }
+
+    // Vulkan's TLAS recorder issues the build directly. Publish the actual write/read sequence explicitly so this
+    // graph task's declared AccelStructRead final state remains a truthful cross-packet and cross-frame handoff.
+    commandList.setAccelStructState(m_preparedSceneTlas.get(), Core::ResourceStates::AccelStructWrite);
+    commandList.commitBarriers();
+    commandList.buildTopLevelAccelStruct(
+        m_preparedSceneTlas.get(),
+        m_preparedSceneTlasInstances.data(),
+        m_preparedSceneTlasInstances.size(),
+        Core::RayTracingAccelStructBuildFlags::PreferFastTrace
+    );
+    commandList.setAccelStructState(m_preparedSceneTlas.get(), Core::ResourceStates::AccelStructRead);
+    commandList.commitBarriers();
+    rayTracingState().m_tlasDeviceAddress = m_preparedSceneTlas->getDeviceAddress();
+    return true;
+}
+
+bool RendererRayTracingSystem::preparedSceneTlasBuildReady()const noexcept{
+    return m_preparedSceneTlasReady;
+}
+
+void RendererRayTracingSystem::confirmPreparedSceneTlasBuild()noexcept{
+    if(!m_preparedSceneTlasReady)
+        return;
+
+    auto& state = rayTracingState();
+    if(
+        state.m_tlas.get() == m_preparedSceneTlas.get()
+        && state.m_tlas
+        && state.m_tlas->getBackingBufferHandle().get() == m_preparedSceneTlasBackingBuffer.get()
+        && state.m_tlasMaxInstances == m_preparedSceneTlasMaxInstances
+        && state.m_tlasHeapHandle == m_preparedSceneTlasHeapHandle
+        && m_preparedSceneTlasStatic
+    ){
+        state.m_tlasStaticSceneHash = m_preparedSceneTlasStaticSceneHash;
+        state.m_tlasStaticSceneHashValid = true;
+    }
+    else
+        state.m_tlasStaticSceneHashValid = false;
+    clearPreparedSceneTlasBuild();
+}
+
 bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(){
     m_preparedShadowTraceGeometryBuffers.clear();
     if(!m_shadowVisibilityResourcesPreflighted)
@@ -727,6 +849,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     m_preparedCausticEmissionTargetBytes.clear();
     clearPreparedShadowMaterialContext();
     clearPreparedSceneBvh();
+    clearPreparedSceneTlasBuild();
     m_shadowVisibilityPreparedTargets = nullptr;
     m_shadowVisibilityResourcesPreflighted = false;
     m_shadowVisibilityHardwareSupported = false;
@@ -777,6 +900,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     m_shadowVisibilityHybridPipelinePreflighted = false;
     clearPreparedShadowMaterialContext();
     clearPreparedSceneBvh();
+    clearPreparedSceneTlasBuild();
     // Surfel GI is a per-frame consumer of the scene selected below. Never let an empty or rejected preflight reuse
     // the preceding frame's backend selection and dispatch against stale trace inputs.
     rayTracingState().m_hybridTransparentShadowReady = false;
@@ -854,6 +978,10 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         // established native writers for that two-stage fallback instead of publishing a presumed final graph blob.
         if(m_shadowVisibilityHybridResourcesPreflighted)
             clearPreparedShadowMaterialContext();
+        // Hybrid tracing retains the established native HW/SW fallback. A later software failure is intentionally
+        // non-fatal, so do not let an opaque-only frozen TLAS build publish a partial hybrid frame.
+        if(rayTracingState().m_sceneHasTransparentOccluder)
+            clearPreparedSceneTlasBuild();
         // The first graph-owned scene-BVH migration intentionally excludes every hardware route. In a hybrid frame
         // the later software half is non-fatal after hardware preparation has succeeded, so retain its established
         // direct writers instead of publishing a frozen pair whose acceptance would imply that SW work completed.
@@ -1024,7 +1152,8 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     const bool causticEmissionTargetsGraphOwned,
     const bool surfelFrameConstantsGraphOwned,
     const bool shadowMaterialContextBatchGraphOwned,
-    const bool sceneBvhBatchGraphOwned
+    const bool sceneBvhBatchGraphOwned,
+    const bool sceneTlasBuildGraphOwned
 ){
     outBackendReady = false;
     if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
@@ -1040,10 +1169,17 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
         return true;
 
     if(m_shadowVisibilityHardwareSupported){
-        if(!buildPendingMeshBlas(commandList))
+        if(!buildPendingMeshBlas(commandList)){
+            if(sceneTlasBuildGraphOwned)
+                return false;
             return true;
-        if(!buildSceneTlas(commandList, scratchArena, shadowMaterialContextBatchGraphOwned)){
-            if(shadowMaterialContextBatchGraphOwned)
+        }
+        const bool sceneTlasReady = sceneTlasBuildGraphOwned
+            ? recordPreparedSceneTlasBuild(commandList)
+            : buildSceneTlas(commandList, scratchArena, shadowMaterialContextBatchGraphOwned)
+        ;
+        if(!sceneTlasReady){
+            if(shadowMaterialContextBatchGraphOwned || sceneTlasBuildGraphOwned)
                 return false;
             rayTracingState().m_surfelEnabled = false;
             rayTracingState().m_surfelUseHwTrace = false;

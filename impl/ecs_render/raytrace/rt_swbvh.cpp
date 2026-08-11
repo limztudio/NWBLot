@@ -438,6 +438,9 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     auto rendererView = world().view<RendererComponent>();
     const usize candidateCount = rendererView.candidateCount();
     Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena> instances{ scratchArena };
+    // RayTracingInstanceDesc contains only a raw BLAS pointer. The opaque graph-owned TLAS build retains this
+    // parallel handle stream until the accepting Shadow Preparation packet has submitted.
+    Vector<Core::RayTracingAccelStructHandle, Core::Alloc::ScratchArena> instanceBlases{ scratchArena };
     // Kept parallel to instances for hardware InstanceID lookup.
     Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
     // All-occluder trace context; draw buffers hold one transparency class.
@@ -450,6 +453,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         scratchArena
     );
     instances.reserve(candidateCount);
+    instanceBlases.reserve(candidateCount);
     instanceMaterials.reserve(candidateCount);
     shadowInstanceData.reserve(candidateCount);
     shadowMutableTypedRanges.reserve(candidateCount);
@@ -584,6 +588,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             instanceDesc.setFlags(Core::RayTracingInstanceFlags::ForceOpaque);
 
         instances.push_back(instanceDesc);
+        instanceBlases.push_back(mesh->blas);
         instanceMaterials.push_back(instanceMaterial);
         shadowInstanceData.push_back(shadowInstance);
     }
@@ -665,12 +670,18 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     }
 
     if(!canReuseTlas && commandList){
+        // The backend records the acceleration-structure build directly. Keep the task graph's declared
+        // AccelStructRead boundary truthful by explicitly publishing the native build write and its final read.
+        commandList->setAccelStructState(rayTracingState().m_tlas.get(), Core::ResourceStates::AccelStructWrite);
+        commandList->commitBarriers();
         commandList->buildTopLevelAccelStruct(
             rayTracingState().m_tlas.get(),
             instances.data(),
             instances.size(),
             Core::RayTracingAccelStructBuildFlags::PreferFastTrace
         );
+        commandList->setAccelStructState(rayTracingState().m_tlas.get(), Core::ResourceStates::AccelStructRead);
+        commandList->commitBarriers();
     }
     rayTracingState().m_tlasDeviceAddress = rayTracingState().m_tlas->getDeviceAddress();
 
@@ -811,6 +822,20 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     else if(commandList && shadowMaterialContextBatchGraphOwned){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned HW shadow material context unexpectedly reused a native cache"));
         return false;
+    }
+
+    // Freeze only the opaque hardware route. Hybrid recording deliberately keeps its native HW/SW fallback: its
+    // later software gather is non-fatal and must not accept a presumed final hardware-only snapshot.
+    if(!commandList && !canReuseTlas && !rayTracingState().m_sceneHasTransparentOccluder){
+        if(!capturePreparedSceneTlasBuild(
+            staticScene,
+            tlasStaticSceneHash,
+            instances,
+            instanceBlases
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: could not freeze opaque scene TLAS build after preflight"));
+            return false;
+        }
     }
 
     if(staticScene && commandList){
@@ -1392,9 +1417,14 @@ bool RendererRayTracingSystem::buildMeshBlas(Core::CommandList& commandList, Mes
 
     commandList.setBufferState(meshResources.positionBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
     commandList.setBufferState(meshResources.triangleIndexBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
+    commandList.setAccelStructState(meshResources.blas.get(), Core::ResourceStates::AccelStructWrite);
     commandList.commitBarriers();
 
     commandList.buildBottomLevelAccelStruct(meshResources.blas.get(), &geometry, 1u, buildFlags);
+    // TLAS build and later RayQuery consume this BLAS in later graph packets. Publish the build write before the
+    // preparation packet signals its Graphics frontier rather than leaving a raw build-write state behind.
+    commandList.setAccelStructState(meshResources.blas.get(), Core::ResourceStates::AccelStructRead);
+    commandList.commitBarriers();
 
     meshResources.blasRefitsSinceRebuild = performRefit ? (meshResources.blasRefitsSinceRebuild + 1u) : 0u;
 

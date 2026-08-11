@@ -79,7 +79,8 @@ public:
         bool causticEmissionTargetsGraphOwned = false,
         bool surfelFrameConstantsGraphOwned = false,
         bool shadowMaterialContextBatchGraphOwned = false,
-        bool sceneBvhBatchGraphOwned = false
+        bool sceneBvhBatchGraphOwned = false,
+        bool sceneTlasBuildGraphOwned = false
     );
     [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept;
     void discardPreflightShadowVisibilityResources()noexcept;
@@ -142,6 +143,10 @@ public:
         Core::GpuUploadBlobId& outInstanceBlob
     )const;
     void confirmPreparedSceneBvhUploads()noexcept;
+    // The opaque hardware TLAS records from this frozen preflight plan in Shadow Preparation. Its static cache
+    // becomes valid only after that packet accepts; transparent/hybrid frames retain the compatibility path.
+    [[nodiscard]] bool preparedSceneTlasBuildReady()const noexcept;
+    void confirmPreparedSceneTlasBuild()noexcept;
     void releaseRayTraceMaterialContextHeapHandles();
     void releaseSwBvhScratchHeapHandles();
     void releaseSurfelGiHeapHandles();
@@ -293,6 +298,14 @@ private:
         usize instanceByteCount
     )const;
     void clearPreparedSceneBvh()noexcept;
+    [[nodiscard]] bool capturePreparedSceneTlasBuild(
+        bool staticScene,
+        u64 staticSceneHash,
+        const Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena>& instances,
+        const Vector<Core::RayTracingAccelStructHandle, Core::Alloc::ScratchArena>& instanceBlases
+    );
+    [[nodiscard]] bool recordPreparedSceneTlasBuild(Core::CommandList& commandList);
+    void clearPreparedSceneTlasBuild()noexcept;
     [[nodiscard]] bool prepareSurfelResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool recordPreparedSurfelFrameConstants(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool initializeSurfelResources(Core::CommandList& commandList);
@@ -432,6 +445,17 @@ private:
     u64 m_preparedSceneBvhStaticSceneHash = 0u;
     bool m_preparedSceneBvhStatic = false;
     bool m_preparedSceneBvhReady = false;
+    // RayTracingInstanceDesc stores raw BLAS pointers, so the frozen TLAS plan retains every corresponding BLAS
+    // handle until Shadow Preparation accepts or discards it. The selected TLAS/backing generation is retained too.
+    Vector<Core::RayTracingInstanceDesc, Core::Alloc::GlobalArena> m_preparedSceneTlasInstances;
+    Vector<Core::RayTracingAccelStructHandle, Core::Alloc::GlobalArena> m_preparedSceneTlasBlases;
+    Core::RayTracingAccelStructHandle m_preparedSceneTlas;
+    Core::BufferHandle m_preparedSceneTlasBackingBuffer;
+    Core::GpuDescriptorHandle m_preparedSceneTlasHeapHandle;
+    usize m_preparedSceneTlasMaxInstances = 0u;
+    u64 m_preparedSceneTlasStaticSceneHash = 0u;
+    bool m_preparedSceneTlasStatic = false;
+    bool m_preparedSceneTlasReady = false;
     DeferredFrameTargets* m_shadowVisibilityPreparedTargets = nullptr;
     bool m_shadowVisibilityResourcesPreflighted = false;
     bool m_shadowVisibilityHardwareSupported = false;

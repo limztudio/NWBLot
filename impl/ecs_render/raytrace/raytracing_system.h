@@ -76,7 +76,8 @@ public:
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         bool& outBackendReady,
-        bool causticEmissionTargetsGraphOwned = false
+        bool causticEmissionTargetsGraphOwned = false,
+        bool surfelFrameConstantsGraphOwned = false
     );
     [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept;
     void discardPreflightShadowVisibilityResources()noexcept;
@@ -104,6 +105,13 @@ public:
     // authoritatively represents a frame without refractive emission targets.
     [[nodiscard]] bool retainPreparedCausticEmissionTargetUpload(
         Core::GpuTaskGraph& graph,
+        Core::GpuUploadBlobId& outBlob
+    )const;
+    // Retain the exact per-frame surfel constant payload before graph recording. A valid empty result represents
+    // an inactive surfel frame; an active frame always supplies a blob for the graph-owned upload.
+    [[nodiscard]] bool retainPreparedSurfelFrameConstantsUpload(
+        Core::GpuTaskGraph& graph,
+        const DeferredFrameTargets& targets,
         Core::GpuUploadBlobId& outBlob
     )const;
     void releaseRayTraceMaterialContextHeapHandles();

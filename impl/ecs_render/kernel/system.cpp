@@ -207,6 +207,7 @@ void RendererSystem::invalidateResources(){
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};
+    m_surfelFrameConstantsUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
@@ -454,6 +455,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};
+    m_surfelFrameConstantsUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -842,6 +844,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && causticEmissionTargetsUploadPacket == shadowPreparePacket
         )
     ;
+    const Core::GpuSubmissionPacketId surfelFrameConstantsUploadPacket =
+        m_surfelFrameConstantsUploadTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_surfelFrameConstantsUploadTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    // Active surfel frames freeze a fresh constant payload before compilation. It must share Shadow Preparation's
+    // first Graphics packet so that task remains the handoff producer for the asynchronous Surfel-GI consumer.
+    const bool surfelFrameConstantsUploadMergedIntoShadowPreparePacket =
+        !m_surfelFrameConstantsUploadTask.valid()
+        || (
+            shadowPreparePacket.valid()
+            && surfelFrameConstantsUploadPacket.valid()
+            && surfelFrameConstantsUploadPacket == shadowPreparePacket
+        )
+    ;
     const Core::GpuSubmissionPacketId graphicsPrefixPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_graphicsPrefixTask
     );
@@ -1224,6 +1241,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !deferredBindlessSlotsUploadMergedIntoShadowPreparePacket
         || !rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket
         || !causticEmissionTargetsUploadMergedIntoShadowPreparePacket
+        || !surfelFrameConstantsUploadMergedIntoShadowPreparePacket
         || !shadowPrepareQueue
         || shadowPrepareQueue->queueClass != Core::CommandQueue::Graphics
         || !m_graphicsPrefixMeshViewSetupTask.valid()
@@ -2559,6 +2577,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && deferredBindlessSlotsUploadMergedIntoShadowPreparePacket
             && rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket
             && causticEmissionTargetsUploadMergedIntoShadowPreparePacket
+            && surfelFrameConstantsUploadMergedIntoShadowPreparePacket
             && graphicsPrefixPacket.valid()
             && graphicsPrefixWorkPacketRange.valid()
             && shadowPrepareThroughPrefixPacketRange.valid()

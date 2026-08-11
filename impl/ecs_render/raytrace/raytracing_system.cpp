@@ -597,7 +597,8 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     bool& outBackendReady,
-    const bool causticEmissionTargetsGraphOwned
+    const bool causticEmissionTargetsGraphOwned,
+    const bool surfelFrameConstantsGraphOwned
 ){
     outBackendReady = false;
     if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
@@ -641,7 +642,11 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
             else
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow recording failed; transparent shadows absent this frame"));
         }
-        if(rayTracingState().m_surfelEnabled && !recordPreparedSurfelFrameConstants(commandList, targets))
+        if(
+            rayTracingState().m_surfelEnabled
+            && !surfelFrameConstantsGraphOwned
+            && !recordPreparedSurfelFrameConstants(commandList, targets)
+        )
             return false;
         return true;
     }
@@ -661,7 +666,11 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     }
 
     outBackendReady = m_shadowVisibilityBackendPipelinePreflighted;
-    if(rayTracingState().m_surfelEnabled && !recordPreparedSurfelFrameConstants(commandList, targets))
+    if(
+        rayTracingState().m_surfelEnabled
+        && !surfelFrameConstantsGraphOwned
+        && !recordPreparedSurfelFrameConstants(commandList, targets)
+    )
         return false;
     return true;
 }

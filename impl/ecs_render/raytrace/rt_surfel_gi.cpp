@@ -28,6 +28,34 @@ static_assert(sizeof(NwbSurfelConstantsGpu) == sizeof(Float4) * NWB_SURFEL_CONST
 // Offset trace and gather points to avoid self-intersection.
 inline constexpr f32 s_SurfelNormalBias = 0.05f;
 
+template<typename StateT>
+[[nodiscard]] NwbSurfelConstantsGpu BuildSurfelFrameConstants(
+    const StateT& state,
+    const DeferredFrameTargets& targets
+){
+    // First frame traces every surfel; later frames use round-robin updates.
+    const u32 updateDivisor = state.m_surfelSeeded ? Max<u32>(NWB_SURFEL_UPDATE_DIVISOR, 1u) : 1u;
+    const f32 cellSize = NWB_SURFEL_CELL_SIZE;
+
+    NwbSurfelConstantsGpu params;
+    params.cameraPositionCellSize = Float4(0.0f, 0.0f, 0.0f, cellSize);
+    params.hashPoolFrameDivisor = Float4(
+        static_cast<f32>(state.m_surfelHashCellCount),
+        static_cast<f32>(state.m_surfelPoolCapacity),
+        static_cast<f32>(state.m_surfelFrameIndex),
+        static_cast<f32>(updateDivisor)
+    );
+    params.coverageRadiusBiasHyst = Float4(0.0f, NWB_SURFEL_DEFAULT_RADIUS, s_SurfelNormalBias, static_cast<f32>(NWB_SURFEL_MAX_ACCUM));
+    params.ageRaysTileScreen = Float4(
+        static_cast<f32>(NWB_SURFEL_MAX_AGE),
+        static_cast<f32>(NWB_SURFEL_RAYS_PER_SURFEL),
+        static_cast<f32>(NWB_SURFEL_SPAWN_TILE),
+        static_cast<f32>(targets.width)
+    );
+    params.screenHeightPad = Float4(static_cast<f32>(targets.height), 0.0f, 0.0f, 0.0f);
+    return params;
+}
+
 // Delayed counter readback avoids stalling on the asynchronous copy.
 inline constexpr u32 s_SurfelCountLogInterval = 120u;
 inline constexpr u32 s_SurfelCountLogDelay = 3u;
@@ -864,6 +892,28 @@ bool RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targ
     return true;
 }
 
+bool RendererRayTracingSystem::retainPreparedSurfelFrameConstantsUpload(
+    Core::GpuTaskGraph& graph,
+    const DeferredFrameTargets& targets,
+    Core::GpuUploadBlobId& outBlob
+)const{
+    outBlob = {};
+    if(!hasSurfelWork())
+        return true;
+    if(!rayTracingState().m_surfelConstants){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: active surfel GI has no preflighted constant buffer"));
+        return false;
+    }
+
+    const NwbSurfelConstantsGpu params = BuildSurfelFrameConstants(rayTracingState(), targets);
+    outBlob = graph.copyUploadData(
+        &params,
+        sizeof(params),
+        alignof(NwbSurfelConstantsGpu)
+    );
+    return outBlob.valid();
+}
+
 bool RendererRayTracingSystem::recordPreparedSurfelFrameConstants(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets
@@ -871,26 +921,7 @@ bool RendererRayTracingSystem::recordPreparedSurfelFrameConstants(
     if(!hasSurfelWork() || !rayTracingState().m_surfelConstants)
         return true;
 
-    // First frame traces every surfel; later frames use round-robin updates.
-    const u32 updateDivisor = rayTracingState().m_surfelSeeded ? Max<u32>(NWB_SURFEL_UPDATE_DIVISOR, 1u) : 1u;
-    const f32 cellSize = NWB_SURFEL_CELL_SIZE;
-
-    NwbSurfelConstantsGpu params;
-    params.cameraPositionCellSize = Float4(0.0f, 0.0f, 0.0f, cellSize);
-    params.hashPoolFrameDivisor = Float4(
-        static_cast<f32>(rayTracingState().m_surfelHashCellCount),
-        static_cast<f32>(rayTracingState().m_surfelPoolCapacity),
-        static_cast<f32>(rayTracingState().m_surfelFrameIndex),
-        static_cast<f32>(updateDivisor)
-    );
-    params.coverageRadiusBiasHyst = Float4(0.0f, NWB_SURFEL_DEFAULT_RADIUS, s_SurfelNormalBias, static_cast<f32>(NWB_SURFEL_MAX_ACCUM));
-    params.ageRaysTileScreen = Float4(
-        static_cast<f32>(NWB_SURFEL_MAX_AGE),
-        static_cast<f32>(NWB_SURFEL_RAYS_PER_SURFEL),
-        static_cast<f32>(NWB_SURFEL_SPAWN_TILE),
-        static_cast<f32>(targets.width)
-    );
-    params.screenHeightPad = Float4(static_cast<f32>(targets.height), 0.0f, 0.0f, 0.0f);
+    const NwbSurfelConstantsGpu params = BuildSurfelFrameConstants(rayTracingState(), targets);
 
     Core::Buffer* cb = rayTracingState().m_surfelConstants.get();
     commandList.setBufferState(cb, Core::ResourceStates::CopyDest);

@@ -98,6 +98,7 @@ struct ShadowPrepareGraphTask{
         bool currentBindlessSlotsGraphOwned = false;
         bool rayTraceMaterialContextSlotsGraphOwned = false;
         bool causticEmissionTargetsGraphOwned = false;
+        bool surfelFrameConstantsGraphOwned = false;
     };
 
     [[nodiscard]] static bool record(
@@ -130,7 +131,8 @@ struct ShadowPrepareGraphTask{
                 commandList,
                 *payload.targets,
                 renderer.m_preparedShadowVisibilityReady,
-                payload.causticEmissionTargetsGraphOwned
+                payload.causticEmissionTargetsGraphOwned,
+                payload.surfelFrameConstantsGraphOwned
             )
         ;
         // The graph-owned material-context selector was snapshotted after preflight settled every backing handle.
@@ -1345,6 +1347,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};
+    m_surfelFrameConstantsUploadTask = {};
     if(
         !deferredTargets.valid()
         || !deferredTargets.bindless.valid()
@@ -1511,9 +1514,67 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
         shadowPrepareDependency = m_causticEmissionTargetsUploadTask;
     }
 
+    const Core::GpuGraphResourceId surfelFrameConstants = m_rayTracingState.m_surfelConstants
+        ? importBuffer(
+            m_rayTracingState.m_surfelConstants,
+            Name("render.surfel_gi.constants"),
+            "Surfel Constants"
+        )
+        : Core::GpuGraphResourceId{}
+    ;
+    if(m_rayTracingState.m_surfelConstants && !surfelFrameConstants.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import preflighted surfel constants"));
+        return false;
+    }
+
+    Core::GpuUploadBlobId surfelFrameConstantsBlob;
+    if(!m_raytracingSystem.retainPreparedSurfelFrameConstantsUpload(
+        m_deferredLightingTaskGraph,
+        deferredTargets,
+        surfelFrameConstantsBlob
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted surfel-frame constants upload data"));
+        return false;
+    }
+    if(surfelFrameConstantsBlob.valid()){
+        if(!surfelFrameConstants.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel-frame constants upload has no imported destination"));
+            return false;
+        }
+
+        Core::GpuTaskSchedulingHint surfelFrameConstantsUploadScheduling;
+        surfelFrameConstantsUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
+        surfelFrameConstantsUploadScheduling.forceSubmissionBoundary = false;
+        surfelFrameConstantsUploadScheduling.allowPacketMerge = true;
+        surfelFrameConstantsUploadScheduling.mergeWithPrevious = true;
+        Core::GpuTaskDesc surfelFrameConstantsUploadDesc;
+        surfelFrameConstantsUploadDesc
+            .setIdentity(Name("render.surfel_gi.constants_upload"))
+            .setMarkerLabel("Surfel Frame Constants Upload")
+            .setQueue(GraphicsUploadQueueRequest())
+            .setScheduling(surfelFrameConstantsUploadScheduling)
+            .setDependencies(&shadowPrepareDependency, 1u)
+        ;
+        m_surfelFrameConstantsUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+            surfelFrameConstantsUploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = surfelFrameConstantsBlob,
+                .destination = surfelFrameConstants,
+                // This automatic-state constant buffer publishes Common. Shadow Preparation owns the following CB
+                // handoff and therefore becomes the accepted cross-queue producer for Surfel GI.
+                .finalState = Core::ResourceStates::Common,
+            }
+        );
+        if(!m_surfelFrameConstantsUploadTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare surfel-frame constants upload"));
+            return false;
+        }
+        shadowPrepareDependency = m_surfelFrameConstantsUploadTask;
+    }
+
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
-    resourceUses.reserve(13u + shadowTraceGeometryResourceCount);
+    resourceUses.reserve(14u + shadowTraceGeometryResourceCount);
     // Shadow Preparation owns each preflight input's post-transition packet boundary. This deliberately supersedes
     // preceding immutable uploads as graph producers, so later Compute readers wait on this first Graphics packet
     // rather than forcing FrontierSafe packetization to split an upload away from its accepting consumer.
@@ -1523,6 +1584,8 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
     resourceUses.push_back(WriteUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
     if(causticEmissionTargets.valid())
         resourceUses.push_back(WriteUse(causticEmissionTargets, Core::ResourceStates::ShaderResource));
+    if(surfelFrameConstants.valid())
+        resourceUses.push_back(WriteUse(surfelFrameConstants, Core::ResourceStates::ConstantBuffer));
     for(usize resourceIndex = 0u; resourceIndex < shadowTraceGeometryResourceCount; ++resourceIndex){
         const Core::GpuGraphResourceId resource = shadowTraceGeometryResources[resourceIndex];
         if(!resource.valid())
@@ -1569,12 +1632,6 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             Name("render.deferred_effects.shadow_instances"),
             "Shadow Instances",
             Core::ResourceStates::ShaderResource
-        )
-        && appendOptionalWriteBuffer(
-            m_rayTracingState.m_surfelConstants,
-            Name("render.surfel_gi.constants"),
-            "Surfel Constants",
-            Core::ResourceStates::ConstantBuffer
         )
     ;
     if(m_rayTracingState.m_tlas){
@@ -1624,6 +1681,7 @@ bool RendererSystem::declareDeferredShadowPrepareTask(
             .currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned,
             .rayTraceMaterialContextSlotsGraphOwned = true,
             .causticEmissionTargetsGraphOwned = true,
+            .surfelFrameConstantsGraphOwned = true,
         }
     );
     if(!m_deferredShadowPrepareTask.valid()){
@@ -3277,6 +3335,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};
+    m_surfelFrameConstantsUploadTask = {};
     m_deferredLaggedLightingHistorySlotsUploadTask = {};
     m_deferredShadowPrepareTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};

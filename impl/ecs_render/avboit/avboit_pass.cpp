@@ -500,21 +500,43 @@ void RendererAvboitSystem::renderAvboitPreDepthWarpPasses(
 void RendererAvboitSystem::renderAvboitExtinctionPass(
     Core::CommandList& commandList,
     AvboitFrameTargets& avboitTargets,
-    const CsgFrameState& csgFrameState
+    const CsgFrameState& csgFrameState,
+    const MaterialPassDrawItemPartitions* const preparedExtinctionDrawItems,
+    const CsgFrameGpuData* const preparedExtinctionCsgFrameData,
+    const usize preparedExtinctionInstanceCount,
+    const usize preparedExtinctionMaterialTypedByteCount
 ){
     NWB_ASSERT(avboitTargets.valid());
 
     // The graph records the warp/control reads and packed-extinction writes as packet-boundary state; this thunk
     // contains only the native raster pass.
 
-    m_renderer.materialSystem().renderMaterialPass(
-        commandList,
-        avboitTargets.lowFramebuffer.get(),
-        MaterialPipelinePass::AvboitExtinction,
-        true,
-        csgFrameState,
-        &avboitTargets
-    );
+    if(preparedExtinctionDrawItems || preparedExtinctionCsgFrameData){
+        NWB_ASSERT(preparedExtinctionDrawItems);
+        NWB_ASSERT(preparedExtinctionCsgFrameData);
+        if(preparedExtinctionDrawItems && preparedExtinctionCsgFrameData){
+            m_renderer.materialSystem().renderPreparedMaterialPass(
+                commandList,
+                avboitTargets.lowFramebuffer.get(),
+                MaterialPipelinePass::AvboitExtinction,
+                &avboitTargets,
+                *preparedExtinctionDrawItems,
+                *preparedExtinctionCsgFrameData,
+                preparedExtinctionInstanceCount,
+                preparedExtinctionMaterialTypedByteCount
+            );
+        }
+    }
+    else{
+        m_renderer.materialSystem().renderMaterialPass(
+            commandList,
+            avboitTargets.lowFramebuffer.get(),
+            MaterialPipelinePass::AvboitExtinction,
+            true,
+            csgFrameState,
+            &avboitTargets
+        );
+    }
     commandList.endRenderPass();
 }
 
@@ -561,7 +583,11 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
 void RendererAvboitSystem::renderAvboitPostOccupancyPasses(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const CsgFrameState& csgFrameState
+    const CsgFrameState& csgFrameState,
+    const MaterialPassDrawItemPartitions* const preparedExtinctionDrawItems,
+    const CsgFrameGpuData* const preparedExtinctionCsgFrameData,
+    const usize preparedExtinctionInstanceCount,
+    const usize preparedExtinctionMaterialTypedByteCount
 ){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
@@ -569,7 +595,15 @@ void RendererAvboitSystem::renderAvboitPostOccupancyPasses(
     NWB_ASSERT(avboitState().m_integratePipeline);
 
     dispatchAvboitDepthWarp(commandList, avboitTargets);
-    renderAvboitExtinctionPass(commandList, avboitTargets, csgFrameState);
+    renderAvboitExtinctionPass(
+        commandList,
+        avboitTargets,
+        csgFrameState,
+        preparedExtinctionDrawItems,
+        preparedExtinctionCsgFrameData,
+        preparedExtinctionInstanceCount,
+        preparedExtinctionMaterialTypedByteCount
+    );
     dispatchAvboitIntegration(commandList, avboitTargets);
     renderAvboitAccumulatePass(commandList, targets, csgFrameState);
 }

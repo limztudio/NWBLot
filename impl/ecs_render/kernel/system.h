@@ -333,6 +333,9 @@ private:
     Core::GpuTaskId m_deferredAvboitPreTask;
     Core::GpuTaskId m_deferredAvboitOccupancyTask;
     Core::GpuTaskId m_deferredAvboitDepthWarpTask;
+    // The final immutable extinction upload, when that phase has visible draws. It must live in the native
+    // extinction packet so rejected/retried packet recording cannot publish only a partial phase stream.
+    Core::GpuTaskId m_deferredAvboitExtinctionStreamTask;
     Core::GpuTaskId m_deferredAvboitExtinctionTask;
     Core::GpuTaskId m_deferredAvboitIntegrationTask;
     Core::GpuTaskId m_deferredAvboitAccumulationTask;

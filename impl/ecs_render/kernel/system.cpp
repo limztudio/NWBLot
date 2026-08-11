@@ -224,6 +224,7 @@ void RendererSystem::invalidateResources(){
     m_deferredAvboitPreTask = {};
     m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
+    m_deferredAvboitExtinctionStreamTask = {};
     m_deferredAvboitExtinctionTask = {};
     m_deferredAvboitIntegrationTask = {};
     m_deferredAvboitAccumulationTask = {};
@@ -463,6 +464,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredAvboitPreTask = {};
     m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
+    m_deferredAvboitExtinctionStreamTask = {};
     m_deferredAvboitExtinctionTask = {};
     m_deferredAvboitIntegrationTask = {};
     m_deferredAvboitAccumulationTask = {};
@@ -903,6 +905,25 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     const Core::GpuSubmissionPacketId avboitExtinctionPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitExtinctionTask
     );
+    const Core::GpuSubmissionPacketId avboitExtinctionStreamPacket =
+        m_deferredAvboitExtinctionStreamTask.valid()
+        ? m_deferredLightingCompiledGraph.packetForTask(m_deferredAvboitExtinctionStreamTask)
+        : Core::GpuSubmissionPacketId{}
+    ;
+    const bool avboitExtinctionPacketContainsStreams = !m_deferredAvboitExtinctionStreamTask.valid()
+        || (
+            avboitExtinctionPacket.valid()
+            && avboitExtinctionStreamPacket.valid()
+            && avboitExtinctionPacket == avboitExtinctionStreamPacket
+        )
+    ;
+    const bool avboitUnsplitPrePacketContainsExtinction = !hasTransparentRenderers
+        || (
+            avboitPrePacket.valid()
+            && avboitExtinctionPacket.valid()
+            && avboitPrePacket == avboitExtinctionPacket
+        )
+    ;
     const Core::GpuSubmissionPacketId avboitIntegrationPacket = m_deferredLightingCompiledGraph.packetForTask(
         m_deferredAvboitIntegrationTask
     );
@@ -1053,9 +1074,13 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     ;
     const Core::GpuSubmissionPacketRange hardwareCausticsPacketRange =
         m_deferredLightingCompiledGraph.packetRange(hardwareCausticsPacket, hardwareCausticsPacket);
+    const Core::GpuSubmissionPacketId avboitUnsplitFinalPacket = hasTransparentRenderers
+        ? avboitExtinctionPacket
+        : avboitPrePacket
+    ;
     const Core::GpuSubmissionPacketRange avboitPacketRange = m_deferredLightingCompiledGraph.packetRange(
         avboitPrePacket,
-        avboitUsesAsyncCompute ? avboitAccumulationPacket : avboitPrePacket
+        avboitUsesAsyncCompute ? avboitAccumulationPacket : avboitUnsplitFinalPacket
     );
     const Core::GpuSubmissionPacketRange deferredLightingCompositePacketRange =
         m_deferredLightingCompiledGraph.packetRange(deferredLightingPacket, deferredCompositePacket);
@@ -1159,6 +1184,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_deferredAvboitOccupancyTask.valid()
         || !avboitPrePacket.valid()
         || !avboitPrePacketContainsOccupancy
+        || !avboitExtinctionPacketContainsStreams
+        || (hasTransparentRenderers && (
+            !m_deferredAvboitExtinctionTask.valid()
+            || !avboitExtinctionPacket.valid()
+            || (!avboitUsesAsyncCompute && !avboitUnsplitPrePacketContainsExtinction)
+        ))
         || !avboitPreQueue
         || avboitPreQueue->queueClass != Core::CommandQueue::Graphics
         || (avboitUsesAsyncCompute && (
@@ -1624,6 +1655,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_deferredAvboitOccupancyTask.valid()
         && avboitPrePacket.valid()
         && avboitPrePacketContainsOccupancy
+        && avboitExtinctionPacketContainsStreams
+        && (!hasTransparentRenderers || (
+            m_deferredAvboitExtinctionTask.valid()
+            && avboitExtinctionPacket.valid()
+            && (avboitUsesAsyncCompute || avboitUnsplitPrePacketContainsExtinction)
+        ))
         && (!avboitUsesAsyncCompute || (
             m_deferredAvboitDepthWarpTask.valid()
             && m_deferredAvboitExtinctionTask.valid()
@@ -1891,6 +1928,12 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_deferredAvboitOccupancyTask.valid()
             && avboitPrePacket.valid()
             && avboitPrePacketContainsOccupancy
+            && avboitExtinctionPacketContainsStreams
+            && (!hasTransparentRenderers || (
+                m_deferredAvboitExtinctionTask.valid()
+                && avboitExtinctionPacket.valid()
+                && (avboitUsesAsyncCompute || avboitUnsplitPrePacketContainsExtinction)
+            ))
             && avboitPacketRange.valid()
             && avboitPacketRange.packetCount == avboitTimingTicketCount
             && (!avboitUsesAsyncCompute || (

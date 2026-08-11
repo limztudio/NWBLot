@@ -928,6 +928,8 @@ struct AvboitOccupancyGraphTask{
         const CsgFrameGpuData* preparedOccupancyCsgFrameData = nullptr;
         usize preparedOccupancyInstanceCount = 0u;
         usize preparedOccupancyMaterialTypedByteCount = 0u;
+        if(payload.hasTransparentRenderers && (!payload.occupancyPhasePrepared || !payload.occupancySnapshot.captured))
+            return false;
         if(payload.occupancyPhasePrepared && payload.occupancySnapshot.captured){
             payload.occupancySnapshot.materialize(occupancyDrawItems, occupancyCsgFrameData);
             preparedOccupancyDrawItems = &occupancyDrawItems;
@@ -947,14 +949,12 @@ struct AvboitOccupancyGraphTask{
                 preparedOccupancyInstanceCount,
                 preparedOccupancyMaterialTypedByteCount
             );
-            if(!payload.splitStages)
-                payload.avboitSystem->renderAvboitPostOccupancyPasses(
-                    commandList,
-                    *payload.targets,
-                    *payload.csgFrameState
-                );
         }
-        RestoreAvboitGbufferInputs(commandList, *payload.targets);
+        // The Graphics-only path records the remaining AVBOIT phases in the mergeable extinction tail so its
+        // phase-local immutable uploads land after occupancy. The split path retains the historical early restore
+        // before the Compute depth warp packet.
+        if(payload.splitStages || !payload.hasTransparentRenderers)
+            RestoreAvboitGbufferInputs(commandList, *payload.targets);
         return true;
     }
 };
@@ -986,9 +986,17 @@ struct AvboitDepthWarpGraphTask{
 struct AvboitExtinctionGraphTask{
     struct Payload{
         RendererAvboitSystem* avboitSystem = nullptr;
-        AvboitFrameTargets* targets = nullptr;
+        DeferredFrameTargets* targets = nullptr;
         const CsgFrameState* csgFrameState = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        ECSRenderDetail::TransparentMaterialPassGraphSnapshot extinctionSnapshot;
+        bool extinctionPhasePrepared = false;
+        bool hasTransparentRenderers = false;
+        bool splitStages = false;
+
+        explicit Payload(Core::Alloc::GlobalArena& arena)
+            : extinctionSnapshot(arena)
+        {}
     };
 
     [[nodiscard]] static bool record(
@@ -1001,7 +1009,48 @@ struct AvboitExtinctionGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        payload.avboitSystem->renderAvboitExtinctionPass(commandList, *payload.targets, *payload.csgFrameState);
+        Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
+        MaterialPassDrawItemPartitions extinctionDrawItems{ scratchArena };
+        CsgFrameGpuData extinctionCsgFrameData{ scratchArena };
+        const MaterialPassDrawItemPartitions* preparedExtinctionDrawItems = nullptr;
+        const CsgFrameGpuData* preparedExtinctionCsgFrameData = nullptr;
+        usize preparedExtinctionInstanceCount = 0u;
+        usize preparedExtinctionMaterialTypedByteCount = 0u;
+        if(payload.hasTransparentRenderers && (!payload.extinctionPhasePrepared || !payload.extinctionSnapshot.captured))
+            return false;
+        if(payload.extinctionPhasePrepared && payload.extinctionSnapshot.captured){
+            payload.extinctionSnapshot.materialize(extinctionDrawItems, extinctionCsgFrameData);
+            preparedExtinctionDrawItems = &extinctionDrawItems;
+            preparedExtinctionCsgFrameData = &extinctionCsgFrameData;
+            preparedExtinctionInstanceCount = payload.extinctionSnapshot.instanceCount;
+            preparedExtinctionMaterialTypedByteCount = payload.extinctionSnapshot.materialTypedByteCount;
+        }
+        if(payload.hasTransparentRenderers){
+            if(payload.splitStages){
+                payload.avboitSystem->renderAvboitExtinctionPass(
+                    commandList,
+                    payload.targets->avboit,
+                    *payload.csgFrameState,
+                    preparedExtinctionDrawItems,
+                    preparedExtinctionCsgFrameData,
+                    preparedExtinctionInstanceCount,
+                    preparedExtinctionMaterialTypedByteCount
+                );
+            }
+            else{
+                payload.avboitSystem->renderAvboitPostOccupancyPasses(
+                    commandList,
+                    *payload.targets,
+                    *payload.csgFrameState,
+                    preparedExtinctionDrawItems,
+                    preparedExtinctionCsgFrameData,
+                    preparedExtinctionInstanceCount,
+                    preparedExtinctionMaterialTypedByteCount
+                );
+            }
+        }
+        if(!payload.splitStages)
+            RestoreAvboitGbufferInputs(commandList, *payload.targets);
         return true;
     }
 };
@@ -3022,6 +3071,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredAvboitPreTask = {};
     m_deferredAvboitOccupancyTask = {};
     m_deferredAvboitDepthWarpTask = {};
+    m_deferredAvboitExtinctionStreamTask = {};
     m_deferredAvboitExtinctionTask = {};
     m_deferredAvboitIntegrationTask = {};
     m_deferredAvboitAccumulationTask = {};
@@ -4371,14 +4421,16 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitPreResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
     avboitPreResourceUses.push_back(ReadUse(depth));
     avboitPreResourceUses.push_back(ReadWriteUse(avboitLowRaster, Core::ResourceStates::RenderTarget));
-    avboitPreResourceUses.push_back(ReadWriteUse(avboitAccumColor, Core::ResourceStates::RenderTarget));
-    avboitPreResourceUses.push_back(ReadWriteUse(avboitAccumExtinction, Core::ResourceStates::RenderTarget));
-    avboitPreResourceUses.push_back(ReadWriteUse(avboitTransmittance, Core::ResourceStates::UnorderedAccess));
+    // Clear owns the untouched post-occupancy targets here; the extinction tail later declares their actual
+    // raster/compute states. Keeping only CopyDest for this clear avoids retaining a false post-phase producer.
+    avboitPreResourceUses.push_back(WriteUse(avboitAccumColor, Core::ResourceStates::CopyDest));
+    avboitPreResourceUses.push_back(WriteUse(avboitAccumExtinction, Core::ResourceStates::CopyDest));
+    avboitPreResourceUses.push_back(WriteUse(avboitTransmittance, Core::ResourceStates::CopyDest));
     avboitPreResourceUses.push_back(ReadWriteUse(avboitCoverage, Core::ResourceStates::UnorderedAccess));
-    avboitPreResourceUses.push_back(ReadWriteUse(avboitDepthWarp, Core::ResourceStates::UnorderedAccess));
-    avboitPreResourceUses.push_back(ReadWriteUse(avboitControl, Core::ResourceStates::UnorderedAccess));
-    avboitPreResourceUses.push_back(ReadWriteUse(avboitExtinction, Core::ResourceStates::UnorderedAccess));
-    avboitPreResourceUses.push_back(ReadWriteUse(avboitExtinctionOverflow, Core::ResourceStates::UnorderedAccess));
+    avboitPreResourceUses.push_back(WriteUse(avboitDepthWarp, Core::ResourceStates::CopyDest));
+    avboitPreResourceUses.push_back(WriteUse(avboitControl, Core::ResourceStates::CopyDest));
+    avboitPreResourceUses.push_back(WriteUse(avboitExtinction, Core::ResourceStates::CopyDest));
+    avboitPreResourceUses.push_back(WriteUse(avboitExtinctionOverflow, Core::ResourceStates::CopyDest));
     if(avboitOccupancyPayload.occupancyStreamsUploaded){
         avboitPreResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
         avboitPreResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
@@ -4423,6 +4475,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     avboitGraphicsScheduling.forceSubmissionBoundary = true;
     avboitGraphicsScheduling.allowPacketMerge = false;
 
+    Core::GpuTaskSchedulingHint avboitComputeScheduling;
+    avboitComputeScheduling.cost = Core::GpuTaskCostHint::Medium;
+    avboitComputeScheduling.forceSubmissionBoundary = true;
+    avboitComputeScheduling.allowPacketMerge = false;
     if(splitAvboitStages){
         const Core::GpuTaskResourceUse depthWarpResourceUses[] = {
             ReadUse(avboitCoverage),
@@ -4430,10 +4486,6 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             ReadWriteUse(avboitControl, Core::ResourceStates::UnorderedAccess),
             ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
         };
-        Core::GpuTaskSchedulingHint avboitComputeScheduling;
-        avboitComputeScheduling.cost = Core::GpuTaskCostHint::Medium;
-        avboitComputeScheduling.forceSubmissionBoundary = true;
-        avboitComputeScheduling.allowPacketMerge = false;
         const Core::GpuTaskId preDependency[] = { m_deferredAvboitOccupancyTask };
         Core::GpuTaskDesc depthWarpDesc;
         depthWarpDesc
@@ -4456,41 +4508,342 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
             return;
         }
+    }
 
-        const Core::GpuTaskResourceUse extinctionResourceUses[] = {
-            ReadUse(avboitLowRaster, Core::ResourceStates::RenderTarget),
-            ReadUse(avboitDepthWarp),
-            ReadUse(avboitControl),
-            ReadWriteUse(avboitExtinction, Core::ResourceStates::UnorderedAccess),
-            ReadWriteUse(avboitExtinctionOverflow, Core::ResourceStates::UnorderedAccess),
-            ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
-            ReadUse(avboitMaterialDomain),
-            ReadUse(avboitCsgDomain),
-        };
-        const Core::GpuTaskId depthWarpDependency[] = { m_deferredAvboitDepthWarpTask };
-        Core::GpuTaskDesc extinctionDesc;
-        extinctionDesc
-            .setIdentity(Name("render.avboit.extinction"))
-            .setMarkerLabel("AVBOIT Extinction")
-            .setQueue(GraphicsQueueRequest())
-            .setScheduling(avboitGraphicsScheduling)
-            .setDependencies(depthWarpDependency, LengthOf(depthWarpDependency))
-            .setResourceUses(extinctionResourceUses, LengthOf(extinctionResourceUses))
-        ;
-        m_deferredAvboitExtinctionTask = m_deferredLightingTaskGraph.addTask<AvboitExtinctionGraphTask>(
-            extinctionDesc,
-            AvboitExtinctionGraphTask::Payload{
-                .avboitSystem = &m_avboitSystem,
-                .targets = &deferredTargets.avboit,
-                .csgFrameState = &csgFrameState,
-                .timingTicket = &avboitExtinctionTimingTicket,
-            }
+    if(hasTransparentRenderers){
+    // Extinction is a distinct shared-buffer write point. Snapshot and publish it only after occupancy, or after
+    // the split Compute depth warp, so neither phase can overwrite the other phase's instance/typed/CSG stream.
+    AvboitExtinctionGraphTask::Payload avboitExtinctionPayload{ m_arena };
+    avboitExtinctionPayload.avboitSystem = &m_avboitSystem;
+    avboitExtinctionPayload.targets = &deferredTargets;
+    avboitExtinctionPayload.csgFrameState = &csgFrameState;
+    avboitExtinctionPayload.timingTicket = splitAvboitStages
+        ? &avboitExtinctionTimingTicket
+        : &avboitPreTimingTicket
+    ;
+    avboitExtinctionPayload.hasTransparentRenderers = hasTransparentRenderers;
+    avboitExtinctionPayload.splitStages = splitAvboitStages;
+
+    Core::GpuTaskId extinctionUploadTask = splitAvboitStages
+        ? m_deferredAvboitDepthWarpTask
+        : m_deferredAvboitOccupancyTask
+    ;
+    bool extinctionStreamsUploaded = false;
+    bool extinctionCsgStreamsUploaded = false;
+        Core::Alloc::ScratchArena extinctionUploadScratch(RendererArenaScope::s_TaskGraphArena);
+        MaterialPassDrawItemPartitions extinctionDrawItems{ extinctionUploadScratch };
+        InstanceGpuDataVector extinctionInstanceData{ extinctionUploadScratch };
+        CsgFrameGpuData extinctionCsgFrameData{ extinctionUploadScratch };
+#if defined(NWB_DEBUG)
+        ECSRenderDetail::MaterialTypedInstanceRangeVector extinctionMaterialTypedRanges{ extinctionUploadScratch };
+#endif
+        MaterialTypedByteDataVector extinctionMaterialTypedBytes{ extinctionUploadScratch };
+        m_materialSystem.gatherMaterialPassDrawItems(
+            deferredTargets.avboit.lowFramebuffer.get(),
+            MaterialPipelinePass::AvboitExtinction,
+            true,
+            csgFrameState,
+            extinctionDrawItems,
+            extinctionInstanceData,
+            extinctionCsgFrameData,
+#if defined(NWB_DEBUG)
+            extinctionMaterialTypedRanges,
+#endif
+            extinctionMaterialTypedBytes,
+            RendererResourceLookupMode::PreparedOnly
         );
-        if(!m_deferredAvboitExtinctionTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
-            return;
-        }
 
+        const bool extinctionHasCsgDrawItems = !extinctionDrawItems.csg.empty();
+        if(!extinctionDrawItems.empty()){
+            if(
+                !materialInstances.valid()
+                || !materialTyped.valid()
+                || !m_materialSystem.materialPassDrawBuffersReady(
+                    extinctionInstanceData,
+                    extinctionMaterialTypedBytes
+                )
+                || !m_materialSystem.materialPassDrawResourcesReady(extinctionDrawItems.regular)
+                || (extinctionHasCsgDrawItems && (
+                    !extinctionCsgFrameData.hasWork()
+                    || !csgReceiverRanges.valid()
+                    || !csgCutters.valid()
+                    || !csgClipContextSlots.valid()
+                    || !csgIntervalSampleState.valid()
+                    || !m_csgSystem.csgFrameBuffersReady(extinctionCsgFrameData)
+                    || !m_materialSystem.materialPassDrawResourcesReady(extinctionDrawItems.csg)
+                ))
+            ){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT extinction resources were unavailable during graph declaration"));
+                return;
+            }
+
+            m_materialSystem.prepareMaterialPassInstanceUploadData(extinctionInstanceData);
+#if defined(NWB_DEBUG)
+            if(
+                extinctionInstanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
+                || extinctionCsgFrameData.receiverRanges.size() > Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData)
+                || extinctionCsgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
+            ){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: AVBOIT extinction upload size overflows graph blob capacity"));
+                return;
+            }
+            NWB_ASSERT(extinctionInstanceData.size() == extinctionMaterialTypedRanges.size());
+            ECSRenderDetail::AssertMaterialTypedUploadRanges(
+                extinctionMaterialTypedRanges,
+                extinctionMaterialTypedBytes
+            );
+#endif
+
+            const Core::GpuUploadBlobId extinctionInstanceBlob = m_deferredLightingTaskGraph.copyUploadData(
+                extinctionInstanceData.data(),
+                extinctionInstanceData.size() * sizeof(InstanceGpuData),
+                alignof(InstanceGpuData)
+            );
+            const Core::GpuUploadBlobId extinctionMaterialTypedBlob = m_deferredLightingTaskGraph.copyUploadData(
+                extinctionMaterialTypedBytes.data(),
+                extinctionMaterialTypedBytes.size(),
+                alignof(u32)
+            );
+            if(!extinctionInstanceBlob.valid() || !extinctionMaterialTypedBlob.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT extinction material upload data"));
+                return;
+            }
+
+            Core::GpuTaskSchedulingHint extinctionUploadScheduling;
+            extinctionUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
+            extinctionUploadScheduling.forceSubmissionBoundary = false;
+            extinctionUploadScheduling.allowPacketMerge = true;
+            extinctionUploadScheduling.mergeWithPrevious = true;
+
+            Core::GpuTaskDesc extinctionInstanceUploadDesc;
+            extinctionInstanceUploadDesc
+                .setIdentity(Name("render.avboit.extinction.material_instances_upload"))
+                .setMarkerLabel("AVBOIT Extinction Material Instances Upload")
+                .setQueue(GraphicsUploadQueueRequest())
+                .setScheduling(extinctionUploadScheduling)
+                .setDependencies(&extinctionUploadTask, 1u)
+            ;
+            extinctionUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+                extinctionInstanceUploadDesc,
+                Core::GpuUploadBufferTaskDesc{
+                    .source = extinctionInstanceBlob,
+                    .destination = materialInstances,
+                    .finalState = Core::ResourceStates::Common,
+                }
+            );
+            if(!extinctionUploadTask.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT extinction material instance upload"));
+                return;
+            }
+
+            Core::GpuTaskDesc extinctionMaterialTypedUploadDesc;
+            extinctionMaterialTypedUploadDesc
+                .setIdentity(Name("render.avboit.extinction.material_typed_upload"))
+                .setMarkerLabel("AVBOIT Extinction Material Typed Upload")
+                .setQueue(GraphicsUploadQueueRequest())
+                .setScheduling(extinctionUploadScheduling)
+                .setDependencies(&extinctionUploadTask, 1u)
+            ;
+            extinctionUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+                extinctionMaterialTypedUploadDesc,
+                Core::GpuUploadBufferTaskDesc{
+                    .source = extinctionMaterialTypedBlob,
+                    .destination = materialTyped,
+                    .finalState = Core::ResourceStates::Common,
+                }
+            );
+            if(!extinctionUploadTask.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT extinction material typed upload"));
+                return;
+            }
+
+            if(extinctionHasCsgDrawItems){
+                CsgClipContextSlots extinctionCsgClipContextSlotData;
+                if(!m_csgSystem.prepareCsgClipContextSlotData(
+                    extinctionCsgFrameData,
+                    extinctionCsgClipContextSlotData
+                )){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot AVBOIT extinction CSG context data"));
+                    return;
+                }
+                const Core::GpuUploadBlobId extinctionCsgReceiverRangesBlob = m_deferredLightingTaskGraph.copyUploadData(
+                    extinctionCsgFrameData.receiverRanges.data(),
+                    extinctionCsgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData),
+                    alignof(CsgReceiverRangeGpuData)
+                );
+                const Core::GpuUploadBlobId extinctionCsgCuttersBlob = m_deferredLightingTaskGraph.copyUploadData(
+                    extinctionCsgFrameData.cutters.data(),
+                    extinctionCsgFrameData.cutters.size() * sizeof(CsgCutterGpuData),
+                    alignof(CsgCutterGpuData)
+                );
+                const Core::GpuUploadBlobId extinctionCsgClipContextSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
+                    &extinctionCsgClipContextSlotData,
+                    sizeof(extinctionCsgClipContextSlotData),
+                    alignof(CsgClipContextSlots)
+                );
+                if(
+                    !extinctionCsgReceiverRangesBlob.valid()
+                    || !extinctionCsgCuttersBlob.valid()
+                    || !extinctionCsgClipContextSlotsBlob.valid()
+                ){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT extinction CSG upload data"));
+                    return;
+                }
+
+                Core::GpuTaskDesc extinctionCsgReceiverRangesUploadDesc;
+                extinctionCsgReceiverRangesUploadDesc
+                    .setIdentity(Name("render.avboit.extinction.csg_receiver_ranges_upload"))
+                    .setMarkerLabel("AVBOIT Extinction CSG Receiver Ranges Upload")
+                    .setQueue(GraphicsUploadQueueRequest())
+                    .setScheduling(extinctionUploadScheduling)
+                    .setDependencies(&extinctionUploadTask, 1u)
+                ;
+                extinctionUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+                    extinctionCsgReceiverRangesUploadDesc,
+                    Core::GpuUploadBufferTaskDesc{
+                        .source = extinctionCsgReceiverRangesBlob,
+                        .destination = csgReceiverRanges,
+                        .finalState = Core::ResourceStates::Common,
+                    }
+                );
+                if(!extinctionUploadTask.valid()){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT extinction CSG receiver-range upload"));
+                    return;
+                }
+
+                Core::GpuTaskDesc extinctionCsgCuttersUploadDesc;
+                extinctionCsgCuttersUploadDesc
+                    .setIdentity(Name("render.avboit.extinction.csg_cutters_upload"))
+                    .setMarkerLabel("AVBOIT Extinction CSG Cutters Upload")
+                    .setQueue(GraphicsUploadQueueRequest())
+                    .setScheduling(extinctionUploadScheduling)
+                    .setDependencies(&extinctionUploadTask, 1u)
+                ;
+                extinctionUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+                    extinctionCsgCuttersUploadDesc,
+                    Core::GpuUploadBufferTaskDesc{
+                        .source = extinctionCsgCuttersBlob,
+                        .destination = csgCutters,
+                        .finalState = Core::ResourceStates::Common,
+                    }
+                );
+                if(!extinctionUploadTask.valid()){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT extinction CSG cutter upload"));
+                    return;
+                }
+
+                Core::GpuTaskDesc extinctionCsgClipContextSlotsUploadDesc;
+                extinctionCsgClipContextSlotsUploadDesc
+                    .setIdentity(Name("render.avboit.extinction.csg_clip_context_slots_upload"))
+                    .setMarkerLabel("AVBOIT Extinction CSG Clip Context Slots Upload")
+                    .setQueue(GraphicsUploadQueueRequest())
+                    .setScheduling(extinctionUploadScheduling)
+                    .setDependencies(&extinctionUploadTask, 1u)
+                ;
+                extinctionUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+                    extinctionCsgClipContextSlotsUploadDesc,
+                    Core::GpuUploadBufferTaskDesc{
+                        .source = extinctionCsgClipContextSlotsBlob,
+                        .destination = csgClipContextSlots,
+                        .finalState = Core::ResourceStates::Common,
+                    }
+                );
+                if(!extinctionUploadTask.valid()){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT extinction CSG clip-context upload"));
+                    return;
+                }
+                extinctionCsgStreamsUploaded = true;
+            }
+
+            avboitExtinctionPayload.extinctionSnapshot.capture(
+                extinctionDrawItems,
+                extinctionCsgFrameData,
+                extinctionInstanceData.size(),
+                extinctionMaterialTypedBytes.size()
+            );
+            avboitExtinctionPayload.extinctionPhasePrepared = true;
+            extinctionStreamsUploaded = true;
+        }
+        else{
+            // Preserve graph ownership even when a transparent frame has no ready extinction draws: native recording
+            // consumes this explicit empty phase rather than regathering mutable renderer state.
+            avboitExtinctionPayload.extinctionSnapshot.capture(
+                extinctionDrawItems,
+                extinctionCsgFrameData,
+                extinctionInstanceData.size(),
+                extinctionMaterialTypedBytes.size()
+            );
+            avboitExtinctionPayload.extinctionPhasePrepared = true;
+        }
+    Core::Alloc::ScratchArena extinctionResourceScratch(RendererArenaScope::s_TaskGraphArena);
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionResourceUses{ extinctionResourceScratch };
+    extinctionResourceUses.reserve((splitAvboitStages ? 9u : 16u) + (extinctionStreamsUploaded ? 7u : 0u));
+    if(splitAvboitStages){
+        extinctionResourceUses.push_back(ReadUse(depth));
+        extinctionResourceUses.push_back(ReadUse(avboitLowRaster, Core::ResourceStates::RenderTarget));
+        extinctionResourceUses.push_back(ReadUse(avboitDepthWarp));
+        extinctionResourceUses.push_back(ReadUse(avboitControl));
+        extinctionResourceUses.push_back(ReadWriteUse(avboitExtinction, Core::ResourceStates::UnorderedAccess));
+        extinctionResourceUses.push_back(ReadWriteUse(avboitExtinctionOverflow, Core::ResourceStates::UnorderedAccess));
+    }
+    else{
+        // This tail owns depth warp, extinction, integration, and accumulation on the one Graphics AVBOIT packet.
+        extinctionResourceUses.push_back(ReadUse(albedo));
+        extinctionResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource, true));
+        extinctionResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource, true));
+        extinctionResourceUses.push_back(ReadUse(depth));
+        extinctionResourceUses.push_back(ReadWriteUse(avboitLowRaster, Core::ResourceStates::RenderTarget));
+        extinctionResourceUses.push_back(ReadWriteUse(avboitAccumColor, Core::ResourceStates::RenderTarget));
+        extinctionResourceUses.push_back(ReadWriteUse(avboitAccumExtinction, Core::ResourceStates::RenderTarget));
+        extinctionResourceUses.push_back(ReadWriteUse(avboitTransmittance, Core::ResourceStates::UnorderedAccess));
+        extinctionResourceUses.push_back(ReadWriteUse(avboitCoverage, Core::ResourceStates::UnorderedAccess));
+        extinctionResourceUses.push_back(ReadWriteUse(avboitDepthWarp, Core::ResourceStates::UnorderedAccess));
+        extinctionResourceUses.push_back(ReadWriteUse(avboitControl, Core::ResourceStates::UnorderedAccess));
+        extinctionResourceUses.push_back(ReadWriteUse(avboitExtinction, Core::ResourceStates::UnorderedAccess));
+        extinctionResourceUses.push_back(ReadWriteUse(avboitExtinctionOverflow, Core::ResourceStates::UnorderedAccess));
+    }
+    if(extinctionStreamsUploaded){
+        extinctionResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
+        extinctionResourceUses.push_back(ReadUse(materialInstances, Core::ResourceStates::ShaderResource));
+        extinctionResourceUses.push_back(ReadUse(materialTyped, Core::ResourceStates::ShaderResource));
+        if(extinctionCsgStreamsUploaded){
+            extinctionResourceUses.push_back(ReadUse(csgReceiverRanges, Core::ResourceStates::ShaderResource));
+            extinctionResourceUses.push_back(ReadUse(csgCutters, Core::ResourceStates::ShaderResource));
+            extinctionResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
+            // The full-resolution interval producer owns this sample state throughout all low-raster AVBOIT phases.
+            extinctionResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
+        }
+    }
+    extinctionResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+    extinctionResourceUses.push_back(ReadUse(avboitMaterialDomain));
+    extinctionResourceUses.push_back(ReadUse(avboitCsgDomain));
+
+    Core::GpuTaskSchedulingHint avboitExtinctionScheduling;
+    avboitExtinctionScheduling.cost = Core::GpuTaskCostHint::Large;
+    avboitExtinctionScheduling.forceSubmissionBoundary = false;
+    avboitExtinctionScheduling.allowPacketMerge = true;
+    avboitExtinctionScheduling.mergeWithPrevious = true;
+    Core::GpuTaskDesc extinctionDesc;
+    extinctionDesc
+        .setIdentity(Name("render.avboit.extinction"))
+        .setMarkerLabel("AVBOIT Extinction")
+        .setQueue(GraphicsQueueRequest())
+        .setScheduling(avboitExtinctionScheduling)
+        .setDependencies(&extinctionUploadTask, 1u)
+        .setResourceUses(extinctionResourceUses.data(), extinctionResourceUses.size())
+    ;
+    m_deferredAvboitExtinctionTask = m_deferredLightingTaskGraph.addTask<AvboitExtinctionGraphTask>(
+        extinctionDesc,
+        Move(avboitExtinctionPayload)
+    );
+    if(!m_deferredAvboitExtinctionTask.valid()){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
+        return;
+    }
+    if(extinctionStreamsUploaded)
+        m_deferredAvboitExtinctionStreamTask = extinctionUploadTask;
+
+    if(splitAvboitStages){
         const Core::GpuTaskResourceUse integrationResourceUses[] = {
             ReadUse(avboitExtinction),
             ReadUse(avboitControl),
@@ -4556,9 +4909,10 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             return;
         }
     }
+    }
     const Core::GpuTaskId avboitFinalTask = splitAvboitStages
         ? m_deferredAvboitAccumulationTask
-        : m_deferredAvboitOccupancyTask
+        : (hasTransparentRenderers ? m_deferredAvboitExtinctionTask : m_deferredAvboitOccupancyTask)
     ;
 
     const Core::GpuExternalCompletionId laggedLightingExternalDependencies[] = {

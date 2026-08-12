@@ -1693,6 +1693,21 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || m_raytracingSystem.preparedMeshSwBvhBuildsReady()
         || m_raytracingSystem.shadowVisibilitySoftwareResourcesPreflighted()
     ;
+    // A normalized trace-geometry stream may be imported as ShaderResource on the next frame even when its native
+    // BufferDesc starts at Common. Keep that accepted graph state with the preparation handoff; otherwise the
+    // following Prefix packet has a compiler state seed with no native producer entry to import. Include retained
+    // invisible streams too: preflight deliberately keeps their accepted normalization until the mesh is removed.
+    for(const Core::BufferHandle& acceptedBuffer : m_raytracingSystem.acceptedShadowTraceGeometryBuffers()){
+        appendShadowPrepareStateBuffer(acceptedBuffer);
+        shadowPrepareStateCandidateRequired = true;
+    }
+    const PreparedShadowTraceGeometryBufferVector& preparedTraceGeometry =
+        m_raytracingSystem.preparedShadowTraceGeometryBuffers()
+    ;
+    for(const PreparedShadowTraceGeometryBuffer& preparedBuffer : preparedTraceGeometry){
+        appendShadowPrepareStateBuffer(preparedBuffer.buffer);
+        shadowPrepareStateCandidateRequired = true;
+    }
     for(auto meshIt = meshState().m_meshes.begin(); meshIt != meshState().m_meshes.end(); ++meshIt){
         const MeshResources& mesh = meshIt.value();
         if(mesh.blas){
@@ -1708,9 +1723,10 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     appendShadowPrepareStateBuffer(m_rayTracingState.m_bvhSortPayloadBuffer);
     appendShadowPrepareStateBuffer(m_rayTracingState.m_bvhVisitCounterBuffer);
 
-    // The handoff stores raw RHI pointers. Filter it into a local source for every current AS/software-BVH state
-    // buffer before recording, but do not publish that filtered set yet: a rejected packet must leave the prior
-    // accepted seed untouched. The local strong handles remain alive through the accepted packet callback below.
+    // The handoff stores raw RHI pointers. Filter it into a local source for every current AS/software-BVH and
+    // trace-geometry state buffer before recording, but do not publish that filtered set yet: a rejected packet
+    // must leave the prior accepted seed untouched. The local strong handles remain alive through the accepted
+    // packet callback below.
     Core::CommandListResourceStateHandoff shadowPrepareFilteredPriorState(m_arena);
     bool shadowPrepareFilteredPriorStateReady = false;
     if(m_shadowPreparePersistentStateHandoff.valid()){

@@ -188,6 +188,9 @@ public:
     // uses the shared IDs for every packet that manually stages it.
     [[nodiscard]] bool freezePreparedShadowTraceGeometryBuffers();
     [[nodiscard]] const PreparedShadowTraceGeometryBufferVector& preparedShadowTraceGeometryBuffers()const noexcept;
+    // Includes accepted but currently invisible mesh streams, which must retain their state source until their
+    // owning mesh is removed or a later preparation packet supersedes it.
+    [[nodiscard]] const Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& acceptedShadowTraceGeometryBuffers()const noexcept;
     void confirmPreparedShadowTraceGeometryNormalization()noexcept;
     void invalidatePreparedShadowTraceGeometryBuffers()noexcept;
 

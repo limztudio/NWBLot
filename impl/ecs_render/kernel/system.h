@@ -437,8 +437,9 @@ private:
     // consumes the visibility result on the same Compute lane, so the result snapshot remains Compute-local.
     Core::CommandListResourceStateHandoff m_shadowComputePersistentStateHandoff;
     Core::CommandListResourceStateHandoff m_shadowVisibilityReturnStateHandoff;
-    // Native TLAS/BLAS and software-BVH build storage changes inside Shadow Preparation. Retain only accepted live
-    // generations so the next frame's first graph packet seeds their real acceleration and UAV states.
+    // Native TLAS/BLAS, software-BVH build storage, and normalized trace geometry change inside Shadow Preparation.
+    // Retain only accepted live generations so the next frame's first graph packet seeds their real acceleration,
+    // UAV, and descriptor-visible ShaderResource states.
     Core::CommandListResourceStateHandoff m_shadowPreparePersistentStateHandoff;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_shadowPreparePersistentStateBuffers;
     // Software caustics retain their temporal scratch on the dedicated Compute lane. Hardware dispatch-rays caustics

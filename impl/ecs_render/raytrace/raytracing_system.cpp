@@ -1176,6 +1176,11 @@ const PreparedShadowTraceGeometryBufferVector& RendererRayTracingSystem::prepare
     return m_preparedShadowTraceGeometryBuffers;
 }
 
+const Vector<Core::BufferHandle, Core::Alloc::GlobalArena>&
+RendererRayTracingSystem::acceptedShadowTraceGeometryBuffers()const noexcept{
+    return m_acceptedShadowTraceGeometryBuffers;
+}
+
 void RendererRayTracingSystem::confirmPreparedShadowTraceGeometryNormalization()noexcept{
     for(const PreparedShadowTraceGeometryBuffer& resource : m_preparedShadowTraceGeometryBuffers){
         bool known = false;

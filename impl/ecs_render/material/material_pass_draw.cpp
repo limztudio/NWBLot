@@ -27,7 +27,8 @@ static void SetCsgHeapResourceStates(
     Core::CommandList& commandList,
     const DeferredFrameTargets& targets,
     const MaterialPipelineCsgBindingUse& csgBindingUse,
-    const bool receiverSurfaceImageStatesGraphOwned
+    const bool receiverSurfaceImageStatesGraphOwned,
+    const bool intervalSampleImageStatesGraphOwned
 ){
     if(!csgBindingUse.clip)
         return;
@@ -39,9 +40,10 @@ static void SetCsgHeapResourceStates(
         commandList.setTextureState(targets.csgReceiverEventData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.csgReceiverEventCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
     }
-    if(csgBindingUse.intervalSample){
+    if(csgBindingUse.intervalSample && !intervalSampleImageStatesGraphOwned){
         // Cap/interval sampling loads through StorageImage aliases, so its heap descriptors require GENERAL rather
-        // than the sampled-image shader-read layout.
+        // than the sampled-image shader-read layout. The normal opaque graph declares the same UAV use at its
+        // combine-to-sample boundary; AVBOIT and direct compatibility callers retain this native bridge.
         commandList.setTextureState(targets.csgRemovedIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.csgRemovedIntervalCapNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.csgRemovedIntervalData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
@@ -232,7 +234,8 @@ void RendererMaterialSystem::renderMeshMaterialPassDrawItems(
             context.commandList,
             deferredState().m_targets,
             csgBindingUse,
-            context.csgReceiverSurfaceImageStatesGraphOwned
+            context.csgReceiverSurfaceImageStatesGraphOwned,
+            context.csgIntervalSampleImageStatesGraphOwned
         );
 
         Core::MeshletState meshletState;
@@ -276,7 +279,8 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
             context.commandList,
             deferredState().m_targets,
             csgBindingUse,
-            context.csgReceiverSurfaceImageStatesGraphOwned
+            context.csgReceiverSurfaceImageStatesGraphOwned,
+            context.csgIntervalSampleImageStatesGraphOwned
         );
         context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
 

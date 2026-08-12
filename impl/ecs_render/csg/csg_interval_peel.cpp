@@ -309,7 +309,12 @@ void RendererCsgSystem::dispatchCsgIntervalCombine(
     );
 }
 
-void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, DeferredFrameTargets& targets, const CsgFrameGpuData& csgFrameData){
+void RendererCsgSystem::renderCsgIntervalCaps(
+    Core::CommandList& commandList,
+    DeferredFrameTargets& targets,
+    const CsgFrameGpuData& csgFrameData,
+    const bool intervalSampleImageStatesGraphOwned
+){
     NWB_ASSERT(csgState().m_intervalCapFillPipeline);
     NWB_ASSERT(csgState().m_clipContextSlotsHeapHandle.valid());
     NWB_ASSERT(drawState().m_materialTypedBuffer);
@@ -319,7 +324,8 @@ void RendererCsgSystem::renderCsgIntervalCaps(Core::CommandList& commandList, De
 
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CsgCapFill, graphics().getDevice(), commandList);
 
-    __hidden_csg_interval_peel::SetCsgIntervalSampleStorageStates(commandList, targets);
+    if(!intervalSampleImageStatesGraphOwned)
+        __hidden_csg_interval_peel::SetCsgIntervalSampleStorageStates(commandList, targets);
     // The cap-fill surface evaluator reaches typed words and mesh instances through heap slots, so its pipeline-local
     // material descriptor cannot contribute these transitions automatically.
     commandList.setBufferState(drawState().m_materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);

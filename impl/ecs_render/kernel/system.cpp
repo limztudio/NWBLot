@@ -239,6 +239,7 @@ void RendererSystem::invalidateResources(){
     m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixGbufferTask = {};
+    m_graphicsPrefixCsgIntervalSampleTask = {};
     m_graphicsPrefixTask = {};
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
@@ -494,6 +495,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_graphicsPrefixDeferredClearFirstTask = {};
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixGbufferTask = {};
+    m_graphicsPrefixCsgIntervalSampleTask = {};
     m_graphicsPrefixTask = {};
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
@@ -727,6 +729,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     Core::GpuTimingSubmissionTicket graphicsPrefixSceneShadingSetupTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket graphicsPrefixDeferredClearTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket graphicsPrefixGbufferTimingTicket(m_graphics.gpuTiming());
+    Core::GpuTimingSubmissionTicket graphicsPrefixCsgIntervalSampleTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket graphicsPrefixNormalizeTimingTicket(m_graphics.gpuTiming());
     constexpr usize graphicsPrefixTimingTicketCount = static_cast<usize>(
         ECSRenderDetail::DeferredGraphicsPrefixTimingSlot::kCount
@@ -736,6 +739,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &graphicsPrefixSceneShadingSetupTimingTicket,
         &graphicsPrefixDeferredClearTimingTicket,
         &graphicsPrefixGbufferTimingTicket,
+        &graphicsPrefixCsgIntervalSampleTimingTicket,
         &graphicsPrefixNormalizeTimingTicket,
     };
     Core::GpuTimingSubmissionTicket* const graphicsPrefixOwnedTimingTickets[graphicsPrefixTimingTicketCount] = {
@@ -743,6 +747,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         &graphicsPrefixSceneShadingSetupTimingTicket,
         &graphicsPrefixDeferredClearTimingTicket,
         &graphicsPrefixGbufferTimingTicket,
+        &graphicsPrefixCsgIntervalSampleTimingTicket,
         &graphicsPrefixNormalizeTimingTicket,
     };
     // The optional AsyncPrefix query spans Mesh View Setup through Normalize, so it is only valid when compilation
@@ -975,11 +980,19 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixDeferredClearFirstTask);
     const Core::GpuSubmissionPacketId graphicsPrefixGbufferPacket =
         m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixGbufferTask);
+    // The opaque CSG sample task exists only when this frame has semantic CSG work. In ordinary frames its timing
+    // slot aliases G-buffer, so the fixed prefix ticket table still has one ordered anchor per semantic position.
+    const Core::GpuSubmissionPacketId graphicsPrefixCsgIntervalSamplePacket =
+        m_graphicsPrefixCsgIntervalSampleTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_graphicsPrefixCsgIntervalSampleTask)
+            : graphicsPrefixGbufferPacket
+    ;
     const Core::GpuSubmissionPacketId graphicsPrefixTaskPackets[graphicsPrefixTimingTicketCount] = {
         graphicsPrefixMeshViewSetupPacket,
         graphicsPrefixSceneShadingSetupPacket,
         graphicsPrefixDeferredClearPacket,
         graphicsPrefixGbufferPacket,
+        graphicsPrefixCsgIntervalSamplePacket,
         graphicsPrefixPacket,
     };
     bool graphicsPrefixTimingBindingsValid = true;
@@ -1395,12 +1408,14 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         || !m_graphicsPrefixDeferredClearFirstTask.valid()
         || !m_graphicsPrefixDeferredClearTask.valid()
         || !m_graphicsPrefixGbufferTask.valid()
+        || (hasOpaqueCsgFrameWork && !m_graphicsPrefixCsgIntervalSampleTask.valid())
         || !m_graphicsPrefixTask.valid()
         || !graphicsPrefixMeshViewSetupPacket.valid()
         || !graphicsPrefixSceneShadingSetupPacket.valid()
         || !graphicsPrefixDeferredClearFirstPacket.valid()
         || !graphicsPrefixDeferredClearPacket.valid()
         || !graphicsPrefixGbufferPacket.valid()
+        || !graphicsPrefixCsgIntervalSamplePacket.valid()
         || !graphicsPrefixPacket.valid()
         || !graphicsPrefixTimingBindingsValid
         || !graphicsPrefixPacketsAreGraphics
@@ -1735,6 +1750,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_graphicsPrefixDeferredClearFirstTask.valid()
         && m_graphicsPrefixDeferredClearTask.valid()
         && m_graphicsPrefixGbufferTask.valid()
+        && (!hasOpaqueCsgFrameWork || m_graphicsPrefixCsgIntervalSampleTask.valid())
         && m_graphicsPrefixTask.valid()
         && m_deferredShadowPrepareTask.valid()
         && shadowPreparePacket.valid()
@@ -2025,6 +2041,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && m_graphicsPrefixDeferredClearFirstTask.valid()
         && m_graphicsPrefixDeferredClearTask.valid()
         && m_graphicsPrefixGbufferTask.valid()
+        && (!hasOpaqueCsgFrameWork || m_graphicsPrefixCsgIntervalSampleTask.valid())
         && m_graphicsPrefixTask.valid()
         && graphicsPrefixPacket.valid()
         && graphicsPrefixDeferredClearBundleMerged
@@ -2920,6 +2937,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
             && m_graphicsPrefixDeferredClearFirstTask.valid()
             && m_graphicsPrefixDeferredClearTask.valid()
             && m_graphicsPrefixGbufferTask.valid()
+            && (!hasOpaqueCsgFrameWork || m_graphicsPrefixCsgIntervalSampleTask.valid())
             && m_graphicsPrefixTask.valid()
             && shadowPreparePacket.valid()
             && deferredBindlessSlotsUploadMergedIntoShadowPreparePacket

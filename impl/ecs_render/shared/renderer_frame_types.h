@@ -99,6 +99,9 @@ struct MaterialPassDrawContext{
     // Prepared graph tasks declare the receiver-event images before the material thunk records. Compatibility
     // callers leave this false and retain their direct heap-image state setup.
     bool csgReceiverSurfaceImageStatesGraphOwned = false;
+    // The opaque graph splits interval combine from its following material/cap sample task. That task lowers the
+    // required UAV handoff before this thunk records; direct and AVBOIT compatibility callers retain their bridge.
+    bool csgIntervalSampleImageStatesGraphOwned = false;
 };
 
 

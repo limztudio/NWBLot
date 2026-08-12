@@ -74,6 +74,7 @@ namespace ECSRenderDetail{
         SceneShadingSetup,
         DeferredClear,
         Gbuffer,
+        CsgIntervalSample,
         Normalize,
         kCount,
     };
@@ -81,6 +82,7 @@ namespace ECSRenderDetail{
     struct MeshViewSetupGraphTask;
     struct MeshViewUploadCommitGraphTask;
     struct SceneShadingSetupGraphTask;
+    struct CsgIntervalSampleGraphTask;
     struct DeferredClearTimingRecordState{
         Core::Graphics* graphics = nullptr;
         Optional<Core::GpuTimingMeasure>* timing = nullptr;
@@ -105,6 +107,7 @@ class RendererSystem final : public Core::ECS::ISystem, public Core::IRenderPass
     friend struct ECSRenderDetail::MeshViewUploadCommitGraphTask;
     friend struct ECSRenderDetail::SceneShadingSetupGraphTask;
     friend struct ECSRenderDetail::GbufferGraphTask;
+    friend struct ECSRenderDetail::CsgIntervalSampleGraphTask;
 
 private:
     // This is deliberately diagnostic-only: lifecycle ownership remains below in RendererSystem, while the
@@ -373,6 +376,7 @@ private:
     Core::GpuTaskId m_graphicsPrefixDeferredClearFirstTask;
     Core::GpuTaskId m_graphicsPrefixDeferredClearTask;
     Core::GpuTaskId m_graphicsPrefixGbufferTask;
+    Core::GpuTaskId m_graphicsPrefixCsgIntervalSampleTask;
     Core::GpuTaskId m_graphicsPrefixTask;
     Core::GpuTaskId m_deferredShadowVisibilityTask;
     Core::GpuTaskId m_deferredSoftwareCausticsTask;

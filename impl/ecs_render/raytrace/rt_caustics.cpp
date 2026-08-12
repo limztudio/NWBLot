@@ -37,6 +37,8 @@ struct SoftwareCausticsGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* shadowVisibilityPrepared = nullptr;
         bool graphEntryStatesOwned = false;
+        bool graphOwnsAccumulatorBootstrapClear = false;
+        bool* accumulatorBootstrapProducerDispatched = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -45,23 +47,45 @@ struct SoftwareCausticsGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
+        if(payload.accumulatorBootstrapProducerDispatched)
+            *payload.accumulatorBootstrapProducerDispatched = false;
         if(!payload.raytracingSystem || !payload.targets || !payload.timingTicket)
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
         // The typed graph clear retains black irradiance whenever no producer dispatches. The temporal accumulator
-        // reset remains packet-local until its CPU acceptance bookkeeping is graph-owned too.
+        // bootstrap remains graph-owned when its typed clear precedes this packet; non-temporal reset/decay stay
+        // packet-local.
         payload.raytracingSystem->clearNonTemporalCausticAccumulator(commandList, *payload.targets);
         if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
             const bool causticsDispatched = payload.raytracingSystem->renderGpuBvhCaustics(
                 commandList,
                 *payload.targets,
-                payload.graphEntryStatesOwned
+                payload.graphEntryStatesOwned,
+                payload.graphOwnsAccumulatorBootstrapClear
             );
+            if(payload.accumulatorBootstrapProducerDispatched)
+                *payload.accumulatorBootstrapProducerDispatched = causticsDispatched;
             if(!causticsDispatched && payload.raytracingSystem->hasCausticWork())
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software caustic render pass failed"));
         }
         return true;
+    }
+
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        static_cast<void>(token);
+        if(
+            payload.raytracingSystem
+            && payload.graphOwnsAccumulatorBootstrapClear
+            && payload.accumulatorBootstrapProducerDispatched
+            && *payload.accumulatorBootstrapProducerDispatched
+        )
+            payload.raytracingSystem->confirmCausticAccumulatorBootstrapClear();
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.accumulatorBootstrapProducerDispatched)
+            *payload.accumulatorBootstrapProducerDispatched = false;
     }
 };
 
@@ -73,6 +97,8 @@ struct HardwareCausticsGraphTask{
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* shadowVisibilityPrepared = nullptr;
         bool graphEntryStatesOwned = false;
+        bool graphOwnsAccumulatorBootstrapClear = false;
+        bool* accumulatorBootstrapProducerDispatched = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -81,23 +107,45 @@ struct HardwareCausticsGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
+        if(payload.accumulatorBootstrapProducerDispatched)
+            *payload.accumulatorBootstrapProducerDispatched = false;
         if(!payload.raytracingSystem || !payload.targets || !payload.timingTicket)
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
         // The typed graph clear retains black irradiance whenever no producer dispatches. The temporal accumulator
-        // reset remains packet-local until its CPU acceptance bookkeeping is graph-owned too.
+        // bootstrap remains graph-owned when its typed clear precedes this packet; non-temporal reset/decay stay
+        // packet-local.
         payload.raytracingSystem->clearNonTemporalCausticAccumulator(commandList, *payload.targets);
         if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
             const bool causticsDispatched = payload.raytracingSystem->renderHwCaustics(
                 commandList,
                 *payload.targets,
-                payload.graphEntryStatesOwned
+                payload.graphEntryStatesOwned,
+                payload.graphOwnsAccumulatorBootstrapClear
             );
+            if(payload.accumulatorBootstrapProducerDispatched)
+                *payload.accumulatorBootstrapProducerDispatched = causticsDispatched;
             if(!causticsDispatched && payload.raytracingSystem->hasHwCausticWork())
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic render pass failed"));
         }
         return true;
+    }
+
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        static_cast<void>(token);
+        if(
+            payload.raytracingSystem
+            && payload.graphOwnsAccumulatorBootstrapClear
+            && payload.accumulatorBootstrapProducerDispatched
+            && *payload.accumulatorBootstrapProducerDispatched
+        )
+            payload.raytracingSystem->confirmCausticAccumulatorBootstrapClear();
+    }
+
+    static void discarded(Payload& payload){
+        if(payload.accumulatorBootstrapProducerDispatched)
+            *payload.accumulatorBootstrapProducerDispatched = false;
     }
 };
 
@@ -482,6 +530,10 @@ void RendererRayTracingSystem::clearNonTemporalCausticAccumulator(Core::CommandL
     }
 }
 
+void RendererRayTracingSystem::confirmCausticAccumulatorBootstrapClear(){
+    rayTracingState().m_causticAccumulatorInitialized = true;
+}
+
 void RendererRayTracingSystem::dispatchCausticResolve(Core::CommandList& commandList, DeferredFrameTargets& targets){
     Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticResolve, graphics().getDevice(), commandList);
     NWB_ASSERT(targets.bindless.valid());
@@ -709,7 +761,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareSoftwareCausticsTask(
     DeferredFrameTargets& targets,
     const bool* const shadowVisibilityPrepared,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    const bool graphEntryStatesOwned
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsAccumulatorBootstrapClear,
+    bool* const accumulatorBootstrapProducerDispatched
 ){
     return graph.addTask<__hidden_caustics::SoftwareCausticsGraphTask>(
         desc,
@@ -719,6 +773,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareSoftwareCausticsTask(
             .timingTicket = &timingTicket,
             .shadowVisibilityPrepared = shadowVisibilityPrepared,
             .graphEntryStatesOwned = graphEntryStatesOwned,
+            .graphOwnsAccumulatorBootstrapClear = graphOwnsAccumulatorBootstrapClear,
+            .accumulatorBootstrapProducerDispatched = accumulatorBootstrapProducerDispatched,
         }
     );
 }
@@ -729,7 +785,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareHardwareCausticsTask(
     DeferredFrameTargets& targets,
     const bool* const shadowVisibilityPrepared,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    const bool graphEntryStatesOwned
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsAccumulatorBootstrapClear,
+    bool* const accumulatorBootstrapProducerDispatched
 ){
     return graph.addTask<__hidden_caustics::HardwareCausticsGraphTask>(
         desc,
@@ -739,6 +797,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareHardwareCausticsTask(
             .timingTicket = &timingTicket,
             .shadowVisibilityPrepared = shadowVisibilityPrepared,
             .graphEntryStatesOwned = graphEntryStatesOwned,
+            .graphOwnsAccumulatorBootstrapClear = graphOwnsAccumulatorBootstrapClear,
+            .accumulatorBootstrapProducerDispatched = accumulatorBootstrapProducerDispatched,
         }
     );
 }
@@ -765,7 +825,8 @@ bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameT
 bool RendererRayTracingSystem::renderGpuBvhCaustics(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const bool graphEntryStatesOwned
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsAccumulatorBootstrapClear
 ){
     // Software photon producer runs before deferred lighting.
 
@@ -787,7 +848,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, graphics().getDevice(), commandList);
 
-        if(temporalDecay > 0.f)
+        if(temporalDecay > 0.f && !graphOwnsAccumulatorBootstrapClear)
             prepareCausticAccumulatorForSplat(commandList, targets, temporalDecay);
 
         if(!graphEntryStatesOwned){
@@ -1258,7 +1319,8 @@ bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& t
 bool RendererRayTracingSystem::renderHwCaustics(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const bool graphEntryStatesOwned
+    const bool graphEntryStatesOwned,
+    const bool graphOwnsAccumulatorBootstrapClear
 ){
     // Hardware photons share the accumulator and resolve with the software reference.
     if(!hasHwCausticWork())
@@ -1287,7 +1349,7 @@ bool RendererRayTracingSystem::renderHwCaustics(
     {
         Core::GpuTimingMeasure timing(graphics().gpuTiming(), RendererGpuTimingScope::s_CausticPhotons, graphics().getDevice(), commandList);
 
-        if(temporalDecay > 0.f)
+        if(temporalDecay > 0.f && !graphOwnsAccumulatorBootstrapClear)
             prepareCausticAccumulatorForSplat(commandList, targets, temporalDecay);
 
         if(!graphEntryStatesOwned){

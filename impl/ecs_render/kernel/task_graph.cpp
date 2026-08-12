@@ -3729,6 +3729,8 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
 
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
+    m_deferredCausticAccumulatorBootstrapClearTask = {};
+    m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
 
     // This remains the direct successor of Shadow Visibility in the deferred graph. A distinct Compute family is
     // optional; on other devices the compiler routes the same packet through Graphics.
@@ -3881,8 +3883,9 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     const Core::GpuTaskId shadowVisibilityDependency[] = { m_deferredShadowVisibilityTask };
 
     // Black irradiance is the no-producer result. Start the existing Software Caustics Compute packet with this
-    // typed CopyDest clear, then explicitly merge the producer callback into it below. The temporal accumulator
-    // retains local acceptance-sensitive reset/decay work.
+    // typed CopyDest clear, then explicitly merge the producer callback into it below. A fresh temporal
+    // accumulator adds a second typed zero clear before the producer; its CPU initialized mirror commits only on
+    // that producer packet's acceptance.
     Core::GpuTaskSchedulingHint irradianceClearScheduling;
     irradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
     irradianceClearScheduling.allowPacketMerge = true;
@@ -3909,6 +3912,41 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
     }
     m_deferredCausticIrradianceClearTask = irradianceClearTask;
 
+    Core::GpuTaskId causticsDependency = irradianceClearTask;
+    const bool graphOwnsAccumulatorBootstrapClear =
+        !m_rayTracingState.m_causticAccumulatorInitialized
+        && m_rayTracingState.m_causticTemporalDecay > 0.f
+    ;
+    if(graphOwnsAccumulatorBootstrapClear){
+        Core::GpuTaskSchedulingHint accumulatorBootstrapClearScheduling;
+        accumulatorBootstrapClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
+        accumulatorBootstrapClearScheduling.allowPacketMerge = true;
+        accumulatorBootstrapClearScheduling.mergeWithPrevious = true;
+        Core::GpuTaskDesc accumulatorBootstrapClearDesc;
+        accumulatorBootstrapClearDesc
+            .setIdentity(Name("render.software_caustics.accumulator_bootstrap_clear"))
+            .setMarkerLabel("Software Caustics Accumulator Bootstrap Clear")
+            .setQueue(ComputeTransferQueueRequest())
+            .setScheduling(accumulatorBootstrapClearScheduling)
+            .setDependencies(&irradianceClearTask, 1u)
+        ;
+        Core::GpuClearTextureTaskDesc accumulatorBootstrapClear;
+        accumulatorBootstrapClear.destination = causticAccumulator;
+        accumulatorBootstrapClear.subresources = ECSRenderDetail::s_CausticAccumulatorSubresources;
+        accumulatorBootstrapClear.valueType = Core::GpuClearTextureTaskValueType::UInt;
+        accumulatorBootstrapClear.uintValue = Core::UIntColor(0u);
+        const Core::GpuTaskId accumulatorBootstrapClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
+            accumulatorBootstrapClearDesc,
+            accumulatorBootstrapClear
+        );
+        if(!accumulatorBootstrapClearTask.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred software-caustics accumulator bootstrap clear"));
+            return false;
+        }
+        m_deferredCausticAccumulatorBootstrapClearTask = accumulatorBootstrapClearTask;
+        causticsDependency = accumulatorBootstrapClearTask;
+    }
+
     Core::GpuTaskSchedulingHint causticsScheduling = scheduling;
     causticsScheduling.forceSubmissionBoundary = false;
     causticsScheduling.allowPacketMerge = true;
@@ -3919,7 +3957,7 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         .setMarkerLabel("Software Caustics")
         .setQueue(ComputeQueueRequest())
         .setScheduling(causticsScheduling)
-        .setDependencies(&irradianceClearTask, 1u)
+        .setDependencies(&causticsDependency, 1u)
         .setResourceUses(resourceUses.data(), resourceUses.size())
     ;
     m_deferredSoftwareCausticsTask = m_raytracingSystem.declareSoftwareCausticsTask(
@@ -3928,7 +3966,11 @@ bool RendererSystem::declareDeferredSoftwareCausticsTask(
         deferredTargets,
         &m_preparedShadowVisibilityReady,
         timingTicket,
-        true
+        true,
+        graphOwnsAccumulatorBootstrapClear,
+        graphOwnsAccumulatorBootstrapClear
+            ? &m_deferredCausticAccumulatorBootstrapProducerDispatched
+            : nullptr
     );
     if(!m_deferredSoftwareCausticsTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics graph task"));
@@ -4436,6 +4478,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
+    m_deferredCausticAccumulatorBootstrapClearTask = {};
+    m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
@@ -5366,7 +5410,8 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         hardwareScheduling.allowPacketMerge = false;
 
         // The lagged-history completion must protect the first writer too: clear starts the existing Hardware
-        // Caustics Graphics packet and the ray-tracing producer merges into it below.
+        // Caustics Graphics packet and the ray-tracing producer merges into it below. A fresh temporal accumulator
+        // inserts its typed zero clear between that no-producer result and the producer callback.
         Core::GpuTaskSchedulingHint irradianceClearScheduling;
         irradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
         irradianceClearScheduling.allowPacketMerge = true;
@@ -5394,6 +5439,41 @@ void RendererSystem::buildDeferredLightingTaskGraph(
         }
         m_deferredCausticIrradianceClearTask = irradianceClearTask;
 
+        Core::GpuTaskId causticsDependency = irradianceClearTask;
+        const bool graphOwnsAccumulatorBootstrapClear =
+            !m_rayTracingState.m_causticAccumulatorInitialized
+            && m_rayTracingState.m_causticTemporalDecay > 0.f
+        ;
+        if(graphOwnsAccumulatorBootstrapClear){
+            Core::GpuTaskSchedulingHint accumulatorBootstrapClearScheduling;
+            accumulatorBootstrapClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
+            accumulatorBootstrapClearScheduling.allowPacketMerge = true;
+            accumulatorBootstrapClearScheduling.mergeWithPrevious = true;
+            Core::GpuTaskDesc accumulatorBootstrapClearDesc;
+            accumulatorBootstrapClearDesc
+                .setIdentity(Name("render.hardware_caustics.accumulator_bootstrap_clear"))
+                .setMarkerLabel("Hardware Caustics Accumulator Bootstrap Clear")
+                .setQueue(GraphicsUploadQueueRequest())
+                .setScheduling(accumulatorBootstrapClearScheduling)
+                .setDependencies(&irradianceClearTask, 1u)
+            ;
+            Core::GpuClearTextureTaskDesc accumulatorBootstrapClear;
+            accumulatorBootstrapClear.destination = causticAccumulator;
+            accumulatorBootstrapClear.subresources = ECSRenderDetail::s_CausticAccumulatorSubresources;
+            accumulatorBootstrapClear.valueType = Core::GpuClearTextureTaskValueType::UInt;
+            accumulatorBootstrapClear.uintValue = Core::UIntColor(0u);
+            const Core::GpuTaskId accumulatorBootstrapClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
+                accumulatorBootstrapClearDesc,
+                accumulatorBootstrapClear
+            );
+            if(!accumulatorBootstrapClearTask.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics accumulator bootstrap clear"));
+                return;
+            }
+            m_deferredCausticAccumulatorBootstrapClearTask = accumulatorBootstrapClearTask;
+            causticsDependency = accumulatorBootstrapClearTask;
+        }
+
         Core::GpuTaskSchedulingHint hardwareCausticsScheduling = hardwareScheduling;
         hardwareCausticsScheduling.forceSubmissionBoundary = false;
         hardwareCausticsScheduling.allowPacketMerge = true;
@@ -5404,7 +5484,7 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             .setMarkerLabel("Hardware Caustics")
             .setQueue(GraphicsQueueRequest())
             .setScheduling(hardwareCausticsScheduling)
-            .setDependencies(&irradianceClearTask, 1u)
+            .setDependencies(&causticsDependency, 1u)
             .setResourceUses(hardwareResourceUses.data(), hardwareResourceUses.size())
         ;
         m_deferredHardwareCausticsTask = m_raytracingSystem.declareHardwareCausticsTask(
@@ -5413,7 +5493,11 @@ void RendererSystem::buildDeferredLightingTaskGraph(
             deferredTargets,
             &m_preparedShadowVisibilityReady,
             hardwareCausticsTimingTicket,
-            true
+            true,
+            graphOwnsAccumulatorBootstrapClear,
+            graphOwnsAccumulatorBootstrapClear
+                ? &m_deferredCausticAccumulatorBootstrapProducerDispatched
+                : nullptr
         );
         if(!m_deferredHardwareCausticsTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics graph task"));

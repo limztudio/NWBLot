@@ -248,6 +248,8 @@ void RendererSystem::invalidateResources(){
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
+    m_deferredCausticAccumulatorBootstrapClearTask = {};
+    m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
@@ -505,6 +507,8 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};
     m_deferredCausticIrradianceClearTask = {};
+    m_deferredCausticAccumulatorBootstrapClearTask = {};
+    m_deferredCausticAccumulatorBootstrapProducerDispatched = false;
     m_deferredSurfelGiPreparationTask = {};
     m_deferredSurfelGiSnapshotCopyTask = {};
     m_deferredSurfelGiIrradianceClearTask = {};
@@ -1341,6 +1345,22 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         && causticsPacket.valid()
         && causticIrradianceClearPacket == causticsPacket
     ;
+    // A fresh temporal accumulator is zeroed by a typed graph clear before its selected producer. Like the
+    // irradiance clear, it must remain in that producer packet so the accepted callback is the sole publisher of
+    // the initialized mirror and no hidden submission can write the accumulator.
+    const Core::GpuSubmissionPacketId causticAccumulatorBootstrapClearPacket =
+        m_deferredCausticAccumulatorBootstrapClearTask.valid()
+            ? m_deferredLightingCompiledGraph.packetForTask(m_deferredCausticAccumulatorBootstrapClearTask)
+            : Core::GpuSubmissionPacketId{}
+    ;
+    const bool causticAccumulatorBootstrapClearMergedIntoCausticsPacket =
+        !m_deferredCausticAccumulatorBootstrapClearTask.valid()
+        || (
+            causticAccumulatorBootstrapClearPacket.valid()
+            && causticsPacket.valid()
+            && causticAccumulatorBootstrapClearPacket == causticsPacket
+        )
+    ;
     // Keep every recording and submission span derived from compiled packet handles. The renderer names semantic
     // endpoints only; raw compiler-order indices remain inside the task-graph runtime.
     const Core::GpuSubmissionPacketRange shadowPreparePacketRange =
@@ -1462,6 +1482,7 @@ void RendererSystem::render(Core::Framebuffer* framebuffer){
         ))
         || !m_deferredCausticIrradianceClearTask.valid()
         || !causticIrradianceClearMergedIntoCausticsPacket
+        || !causticAccumulatorBootstrapClearMergedIntoCausticsPacket
         || !m_deferredSurfelGiTask.valid()
         || !m_deferredSurfelGiIrradianceClearTask.valid()
         || !surfelGiOutputClearMergedIntoGiPacket
